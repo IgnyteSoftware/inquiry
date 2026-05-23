@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Inquiry;
@@ -13,12 +14,13 @@ public sealed class LoggingInquiryMiddleware : IInquiryMiddleware
     {
     }
 
+    [ActivatorUtilitiesConstructor]
     public LoggingInquiryMiddleware(ILogger<LoggingInquiryMiddleware> logger, InquiryOptions options)
         : this(logger, options.Logging)
     {
     }
 
-    public LoggingInquiryMiddleware(ILogger<LoggingInquiryMiddleware> logger, InquiryLoggingOptions options)
+    internal LoggingInquiryMiddleware(ILogger<LoggingInquiryMiddleware> logger, InquiryLoggingOptions options)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options ?? throw new ArgumentNullException(nameof(options));
