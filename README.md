@@ -84,3 +84,10 @@ Provider-specific database driver packages are intentionally not referenced by I
 - `src/Inquiry.Extensions.DependencyInjection`: Microsoft.Extensions integration package
 - `tests/Inquiry.Tests`: unit tests with a fake ADO.NET provider
 - `benchmarks/Inquiry.Benchmarks`: BenchmarkDotNet baseline for metadata and SQL generation
+- `samples/Inquiry.Sample.Console`: runnable DI sample backed by in-memory SQLite
+
+## Run The Sample
+
+```powershell
+dotnet run --project samples\Inquiry.Sample.Console\Inquiry.Sample.Console.csproj
+```

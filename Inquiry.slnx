@@ -2,6 +2,9 @@
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Inquiry.Sample.Console/Inquiry.Sample.Console.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Inquiry.Extensions.DependencyInjection/Inquiry.Extensions.DependencyInjection.csproj" />
     <Project Path="src/Inquiry.Generators/Inquiry.Generators.csproj" />
