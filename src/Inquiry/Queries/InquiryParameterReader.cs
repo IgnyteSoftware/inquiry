@@ -14,12 +14,18 @@ internal static class InquiryParameterReader
 
         if (parameters is IReadOnlyDictionary<string, object?> readOnly)
         {
-            return readOnly;
+            return readOnly.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value is InquiryParameter parameter ? parameter.Value : pair.Value,
+                StringComparer.OrdinalIgnoreCase);
         }
 
         if (parameters is IDictionary<string, object?> dictionary)
         {
-            return new Dictionary<string, object?>(dictionary, StringComparer.OrdinalIgnoreCase);
+            return dictionary.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value is InquiryParameter parameter ? parameter.Value : pair.Value,
+                StringComparer.OrdinalIgnoreCase);
         }
 
         if (parameters is IEnumerable<KeyValuePair<string, object?>> pairs)
@@ -37,7 +43,7 @@ internal static class InquiryParameterReader
                     throw new InquiryValidationException("Raw SQL parameter dictionaries must use string keys.");
                 }
 
-                result[key] = entry.Value;
+                result[key] = entry.Value is InquiryParameter parameter ? parameter.Value : entry.Value;
             }
 
             return result;
@@ -47,7 +53,86 @@ internal static class InquiryParameterReader
             .GetType()
             .GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Where(property => property.GetIndexParameters().Length == 0 && property.GetMethod is not null)
-            .ToDictionary(property => property.Name, property => property.GetValue(parameters), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(
+                property => property.Name,
+                property =>
+                {
+                    var value = property.GetValue(parameters);
+                    return value is InquiryParameter parameter ? parameter.Value : value;
+                },
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    public static IReadOnlyList<InquiryParameter> ReadCommandParameters(object? parameters)
+    {
+        if (parameters is null)
+        {
+            return Array.Empty<InquiryParameter>();
+        }
+
+        if (parameters is InquiryParameter parameter)
+        {
+            return new[] { parameter };
+        }
+
+        if (parameters is IReadOnlyList<InquiryParameter> parameterList)
+        {
+            return parameterList;
+        }
+
+        if (parameters is IEnumerable<InquiryParameter> parameterEnumerable)
+        {
+            return parameterEnumerable.ToArray();
+        }
+
+        if (parameters is IReadOnlyDictionary<string, object?> readOnly)
+        {
+            return readOnly
+                .Select(pair => pair.Value is InquiryParameter parameterValue
+                    ? parameterValue
+                    : InquiryParameter.Input(pair.Key, pair.Value))
+                .ToArray();
+        }
+
+        if (parameters is IDictionary<string, object?> dictionary)
+        {
+            return dictionary
+                .Select(pair => pair.Value is InquiryParameter parameterValue
+                    ? parameterValue
+                    : InquiryParameter.Input(pair.Key, pair.Value))
+                .ToArray();
+        }
+
+        if (parameters is IDictionary legacyDictionary)
+        {
+            var result = new List<InquiryParameter>();
+            foreach (DictionaryEntry entry in legacyDictionary)
+            {
+                if (entry.Key is not string key)
+                {
+                    throw new InquiryValidationException("Command parameter dictionaries must use string keys.");
+                }
+
+                result.Add(entry.Value is InquiryParameter parameterValue
+                    ? parameterValue
+                    : InquiryParameter.Input(key, entry.Value));
+            }
+
+            return result;
+        }
+
+        return parameters
+            .GetType()
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(property => property.GetIndexParameters().Length == 0 && property.GetMethod is not null)
+            .Select(property =>
+            {
+                var value = property.GetValue(parameters);
+                return value is InquiryParameter parameterValue
+                    ? parameterValue
+                    : InquiryParameter.Input(property.Name, value);
+            })
+            .ToArray();
     }
 
     private sealed class EmptyDictionary : IReadOnlyDictionary<string, object?>

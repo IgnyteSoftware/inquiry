@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Data;
 
 namespace Inquiry;
 
@@ -10,6 +11,7 @@ public sealed class InquiryRequestContext
         DbConnection connection,
         DbTransaction? transaction,
         string? commandText,
+        CommandType commandType,
         IServiceProvider? services,
         CancellationToken cancellationToken)
     {
@@ -18,6 +20,7 @@ public sealed class InquiryRequestContext
         Connection = connection ?? throw new ArgumentNullException(nameof(connection));
         Transaction = transaction;
         CommandText = commandText;
+        CommandType = commandType;
         Services = services;
         CancellationToken = cancellationToken;
     }
@@ -32,7 +35,11 @@ public sealed class InquiryRequestContext
 
     public string? CommandText { get; set; }
 
+    public CommandType CommandType { get; set; }
+
     public Dictionary<string, object?> Parameters { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public List<InquiryParameter> CommandParameters { get; } = new();
 
     public IServiceProvider? Services { get; }
 

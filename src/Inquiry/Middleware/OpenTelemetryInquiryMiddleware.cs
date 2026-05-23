@@ -34,6 +34,7 @@ public sealed class OpenTelemetryInquiryMiddleware : IInquiryMiddleware
         using var activity = InquiryDiagnostics.ActivitySource.StartActivity($"Inquiry {context.Operation}", ActivityKind.Client);
         activity?.SetTag("db.inquiry.operation", context.Operation.ToString());
         activity?.SetTag("db.inquiry.entity", context.EntityType?.FullName);
+        activity?.SetTag("db.inquiry.command_type", context.CommandType.ToString());
         activity?.SetTag("db.operation", context.Operation.ToString());
         if (_options.IncludeSqlText && context.CommandText is not null)
         {

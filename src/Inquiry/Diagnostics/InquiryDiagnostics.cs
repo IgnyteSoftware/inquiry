@@ -35,7 +35,8 @@ public static class InquiryDiagnostics
         return new[]
         {
             new KeyValuePair<string, object?>("db.inquiry.operation", context.Operation.ToString()),
-            new KeyValuePair<string, object?>("db.inquiry.entity", context.EntityType?.FullName)
+            new KeyValuePair<string, object?>("db.inquiry.entity", context.EntityType?.FullName),
+            new KeyValuePair<string, object?>("db.inquiry.command_type", context.CommandType.ToString())
         };
     }
 }

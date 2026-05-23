@@ -74,6 +74,40 @@ services.AddInquiry(options =>
 
 Provider-specific database driver packages are intentionally not referenced by Inquiry. Pass any `DbConnection` implementation from your application.
 
+## Stored Procedures
+
+Stored procedure calls use the same execution path as SQL text, so middleware, logging, OpenTelemetry, transactions, parameter binding, and materialization still apply.
+
+```csharp
+var output = InquiryParameter.Output("total", DbType.Int32);
+
+await inquiry.ExecuteStoredProcedureAsync(
+    "dbo.CountUsers",
+    new[]
+    {
+        InquiryParameter.Input("domain", "example.com"),
+        output
+    });
+
+Console.WriteLine($"Total users: {output.Value}");
+```
+
+```csharp
+await inquiry.ExecuteInTransactionAsync(async (session, cancellationToken) =>
+{
+    await session.ExecuteStoredProcedureAsync(
+        "dbo.ActivateUser",
+        new { id = userId },
+        cancellationToken);
+});
+```
+
+```csharp
+var users = await inquiry.QueryStoredProcedureAsync<User>(
+    "dbo.SearchUsers",
+    new { domain = "example.com" });
+```
+
 ## Projects
 
 - `src/Inquiry`: runtime package
