@@ -11,7 +11,7 @@ The initial implementation includes:
 - separate SQLite, PostgreSQL, and SQL Server provider packages
 - `IInquiryClient` CRUD APIs for find, select, insert, update, delete, upsert, raw query, raw execute, and transactions
 - simple query builder with raw SQL fragments plus parameter binding
-- middleware pipeline and optional OpenTelemetry `ActivitySource`/`Meter`
+- middleware pipeline and optional OpenTelemetry instrumentation package
 - optional Microsoft.Extensions dependency injection and logging integration
 - focused xUnit coverage for mapping, SQL generation, client execution, and middleware ordering
 
@@ -23,8 +23,9 @@ The initial implementation includes:
 - `Inquiry.PostgreSql`: PostgreSQL dialect and `UsePostgreSql(...)` registration extensions
 - `Inquiry.SqlServer`: SQL Server dialect and `UseSqlServer(...)` registration extensions
 - `Inquiry.Extensions.DependencyInjection`: `services.AddInquiry(...)` and `LoggingInquiryMiddleware`
+- `Inquiry.OpenTelemetry`: optional ActivitySource/Meter tracing and metrics middleware
 
-The core `Inquiry` package intentionally has no concrete providers and no Microsoft.Extensions package dependencies.
+The core `Inquiry` package intentionally has no concrete providers, no Microsoft.Extensions package dependencies, and no OpenTelemetry package dependency.
 
 ## Basic Usage
 
@@ -61,18 +62,51 @@ await client.DeleteAsync(user);
 
 ## Dependency Injection
 
-Reference `Inquiry.Extensions.DependencyInjection` plus the provider package you need.
+Reference `Inquiry.Extensions.DependencyInjection` plus the provider package you need. Add `Inquiry.OpenTelemetry` only when you want Inquiry spans and metrics.
 
 ```csharp
 services.AddInquiry(options =>
 {
     options.UsePostgreSql(() => new NpgsqlConnection(connectionString));
     options.UseMiddleware<LoggingInquiryMiddleware>();
-    options.UseOpenTelemetry();
+    options.UseOpenTelemetry(telemetry =>
+    {
+        telemetry.IncludeCommandText = false;
+        telemetry.IncludeParameterValues = false;
+    });
 });
 ```
 
 Provider-specific database driver packages are intentionally not referenced by Inquiry. Pass any `DbConnection` implementation from your application.
+
+## OpenTelemetry
+
+`Inquiry.OpenTelemetry` follows the same split used by EF Core instrumentation: the runtime stays independent, and applications opt into an instrumentation package when they want spans and metrics.
+
+```csharp
+services.AddInquiry(options =>
+{
+    options.UseSqlite(connection);
+    options.UseOpenTelemetry(telemetry =>
+    {
+        telemetry.Filter = context => context.ProviderName == "sqlite";
+        telemetry.Enrich = (activity, context) =>
+        {
+            activity.SetTag("db.inquiry.command_type", context.CommandType.ToString());
+        };
+    });
+});
+```
+
+The package emits `ActivitySource` and `Meter` data named `Inquiry`. Configure your OpenTelemetry SDK to collect them:
+
+```csharp
+services.AddOpenTelemetry()
+    .WithTracing(builder => builder.AddSource(InquiryOpenTelemetry.InstrumentationName))
+    .WithMetrics(builder => builder.AddMeter(InquiryOpenTelemetry.InstrumentationName));
+```
+
+Command text and parameter values are off by default. Enable them only when your environment allows sensitive data in telemetry.
 
 ## Stored Procedures
 
@@ -116,6 +150,7 @@ var users = await inquiry.QueryStoredProcedureAsync<User>(
 - `src/Inquiry.PostgreSql`: PostgreSQL provider package
 - `src/Inquiry.SqlServer`: SQL Server provider package
 - `src/Inquiry.Extensions.DependencyInjection`: Microsoft.Extensions integration package
+- `src/Inquiry.OpenTelemetry`: optional OpenTelemetry instrumentation package
 - `tests/Inquiry.Tests`: unit tests with a fake ADO.NET provider
 - `benchmarks/Inquiry.Benchmarks`: BenchmarkDotNet baseline for metadata and SQL generation
 - `samples/Inquiry.Sample.Console`: runnable DI sample backed by in-memory SQLite

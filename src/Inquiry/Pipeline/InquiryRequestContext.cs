@@ -12,6 +12,7 @@ public sealed class InquiryRequestContext
         DbTransaction? transaction,
         string? commandText,
         CommandType commandType,
+        string? providerName,
         IServiceProvider? services,
         CancellationToken cancellationToken)
     {
@@ -21,6 +22,7 @@ public sealed class InquiryRequestContext
         Transaction = transaction;
         CommandText = commandText;
         CommandType = commandType;
+        ProviderName = providerName;
         Services = services;
         CancellationToken = cancellationToken;
     }
@@ -37,9 +39,13 @@ public sealed class InquiryRequestContext
 
     public CommandType CommandType { get; set; }
 
+    public string? ProviderName { get; }
+
     public Dictionary<string, object?> Parameters { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public List<InquiryParameter> CommandParameters { get; } = new();
+
+    public List<Action<InquiryRequestContext, DbCommand>> CommandEnrichers { get; } = new();
 
     public IServiceProvider? Services { get; }
 

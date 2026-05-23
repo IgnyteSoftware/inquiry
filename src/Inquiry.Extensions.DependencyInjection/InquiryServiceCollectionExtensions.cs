@@ -22,7 +22,6 @@ public static class InquiryServiceCollectionExtensions
 
         services.AddSingleton(options);
         services.AddSingleton(options.Logging);
-        services.AddSingleton(options.Telemetry);
         services.AddSingleton(options.Conventions);
         services.AddSingleton(options.Provider);
         services.AddSingleton(provider => new InquiryMetadataRegistry(provider.GetRequiredService<InquiryConventionOptions>()));
