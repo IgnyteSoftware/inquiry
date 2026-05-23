@@ -11,8 +11,6 @@ public sealed class InquiryOptions
 
     public InquiryLoggingOptions Logging { get; } = new();
 
-    public InquiryTelemetryOptions Telemetry { get; } = new();
-
     public InquiryConventionOptions Conventions { get; } = new();
 
     public InquiryPipelineOptions Pipeline { get; } = new();
@@ -67,13 +65,6 @@ public sealed class InquiryOptions
         return this;
     }
 
-    public InquiryOptions UseOpenTelemetry()
-    {
-        Telemetry.Enabled = true;
-        UseMiddleware<OpenTelemetryInquiryMiddleware>();
-        return this;
-    }
-
     public InquiryOptions UseGeneratedMappings()
     {
         GeneratedMappingsEnabled = true;
@@ -101,15 +92,6 @@ public sealed class InquiryLoggingOptions
     public bool EnableSensitiveDataLogging { get; set; }
 
     public TimeSpan? SlowQueryThreshold { get; set; } = TimeSpan.FromMilliseconds(500);
-}
-
-public sealed class InquiryTelemetryOptions
-{
-    public bool Enabled { get; set; }
-
-    public bool IncludeSqlText { get; set; }
-
-    public bool IncludeParameterValues { get; set; }
 }
 
 public enum InquiryNamingConvention

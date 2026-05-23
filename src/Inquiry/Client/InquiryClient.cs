@@ -457,6 +457,7 @@ public sealed class InquiryClient : IInquiryClient
                 _transaction,
                 commandText,
                 commandType,
+                _provider.Name,
                 _services,
                 cancellationToken);
 
@@ -481,6 +482,11 @@ public sealed class InquiryClient : IInquiryClient
                 foreach (var parameter in commandParameters)
                 {
                     AddParameter(command, parameter);
+                }
+
+                foreach (var commandEnricher in ctx.CommandEnrichers)
+                {
+                    commandEnricher(ctx, command);
                 }
 
                 var stopwatch = Stopwatch.StartNew();
