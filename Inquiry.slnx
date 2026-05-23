@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Inquiry.Extensions.DependencyInjection/Inquiry.Extensions.DependencyInjection.csproj" />
+    <Project Path="src/Inquiry.Generators/Inquiry.Generators.csproj" />
+    <Project Path="src/Inquiry.PostgreSql/Inquiry.PostgreSql.csproj" />
+    <Project Path="src/Inquiry.Sqlite/Inquiry.Sqlite.csproj" />
+    <Project Path="src/Inquiry.SqlServer/Inquiry.SqlServer.csproj" />
+    <Project Path="src/Inquiry/Inquiry.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Inquiry.Tests/Inquiry.Tests.csproj" />
+  </Folder>
+</Solution>
