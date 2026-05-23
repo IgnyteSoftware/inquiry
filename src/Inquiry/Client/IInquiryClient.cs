@@ -38,6 +38,21 @@ public interface IInquiryClient
 
     Task<int> ExecuteAsync(string sql, object? parameters = null, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<TEntity>> QueryStoredProcedureAsync<TEntity>(
+        string procedureName,
+        object? parameters = null,
+        CancellationToken cancellationToken = default);
+
+    Task<TEntity?> QuerySingleOrDefaultStoredProcedureAsync<TEntity>(
+        string procedureName,
+        object? parameters = null,
+        CancellationToken cancellationToken = default);
+
+    Task<int> ExecuteStoredProcedureAsync(
+        string procedureName,
+        object? parameters = null,
+        CancellationToken cancellationToken = default);
+
     Task<IInquiryTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
 
     Task ExecuteInTransactionAsync(Func<IInquiryClient, CancellationToken, Task> callback, CancellationToken cancellationToken = default);

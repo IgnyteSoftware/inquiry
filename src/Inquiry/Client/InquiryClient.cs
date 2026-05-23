@@ -204,7 +204,7 @@ public sealed class InquiryClient : IInquiryClient
             InquiryOperation.RawQuery,
             typeof(TEntity),
             sql,
-            InquiryParameterReader.Read(parameters),
+            parameters,
             reader => MaterializeByName(descriptor, reader),
             singleRow: false,
             cancellationToken);
@@ -219,7 +219,7 @@ public sealed class InquiryClient : IInquiryClient
             InquiryOperation.RawQuery,
             typeof(TEntity),
             sql,
-            InquiryParameterReader.Read(parameters),
+            parameters,
             reader => MaterializeByName(_metadata.GetDescriptor<TEntity>(), reader),
             singleRow: true,
             cancellationToken).ConfigureAwait(false);
@@ -238,8 +238,72 @@ public sealed class InquiryClient : IInquiryClient
             InquiryOperation.RawExecute,
             null,
             sql,
-            InquiryParameterReader.Read(parameters),
+            parameters,
             cancellationToken);
+    }
+
+    public Task<IReadOnlyList<TEntity>> QueryStoredProcedureAsync<TEntity>(
+        string procedureName,
+        object? parameters = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(procedureName))
+        {
+            throw new ArgumentException("Stored procedure name cannot be empty.", nameof(procedureName));
+        }
+
+        var descriptor = _metadata.GetDescriptor<TEntity>();
+        return ExecuteReaderAsync(
+            InquiryOperation.StoredProcedureQuery,
+            typeof(TEntity),
+            procedureName,
+            parameters,
+            reader => MaterializeByName(descriptor, reader),
+            singleRow: false,
+            cancellationToken,
+            CommandType.StoredProcedure);
+    }
+
+    public async Task<TEntity?> QuerySingleOrDefaultStoredProcedureAsync<TEntity>(
+        string procedureName,
+        object? parameters = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(procedureName))
+        {
+            throw new ArgumentException("Stored procedure name cannot be empty.", nameof(procedureName));
+        }
+
+        var list = await ExecuteReaderAsync(
+            InquiryOperation.StoredProcedureQuery,
+            typeof(TEntity),
+            procedureName,
+            parameters,
+            reader => MaterializeByName(_metadata.GetDescriptor<TEntity>(), reader),
+            singleRow: true,
+            cancellationToken,
+            CommandType.StoredProcedure).ConfigureAwait(false);
+
+        return list.Count == 0 ? default : list[0];
+    }
+
+    public Task<int> ExecuteStoredProcedureAsync(
+        string procedureName,
+        object? parameters = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(procedureName))
+        {
+            throw new ArgumentException("Stored procedure name cannot be empty.", nameof(procedureName));
+        }
+
+        return ExecuteNonQueryAsync(
+            InquiryOperation.StoredProcedureExecute,
+            null,
+            procedureName,
+            parameters,
+            cancellationToken,
+            CommandType.StoredProcedure);
     }
 
     public async Task<IInquiryTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
@@ -304,15 +368,18 @@ public sealed class InquiryClient : IInquiryClient
     private async Task<int> ExecuteNonQueryAsync(
         InquiryOperation operation,
         Type? entityType,
-        string sql,
-        IReadOnlyDictionary<string, object?>? parameters,
-        CancellationToken cancellationToken)
+        string commandText,
+        object? parameters,
+        CancellationToken cancellationToken,
+        CommandType commandType = CommandType.Text)
     {
+        var commandParameters = InquiryParameterReader.ReadCommandParameters(parameters);
         var response = await ExecuteWithConnectionAsync(
             operation,
             entityType,
-            sql,
-            parameters,
+            commandText,
+            commandParameters,
+            commandType,
             async (command, token) =>
             {
                 var rows = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
@@ -326,17 +393,20 @@ public sealed class InquiryClient : IInquiryClient
     private async Task<IReadOnlyList<TEntity>> ExecuteReaderAsync<TEntity>(
         InquiryOperation operation,
         Type? entityType,
-        string sql,
-        IReadOnlyDictionary<string, object?>? parameters,
+        string commandText,
+        object? parameters,
         Func<DbDataReader, TEntity> materialize,
         bool singleRow,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        CommandType commandType = CommandType.Text)
     {
+        var commandParameters = InquiryParameterReader.ReadCommandParameters(parameters);
         var response = await ExecuteWithConnectionAsync(
             operation,
             entityType,
-            sql,
-            parameters,
+            commandText,
+            commandParameters,
+            commandType,
             async (command, token) =>
             {
                 var list = new List<TEntity>();
@@ -362,8 +432,9 @@ public sealed class InquiryClient : IInquiryClient
     private async Task<InquiryResponse> ExecuteWithConnectionAsync(
         InquiryOperation operation,
         Type? entityType,
-        string sql,
-        IReadOnlyDictionary<string, object?>? parameters,
+        string commandText,
+        IReadOnlyList<InquiryParameter> parameters,
+        CommandType commandType,
         Func<DbCommand, CancellationToken, Task<InquiryResponse>> execute,
         CancellationToken cancellationToken)
     {
@@ -384,16 +455,15 @@ public sealed class InquiryClient : IInquiryClient
                 entityType,
                 connection,
                 _transaction,
-                sql,
+                commandText,
+                commandType,
                 _services,
                 cancellationToken);
 
-            if (parameters is not null)
+            foreach (var parameter in parameters)
             {
-                foreach (var parameter in parameters)
-                {
-                    context.Parameters[NormalizeParameterName(parameter.Key)] = parameter.Value;
-                }
+                context.CommandParameters.Add(parameter);
+                context.Parameters[NormalizeParameterName(parameter.Name)] = parameter.Value;
             }
 
             var terminal = new InquiryRequestDelegate(async ctx =>
@@ -405,15 +475,18 @@ public sealed class InquiryClient : IInquiryClient
 
                 await using var command = ctx.Connection.CreateCommand();
                 command.CommandText = ctx.CommandText;
+                command.CommandType = ctx.CommandType;
                 command.Transaction = ctx.Transaction;
-                foreach (var parameter in ctx.Parameters)
+                var commandParameters = BuildCommandParameters(ctx);
+                foreach (var parameter in commandParameters)
                 {
-                    AddParameter(command, parameter.Key, parameter.Value);
+                    AddParameter(command, parameter);
                 }
 
                 var stopwatch = Stopwatch.StartNew();
                 var response = await execute(command, ctx.CancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
+                CopyOutputParameterValues(command, commandParameters, ctx);
 
                 return new InquiryResponse
                 {
@@ -451,12 +524,85 @@ public sealed class InquiryClient : IInquiryClient
         }
     }
 
-    private static void AddParameter(DbCommand command, string name, object? value)
+    private static IReadOnlyList<InquiryParameter> BuildCommandParameters(InquiryRequestContext context)
+    {
+        var parameters = new List<InquiryParameter>(context.CommandParameters);
+        var knownNames = new HashSet<string>(
+            parameters.Select(parameter => NormalizeParameterName(parameter.Name)),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var parameter in parameters)
+        {
+            if (parameter.Direction is ParameterDirection.Input or ParameterDirection.InputOutput &&
+                context.Parameters.TryGetValue(NormalizeParameterName(parameter.Name), out var value))
+            {
+                parameter.Value = value;
+            }
+        }
+
+        foreach (var parameter in context.Parameters)
+        {
+            var normalizedName = NormalizeParameterName(parameter.Key);
+            if (knownNames.Add(normalizedName))
+            {
+                parameters.Add(InquiryParameter.Input(normalizedName, parameter.Value));
+            }
+        }
+
+        return parameters;
+    }
+
+    private static void AddParameter(DbCommand command, InquiryParameter inquiryParameter)
     {
         var parameter = command.CreateParameter();
-        parameter.ParameterName = NormalizeParameterName(name);
-        parameter.Value = value ?? DBNull.Value;
+        parameter.ParameterName = NormalizeParameterName(inquiryParameter.Name);
+        parameter.Direction = inquiryParameter.Direction;
+        if (inquiryParameter.DbType is not null)
+        {
+            parameter.DbType = inquiryParameter.DbType.Value;
+        }
+
+        if (inquiryParameter.Size is not null)
+        {
+            parameter.Size = inquiryParameter.Size.Value;
+        }
+
+        if (inquiryParameter.IsNullable is not null)
+        {
+            parameter.IsNullable = inquiryParameter.IsNullable.Value;
+        }
+
+        parameter.Value = inquiryParameter.Value ?? DBNull.Value;
         command.Parameters.Add(parameter);
+    }
+
+    private static void CopyOutputParameterValues(
+        DbCommand command,
+        IReadOnlyList<InquiryParameter> inquiryParameters,
+        InquiryRequestContext context)
+    {
+        foreach (var inquiryParameter in inquiryParameters)
+        {
+            if (!ReceivesValueFromDatabase(inquiryParameter.Direction))
+            {
+                continue;
+            }
+
+            var parameterName = NormalizeParameterName(inquiryParameter.Name);
+            if (!command.Parameters.Contains(parameterName))
+            {
+                continue;
+            }
+
+            var dbParameter = command.Parameters[parameterName];
+            inquiryParameter.Value = dbParameter.Value is DBNull ? null : dbParameter.Value;
+            context.Parameters[parameterName] = inquiryParameter.Value;
+        }
+    }
+
+    private static bool ReceivesValueFromDatabase(ParameterDirection direction)
+    {
+        return direction is ParameterDirection.Output or ParameterDirection.InputOutput or ParameterDirection.ReturnValue;
     }
 
     private static string NormalizeParameterName(string name)

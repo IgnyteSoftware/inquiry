@@ -12,6 +12,8 @@ internal sealed class RecordingDbConnection : DbConnection
 
     public List<RecordingDbCommand> Commands { get; } = new();
 
+    public Dictionary<string, object?> OutputParameterValues { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public int RowsAffected { get; set; } = 1;
 
     public override string ConnectionString { get; set; } = "Data Source=:memory:";
@@ -143,12 +145,23 @@ internal sealed class RecordingDbCommand : DbCommand
 
     protected override DbTransaction? DbTransaction { get; set; }
 
+    public DbTransaction? RecordedTransaction => DbTransaction;
+
     public override void Cancel()
     {
     }
 
     public override int ExecuteNonQuery()
     {
+        foreach (DbParameter parameter in _parameters)
+        {
+            if (parameter.Direction is ParameterDirection.Output or ParameterDirection.InputOutput or ParameterDirection.ReturnValue &&
+                _connection.OutputParameterValues.TryGetValue(parameter.ParameterName, out var value))
+            {
+                parameter.Value = value ?? DBNull.Value;
+            }
+        }
+
         return _connection.RowsAffected;
     }
 

@@ -12,5 +12,7 @@ public enum InquiryOperation
     Upsert,
     RawQuery,
     RawExecute,
+    StoredProcedureQuery,
+    StoredProcedureExecute,
     Transaction
 }
