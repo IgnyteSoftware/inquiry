@@ -44,13 +44,13 @@ public sealed class InquiryGeneratorTests
                 {
                 }
 
-                [InquirySelect]
+                [InquirySelectAll]
                 public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
 
-                [InquirySelectByKey]
+                [InquirySelectOneByKey]
                 public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
-                [InquirySelectByField("IsActive")]
+                [InquirySelectAllByField("IsActive")]
                 public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);
 
                 [InquiryInsert]
@@ -59,7 +59,7 @@ public sealed class InquiryGeneratorTests
                 [InquiryUpdate]
                 public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);
 
-                [InquiryDeleteByKey]
+                [InquiryDeleteOneByKey]
                 public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
             }
             """;
@@ -160,7 +160,7 @@ public sealed class InquiryGeneratorTests
                 {
                 }
 
-                [InquirySelect]
+                [InquirySelectAll]
                 public abstract IAsyncEnumerable<User> SelectAllAsync(CancellationToken cancellationToken = default);
             }
             """;
@@ -225,6 +225,104 @@ public sealed class InquiryGeneratorTests
 
         Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"OrganizationKey\", \"OrganizationId\", isKey: false", generatedEntityText);
         Assert.Contains("new global::Inquiry.Entities.InquiryForeignKey(\"OrganizationKey\", \"OrganizationId\", \"TOrganization\", \"Key\")", generatedEntityText);
+    }
+
+    [Theory]
+    [InlineData("[InquirySelectAll]", "public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);", "_sqlStatements.SelectAll")]
+    [InlineData("[InquirySelectOneByKey]", "public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlStatements.SelectByKey")]
+    [InlineData("[InquirySelectAllByField(\"IsActive\")]", "public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);", "_sqlStatements.SelectByField")]
+    [InlineData("[InquiryInsert]", "public abstract Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlStatements.Insert")]
+    [InlineData("[InquiryUpdate]", "public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlStatements.Update")]
+    [InlineData("[InquiryDeleteOneByKey]", "public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlStatements.DeleteByKey")]
+    public void GeneratesStoreMethodForEachOperationSlice(string attribute, string methodDeclaration, string expectedStatement)
+    {
+        var source = $$"""
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn]
+                public bool IsActive { get; set; }
+            }
+
+            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            {
+                protected OrganizationStore(IInquiry inquiry)
+                    : base(inquiry)
+                {
+                }
+
+                {{attribute}}
+                {{methodDeclaration}}
+            }
+            """;
+
+        var result = RunGenerator(source);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        Assert.Contains(expectedStatement, generatedText);
+    }
+
+    [Fact]
+    public void ConsumerCompilationNeedsOnlyInquiryRuntimeTypes()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+            }
+
+            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            {
+                protected OrganizationStore(IInquiry inquiry)
+                    : base(inquiry)
+                {
+                }
+
+                [InquirySelectAll]
+                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(errors);
+        Assert.Contains(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
     }
 
     [Fact]

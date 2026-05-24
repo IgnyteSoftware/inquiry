@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <_InquiryProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry\Inquiry.csproj'))</_InquiryProjectPath>
+    <_InquiryGeneratorAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Generators\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.dll'))</_InquiryGeneratorAnalyzerPath>
+  </PropertyGroup>
+
+  <Target Name="AddInquiryProjectReferenceAnalyzer" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <_InquiryProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryProjectPath)'" />
+      <Analyzer Include="$(_InquiryGeneratorAnalyzerPath)" Condition="'@(_InquiryProjectReference)' != '' and Exists('$(_InquiryGeneratorAnalyzerPath)')" />
+    </ItemGroup>
+  </Target>
+</Project>
