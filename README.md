@@ -57,12 +57,12 @@ The generator emits `GeneratedOrganizationStore : OrganizationStore` and generat
 
 ## Dependency Injection
 
-Inquiry is designed for applications that use `Microsoft.Extensions.DependencyInjection`. Provider packages register the database connection factory and core Inquiry services. Generated code registers each store and entity materializer.
+Inquiry is designed for applications that use `Microsoft.Extensions.DependencyInjection`. `AddInquiry()` registers the core runtime and discovers generated store/materializer registrations. Provider packages register only database-specific services such as connection factories.
 
 ```csharp
 services
-    .AddInquirySqlite(connectionString)
-    .AddInquiryStores();
+    .AddInquiry()
+    .AddInquirySqlite(connectionString);
 
 public sealed class OrganizationService
 {
@@ -75,7 +75,7 @@ public sealed class OrganizationService
 }
 ```
 
-`AddInquiryStores()` is generated in the consuming project and registers each user-defined store, for example `OrganizationStore`, against its generated implementation.
+`AddInquiry()` registers the core runtime and discovers generated service registrations for user-defined stores, for example `OrganizationStore`, and generated entity materializers.
 
 ## IInquiry
 

@@ -19,8 +19,15 @@ public static class SqliteInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
-        services.AddInquiryCore();
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqliteInquiryConnectionFactory(connectionString));
         return services;
+    }
+
+    /// <summary>
+    /// Registers the SQLite connection factory used by generated Inquiry stores.
+    /// </summary>
+    public static IServiceCollection AddInquirySqlLite(this IServiceCollection services, string connectionString)
+    {
+        return services.AddInquirySqlite(connectionString);
     }
 }

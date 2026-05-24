@@ -12,8 +12,8 @@ var connectionString = new SqliteConnectionStringBuilder
 await SampleDatabase.CreateSchemaAsync(connectionString);
 
 using var services = new ServiceCollection()
+    .AddInquiry()
     .AddInquirySqlite(connectionString)
-    .AddInquiryStores()
     .AddTransient<OrganizationWorkflow>()
     .BuildServiceProvider();
 

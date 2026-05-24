@@ -95,10 +95,11 @@ public sealed class InquiryGeneratorTests
 
         var generatedServices = Assert.Single(
             result.RunResult.GeneratedTrees,
-            static tree => tree.FilePath.EndsWith("InquiryServiceCollectionExtensions.g.cs", StringComparison.Ordinal));
+            static tree => tree.FilePath.EndsWith("InquiryGeneratedServiceRegistration.g.cs", StringComparison.Ordinal));
         var generatedServicesText = generatedServices.GetText().ToString();
 
-        Assert.Contains("AddInquiryStores", generatedServicesText);
+        Assert.Contains("IInquiryServiceRegistration", generatedServicesText);
+        Assert.Contains("void AddServices(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)", generatedServicesText);
         Assert.Contains("TryAddSingleton<global::Inquiry.IInquiryEntityMaterializer<global::Demo.Organization>, global::Demo.OrganizationInquiryEntityMaterializer>", generatedServicesText);
         Assert.Contains("TryAddTransient<global::Demo.OrganizationStore, global::Demo.GeneratedOrganizationStore>", generatedServicesText);
     }

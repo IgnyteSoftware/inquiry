@@ -130,12 +130,12 @@ public sealed class InquiryRequestPipelineTests
     }
 
     [Fact]
-    public void AddInquiryCoreRegistersPipeline()
+    public void AddInquiryRegistersPipeline()
     {
         using var services = new ServiceCollection()
             .AddSingleton<IInquiryConnectionFactory>(new TestConnectionFactory("Data Source=:memory:"))
             .AddSingleton<IInquiryEntityMaterializer<TestItem>, TestItemMaterializer>()
-            .AddInquiryCore()
+            .AddInquiry()
             .BuildServiceProvider();
 
         Assert.IsType<InquiryRequestPipeline>(services.GetRequiredService<IInquiryRequestPipeline>());
@@ -153,7 +153,7 @@ public sealed class InquiryRequestPipelineTests
         using var services = new ServiceCollection()
             .AddSingleton<IInquiryConnectionFactory>(new TestConnectionFactory(connectionString))
             .AddSingleton<IInquiryEntityMaterializer<TestItem>, TestItemMaterializer>()
-            .AddInquiryCore()
+            .AddInquiry()
             .BuildServiceProvider();
 
         var inquiry = services.GetRequiredService<IInquiry>();
