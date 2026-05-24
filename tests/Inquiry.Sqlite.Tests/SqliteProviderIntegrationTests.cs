@@ -15,6 +15,7 @@ public sealed class SqliteProviderIntegrationTests
             .BuildServiceProvider();
 
         Assert.IsType<SqliteInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());
+        Assert.IsType<SqliteInquirySqlDialect>(serviceProvider.GetRequiredService<InquirySqlDialect>());
         Assert.Null(serviceProvider.GetService<IInquiry>());
         Assert.Null(serviceProvider.GetService<IInquiryRequestPipeline>());
     }

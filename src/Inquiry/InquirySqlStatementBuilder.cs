@@ -1,19 +1,24 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+namespace Inquiry;
 
-namespace Inquiry.Generators.Sql;
-
-internal sealed class SqlStatementBuilder
+/// <summary>
+/// Builds provider-specific SQL statements for mapped Inquiry entities.
+/// </summary>
+public sealed class InquirySqlStatementBuilder
 {
     private readonly InquirySqlDialect _dialect;
 
-    public SqlStatementBuilder(InquirySqlDialect dialect)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InquirySqlStatementBuilder"/> class.
+    /// </summary>
+    public InquirySqlStatementBuilder(InquirySqlDialect dialect)
     {
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
     }
 
-    public SqlStatementSet Build(string? schema, string tableName, IReadOnlyList<SqlColumn> columns)
+    /// <summary>
+    /// Builds SQL statements for a mapped table and columns.
+    /// </summary>
+    public InquirySqlStatementSet Build(string? schema, string tableName, IReadOnlyList<InquirySqlColumn> columns)
     {
         if (columns is null)
         {
@@ -29,7 +34,7 @@ internal sealed class SqlStatementBuilder
             .Where(c => !c.IsKey)
             .Select(c => _dialect.QuoteIdentifier(c.ColumnName) + " = " + _dialect.ParameterName(c.PropertyName)));
 
-        return new SqlStatementSet(
+        return new InquirySqlStatementSet(
             selectAll: "SELECT " + selectColumns + " FROM " + table,
             selectByKey: "SELECT " + selectColumns + " FROM " + table + " WHERE " + _dialect.QuoteIdentifier(key.ColumnName) + " = " + _dialect.ParameterName("key"),
             deleteByKey: "DELETE FROM " + table + " WHERE " + _dialect.QuoteIdentifier(key.ColumnName) + " = " + _dialect.ParameterName("key"),

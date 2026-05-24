@@ -1,13 +1,16 @@
-using System;
+using Inquiry;
 
-namespace Inquiry.Generators.Sql;
+namespace Inquiry.SqlServer;
 
-internal sealed class SqlServerSqlDialect : InquirySqlDialect
+/// <summary>
+/// Provides SQL Server SQL naming and quoting behavior for Inquiry generated statements.
+/// </summary>
+public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
 {
-    public static SqlServerSqlDialect Instance { get; } = new();
-
+    /// <inheritdoc />
     public override string Name => "SqlServer";
 
+    /// <inheritdoc />
     public override string QuoteIdentifier(string identifier)
     {
         if (string.IsNullOrWhiteSpace(identifier))

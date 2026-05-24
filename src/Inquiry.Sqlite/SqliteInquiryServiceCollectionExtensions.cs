@@ -20,6 +20,7 @@ public static class SqliteInquiryServiceCollectionExtensions
         }
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqliteInquiryConnectionFactory(connectionString));
+        services.AddSingleton<InquirySqlDialect, SqliteInquirySqlDialect>();
         return services;
     }
 
