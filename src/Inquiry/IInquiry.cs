@@ -14,6 +14,15 @@ public interface IInquiry
         where TEntity : class;
 
     /// <summary>
+    /// Executes a SQL query with parameters and streams mapped entities.
+    /// </summary>
+    IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
+        string commandText,
+        object? parameters,
+        CancellationToken cancellationToken = default)
+        where TEntity : class;
+
+    /// <summary>
     /// Executes a SQL query and streams mapped entities.
     /// </summary>
     IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -30,6 +39,15 @@ public interface IInquiry
         where TEntity : class;
 
     /// <summary>
+    /// Executes a SQL query with parameters and returns the first mapped entity, or <see langword="null"/> when no row is returned.
+    /// </summary>
+    Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
+        string commandText,
+        object? parameters,
+        CancellationToken cancellationToken = default)
+        where TEntity : class;
+
+    /// <summary>
     /// Executes a SQL query and returns the first mapped entity, or <see langword="null"/> when no row is returned.
     /// </summary>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -42,6 +60,14 @@ public interface IInquiry
     /// </summary>
     Task<int> ExecuteAsync(
         string commandText,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes a SQL command with parameters and returns the affected row count.
+    /// </summary>
+    Task<int> ExecuteAsync(
+        string commandText,
+        object? parameters,
         CancellationToken cancellationToken = default);
 
     /// <summary>

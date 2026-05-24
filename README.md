@@ -89,6 +89,32 @@ var organization = await _inquiry.QuerySingleOrDefaultAsync<Organization>(
     "SELECT [Key], [Name], [IsActive] FROM [TOrganization]");
 ```
 
+Queries and commands can take parameters with an anonymous object, a dictionary, or explicit `InquiryParameter` values when database metadata is needed.
+
+```csharp
+var activeOrganizations = _inquiry.QueryAsync<Organization>(
+    "SELECT [Key], [Name], [IsActive] FROM [TOrganization] WHERE [IsActive] = @IsActive",
+    new { IsActive = true });
+
+await _inquiry.ExecuteAsync(
+    "UPDATE [TOrganization] SET [Name] = @Name WHERE [Key] = @Key",
+    new Dictionary<string, object?>
+    {
+        ["Key"] = organization.Key,
+        ["Name"] = "Acme Research Group",
+    });
+
+await _inquiry.ExecuteAsync(
+    "UPDATE [TOrganization] SET [Name] = @Name WHERE [Key] = @Key",
+    new[]
+    {
+        new InquiryParameter("Key", organization.Key),
+        new InquiryParameter("Name", "Acme Research Group", DbType.String, size: 200),
+    });
+```
+
+Parameter names can include the provider prefix (`@Name`, `:Name`, `$Name`) or omit it. Unprefixed names are bound with an `@` prefix.
+
 Generated CRUD methods use `IInquiry` as well. `IInquiry` then delegates to the request pipeline so interceptors and provider behavior apply consistently.
 
 ## Request Pipeline

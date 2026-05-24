@@ -77,10 +77,14 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("_inquiry.QueryAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("_inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("_inquiry.ExecuteAsync", generatedText);
+        Assert.Contains("new { key = key }", generatedText);
+        Assert.Contains("new { value = isActive }", generatedText);
+        Assert.Contains("Key = organization.Key", generatedText);
         Assert.Contains("SELECT [Key], [Name], [IsActive] FROM [TOrganization]", generatedText);
         Assert.Contains("INSERT INTO [TOrganization] ([Key], [Name], [IsActive]) VALUES (@Key, @Name, @IsActive)", generatedText);
         Assert.Contains("UPDATE [TOrganization] SET [Name] = @Name, [IsActive] = @IsActive WHERE [Key] = @Key", generatedText);
         Assert.Contains("DELETE FROM [TOrganization] WHERE [Key] = @key", generatedText);
+        Assert.DoesNotContain("AddParameter", generatedText);
         Assert.DoesNotContain("ConnectionFactory.OpenConnectionAsync", generatedText);
         Assert.DoesNotContain("CreateCommand()", generatedText);
         Assert.DoesNotContain("ExecuteReaderAsync", generatedText);

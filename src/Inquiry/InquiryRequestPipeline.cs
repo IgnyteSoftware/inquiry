@@ -124,7 +124,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             dbCommand.CommandTimeout = command.CommandTimeout.Value;
         }
 
-        command.BindParameters?.Invoke(dbCommand);
+        InquiryParameterBinder.Bind(dbCommand, command.Parameters);
         var context = new InquiryCommandContext(command, dbCommand);
 
         foreach (var interceptor in _interceptors)
