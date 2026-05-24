@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
     <Description>SQLite provider for Inquiry.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

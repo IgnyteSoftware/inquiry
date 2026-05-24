@@ -11,26 +11,37 @@ using Microsoft.CodeAnalysis.Text;
 namespace Inquiry.Generators;
 
 [Generator(LanguageNames.CSharp)]
-public sealed class InquiryGenerator : ISourceGenerator
+public sealed class InquiryGenerator : IIncrementalGenerator
 {
     private const string AttributeNamespace = "Inquiry";
+    private const string GlobalPrefix = "global::";
 
     private static readonly SymbolDisplayFormat FullyQualifiedNullableFormat = SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
         SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
-    public void Initialize(GeneratorInitializationContext context)
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        context.RegisterForSyntaxNotifications(static () => new SyntaxReceiver());
+        var candidates = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                predicate: static (node, _) => IsCandidateClass(node),
+                transform: static (ctx, _) => (ClassDeclarationSyntax)ctx.Node)
+            .Collect();
+
+        var source = context.CompilationProvider.Combine(candidates);
+
+        context.RegisterSourceOutput(source, static (spc, pair) =>
+            Execute(spc, pair.Left, pair.Right));
     }
 
-    public void Execute(GeneratorExecutionContext context)
+    private static bool IsCandidateClass(SyntaxNode node)
     {
-        if (context.SyntaxReceiver is not SyntaxReceiver receiver)
-        {
-            return;
-        }
+        return node is ClassDeclarationSyntax cls &&
+            (cls.AttributeLists.Count > 0 || cls.BaseList is not null);
+    }
 
-        var entities = DiscoverEntities(context, receiver.CandidateClasses);
+    private static void Execute(SourceProductionContext context, Compilation compilation, ImmutableArray<ClassDeclarationSyntax> candidates)
+    {
+        var entities = DiscoverEntities(context, compilation, candidates);
         var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistrationModel>();
         foreach (var entity in entities.Values)
         {
@@ -38,9 +49,11 @@ public sealed class InquiryGenerator : ISourceGenerator
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistrationModel>();
-        foreach (var classDeclaration in receiver.CandidateClasses)
+        foreach (var classDeclaration in candidates)
         {
-            if (context.Compilation.GetSemanticModel(classDeclaration.SyntaxTree).GetDeclaredSymbol(classDeclaration, context.CancellationToken) is not INamedTypeSymbol storeSymbol)
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            if (compilation.GetSemanticModel(classDeclaration.SyntaxTree).GetDeclaredSymbol(classDeclaration, context.CancellationToken) is not INamedTypeSymbol storeSymbol)
             {
                 continue;
             }
@@ -79,13 +92,15 @@ public sealed class InquiryGenerator : ISourceGenerator
         }
     }
 
-    private static Dictionary<string, EntityModel> DiscoverEntities(GeneratorExecutionContext context, IReadOnlyList<ClassDeclarationSyntax> candidates)
+    private static Dictionary<string, EntityModel> DiscoverEntities(SourceProductionContext context, Compilation compilation, ImmutableArray<ClassDeclarationSyntax> candidates)
     {
         var entities = new Dictionary<string, EntityModel>();
 
         foreach (var classDeclaration in candidates)
         {
-            var model = context.Compilation.GetSemanticModel(classDeclaration.SyntaxTree);
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            var model = compilation.GetSemanticModel(classDeclaration.SyntaxTree);
             if (model.GetDeclaredSymbol(classDeclaration, context.CancellationToken) is not INamedTypeSymbol entitySymbol)
             {
                 continue;
@@ -112,7 +127,8 @@ public sealed class InquiryGenerator : ISourceGenerator
 
                 var columnName = GetConstructorString(columnAttribute) ?? property.Name;
                 var typeInfo = TypeInfo.Create(property.Type, property.NullableAnnotation);
-                var column = new ColumnModel(property, property.Name, columnName, typeInfo, keyAttribute is not null);
+                var isGenerated = keyAttribute is not null && GetNamedBool(keyAttribute, "IsGenerated");
+                var column = new ColumnModel(property, property.Name, columnName, typeInfo, keyAttribute is not null, isGenerated);
                 columns.Add(column);
 
                 if (!typeInfo.IsSupported)
@@ -128,11 +144,10 @@ public sealed class InquiryGenerator : ISourceGenerator
                 if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
-                        InquiryDiagnosticDescriptors.UnsupportedPropertyType,
+                        InquiryDiagnosticDescriptors.PropertyMustHavePublicSetter,
                         property.Locations.FirstOrDefault(),
                         entitySymbol.Name,
-                        property.Name,
-                        property.Type.ToDisplayString()));
+                        property.Name));
                 }
             }
 
@@ -155,7 +170,7 @@ public sealed class InquiryGenerator : ISourceGenerator
         return entities;
     }
 
-    private static ImmutableArray<StoreMethodModel> DiscoverStoreMethods(GeneratorExecutionContext context, INamedTypeSymbol storeSymbol, EntityModel entity)
+    private static ImmutableArray<StoreMethodModel> DiscoverStoreMethods(SourceProductionContext context, INamedTypeSymbol storeSymbol, EntityModel entity)
     {
         var methods = ImmutableArray.CreateBuilder<StoreMethodModel>();
 
@@ -236,7 +251,7 @@ public sealed class InquiryGenerator : ISourceGenerator
         };
     }
 
-    private static EntityRegistrationModel GenerateEntityMetadata(GeneratorExecutionContext context, EntityModel entity)
+    private static EntityRegistrationModel GenerateEntityMetadata(SourceProductionContext context, EntityModel entity)
     {
         var materializerName = $"{entity.Symbol.Name}InquiryEntityMaterializer";
         var source = new StringBuilder();
@@ -274,7 +289,7 @@ public sealed class InquiryGenerator : ISourceGenerator
         return new EntityRegistrationModel(entity.Symbol, materializerName);
     }
 
-    private static StoreRegistrationModel GenerateStore(GeneratorExecutionContext context, INamedTypeSymbol storeSymbol, EntityModel entity, ImmutableArray<StoreMethodModel> methods)
+    private static StoreRegistrationModel GenerateStore(SourceProductionContext context, INamedTypeSymbol storeSymbol, EntityModel entity, ImmutableArray<StoreMethodModel> methods)
     {
         var generatedName = $"Generated{storeSymbol.Name}";
         var source = new StringBuilder();
@@ -300,7 +315,7 @@ public sealed class InquiryGenerator : ISourceGenerator
         source.AppendLine("            {");
         foreach (var column in entity.Columns)
         {
-            source.AppendLine($"                new global::Inquiry.InquirySqlColumn(\"{Escape(column.PropertyName)}\", \"{Escape(column.ColumnName)}\", isKey: {BooleanLiteral(column.IsKey)}),");
+            source.AppendLine($"                new global::Inquiry.InquirySqlColumn(\"{Escape(column.PropertyName)}\", \"{Escape(column.ColumnName)}\", isKey: {BooleanLiteral(column.IsKey)}, isGenerated: {BooleanLiteral(column.IsGenerated)}),");
         }
 
         source.AppendLine("            });");
@@ -321,7 +336,7 @@ public sealed class InquiryGenerator : ISourceGenerator
     }
 
     private static void GenerateServiceRegistration(
-        GeneratorExecutionContext context,
+        SourceProductionContext context,
         ImmutableArray<EntityRegistrationModel> entityRegistrations,
         ImmutableArray<StoreRegistrationModel> storeRegistrations)
     {
@@ -381,7 +396,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine($"        return _inquiry.QueryAsync<{entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(");
-                source.AppendLine($"            _sqlStatements.SelectByField(new global::Inquiry.InquirySqlColumn(\"{Escape(method.FieldColumn!.PropertyName)}\", \"{Escape(method.FieldColumn.ColumnName)}\", isKey: {BooleanLiteral(method.FieldColumn.IsKey)})),");
+                source.AppendLine($"            _sqlStatements.SelectByField(new global::Inquiry.InquirySqlColumn(\"{Escape(method.FieldColumn!.PropertyName)}\", \"{Escape(method.FieldColumn.ColumnName)}\", isKey: {BooleanLiteral(method.FieldColumn.IsKey)}, isGenerated: {BooleanLiteral(method.FieldColumn.IsGenerated)})),");
                 source.AppendLine($"            new {{ value = {entityParameter} }},");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
@@ -404,7 +419,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine("            _sqlStatements.Insert,");
                 source.AppendLine("            new");
                 source.AppendLine("            {");
-                foreach (var column in entity.Columns)
+                foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
                 {
                     source.AppendLine($"                {column.PropertyName} = {entityParameter}.{column.PropertyName},");
                 }
@@ -420,7 +435,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine("            _sqlStatements.Update,");
                 source.AppendLine("            new");
                 source.AppendLine("            {");
-                foreach (var column in entity.Columns)
+                foreach (var column in entity.Columns.Where(c => c.IsKey || !c.IsGenerated))
                 {
                     source.AppendLine($"                {column.PropertyName} = {entityParameter}.{column.PropertyName},");
                 }
@@ -516,8 +531,12 @@ public sealed class InquiryGenerator : ISourceGenerator
     {
         foreach (var candidate in method.GetAttributes())
         {
-            var name = candidate.AttributeClass?.Name;
-            switch (name)
+            if (!IsInquiryAttribute(candidate))
+            {
+                continue;
+            }
+
+            switch (candidate.AttributeClass?.Name)
             {
                 case "InquirySelectAttribute":
                     attribute = candidate;
@@ -566,7 +585,7 @@ public sealed class InquiryGenerator : ISourceGenerator
     {
         return type is INamedTypeSymbol named &&
             named.TypeArguments.Length == 1 &&
-            named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).TrimStart("global::".ToCharArray()) == metadataName &&
+            StripGlobalPrefix(named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)) == metadataName &&
             SymbolEqualityComparer.Default.Equals(named.TypeArguments[0], typeArgument);
     }
 
@@ -574,8 +593,15 @@ public sealed class InquiryGenerator : ISourceGenerator
     {
         return type is INamedTypeSymbol named &&
             named.TypeArguments.Length == 1 &&
-            named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).TrimStart("global::".ToCharArray()) == metadataName &&
+            StripGlobalPrefix(named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)) == metadataName &&
             named.TypeArguments[0].SpecialType == specialType;
+    }
+
+    private static string StripGlobalPrefix(string displayName)
+    {
+        return displayName.StartsWith(GlobalPrefix, StringComparison.Ordinal)
+            ? displayName.Substring(GlobalPrefix.Length)
+            : displayName;
     }
 
     private static bool IsCancellationToken(ITypeSymbol type)
@@ -588,6 +614,11 @@ public sealed class InquiryGenerator : ISourceGenerator
         return symbol.GetAttributes().FirstOrDefault(a =>
             a.AttributeClass?.Name == shortName &&
             a.AttributeClass.ContainingNamespace.ToDisplayString() == AttributeNamespace);
+    }
+
+    private static bool IsInquiryAttribute(AttributeData attribute)
+    {
+        return attribute.AttributeClass?.ContainingNamespace?.ToDisplayString() == AttributeNamespace;
     }
 
     private static string? GetConstructorString(AttributeData attribute)
@@ -606,6 +637,19 @@ public sealed class InquiryGenerator : ISourceGenerator
         }
 
         return null;
+    }
+
+    private static bool GetNamedBool(AttributeData attribute, string name)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == name && argument.Value.Value is bool flag)
+            {
+                return flag;
+            }
+        }
+
+        return false;
     }
 
     private static string Escape(string value)
@@ -652,5 +696,4 @@ public sealed class InquiryGenerator : ISourceGenerator
 
         return "global::" + registration.EntityType.ContainingNamespace.ToDisplayString() + "." + registration.MaterializerTypeName;
     }
-
 }

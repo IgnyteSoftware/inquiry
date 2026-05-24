@@ -11,7 +11,7 @@ public sealed class SqliteProviderIntegrationTests
     public void SqliteProviderRegistersOnlyProviderServices()
     {
         using var serviceProvider = new ServiceCollection()
-            .AddInquirySqlLite("Data Source=:memory:")
+            .AddInquirySqlite("Data Source=:memory:")
             .BuildServiceProvider();
 
         Assert.IsType<SqliteInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());

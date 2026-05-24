@@ -43,6 +43,11 @@ internal static class InquiryParameterBinder
 
     private static string NormalizeName(string name)
     {
+        if (string.IsNullOrEmpty(name))
+        {
+            throw new ArgumentException("Parameter name cannot be null or empty.", nameof(name));
+        }
+
         return name[0] is '@' or ':' or '$' or '?'
             ? name
             : "@" + name;

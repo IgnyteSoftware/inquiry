@@ -75,6 +75,22 @@ public sealed partial class InquiryRequestPipeline
 
         public async ValueTask DisposeAsync()
         {
+            if (_initialized && !_completed && _command is not null)
+            {
+                _completed = true;
+                try
+                {
+                    var abandoned = new OperationCanceledException(
+                        "Inquiry query enumeration was disposed before completion.",
+                        _cancellationToken);
+                    await _pipeline.NotifyFailedAsync(_commandDefinition, _command, abandoned, _cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Interceptor failures during dispose must not mask resource cleanup.
+                }
+            }
+
             if (_reader is not null)
             {
                 await _reader.DisposeAsync().ConfigureAwait(false);

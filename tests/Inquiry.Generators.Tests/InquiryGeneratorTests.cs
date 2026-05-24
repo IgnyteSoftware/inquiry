@@ -144,7 +144,7 @@ public sealed class InquiryGeneratorTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
         var generator = new InquiryGenerator();
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new ISourceGenerator[] { generator }, parseOptions: parseOptions);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { generator.AsSourceGenerator() }, parseOptions: parseOptions);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
         return new GeneratorTestResult(outputCompilation, generatorDiagnostics, driver.GetRunResult());

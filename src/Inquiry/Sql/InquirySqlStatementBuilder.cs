@@ -25,13 +25,35 @@ public sealed class InquirySqlStatementBuilder
             throw new ArgumentNullException(nameof(columns));
         }
 
-        var key = columns.Single(c => c.IsKey);
+        if (columns.Count == 0)
+        {
+            throw new ArgumentException("At least one column is required.", nameof(columns));
+        }
+
+        var keys = columns.Where(c => c.IsKey).ToArray();
+        if (keys.Length == 0)
+        {
+            throw new ArgumentException("Columns must contain exactly one key column; none were marked as a key.", nameof(columns));
+        }
+
+        if (keys.Length > 1)
+        {
+            throw new ArgumentException("Columns must contain exactly one key column; multiple columns are marked as keys.", nameof(columns));
+        }
+
+        var key = keys[0];
+        var insertableColumns = columns.Where(c => !c.IsGenerated).ToArray();
+        if (insertableColumns.Length == 0)
+        {
+            throw new ArgumentException("At least one column must not be database-generated so INSERT can supply a value.", nameof(columns));
+        }
+
         var table = _dialect.QuoteTable(schema, tableName);
         var selectColumns = string.Join(", ", columns.Select(c => _dialect.QuoteIdentifier(c.ColumnName)));
-        var insertColumns = string.Join(", ", columns.Select(c => _dialect.QuoteIdentifier(c.ColumnName)));
-        var insertParameters = string.Join(", ", columns.Select(c => _dialect.ParameterName(c.PropertyName)));
+        var insertColumns = string.Join(", ", insertableColumns.Select(c => _dialect.QuoteIdentifier(c.ColumnName)));
+        var insertParameters = string.Join(", ", insertableColumns.Select(c => _dialect.ParameterName(c.PropertyName)));
         var setClauses = string.Join(", ", columns
-            .Where(c => !c.IsKey)
+            .Where(c => !c.IsKey && !c.IsGenerated)
             .Select(c => _dialect.QuoteIdentifier(c.ColumnName) + " = " + _dialect.ParameterName(c.PropertyName)));
 
         return new InquirySqlStatementSet(
