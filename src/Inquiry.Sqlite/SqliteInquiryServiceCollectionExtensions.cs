@@ -23,12 +23,4 @@ public static class SqliteInquiryServiceCollectionExtensions
         services.AddSingleton<InquirySqlDialect, SqliteInquirySqlDialect>();
         return services;
     }
-
-    /// <summary>
-    /// Registers the SQLite connection factory used by generated Inquiry stores.
-    /// </summary>
-    public static IServiceCollection AddInquirySqlLite(this IServiceCollection services, string connectionString)
-    {
-        return services.AddInquirySqlite(connectionString);
-    }
 }

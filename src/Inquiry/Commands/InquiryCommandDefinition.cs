@@ -29,6 +29,11 @@ public sealed class InquiryCommandDefinition
             throw new ArgumentException("Command text cannot be empty.", nameof(commandText));
         }
 
+        if (commandTimeout is < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(commandTimeout), commandTimeout, "Command timeout cannot be negative.");
+        }
+
         CommandText = commandText;
         Parameters = parameters?.ToArray() ?? throw new ArgumentNullException(nameof(parameters));
         CommandType = commandType;

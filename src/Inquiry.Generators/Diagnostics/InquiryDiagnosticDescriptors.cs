@@ -68,6 +68,14 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor PropertyMustHavePublicSetter = new(
+        "INQ009",
+        "Mapped entity property must have an accessible setter",
+        "Entity property '{0}.{1}' must have a public or internal setter to be mapped.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public static readonly DiagnosticDescriptor MethodMustBeAbstract = new(
         "INQ010",
         "Query method must be abstract",

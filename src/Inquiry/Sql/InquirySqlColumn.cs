@@ -8,7 +8,7 @@ public sealed class InquirySqlColumn
     /// <summary>
     /// Initializes a new instance of the <see cref="InquirySqlColumn"/> class.
     /// </summary>
-    public InquirySqlColumn(string propertyName, string columnName, bool isKey)
+    public InquirySqlColumn(string propertyName, string columnName, bool isKey, bool isGenerated = false)
     {
         if (string.IsNullOrWhiteSpace(propertyName))
         {
@@ -23,6 +23,7 @@ public sealed class InquirySqlColumn
         PropertyName = propertyName;
         ColumnName = columnName;
         IsKey = isKey;
+        IsGenerated = isGenerated;
     }
 
     /// <summary>
@@ -39,4 +40,11 @@ public sealed class InquirySqlColumn
     /// Gets a value indicating whether this column is the entity key.
     /// </summary>
     public bool IsKey { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the database supplies this column's value
+    /// (for example, IDENTITY or AUTOINCREMENT keys). Generated columns are excluded
+    /// from INSERT and UPDATE statements.
+    /// </summary>
+    public bool IsGenerated { get; }
 }

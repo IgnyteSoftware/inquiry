@@ -20,4 +20,11 @@ public sealed class InquiryKeyAttribute : InquiryColumnAttribute
         : base(name)
     {
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the database generates the key
+    /// (for example, IDENTITY or AUTOINCREMENT). Generated keys are excluded
+    /// from INSERT statements.
+    /// </summary>
+    public bool IsGenerated { get; set; }
 }
