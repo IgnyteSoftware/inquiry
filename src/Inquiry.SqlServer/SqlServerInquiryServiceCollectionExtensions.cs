@@ -20,6 +20,7 @@ public static class SqlServerInquiryServiceCollectionExtensions
         }
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(connectionString));
+        services.AddSingleton<InquirySqlDialect, SqlServerInquirySqlDialect>();
         return services;
     }
 }

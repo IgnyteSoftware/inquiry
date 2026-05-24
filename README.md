@@ -6,8 +6,8 @@ Inquiry is an experimental .NET 6+ source-generated micro-ORM. It maps entity cl
 
 - `src/Inquiry`: public attributes, connection abstractions, and store base types.
 - `src/Inquiry.Generators`: Roslyn source generator for entity metadata, diagnostics, SQL, materializers, parameter binding, and generated stores.
-- `src/Inquiry.SqlServer`: SQL Server connection factory using `Microsoft.Data.SqlClient`.
-- `src/Inquiry.Sqlite`: SQLite connection factory using `Microsoft.Data.Sqlite`.
+- `src/Inquiry.SqlServer`: SQL Server connection factory and SQL dialect using `Microsoft.Data.SqlClient`.
+- `src/Inquiry.Sqlite`: SQLite connection factory and SQL dialect using `Microsoft.Data.Sqlite`.
 - `tests/Inquiry.Tests`: core API tests.
 - `tests/Inquiry.Generators.Tests`: source-generator compilation tests.
 - `tests/Inquiry.Sqlite.Tests`: generated-store integration tests against SQLite.
@@ -142,4 +142,4 @@ The sample uses SQLite, creates a local schema, registers Inquiry with dependenc
 - `[InquiryUpdate]`
 - `[InquiryDeleteByKey]`
 
-Version-one SQL generation currently uses square-bracket identifiers and `@` parameters. This works for SQL Server and SQLite; provider-specific SQL dialect generation is the next design step for PostgreSQL/MySQL and deeper provider customization.
+Generated stores build SQL through the `InquirySqlDialect` registered by the active provider package. Provider packages own provider-specific identifier quoting and parameter naming, while the core runtime owns the shared CRUD statement builder.

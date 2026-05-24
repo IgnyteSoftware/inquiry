@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
-using Inquiry.Generators.Sql;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -356,24 +355,33 @@ public sealed class InquiryGenerator : ISourceGenerator
         AppendNamespaceStart(source, storeSymbol);
         source.AppendLine($"{GetAccessibility(storeSymbol.DeclaredAccessibility)} sealed class {generatedName} : {storeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
         source.AppendLine("{");
-        source.AppendLine($"    public {generatedName}(global::Inquiry.IInquiry inquiry)");
+        source.AppendLine("    private readonly global::Inquiry.InquirySqlStatementSet _sqlStatements;");
+        source.AppendLine();
+        source.AppendLine($"    public {generatedName}(global::Inquiry.IInquiry inquiry, global::Inquiry.InquirySqlDialect sqlDialect)");
         source.AppendLine("        : base(inquiry)");
         source.AppendLine("    {");
-        source.AppendLine("    }");
+        source.AppendLine("        if (sqlDialect is null)");
+        source.AppendLine("        {");
+        source.AppendLine("            throw new global::System.ArgumentNullException(nameof(sqlDialect));");
+        source.AppendLine("        }");
         source.AppendLine();
+        source.AppendLine("        _sqlStatements = new global::Inquiry.InquirySqlStatementBuilder(sqlDialect).Build(");
+        source.AppendLine($"            {Literal(entity.Schema)},");
+        source.AppendLine($"            \"{Escape(entity.TableName)}\",");
+        source.AppendLine("            new global::Inquiry.InquirySqlColumn[]");
+        source.AppendLine("            {");
+        foreach (var column in entity.Columns)
+        {
+            source.AppendLine($"                new global::Inquiry.InquirySqlColumn(\"{Escape(column.PropertyName)}\", \"{Escape(column.ColumnName)}\", isKey: {BooleanLiteral(column.IsKey)}),");
+        }
 
-        var sqlStatements = new SqlStatementBuilder(SqlServerSqlDialect.Instance)
-            .Build(entity.Schema, entity.TableName, entity.Columns.Select(ToSqlColumn).ToArray());
-        source.AppendLine($"    private const string SelectAllSql = \"{Escape(sqlStatements.SelectAll)}\";");
-        source.AppendLine($"    private const string SelectByKeySql = \"{Escape(sqlStatements.SelectByKey)}\";");
-        source.AppendLine($"    private const string DeleteByKeySql = \"{Escape(sqlStatements.DeleteByKey)}\";");
-        source.AppendLine($"    private const string InsertSql = \"{Escape(sqlStatements.Insert)}\";");
-        source.AppendLine($"    private const string UpdateSql = \"{Escape(sqlStatements.Update)}\";");
+        source.AppendLine("            });");
+        source.AppendLine("    }");
         source.AppendLine();
 
         foreach (var method in methods)
         {
-            GenerateMethod(source, method, entity, sqlStatements);
+            GenerateMethod(source, method, entity);
             source.AppendLine();
         }
 
@@ -424,7 +432,7 @@ public sealed class InquiryGenerator : ISourceGenerator
         context.AddSource("InquiryGeneratedServiceRegistration.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
     }
 
-    private static void GenerateMethod(StringBuilder source, StoreMethodModel method, EntityModel entity, SqlStatementSet sqlStatements)
+    private static void GenerateMethod(StringBuilder source, StoreMethodModel method, EntityModel entity)
     {
         var returnType = method.Symbol.ReturnType.ToDisplayString(FullyQualifiedNullableFormat);
         var methodName = method.Symbol.Name;
@@ -437,16 +445,15 @@ public sealed class InquiryGenerator : ISourceGenerator
             case StoreOperation.SelectAll:
                 source.AppendLine($"    public override {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
-                source.AppendLine($"        return _inquiry.QueryAsync<{entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(new global::Inquiry.InquiryCommandDefinition(SelectAllSql), {cancellation});");
+                source.AppendLine($"        return _inquiry.QueryAsync<{entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(new global::Inquiry.InquiryCommandDefinition(_sqlStatements.SelectAll), {cancellation});");
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.SelectByField:
-                var selectByFieldSql = sqlStatements.SelectByField(ToSqlColumn(method.FieldColumn!));
                 source.AppendLine($"    public override {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine($"        return _inquiry.QueryAsync<{entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(");
-                source.AppendLine($"            \"{Escape(selectByFieldSql)}\",");
+                source.AppendLine($"            _sqlStatements.SelectByField(new global::Inquiry.InquirySqlColumn(\"{Escape(method.FieldColumn!.PropertyName)}\", \"{Escape(method.FieldColumn.ColumnName)}\", isKey: {BooleanLiteral(method.FieldColumn.IsKey)})),");
                 source.AppendLine($"            new {{ value = {entityParameter} }},");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
@@ -456,7 +463,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override async {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine($"        return await _inquiry.QuerySingleOrDefaultAsync<{entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(");
-                source.AppendLine("            SelectByKeySql,");
+                source.AppendLine("            _sqlStatements.SelectByKey,");
                 source.AppendLine($"            new {{ key = {entityParameter} }},");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
@@ -466,7 +473,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine("        return _inquiry.ExecuteAsync(");
-                source.AppendLine("            InsertSql,");
+                source.AppendLine("            _sqlStatements.Insert,");
                 source.AppendLine("            new");
                 source.AppendLine("            {");
                 foreach (var column in entity.Columns)
@@ -482,7 +489,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override async {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine("        return await _inquiry.ExecuteAsync(");
-                source.AppendLine("            UpdateSql,");
+                source.AppendLine("            _sqlStatements.Update,");
                 source.AppendLine("            new");
                 source.AppendLine("            {");
                 foreach (var column in entity.Columns)
@@ -498,7 +505,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override async {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine("        return await _inquiry.ExecuteAsync(");
-                source.AppendLine("            DeleteByKeySql,");
+                source.AppendLine("            _sqlStatements.DeleteByKey,");
                 source.AppendLine($"            new {{ key = {entityParameter} }},");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
                 source.AppendLine("    }");
@@ -678,9 +685,14 @@ public sealed class InquiryGenerator : ISourceGenerator
         return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
     }
 
-    private static SqlColumn ToSqlColumn(ColumnModel column)
+    private static string Literal(string? value)
     {
-        return new SqlColumn(column.PropertyName, column.ColumnName, column.IsKey);
+        return value is null ? "null" : "\"" + Escape(value) + "\"";
+    }
+
+    private static string BooleanLiteral(bool value)
+    {
+        return value ? "true" : "false";
     }
 
     private static string GetAccessibility(Accessibility accessibility)

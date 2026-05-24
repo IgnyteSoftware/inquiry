@@ -73,18 +73,22 @@ public sealed class InquiryGeneratorTests
         var generatedText = generatedStore.GetText().ToString();
 
         Assert.Contains("public sealed class GeneratedOrganizationStore : global::Demo.OrganizationStore", generatedText);
-        Assert.Contains("public GeneratedOrganizationStore(global::Inquiry.IInquiry inquiry)", generatedText);
+        Assert.Contains("private readonly global::Inquiry.InquirySqlStatementSet _sqlStatements;", generatedText);
+        Assert.Contains("public GeneratedOrganizationStore(global::Inquiry.IInquiry inquiry, global::Inquiry.InquirySqlDialect sqlDialect)", generatedText);
+        Assert.Contains("new global::Inquiry.InquirySqlStatementBuilder(sqlDialect).Build", generatedText);
         Assert.Contains("_inquiry.QueryAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("_inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("_inquiry.ExecuteAsync", generatedText);
         Assert.Contains("new { key = key }", generatedText);
         Assert.Contains("new { value = isActive }", generatedText);
         Assert.Contains("Key = organization.Key", generatedText);
-        Assert.Contains("SELECT [Key], [Name], [IsActive] FROM [TOrganization]", generatedText);
-        Assert.Contains("INSERT INTO [TOrganization] ([Key], [Name], [IsActive]) VALUES (@Key, @Name, @IsActive)", generatedText);
-        Assert.Contains("UPDATE [TOrganization] SET [Name] = @Name, [IsActive] = @IsActive WHERE [Key] = @Key", generatedText);
-        Assert.Contains("DELETE FROM [TOrganization] WHERE [Key] = @key", generatedText);
+        Assert.Contains("_sqlStatements.SelectAll", generatedText);
+        Assert.Contains("_sqlStatements.Insert", generatedText);
+        Assert.Contains("_sqlStatements.Update", generatedText);
+        Assert.Contains("_sqlStatements.DeleteByKey", generatedText);
         Assert.DoesNotContain("AddParameter", generatedText);
+        Assert.DoesNotContain("SqlServer", generatedText);
+        Assert.DoesNotContain("Sqlite", generatedText);
         Assert.DoesNotContain("ConnectionFactory.OpenConnectionAsync", generatedText);
         Assert.DoesNotContain("CreateCommand()", generatedText);
         Assert.DoesNotContain("ExecuteReaderAsync", generatedText);
