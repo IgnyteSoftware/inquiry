@@ -1,4 +1,6 @@
-namespace Inquiry.Sqlite.Tests;
+using Inquiry.Entities;
+
+namespace Inquiry.Sqlite.Tests.Fixtures;
 
 [InquiryTable("TOrganization")]
 public sealed class Organization

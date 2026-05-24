@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Sql;
 
 /// <summary>
 /// Provides provider-specific SQL naming and quoting behavior for Inquiry generated statements.

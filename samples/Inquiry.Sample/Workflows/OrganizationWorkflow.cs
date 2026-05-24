@@ -1,3 +1,8 @@
+using Inquiry.Sample.Models;
+using Inquiry.Sample.Stores;
+
+namespace Inquiry.Sample.Workflows;
+
 public sealed class OrganizationWorkflow
 {
     private readonly OrganizationStore _organizations;
@@ -35,7 +40,7 @@ public sealed class OrganizationWorkflow
         Console.WriteLine($"Updated: {updated?.Name}, active={updated?.IsActive}");
 
         Console.WriteLine("All organizations through IInquiry:");
-        await foreach (var queriedOrganization in _organizations.SelectAllWithInquiryAsync(cancellationToken))
+        await foreach (var queriedOrganization in _organizations.SelectAllCustomAsync(cancellationToken))
         {
             Console.WriteLine($"- {queriedOrganization.Name}");
         }

@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Sql;
 
 /// <summary>
 /// Builds provider-specific SQL statements for mapped Inquiry entities.

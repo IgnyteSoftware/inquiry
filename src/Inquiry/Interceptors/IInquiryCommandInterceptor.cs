@@ -1,4 +1,6 @@
-namespace Inquiry;
+using Inquiry.Commands;
+
+namespace Inquiry.Interceptors;
 
 /// <summary>
 /// Observes and mutates commands executed by the Inquiry request pipeline.

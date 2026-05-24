@@ -1,4 +1,6 @@
-using Inquiry;
+using Inquiry.Entities;
+
+namespace Inquiry.Sample.Models;
 
 [InquiryTable("TOrganization")]
 public sealed class Organization

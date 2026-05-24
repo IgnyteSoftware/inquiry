@@ -1,8 +1,9 @@
-using Inquiry;
+using Inquiry.Connections;
+using Inquiry.Sql;
 using Inquiry.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Microsoft.Extensions.DependencyInjection;
+namespace Inquiry.Sqlite.DependencyInjection;
 
 /// <summary>
 /// Registers Inquiry SQLite services.

@@ -1,8 +1,11 @@
+using Inquiry.DependencyInjection;
+using Inquiry.Materialization;
+using Inquiry.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Reflection;
 
-namespace Microsoft.Extensions.DependencyInjection;
+namespace Inquiry.DependencyInjection;
 
 /// <summary>
 /// Registers core Inquiry runtime services.
@@ -19,8 +22,8 @@ public static class InquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
-        services.TryAddScoped<Inquiry.IInquiry, Inquiry.DefaultInquiry>();
-        services.TryAddScoped<Inquiry.IInquiryRequestPipeline, Inquiry.InquiryRequestPipeline>();
+        services.TryAddScoped<IInquiry, DefaultInquiry>();
+        services.TryAddScoped<IInquiryRequestPipeline, InquiryRequestPipeline>();
         AddGeneratedServices(services);
         return services;
     }
@@ -36,7 +39,7 @@ public static class InquiryServiceCollectionExtensions
 
             foreach (var registrationType in GetRegistrationTypes(assembly))
             {
-                var registration = (Inquiry.IInquiryServiceRegistration?)Activator.CreateInstance(registrationType, nonPublic: true);
+                var registration = (IInquiryServiceRegistration?)Activator.CreateInstance(registrationType, nonPublic: true);
                 registration?.AddServices(services);
             }
         }
@@ -50,7 +53,7 @@ public static class InquiryServiceCollectionExtensions
                 .GetTypes()
                 .Where(static type =>
                     !type.IsAbstract &&
-                    typeof(Inquiry.IInquiryServiceRegistration).IsAssignableFrom(type));
+                    typeof(IInquiryServiceRegistration).IsAssignableFrom(type));
         }
         catch (ReflectionTypeLoadException exception)
         {
@@ -59,7 +62,7 @@ public static class InquiryServiceCollectionExtensions
                 .Cast<Type>()
                 .Where(static type =>
                     !type.IsAbstract &&
-                    typeof(Inquiry.IInquiryServiceRegistration).IsAssignableFrom(type));
+                    typeof(IInquiryServiceRegistration).IsAssignableFrom(type));
         }
     }
 }

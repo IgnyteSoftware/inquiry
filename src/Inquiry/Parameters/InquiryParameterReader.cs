@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Reflection;
 
-namespace Inquiry;
+namespace Inquiry.Parameters;
 
 internal static class InquiryParameterReader
 {

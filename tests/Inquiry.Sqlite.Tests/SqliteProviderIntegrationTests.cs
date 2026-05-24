@@ -1,5 +1,12 @@
 using System.Collections.Generic;
+using Inquiry.Connections;
+using Inquiry.DependencyInjection;
+using Inquiry.Entities;
+using Inquiry.Pipeline;
+using Inquiry.Sql;
 using Inquiry.Sqlite;
+using Inquiry.Sqlite.DependencyInjection;
+using Inquiry.Sqlite.Tests.Fixtures;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -33,6 +40,7 @@ public sealed class SqliteProviderIntegrationTests
             .AddInquirySqlite(connectionString)
             .BuildServiceProvider();
         var store = serviceProvider.GetRequiredService<OrganizationStore>();
+        var metadata = serviceProvider.GetRequiredService<IInquiryEntityMetadata<Organization>>();
         var key = Guid.NewGuid();
         var organization = new Organization
         {
@@ -55,6 +63,8 @@ public sealed class SqliteProviderIntegrationTests
         var selectedAfterDelete = await store.SelectByKeyAsync(key);
 
         Assert.Equal(1, inserted);
+        Assert.Equal("TOrganization", metadata.TableName);
+        Assert.Empty(metadata.ForeignKeys);
         Assert.NotNull(selected);
         Assert.Equal("Acme", selected.Name);
         Assert.True(selected.IsActive);

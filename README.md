@@ -4,7 +4,7 @@ Inquiry is an experimental .NET 6+ source-generated micro-ORM. It maps entity cl
 
 ## Projects
 
-- `src/Inquiry`: public attributes, connection abstractions, and store base types.
+- `src/Inquiry`: public runtime APIs, entity/store attributes, connection abstractions, and store base types.
 - `src/Inquiry.Generators`: Roslyn source generator for entity metadata, diagnostics, SQL, materializers, parameter binding, and generated stores.
 - `src/Inquiry.SqlServer`: SQL Server connection factory and SQL dialect using `Microsoft.Data.SqlClient`.
 - `src/Inquiry.Sqlite`: SQLite connection factory and SQL dialect using `Microsoft.Data.Sqlite`.
@@ -18,6 +18,10 @@ Inquiry is an experimental .NET 6+ source-generated micro-ORM. It maps entity cl
 The initial generator keeps the product-document concept of user-authored abstract stores, but generates a concrete derived implementation because source generators cannot fill in abstract members on the same partial class.
 
 ```csharp
+using Inquiry;
+using Inquiry.Entities;
+using Inquiry.Stores;
+
 [InquiryTable("TOrganization")]
 public sealed class Organization
 {
@@ -60,6 +64,9 @@ The generator emits `GeneratedOrganizationStore : OrganizationStore` and generat
 Inquiry is designed for applications that use `Microsoft.Extensions.DependencyInjection`. `AddInquiry()` registers the core runtime and discovers generated store/materializer registrations. Provider packages register only database-specific services such as connection factories.
 
 ```csharp
+using Inquiry.DependencyInjection;
+using Inquiry.Sqlite.DependencyInjection;
+
 services
     .AddInquiry()
     .AddInquirySqlite(connectionString);
@@ -92,6 +99,8 @@ var organization = await _inquiry.QuerySingleOrDefaultAsync<Organization>(
 Queries and commands can take parameters with an anonymous object, a dictionary, or explicit `InquiryParameter` values when database metadata is needed.
 
 ```csharp
+using Inquiry.Parameters;
+
 var activeOrganizations = _inquiry.QueryAsync<Organization>(
     "SELECT [Key], [Name], [IsActive] FROM [TOrganization] WHERE [IsActive] = @IsActive",
     new { IsActive = true });
@@ -119,9 +128,9 @@ Generated CRUD methods use `IInquiry` as well. `IInquiry` then delegates to the 
 
 ## Request Pipeline
 
-`IInquiryRequestPipeline` is the lower-level runtime layer beneath `IInquiry`. The pipeline owns ADO.NET connection, command, reader, and disposal behavior, while generated code supplies SQL, parameter binders, and materializers.
+`IInquiryRequestPipeline` lives in `Inquiry.Pipeline` and is the lower-level runtime layer beneath `IInquiry`. The pipeline owns ADO.NET connection, command, reader, and disposal behavior, while generated code supplies SQL, parameter binders, and materializers.
 
-Most users should not need to inject the pipeline directly. Applications can register `IInquiryCommandInterceptor` implementations to observe commands, mutate command settings before execution, and receive success/failure callbacks. Interceptors cannot replace execution results.
+Most users should not need to inject the pipeline directly. Applications can register `IInquiryCommandInterceptor` implementations from `Inquiry.Interceptors` to observe commands, mutate command settings before execution, and receive success/failure callbacks. Interceptors cannot replace execution results.
 
 ## Sample Application
 
@@ -135,6 +144,8 @@ The sample uses SQLite, creates a local schema, registers Inquiry with dependenc
 
 ## Supported Operations
 
+Store-generation attributes live in `Inquiry.Stores`:
+
 - `[InquirySelect]`
 - `[InquirySelectByKey]`
 - `[InquirySelectByField]`
@@ -142,4 +153,6 @@ The sample uses SQLite, creates a local schema, registers Inquiry with dependenc
 - `[InquiryUpdate]`
 - `[InquiryDeleteByKey]`
 
-Generated stores build SQL through the `InquirySqlDialect` registered by the active provider package. Provider packages own provider-specific identifier quoting and parameter naming, while the core runtime owns the shared CRUD statement builder.
+Entity-mapping attributes live in `Inquiry.Entities`, including `[InquiryTable]`, `[InquiryColumn]`, `[InquiryKey]`, and `[InquiryForeignKey]`.
+
+Generated stores build SQL through the `InquirySqlDialect` type in `Inquiry.Sql`, registered by the active provider package. Provider packages own provider-specific identifier quoting and parameter naming, while the core runtime owns the shared CRUD statement builder.

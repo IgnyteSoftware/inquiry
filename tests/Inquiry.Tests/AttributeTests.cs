@@ -1,4 +1,5 @@
-using Inquiry;
+using Inquiry.Entities;
+using Inquiry.Stores;
 
 namespace Inquiry.Tests;
 
@@ -19,8 +20,28 @@ public sealed class AttributeTests
     [Fact]
     public void SelectByFieldAttributeStoresField()
     {
-        var attribute = new InquirySelectByFieldAttribute("IsActive");
+        var attribute = new InquirySelectAllByFieldAttribute("IsActive");
 
         Assert.Equal("IsActive", attribute.Field);
+    }
+
+    [Fact]
+    public void ForeignKeyAttributeStoresReferencedTableAndColumn()
+    {
+        var attribute = new InquiryForeignKeyAttribute("TOrganization", "Key");
+
+        Assert.Null(attribute.Name);
+        Assert.Equal("TOrganization", attribute.ReferencedTable);
+        Assert.Equal("Key", attribute.ReferencedColumn);
+    }
+
+    [Fact]
+    public void ForeignKeyAttributeCanStoreLocalColumnName()
+    {
+        var attribute = new InquiryForeignKeyAttribute("OrganizationKey", "TOrganization", "Key");
+
+        Assert.Equal("OrganizationKey", attribute.Name);
+        Assert.Equal("TOrganization", attribute.ReferencedTable);
+        Assert.Equal("Key", attribute.ReferencedColumn);
     }
 }

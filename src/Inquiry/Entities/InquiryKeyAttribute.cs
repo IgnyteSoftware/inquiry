@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Entities;
 
 /// <summary>
 /// Marks the single primary key property for an Inquiry entity.

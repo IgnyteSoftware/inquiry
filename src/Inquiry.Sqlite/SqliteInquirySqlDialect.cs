@@ -1,4 +1,4 @@
-using Inquiry;
+using Inquiry.Sql;
 
 namespace Inquiry.Sqlite;
 

@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
 
+namespace Inquiry.Sample.Data;
+
 internal static class SampleDatabase
 {
     public static async Task CreateSchemaAsync(string connectionString)

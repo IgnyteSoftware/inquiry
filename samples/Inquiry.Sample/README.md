@@ -4,11 +4,12 @@ This sample shows the current end-user flow for Inquiry with SQLite and dependen
 
 It demonstrates:
 
-- Entity mapping with `[InquiryTable]`, `[InquiryKey]`, and `[InquiryColumn]`.
+- Entity mapping with `Inquiry.Entities` attributes: `[InquiryTable]`, `[InquiryKey]`, and `[InquiryColumn]`.
+- Store generation with `Inquiry.Stores` attributes such as `[InquirySelect]` and `[InquiryInsert]`.
 - User-defined abstract store methods.
 - Custom store queries through `_inquiry.QueryAsync<T>()`.
-- Inquiry runtime registration through `AddInquiry()`.
-- Provider registration through `AddInquirySqlite(connectionString)`.
+- Inquiry runtime registration through `Inquiry.DependencyInjection.AddInquiry()`.
+- Provider registration through `Inquiry.Sqlite.DependencyInjection.AddInquirySqlite(connectionString)`.
 - Insert, select by key, select by field, update, and delete.
 
 Run it from the repository root:

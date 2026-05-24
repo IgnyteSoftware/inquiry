@@ -1,4 +1,8 @@
 using Inquiry;
+using Inquiry.Sample.Models;
+using Inquiry.Stores;
+
+namespace Inquiry.Sample.Stores;
 
 public abstract partial class OrganizationStore : InquiryStore<Organization>
 {
@@ -7,13 +11,13 @@ public abstract partial class OrganizationStore : InquiryStore<Organization>
     {
     }
 
-    [InquirySelect]
+    [InquirySelectAll]
     public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
 
-    [InquirySelectByKey]
+    [InquirySelectOneByKey]
     public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
-    [InquirySelectByField("IsActive")]
+    [InquirySelectAllByField("IsActive")]
     public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);
 
     [InquiryInsert]
@@ -22,11 +26,11 @@ public abstract partial class OrganizationStore : InquiryStore<Organization>
     [InquiryUpdate]
     public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteByKey]
+    [InquiryDeleteOneByKey]
     public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
-    public IAsyncEnumerable<Organization> SelectAllWithInquiryAsync(CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<Organization> SelectAllCustomAsync(CancellationToken cancellationToken = default)
     {
-        return _inquiry.QueryAsync<Organization>("SELECT [Key], [Name], [IsActive] FROM [TOrganization]", cancellationToken);
+        return _inquiry.QueryAsync<Organization>("SELECT * FROM [TOrganization]", cancellationToken);
     }
 }

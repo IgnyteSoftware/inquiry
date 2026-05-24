@@ -1,6 +1,6 @@
 using System.Data;
 
-namespace Inquiry;
+namespace Inquiry.Parameters;
 
 /// <summary>
 /// Describes a database parameter that can be bound to an Inquiry command.

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Inquiry;
+namespace Inquiry.DependencyInjection;
 
 /// <summary>
 /// Registers generated Inquiry services for a consuming assembly.

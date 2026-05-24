@@ -1,5 +1,12 @@
 using System.Data;
 using System.Data.Common;
+using Inquiry.Commands;
+using Inquiry.Connections;
+using Inquiry.DependencyInjection;
+using Inquiry.Interceptors;
+using Inquiry.Materialization;
+using Inquiry.Parameters;
+using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 

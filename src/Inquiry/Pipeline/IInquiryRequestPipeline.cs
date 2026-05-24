@@ -1,6 +1,7 @@
 using System.Data.Common;
+using Inquiry.Commands;
 
-namespace Inquiry;
+namespace Inquiry.Pipeline;
 
 /// <summary>
 /// Executes Inquiry database requests.

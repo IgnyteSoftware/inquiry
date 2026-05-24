@@ -1,4 +1,7 @@
-namespace Inquiry.Sqlite.Tests;
+using Inquiry;
+using Inquiry.Stores;
+
+namespace Inquiry.Sqlite.Tests.Fixtures;
 
 public abstract partial class OrganizationStore : InquiryStore<Organization>
 {
@@ -7,13 +10,13 @@ public abstract partial class OrganizationStore : InquiryStore<Organization>
     {
     }
 
-    [InquirySelect]
+    [InquirySelectAll]
     public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
 
-    [InquirySelectByKey]
+    [InquirySelectOneByKey]
     public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
-    [InquirySelectByField("IsActive")]
+    [InquirySelectAllByField("IsActive")]
     public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);
 
     [InquiryInsert]
@@ -22,7 +25,7 @@ public abstract partial class OrganizationStore : InquiryStore<Organization>
     [InquiryUpdate]
     public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteByKey]
+    [InquiryDeleteOneByKey]
     public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
     public IAsyncEnumerable<Organization> SelectWithInquiryAsync(CancellationToken cancellationToken = default)

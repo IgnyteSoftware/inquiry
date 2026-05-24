@@ -1,6 +1,6 @@
 using System.Data.Common;
 
-namespace Inquiry;
+namespace Inquiry.Parameters;
 
 internal static class InquiryParameterBinder
 {

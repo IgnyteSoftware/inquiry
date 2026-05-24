@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Sql;
 
 /// <summary>
 /// Contains generated SQL statements for a mapped Inquiry entity.
