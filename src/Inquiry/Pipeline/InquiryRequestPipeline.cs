@@ -1,15 +1,16 @@
-using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Parameters;
+using System.Data.Common;
+using System.Runtime.CompilerServices;
 
 namespace Inquiry.Pipeline;
 
 /// <summary>
 /// Default implementation of the Inquiry request pipeline.
 /// </summary>
-public sealed partial class InquiryRequestPipeline : IInquiryRequestPipeline
+public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 {
     private readonly IInquiryConnectionFactory _connectionFactory;
     private readonly IInquiryCommandInterceptor[] _interceptors;
@@ -26,10 +27,10 @@ public sealed partial class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
-    public IAsyncEnumerable<T> QueryAsync<T>(
-        InquiryCommandDefinition command,
+    public async IAsyncEnumerable<T> QueryAsync<T>(
+        InquiryCommand command,
         Func<DbDataReader, T> materialize,
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (command is null)
         {
@@ -41,12 +42,52 @@ public sealed partial class InquiryRequestPipeline : IInquiryRequestPipeline
             throw new ArgumentNullException(nameof(materialize));
         }
 
-        return new PipelineAsyncEnumerable<T>(this, command, materialize, cancellationToken);
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbCommand = connection.CreateCommand();
+        var completed = false;
+        DbDataReader? reader = null;
+        try
+        {
+            await InitializeCommandAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+            await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+
+            reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                yield return materialize(reader);
+            }
+
+            completed = true;
+            await NotifyExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (reader is not null)
+            {
+                await reader.DisposeAsync().ConfigureAwait(false);
+            }
+
+            if (!completed)
+            {
+                // Consumer broke out of the enumeration or it threw — notify interceptors so tracing/metrics close cleanly.
+                try
+                {
+                    var abandoned = new OperationCanceledException(
+                        "Inquiry query enumeration was disposed before completion.",
+                        cancellationToken);
+                    await NotifyFailedAsync(command, dbCommand, abandoned, cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Interceptor failures during dispose must not mask resource cleanup.
+                }
+            }
+        }
     }
 
     /// <inheritdoc />
     public async Task<T?> QuerySingleOrDefaultAsync<T>(
-        InquiryCommandDefinition command,
+        InquiryCommand command,
         Func<DbDataReader, T> materialize,
         CancellationToken cancellationToken = default)
     {
@@ -84,7 +125,7 @@ public sealed partial class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
-    public async Task<int> ExecuteAsync(InquiryCommandDefinition command, CancellationToken cancellationToken = default)
+    public async Task<int> ExecuteAsync(InquiryCommand command, CancellationToken cancellationToken = default)
     {
         if (command is null)
         {
@@ -113,7 +154,7 @@ public sealed partial class InquiryRequestPipeline : IInquiryRequestPipeline
 
     private async ValueTask InitializeCommandAsync(
         DbCommand dbCommand,
-        InquiryCommandDefinition command,
+        InquiryCommand command,
         CancellationToken cancellationToken)
     {
         dbCommand.CommandText = command.CommandText;
@@ -138,7 +179,7 @@ public sealed partial class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     private async ValueTask NotifyExecutingAsync(
-        InquiryCommandDefinition commandDefinition,
+        InquiryCommand commandDefinition,
         DbCommand command,
         CancellationToken cancellationToken)
     {
@@ -151,7 +192,7 @@ public sealed partial class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     private async ValueTask NotifyExecutedAsync(
-        InquiryCommandDefinition commandDefinition,
+        InquiryCommand commandDefinition,
         DbCommand command,
         int? recordsAffected,
         CancellationToken cancellationToken)
@@ -165,7 +206,7 @@ public sealed partial class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     private async ValueTask NotifyFailedAsync(
-        InquiryCommandDefinition commandDefinition,
+        InquiryCommand commandDefinition,
         DbCommand command,
         Exception exception,
         CancellationToken cancellationToken)

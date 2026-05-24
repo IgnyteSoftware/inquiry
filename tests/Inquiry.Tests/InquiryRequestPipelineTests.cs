@@ -1,5 +1,3 @@
-using System.Data;
-using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
@@ -9,6 +7,8 @@ using Inquiry.Parameters;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using System.Data;
+using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -27,7 +27,7 @@ public sealed class InquiryRequestPipelineTests
         using var cancellationTokenSource = new CancellationTokenSource();
 
         var inserted = await pipeline.ExecuteAsync(
-            new InquiryCommandDefinition(
+            new InquiryCommand(
                 "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
                 new[]
                 {
@@ -38,21 +38,21 @@ public sealed class InquiryRequestPipelineTests
             cancellationTokenSource.Token);
 
         var selected = await pipeline.QuerySingleOrDefaultAsync(
-            new InquiryCommandDefinition(
+            new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 1) }),
             MaterializeItem,
             cancellationTokenSource.Token);
 
         var missing = await pipeline.QuerySingleOrDefaultAsync(
-            new InquiryCommandDefinition(
+            new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 404) }),
             MaterializeItem,
             cancellationTokenSource.Token);
 
         var updated = await pipeline.ExecuteAsync(
-            new InquiryCommandDefinition(
+            new InquiryCommand(
                 "UPDATE Items SET Name = @Name WHERE Id = @Id",
                 new[]
                 {
@@ -62,7 +62,7 @@ public sealed class InquiryRequestPipelineTests
             cancellationTokenSource.Token);
 
         var deleted = await pipeline.ExecuteAsync(
-            new InquiryCommandDefinition(
+            new InquiryCommand(
                 "DELETE FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 1) }),
             cancellationTokenSource.Token);
@@ -88,18 +88,18 @@ public sealed class InquiryRequestPipelineTests
             new TestConnectionFactory(connectionString),
             Array.Empty<IInquiryCommandInterceptor>());
 
-        await pipeline.ExecuteAsync(new InquiryCommandDefinition("INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)"));
-        await pipeline.ExecuteAsync(new InquiryCommandDefinition("INSERT INTO Items (Id, Name, IsActive) VALUES (2, 'Beta', 1)"));
+        await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)"));
+        await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (2, 'Beta', 1)"));
 
         await foreach (var item in pipeline.QueryAsync(
-            new InquiryCommandDefinition("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
+            new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
             MaterializeItem))
         {
             Assert.Equal("Alpha", item.Name);
             break;
         }
 
-        var updated = await pipeline.ExecuteAsync(new InquiryCommandDefinition("UPDATE Items SET Name = 'Gamma' WHERE Id = 2"));
+        var updated = await pipeline.ExecuteAsync(new InquiryCommand("UPDATE Items SET Name = 'Gamma' WHERE Id = 2"));
 
         Assert.Equal(1, updated);
     }
@@ -117,7 +117,7 @@ public sealed class InquiryRequestPipelineTests
             new TestConnectionFactory(connectionString),
             new[] { interceptor });
 
-        var inserted = await pipeline.ExecuteAsync(new InquiryCommandDefinition(
+        var inserted = await pipeline.ExecuteAsync(new InquiryCommand(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
             new[]
             {
@@ -127,7 +127,7 @@ public sealed class InquiryRequestPipelineTests
             }));
 
         var exception = await Assert.ThrowsAsync<SqliteException>(() =>
-            pipeline.ExecuteAsync(new InquiryCommandDefinition("INSERT INTO MissingTable (Id) VALUES (1)")));
+            pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO MissingTable (Id) VALUES (1)")));
 
         Assert.Equal(1, inserted);
         Assert.Equal("INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)", interceptor.InitializedCommandTexts[0]);
@@ -230,7 +230,7 @@ public sealed class InquiryRequestPipelineTests
             new TestConnectionFactory(connectionString),
             new[] { interceptor });
 
-        var inserted = await pipeline.ExecuteAsync(new InquiryCommandDefinition(
+        var inserted = await pipeline.ExecuteAsync(new InquiryCommand(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
             new[]
             {
@@ -240,7 +240,7 @@ public sealed class InquiryRequestPipelineTests
             }));
 
         var selected = await pipeline.QuerySingleOrDefaultAsync(
-            new InquiryCommandDefinition(
+            new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 1) }),
             MaterializeItem);

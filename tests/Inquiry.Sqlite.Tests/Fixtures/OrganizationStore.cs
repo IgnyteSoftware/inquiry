@@ -1,4 +1,3 @@
-using Inquiry;
 using Inquiry.Stores;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
@@ -30,6 +29,6 @@ public abstract partial class OrganizationStore : InquiryStore<Organization>
 
     public IAsyncEnumerable<Organization> SelectWithInquiryAsync(CancellationToken cancellationToken = default)
     {
-        return _inquiry.QueryAsync<Organization>("SELECT [Key], [Name], [IsActive] FROM [TOrganization]", cancellationToken);
+        return Inquiry.QueryAsync<Organization>("SELECT [Key], [Name], [IsActive] FROM [TOrganization]", cancellationToken);
     }
 }

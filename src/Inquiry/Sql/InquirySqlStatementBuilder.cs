@@ -56,12 +56,19 @@ public sealed class InquirySqlStatementBuilder
             .Where(c => !c.IsKey && !c.IsGenerated)
             .Select(c => _dialect.QuoteIdentifier(c.ColumnName) + " = " + _dialect.ParameterName(c.PropertyName)));
 
+        var selectByField = new Dictionary<string, string>(columns.Count, StringComparer.Ordinal);
+        foreach (var column in columns)
+        {
+            selectByField[column.PropertyName] =
+                "SELECT " + selectColumns + " FROM " + table + " WHERE " + _dialect.QuoteIdentifier(column.ColumnName) + " = " + _dialect.ParameterName("value");
+        }
+
         return new InquirySqlStatementSet(
             selectAll: "SELECT " + selectColumns + " FROM " + table,
             selectByKey: "SELECT " + selectColumns + " FROM " + table + " WHERE " + _dialect.QuoteIdentifier(key.ColumnName) + " = " + _dialect.ParameterName("key"),
             deleteByKey: "DELETE FROM " + table + " WHERE " + _dialect.QuoteIdentifier(key.ColumnName) + " = " + _dialect.ParameterName("key"),
             insert: "INSERT INTO " + table + " (" + insertColumns + ") VALUES (" + insertParameters + ")",
             update: "UPDATE " + table + " SET " + setClauses + " WHERE " + _dialect.QuoteIdentifier(key.ColumnName) + " = " + _dialect.ParameterName(key.PropertyName),
-            selectByField: fieldColumn => "SELECT " + selectColumns + " FROM " + table + " WHERE " + _dialect.QuoteIdentifier(fieldColumn.ColumnName) + " = " + _dialect.ParameterName("value"));
+            selectByField: selectByField);
     }
 }

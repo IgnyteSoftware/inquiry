@@ -1,4 +1,3 @@
-using Inquiry;
 using Inquiry.Sample.Models;
 using Inquiry.Stores;
 
@@ -31,6 +30,6 @@ public abstract partial class OrganizationStore : InquiryStore<Organization>
 
     public IAsyncEnumerable<Organization> SelectAllCustomAsync(CancellationToken cancellationToken = default)
     {
-        return _inquiry.QueryAsync<Organization>("SELECT * FROM [TOrganization]", cancellationToken);
+        return Inquiry.QueryAsync<Organization>("SELECT * FROM [TOrganization]", cancellationToken);
     }
 }

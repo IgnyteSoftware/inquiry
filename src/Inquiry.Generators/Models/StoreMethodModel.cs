@@ -1,20 +1,19 @@
 using Microsoft.CodeAnalysis;
-using Inquiry.Generators.Features.StoreOperations;
 
 namespace Inquiry.Generators.Models;
 
 internal sealed class StoreMethodModel
 {
-    public StoreMethodModel(IMethodSymbol symbol, IStoreOperationFeature feature, ColumnModel? fieldColumn = null)
+    public StoreMethodModel(IMethodSymbol symbol, StoreOperation operation, ColumnModel? fieldColumn = null)
     {
         Symbol = symbol;
-        Feature = feature;
+        Operation = operation;
         FieldColumn = fieldColumn;
     }
 
     public IMethodSymbol Symbol { get; }
 
-    public IStoreOperationFeature Feature { get; }
+    public StoreOperation Operation { get; }
 
     public ColumnModel? FieldColumn { get; }
 }

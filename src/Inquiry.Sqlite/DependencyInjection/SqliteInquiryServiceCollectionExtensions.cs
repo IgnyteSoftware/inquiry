@@ -1,6 +1,5 @@
 using Inquiry.Connections;
 using Inquiry.Sql;
-using Inquiry.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Sqlite.DependencyInjection;

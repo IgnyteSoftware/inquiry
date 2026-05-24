@@ -83,12 +83,4 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor InvalidForeignKey = new(
-        "INQ011",
-        "Foreign-key mapping is invalid",
-        "Entity property '{0}.{1}' has an invalid foreign-key mapping: {2}.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
 }

@@ -11,16 +11,11 @@ public abstract class InquiryStore<TEntity>
     /// </summary>
     protected InquiryStore(IInquiry inquiry)
     {
-        _inquiry = inquiry ?? throw new ArgumentNullException(nameof(inquiry));
+        Inquiry = inquiry ?? throw new ArgumentNullException(nameof(inquiry));
     }
 
     /// <summary>
-    /// Gets the high-level Inquiry facade for custom store queries.
+    /// Gets the high-level Inquiry facade used by generated store methods and user-defined custom queries.
     /// </summary>
-    protected IInquiry Inquiry => _inquiry;
-
-    /// <summary>
-    /// Provides direct access to the high-level Inquiry facade for custom store queries.
-    /// </summary>
-    protected readonly IInquiry _inquiry;
+    protected IInquiry Inquiry { get; }
 }

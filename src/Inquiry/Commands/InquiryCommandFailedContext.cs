@@ -10,7 +10,7 @@ public sealed class InquiryCommandFailedContext : InquiryCommandContext
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryCommandFailedContext"/> class.
     /// </summary>
-    public InquiryCommandFailedContext(InquiryCommandDefinition commandDefinition, DbCommand command, Exception exception)
+    public InquiryCommandFailedContext(InquiryCommand commandDefinition, DbCommand command, Exception exception)
         : base(commandDefinition, command)
     {
         Exception = exception ?? throw new ArgumentNullException(nameof(exception));

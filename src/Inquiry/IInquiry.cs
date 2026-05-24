@@ -28,7 +28,7 @@ public interface IInquiry
     /// Executes a SQL query and streams mapped entities.
     /// </summary>
     IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        InquiryCommandDefinition command,
+        InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
@@ -53,7 +53,7 @@ public interface IInquiry
     /// Executes a SQL query and returns the first mapped entity, or <see langword="null"/> when no row is returned.
     /// </summary>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        InquiryCommandDefinition command,
+        InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
@@ -76,6 +76,6 @@ public interface IInquiry
     /// Executes a SQL command and returns the affected row count.
     /// </summary>
     Task<int> ExecuteAsync(
-        InquiryCommandDefinition command,
+        InquiryCommand command,
         CancellationToken cancellationToken = default);
 }
