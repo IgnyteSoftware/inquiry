@@ -19,7 +19,6 @@ public static class SqlServerInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
-        services.AddInquiryCore();
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(connectionString));
         return services;
     }

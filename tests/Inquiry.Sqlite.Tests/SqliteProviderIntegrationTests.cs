@@ -8,6 +8,18 @@ namespace Inquiry.Sqlite.Tests;
 public sealed class SqliteProviderIntegrationTests
 {
     [Fact]
+    public void SqliteProviderRegistersOnlyProviderServices()
+    {
+        using var serviceProvider = new ServiceCollection()
+            .AddInquirySqlLite("Data Source=:memory:")
+            .BuildServiceProvider();
+
+        Assert.IsType<SqliteInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());
+        Assert.Null(serviceProvider.GetService<IInquiry>());
+        Assert.Null(serviceProvider.GetService<IInquiryRequestPipeline>());
+    }
+
+    [Fact]
     public async Task GeneratedStoreExecutesCrudAgainstSqlite()
     {
         var connectionString = CreateSharedInMemoryConnectionString();
@@ -16,8 +28,8 @@ public sealed class SqliteProviderIntegrationTests
         await CreateSchemaAsync(keeperConnection);
 
         using var serviceProvider = new ServiceCollection()
+            .AddInquiry()
             .AddInquirySqlite(connectionString)
-            .AddInquiryStores()
             .BuildServiceProvider();
         var store = serviceProvider.GetRequiredService<OrganizationStore>();
         var key = Guid.NewGuid();

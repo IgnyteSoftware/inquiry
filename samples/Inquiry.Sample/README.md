@@ -7,7 +7,7 @@ It demonstrates:
 - Entity mapping with `[InquiryTable]`, `[InquiryKey]`, and `[InquiryColumn]`.
 - User-defined abstract store methods.
 - Custom store queries through `_inquiry.QueryAsync<T>()`.
-- Generated store registration through `AddInquiryStores()`.
+- Inquiry runtime registration through `AddInquiry()`.
 - Provider registration through `AddInquirySqlite(connectionString)`.
 - Insert, select by key, select by field, update, and delete.
 
