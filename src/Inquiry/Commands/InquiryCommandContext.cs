@@ -1,6 +1,6 @@
 using System.Data.Common;
 
-namespace Inquiry;
+namespace Inquiry.Commands;
 
 /// <summary>
 /// Provides command context to Inquiry command interceptors.

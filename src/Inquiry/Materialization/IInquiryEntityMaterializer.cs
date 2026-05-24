@@ -1,6 +1,6 @@
 using System.Data.Common;
 
-namespace Inquiry;
+namespace Inquiry.Materialization;
 
 /// <summary>
 /// Materializes mapped Inquiry entities from a data reader.

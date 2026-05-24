@@ -1,4 +1,4 @@
-namespace Inquiry.Generators;
+namespace Inquiry.Generators.Models;
 
 internal enum StoreOperation
 {

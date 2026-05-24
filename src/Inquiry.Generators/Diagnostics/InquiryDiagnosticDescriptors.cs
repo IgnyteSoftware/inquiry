@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Inquiry.Generators;
+namespace Inquiry.Generators.Diagnostics;
 
 internal static class InquiryDiagnosticDescriptors
 {
@@ -80,6 +80,14 @@ internal static class InquiryDiagnosticDescriptors
         "INQ010",
         "Query method must be abstract",
         "Query method '{0}' must be abstract.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor InvalidForeignKey = new(
+        "INQ011",
+        "Foreign-key mapping is invalid",
+        "Entity property '{0}.{1}' has an invalid foreign-key mapping: {2}.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

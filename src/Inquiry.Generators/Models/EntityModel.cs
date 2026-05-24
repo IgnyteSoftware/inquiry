@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 
-namespace Inquiry.Generators;
+namespace Inquiry.Generators.Models;
 
 internal sealed class EntityModel
 {

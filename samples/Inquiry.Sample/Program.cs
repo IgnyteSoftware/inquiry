@@ -1,5 +1,9 @@
 using Inquiry;
+using Inquiry.DependencyInjection;
+using Inquiry.Sample.Data;
 using Inquiry.Sqlite;
+using Inquiry.Sqlite.DependencyInjection;
+using Inquiry.Sample.Workflows;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 

@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Sql;
 
 /// <summary>
 /// Describes a mapped column used to build Inquiry generated SQL statements.

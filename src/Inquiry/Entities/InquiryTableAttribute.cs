@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Entities;
 
 /// <summary>
 /// Maps a CLR entity type to a relational database table.

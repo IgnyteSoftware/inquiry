@@ -1,3 +1,5 @@
+using Inquiry.Commands;
+
 namespace Inquiry;
 
 /// <summary>

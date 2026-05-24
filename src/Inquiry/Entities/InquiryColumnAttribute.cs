@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Entities;
 
 /// <summary>
 /// Maps a CLR property to a relational database column.

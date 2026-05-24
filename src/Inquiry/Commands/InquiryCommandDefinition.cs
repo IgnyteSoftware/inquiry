@@ -1,6 +1,7 @@
 using System.Data;
+using Inquiry.Parameters;
 
-namespace Inquiry;
+namespace Inquiry.Commands;
 
 /// <summary>
 /// Describes a database command that can be executed by the Inquiry request pipeline.

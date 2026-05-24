@@ -1,3 +1,7 @@
+using Inquiry.Commands;
+using Inquiry.Materialization;
+using Inquiry.Parameters;
+using Inquiry.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry;

@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Stores;
 
 /// <summary>
 /// Base type for generated and user-defined Inquiry stores when a public key type is useful.

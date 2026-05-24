@@ -1,5 +1,5 @@
 using System.Data.Common;
-using Inquiry;
+using Inquiry.Connections;
 using Microsoft.Data.SqlClient;
 
 namespace Inquiry.SqlServer;

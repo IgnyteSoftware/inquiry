@@ -1,10 +1,10 @@
 using Microsoft.CodeAnalysis;
 
-namespace Inquiry.Generators;
+namespace Inquiry.Generators.Models;
 
 internal sealed class ColumnModel
 {
-    public ColumnModel(IPropertySymbol symbol, string propertyName, string columnName, TypeInfo type, bool isKey, bool isGenerated)
+    public ColumnModel(IPropertySymbol symbol, string propertyName, string columnName, TypeInfo type, bool isKey, bool isGenerated, ForeignKeyModel? foreignKey)
     {
         Symbol = symbol;
         PropertyName = propertyName;
@@ -12,6 +12,7 @@ internal sealed class ColumnModel
         Type = type;
         IsKey = isKey;
         IsGenerated = isGenerated;
+        ForeignKey = foreignKey;
     }
 
     public IPropertySymbol Symbol { get; }
@@ -25,4 +26,6 @@ internal sealed class ColumnModel
     public bool IsKey { get; }
 
     public bool IsGenerated { get; }
+
+    public ForeignKeyModel? ForeignKey { get; }
 }

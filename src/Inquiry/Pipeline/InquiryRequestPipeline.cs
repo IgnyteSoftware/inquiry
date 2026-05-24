@@ -1,6 +1,10 @@
 using System.Data.Common;
+using Inquiry.Commands;
+using Inquiry.Connections;
+using Inquiry.Interceptors;
+using Inquiry.Parameters;
 
-namespace Inquiry;
+namespace Inquiry.Pipeline;
 
 /// <summary>
 /// Default implementation of the Inquiry request pipeline.

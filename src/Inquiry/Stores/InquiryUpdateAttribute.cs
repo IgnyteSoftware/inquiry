@@ -1,4 +1,4 @@
-namespace Inquiry;
+namespace Inquiry.Stores;
 
 /// <summary>
 /// Generates a method that updates an entity by primary key.

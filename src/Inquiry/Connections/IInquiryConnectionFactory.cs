@@ -1,6 +1,6 @@
 using System.Data.Common;
 
-namespace Inquiry;
+namespace Inquiry.Connections;
 
 /// <summary>
 /// Creates and opens database connections for generated Inquiry stores.

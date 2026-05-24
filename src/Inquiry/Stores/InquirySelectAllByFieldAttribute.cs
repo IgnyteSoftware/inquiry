@@ -1,15 +1,15 @@
-namespace Inquiry;
+namespace Inquiry.Stores;
 
 /// <summary>
 /// Generates a method that selects rows by one mapped property or column.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquirySelectByFieldAttribute : Attribute
+public sealed class InquirySelectAllByFieldAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="InquirySelectByFieldAttribute"/> class.
+    /// Initializes a new instance of the <see cref="InquirySelectAllByFieldAttribute"/> class.
     /// </summary>
-    public InquirySelectByFieldAttribute(string field)
+    public InquirySelectAllByFieldAttribute(string field)
     {
         if (string.IsNullOrWhiteSpace(field))
         {

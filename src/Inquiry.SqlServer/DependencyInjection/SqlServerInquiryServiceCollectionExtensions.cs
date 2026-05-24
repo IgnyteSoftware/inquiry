@@ -1,8 +1,9 @@
-using Inquiry;
+using Inquiry.Connections;
+using Inquiry.Sql;
 using Inquiry.SqlServer;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Microsoft.Extensions.DependencyInjection;
+namespace Inquiry.SqlServer.DependencyInjection;
 
 /// <summary>
 /// Registers Inquiry SQL Server services.
