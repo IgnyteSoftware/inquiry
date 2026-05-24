@@ -30,6 +30,16 @@ public sealed class DefaultInquiry : IInquiry
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
+        string commandText,
+        object? parameters,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+    {
+        return QueryAsync<TEntity>(CreateCommand(commandText, parameters), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
         InquiryCommandDefinition command,
         CancellationToken cancellationToken = default)
         where TEntity : class
@@ -49,6 +59,16 @@ public sealed class DefaultInquiry : IInquiry
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
+        string commandText,
+        object? parameters,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+    {
+        return QuerySingleOrDefaultAsync<TEntity>(CreateCommand(commandText, parameters), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         InquiryCommandDefinition command,
         CancellationToken cancellationToken = default)
         where TEntity : class
@@ -64,9 +84,25 @@ public sealed class DefaultInquiry : IInquiry
     }
 
     /// <inheritdoc />
+    public Task<int> ExecuteAsync(
+        string commandText,
+        object? parameters,
+        CancellationToken cancellationToken = default)
+    {
+        return ExecuteAsync(CreateCommand(commandText, parameters), cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<int> ExecuteAsync(InquiryCommandDefinition command, CancellationToken cancellationToken = default)
     {
         return _requestPipeline.ExecuteAsync(command, cancellationToken);
+    }
+
+    private static InquiryCommandDefinition CreateCommand(string commandText, object? parameters)
+    {
+        return new InquiryCommandDefinition(
+            commandText,
+            InquiryParameterReader.Read(parameters));
     }
 
     private IInquiryEntityMaterializer<TEntity> GetMaterializer<TEntity>()

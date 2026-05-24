@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,42 +22,42 @@ public sealed class InquiryRequestPipelineTests
         var inserted = await pipeline.ExecuteAsync(
             new InquiryCommandDefinition(
                 "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
-                command =>
+                new[]
                 {
-                    AddParameter(command, "@Id", 1);
-                    AddParameter(command, "@Name", "Alpha");
-                    AddParameter(command, "@IsActive", 1);
+                    new InquiryParameter("Id", 1),
+                    new InquiryParameter("Name", "Alpha"),
+                    new InquiryParameter("IsActive", 1),
                 }),
             cancellationTokenSource.Token);
 
         var selected = await pipeline.QuerySingleOrDefaultAsync(
             new InquiryCommandDefinition(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
-                command => AddParameter(command, "@Id", 1)),
+                new[] { new InquiryParameter("Id", 1) }),
             MaterializeItem,
             cancellationTokenSource.Token);
 
         var missing = await pipeline.QuerySingleOrDefaultAsync(
             new InquiryCommandDefinition(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
-                command => AddParameter(command, "@Id", 404)),
+                new[] { new InquiryParameter("Id", 404) }),
             MaterializeItem,
             cancellationTokenSource.Token);
 
         var updated = await pipeline.ExecuteAsync(
             new InquiryCommandDefinition(
                 "UPDATE Items SET Name = @Name WHERE Id = @Id",
-                command =>
+                new[]
                 {
-                    AddParameter(command, "@Name", "Beta");
-                    AddParameter(command, "@Id", 1);
+                    new InquiryParameter("Name", "Beta"),
+                    new InquiryParameter("Id", 1),
                 }),
             cancellationTokenSource.Token);
 
         var deleted = await pipeline.ExecuteAsync(
             new InquiryCommandDefinition(
                 "DELETE FROM Items WHERE Id = @Id",
-                command => AddParameter(command, "@Id", 1)),
+                new[] { new InquiryParameter("Id", 1) }),
             cancellationTokenSource.Token);
 
         Assert.Equal(1, inserted);
@@ -111,11 +112,11 @@ public sealed class InquiryRequestPipelineTests
 
         var inserted = await pipeline.ExecuteAsync(new InquiryCommandDefinition(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
-            command =>
+            new[]
             {
-                AddParameter(command, "@Id", 1);
-                AddParameter(command, "@Name", "Alpha");
-                AddParameter(command, "@IsActive", 1);
+                new InquiryParameter("Id", 1),
+                new InquiryParameter("Name", "Alpha"),
+                new InquiryParameter("IsActive", 1),
             }));
 
         var exception = await Assert.ThrowsAsync<SqliteException>(() =>
@@ -169,6 +170,81 @@ public sealed class InquiryRequestPipelineTests
         Assert.Equal("Alpha", selected.Name);
     }
 
+    [Fact]
+    public async Task InquiryFacadeBindsAnonymousObjectAndDictionaryParameters()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        await CreateSchemaAsync(keeperConnection);
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IInquiryConnectionFactory>(new TestConnectionFactory(connectionString))
+            .AddSingleton<IInquiryEntityMaterializer<TestItem>, TestItemMaterializer>()
+            .AddInquiry()
+            .BuildServiceProvider();
+
+        var inquiry = services.GetRequiredService<IInquiry>();
+
+        var inserted = await inquiry.ExecuteAsync(
+            "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
+            new { Id = 1, Name = "Alpha", IsActive = 1 });
+
+        var selected = await inquiry.QuerySingleOrDefaultAsync<TestItem>(
+            "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
+            new Dictionary<string, object?> { ["Id"] = 1 });
+
+        var updated = await inquiry.ExecuteAsync(
+            "UPDATE Items SET Name = @Name WHERE Id = @Id",
+            new Dictionary<string, object?> { ["Name"] = "Beta", ["Id"] = 1 });
+
+        var streamed = await ToListAsync(inquiry.QueryAsync<TestItem>(
+            "SELECT Id, Name, IsActive FROM Items WHERE Name = @Name",
+            new { Name = "Beta" }));
+
+        Assert.Equal(1, inserted);
+        Assert.NotNull(selected);
+        Assert.Equal("Alpha", selected.Name);
+        Assert.Equal(1, updated);
+        Assert.Single(streamed);
+        Assert.Equal("Beta", streamed[0].Name);
+    }
+
+    [Fact]
+    public async Task CommandDefinitionBindsInquiryParameterCollection()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        await CreateSchemaAsync(keeperConnection);
+
+        var interceptor = new RecordingInterceptor();
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            new[] { interceptor });
+
+        var inserted = await pipeline.ExecuteAsync(new InquiryCommandDefinition(
+            "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
+            new[]
+            {
+                new InquiryParameter("Id", 1),
+                new InquiryParameter("Name", "Alpha", DbType.String, size: 50),
+                new InquiryParameter("IsActive", 1),
+            }));
+
+        var selected = await pipeline.QuerySingleOrDefaultAsync(
+            new InquiryCommandDefinition(
+                "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
+                new[] { new InquiryParameter("Id", 1) }),
+            MaterializeItem);
+
+        Assert.Equal(1, inserted);
+        Assert.NotNull(selected);
+        Assert.Equal("Alpha", selected.Name);
+        Assert.Equal(3, interceptor.InitializedParameterCounts[0]);
+        Assert.Contains("@Name", interceptor.InitializedParameterNames[0]);
+    }
+
     private static string CreateSharedInMemoryConnectionString()
     {
         var builder = new SqliteConnectionStringBuilder
@@ -201,14 +277,6 @@ public sealed class InquiryRequestPipelineTests
             reader.GetInt32(0),
             reader.GetString(1),
             reader.GetInt32(2) == 1);
-    }
-
-    private static void AddParameter(DbCommand command, string name, object value)
-    {
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = name;
-        parameter.Value = value;
-        command.Parameters.Add(parameter);
     }
 
     private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> source)
@@ -248,6 +316,8 @@ public sealed class InquiryRequestPipelineTests
 
         public List<int> InitializedParameterCounts { get; } = new();
 
+        public List<string[]> InitializedParameterNames { get; } = new();
+
         public List<int> ExecutingTimeouts { get; } = new();
 
         public List<int?> ExecutedRecordsAffected { get; } = new();
@@ -258,6 +328,7 @@ public sealed class InquiryRequestPipelineTests
         {
             InitializedCommandTexts.Add(context.Command.CommandText);
             InitializedParameterCounts.Add(context.Command.Parameters.Count);
+            InitializedParameterNames.Add(context.Command.Parameters.Cast<DbParameter>().Select(static parameter => parameter.ParameterName).ToArray());
             context.Command.CommandTimeout = 7;
             return ValueTask.CompletedTask;
         }

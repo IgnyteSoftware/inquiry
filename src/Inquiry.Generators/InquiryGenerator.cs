@@ -377,7 +377,6 @@ public sealed class InquiryGenerator : ISourceGenerator
             source.AppendLine();
         }
 
-        GenerateParameterHelper(source);
         source.AppendLine("}");
         AppendNamespaceEnd(source, storeSymbol);
 
@@ -447,7 +446,8 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine($"        return _inquiry.QueryAsync<{entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(");
-                source.AppendLine($"            new global::Inquiry.InquiryCommandDefinition(\"{Escape(selectByFieldSql)}\", command => AddParameter(command, \"@value\", {entityParameter})),");
+                source.AppendLine($"            \"{Escape(selectByFieldSql)}\",");
+                source.AppendLine($"            new {{ value = {entityParameter} }},");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
@@ -456,7 +456,8 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override async {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine($"        return await _inquiry.QuerySingleOrDefaultAsync<{entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(");
-                source.AppendLine($"            new global::Inquiry.InquiryCommandDefinition(SelectByKeySql, command => AddParameter(command, \"@key\", {entityParameter})),");
+                source.AppendLine("            SelectByKeySql,");
+                source.AppendLine($"            new {{ key = {entityParameter} }},");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
                 break;
@@ -465,13 +466,14 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine("        return _inquiry.ExecuteAsync(");
-                source.AppendLine("            new global::Inquiry.InquiryCommandDefinition(InsertSql, command =>");
+                source.AppendLine("            InsertSql,");
+                source.AppendLine("            new");
                 source.AppendLine("            {");
                 foreach (var column in entity.Columns)
                 {
-                    source.AppendLine($"                AddParameter(command, \"@{column.PropertyName}\", {entityParameter}.{column.PropertyName});");
+                    source.AppendLine($"                {column.PropertyName} = {entityParameter}.{column.PropertyName},");
                 }
-                source.AppendLine("            }),");
+                source.AppendLine("            },");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
@@ -480,13 +482,14 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override async {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine("        return await _inquiry.ExecuteAsync(");
-                source.AppendLine("            new global::Inquiry.InquiryCommandDefinition(UpdateSql, command =>");
+                source.AppendLine("            UpdateSql,");
+                source.AppendLine("            new");
                 source.AppendLine("            {");
                 foreach (var column in entity.Columns)
                 {
-                    source.AppendLine($"                AddParameter(command, \"@{column.PropertyName}\", {entityParameter}.{column.PropertyName});");
+                    source.AppendLine($"                {column.PropertyName} = {entityParameter}.{column.PropertyName},");
                 }
-                source.AppendLine("            }),");
+                source.AppendLine("            },");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
                 source.AppendLine("    }");
                 break;
@@ -495,22 +498,12 @@ public sealed class InquiryGenerator : ISourceGenerator
                 source.AppendLine($"    public override async {returnType} {methodName}({parameters})");
                 source.AppendLine("    {");
                 source.AppendLine("        return await _inquiry.ExecuteAsync(");
-                source.AppendLine($"            new global::Inquiry.InquiryCommandDefinition(DeleteByKeySql, command => AddParameter(command, \"@key\", {entityParameter})),");
+                source.AppendLine("            DeleteByKeySql,");
+                source.AppendLine($"            new {{ key = {entityParameter} }},");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
                 source.AppendLine("    }");
                 break;
         }
-    }
-
-    private static void GenerateParameterHelper(StringBuilder source)
-    {
-        source.AppendLine("    private static void AddParameter(global::System.Data.Common.DbCommand command, string name, object? value)");
-        source.AppendLine("    {");
-        source.AppendLine("        var parameter = command.CreateParameter();");
-        source.AppendLine("        parameter.ParameterName = name;");
-        source.AppendLine("        parameter.Value = value ?? global::System.DBNull.Value;");
-        source.AppendLine("        command.Parameters.Add(parameter);");
-        source.AppendLine("    }");
     }
 
     private static string ReadExpression(TypeInfo type, int index)

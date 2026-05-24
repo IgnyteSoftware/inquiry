@@ -1,5 +1,4 @@
 using System.Data;
-using System.Data.Common;
 
 namespace Inquiry;
 
@@ -11,9 +10,17 @@ public sealed class InquiryCommandDefinition
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryCommandDefinition"/> class.
     /// </summary>
+    public InquiryCommandDefinition(string commandText, CommandType? commandType = null, int? commandTimeout = null)
+        : this(commandText, Array.Empty<InquiryParameter>(), commandType, commandTimeout)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InquiryCommandDefinition"/> class.
+    /// </summary>
     public InquiryCommandDefinition(
         string commandText,
-        Action<DbCommand>? bindParameters = null,
+        IReadOnlyList<InquiryParameter> parameters,
         CommandType? commandType = null,
         int? commandTimeout = null)
     {
@@ -23,7 +30,7 @@ public sealed class InquiryCommandDefinition
         }
 
         CommandText = commandText;
-        BindParameters = bindParameters;
+        Parameters = parameters?.ToArray() ?? throw new ArgumentNullException(nameof(parameters));
         CommandType = commandType;
         CommandTimeout = commandTimeout;
     }
@@ -34,9 +41,9 @@ public sealed class InquiryCommandDefinition
     public string CommandText { get; }
 
     /// <summary>
-    /// Gets the delegate used to bind provider-specific parameters.
+    /// Gets the parameters to bind to the command.
     /// </summary>
-    public Action<DbCommand>? BindParameters { get; }
+    public IReadOnlyList<InquiryParameter> Parameters { get; }
 
     /// <summary>
     /// Gets the optional ADO.NET command type.
