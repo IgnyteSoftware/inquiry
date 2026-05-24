@@ -18,78 +18,6 @@ public sealed class InquiryGenerator : ISourceGenerator
     private static readonly SymbolDisplayFormat FullyQualifiedNullableFormat = SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
         SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
-    private static readonly DiagnosticDescriptor EntityKeyCount = new(
-        "INQ001",
-        "Entity must have exactly one InquiryKey property",
-        "Entity '{0}' must have exactly one InquiryKey property.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor DuplicateColumn = new(
-        "INQ002",
-        "Entity contains duplicate mapped column names",
-        "Entity '{0}' maps multiple properties to column '{1}'.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor UnsupportedPropertyType = new(
-        "INQ003",
-        "Entity property type is not supported",
-        "Entity property '{0}.{1}' has unsupported type '{2}'.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor StoreMustBePartial = new(
-        "INQ004",
-        "Store class must be partial",
-        "Store class '{0}' must be partial.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor UnsupportedReturnType = new(
-        "INQ005",
-        "Query method return type is not supported",
-        "Query method '{0}' has unsupported return type '{1}'.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor InvalidParameters = new(
-        "INQ006",
-        "Query method parameter list is invalid",
-        "Query method '{0}' has an invalid parameter list.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor UnknownField = new(
-        "INQ007",
-        "SelectByField references an unmapped property or column",
-        "Query method '{0}' references unmapped field '{1}'.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor StoreEntityNotMapped = new(
-        "INQ008",
-        "Store entity type is not mapped with InquiryTable",
-        "Store class '{0}' uses entity '{1}', which is not mapped with InquiryTable.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor MethodMustBeAbstract = new(
-        "INQ010",
-        "Query method must be abstract",
-        "Query method '{0}' must be abstract.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
     public void Initialize(GeneratorInitializationContext context)
     {
         context.RegisterForSyntaxNotifications(static () => new SyntaxReceiver());
@@ -124,14 +52,14 @@ public sealed class InquiryGenerator : ISourceGenerator
 
             if (!classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword))
             {
-                context.ReportDiagnostic(Diagnostic.Create(StoreMustBePartial, classDeclaration.Identifier.GetLocation(), storeSymbol.Name));
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoreMustBePartial, classDeclaration.Identifier.GetLocation(), storeSymbol.Name));
                 continue;
             }
 
             var entityKey = entityType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (!entities.TryGetValue(entityKey, out var entity))
             {
-                context.ReportDiagnostic(Diagnostic.Create(StoreEntityNotMapped, classDeclaration.Identifier.GetLocation(), storeSymbol.Name, entityType.ToDisplayString()));
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoreEntityNotMapped, classDeclaration.Identifier.GetLocation(), storeSymbol.Name, entityType.ToDisplayString()));
                 continue;
             }
 
@@ -190,7 +118,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 if (!typeInfo.IsSupported)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
-                        UnsupportedPropertyType,
+                        InquiryDiagnosticDescriptors.UnsupportedPropertyType,
                         property.Locations.FirstOrDefault(),
                         entitySymbol.Name,
                         property.Name,
@@ -200,7 +128,7 @@ public sealed class InquiryGenerator : ISourceGenerator
                 if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
-                        UnsupportedPropertyType,
+                        InquiryDiagnosticDescriptors.UnsupportedPropertyType,
                         property.Locations.FirstOrDefault(),
                         entitySymbol.Name,
                         property.Name,
@@ -211,13 +139,13 @@ public sealed class InquiryGenerator : ISourceGenerator
             var keyColumns = columns.Where(static c => c.IsKey).ToArray();
             if (keyColumns.Length != 1)
             {
-                context.ReportDiagnostic(Diagnostic.Create(EntityKeyCount, classDeclaration.Identifier.GetLocation(), entitySymbol.Name));
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.EntityKeyCount, classDeclaration.Identifier.GetLocation(), entitySymbol.Name));
                 continue;
             }
 
             foreach (var duplicate in columns.GroupBy(static c => c.ColumnName, StringComparer.OrdinalIgnoreCase).Where(static g => g.Count() > 1))
             {
-                context.ReportDiagnostic(Diagnostic.Create(DuplicateColumn, classDeclaration.Identifier.GetLocation(), entitySymbol.Name, duplicate.Key));
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DuplicateColumn, classDeclaration.Identifier.GetLocation(), entitySymbol.Name, duplicate.Key));
             }
 
             var entity = new EntityModel(entitySymbol, tableName, schema, columns, keyColumns[0]);
@@ -241,7 +169,7 @@ public sealed class InquiryGenerator : ISourceGenerator
 
             if (!method.IsAbstract)
             {
-                context.ReportDiagnostic(Diagnostic.Create(MethodMustBeAbstract, method.Locations.FirstOrDefault(), method.Name));
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MethodMustBeAbstract, method.Locations.FirstOrDefault(), method.Name));
                 continue;
             }
 
@@ -249,19 +177,19 @@ public sealed class InquiryGenerator : ISourceGenerator
             var fieldColumn = selectedField is null ? null : entity.Columns.FirstOrDefault(c => string.Equals(c.PropertyName, selectedField, StringComparison.OrdinalIgnoreCase) || string.Equals(c.ColumnName, selectedField, StringComparison.OrdinalIgnoreCase));
             if (operation == StoreOperation.SelectByField && fieldColumn is null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(UnknownField, method.Locations.FirstOrDefault(), method.Name, selectedField));
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnknownField, method.Locations.FirstOrDefault(), method.Name, selectedField));
                 continue;
             }
 
             if (!IsSupportedReturnType(method.ReturnType, operation, entity))
             {
-                context.ReportDiagnostic(Diagnostic.Create(UnsupportedReturnType, method.Locations.FirstOrDefault(), method.Name, method.ReturnType.ToDisplayString()));
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnsupportedReturnType, method.Locations.FirstOrDefault(), method.Name, method.ReturnType.ToDisplayString()));
                 continue;
             }
 
             if (!HasSupportedParameters(method, operation, entity, fieldColumn))
             {
-                context.ReportDiagnostic(Diagnostic.Create(InvalidParameters, method.Locations.FirstOrDefault(), method.Name));
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Locations.FirstOrDefault(), method.Name));
                 continue;
             }
 
@@ -725,192 +653,4 @@ public sealed class InquiryGenerator : ISourceGenerator
         return "global::" + registration.EntityType.ContainingNamespace.ToDisplayString() + "." + registration.MaterializerTypeName;
     }
 
-    private sealed class SyntaxReceiver : ISyntaxReceiver
-    {
-        public List<ClassDeclarationSyntax> CandidateClasses { get; } = new();
-
-        public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
-        {
-            if (syntaxNode is ClassDeclarationSyntax classDeclaration &&
-                (classDeclaration.AttributeLists.Count > 0 || classDeclaration.BaseList is not null))
-            {
-                CandidateClasses.Add(classDeclaration);
-            }
-        }
-    }
-
-    private sealed class EntityModel
-    {
-        public EntityModel(INamedTypeSymbol symbol, string tableName, string? schema, List<ColumnModel> columns, ColumnModel key)
-        {
-            Symbol = symbol;
-            TableName = tableName;
-            Schema = schema;
-            Columns = columns;
-            Key = key;
-        }
-
-        public INamedTypeSymbol Symbol { get; }
-
-        public string TableName { get; }
-
-        public string? Schema { get; }
-
-        public List<ColumnModel> Columns { get; }
-
-        public ColumnModel Key { get; }
-    }
-
-    private sealed class ColumnModel
-    {
-        public ColumnModel(IPropertySymbol symbol, string propertyName, string columnName, TypeInfo type, bool isKey)
-        {
-            Symbol = symbol;
-            PropertyName = propertyName;
-            ColumnName = columnName;
-            Type = type;
-            IsKey = isKey;
-        }
-
-        public IPropertySymbol Symbol { get; }
-
-        public string PropertyName { get; }
-
-        public string ColumnName { get; }
-
-        public TypeInfo Type { get; }
-
-        public bool IsKey { get; }
-    }
-
-    private sealed class TypeInfo
-    {
-        private TypeInfo(ITypeSymbol symbol, SpecialType specialType, bool isNullable, bool isGuid, bool isDateTimeOffset, bool isByteArray)
-        {
-            Symbol = symbol;
-            SpecialType = specialType;
-            IsNullable = isNullable;
-            IsGuid = isGuid;
-            IsDateTimeOffset = isDateTimeOffset;
-            IsByteArray = isByteArray;
-            IsSupported = IsSupportedType(specialType, isGuid, isDateTimeOffset, isByteArray);
-            DisplayName = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            NonNullableDisplayName = GetNonNullableSymbol(symbol).ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        }
-
-        public ITypeSymbol Symbol { get; }
-
-        public SpecialType SpecialType { get; }
-
-        public bool IsNullable { get; }
-
-        public bool IsGuid { get; }
-
-        public bool IsDateTimeOffset { get; }
-
-        public bool IsByteArray { get; }
-
-        public bool IsSupported { get; }
-
-        public string DisplayName { get; }
-
-        public string NonNullableDisplayName { get; }
-
-        public static TypeInfo Create(ITypeSymbol symbol, NullableAnnotation nullableAnnotation)
-        {
-            var nonNullable = GetNonNullableSymbol(symbol);
-            return new TypeInfo(
-                symbol,
-                nonNullable.SpecialType,
-                DetermineIsNullable(symbol, nullableAnnotation),
-                nonNullable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Guid",
-                nonNullable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.DateTimeOffset",
-                nonNullable is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte });
-        }
-
-        private static bool DetermineIsNullable(ITypeSymbol symbol, NullableAnnotation nullableAnnotation)
-        {
-            return nullableAnnotation == NullableAnnotation.Annotated ||
-                symbol is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
-        }
-
-        private static ITypeSymbol GetNonNullableSymbol(ITypeSymbol symbol)
-        {
-            if (symbol is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } named)
-            {
-                return named.TypeArguments[0];
-            }
-
-            return symbol;
-        }
-
-        private static bool IsSupportedType(SpecialType specialType, bool isGuid, bool isDateTimeOffset, bool isByteArray)
-        {
-            return specialType is SpecialType.System_String
-                or SpecialType.System_Int16
-                or SpecialType.System_Int32
-                or SpecialType.System_Int64
-                or SpecialType.System_Boolean
-                or SpecialType.System_Decimal
-                or SpecialType.System_Double
-                or SpecialType.System_Single
-                or SpecialType.System_DateTime
-                || isGuid
-                || isDateTimeOffset
-                || isByteArray;
-        }
-    }
-
-    private sealed class StoreMethodModel
-    {
-        public StoreMethodModel(IMethodSymbol symbol, StoreOperation operation, ColumnModel? fieldColumn)
-        {
-            Symbol = symbol;
-            Operation = operation;
-            FieldColumn = fieldColumn;
-        }
-
-        public IMethodSymbol Symbol { get; }
-
-        public StoreOperation Operation { get; }
-
-        public ColumnModel? FieldColumn { get; }
-    }
-
-    private sealed class StoreRegistrationModel
-    {
-        public StoreRegistrationModel(INamedTypeSymbol storeType, string generatedTypeName)
-        {
-            StoreType = storeType;
-            GeneratedTypeName = generatedTypeName;
-        }
-
-        public INamedTypeSymbol StoreType { get; }
-
-        public string GeneratedTypeName { get; }
-    }
-
-    private sealed class EntityRegistrationModel
-    {
-        public EntityRegistrationModel(INamedTypeSymbol entityType, string materializerTypeName)
-        {
-            EntityType = entityType;
-            MaterializerTypeName = materializerTypeName;
-        }
-
-        public INamedTypeSymbol EntityType { get; }
-
-        public string MaterializerTypeName { get; }
-    }
-
-    private enum StoreOperation
-    {
-        None,
-        SelectAll,
-        SelectByKey,
-        SelectByField,
-        Insert,
-        Update,
-        DeleteByKey,
-    }
 }
