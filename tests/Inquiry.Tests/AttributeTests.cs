@@ -36,12 +36,19 @@ public sealed class AttributeTests
     }
 
     [Fact]
-    public void ForeignKeyAttributeCanStoreLocalColumnName()
+    public void ForeignKeyAttributeCanStoreExplicitColumnName()
     {
         var attribute = new InquiryForeignKeyAttribute("OrganizationKey", "TOrganization", "Key");
 
         Assert.Equal("OrganizationKey", attribute.Name);
         Assert.Equal("TOrganization", attribute.ReferencedTable);
         Assert.Equal("Key", attribute.ReferencedColumn);
+    }
+
+    [Fact]
+    public void ForeignKeyAttributeRejectsEmptyReference()
+    {
+        Assert.Throws<ArgumentException>(() => new InquiryForeignKeyAttribute(string.Empty, "Key"));
+        Assert.Throws<ArgumentException>(() => new InquiryForeignKeyAttribute("TOrganization", string.Empty));
     }
 }

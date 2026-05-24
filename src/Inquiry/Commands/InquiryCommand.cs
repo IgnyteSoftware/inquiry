@@ -1,25 +1,25 @@
-using System.Data;
 using Inquiry.Parameters;
+using System.Data;
 
 namespace Inquiry.Commands;
 
 /// <summary>
 /// Describes a database command that can be executed by the Inquiry request pipeline.
 /// </summary>
-public sealed class InquiryCommandDefinition
+public sealed class InquiryCommand
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="InquiryCommandDefinition"/> class.
+    /// Initializes a new instance of the <see cref="InquiryCommand"/> class.
     /// </summary>
-    public InquiryCommandDefinition(string commandText, CommandType? commandType = null, int? commandTimeout = null)
+    public InquiryCommand(string commandText, CommandType? commandType = null, int? commandTimeout = null)
         : this(commandText, Array.Empty<InquiryParameter>(), commandType, commandTimeout)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="InquiryCommandDefinition"/> class.
+    /// Initializes a new instance of the <see cref="InquiryCommand"/> class.
     /// </summary>
-    public InquiryCommandDefinition(
+    public InquiryCommand(
         string commandText,
         IReadOnlyList<InquiryParameter> parameters,
         CommandType? commandType = null,

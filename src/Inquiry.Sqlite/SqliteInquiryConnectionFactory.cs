@@ -1,6 +1,6 @@
-using System.Data.Common;
 using Inquiry.Connections;
 using Microsoft.Data.Sqlite;
+using System.Data.Common;
 
 namespace Inquiry.Sqlite;
 

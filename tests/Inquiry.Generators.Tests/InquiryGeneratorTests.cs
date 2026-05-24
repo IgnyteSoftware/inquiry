@@ -1,10 +1,7 @@
-using System.Collections.Immutable;
-using System.Reflection;
 using Inquiry.Entities;
-using Inquiry.Generators;
-using Inquiry.Stores;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using System.Collections.Immutable;
 
 namespace Inquiry.Generators.Tests;
 
@@ -79,10 +76,11 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("public sealed class GeneratedOrganizationStore : global::Demo.OrganizationStore", generatedText);
         Assert.Contains("private readonly global::Inquiry.Sql.InquirySqlStatementSet _sqlStatements;", generatedText);
         Assert.Contains("public GeneratedOrganizationStore(global::Inquiry.IInquiry inquiry, global::Inquiry.Sql.InquirySqlDialect sqlDialect)", generatedText);
-        Assert.Contains("new global::Inquiry.Sql.InquirySqlStatementBuilder(sqlDialect).Build", generatedText);
-        Assert.Contains("_inquiry.QueryAsync<global::Demo.Organization>", generatedText);
-        Assert.Contains("_inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization>", generatedText);
-        Assert.Contains("_inquiry.ExecuteAsync", generatedText);
+        Assert.Contains("new global::Inquiry.Sql.InquirySqlStatementBuilder(sqlDialect", generatedText);
+        Assert.Contains(".Build(null, \"TOrganization\", _columns)", generatedText);
+        Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization>", generatedText);
+        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization>", generatedText);
+        Assert.Contains("Inquiry.ExecuteAsync", generatedText);
         Assert.Contains("new { key = key }", generatedText);
         Assert.Contains("new { value = isActive }", generatedText);
         Assert.Contains("Key = organization.Key", generatedText);
@@ -112,14 +110,17 @@ public sealed class InquiryGeneratorTests
 
         Assert.Contains("IInquiryServiceRegistration", generatedServicesText);
         Assert.Contains("void AddServices(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)", generatedServicesText);
-        Assert.Contains("TryAddSingleton<global::Inquiry.Entities.IInquiryEntityMetadata<global::Demo.Organization>, global::Demo.OrganizationInquiryEntityMetadata>", generatedServicesText);
+        Assert.DoesNotContain("IInquiryEntityMetadata", generatedServicesText);
         Assert.Contains("TryAddSingleton<global::Inquiry.Materialization.IInquiryEntityMaterializer<global::Demo.Organization>, global::Demo.OrganizationInquiryEntityMaterializer>", generatedServicesText);
         Assert.Contains("TryAddTransient<global::Demo.OrganizationStore, global::Demo.GeneratedOrganizationStore>", generatedServicesText);
     }
 
     [Fact]
-    public void GeneratesForeignKeyMetadataWithoutChangingColumnMapping()
+    public void ForeignKeyAttributeMapsAsRegularColumn()
     {
+        // Verifies that [InquiryForeignKey] participates in column discovery the same way
+        // [InquiryColumn] does: 2-arg form defaults the column name to the property name,
+        // 3-arg form honors the explicit local column name.
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -130,16 +131,6 @@ public sealed class InquiryGeneratorTests
 
             namespace Demo;
 
-            [InquiryTable("TOrganization")]
-            public sealed class Organization
-            {
-                [InquiryKey]
-                public Guid Key { get; set; }
-
-                [InquiryColumn]
-                public string Name { get; set; } = string.Empty;
-            }
-
             [InquiryTable("TUser")]
             public sealed class User
             {
@@ -147,18 +138,15 @@ public sealed class InquiryGeneratorTests
                 public Guid Key { get; set; }
 
                 [InquiryForeignKey("TOrganization", "Key")]
-                public Guid OrganizationKey { get; set; }
+                public Guid TOrganizationKey { get; set; }
 
-                [InquiryColumn]
-                public string Name { get; set; } = string.Empty;
+                [InquiryForeignKey("AltColumnName", "TOther", "Key")]
+                public Guid OtherKey { get; set; }
             }
 
             public abstract partial class UserStore : InquiryStore<User>
             {
-                protected UserStore(IInquiry inquiry)
-                    : base(inquiry)
-                {
-                }
+                protected UserStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAll]
                 public abstract IAsyncEnumerable<User> SelectAllAsync(CancellationToken cancellationToken = default);
@@ -172,59 +160,15 @@ public sealed class InquiryGeneratorTests
         Assert.Empty(result.RunResult.Diagnostics);
         Assert.Empty(errors);
 
-        var generatedEntity = Assert.Single(
-            result.RunResult.GeneratedTrees,
-            static tree => tree.FilePath.EndsWith("User.InquiryEntity.g.cs", StringComparison.Ordinal));
-        var generatedEntityText = generatedEntity.GetText().ToString();
-
-        Assert.Contains("IInquiryEntityMetadata<global::Demo.User>", generatedEntityText);
-        Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"OrganizationKey\", \"OrganizationKey\", isKey: false", generatedEntityText);
-        Assert.Contains("new global::Inquiry.Entities.InquiryForeignKey(\"OrganizationKey\", \"OrganizationKey\", \"TOrganization\", \"Key\")", generatedEntityText);
-        Assert.DoesNotContain("new global::Inquiry.Sql.InquirySqlColumn(\"OrganizationKey\", \"TOrganization\"", generatedEntityText);
-
         var generatedStore = Assert.Single(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("UserStore.InquiryStore.g.cs", StringComparison.Ordinal));
-        var generatedStoreText = generatedStore.GetText().ToString();
+        var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"OrganizationKey\", \"OrganizationKey\", isKey: false", generatedStoreText);
-        Assert.DoesNotContain("new global::Inquiry.Sql.InquirySqlColumn(\"OrganizationKey\", \"TOrganization\"", generatedStoreText);
-    }
-
-    [Fact]
-    public void GeneratesForeignKeyMetadataWithExplicitLocalColumn()
-    {
-        const string source = """
-            using System;
-            using Inquiry.Entities;
-
-            namespace Demo;
-
-            [InquiryTable("TUser")]
-            public sealed class User
-            {
-                [InquiryKey]
-                public Guid Key { get; set; }
-
-                [InquiryForeignKey("OrganizationId", "TOrganization", "Key")]
-                public Guid OrganizationKey { get; set; }
-            }
-            """;
-
-        var result = RunGenerator(source);
-        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
-
-        Assert.Empty(result.GeneratorDiagnostics);
-        Assert.Empty(result.RunResult.Diagnostics);
-        Assert.Empty(errors);
-
-        var generatedEntity = Assert.Single(
-            result.RunResult.GeneratedTrees,
-            static tree => tree.FilePath.EndsWith("User.InquiryEntity.g.cs", StringComparison.Ordinal));
-        var generatedEntityText = generatedEntity.GetText().ToString();
-
-        Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"OrganizationKey\", \"OrganizationId\", isKey: false", generatedEntityText);
-        Assert.Contains("new global::Inquiry.Entities.InquiryForeignKey(\"OrganizationKey\", \"OrganizationId\", \"TOrganization\", \"Key\")", generatedEntityText);
+        // 2-arg FK: property name doubles as column name.
+        Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"TOrganizationKey\", \"TOrganizationKey\", isKey: false, isGenerated: false)", generatedText);
+        // 3-arg FK: explicit local column name is honored.
+        Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"OtherKey\", \"AltColumnName\", isKey: false, isGenerated: false)", generatedText);
     }
 
     [Theory]
@@ -344,31 +288,6 @@ public sealed class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ001");
-    }
-
-    [Fact]
-    public void ReportsDiagnosticForInvalidForeignKey()
-    {
-        const string source = """
-            using System;
-            using Inquiry.Entities;
-
-            namespace Demo;
-
-            [InquiryTable("TUser")]
-            public sealed class User
-            {
-                [InquiryKey]
-                public Guid Key { get; set; }
-
-                [InquiryForeignKey("", "Key")]
-                public Guid OrganizationKey { get; set; }
-            }
-            """;
-
-        var result = RunGenerator(source);
-
-        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ011");
     }
 
     private static GeneratorTestResult RunGenerator(string source)

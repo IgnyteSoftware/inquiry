@@ -1,15 +1,11 @@
-using System.Collections.Immutable;
-using System.Linq;
 using Inquiry.Generators.Diagnostics;
-using Inquiry.Generators.Features.EntityMetadata;
-using Inquiry.Generators.Features.ServiceRegistration;
-using Inquiry.Generators.Features.StoreOperations;
-using Inquiry.Generators.Features.Stores;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Immutable;
+using System.Linq;
 
 namespace Inquiry.Generators;
 
@@ -38,12 +34,11 @@ public sealed class InquiryGenerator : IIncrementalGenerator
 
     private static void Execute(SourceProductionContext context, Compilation compilation, ImmutableArray<ClassDeclarationSyntax> candidates)
     {
-        var storeOperationFeatures = StoreOperationFeatures.All;
-        var entities = EntityDiscoverer.Discover(context, compilation, candidates);
+        var entities = EntityProcessor.Discover(context, compilation, candidates);
         var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistrationModel>();
         foreach (var entity in entities.Values)
         {
-            entityRegistrations.Add(EntityMetadataFeature.Generate(context, entity));
+            entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity));
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistrationModel>();
@@ -74,18 +69,18 @@ public sealed class InquiryGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var methods = StoreMethodDiscoverer.Discover(context, storeSymbol, entity, storeOperationFeatures);
+            var methods = StoreProcessor.Discover(context, storeSymbol, entity);
             if (methods.Length == 0)
             {
                 continue;
             }
 
-            storeRegistrations.Add(StoreImplementationGenerator.Generate(context, storeSymbol, entity, methods));
+            storeRegistrations.Add(StoreProcessor.Emit(context, storeSymbol, entity, methods));
         }
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)
         {
-            ServiceRegistrationGenerator.Generate(context, entityRegistrations.ToImmutable(), storeRegistrations.ToImmutable());
+            RegistrationEmitter.Emit(context, entityRegistrations.ToImmutable(), storeRegistrations.ToImmutable());
         }
     }
 }

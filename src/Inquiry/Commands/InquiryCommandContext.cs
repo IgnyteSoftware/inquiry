@@ -10,16 +10,16 @@ public class InquiryCommandContext
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryCommandContext"/> class.
     /// </summary>
-    public InquiryCommandContext(InquiryCommandDefinition commandDefinition, DbCommand command)
+    public InquiryCommandContext(InquiryCommand commandDefinition, DbCommand command)
     {
-        CommandDefinition = commandDefinition ?? throw new ArgumentNullException(nameof(commandDefinition));
+        InquiryCommand = commandDefinition ?? throw new ArgumentNullException(nameof(commandDefinition));
         Command = command ?? throw new ArgumentNullException(nameof(command));
     }
 
     /// <summary>
     /// Gets the command definition used to configure the command.
     /// </summary>
-    public InquiryCommandDefinition CommandDefinition { get; }
+    public InquiryCommand InquiryCommand { get; }
 
     /// <summary>
     /// Gets the mutable ADO.NET command.

@@ -44,6 +44,6 @@ public sealed class SqlStatementBuilderTests
         Assert.Equal("INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive)", statements.Insert);
         Assert.Equal("UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key", statements.Update);
         Assert.Equal("DELETE FROM \"TOrganization\" WHERE \"Key\" = @key", statements.DeleteByKey);
-        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"IsActive\" = @value", statements.SelectByField(new InquirySqlColumn("IsActive", "IsActive", isKey: false)));
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"IsActive\" = @value", statements.SelectByField["IsActive"]);
     }
 }

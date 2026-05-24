@@ -29,7 +29,7 @@ public sealed class DefaultInquiry : IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        return QueryAsync<TEntity>(new InquiryCommandDefinition(commandText), cancellationToken);
+        return QueryAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
     }
 
     /// <inheritdoc />
@@ -44,7 +44,7 @@ public sealed class DefaultInquiry : IInquiry
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        InquiryCommandDefinition command,
+        InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
@@ -58,7 +58,7 @@ public sealed class DefaultInquiry : IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        return QuerySingleOrDefaultAsync<TEntity>(new InquiryCommandDefinition(commandText), cancellationToken);
+        return QuerySingleOrDefaultAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
     }
 
     /// <inheritdoc />
@@ -73,7 +73,7 @@ public sealed class DefaultInquiry : IInquiry
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        InquiryCommandDefinition command,
+        InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
@@ -84,7 +84,7 @@ public sealed class DefaultInquiry : IInquiry
     /// <inheritdoc />
     public Task<int> ExecuteAsync(string commandText, CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(new InquiryCommandDefinition(commandText), cancellationToken);
+        return ExecuteAsync(new InquiryCommand(commandText), cancellationToken);
     }
 
     /// <inheritdoc />
@@ -97,14 +97,14 @@ public sealed class DefaultInquiry : IInquiry
     }
 
     /// <inheritdoc />
-    public Task<int> ExecuteAsync(InquiryCommandDefinition command, CancellationToken cancellationToken = default)
+    public Task<int> ExecuteAsync(InquiryCommand command, CancellationToken cancellationToken = default)
     {
         return _requestPipeline.ExecuteAsync(command, cancellationToken);
     }
 
-    private static InquiryCommandDefinition CreateCommand(string commandText, object? parameters)
+    private static InquiryCommand CreateCommand(string commandText, object? parameters)
     {
-        return new InquiryCommandDefinition(
+        return new InquiryCommand(
             commandText,
             InquiryParameterReader.Read(parameters));
     }

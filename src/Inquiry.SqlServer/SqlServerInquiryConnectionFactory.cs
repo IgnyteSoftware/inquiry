@@ -1,6 +1,6 @@
-using System.Data.Common;
 using Inquiry.Connections;
 using Microsoft.Data.SqlClient;
+using System.Data.Common;
 
 namespace Inquiry.SqlServer;
 
