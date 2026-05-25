@@ -89,8 +89,8 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("Inquiry.ExecuteAsync", generatedText);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"key\", key)", generatedText);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"value\", isActive)", generatedText);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"Key\", key)", generatedText);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"IsActive\", isActive)", generatedText);
         Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"Key\", organization.Key)", generatedText);
         Assert.Contains("_sqlSelectAll", generatedText);
         Assert.Contains("_sqlInsert", generatedText);
@@ -445,7 +445,7 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
-    public void ReportsDiagnosticForMultipleKeys()
+    public void AcceptsMultipleKeysWhenNoneAreGenerated()
     {
         const string source = """
             using System;
@@ -466,7 +466,32 @@ public sealed class InquiryGeneratorTests
 
         var result = RunGenerator(source);
 
-        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ001");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForCompositeKeyContainingGeneratedColumn()
+    {
+        const string source = """
+            using System;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TItem")]
+            public sealed class Item
+            {
+                [InquiryKey(IsGenerated = true)]
+                public int? Id { get; set; }
+
+                [InquiryKey]
+                public Guid Tag { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ011");
     }
 
     [Fact]

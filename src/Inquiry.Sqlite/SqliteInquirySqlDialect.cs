@@ -33,16 +33,19 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         return "SELECT " + context.SelectColumns + " FROM " + context.Table
-            + " WHERE " + context.QuotedKeyColumn + " = " + ParameterName("key");
+            + " WHERE " + context.KeyWhereClause;
     }
 
     /// <inheritdoc />
-    public override string BuildSelectByFieldSql(InquirySqlBuildContext context, InquirySqlColumn column)
+    public override string BuildSelectByFieldSql(InquirySqlBuildContext context, IReadOnlyList<InquirySqlColumn> columns)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
-        if (column is null) throw new ArgumentNullException(nameof(column));
-        return "SELECT " + context.SelectColumns + " FROM " + context.Table
-            + " WHERE " + QuoteIdentifier(column.ColumnName) + " = " + ParameterName("value");
+        if (columns is null) throw new ArgumentNullException(nameof(columns));
+        if (columns.Count == 0) throw new ArgumentException("At least one column is required.", nameof(columns));
+
+        var where = string.Join(" AND ", columns
+            .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + where;
     }
 
     /// <inheritdoc />
@@ -73,7 +76,7 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpdate(context);
         return "UPDATE " + context.Table + " SET " + context.SetClauses
-            + " WHERE " + context.QuotedKeyColumn + " = " + context.KeyParameter;
+            + " WHERE " + context.KeyWhereClause;
     }
 
     /// <inheritdoc />
@@ -88,8 +91,7 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
     public override string BuildDeleteByKeySql(InquirySqlBuildContext context)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
-        return "DELETE FROM " + context.Table
-            + " WHERE " + context.QuotedKeyColumn + " = " + ParameterName("key");
+        return "DELETE FROM " + context.Table + " WHERE " + context.KeyWhereClause;
     }
 
     /// <inheritdoc />
@@ -106,7 +108,7 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
         }
 
         return $"INSERT INTO {context.Table} ({context.InsertColumns}) VALUES ({context.InsertParameters}) " +
-            $"ON CONFLICT ({context.QuotedKeyColumn}) DO UPDATE SET {context.SetClauses}";
+            $"ON CONFLICT ({JoinKeyColumns(context)}) DO UPDATE SET {context.SetClauses}";
     }
 
     /// <inheritdoc />
@@ -124,16 +126,29 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
 
     private string BuildGeneratedKeyUpsertSql(InquirySqlBuildContext context, bool returning)
     {
-        var explicitInsertColumns = JoinSql(context.QuotedKeyColumn, context.InsertColumns);
-        var explicitInsertParameters = JoinSql(context.KeyParameter, context.InsertParameters);
+        // Generated-key upsert only applies to single-PK entities (composite PKs reject
+        // IsGenerated in CreateContext), so KeyColumns[0] is safe here.
+        var keyColumn = context.QuotedKeyColumns[0];
+        var keyParameter = context.KeyParameters[0];
+        var explicitInsertColumns = JoinSql(keyColumn, context.InsertColumns);
+        var explicitInsertParameters = JoinSql(keyParameter, context.InsertParameters);
         var returningClause = returning ? " RETURNING " + context.SelectColumns : string.Empty;
 
         return $"INSERT INTO {context.Table} ({explicitInsertColumns}) VALUES ({explicitInsertParameters}) " +
-            $"ON CONFLICT ({context.QuotedKeyColumn}) DO UPDATE SET {context.SetClauses}{returningClause}";
+            $"ON CONFLICT ({keyColumn}) DO UPDATE SET {context.SetClauses}{returningClause}";
     }
 
     private static bool DatabaseMaySupplyKey(InquirySqlBuildContext context)
-        => context.KeyColumn.IsGenerated || context.KeyColumn.UseDatabaseDefault;
+    {
+        // Only single-PK entities reach the generated-key path; composite PKs reject
+        // IsGenerated columns up front in CreateContext.
+        if (context.KeyColumns.Count != 1) return false;
+        var key = context.KeyColumns[0];
+        return key.IsGenerated || key.UseDatabaseDefault;
+    }
+
+    private static string JoinKeyColumns(InquirySqlBuildContext context)
+        => string.Join(", ", context.QuotedKeyColumns);
 
     private static string JoinSql(string first, string rest)
         => string.IsNullOrWhiteSpace(rest) ? first : first + ", " + rest;

@@ -6,8 +6,8 @@ internal static class InquiryDiagnosticDescriptors
 {
     public static readonly DiagnosticDescriptor EntityKeyCount = new(
         "INQ001",
-        "Entity must have exactly one InquiryKey property",
-        "Entity '{0}' must have exactly one InquiryKey property.",
+        "Entity must have at least one InquiryKey property",
+        "Entity '{0}' must have at least one InquiryKey property.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -72,6 +72,22 @@ internal static class InquiryDiagnosticDescriptors
         "INQ010",
         "Query method must be abstract",
         "Query method '{0}' must be abstract.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor CompositeKeyContainsGenerated = new(
+        "INQ011",
+        "Composite primary key cannot contain database-generated columns",
+        "Entity '{0}' has a composite primary key that includes a database-generated column ('{1}'). Composite keys must be entirely client-supplied.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor EagerLoadingOnCompositeKeyParent = new(
+        "INQ012",
+        "Eager loading is not supported on composite-key entities",
+        "Query method '{0}' uses eager loading on entity '{1}', which has a composite primary key. Composite-key parents are not supported for eager loading.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

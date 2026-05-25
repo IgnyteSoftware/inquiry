@@ -18,11 +18,34 @@ public sealed class AttributeTests
     }
 
     [Fact]
-    public void SelectByFieldAttributeStoresField()
+    public void SelectByFieldAttributeStoresSingleField()
     {
         var attribute = new InquirySelectAllByFieldAttribute("IsActive");
 
-        Assert.Equal("IsActive", attribute.Field);
+        Assert.Single(attribute.Fields);
+        Assert.Equal("IsActive", attribute.Fields[0]);
+    }
+
+    [Fact]
+    public void SelectByFieldAttributeStoresMultipleFieldsInOrder()
+    {
+        var attribute = new InquirySelectAllByFieldAttribute("CustomerID", "EmployeeID");
+
+        Assert.Equal(2, attribute.Fields.Count);
+        Assert.Equal("CustomerID", attribute.Fields[0]);
+        Assert.Equal("EmployeeID", attribute.Fields[1]);
+    }
+
+    [Fact]
+    public void SelectByFieldAttributeRejectsEmptyFieldList()
+    {
+        Assert.Throws<ArgumentException>(() => new InquirySelectAllByFieldAttribute());
+    }
+
+    [Fact]
+    public void SelectByFieldAttributeRejectsWhitespaceField()
+    {
+        Assert.Throws<ArgumentException>(() => new InquirySelectAllByFieldAttribute("  "));
     }
 
     [Fact]

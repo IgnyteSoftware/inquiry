@@ -13,25 +13,27 @@ public sealed class InquirySqlBuildContext
     public InquirySqlBuildContext(
         string table,
         IReadOnlyList<InquirySqlColumn> columns,
-        InquirySqlColumn keyColumn,
+        IReadOnlyList<InquirySqlColumn> keyColumns,
         IReadOnlyList<InquirySqlColumn> insertableColumns,
         string selectColumns,
         string insertColumns,
         string insertParameters,
         string setClauses,
-        string quotedKeyColumn,
-        string keyParameter)
+        IReadOnlyList<string> quotedKeyColumns,
+        IReadOnlyList<string> keyParameters,
+        string keyWhereClause)
     {
         Table = table ?? throw new ArgumentNullException(nameof(table));
         Columns = columns ?? throw new ArgumentNullException(nameof(columns));
-        KeyColumn = keyColumn ?? throw new ArgumentNullException(nameof(keyColumn));
+        KeyColumns = keyColumns ?? throw new ArgumentNullException(nameof(keyColumns));
         InsertableColumns = insertableColumns ?? throw new ArgumentNullException(nameof(insertableColumns));
         SelectColumns = selectColumns ?? throw new ArgumentNullException(nameof(selectColumns));
         InsertColumns = insertColumns ?? throw new ArgumentNullException(nameof(insertColumns));
         InsertParameters = insertParameters ?? throw new ArgumentNullException(nameof(insertParameters));
         SetClauses = setClauses ?? throw new ArgumentNullException(nameof(setClauses));
-        QuotedKeyColumn = quotedKeyColumn ?? throw new ArgumentNullException(nameof(quotedKeyColumn));
-        KeyParameter = keyParameter ?? throw new ArgumentNullException(nameof(keyParameter));
+        QuotedKeyColumns = quotedKeyColumns ?? throw new ArgumentNullException(nameof(quotedKeyColumns));
+        KeyParameters = keyParameters ?? throw new ArgumentNullException(nameof(keyParameters));
+        KeyWhereClause = keyWhereClause ?? throw new ArgumentNullException(nameof(keyWhereClause));
     }
 
     /// <summary>Gets the fully-quoted target table (including schema if provided).</summary>
@@ -40,8 +42,11 @@ public sealed class InquirySqlBuildContext
     /// <summary>Gets all mapped columns for the entity.</summary>
     public IReadOnlyList<InquirySqlColumn> Columns { get; }
 
-    /// <summary>Gets the column marked as the entity key.</summary>
-    public InquirySqlColumn KeyColumn { get; }
+    /// <summary>
+    /// Gets the columns marked as the entity's primary key, in declaration order.
+    /// Always contains at least one element; contains multiple for composite keys.
+    /// </summary>
+    public IReadOnlyList<InquirySqlColumn> KeyColumns { get; }
 
     /// <summary>Gets the columns that are supplied to INSERT (excludes database-generated values).</summary>
     public IReadOnlyList<InquirySqlColumn> InsertableColumns { get; }
@@ -58,9 +63,15 @@ public sealed class InquirySqlBuildContext
     /// <summary>Gets a comma-separated <c>col = @param</c> list for UPDATE/upsert SET clauses (key + generated columns excluded).</summary>
     public string SetClauses { get; }
 
-    /// <summary>Gets the quoted key column name.</summary>
-    public string QuotedKeyColumn { get; }
+    /// <summary>Gets the quoted key column names, in declaration order.</summary>
+    public IReadOnlyList<string> QuotedKeyColumns { get; }
 
-    /// <summary>Gets the parameter name for the key value (e.g., <c>@Key</c>).</summary>
-    public string KeyParameter { get; }
+    /// <summary>Gets the parameter names for the key values (e.g., <c>@OrderID</c>, <c>@ProductID</c>), in declaration order.</summary>
+    public IReadOnlyList<string> KeyParameters { get; }
+
+    /// <summary>
+    /// Gets the precomputed WHERE-clause fragment matching all key columns
+    /// (e.g., <c>"OrderID" = @OrderID AND "ProductID" = @ProductID</c>).
+    /// </summary>
+    public string KeyWhereClause { get; }
 }

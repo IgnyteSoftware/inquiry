@@ -5,24 +5,21 @@ namespace Inquiry.Sample.Services;
 
 /// <summary>
 /// Inserts an <see cref="Order"/> together with its <c>Order Details</c> rows inside a single
-/// <see cref="IInquiryTransaction"/>. Demonstrates two things:
-/// <list type="bullet">
-///   <item><see cref="OrderStore.InsertReturningAsync"/> retrieving the IDENTITY-assigned OrderID.</item>
-///   <item>Falling back to raw SQL via <see cref="IInquiry.ExecuteAsync"/> for <c>Order Details</c>,
-///         which has a composite primary key and therefore no generated store (see
-///         Inquiry.Northwind/LIMITATIONS.md).</item>
-/// </list>
+/// <see cref="IInquiryTransaction"/>. The order header is inserted via raw SQL with a
+/// <c>RETURNING *</c> clause to surface the IDENTITY-assigned <c>OrderID</c>; the detail
+/// lines also go through raw SQL because generated stores bind to the non-transactional
+/// <see cref="IInquiry"/> at DI time and can't participate in this transaction. Outside a
+/// transaction, the composite-keyed <see cref="OrderDetailStore"/> handles the same inserts
+/// with no SQL hand-writing.
 /// </summary>
 public sealed class OrderTransactionService
 {
     private readonly IInquiry _inquiry;
-    private readonly OrderStore _orders;
     private readonly ProductStore _products;
 
-    public OrderTransactionService(IInquiry inquiry, OrderStore orders, ProductStore products)
+    public OrderTransactionService(IInquiry inquiry, ProductStore products)
     {
         _inquiry = inquiry;
-        _orders = orders;
         _products = products;
     }
 
@@ -45,7 +42,6 @@ public sealed class OrderTransactionService
 
         await using var tx = await _inquiry.BeginTransactionAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        // Insert the Order (IDENTITY) via the generated store routed through the transactional facade.
         var insertedOrder = await tx.Inquiry
             .QuerySingleOrDefaultAsync<Order>(
                 "INSERT INTO Orders (CustomerID, OrderDate, Freight) VALUES (@cid, @date, @freight) RETURNING *",
@@ -58,7 +54,6 @@ public sealed class OrderTransactionService
             throw new InvalidOperationException("Order insert did not return a row.");
         }
 
-        // Order Details has a composite PK, so there is no generated store — raw SQL it is.
         foreach (var p in picks)
         {
             await tx.Inquiry.ExecuteAsync(

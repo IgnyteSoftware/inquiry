@@ -10,14 +10,14 @@ internal sealed class EntityModel
         string tableName,
         string? schema,
         List<ColumnModel> columns,
-        ColumnModel key,
+        IReadOnlyList<ColumnModel> keys,
         List<RelationModel> relations)
     {
         Symbol = symbol;
         TableName = tableName;
         Schema = schema;
         Columns = columns;
-        Key = key;
+        Keys = keys;
         Relations = relations;
     }
 
@@ -29,7 +29,11 @@ internal sealed class EntityModel
 
     public List<ColumnModel> Columns { get; }
 
-    public ColumnModel Key { get; }
+    /// <summary>The key column(s) for the entity, in declaration order. Always contains at least one.</summary>
+    public IReadOnlyList<ColumnModel> Keys { get; }
+
+    /// <summary>The first key column. Convenience accessor for single-key entities.</summary>
+    public ColumnModel Key => Keys[0];
 
     /// <summary>Navigation properties marked with <c>[InquiryRelation]</c>.</summary>
     public List<RelationModel> Relations { get; }

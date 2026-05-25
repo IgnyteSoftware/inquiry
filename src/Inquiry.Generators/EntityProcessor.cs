@@ -47,10 +47,20 @@ internal static class EntityProcessor
             var relations = DiscoverRelations(entitySymbol);
 
             var keyColumns = columns.Where(static c => c.IsKey).ToArray();
-            if (keyColumns.Length != 1)
+            if (keyColumns.Length == 0)
             {
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.EntityKeyCount, classDeclaration.Identifier.GetLocation(), entitySymbol.Name));
                 continue;
+            }
+
+            if (keyColumns.Length > 1)
+            {
+                var generatedKey = keyColumns.FirstOrDefault(static k => k.IsGenerated);
+                if (generatedKey is not null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.CompositeKeyContainsGenerated, classDeclaration.Identifier.GetLocation(), entitySymbol.Name, generatedKey.PropertyName));
+                    continue;
+                }
             }
 
             foreach (var duplicate in columns.GroupBy(static c => c.ColumnName, StringComparer.OrdinalIgnoreCase).Where(static g => g.Count() > 1))
@@ -58,7 +68,7 @@ internal static class EntityProcessor
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DuplicateColumn, classDeclaration.Identifier.GetLocation(), entitySymbol.Name, duplicate.Key));
             }
 
-            var entity = new EntityModel(entitySymbol, tableName, schema, columns, keyColumns[0], relations);
+            var entity = new EntityModel(entitySymbol, tableName, schema, columns, keyColumns, relations);
             entities[entitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)] = entity;
         }
 

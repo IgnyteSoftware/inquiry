@@ -39,8 +39,8 @@ public sealed class SqlServerDialectTests
         var (dialect, ctx) = NewContext();
 
         Assert.Equal("SELECT [Key], [Name], [IsActive] FROM [dbo].[TOrganization]", dialect.BuildSelectAllSql(ctx));
-        Assert.Equal("SELECT [Key], [Name], [IsActive] FROM [dbo].[TOrganization] WHERE [Key] = @key", dialect.BuildSelectByKeySql(ctx));
-        Assert.Equal("SELECT [Key], [Name], [IsActive] FROM [dbo].[TOrganization] WHERE [IsActive] = @value", dialect.BuildSelectByFieldSql(ctx, _columns[2]));
+        Assert.Equal("SELECT [Key], [Name], [IsActive] FROM [dbo].[TOrganization] WHERE [Key] = @Key", dialect.BuildSelectByKeySql(ctx));
+        Assert.Equal("SELECT [Key], [Name], [IsActive] FROM [dbo].[TOrganization] WHERE [IsActive] = @IsActive", dialect.BuildSelectByFieldSql(ctx, _columns[2]));
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class SqlServerDialectTests
         Assert.Equal("INSERT INTO [dbo].[TOrganization] ([Key], [Name], [IsActive]) OUTPUT INSERTED.[Key], INSERTED.[Name], INSERTED.[IsActive] VALUES (@Key, @Name, @IsActive)", dialect.BuildInsertReturningSql(ctx));
         Assert.Equal("UPDATE [dbo].[TOrganization] SET [Name] = @Name, [IsActive] = @IsActive WHERE [Key] = @Key", dialect.BuildUpdateSql(ctx));
         Assert.Equal("UPDATE [dbo].[TOrganization] SET [Name] = @Name, [IsActive] = @IsActive OUTPUT INSERTED.[Key], INSERTED.[Name], INSERTED.[IsActive] WHERE [Key] = @Key", dialect.BuildUpdateReturningSql(ctx));
-        Assert.Equal("DELETE FROM [dbo].[TOrganization] WHERE [Key] = @key", dialect.BuildDeleteByKeySql(ctx));
+        Assert.Equal("DELETE FROM [dbo].[TOrganization] WHERE [Key] = @Key", dialect.BuildDeleteByKeySql(ctx));
     }
 
     [Fact]
@@ -102,13 +102,13 @@ public sealed class SqlServerDialectTests
 
         Assert.Equal(
             "MERGE INTO [dbo].[TOrganization] AS target " +
-            "USING (SELECT @Key AS k) AS source ON target.[Key] = source.k " +
+            "USING (SELECT @Key AS k0) AS source ON target.[Key] = source.k0 " +
             "WHEN MATCHED THEN UPDATE SET [Name] = @Name, [IsActive] = @IsActive " +
             "WHEN NOT MATCHED THEN INSERT ([Key], [Name], [IsActive]) VALUES (@Key, @Name, @IsActive);",
             dialect.BuildUpsertSql(ctx));
         Assert.Equal(
             "MERGE INTO [dbo].[TOrganization] AS target " +
-            "USING (SELECT @Key AS k) AS source ON target.[Key] = source.k " +
+            "USING (SELECT @Key AS k0) AS source ON target.[Key] = source.k0 " +
             "WHEN MATCHED THEN UPDATE SET [Name] = @Name, [IsActive] = @IsActive " +
             "WHEN NOT MATCHED THEN INSERT ([Key], [Name], [IsActive]) VALUES (@Key, @Name, @IsActive) " +
             "OUTPUT INSERTED.[Key], INSERTED.[Name], INSERTED.[IsActive];",

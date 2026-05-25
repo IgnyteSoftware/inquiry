@@ -83,23 +83,49 @@ internal static class StoreOperationEmitter
             return null;
         }
 
-        ColumnModel? fieldColumn = null;
+        List<ColumnModel>? fieldColumns = null;
         if (operation == StoreOperation.SelectAllByField)
         {
-            var selectedField = GeneratorHelpers.GetConstructorString(attribute);
-            fieldColumn = selectedField is null ? null : entity.Columns.FirstOrDefault(c =>
-                string.Equals(c.PropertyName, selectedField, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(c.ColumnName, selectedField, StringComparison.OrdinalIgnoreCase));
-
-            if (fieldColumn is null)
+            var selectedFields = GeneratorHelpers.GetConstructorStringArray(attribute);
+            if (selectedFields is null || selectedFields.Length == 0)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     InquiryDiagnosticDescriptors.UnknownField,
                     method.Locations.FirstOrDefault(),
                     method.Name,
-                    selectedField));
+                    "<none>"));
                 return null;
             }
+
+            fieldColumns = new List<ColumnModel>(selectedFields.Length);
+            foreach (var selectedField in selectedFields)
+            {
+                var resolved = entity.Columns.FirstOrDefault(c =>
+                    string.Equals(c.PropertyName, selectedField, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(c.ColumnName, selectedField, StringComparison.OrdinalIgnoreCase));
+
+                if (resolved is null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.UnknownField,
+                        method.Locations.FirstOrDefault(),
+                        method.Name,
+                        selectedField));
+                    return null;
+                }
+                fieldColumns.Add(resolved);
+            }
+        }
+
+        if (operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager &&
+            entity.Keys.Count > 1)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.EagerLoadingOnCompositeKeyParent,
+                method.Locations.FirstOrDefault(),
+                method.Name,
+                entity.Symbol.Name));
+            return null;
         }
 
         string? procedureName = null;
@@ -117,7 +143,7 @@ internal static class StoreOperationEmitter
             }
         }
 
-        if (!HasSupportedParameters(method, operation, entity, fieldColumn))
+        if (!HasSupportedParameters(method, operation, entity, fieldColumns))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 InquiryDiagnosticDescriptors.InvalidParameters,
@@ -126,7 +152,7 @@ internal static class StoreOperationEmitter
             return null;
         }
 
-        return new StoreMethodModel(method, operation, fieldColumn, procedureName, returnsEntity);
+        return new StoreMethodModel(method, operation, fieldColumns, procedureName, returnsEntity);
     }
 
     public static void Emit(StringBuilder source, StoreMethodModel method, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
@@ -154,27 +180,21 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
                 source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine("                _sqlSelectByKey,");
-                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
-                source.AppendLine("                {");
-                source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"key\", {firstParameter}),");
-                source.AppendLine("                }),");
+                AppendPositionalParameters(source, entity.Keys, symbol.Parameters, indent: "                ");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.SelectOneByKeyEager:
-                EmitSelectOneByKeyEager(source, symbol, parameters, entityType, cancellation, firstParameter, entity);
+                EmitSelectOneByKeyEager(source, symbol, parameters, entityType, cancellation, entity, relationChildEntities);
                 break;
 
             case StoreOperation.SelectAllByField:
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(");
                 source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                source.AppendLine($"                _sqlSelectBy_{method.FieldColumn!.PropertyName},");
-                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
-                source.AppendLine("                {");
-                source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"value\", {firstParameter}),");
-                source.AppendLine("                }),");
+                source.AppendLine($"                _sqlSelectBy_{BuildFieldSuffix(method.FieldColumns)},");
+                AppendPositionalParameters(source, method.FieldColumns, symbol.Parameters, indent: "                ");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
@@ -257,10 +277,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("        return await Inquiry.ExecuteAsync(");
                 source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine("                _sqlDeleteByKey,");
-                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
-                source.AppendLine("                {");
-                source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"key\", {firstParameter}),");
-                source.AppendLine("                }),");
+                AppendPositionalParameters(source, entity.Keys, symbol.Parameters, indent: "                ");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
                 source.AppendLine("    }");
                 break;
@@ -358,15 +375,17 @@ internal static class StoreOperationEmitter
         source.AppendLine("    }");
     }
 
-    private static void EmitSelectOneByKeyEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string firstParam, EntityModel entity)
+    private static void EmitSelectOneByKeyEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
     {
+        // Eager-on-composite is rejected in Validate, so entity.Keys.Count == 1 here.
+        var keyParamName = symbol.Parameters[0].Name;
         AppendHeader(source, symbol, parameters, isAsync: true);
         source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
         source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
         source.AppendLine("                _sqlSelectByKey,");
         source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine("                {");
-        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"key\", {firstParam}),");
+        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(entity.Key.PropertyName)}\", {keyParamName}),");
         source.AppendLine("                }),");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
         source.AppendLine("        if (_entity is not null)");
@@ -377,14 +396,15 @@ internal static class StoreOperationEmitter
             var fieldName = $"_sql_{relation.PropertyName}";
             if (relation.IsCollection)
             {
-                // One-to-many: load children filtered by parent's key.
+                // One-to-many: load children filtered by their FK column. The SQL parameter
+                // name comes from the child's FK property name (which is relation.ForeignKeyProperty).
                 source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
                 source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}>(");
                 source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"value\", _entity.{entity.Key.PropertyName}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", _entity.{entity.Key.PropertyName}),");
                 source.AppendLine("                    }),");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
                 source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
@@ -392,13 +412,16 @@ internal static class StoreOperationEmitter
             }
             else
             {
-                // Many-to-one: load single parent using the current entity's FK value.
+                // Many-to-one: load single parent filtered by the parent's key column. The SQL
+                // parameter name comes from the parent (child entity in the relation's terms)
+                // KEY property name.
+                var parentKeyPropertyName = relationChildEntities[relation.PropertyName].Key.PropertyName;
                 source.AppendLine($"            _entity.{relation.PropertyName} = await Inquiry.QuerySingleOrDefaultAsync<{childType}>(");
                 source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"value\", _entity.{relation.ForeignKeyProperty}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(parentKeyPropertyName)}\", _entity.{relation.ForeignKeyProperty}),");
                 source.AppendLine("                    }),");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
             }
@@ -406,6 +429,37 @@ internal static class StoreOperationEmitter
         source.AppendLine("        }");
         source.AppendLine("        return _entity;");
         source.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// Emits a parameter list that pairs each of the supplied <paramref name="columns"/> with the
+    /// matching positional method parameter (by index). Used by every operation whose SQL has
+    /// N <c>WHERE col = @col</c> placeholders bound to N positional store-method arguments.
+    /// </summary>
+    private static void AppendPositionalParameters(
+        StringBuilder source,
+        IReadOnlyList<ColumnModel> columns,
+        System.Collections.Immutable.ImmutableArray<IParameterSymbol> methodParameters,
+        string indent)
+    {
+        source.AppendLine($"{indent}new global::Inquiry.Parameters.InquiryParameter[]");
+        source.AppendLine($"{indent}{{");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(columns[i].PropertyName)}\", {methodParameters[i].Name}),");
+        }
+        source.AppendLine($"{indent}}}),");
+    }
+
+    /// <summary>
+    /// Returns the suffix used in the generated SQL field name for a SelectByField operation
+    /// (e.g. "CustomerID_EmployeeID" for a two-column filter). Single-column filters use the
+    /// column's property name directly, matching the pre-multi-column naming.
+    /// </summary>
+    private static string BuildFieldSuffix(IReadOnlyList<ColumnModel> columns)
+    {
+        if (columns.Count == 1) return columns[0].PropertyName;
+        return string.Join("_", columns.Select(c => c.PropertyName));
     }
 
     private static void EmitSelectAllEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
@@ -572,24 +626,26 @@ internal static class StoreOperationEmitter
         return false;
     }
 
-    private static bool HasSupportedParameters(IMethodSymbol method, StoreOperation operation, EntityModel entity, ColumnModel? fieldColumn)
+    private static bool HasSupportedParameters(IMethodSymbol method, StoreOperation operation, EntityModel entity, IReadOnlyList<ColumnModel>? fieldColumns)
     {
         if (method.Parameters.Length == 0 || !GeneratorHelpers.IsCancellationToken(method.Parameters[method.Parameters.Length - 1].Type))
         {
             return false;
         }
 
+        // Count of "real" parameters (everything except the trailing CancellationToken).
+        var nonCancellationCount = method.Parameters.Length - 1;
+
         return operation switch
         {
             StoreOperation.SelectAll or StoreOperation.SelectAllEager =>
                 method.Parameters.Length == 1,
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.DeleteOneByKey =>
-                method.Parameters.Length == 2 &&
-                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, entity.Key.Type.Symbol),
+                MatchesPositionalColumns(method, nonCancellationCount, entity.Keys),
             StoreOperation.SelectAllByField =>
-                method.Parameters.Length == 2 &&
-                fieldColumn is not null &&
-                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, fieldColumn.Type.Symbol),
+                fieldColumns is not null &&
+                fieldColumns.Count > 0 &&
+                MatchesPositionalColumns(method, nonCancellationCount, fieldColumns),
             StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert =>
                 method.Parameters.Length == 2 &&
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, entity.Symbol),
@@ -597,6 +653,19 @@ internal static class StoreOperationEmitter
                 true, // any parameters allowed
             _ => false,
         };
+    }
+
+    private static bool MatchesPositionalColumns(IMethodSymbol method, int nonCancellationCount, IReadOnlyList<ColumnModel> columns)
+    {
+        if (nonCancellationCount != columns.Count) return false;
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (!SymbolEqualityComparer.Default.Equals(method.Parameters[i].Type, columns[i].Type.Symbol))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static bool IsAsyncEnumerable(ITypeSymbol type, out ITypeSymbol? elementType)

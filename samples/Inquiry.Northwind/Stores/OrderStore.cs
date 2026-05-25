@@ -16,6 +16,9 @@ public abstract partial class OrderStore : InquiryStore<Order>
     [InquirySelectAllByField("CustomerID")]
     public abstract IAsyncEnumerable<Order> SelectByCustomerAsync(string? customerID, CancellationToken cancellationToken = default);
 
+    [InquirySelectAllByField("CustomerID", "EmployeeID")]
+    public abstract IAsyncEnumerable<Order> SelectByCustomerAndEmployeeAsync(string? customerID, int? employeeID, CancellationToken cancellationToken = default);
+
     [InquiryInsert]
     public abstract Task<int> InsertAsync(Order order, CancellationToken cancellationToken = default);
 
