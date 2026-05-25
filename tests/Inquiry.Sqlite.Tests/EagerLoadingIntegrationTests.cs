@@ -100,6 +100,63 @@ public sealed class EagerLoadingIntegrationTests
         Assert.Equal(1, b.Products?.Count);
     }
 
+    [Fact]
+    public async Task SelectOneByKeyEagerLoadsParentReference()
+    {
+        var (sp, keeper) = await SetupAsync();
+        await using var _ = keeper;
+        using var _sp = sp;
+        var catStore = sp.GetRequiredService<CategoryStore>();
+        var prodStore = sp.GetRequiredService<ProductStore>();
+
+        var category = new Category { Key = Guid.NewGuid(), Name = "Electronics" };
+        await catStore.InsertAsync(category);
+
+        var product = new Product { Key = Guid.NewGuid(), Name = "Phone", Price = 699m, CategoryKey = category.Key };
+        await prodStore.InsertAsync(product);
+
+        var loaded = await prodStore.SelectByKeyWithCategoryAsync(product.Key);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("Phone", loaded.Name);
+        Assert.NotNull(loaded.Category);
+        Assert.Equal(category.Key, loaded.Category!.Key);
+        Assert.Equal("Electronics", loaded.Category.Name);
+    }
+
+    [Fact]
+    public async Task SelectAllEagerPopulatesParentForAllChildren()
+    {
+        var (sp, keeper) = await SetupAsync();
+        await using var _ = keeper;
+        using var _sp = sp;
+        var catStore = sp.GetRequiredService<CategoryStore>();
+        var prodStore = sp.GetRequiredService<ProductStore>();
+
+        var cat1 = new Category { Key = Guid.NewGuid(), Name = "Cat A" };
+        var cat2 = new Category { Key = Guid.NewGuid(), Name = "Cat B" };
+        await catStore.InsertAsync(cat1);
+        await catStore.InsertAsync(cat2);
+
+        foreach (var p in new[]
+        {
+            new Product { Key = Guid.NewGuid(), Name = "P1", Price = 1m, CategoryKey = cat1.Key },
+            new Product { Key = Guid.NewGuid(), Name = "P2", Price = 2m, CategoryKey = cat1.Key },
+            new Product { Key = Guid.NewGuid(), Name = "P3", Price = 3m, CategoryKey = cat2.Key },
+        })
+        {
+            await prodStore.InsertAsync(p);
+        }
+
+        var all = await ToListAsync(prodStore.SelectAllWithCategoryAsync());
+
+        Assert.Equal(3, all.Count);
+        Assert.All(all, p => Assert.NotNull(p.Category));
+        Assert.Equal("Cat A", all.Single(p => p.Name == "P1").Category!.Name);
+        Assert.Equal("Cat A", all.Single(p => p.Name == "P2").Category!.Name);
+        Assert.Equal("Cat B", all.Single(p => p.Name == "P3").Category!.Name);
+    }
+
     private static async Task<(ServiceProvider sp, SqliteConnection keeper)> SetupAsync()
     {
         var cs = new SqliteConnectionStringBuilder

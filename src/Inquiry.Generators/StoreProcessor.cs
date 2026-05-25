@@ -180,10 +180,14 @@ internal static class StoreProcessor
                 if (!allEntities.TryGetValue(childKey, out var childEntity))
                     continue;
 
-                var fkIndex = childEntity.Columns.FindIndex(c => c.PropertyName == relation.ForeignKeyProperty);
+                // For one-to-many (collection), filter the related table by its FK column.
+                // For many-to-one (single ref), filter the related (parent) table by its own key column.
+                var filterIndex = relation.IsCollection
+                    ? childEntity.Columns.FindIndex(c => c.PropertyName == relation.ForeignKeyProperty)
+                    : childEntity.Columns.FindIndex(c => c.IsKey);
 
                 source.AppendLine($"        var _ctx_{relation.PropertyName} = sqlDialect.CreateContext({GeneratorHelpers.Literal(childEntity.Schema)}, \"{GeneratorHelpers.Escape(childEntity.TableName)}\", _columns_{relation.PropertyName});");
-                source.AppendLine($"        _sql_{relation.PropertyName} = sqlDialect.BuildSelectByFieldSql(_ctx_{relation.PropertyName}, _columns_{relation.PropertyName}[{fkIndex}]);");
+                source.AppendLine($"        _sql_{relation.PropertyName} = sqlDialect.BuildSelectByFieldSql(_ctx_{relation.PropertyName}, _columns_{relation.PropertyName}[{filterIndex}]);");
                 source.AppendLine($"        _sql_{relation.PropertyName}_All = sqlDialect.BuildSelectAllSql(_ctx_{relation.PropertyName});");
             }
         }
@@ -193,7 +197,7 @@ internal static class StoreProcessor
         foreach (var method in methods)
         {
             source.AppendLine();
-            StoreOperationEmitter.Emit(source, method, entity);
+            StoreOperationEmitter.Emit(source, method, entity, relationChildEntities);
         }
 
         source.AppendLine("}");

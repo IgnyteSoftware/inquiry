@@ -17,4 +17,7 @@ public sealed class Product
 
     [InquiryForeignKey("CategoryKey", "TCategory", "Key")]
     public Guid CategoryKey { get; set; }
+
+    [InquiryRelation("CategoryKey")]
+    public Category? Category { get; set; }
 }
