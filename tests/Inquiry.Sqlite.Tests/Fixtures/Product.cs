@@ -1,5 +1,4 @@
 using Inquiry.Entities;
-using System.Collections.Generic;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
 

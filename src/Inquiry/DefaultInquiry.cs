@@ -13,7 +13,7 @@ namespace Inquiry;
 /// <summary>
 /// Default implementation of the high-level Inquiry facade.
 /// </summary>
-public sealed class DefaultInquiry : IInquiry
+internal sealed class DefaultInquiry : IInquiry
 {
     private readonly IInquiryRequestPipeline _requestPipeline;
     private readonly IInquiryConnectionFactory _connectionFactory;
@@ -40,9 +40,7 @@ public sealed class DefaultInquiry : IInquiry
         string commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class
-    {
-        return QueryAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
-    }
+        => QueryAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -50,28 +48,21 @@ public sealed class DefaultInquiry : IInquiry
         object? parameters,
         CancellationToken cancellationToken = default)
         where TEntity : class
-    {
-        return QueryAsync<TEntity>(CreateCommand(commandText, parameters), cancellationToken);
-    }
+        => QueryAsync<TEntity>(new InquiryCommand(commandText, InquiryParameterReader.Read(parameters)), cancellationToken);
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
-    {
-        var materializer = GetMaterializer<TEntity>();
-        return _requestPipeline.QueryAsync(command, materializer.Materialize, cancellationToken);
-    }
+        => _requestPipeline.QueryAsync(command, GetMaterializer<TEntity>().Materialize, cancellationToken);
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         string commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class
-    {
-        return QuerySingleOrDefaultAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
-    }
+        => QuerySingleOrDefaultAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -79,40 +70,33 @@ public sealed class DefaultInquiry : IInquiry
         object? parameters,
         CancellationToken cancellationToken = default)
         where TEntity : class
-    {
-        return QuerySingleOrDefaultAsync<TEntity>(CreateCommand(commandText, parameters), cancellationToken);
-    }
+        => QuerySingleOrDefaultAsync<TEntity>(new InquiryCommand(commandText, InquiryParameterReader.Read(parameters)), cancellationToken);
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
-    {
-        var materializer = GetMaterializer<TEntity>();
-        return _requestPipeline.QuerySingleOrDefaultAsync(command, materializer.Materialize, cancellationToken);
-    }
+        => _requestPipeline.QuerySingleOrDefaultAsync(command, GetMaterializer<TEntity>().Materialize, cancellationToken);
 
     /// <inheritdoc />
-    public Task<int> ExecuteAsync(string commandText, CancellationToken cancellationToken = default)
-    {
-        return ExecuteAsync(new InquiryCommand(commandText), cancellationToken);
-    }
+    public Task<int> ExecuteAsync(
+        string commandText,
+        CancellationToken cancellationToken = default)
+        => ExecuteAsync(new InquiryCommand(commandText), cancellationToken);
 
     /// <inheritdoc />
     public Task<int> ExecuteAsync(
         string commandText,
         object? parameters,
         CancellationToken cancellationToken = default)
-    {
-        return ExecuteAsync(CreateCommand(commandText, parameters), cancellationToken);
-    }
+        => ExecuteAsync(new InquiryCommand(commandText, InquiryParameterReader.Read(parameters)), cancellationToken);
 
     /// <inheritdoc />
-    public Task<int> ExecuteAsync(InquiryCommand command, CancellationToken cancellationToken = default)
-    {
-        return _requestPipeline.ExecuteAsync(command, cancellationToken);
-    }
+    public Task<int> ExecuteAsync(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        => _requestPipeline.ExecuteAsync(command, cancellationToken);
 
     /// <inheritdoc />
     public async Task<IInquiryTransaction> BeginTransactionAsync(
@@ -134,14 +118,7 @@ public sealed class DefaultInquiry : IInquiry
         }
     }
 
-    private static InquiryCommand CreateCommand(string commandText, object? parameters)
-    {
-        return new InquiryCommand(commandText, InquiryParameterReader.Read(parameters));
-    }
-
     private IInquiryEntityMaterializer<TEntity> GetMaterializer<TEntity>()
         where TEntity : class
-    {
-        return _serviceProvider.GetRequiredService<IInquiryEntityMaterializer<TEntity>>();
-    }
+        => _serviceProvider.GetRequiredService<IInquiryEntityMaterializer<TEntity>>();
 }
