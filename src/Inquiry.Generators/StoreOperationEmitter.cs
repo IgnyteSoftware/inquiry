@@ -217,12 +217,34 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 if (method.ReturnsEntity)
                 {
+                    if (ShouldUseInsertWhenKeyIsNull(entity))
+                    {
+                        source.AppendLine($"        if ({firstParameter}.{entity.Key.PropertyName} is null)");
+                        source.AppendLine("        {");
+                        source.AppendLine($"            return Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                        AppendMutationCommand(source, "_sqlInsertReturning", entity, firstParameter, indent: "                ");
+                        source.AppendLine($"                {cancellation});");
+                        source.AppendLine("        }");
+                        source.AppendLine();
+                    }
+
                     source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
                     AppendMutationCommand(source, "_sqlUpsertReturning", entity, firstParameter, indent: "            ", includeKey: true);
                     source.AppendLine($"            {cancellation});");
                 }
                 else
                 {
+                    if (ShouldUseInsertWhenKeyIsNull(entity))
+                    {
+                        source.AppendLine($"        if ({firstParameter}.{entity.Key.PropertyName} is null)");
+                        source.AppendLine("        {");
+                        source.AppendLine("            return Inquiry.ExecuteAsync(");
+                        AppendMutationCommand(source, "_sqlInsert", entity, firstParameter, indent: "                ");
+                        source.AppendLine($"                {cancellation});");
+                        source.AppendLine("        }");
+                        source.AppendLine();
+                    }
+
                     source.AppendLine("        return Inquiry.ExecuteAsync(");
                     AppendMutationCommand(source, "_sqlUpsert", entity, firstParameter, indent: "            ", includeKey: true);
                     source.AppendLine($"            {cancellation});");
@@ -264,7 +286,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine($"{indent}    {{");
 
-        foreach (var column in entity.Columns.Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated))
+        foreach (var column in entity.Columns.Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault))
         {
             source.AppendLine($"{indent}        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {entityParameter}.{column.PropertyName}),");
         }
@@ -447,6 +469,9 @@ internal static class StoreOperationEmitter
         source.AppendLine($"    public override {asyncModifier}{returnType} {method.Name}({parameters})");
         source.AppendLine("    {");
     }
+
+    private static bool ShouldUseInsertWhenKeyIsNull(EntityModel entity)
+        => entity.Key.Type.IsNullable && (entity.Key.IsGenerated || entity.Key.UseDatabaseDefault);
 
     private static bool HasSupportedReturnType(StoreOperation operation, ITypeSymbol returnType, EntityModel entity, bool returnsEntity)
     {

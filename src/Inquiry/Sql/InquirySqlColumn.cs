@@ -8,7 +8,12 @@ public sealed class InquirySqlColumn
     /// <summary>
     /// Initializes a new instance of the <see cref="InquirySqlColumn"/> class.
     /// </summary>
-    public InquirySqlColumn(string propertyName, string columnName, bool isKey, bool isGenerated = false)
+    public InquirySqlColumn(
+        string propertyName,
+        string columnName,
+        bool isKey,
+        bool isGenerated = false,
+        bool useDatabaseDefault = false)
     {
         if (string.IsNullOrWhiteSpace(propertyName))
         {
@@ -24,6 +29,7 @@ public sealed class InquirySqlColumn
         ColumnName = columnName;
         IsKey = isKey;
         IsGenerated = isGenerated;
+        UseDatabaseDefault = useDatabaseDefault;
     }
 
     /// <summary>
@@ -47,4 +53,11 @@ public sealed class InquirySqlColumn
     /// from INSERT and UPDATE statements.
     /// </summary>
     public bool IsGenerated { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether INSERT statements should omit this column
+    /// so the database default expression supplies the value. Unlike generated columns,
+    /// defaulted columns remain updateable after insertion.
+    /// </summary>
+    public bool UseDatabaseDefault { get; }
 }

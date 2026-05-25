@@ -50,6 +50,11 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanInsert(context);
+        if (context.InsertableColumns.Count == 0)
+        {
+            return "INSERT INTO " + context.Table + " DEFAULT VALUES";
+        }
+
         return "INSERT INTO " + context.Table
             + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ")";
     }
@@ -89,21 +94,19 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
 
     /// <inheritdoc />
     /// <remarks>
-    /// SQLite uses <c>INSERT OR REPLACE</c> which deletes the existing row (triggering ON DELETE
-    /// constraints) and inserts the new one. For conflict-safe upserts that only update changed
-    /// columns, use <c>INSERT OR IGNORE / UPDATE</c> or <c>INSERT ... ON CONFLICT DO UPDATE</c>
-    /// (SQLite 3.24+). This implementation uses the widely-compatible <c>INSERT OR REPLACE</c>.
+    /// Uses SQLite 3.24+ <c>INSERT ... ON CONFLICT DO UPDATE</c> syntax.
     /// </remarks>
     public override string BuildUpsertSql(InquirySqlBuildContext context)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
-        if (context.KeyColumn.IsGenerated)
+        if (DatabaseMaySupplyKey(context))
         {
             return BuildGeneratedKeyUpsertSql(context, returning: false);
         }
 
-        return $"INSERT OR REPLACE INTO {context.Table} ({context.InsertColumns}) VALUES ({context.InsertParameters})";
+        return $"INSERT INTO {context.Table} ({context.InsertColumns}) VALUES ({context.InsertParameters}) " +
+            $"ON CONFLICT ({context.QuotedKeyColumn}) DO UPDATE SET {context.SetClauses}";
     }
 
     /// <inheritdoc />
@@ -111,7 +114,7 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
-        if (context.KeyColumn.IsGenerated)
+        if (DatabaseMaySupplyKey(context))
         {
             return BuildGeneratedKeyUpsertSql(context, returning: true);
         }
@@ -121,11 +124,17 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
 
     private string BuildGeneratedKeyUpsertSql(InquirySqlBuildContext context, bool returning)
     {
-        var explicitInsertColumns = context.QuotedKeyColumn + ", " + context.InsertColumns;
-        var explicitInsertParameters = context.KeyParameter + ", " + context.InsertParameters;
+        var explicitInsertColumns = JoinSql(context.QuotedKeyColumn, context.InsertColumns);
+        var explicitInsertParameters = JoinSql(context.KeyParameter, context.InsertParameters);
         var returningClause = returning ? " RETURNING " + context.SelectColumns : string.Empty;
 
         return $"INSERT INTO {context.Table} ({explicitInsertColumns}) VALUES ({explicitInsertParameters}) " +
             $"ON CONFLICT ({context.QuotedKeyColumn}) DO UPDATE SET {context.SetClauses}{returningClause}";
     }
+
+    private static bool DatabaseMaySupplyKey(InquirySqlBuildContext context)
+        => context.KeyColumn.IsGenerated || context.KeyColumn.UseDatabaseDefault;
+
+    private static string JoinSql(string first, string rest)
+        => string.IsNullOrWhiteSpace(rest) ? first : first + ", " + rest;
 }

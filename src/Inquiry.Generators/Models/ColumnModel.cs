@@ -4,7 +4,14 @@ namespace Inquiry.Generators.Models;
 
 internal sealed class ColumnModel
 {
-    public ColumnModel(IPropertySymbol symbol, string propertyName, string columnName, TypeInfo type, bool isKey, bool isGenerated)
+    public ColumnModel(
+        IPropertySymbol symbol,
+        string propertyName,
+        string columnName,
+        TypeInfo type,
+        bool isKey,
+        bool isGenerated,
+        bool useDatabaseDefault)
     {
         Symbol = symbol;
         PropertyName = propertyName;
@@ -12,6 +19,7 @@ internal sealed class ColumnModel
         Type = type;
         IsKey = isKey;
         IsGenerated = isGenerated;
+        UseDatabaseDefault = useDatabaseDefault;
     }
 
     public IPropertySymbol Symbol { get; }
@@ -25,4 +33,6 @@ internal sealed class ColumnModel
     public bool IsKey { get; }
 
     public bool IsGenerated { get; }
+
+    public bool UseDatabaseDefault { get; }
 }

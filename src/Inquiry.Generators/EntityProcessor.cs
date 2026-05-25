@@ -111,7 +111,10 @@ internal static class EntityProcessor
             var columnName = ResolveColumnName(columnAttribute, foreignKeyAttribute, property.Name);
             var typeInfo = GeneratorTypeInfo.Create(property.Type, property.NullableAnnotation);
             var isGenerated = keyAttribute is not null && GeneratorHelpers.GetNamedBool(keyAttribute, "IsGenerated");
-            columns.Add(new ColumnModel(property, property.Name, columnName, typeInfo, keyAttribute is not null, isGenerated));
+            var useDatabaseDefault =
+                columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "UseDatabaseDefault") ||
+                foreignKeyAttribute is not null && GeneratorHelpers.GetNamedBool(foreignKeyAttribute, "UseDatabaseDefault");
+            columns.Add(new ColumnModel(property, property.Name, columnName, typeInfo, keyAttribute is not null, isGenerated, useDatabaseDefault));
 
             if (!typeInfo.IsSupported)
             {

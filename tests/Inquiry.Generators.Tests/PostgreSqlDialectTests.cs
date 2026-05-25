@@ -96,6 +96,35 @@ public sealed class PostgreSqlDialectTests
     }
 
     [Fact]
+    public void DefaultedColumnIsExcludedFromInsertButIncludedInUpdate()
+    {
+        var columns = new InquirySqlColumn[]
+        {
+            new("Id", "Id", isKey: true),
+            new("Name", "Name", isKey: false),
+            new("CreatedAt", "CreatedAt", isKey: false, useDatabaseDefault: true),
+        };
+        var dialect = new PostgreSqlInquirySqlDialect();
+        var ctx = dialect.CreateContext(null, "TItems", columns);
+
+        Assert.Equal("INSERT INTO \"TItems\" (\"Id\", \"Name\") VALUES (@Id, @Name)", dialect.BuildInsertSql(ctx));
+        Assert.Equal("UPDATE \"TItems\" SET \"Name\" = @Name, \"CreatedAt\" = @CreatedAt WHERE \"Id\" = @Id", dialect.BuildUpdateSql(ctx));
+    }
+
+    [Fact]
+    public void BuildInsertUsesDefaultValuesWhenAllColumnsAreDatabaseSupplied()
+    {
+        var dialect = new PostgreSqlInquirySqlDialect();
+        var ctx = dialect.CreateContext(
+            null,
+            "T",
+            new[] { new InquirySqlColumn("Id", "Id", isKey: true, isGenerated: true) });
+
+        Assert.Equal("INSERT INTO \"T\" DEFAULT VALUES", dialect.BuildInsertSql(ctx));
+        Assert.Equal("INSERT INTO \"T\" DEFAULT VALUES RETURNING \"Id\"", dialect.BuildInsertReturningSql(ctx));
+    }
+
+    [Fact]
     public void BuildSelectByFieldSqlFiltersOnArbitraryColumn()
     {
         var (dialect, ctx) = NewContext();

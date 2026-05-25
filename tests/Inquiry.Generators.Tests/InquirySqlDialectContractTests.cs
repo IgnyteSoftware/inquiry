@@ -101,15 +101,15 @@ public sealed class InquirySqlDialectContractTests
 
     [Theory]
     [MemberData(nameof(AllDialects))]
-    public void BuildInsertSqlRejectsAllGeneratedColumns(InquirySqlDialect dialect)
+    public void BuildInsertSqlAllowsAllDatabaseSuppliedColumns(InquirySqlDialect dialect)
     {
         var context = dialect.CreateContext(
             null,
             "T",
             new[] { new InquirySqlColumn("Id", "Id", isKey: true, isGenerated: true) });
 
-        Assert.Throws<InvalidOperationException>(() => dialect.BuildInsertSql(context));
-        Assert.Throws<InvalidOperationException>(() => dialect.BuildInsertReturningSql(context));
+        Assert.False(string.IsNullOrWhiteSpace(dialect.BuildInsertSql(context)));
+        Assert.False(string.IsNullOrWhiteSpace(dialect.BuildInsertReturningSql(context)));
     }
 
     [Theory]

@@ -37,6 +37,21 @@ internal static class Schemas
         );
         """;
 
+    public const string DefaultedItem = """
+        CREATE TABLE TDefaultedItem (
+            Key TEXT PRIMARY KEY,
+            Name TEXT NOT NULL,
+            Status TEXT DEFAULT 'New' NOT NULL
+        );
+        """;
+
+    public const string DefaultedKeyItem = """
+        CREATE TABLE TDefaultedKeyItem (
+            Id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+            Name TEXT NOT NULL
+        );
+        """;
+
     /// <summary>Both category and product tables in one batch.</summary>
     public const string CategoryAndProduct = Category + "\n" + Product;
 }

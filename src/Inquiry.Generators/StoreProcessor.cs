@@ -59,14 +59,20 @@ internal static class StoreProcessor
         Dictionary<string, EntityModel> allEntities)
     {
         var generatedName = $"Generated{storeSymbol.Name}";
+        var keyMayBeDatabaseSupplied = entity.Key.IsGenerated || entity.Key.UseDatabaseDefault;
+        var nullableDatabaseSuppliedKeyUpsert = keyMayBeDatabaseSupplied &&
+            entity.Key.Type.IsNullable &&
+            methods.Any(m => m.Operation == StoreOperation.Upsert);
 
         // Determine which statements this store actually needs.
         var needsSelectAll = methods.Any(m => m.Operation is StoreOperation.SelectAll or StoreOperation.SelectAllEager);
         var needsSelectByKey = methods.Any(m => m.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
-        var needsInsert = methods.Any(m => m.Operation == StoreOperation.Insert && !m.ReturnsEntity);
+        var needsInsert = methods.Any(m => m.Operation == StoreOperation.Insert && !m.ReturnsEntity) ||
+            nullableDatabaseSuppliedKeyUpsert && methods.Any(m => m.Operation == StoreOperation.Upsert && !m.ReturnsEntity);
         var needsUpdate = methods.Any(m => m.Operation == StoreOperation.Update && !m.ReturnsEntity);
         var needsUpsert = methods.Any(m => m.Operation == StoreOperation.Upsert && !m.ReturnsEntity);
-        var needsInsertReturning = methods.Any(m => m.Operation == StoreOperation.Insert && m.ReturnsEntity);
+        var needsInsertReturning = methods.Any(m => m.Operation == StoreOperation.Insert && m.ReturnsEntity) ||
+            nullableDatabaseSuppliedKeyUpsert && methods.Any(m => m.Operation == StoreOperation.Upsert && m.ReturnsEntity);
         var needsUpdateReturning = methods.Any(m => m.Operation == StoreOperation.Update && m.ReturnsEntity);
         var needsUpsertReturning = methods.Any(m => m.Operation == StoreOperation.Upsert && m.ReturnsEntity);
         var needsDelete = methods.Any(m => m.Operation == StoreOperation.DeleteOneByKey);
@@ -91,7 +97,7 @@ internal static class StoreProcessor
         source.AppendLine("    {");
         foreach (var column in entity.Columns)
         {
-            source.AppendLine($"        new global::Inquiry.Sql.InquirySqlColumn(\"{GeneratorHelpers.Escape(column.PropertyName)}\", \"{GeneratorHelpers.Escape(column.ColumnName)}\", isKey: {GeneratorHelpers.BooleanLiteral(column.IsKey)}, isGenerated: {GeneratorHelpers.BooleanLiteral(column.IsGenerated)}),");
+            source.AppendLine($"        new global::Inquiry.Sql.InquirySqlColumn(\"{GeneratorHelpers.Escape(column.PropertyName)}\", \"{GeneratorHelpers.Escape(column.ColumnName)}\", isKey: {GeneratorHelpers.BooleanLiteral(column.IsKey)}, isGenerated: {GeneratorHelpers.BooleanLiteral(column.IsGenerated)}, useDatabaseDefault: {GeneratorHelpers.BooleanLiteral(column.UseDatabaseDefault)}),");
         }
         source.AppendLine("    };");
 
@@ -114,7 +120,7 @@ internal static class StoreProcessor
                 source.AppendLine("    {");
                 foreach (var col in childEntity.Columns)
                 {
-                    source.AppendLine($"        new global::Inquiry.Sql.InquirySqlColumn(\"{GeneratorHelpers.Escape(col.PropertyName)}\", \"{GeneratorHelpers.Escape(col.ColumnName)}\", isKey: {GeneratorHelpers.BooleanLiteral(col.IsKey)}, isGenerated: {GeneratorHelpers.BooleanLiteral(col.IsGenerated)}),");
+                    source.AppendLine($"        new global::Inquiry.Sql.InquirySqlColumn(\"{GeneratorHelpers.Escape(col.PropertyName)}\", \"{GeneratorHelpers.Escape(col.ColumnName)}\", isKey: {GeneratorHelpers.BooleanLiteral(col.IsKey)}, isGenerated: {GeneratorHelpers.BooleanLiteral(col.IsGenerated)}, useDatabaseDefault: {GeneratorHelpers.BooleanLiteral(col.UseDatabaseDefault)}),");
                 }
                 source.AppendLine("    };");
             }

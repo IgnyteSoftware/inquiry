@@ -56,6 +56,35 @@ public sealed class SqlServerDialectTests
     }
 
     [Fact]
+    public void DefaultedColumnIsExcludedFromInsertButIncludedInUpdate()
+    {
+        var columns = new InquirySqlColumn[]
+        {
+            new("Id", "Id", isKey: true),
+            new("Name", "Name", isKey: false),
+            new("CreatedAt", "CreatedAt", isKey: false, useDatabaseDefault: true),
+        };
+        var dialect = new SqlServerInquirySqlDialect();
+        var ctx = dialect.CreateContext("dbo", "TItems", columns);
+
+        Assert.Equal("INSERT INTO [dbo].[TItems] ([Id], [Name]) VALUES (@Id, @Name)", dialect.BuildInsertSql(ctx));
+        Assert.Equal("UPDATE [dbo].[TItems] SET [Name] = @Name, [CreatedAt] = @CreatedAt WHERE [Id] = @Id", dialect.BuildUpdateSql(ctx));
+    }
+
+    [Fact]
+    public void BuildInsertUsesDefaultValuesWhenAllColumnsAreDatabaseSupplied()
+    {
+        var dialect = new SqlServerInquirySqlDialect();
+        var ctx = dialect.CreateContext(
+            "dbo",
+            "T",
+            new[] { new InquirySqlColumn("Id", "Id", isKey: true, isGenerated: true) });
+
+        Assert.Equal("INSERT INTO [dbo].[T] DEFAULT VALUES", dialect.BuildInsertSql(ctx));
+        Assert.Equal("INSERT INTO [dbo].[T] OUTPUT INSERTED.[Id] DEFAULT VALUES", dialect.BuildInsertReturningSql(ctx));
+    }
+
+    [Fact]
     public void BuildsUpsertWithMerge()
     {
         var (dialect, ctx) = NewContext();

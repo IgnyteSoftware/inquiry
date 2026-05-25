@@ -245,7 +245,7 @@ public abstract class InquirySqlDialect
 
 | File | Identifier quoting | Upsert strategy |
 | --- | --- | --- |
-| [`src/Inquiry.Sqlite/SqliteInquirySqlDialect.cs`](src/Inquiry.Sqlite/SqliteInquirySqlDialect.cs) | `"name"` (double quotes, doubled to escape) | `INSERT OR REPLACE` |
+| [`src/Inquiry.Sqlite/SqliteInquirySqlDialect.cs`](src/Inquiry.Sqlite/SqliteInquirySqlDialect.cs) | `"name"` (double quotes, doubled to escape) | `INSERT ... ON CONFLICT DO UPDATE` |
 | [`src/Inquiry.SqlServer/SqlServerInquirySqlDialect.cs`](src/Inquiry.SqlServer/SqlServerInquirySqlDialect.cs) | `[name]` (brackets, `]` doubled to escape) | `MERGE INTO ... WHEN MATCHED / WHEN NOT MATCHED` |
 | [`src/Inquiry.PostgreSql/PostgreSqlInquirySqlDialect.cs`](src/Inquiry.PostgreSql/PostgreSqlInquirySqlDialect.cs) | `"name"` (double quotes) | `INSERT … ON CONFLICT (...) DO UPDATE` |
 

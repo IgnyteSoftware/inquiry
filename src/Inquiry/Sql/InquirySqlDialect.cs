@@ -70,7 +70,7 @@ public abstract class InquirySqlDialect
         }
 
         var key = keys[0];
-        var insertableColumns = columns.Where(c => !c.IsGenerated).ToArray();
+        var insertableColumns = columns.Where(c => !c.IsGenerated && !c.UseDatabaseDefault).ToArray();
         var table = QuoteTable(schema, tableName);
         var selectColumns = string.Join(", ", columns.Select(c => QuoteIdentifier(c.ColumnName)));
         var insertColumns = string.Join(", ", insertableColumns.Select(c => QuoteIdentifier(c.ColumnName)));
@@ -94,13 +94,10 @@ public abstract class InquirySqlDialect
             keyParameter: keyParam);
     }
 
-    /// <summary>Throws if the context cannot produce a valid INSERT statement.</summary>
+    /// <summary>Validates that an INSERT context was provided.</summary>
     protected static void EnsureCanInsert(InquirySqlBuildContext context)
     {
-        if (context.InsertableColumns.Count == 0)
-        {
-            throw new InvalidOperationException("Cannot build INSERT SQL because all mapped columns are database-generated.");
-        }
+        _ = context ?? throw new ArgumentNullException(nameof(context));
     }
 
     /// <summary>Throws if the context cannot produce a valid UPDATE SET clause.</summary>

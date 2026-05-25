@@ -30,4 +30,10 @@ public class InquiryColumnAttribute : Attribute
     /// Gets the mapped column name, or <see langword="null"/> to use the CLR property name.
     /// </summary>
     public string? Name { get; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether INSERT statements should omit this column
+    /// so the database default expression supplies the value.
+    /// </summary>
+    public bool UseDatabaseDefault { get; set; }
 }
