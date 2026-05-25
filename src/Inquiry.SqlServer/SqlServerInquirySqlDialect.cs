@@ -50,6 +50,11 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanInsert(context);
+        if (context.InsertableColumns.Count == 0)
+        {
+            return "INSERT INTO " + context.Table + " DEFAULT VALUES";
+        }
+
         return "INSERT INTO " + context.Table
             + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ")";
     }
@@ -59,6 +64,13 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanInsert(context);
+        if (context.InsertableColumns.Count == 0)
+        {
+            return "INSERT INTO " + context.Table
+                + " OUTPUT " + InsertedColumns(context)
+                + " DEFAULT VALUES";
+        }
+
         return "INSERT INTO " + context.Table
             + " (" + context.InsertColumns + ") OUTPUT " + InsertedColumns(context)
             + " VALUES (" + context.InsertParameters + ")";
@@ -99,7 +111,7 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
-        if (context.KeyColumn.IsGenerated)
+        if (DatabaseMaySupplyKey(context))
         {
             return BuildGeneratedKeyUpsertSql(context, returning: false);
         }
@@ -116,7 +128,7 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
-        if (context.KeyColumn.IsGenerated)
+        if (DatabaseMaySupplyKey(context))
         {
             return BuildGeneratedKeyUpsertSql(context, returning: true);
         }
@@ -135,13 +147,16 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     private string BuildGeneratedKeyUpsertSql(InquirySqlBuildContext context, bool returning)
     {
         var output = returning ? " OUTPUT " + InsertedColumns(context) : string.Empty;
-        var explicitInsertColumns = context.QuotedKeyColumn + ", " + context.InsertColumns;
-        var explicitInsertParameters = context.KeyParameter + ", " + context.InsertParameters;
+        var explicitInsertColumns = JoinSql(context.QuotedKeyColumn, context.InsertColumns);
+        var explicitInsertParameters = JoinSql(context.KeyParameter, context.InsertParameters);
+        var generatedInsert = context.InsertableColumns.Count == 0
+            ? $"INSERT INTO {context.Table}{output} DEFAULT VALUES; "
+            : $"INSERT INTO {context.Table} ({context.InsertColumns}){output} VALUES ({context.InsertParameters}); ";
 
         return
             $"IF {context.KeyParameter} IS NULL " +
             "BEGIN " +
-            $"INSERT INTO {context.Table} ({context.InsertColumns}){output} VALUES ({context.InsertParameters}); " +
+            generatedInsert +
             "END " +
             $"ELSE IF EXISTS (SELECT 1 FROM {context.Table} WHERE {context.QuotedKeyColumn} = {context.KeyParameter}) " +
             "BEGIN " +
@@ -152,4 +167,10 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
             $"INSERT INTO {context.Table} ({explicitInsertColumns}){output} VALUES ({explicitInsertParameters}); " +
             "END";
     }
+
+    private static bool DatabaseMaySupplyKey(InquirySqlBuildContext context)
+        => context.KeyColumn.IsGenerated || context.KeyColumn.UseDatabaseDefault;
+
+    private static string JoinSql(string first, string rest)
+        => string.IsNullOrWhiteSpace(rest) ? first : first + ", " + rest;
 }

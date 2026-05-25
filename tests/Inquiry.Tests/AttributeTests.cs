@@ -75,6 +75,15 @@ public sealed class AttributeTests
         var attribute = new InquiryColumnAttribute();
 
         Assert.Null(attribute.Name);
+        Assert.False(attribute.UseDatabaseDefault);
+    }
+
+    [Fact]
+    public void ColumnAttributeUseDatabaseDefaultIsSettable()
+    {
+        var attribute = new InquiryColumnAttribute { UseDatabaseDefault = true };
+
+        Assert.True(attribute.UseDatabaseDefault);
     }
 
     [Theory]
@@ -91,6 +100,7 @@ public sealed class AttributeTests
         var attribute = new InquiryKeyAttribute();
 
         Assert.False(attribute.IsGenerated);
+        Assert.False(attribute.UseDatabaseDefault);
         Assert.Null(attribute.Name);
     }
 

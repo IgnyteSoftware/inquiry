@@ -50,6 +50,11 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanInsert(context);
+        if (context.InsertableColumns.Count == 0)
+        {
+            return "INSERT INTO " + context.Table + " DEFAULT VALUES";
+        }
+
         return "INSERT INTO " + context.Table
             + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ")";
     }
@@ -95,7 +100,7 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
-        if (context.KeyColumn.IsGenerated)
+        if (DatabaseMaySupplyKey(context))
         {
             return BuildGeneratedKeyUpsertSql(context, returning: false);
         }
@@ -109,7 +114,7 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
-        if (context.KeyColumn.IsGenerated)
+        if (DatabaseMaySupplyKey(context))
         {
             return BuildGeneratedKeyUpsertSql(context, returning: true);
         }
@@ -119,28 +124,36 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
 
     private string BuildGeneratedKeyUpsertSql(InquirySqlBuildContext context, bool returning)
     {
-        var explicitInsertColumns = context.QuotedKeyColumn + ", " + context.InsertColumns;
-        var explicitInsertParameters = context.KeyParameter + ", " + context.InsertParameters;
+        if (context.InsertableColumns.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot build generated/default key UPSERT SQL because there are no columns to insert when the key is database-supplied.");
+        }
+
+        var explicitInsertColumns = JoinSql(context.QuotedKeyColumn, context.InsertColumns);
+        var explicitInsertParameters = JoinSql(context.KeyParameter, context.InsertParameters);
+        var generatedInsertColumns = $" ({context.InsertColumns}) SELECT {context.InsertParameters} WHERE {context.KeyParameter} IS NULL";
 
         if (!returning)
         {
             return
                 $"UPDATE {context.Table} SET {context.SetClauses} " +
                 $"WHERE {context.KeyParameter} IS NOT NULL AND {context.QuotedKeyColumn} = {context.KeyParameter}; " +
-                $"INSERT INTO {context.Table} ({context.InsertColumns}) " +
-                $"SELECT {context.InsertParameters} WHERE {context.KeyParameter} IS NULL; " +
+                $"INSERT INTO {context.Table}{generatedInsertColumns}; " +
                 $"INSERT INTO {context.Table} ({explicitInsertColumns}) " +
                 $"SELECT {explicitInsertParameters} WHERE {context.KeyParameter} IS NOT NULL " +
                 $"AND NOT EXISTS (SELECT 1 FROM {context.Table} WHERE {context.QuotedKeyColumn} = {context.KeyParameter});";
         }
 
+        var generatedReturningInsert =
+            $"INSERT INTO {context.Table} ({context.InsertColumns}) " +
+            $"SELECT {context.InsertParameters} WHERE {context.KeyParameter} IS NULL " +
+            $"RETURNING {context.SelectColumns}";
+
         return
             $"WITH updated AS (UPDATE {context.Table} SET {context.SetClauses} " +
             $"WHERE {context.KeyParameter} IS NOT NULL AND {context.QuotedKeyColumn} = {context.KeyParameter} " +
             $"RETURNING {context.SelectColumns}), " +
-            $"inserted_generated AS (INSERT INTO {context.Table} ({context.InsertColumns}) " +
-            $"SELECT {context.InsertParameters} WHERE {context.KeyParameter} IS NULL " +
-            $"RETURNING {context.SelectColumns}), " +
+            $"inserted_generated AS ({generatedReturningInsert}), " +
             $"inserted_explicit AS (INSERT INTO {context.Table} ({explicitInsertColumns}) " +
             $"SELECT {explicitInsertParameters} WHERE {context.KeyParameter} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM updated) " +
             $"RETURNING {context.SelectColumns}) " +
@@ -148,4 +161,10 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
             $"SELECT {context.SelectColumns} FROM inserted_generated UNION ALL " +
             $"SELECT {context.SelectColumns} FROM inserted_explicit";
     }
+
+    private static bool DatabaseMaySupplyKey(InquirySqlBuildContext context)
+        => context.KeyColumn.IsGenerated || context.KeyColumn.UseDatabaseDefault;
+
+    private static string JoinSql(string first, string rest)
+        => string.IsNullOrWhiteSpace(rest) ? first : first + ", " + rest;
 }

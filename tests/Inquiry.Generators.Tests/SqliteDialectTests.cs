@@ -59,11 +59,12 @@ public sealed class SqliteDialectTests
     }
 
     [Fact]
-    public void BuildsUpsertWithInsertOrReplace()
+    public void BuildsUpsertWithOnConflict()
     {
         var (dialect, ctx) = NewContext();
 
-        Assert.StartsWith("INSERT OR REPLACE INTO \"TOrganization\"", dialect.BuildUpsertSql(ctx));
+        Assert.StartsWith("INSERT INTO \"TOrganization\"", dialect.BuildUpsertSql(ctx));
+        Assert.Contains("ON CONFLICT", dialect.BuildUpsertSql(ctx));
     }
 
     [Fact]
@@ -72,10 +73,10 @@ public sealed class SqliteDialectTests
         var (dialect, ctx) = NewContext();
 
         Assert.Equal(
-            "INSERT OR REPLACE INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive)",
+            "INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive) ON CONFLICT (\"Key\") DO UPDATE SET \"Name\" = @Name, \"IsActive\" = @IsActive",
             dialect.BuildUpsertSql(ctx));
         Assert.Equal(
-            "INSERT OR REPLACE INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive) RETURNING \"Key\", \"Name\", \"IsActive\"",
+            "INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive) ON CONFLICT (\"Key\") DO UPDATE SET \"Name\" = @Name, \"IsActive\" = @IsActive RETURNING \"Key\", \"Name\", \"IsActive\"",
             dialect.BuildUpsertReturningSql(ctx));
     }
 
@@ -95,6 +96,21 @@ public sealed class SqliteDialectTests
     }
 
     [Fact]
+    public void DefaultedColumnIsExcludedFromInsertButIncludedInUpdate()
+    {
+        var columns = new InquirySqlColumn[]
+        {
+            new("Id", "Id", isKey: true),
+            new("Name", "Name", isKey: false),
+            new("CreatedAt", "CreatedAt", isKey: false, useDatabaseDefault: true),
+        };
+        var (dialect, ctx) = NewContext(tableName: "TItems", columns: columns);
+
+        Assert.Equal("INSERT INTO \"TItems\" (\"Id\", \"Name\") VALUES (@Id, @Name)", dialect.BuildInsertSql(ctx));
+        Assert.Equal("UPDATE \"TItems\" SET \"Name\" = @Name, \"CreatedAt\" = @CreatedAt WHERE \"Id\" = @Id", dialect.BuildUpdateSql(ctx));
+    }
+
+    [Fact]
     public void CreateContextThrowsWhenNoKeyColumn()
     {
         var columns = new InquirySqlColumn[]
@@ -107,7 +123,7 @@ public sealed class SqliteDialectTests
     }
 
     [Fact]
-    public void BuildInsertThrowsWhenAllColumnsGenerated()
+    public void BuildInsertUsesDefaultValuesWhenAllColumnsAreDatabaseSupplied()
     {
         var columns = new InquirySqlColumn[]
         {
@@ -116,7 +132,8 @@ public sealed class SqliteDialectTests
         var dialect = new SqliteInquirySqlDialect();
         var ctx = dialect.CreateContext(null, "T", columns);
 
-        Assert.Throws<InvalidOperationException>(() => dialect.BuildInsertSql(ctx));
+        Assert.Equal("INSERT INTO \"T\" DEFAULT VALUES", dialect.BuildInsertSql(ctx));
+        Assert.Equal("INSERT INTO \"T\" DEFAULT VALUES RETURNING \"Id\"", dialect.BuildInsertReturningSql(ctx));
     }
 
     [Fact]
