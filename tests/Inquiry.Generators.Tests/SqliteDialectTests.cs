@@ -75,7 +75,7 @@ public sealed class SqliteDialectTests
     }
 
     [Fact]
-    public void GeneratedKeyIsExcludedFromInsertAndUpsert()
+    public void GeneratedKeyIsExcludedFromInsert()
     {
         var columns = new InquirySqlColumn[]
         {
@@ -102,15 +102,16 @@ public sealed class SqliteDialectTests
     }
 
     [Fact]
-    public void CreateContextThrowsWhenAllColumnsGenerated()
+    public void BuildInsertThrowsWhenAllColumnsGenerated()
     {
         var columns = new InquirySqlColumn[]
         {
             new("Id", "Id", isKey: true, isGenerated: true),
         };
         var dialect = new SqliteInquirySqlDialect();
+        var ctx = dialect.CreateContext(null, "T", columns);
 
-        Assert.Throws<ArgumentException>(() => dialect.CreateContext(null, "T", columns));
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildInsertSql(ctx));
     }
 
     [Fact]
@@ -140,7 +141,7 @@ public sealed class SqliteDialectTests
     }
 
     [Fact]
-    public void UpsertExcludesGeneratedKey()
+    public void UpsertThrowsWhenKeyIsGenerated()
     {
         var columns = new InquirySqlColumn[]
         {
@@ -149,6 +150,6 @@ public sealed class SqliteDialectTests
         };
         var (dialect, ctx) = NewContext(tableName: "TItems", columns: columns);
 
-        Assert.Equal("INSERT OR REPLACE INTO \"TItems\" (\"Name\") VALUES (@Name)", dialect.BuildUpsertSql(ctx));
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertSql(ctx));
     }
 }

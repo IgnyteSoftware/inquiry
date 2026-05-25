@@ -85,9 +85,9 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("Inquiry.ExecuteAsync", generatedText);
-        Assert.Contains("new { key = key }", generatedText);
-        Assert.Contains("new { value = isActive }", generatedText);
-        Assert.Contains("Key = organization.Key", generatedText);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"key\", key)", generatedText);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"value\", isActive)", generatedText);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"Key\", organization.Key)", generatedText);
         Assert.Contains("_sqlSelectAll", generatedText);
         Assert.Contains("_sqlInsert", generatedText);
         Assert.Contains("_sqlUpdate", generatedText);

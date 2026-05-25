@@ -49,6 +49,7 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     public override string BuildInsertSql(InquirySqlBuildContext context)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanInsert(context);
         return "INSERT INTO " + context.Table
             + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ")";
     }
@@ -57,6 +58,7 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     public override string BuildUpdateSql(InquirySqlBuildContext context)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanUpdate(context);
         return "UPDATE " + context.Table + " SET " + context.SetClauses
             + " WHERE " + context.QuotedKeyColumn + " = " + context.KeyParameter;
     }
@@ -76,6 +78,7 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     public override string BuildUpsertSql(InquirySqlBuildContext context)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanUpsert(context);
         return $"INSERT INTO {context.Table} ({context.InsertColumns}) VALUES ({context.InsertParameters}) " +
                $"ON CONFLICT ({context.QuotedKeyColumn}) DO UPDATE SET {context.SetClauses}";
     }
