@@ -14,6 +14,6 @@ public sealed class Product
     [InquiryColumn]
     public decimal Price { get; set; }
 
-    [InquiryForeignKey("CategoryKey", "TCategory", "Key")]
+    [InquiryForeignKey("TCategoryKey", "TCategory", "Key")]
     public Guid CategoryKey { get; set; }
 }

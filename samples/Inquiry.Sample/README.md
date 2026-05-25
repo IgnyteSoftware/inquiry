@@ -1,6 +1,6 @@
 # Inquiry.Sample
 
-A Blazor Server application that exercises Inquiry against an in-process SQLite database.
+A Blazor Server application that exercises Inquiry against SQL Server.
 Each page injects a small **service** that wraps one or two generated stores; no page talks
 to a store directly. The seed data, the catalog with eager-loaded products, and the
 transactional insert demo each live in their own service file.
@@ -11,15 +11,15 @@ transactional insert demo each live in their own service file.
 dotnet run --project samples\Inquiry.Sample\Inquiry.Sample.csproj
 ```
 
-The app creates a fresh `inquiry-sample.db` in the build output directory on every start,
-seeds it via `DataSeeder`, then serves the Blazor UI at the URL printed in the console
-(by default `https://localhost:59694`).
+The app reads `ConnectionStrings:InquirySample` from `appsettings.json`, creates the sample
+tables if they do not already exist, seeds them via `DataSeeder`, then serves the Blazor UI
+at the URL printed in the console.
 
 ## What it demonstrates
 
 - Entity mapping with `[InquiryTable]`, `[InquiryKey]`, `[InquiryColumn]`, `[InquiryForeignKey]`, `[InquiryRelation]`
 - Store generation with `[InquirySelectAll]`, `[InquirySelectOneByKey]`, `[InquirySelectAllByField]`, `[InquiryInsert]`, `[InquiryUpdate]`, `[InquiryUpsert]`, `[InquiryDeleteOneByKey]`, `[InquirySelectAllEager]`, `[InquirySelectOneByKeyEager]`
-- DI registration through `AddInquiry()` + `AddInquirySqlite(connectionString)`
+- DI registration through `AddInquiry()` + `AddInquirySqlServer(connectionString)`
 - Eager loading on `Category.Products`
 - Transactions through `IInquiry.BeginTransactionAsync()`
 

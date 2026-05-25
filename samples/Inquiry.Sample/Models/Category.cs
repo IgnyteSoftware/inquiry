@@ -11,6 +11,6 @@ public sealed class Category
     [InquiryColumn]
     public string Name { get; set; } = string.Empty;
 
-    [InquiryRelation("CategoryKey")]
+    [InquiryRelation(nameof(Product.CategoryKey))]
     public List<Product>? Products { get; set; }
 }
