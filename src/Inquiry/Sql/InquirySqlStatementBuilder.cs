@@ -1,7 +1,8 @@
 namespace Inquiry.Sql;
 
 /// <summary>
-/// Builds provider-specific SQL statements for mapped Inquiry entities.
+/// Builds provider-specific SQL statements for mapped Inquiry entities by dispatching
+/// each statement to the configured <see cref="InquirySqlDialect"/>.
 /// </summary>
 public sealed class InquirySqlStatementBuilder
 {
@@ -58,22 +59,31 @@ public sealed class InquirySqlStatementBuilder
         var quotedKeyColumn = _dialect.QuoteIdentifier(key.ColumnName);
         var keyParam = _dialect.ParameterName(key.PropertyName);
 
+        var context = new InquirySqlBuildContext(
+            table: table,
+            columns: columns,
+            keyColumn: key,
+            insertableColumns: insertableColumns,
+            selectColumns: selectColumns,
+            insertColumns: insertColumns,
+            insertParameters: insertParameters,
+            setClauses: setClauses,
+            quotedKeyColumn: quotedKeyColumn,
+            keyParameter: keyParam);
+
         var selectByField = new Dictionary<string, string>(columns.Count, StringComparer.Ordinal);
         foreach (var column in columns)
         {
-            selectByField[column.PropertyName] =
-                "SELECT " + selectColumns + " FROM " + table + " WHERE " + _dialect.QuoteIdentifier(column.ColumnName) + " = " + _dialect.ParameterName("value");
+            selectByField[column.PropertyName] = _dialect.BuildSelectByFieldSql(context, column);
         }
 
-        var upsert = _dialect.BuildUpsertSql(table, insertColumns, insertParameters, setClauses, quotedKeyColumn, keyParam);
-
         return new InquirySqlStatementSet(
-            selectAll: "SELECT " + selectColumns + " FROM " + table,
-            selectByKey: "SELECT " + selectColumns + " FROM " + table + " WHERE " + quotedKeyColumn + " = " + _dialect.ParameterName("key"),
-            deleteByKey: "DELETE FROM " + table + " WHERE " + quotedKeyColumn + " = " + _dialect.ParameterName("key"),
-            insert: "INSERT INTO " + table + " (" + insertColumns + ") VALUES (" + insertParameters + ")",
-            update: "UPDATE " + table + " SET " + setClauses + " WHERE " + quotedKeyColumn + " = " + keyParam,
-            upsert: upsert,
+            selectAll: _dialect.BuildSelectAllSql(context),
+            selectByKey: _dialect.BuildSelectByKeySql(context),
+            deleteByKey: _dialect.BuildDeleteByKeySql(context),
+            insert: _dialect.BuildInsertSql(context),
+            update: _dialect.BuildUpdateSql(context),
+            upsert: _dialect.BuildUpsertSql(context),
             selectByField: selectByField);
     }
 }

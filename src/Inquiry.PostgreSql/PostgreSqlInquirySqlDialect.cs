@@ -3,7 +3,7 @@ using Inquiry.Sql;
 namespace Inquiry.PostgreSql;
 
 /// <summary>
-/// Provides PostgreSQL SQL naming, quoting, and upsert behavior for Inquiry generated statements.
+/// Provides PostgreSQL SQL naming, quoting, and statement generation for Inquiry.
 /// </summary>
 public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
 {
@@ -22,18 +22,61 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     }
 
     /// <inheritdoc />
+    public override string BuildSelectAllSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table;
+    }
+
+    /// <inheritdoc />
+    public override string BuildSelectByKeySql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table
+            + " WHERE " + context.QuotedKeyColumn + " = " + ParameterName("key");
+    }
+
+    /// <inheritdoc />
+    public override string BuildSelectByFieldSql(InquirySqlBuildContext context, InquirySqlColumn column)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        if (column is null) throw new ArgumentNullException(nameof(column));
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table
+            + " WHERE " + QuoteIdentifier(column.ColumnName) + " = " + ParameterName("value");
+    }
+
+    /// <inheritdoc />
+    public override string BuildInsertSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "INSERT INTO " + context.Table
+            + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ")";
+    }
+
+    /// <inheritdoc />
+    public override string BuildUpdateSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "UPDATE " + context.Table + " SET " + context.SetClauses
+            + " WHERE " + context.QuotedKeyColumn + " = " + context.KeyParameter;
+    }
+
+    /// <inheritdoc />
+    public override string BuildDeleteByKeySql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "DELETE FROM " + context.Table
+            + " WHERE " + context.QuotedKeyColumn + " = " + ParameterName("key");
+    }
+
+    /// <inheritdoc />
     /// <remarks>
     /// Uses PostgreSQL 9.5+ <c>INSERT ... ON CONFLICT DO UPDATE</c> syntax.
     /// </remarks>
-    public override string BuildUpsertSql(
-        string table,
-        string insertColumns,
-        string insertParameters,
-        string setClauses,
-        string keyColumn,
-        string keyParam)
+    public override string BuildUpsertSql(InquirySqlBuildContext context)
     {
-        return $"INSERT INTO {table} ({insertColumns}) VALUES ({insertParameters}) " +
-               $"ON CONFLICT ({keyColumn}) DO UPDATE SET {setClauses}";
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return $"INSERT INTO {context.Table} ({context.InsertColumns}) VALUES ({context.InsertParameters}) " +
+               $"ON CONFLICT ({context.QuotedKeyColumn}) DO UPDATE SET {context.SetClauses}";
     }
 }
