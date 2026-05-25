@@ -36,7 +36,12 @@ public sealed class InquiryCommand
         }
 
         CommandText = commandText;
-        Parameters = parameters?.ToArray() ?? throw new ArgumentNullException(nameof(parameters));
+        Parameters = parameters switch
+        {
+            null => throw new ArgumentNullException(nameof(parameters)),
+            InquiryParameter[] array => array,
+            _ => parameters.ToArray(),
+        };
         CommandType = commandType;
         CommandTimeout = commandTimeout;
     }

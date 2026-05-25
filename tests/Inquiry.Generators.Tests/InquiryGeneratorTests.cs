@@ -235,6 +235,50 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
+    public void InsertWithOnlyDatabaseSuppliedColumnsUsesEmptyParameterArray()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey(IsGenerated = true)]
+                public int Id { get; set; }
+            }
+
+            public abstract partial class WidgetStore : InquiryStore<Widget>
+            {
+                protected WidgetStore(IInquiry inquiry) : base(inquiry) {}
+
+                [InquiryInsert]
+                public abstract Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        Assert.Contains("global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()", generatedText);
+        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"Id\", widget.Id)", generatedText);
+    }
+
+    [Fact]
     public void TableNameDefaultsToEntityTypeNameWhenAttributeIsParameterless()
     {
         const string source = """

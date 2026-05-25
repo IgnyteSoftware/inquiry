@@ -283,10 +283,21 @@ internal static class StoreOperationEmitter
     {
         source.AppendLine($"{indent}new global::Inquiry.Commands.InquiryCommand(");
         source.AppendLine($"{indent}    {sqlField},");
+
+        var parameterColumns = entity.Columns
+            .Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault)
+            .ToArray();
+
+        if (parameterColumns.Length == 0)
+        {
+            source.AppendLine($"{indent}    global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()),");
+            return;
+        }
+
         source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine($"{indent}    {{");
 
-        foreach (var column in entity.Columns.Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault))
+        foreach (var column in parameterColumns)
         {
             source.AppendLine($"{indent}        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {entityParameter}.{column.PropertyName}),");
         }
