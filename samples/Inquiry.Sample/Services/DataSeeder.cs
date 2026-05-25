@@ -65,7 +65,7 @@ public sealed class DataSeeder
 
         // Categories
         var electronics = new Category { Key = Guid.NewGuid(), Name = "Electronics" };
-        var clothing    = new Category { Key = Guid.NewGuid(), Name = "Clothing" };
+        var clothing = new Category { Key = Guid.NewGuid(), Name = "Clothing" };
         await _categories.InsertAsync(electronics, cancellationToken).ConfigureAwait(false);
         await _categories.InsertAsync(clothing, cancellationToken).ConfigureAwait(false);
 
