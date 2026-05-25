@@ -5,21 +5,24 @@ namespace Inquiry.Sample.Services;
 
 /// <summary>
 /// Inserts an <see cref="Order"/> together with its <c>Order Details</c> rows inside a single
-/// <see cref="IInquiryTransaction"/>. The order header is inserted via raw SQL with a
-/// <c>RETURNING *</c> clause to surface the IDENTITY-assigned <c>OrderID</c>; the detail
-/// lines also go through raw SQL because generated stores bind to the non-transactional
-/// <see cref="IInquiry"/> at DI time and can't participate in this transaction. Outside a
-/// transaction, the composite-keyed <see cref="OrderDetailStore"/> handles the same inserts
-/// with no SQL hand-writing.
+/// <see cref="IInquiryTransaction"/>. Demonstrates that generated stores automatically
+/// participate in the active transaction — both the IDENTITY-keyed <see cref="OrderStore"/>
+/// (via <c>InsertReturning</c> to surface the new <c>OrderID</c>) and the composite-key
+/// <see cref="OrderDetailStore"/> are called normally, with the ambient transaction wiring
+/// in <c>DefaultInquiry</c> routing all of their commands through one connection + commit.
 /// </summary>
 public sealed class OrderTransactionService
 {
     private readonly IInquiry _inquiry;
+    private readonly OrderStore _orders;
+    private readonly OrderDetailStore _orderDetails;
     private readonly ProductStore _products;
 
-    public OrderTransactionService(IInquiry inquiry, ProductStore products)
+    public OrderTransactionService(IInquiry inquiry, OrderStore orders, OrderDetailStore orderDetails, ProductStore products)
     {
         _inquiry = inquiry;
+        _orders = orders;
+        _orderDetails = orderDetails;
         _products = products;
     }
 
@@ -42,12 +45,9 @@ public sealed class OrderTransactionService
 
         await using var tx = await _inquiry.BeginTransactionAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var insertedOrder = await tx.Inquiry
-            .QuerySingleOrDefaultAsync<Order>(
-                "INSERT INTO Orders (CustomerID, OrderDate, Freight) VALUES (@cid, @date, @freight) RETURNING *",
-                new { cid = customerID, date = DateTime.UtcNow, freight = 5.00m },
-                cancellationToken)
-            .ConfigureAwait(false);
+        var insertedOrder = await _orders.InsertReturningAsync(
+            new Order { CustomerID = customerID, OrderDate = DateTime.UtcNow, Freight = 5.00m },
+            cancellationToken).ConfigureAwait(false);
 
         if (insertedOrder is null || insertedOrder.OrderID is null)
         {
@@ -56,13 +56,14 @@ public sealed class OrderTransactionService
 
         foreach (var p in picks)
         {
-            await tx.Inquiry.ExecuteAsync(
-                """
-                INSERT INTO "Order Details" (OrderID, ProductID, UnitPrice, Quantity, Discount)
-                VALUES (@oid, @pid, @price, @qty, 0)
-                """,
-                new { oid = insertedOrder.OrderID, pid = p.ProductID, price = p.UnitPrice ?? 0m, qty = (short)1 },
-                cancellationToken).ConfigureAwait(false);
+            await _orderDetails.InsertAsync(new OrderDetail
+            {
+                OrderID = insertedOrder.OrderID.Value,
+                ProductID = p.ProductID ?? throw new InvalidOperationException("Product missing ProductID."),
+                UnitPrice = p.UnitPrice ?? 0m,
+                Quantity = 1,
+                Discount = 0f,
+            }, cancellationToken).ConfigureAwait(false);
         }
 
         await tx.CommitAsync(cancellationToken).ConfigureAwait(false);

@@ -10,14 +10,17 @@ internal sealed class InquiryTransaction : IInquiryTransaction
 {
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
+    private readonly Action _onClose;
+    private bool _closed;
     private bool _committed;
     private bool _disposed;
 
-    internal InquiryTransaction(DbConnection connection, DbTransaction transaction, IInquiry transactedInquiry)
+    internal InquiryTransaction(DbConnection connection, DbTransaction transaction, IInquiry inquiry, Action onClose)
     {
         _connection = connection;
         _transaction = transaction;
-        Inquiry = transactedInquiry;
+        _onClose = onClose;
+        Inquiry = inquiry;
     }
 
     /// <inheritdoc />
@@ -29,6 +32,7 @@ internal sealed class InquiryTransaction : IInquiryTransaction
         if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));
         await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         _committed = true;
+        Close();
     }
 
     /// <inheritdoc />
@@ -36,6 +40,7 @@ internal sealed class InquiryTransaction : IInquiryTransaction
     {
         if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));
         await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        Close();
     }
 
     /// <inheritdoc />
@@ -47,6 +52,7 @@ internal sealed class InquiryTransaction : IInquiryTransaction
         }
 
         _disposed = true;
+        Close();
 
         if (!_committed)
         {
@@ -62,5 +68,17 @@ internal sealed class InquiryTransaction : IInquiryTransaction
 
         await _transaction.DisposeAsync().ConfigureAwait(false);
         await _connection.DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Clears the ambient transactional pipeline (idempotent). Called on the first of
+    /// Commit / Rollback / Dispose so that any straggler async work that runs after this
+    /// transaction is closed falls back to the default (non-transactional) pipeline.
+    /// </summary>
+    private void Close()
+    {
+        if (_closed) return;
+        _closed = true;
+        _onClose();
     }
 }
