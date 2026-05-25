@@ -7,7 +7,16 @@ namespace Inquiry.Entities;
 public sealed class InquiryTableAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="InquiryTableAttribute"/> class.
+    /// Initializes a new instance of the <see cref="InquiryTableAttribute"/> class,
+    /// inferring the table name from the CLR type name.
+    /// </summary>
+    public InquiryTableAttribute()
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InquiryTableAttribute"/> class
+    /// with an explicit table name.
     /// </summary>
     public InquiryTableAttribute(string name)
     {
@@ -20,9 +29,9 @@ public sealed class InquiryTableAttribute : Attribute
     }
 
     /// <summary>
-    /// Gets the mapped table name.
+    /// Gets the mapped table name, or <see langword="null"/> to use the CLR type name.
     /// </summary>
-    public string Name { get; }
+    public string? Name { get; }
 
     /// <summary>
     /// Gets or sets the optional database schema name.

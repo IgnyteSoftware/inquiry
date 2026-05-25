@@ -178,6 +178,53 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"OtherKey\", \"AltColumnName\", isKey: false, isGenerated: false)", generatedText);
     }
 
+    [Fact]
+    public void TableNameDefaultsToEntityTypeNameWhenAttributeIsParameterless()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable]
+            public sealed class Widget
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public abstract partial class WidgetStore : InquiryStore<Widget>
+            {
+                protected WidgetStore(IInquiry inquiry) : base(inquiry) {}
+
+                [InquirySelectAll]
+                public abstract IAsyncEnumerable<Widget> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        Assert.Contains("sqlDialect.CreateContext(null, \"Widget\", _columns)", generatedText);
+    }
+
     [Theory]
     [InlineData("[InquirySelectAll]", "public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);", "_sqlSelectAll")]
     [InlineData("[InquirySelectOneByKey]", "public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlSelectByKey")]
