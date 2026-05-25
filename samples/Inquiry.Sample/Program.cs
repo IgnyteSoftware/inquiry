@@ -1,29 +1,11 @@
-using Inquiry.DependencyInjection;
-using Inquiry.Northwind;
+using Inquiry.Sample;
 using Inquiry.Sample.Services;
-using Inquiry.Sqlite.DependencyInjection;
-using Microsoft.Data.Sqlite;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("InquirySample");
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException("Missing connection string 'InquirySample'. Add it to appsettings.json under ConnectionStrings.");
-}
-
-// Create the Northwind schema on first run. Idempotent — the DDL uses CREATE TABLE IF NOT EXISTS.
-await using (var connection = new SqliteConnection(connectionString))
-{
-    await connection.OpenAsync();
-    await using var command = connection.CreateCommand();
-    command.CommandText = NorthwindSchema.SqliteDdl;
-    await command.ExecuteNonQueryAsync();
-}
-
-builder.Services
-    .AddInquiry()
-    .AddInquirySqlite(connectionString);
+// Pick the Inquiry provider (Sqlite/SqlServer/PostgreSql), ensure the target database
+// and Northwind schema exist, and register the matching DI services.
+await InquiryProviderSetup.ConfigureAsync(builder);
 
 // One service per domain. Pages depend on these, not on stores directly.
 builder.Services.AddScoped<CustomerService>();

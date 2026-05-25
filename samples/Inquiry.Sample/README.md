@@ -1,9 +1,9 @@
 # Inquiry.Sample
 
-A Blazor Server application that exercises Inquiry against a SQLite database mapped to the
-classic Northwind schema. Schema, entities, and stores all come from the shared
-[Inquiry.Northwind](../Inquiry.Northwind) project; the sample only owns the UI, the service
-layer, and a small first-run seed.
+A Blazor Server application that exercises Inquiry against a Northwind-shaped database on
+SQLite, SQL Server, or PostgreSQL — picked at runtime from configuration. Schema, entities,
+and stores all come from the shared [Inquiry.Northwind](../Inquiry.Northwind) project; the
+sample only owns the UI, the service layer, and a small first-run seed.
 
 ## Running it
 
@@ -11,10 +11,34 @@ layer, and a small first-run seed.
 dotnet run --project samples\Inquiry.Sample\Inquiry.Sample.csproj
 ```
 
-The app reads `ConnectionStrings:InquirySample` from `appsettings.json` (default
-`Data Source=northwind.db` — a file alongside the running process), runs
-`NorthwindSchema.SqliteDdl` to create the tables if they do not exist, seeds a small
-fixture via `DataSeeder`, then serves the Blazor UI at the URL printed in the console.
+On startup `InquiryProviderSetup` reads `Inquiry:Provider` from `appsettings.json`, picks
+the matching connection string under `ConnectionStrings`, ensures the target database
+exists, runs the provider's Northwind DDL, then registers the matching Inquiry services.
+`DataSeeder` then drops in a small fixture (no-ops if customers already exist) and the
+Blazor UI starts at the URL printed in the console.
+
+## Choosing a provider
+
+Set `Inquiry:Provider` to one of `Sqlite` (default), `SqlServer`, or `PostgreSql`. Each
+provider reads its own connection string under `ConnectionStrings`:
+
+| Provider | Config value | Connection string key | Default in `appsettings.json` |
+| --- | --- | --- | --- |
+| SQLite     | `Sqlite`     | `InquirySample.Sqlite`     | `Data Source=northwind.db` (file alongside the process) |
+| SQL Server | `SqlServer`  | `InquirySample.SqlServer`  | LocalDB pointing at `InquirySample` |
+| PostgreSQL | `PostgreSql` | `InquirySample.PostgreSql` | `localhost` / `inquirysample` / `postgres` superuser |
+
+To switch providers, either edit `appsettings.json` or override via environment variables:
+
+```powershell
+$env:Inquiry__Provider = "PostgreSql"
+$env:ConnectionStrings__InquirySample__PostgreSql = "Host=localhost;Database=inquirysample;Username=postgres;Password=secret"
+dotnet run --project samples\Inquiry.Sample\Inquiry.Sample.csproj
+```
+
+For SQL Server and PostgreSQL, the sample creates the target database if it doesn't
+already exist (using a `master` / `postgres` bootstrap connection with the same
+credentials), so a default install just works.
 
 ## What it demonstrates
 
