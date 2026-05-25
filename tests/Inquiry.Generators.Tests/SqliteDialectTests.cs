@@ -118,4 +118,37 @@ public sealed class SqliteDialectTests
     {
         Assert.Equal("Sqlite", new SqliteInquirySqlDialect().Name);
     }
+
+    [Fact]
+    public void SchemaPrefixIsRenderedWhenProvided()
+    {
+        var (dialect, ctx) = NewContext(schema: "main");
+
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"main\".\"TOrganization\"", dialect.BuildSelectAllSql(ctx));
+        Assert.Equal("DELETE FROM \"main\".\"TOrganization\" WHERE \"Key\" = @key", dialect.BuildDeleteByKeySql(ctx));
+    }
+
+    [Fact]
+    public void BuildSelectByFieldSqlEscapesDoubleQuotesInColumnName()
+    {
+        var (dialect, ctx) = NewContext();
+        var weird = new InquirySqlColumn("Weird", "Wei\"rd", isKey: false);
+
+        Assert.Equal(
+            "SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Wei\"\"rd\" = @value",
+            dialect.BuildSelectByFieldSql(ctx, weird));
+    }
+
+    [Fact]
+    public void UpsertExcludesGeneratedKey()
+    {
+        var columns = new InquirySqlColumn[]
+        {
+            new("Id", "Id", isKey: true, isGenerated: true),
+            new("Name", "Name", isKey: false),
+        };
+        var (dialect, ctx) = NewContext(tableName: "TItems", columns: columns);
+
+        Assert.Equal("INSERT OR REPLACE INTO \"TItems\" (\"Name\") VALUES (@Name)", dialect.BuildUpsertSql(ctx));
+    }
 }

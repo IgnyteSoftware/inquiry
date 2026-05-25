@@ -1,8 +1,4 @@
-using Inquiry.DependencyInjection;
-using Inquiry.Sqlite.DependencyInjection;
 using Inquiry.Sqlite.Tests.Fixtures;
-using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -11,11 +7,9 @@ public sealed class EagerLoadingIntegrationTests
     [Fact]
     public async Task SelectOneByKeyEagerLoadsChildCollection()
     {
-        var (sp, keeper) = await SetupAsync();
-        await using var _ = keeper;
-        using var _sp = sp;
-        var catStore = sp.GetRequiredService<CategoryStore>();
-        var prodStore = sp.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
+        var catStore = harness.GetRequiredService<CategoryStore>();
+        var prodStore = harness.GetRequiredService<ProductStore>();
 
         var category = new Category { Key = Guid.NewGuid(), Name = "Electronics" };
         await catStore.InsertAsync(category);
@@ -40,10 +34,8 @@ public sealed class EagerLoadingIntegrationTests
     [Fact]
     public async Task SelectOneByKeyEagerReturnsNullForMissingEntity()
     {
-        var (sp, keeper) = await SetupAsync();
-        await using var _ = keeper;
-        using var _sp = sp;
-        var catStore = sp.GetRequiredService<CategoryStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
+        var catStore = harness.GetRequiredService<CategoryStore>();
 
         var loaded = await catStore.SelectByKeyWithProductsAsync(Guid.NewGuid());
         Assert.Null(loaded);
@@ -52,10 +44,8 @@ public sealed class EagerLoadingIntegrationTests
     [Fact]
     public async Task SelectOneByKeyEagerReturnsEmptyCollectionWhenNoChildren()
     {
-        var (sp, keeper) = await SetupAsync();
-        await using var _ = keeper;
-        using var _sp = sp;
-        var catStore = sp.GetRequiredService<CategoryStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
+        var catStore = harness.GetRequiredService<CategoryStore>();
 
         var category = new Category { Key = Guid.NewGuid(), Name = "Empty Category" };
         await catStore.InsertAsync(category);
@@ -70,11 +60,9 @@ public sealed class EagerLoadingIntegrationTests
     [Fact]
     public async Task SelectAllEagerPopulatesChildrenForAllParents()
     {
-        var (sp, keeper) = await SetupAsync();
-        await using var _ = keeper;
-        using var _sp = sp;
-        var catStore = sp.GetRequiredService<CategoryStore>();
-        var prodStore = sp.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
+        var catStore = harness.GetRequiredService<CategoryStore>();
+        var prodStore = harness.GetRequiredService<ProductStore>();
 
         var cat1 = new Category { Key = Guid.NewGuid(), Name = "Cat A" };
         var cat2 = new Category { Key = Guid.NewGuid(), Name = "Cat B" };
@@ -91,7 +79,7 @@ public sealed class EagerLoadingIntegrationTests
             await prodStore.InsertAsync(p);
         }
 
-        var all = await ToListAsync(catStore.SelectAllWithProductsAsync());
+        var all = await catStore.SelectAllWithProductsAsync().ToListAsync();
 
         Assert.Equal(2, all.Count);
         var a = all.Single(c => c.Name == "Cat A");
@@ -103,11 +91,9 @@ public sealed class EagerLoadingIntegrationTests
     [Fact]
     public async Task SelectOneByKeyEagerLoadsParentReference()
     {
-        var (sp, keeper) = await SetupAsync();
-        await using var _ = keeper;
-        using var _sp = sp;
-        var catStore = sp.GetRequiredService<CategoryStore>();
-        var prodStore = sp.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
+        var catStore = harness.GetRequiredService<CategoryStore>();
+        var prodStore = harness.GetRequiredService<ProductStore>();
 
         var category = new Category { Key = Guid.NewGuid(), Name = "Electronics" };
         await catStore.InsertAsync(category);
@@ -127,11 +113,9 @@ public sealed class EagerLoadingIntegrationTests
     [Fact]
     public async Task SelectAllEagerPopulatesParentForAllChildren()
     {
-        var (sp, keeper) = await SetupAsync();
-        await using var _ = keeper;
-        using var _sp = sp;
-        var catStore = sp.GetRequiredService<CategoryStore>();
-        var prodStore = sp.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
+        var catStore = harness.GetRequiredService<CategoryStore>();
+        var prodStore = harness.GetRequiredService<ProductStore>();
 
         var cat1 = new Category { Key = Guid.NewGuid(), Name = "Cat A" };
         var cat2 = new Category { Key = Guid.NewGuid(), Name = "Cat B" };
@@ -148,7 +132,7 @@ public sealed class EagerLoadingIntegrationTests
             await prodStore.InsertAsync(p);
         }
 
-        var all = await ToListAsync(prodStore.SelectAllWithCategoryAsync());
+        var all = await prodStore.SelectAllWithCategoryAsync().ToListAsync();
 
         Assert.Equal(3, all.Count);
         Assert.All(all, p => Assert.NotNull(p.Category));
@@ -157,49 +141,41 @@ public sealed class EagerLoadingIntegrationTests
         Assert.Equal("Cat B", all.Single(p => p.Name == "P3").Category!.Name);
     }
 
-    private static async Task<(ServiceProvider sp, SqliteConnection keeper)> SetupAsync()
+    [Fact]
+    public async Task SelectByKeyEagerLeavesParentNullForOrphanForeignKey()
     {
-        var cs = new SqliteConnectionStringBuilder
-        {
-            DataSource = "Eager_" + Guid.NewGuid().ToString("N"),
-            Mode = SqliteOpenMode.Memory,
-            Cache = SqliteCacheMode.Shared,
-        }.ToString();
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
+        var prodStore = harness.GetRequiredService<ProductStore>();
 
-        var keeper = new SqliteConnection(cs);
-        await keeper.OpenAsync();
-        await CreateSchemaAsync(keeper);
+        // Insert a product whose CategoryKey points at a category that doesn't exist.
+        var product = new Product { Key = Guid.NewGuid(), Name = "Orphan", Price = 1m, CategoryKey = Guid.NewGuid() };
+        await prodStore.InsertAsync(product);
 
-        var sp = new ServiceCollection()
-            .AddInquiry()
-            .AddInquirySqlite(cs)
-            .BuildServiceProvider();
+        var loaded = await prodStore.SelectByKeyWithCategoryAsync(product.Key);
 
-        return (sp, keeper);
+        Assert.NotNull(loaded);
+        Assert.Null(loaded.Category);
     }
 
-    private static async Task CreateSchemaAsync(SqliteConnection connection)
+    [Fact]
+    public async Task SelectAllEagerLeavesParentNullForOrphanForeignKey()
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE TCategory (
-                Key TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
-            CREATE TABLE TProduct (
-                Key TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Price REAL NOT NULL,
-                CategoryKey TEXT NOT NULL
-            );
-            """;
-        await cmd.ExecuteNonQueryAsync();
-    }
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
+        var catStore = harness.GetRequiredService<CategoryStore>();
+        var prodStore = harness.GetRequiredService<ProductStore>();
 
-    private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> source)
-    {
-        var list = new List<T>();
-        await foreach (var item in source) list.Add(item);
-        return list;
+        var category = new Category { Key = Guid.NewGuid(), Name = "Existing" };
+        await catStore.InsertAsync(category);
+
+        var matched = new Product { Key = Guid.NewGuid(), Name = "Matched", Price = 1m, CategoryKey = category.Key };
+        var orphan = new Product { Key = Guid.NewGuid(), Name = "Orphan", Price = 2m, CategoryKey = Guid.NewGuid() };
+        await prodStore.InsertAsync(matched);
+        await prodStore.InsertAsync(orphan);
+
+        var all = await prodStore.SelectAllWithCategoryAsync().ToListAsync();
+
+        Assert.Equal(2, all.Count);
+        Assert.Equal("Existing", all.Single(p => p.Name == "Matched").Category?.Name);
+        Assert.Null(all.Single(p => p.Name == "Orphan").Category);
     }
 }
