@@ -13,6 +13,12 @@ public abstract partial class ProductStore : InquiryStore<Product>
     [InquirySelectOneByKey]
     public abstract Task<Product?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
+    [InquirySelectOneByKeyEager]
+    public abstract Task<Product?> SelectByKeyWithCategoryAsync(Guid key, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllEager]
+    public abstract IAsyncEnumerable<Product> SelectAllWithCategoryAsync(CancellationToken cancellationToken = default);
+
     [InquirySelectAllByField("CategoryKey")]
     public abstract IAsyncEnumerable<Product> SelectByCategoryAsync(Guid categoryKey, CancellationToken cancellationToken = default);
 

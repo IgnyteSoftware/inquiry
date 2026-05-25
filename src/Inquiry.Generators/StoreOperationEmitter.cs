@@ -3,6 +3,7 @@ using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -125,7 +126,7 @@ internal static class StoreOperationEmitter
         return new StoreMethodModel(method, operation, fieldColumn, procedureName);
     }
 
-    public static void Emit(StringBuilder source, StoreMethodModel method, EntityModel entity)
+    public static void Emit(StringBuilder source, StoreMethodModel method, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
     {
         var symbol = method.Symbol;
         var entityType = entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -142,7 +143,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.SelectAllEager:
-                EmitSelectAllEager(source, symbol, parameters, entityType, cancellation, entity);
+                EmitSelectAllEager(source, symbol, parameters, entityType, cancellation, entity, relationChildEntities);
                 break;
 
             case StoreOperation.SelectOneByKey:
@@ -155,7 +156,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.SelectOneByKeyEager:
-                EmitSelectOneByKeyEager(source, symbol, parameters, entityType, cancellation, firstParameter, entity);
+                EmitSelectOneByKeyEager(source, symbol, parameters, entityType, cancellation, firstParameter, entity, relationChildEntities);
                 break;
 
             case StoreOperation.SelectAllByField:
@@ -282,7 +283,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("    }");
     }
 
-    private static void EmitSelectOneByKeyEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string firstParam, EntityModel entity)
+    private static void EmitSelectOneByKeyEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string firstParam, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
     {
         AppendHeader(source, symbol, parameters, isAsync: true);
         source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
@@ -295,17 +296,29 @@ internal static class StoreOperationEmitter
         {
             var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var fieldName = $"_sql_{relation.PropertyName}";
-            source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
-            source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}>({fieldName}, new {{ value = _entity.{entity.Key.PropertyName} }}, {cancellation}).ConfigureAwait(false))");
-            source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
-            source.AppendLine($"            _entity.{relation.PropertyName} = _{relation.PropertyName}_list;");
+            if (relation.IsCollection)
+            {
+                // One-to-many: load children filtered by parent's key.
+                source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
+                source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}>({fieldName}, new {{ value = _entity.{entity.Key.PropertyName} }}, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
+                source.AppendLine($"            _entity.{relation.PropertyName} = _{relation.PropertyName}_list;");
+            }
+            else
+            {
+                // Many-to-one: load single parent using the current entity's FK value.
+                source.AppendLine($"            _entity.{relation.PropertyName} = await Inquiry.QuerySingleOrDefaultAsync<{childType}>(");
+                source.AppendLine($"                {fieldName},");
+                source.AppendLine($"                new {{ value = _entity.{relation.ForeignKeyProperty} }},");
+                source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
+            }
         }
         source.AppendLine("        }");
         source.AppendLine("        return _entity;");
         source.AppendLine("    }");
     }
 
-    private static void EmitSelectAllEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, EntityModel entity)
+    private static void EmitSelectAllEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
     {
         var parametersWithAttr = GeneratorHelpers.GetParameterDeclaration(symbol, enumeratorCancellation: true);
         AppendHeader(source, symbol, parametersWithAttr, isAsync: true);
@@ -318,20 +331,33 @@ internal static class StoreOperationEmitter
         {
             var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var fieldName = $"_sql_{relation.PropertyName}";
-            source.AppendLine($"        var _allChildren_{relation.PropertyName} = new global::System.Collections.Generic.List<{childType}>();");
-            source.AppendLine($"        await foreach (var _c in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
-            source.AppendLine($"            _allChildren_{relation.PropertyName}.Add(_c);");
-            source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, global::System.Collections.Generic.List<{childType}>>();");
-            source.AppendLine($"        foreach (var _c in _allChildren_{relation.PropertyName})");
-            source.AppendLine("        {");
-            source.AppendLine($"            var _fkVal = (object)_c.{relation.ForeignKeyProperty};");
-            source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue(_fkVal, out var _grp))");
-            source.AppendLine("            {");
-            source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
-            source.AppendLine($"                _grouped_{relation.PropertyName}[_fkVal] = _grp;");
-            source.AppendLine("            }");
-            source.AppendLine("            _grp.Add(_c);");
-            source.AppendLine("        }");
+
+            if (relation.IsCollection)
+            {
+                // One-to-many: load all children, group by their FK value.
+                source.AppendLine($"        var _allChildren_{relation.PropertyName} = new global::System.Collections.Generic.List<{childType}>();");
+                source.AppendLine($"        await foreach (var _c in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"            _allChildren_{relation.PropertyName}.Add(_c);");
+                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, global::System.Collections.Generic.List<{childType}>>();");
+                source.AppendLine($"        foreach (var _c in _allChildren_{relation.PropertyName})");
+                source.AppendLine("        {");
+                source.AppendLine($"            var _fkVal = (object)_c.{relation.ForeignKeyProperty};");
+                source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue(_fkVal, out var _grp))");
+                source.AppendLine("            {");
+                source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
+                source.AppendLine($"                _grouped_{relation.PropertyName}[_fkVal] = _grp;");
+                source.AppendLine("            }");
+                source.AppendLine("            _grp.Add(_c);");
+                source.AppendLine("        }");
+            }
+            else
+            {
+                // Many-to-one: load all parents into a dict keyed by parent key.
+                var relatedKeyProperty = relationChildEntities[relation.PropertyName].Key.PropertyName;
+                source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, {childType}>();");
+                source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"            _parents_{relation.PropertyName}[(object)_p.{relatedKeyProperty}] = _p;");
+            }
         }
 
         source.AppendLine("        foreach (var _entity in _entities)");
@@ -339,7 +365,14 @@ internal static class StoreOperationEmitter
         foreach (var relation in entity.Relations)
         {
             var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue((object)_entity.{entity.Key.PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+            if (relation.IsCollection)
+            {
+                source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue((object)_entity.{entity.Key.PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+            }
+            else
+            {
+                source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue((object)_entity.{relation.ForeignKeyProperty}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
+            }
         }
         source.AppendLine("        }");
         source.AppendLine();
