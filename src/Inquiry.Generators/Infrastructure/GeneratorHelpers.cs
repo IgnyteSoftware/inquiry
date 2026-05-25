@@ -57,7 +57,7 @@ internal static class GeneratorHelpers
             if (current is { IsGenericType: true } &&
                 current.ContainingNamespace.ToDisplayString() == KnownSymbols.StoreNamespace &&
                 current.Name == "InquiryStore" &&
-                current.TypeArguments.Length is 1 or 2)
+                current.TypeArguments.Length == 1)
             {
                 entityType = current.TypeArguments[0];
                 return true;

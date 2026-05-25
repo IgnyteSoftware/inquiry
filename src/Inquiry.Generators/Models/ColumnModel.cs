@@ -1,11 +1,8 @@
-using Microsoft.CodeAnalysis;
-
 namespace Inquiry.Generators.Models;
 
 internal sealed class ColumnModel
 {
     public ColumnModel(
-        IPropertySymbol symbol,
         string propertyName,
         string columnName,
         TypeInfo type,
@@ -13,7 +10,6 @@ internal sealed class ColumnModel
         bool isGenerated,
         bool useDatabaseDefault)
     {
-        Symbol = symbol;
         PropertyName = propertyName;
         ColumnName = columnName;
         Type = type;
@@ -21,8 +17,6 @@ internal sealed class ColumnModel
         IsGenerated = isGenerated;
         UseDatabaseDefault = useDatabaseDefault;
     }
-
-    public IPropertySymbol Symbol { get; }
 
     public string PropertyName { get; }
 

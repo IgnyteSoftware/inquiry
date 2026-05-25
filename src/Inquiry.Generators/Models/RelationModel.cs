@@ -9,21 +9,16 @@ namespace Inquiry.Generators.Models;
 internal sealed class RelationModel
 {
     public RelationModel(
-        IPropertySymbol symbol,
         string propertyName,
         string foreignKeyProperty,
         INamedTypeSymbol childEntitySymbol,
         bool isCollection)
     {
-        Symbol = symbol;
         PropertyName = propertyName;
         ForeignKeyProperty = foreignKeyProperty;
         ChildEntitySymbol = childEntitySymbol;
         IsCollection = isCollection;
     }
-
-    /// <summary>The navigation property symbol.</summary>
-    public IPropertySymbol Symbol { get; }
 
     /// <summary>Property name on the parent entity (e.g. <c>Products</c>).</summary>
     public string PropertyName { get; }

@@ -73,6 +73,29 @@ public sealed class InquiryParameterBinderTests
     }
 
     [Fact]
+    public void BindConvertsEnumValueToUnderlyingPrimitive()
+    {
+        // Avoids provider variance (Npgsql rejects unmapped enums, SqlClient is lenient) by
+        // coercing the value to the enum's underlying integer type before binding.
+        using var command = new FakeDbCommand();
+
+        InquiryParameterBinder.Bind(command, new[]
+        {
+            new InquiryParameter("Status", SampleStatus.Active),
+            new InquiryParameter("BigStatus", SampleBigStatus.B),
+        });
+
+        Assert.Equal(1, command.Parameters[0].Value);
+        Assert.IsType<int>(command.Parameters[0].Value);
+        Assert.Equal(2L, command.Parameters[1].Value);
+        Assert.IsType<long>(command.Parameters[1].Value);
+    }
+
+    private enum SampleStatus { Inactive = 0, Active = 1 }
+
+    private enum SampleBigStatus : long { A = 1, B = 2 }
+
+    [Fact]
     public void BindLeavesOptionalsUntouchedWhenNull()
     {
         // When InquiryParameter optionals are null, the binder should never assign them on the

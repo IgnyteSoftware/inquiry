@@ -114,17 +114,7 @@ internal static class EntityProcessor
             var useDatabaseDefault =
                 columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "UseDatabaseDefault") ||
                 foreignKeyAttribute is not null && GeneratorHelpers.GetNamedBool(foreignKeyAttribute, "UseDatabaseDefault");
-            columns.Add(new ColumnModel(property, property.Name, columnName, typeInfo, keyAttribute is not null, isGenerated, useDatabaseDefault));
-
-            if (!typeInfo.IsSupported)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    InquiryDiagnosticDescriptors.UnsupportedPropertyType,
-                    property.Locations.FirstOrDefault(),
-                    entitySymbol.Name,
-                    property.Name,
-                    property.Type.ToDisplayString()));
-            }
+            columns.Add(new ColumnModel(property.Name, columnName, typeInfo, keyAttribute is not null, isGenerated, useDatabaseDefault));
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
             {
@@ -163,7 +153,7 @@ internal static class EntityProcessor
                 continue;
             }
 
-            relations.Add(new RelationModel(property, property.Name, foreignKeyProperty!, childEntitySymbol!, isCollection));
+            relations.Add(new RelationModel(property.Name, foreignKeyProperty!, childEntitySymbol!, isCollection));
         }
 
         return relations;
@@ -227,20 +217,11 @@ internal static class EntityProcessor
     private static string ReadExpression(GeneratorTypeInfo type, int index)
     {
         var nonNullable = type.NonNullableDisplayName;
-        var read = type.SpecialType switch
-        {
-            SpecialType.System_String => $"reader.GetString({index})",
-            SpecialType.System_Boolean => $"reader.GetBoolean({index})",
-            SpecialType.System_Int16 => $"reader.GetInt16({index})",
-            SpecialType.System_Int32 => $"reader.GetInt32({index})",
-            SpecialType.System_Int64 => $"reader.GetInt64({index})",
-            SpecialType.System_Single => $"reader.GetFloat({index})",
-            SpecialType.System_Double => $"reader.GetDouble({index})",
-            SpecialType.System_Decimal => $"reader.GetDecimal({index})",
-            SpecialType.System_DateTime => $"reader.GetDateTime({index})",
-            _ when type.IsGuid => $"reader.GetGuid({index})",
-            _ => $"reader.GetFieldValue<{nonNullable}>({index})",
-        };
+        var read = type.IsEnum
+            ? $"({nonNullable}){ReadCallForSpecialType(type.EnumUnderlyingSpecialType, index, nonNullable)}"
+            : type.IsGuid
+                ? $"reader.GetGuid({index})"
+                : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
 
         if (!type.IsNullable)
         {
@@ -253,5 +234,24 @@ internal static class EntityProcessor
         }
 
         return $"reader.IsDBNull({index}) ? null : {read}";
+    }
+
+    private static string ReadCallForSpecialType(SpecialType specialType, int index, string fallbackTypeName)
+    {
+        return specialType switch
+        {
+            SpecialType.System_String => $"reader.GetString({index})",
+            SpecialType.System_Boolean => $"reader.GetBoolean({index})",
+            SpecialType.System_Byte => $"reader.GetByte({index})",
+            SpecialType.System_Char => $"reader.GetChar({index})",
+            SpecialType.System_Int16 => $"reader.GetInt16({index})",
+            SpecialType.System_Int32 => $"reader.GetInt32({index})",
+            SpecialType.System_Int64 => $"reader.GetInt64({index})",
+            SpecialType.System_Single => $"reader.GetFloat({index})",
+            SpecialType.System_Double => $"reader.GetDouble({index})",
+            SpecialType.System_Decimal => $"reader.GetDecimal({index})",
+            SpecialType.System_DateTime => $"reader.GetDateTime({index})",
+            _ => $"reader.GetFieldValue<{fallbackTypeName}>({index})",
+        };
     }
 }

@@ -498,8 +498,10 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
-    public void ReportsDiagnosticForUnsupportedPropertyType()
+    public void UnknownPropertyTypeRoutesThroughGetFieldValueFallback()
     {
+        // Per the permissive type policy: the generator does NOT reject unknown CLR types.
+        // The materializer emits GetFieldValue<T>(i) and lets the provider decide at runtime.
         const string source = """
             using System;
             using Inquiry.Entities;
@@ -521,7 +523,106 @@ public sealed class InquiryGeneratorTests
 
         var result = RunGenerator(source);
 
-        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ003");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+
+        var generatedEntity = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("Organization.InquiryEntity.g.cs", StringComparison.Ordinal));
+        Assert.Contains("reader.GetFieldValue<global::Demo.CustomThing>(1)", generatedEntity.GetText().ToString());
+    }
+
+    [Fact]
+    public void EnumPropertyReadsUnderlyingIntegerAndCasts()
+    {
+        const string source = """
+            using System;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            public enum Status { Inactive = 0, Active = 1 }
+            public enum BigStatus : long { A = 0, B = 1 }
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn]
+                public Status Status { get; set; }
+
+                [InquiryColumn]
+                public Status? NullableStatus { get; set; }
+
+                [InquiryColumn]
+                public BigStatus BigStatus { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+
+        var generatedEntity = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("Organization.InquiryEntity.g.cs", StringComparison.Ordinal));
+        var text = generatedEntity.GetText().ToString();
+
+        Assert.Contains("Status = (global::Demo.Status)reader.GetInt32(1)", text);
+        Assert.Contains("NullableStatus = reader.IsDBNull(2) ? (global::Demo.Status?)null : (global::Demo.Status)reader.GetInt32(2)", text);
+        Assert.Contains("BigStatus = (global::Demo.BigStatus)reader.GetInt64(3)", text);
+    }
+
+    [Fact]
+    public void NewPrimitiveAndModernTypesAreSupported()
+    {
+        // Verifies byte/char get specialized DbDataReader calls and that DateOnly/TimeOnly/
+        // TimeSpan/uint/ushort/ulong/sbyte route through GetFieldValue<T>.
+        const string source = """
+            using System;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn] public byte Flags { get; set; }
+                [InquiryColumn] public sbyte Signed { get; set; }
+                [InquiryColumn] public char Initial { get; set; }
+                [InquiryColumn] public ushort UShortValue { get; set; }
+                [InquiryColumn] public uint UIntValue { get; set; }
+                [InquiryColumn] public ulong ULongValue { get; set; }
+                [InquiryColumn] public DateOnly OnlyDate { get; set; }
+                [InquiryColumn] public TimeOnly OnlyTime { get; set; }
+                [InquiryColumn] public TimeSpan Span { get; set; }
+                [InquiryColumn] public DateOnly? OnlyDateNullable { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+
+        var generatedEntity = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("Widget.InquiryEntity.g.cs", StringComparison.Ordinal));
+        var text = generatedEntity.GetText().ToString();
+
+        Assert.Contains("Flags = reader.GetByte(", text);
+        Assert.Contains("Initial = reader.GetChar(", text);
+        Assert.Contains("Signed = reader.GetFieldValue<sbyte>(", text);
+        Assert.Contains("UShortValue = reader.GetFieldValue<ushort>(", text);
+        Assert.Contains("UIntValue = reader.GetFieldValue<uint>(", text);
+        Assert.Contains("ULongValue = reader.GetFieldValue<ulong>(", text);
+        Assert.Contains("OnlyDate = reader.GetFieldValue<global::System.DateOnly>(", text);
+        Assert.Contains("OnlyTime = reader.GetFieldValue<global::System.TimeOnly>(", text);
+        Assert.Contains("Span = reader.GetFieldValue<global::System.TimeSpan>(", text);
+        Assert.Contains("OnlyDateNullable = reader.IsDBNull(", text);
     }
 
     [Fact]
