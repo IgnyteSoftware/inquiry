@@ -4,7 +4,7 @@ using Inquiry.Sample.Stores;
 namespace Inquiry.Sample.Services;
 
 /// <summary>
-/// Populates the SQLite database with a small fixture so the dashboard has something to show.
+/// Populates the sample database with a small fixture so the dashboard has something to show.
 /// Invoked once from <c>Program.cs</c> during startup; no-ops if data already exists.
 /// </summary>
 public sealed class DataSeeder

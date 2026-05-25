@@ -1,4 +1,4 @@
-using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 
 namespace Inquiry.Sample.Data;
 
@@ -6,51 +6,63 @@ internal static class SampleDatabase
 {
     public static async Task CreateSchemaAsync(string connectionString)
     {
-        await using var connection = new SqliteConnection(connectionString);
+        await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
-
-        await using (var pragma = connection.CreateCommand())
-        {
-            pragma.CommandText = "PRAGMA foreign_keys = ON;";
-            await pragma.ExecuteNonQueryAsync();
-        }
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            CREATE TABLE IF NOT EXISTS TOrganization (
-                [Key] TEXT PRIMARY KEY,
-                [Name] TEXT NOT NULL,
-                IsActive INTEGER DEFAULT 1 NOT NULL
-            );
+            IF OBJECT_ID(N'dbo.TOrganization', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.TOrganization (
+                    [Key] uniqueidentifier NOT NULL CONSTRAINT PK_TOrganization PRIMARY KEY,
+                    [Name] nvarchar(200) NOT NULL,
+                    IsActive bit NOT NULL CONSTRAINT DF_TOrganization_IsActive DEFAULT (1)
+                );
+            END;
 
-            CREATE TABLE IF NOT EXISTS TUser (
-                [Key] TEXT PRIMARY KEY,
-                FirstName TEXT NOT NULL,
-                LastName TEXT NOT NULL,
-                Email TEXT UNIQUE NOT NULL
-            );
+            IF OBJECT_ID(N'dbo.TUser', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.TUser (
+                    [Key] uniqueidentifier NOT NULL CONSTRAINT PK_TUser PRIMARY KEY,
+                    FirstName nvarchar(100) NOT NULL,
+                    LastName nvarchar(100) NOT NULL,
+                    Email nvarchar(320) NOT NULL CONSTRAINT UQ_TUser_Email UNIQUE
+                );
+            END;
 
-            CREATE TABLE IF NOT EXISTS TOrganizationToUser (
-                [Key] TEXT PRIMARY KEY,
-                TOrganizationKey TEXT NOT NULL,
-                TUserKey TEXT NOT NULL,
-                IsActive INTEGER DEFAULT 1 NOT NULL,
-                FOREIGN KEY (TOrganizationKey) REFERENCES TOrganization([Key]),
-                FOREIGN KEY (TUserKey) REFERENCES TUser([Key])
-            );
+            IF OBJECT_ID(N'dbo.TOrganizationToUser', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.TOrganizationToUser (
+                    [Key] uniqueidentifier NOT NULL CONSTRAINT PK_TOrganizationToUser PRIMARY KEY,
+                    TOrganizationKey uniqueidentifier NOT NULL,
+                    TUserKey uniqueidentifier NOT NULL,
+                    IsActive bit NOT NULL CONSTRAINT DF_TOrganizationToUser_IsActive DEFAULT (1),
+                    CONSTRAINT FK_TOrganizationToUser_TOrganization
+                        FOREIGN KEY (TOrganizationKey) REFERENCES dbo.TOrganization([Key]),
+                    CONSTRAINT FK_TOrganizationToUser_TUser
+                        FOREIGN KEY (TUserKey) REFERENCES dbo.TUser([Key])
+                );
+            END;
 
-            CREATE TABLE IF NOT EXISTS TCategory (
-                [Key] TEXT PRIMARY KEY,
-                [Name] TEXT NOT NULL
-            );
+            IF OBJECT_ID(N'dbo.TCategory', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.TCategory (
+                    [Key] uniqueidentifier NOT NULL CONSTRAINT PK_TCategory PRIMARY KEY,
+                    [Name] nvarchar(200) NOT NULL
+                );
+            END;
 
-            CREATE TABLE IF NOT EXISTS TProduct (
-                [Key] TEXT PRIMARY KEY,
-                [Name] TEXT NOT NULL,
-                Price REAL NOT NULL,
-                CategoryKey TEXT NOT NULL,
-                FOREIGN KEY (CategoryKey) REFERENCES TCategory([Key])
-            );
+            IF OBJECT_ID(N'dbo.TProduct', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.TProduct (
+                    [Key] uniqueidentifier NOT NULL CONSTRAINT PK_TProduct PRIMARY KEY,
+                    [Name] nvarchar(200) NOT NULL,
+                    Price decimal(18, 2) NOT NULL,
+                    TCategoryKey uniqueidentifier NOT NULL,
+                    CONSTRAINT FK_TProduct_TCategory
+                        FOREIGN KEY (TCategoryKey) REFERENCES dbo.TCategory([Key])
+                );
+            END;
             """;
 
         await command.ExecuteNonQueryAsync();
