@@ -22,6 +22,9 @@ public abstract partial class UserStore : InquiryStore<User>
     [InquiryInsert]
     public abstract Task<int> InsertAsync(User user, CancellationToken cancellationToken = default);
 
+    [InquiryBulkInsert]
+    public abstract Task<int> BulkInsertAsync(IEnumerable<User> users, CancellationToken cancellationToken = default);
+
     [InquiryUpdate]
     public abstract Task<bool> UpdateAsync(User user, CancellationToken cancellationToken = default);
 

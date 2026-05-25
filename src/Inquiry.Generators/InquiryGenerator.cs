@@ -75,7 +75,7 @@ public sealed class InquiryGenerator : IIncrementalGenerator
                 continue;
             }
 
-            storeRegistrations.Add(StoreProcessor.Emit(context, storeSymbol, entity, methods));
+            storeRegistrations.Add(StoreProcessor.Emit(context, storeSymbol, entity, methods, entities));
         }
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)

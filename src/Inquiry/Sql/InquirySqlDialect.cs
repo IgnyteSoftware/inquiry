@@ -1,7 +1,7 @@
 namespace Inquiry.Sql;
 
 /// <summary>
-/// Provides provider-specific SQL naming and quoting behavior for Inquiry generated statements.
+/// Provides provider-specific SQL naming, quoting, and upsert behavior for Inquiry generated statements.
 /// </summary>
 public abstract class InquirySqlDialect
 {
@@ -42,4 +42,21 @@ public abstract class InquirySqlDialect
     /// Quotes an identifier for the provider.
     /// </summary>
     public abstract string QuoteIdentifier(string identifier);
+
+    /// <summary>
+    /// Builds a provider-specific upsert (insert-or-update) statement.
+    /// </summary>
+    /// <param name="table">The fully-quoted table name.</param>
+    /// <param name="insertColumns">Comma-separated quoted insert column list.</param>
+    /// <param name="insertParameters">Comma-separated parameter list for insert values.</param>
+    /// <param name="setClauses">Comma-separated SET clauses for the update path (col = @param).</param>
+    /// <param name="keyColumn">The quoted key column name.</param>
+    /// <param name="keyParam">The parameter name for the key value.</param>
+    public abstract string BuildUpsertSql(
+        string table,
+        string insertColumns,
+        string insertParameters,
+        string setClauses,
+        string keyColumn,
+        string keyParam);
 }

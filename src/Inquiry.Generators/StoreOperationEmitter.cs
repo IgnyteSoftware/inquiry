@@ -14,10 +14,6 @@ namespace Inquiry.Generators;
 /// </summary>
 internal static class StoreOperationEmitter
 {
-    /// <summary>
-    /// Resolves the operation attribute on a method (if any). Returns <see cref="StoreOperation.None"/>
-    /// when the method carries no recognized operation attribute.
-    /// </summary>
     public static StoreOperation GetOperation(IMethodSymbol method, out AttributeData? attribute)
     {
         foreach (var candidate in method.GetAttributes())
@@ -32,9 +28,15 @@ internal static class StoreOperationEmitter
                 case "InquirySelectAllAttribute":
                     attribute = candidate;
                     return StoreOperation.SelectAll;
+                case "InquirySelectAllEagerAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectAllEager;
                 case "InquirySelectOneByKeyAttribute":
                     attribute = candidate;
                     return StoreOperation.SelectOneByKey;
+                case "InquirySelectOneByKeyEagerAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectOneByKeyEager;
                 case "InquirySelectAllByFieldAttribute":
                     attribute = candidate;
                     return StoreOperation.SelectAllByField;
@@ -44,9 +46,24 @@ internal static class StoreOperationEmitter
                 case "InquiryUpdateAttribute":
                     attribute = candidate;
                     return StoreOperation.Update;
+                case "InquiryUpsertAttribute":
+                    attribute = candidate;
+                    return StoreOperation.Upsert;
+                case "InquiryBulkInsertAttribute":
+                    attribute = candidate;
+                    return StoreOperation.BulkInsert;
+                case "InquiryBulkUpdateAttribute":
+                    attribute = candidate;
+                    return StoreOperation.BulkUpdate;
+                case "InquiryBulkDeleteAttribute":
+                    attribute = candidate;
+                    return StoreOperation.BulkDelete;
                 case "InquiryDeleteOneByKeyAttribute":
                     attribute = candidate;
                     return StoreOperation.DeleteOneByKey;
+                case "InquiryStoredProcedureAttribute":
+                    attribute = candidate;
+                    return StoreOperation.StoredProcedure;
             }
         }
 
@@ -54,11 +71,6 @@ internal static class StoreOperationEmitter
         return StoreOperation.None;
     }
 
-    /// <summary>
-    /// Validates a method's signature against its operation and returns a populated
-    /// <see cref="StoreMethodModel"/>, or <see langword="null"/> when validation fails.
-    /// Diagnostics are reported via <paramref name="context"/>.
-    /// </summary>
     public static StoreMethodModel? Validate(
         SourceProductionContext context,
         IMethodSymbol method,
@@ -68,12 +80,14 @@ internal static class StoreOperationEmitter
     {
         if (!HasSupportedReturnType(operation, method.ReturnType, entity))
         {
-            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnsupportedReturnType, method.Locations.FirstOrDefault(), method.Name, method.ReturnType.ToDisplayString()));
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.UnsupportedReturnType,
+                method.Locations.FirstOrDefault(),
+                method.Name,
+                method.ReturnType.ToDisplayString()));
             return null;
         }
 
-        // For SelectAllByField, resolve the target column before parameter validation —
-        // parameter type must match it.
         ColumnModel? fieldColumn = null;
         if (operation == StoreOperation.SelectAllByField)
         {
@@ -84,23 +98,42 @@ internal static class StoreOperationEmitter
 
             if (fieldColumn is null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnknownField, method.Locations.FirstOrDefault(), method.Name, selectedField));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.UnknownField,
+                    method.Locations.FirstOrDefault(),
+                    method.Name,
+                    selectedField));
+                return null;
+            }
+        }
+
+        string? procedureName = null;
+        if (operation == StoreOperation.StoredProcedure)
+        {
+            procedureName = GeneratorHelpers.GetConstructorString(attribute);
+            if (string.IsNullOrEmpty(procedureName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.UnsupportedReturnType,
+                    method.Locations.FirstOrDefault(),
+                    method.Name,
+                    "StoredProcedure requires a non-empty procedure name"));
                 return null;
             }
         }
 
         if (!HasSupportedParameters(method, operation, entity, fieldColumn))
         {
-            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Locations.FirstOrDefault(), method.Name));
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.InvalidParameters,
+                method.Locations.FirstOrDefault(),
+                method.Name));
             return null;
         }
 
-        return new StoreMethodModel(method, operation, fieldColumn);
+        return new StoreMethodModel(method, operation, fieldColumn, procedureName);
     }
 
-    /// <summary>
-    /// Emits the override body for a store method.
-    /// </summary>
     public static void Emit(StringBuilder source, StoreMethodModel method, EntityModel entity)
     {
         var symbol = method.Symbol;
@@ -113,8 +146,12 @@ internal static class StoreOperationEmitter
         {
             case StoreOperation.SelectAll:
                 AppendHeader(source, symbol, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(new global::Inquiry.Commands.InquiryCommandDefinition(_sqlStatements.SelectAll), {cancellation});");
+                source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(_sqlStatements.SelectAll, {cancellation});");
                 source.AppendLine("    }");
+                break;
+
+            case StoreOperation.SelectAllEager:
+                EmitSelectAllEager(source, symbol, parameters, entityType, cancellation, entity);
                 break;
 
             case StoreOperation.SelectOneByKey:
@@ -124,6 +161,10 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"            new {{ key = {firstParameter} }},");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
+                break;
+
+            case StoreOperation.SelectOneByKeyEager:
+                EmitSelectOneByKeyEager(source, symbol, parameters, entityType, cancellation, firstParameter, entity);
                 break;
 
             case StoreOperation.SelectAllByField:
@@ -165,6 +206,33 @@ internal static class StoreOperationEmitter
                 source.AppendLine("    }");
                 break;
 
+            case StoreOperation.Upsert:
+                AppendHeader(source, symbol, parameters, isAsync: false);
+                source.AppendLine("        return Inquiry.ExecuteAsync(");
+                source.AppendLine("            _sqlStatements.Upsert,");
+                source.AppendLine("            new");
+                source.AppendLine("            {");
+                foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
+                {
+                    source.AppendLine($"                {column.PropertyName} = {firstParameter}.{column.PropertyName},");
+                }
+                source.AppendLine("            },");
+                source.AppendLine($"            {cancellation});");
+                source.AppendLine("    }");
+                break;
+
+            case StoreOperation.BulkInsert:
+                EmitBulkInsert(source, symbol, parameters, cancellation, firstParameter, entity);
+                break;
+
+            case StoreOperation.BulkUpdate:
+                EmitBulkUpdate(source, symbol, parameters, cancellation, firstParameter, entity);
+                break;
+
+            case StoreOperation.BulkDelete:
+                EmitBulkDelete(source, symbol, parameters, cancellation, firstParameter, entity);
+                break;
+
             case StoreOperation.DeleteOneByKey:
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 source.AppendLine("        return await Inquiry.ExecuteAsync(");
@@ -173,7 +241,191 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
                 source.AppendLine("    }");
                 break;
+
+            case StoreOperation.StoredProcedure:
+                EmitStoredProcedure(source, symbol, parameters, entityType, cancellation, method.ProcedureName!, entity);
+                break;
         }
+    }
+
+    // ---- Private emit helpers ----
+
+    private static void EmitBulkInsert(StringBuilder source, IMethodSymbol symbol, string parameters, string cancellation, string firstParam, EntityModel entity)
+    {
+        AppendHeader(source, symbol, parameters, isAsync: true);
+        source.AppendLine($"        var _total = 0;");
+        source.AppendLine($"        foreach (var _item in {firstParam})");
+        source.AppendLine("        {");
+        source.AppendLine("            _total += await Inquiry.ExecuteAsync(");
+        source.AppendLine("                _sqlStatements.Insert,");
+        source.AppendLine("                new");
+        source.AppendLine("                {");
+        foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
+        {
+            source.AppendLine($"                    {column.PropertyName} = _item.{column.PropertyName},");
+        }
+        source.AppendLine("                },");
+        source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
+        source.AppendLine("        }");
+        source.AppendLine("        return _total;");
+        source.AppendLine("    }");
+    }
+
+    private static void EmitBulkUpdate(StringBuilder source, IMethodSymbol symbol, string parameters, string cancellation, string firstParam, EntityModel entity)
+    {
+        AppendHeader(source, symbol, parameters, isAsync: true);
+        source.AppendLine($"        var _total = 0;");
+        source.AppendLine($"        foreach (var _item in {firstParam})");
+        source.AppendLine("        {");
+        source.AppendLine("            var _affected = await Inquiry.ExecuteAsync(");
+        source.AppendLine("                _sqlStatements.Update,");
+        source.AppendLine("                new");
+        source.AppendLine("                {");
+        foreach (var column in entity.Columns.Where(c => c.IsKey || !c.IsGenerated))
+        {
+            source.AppendLine($"                    {column.PropertyName} = _item.{column.PropertyName},");
+        }
+        source.AppendLine("                },");
+        source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
+        source.AppendLine("            _total += _affected;");
+        source.AppendLine("        }");
+        source.AppendLine("        return _total;");
+        source.AppendLine("    }");
+    }
+
+    private static void EmitBulkDelete(StringBuilder source, IMethodSymbol symbol, string parameters, string cancellation, string firstParam, EntityModel entity)
+    {
+        AppendHeader(source, symbol, parameters, isAsync: true);
+        source.AppendLine($"        var _total = 0;");
+        source.AppendLine($"        foreach (var _key in {firstParam})");
+        source.AppendLine("        {");
+        source.AppendLine("            var _affected = await Inquiry.ExecuteAsync(");
+        source.AppendLine("                _sqlStatements.DeleteByKey,");
+        source.AppendLine($"                new {{ key = _key }},");
+        source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
+        source.AppendLine("            _total += _affected;");
+        source.AppendLine("        }");
+        source.AppendLine("        return _total;");
+        source.AppendLine("    }");
+    }
+
+    private static void EmitStoredProcedure(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string procedureName, EntityModel entity)
+    {
+        // Build parameter array from method parameters (all except trailing CancellationToken)
+        var procParams = symbol.Parameters.Take(symbol.Parameters.Length - 1).ToArray();
+        var returnType = symbol.ReturnType;
+
+        var isAsyncEnum = IsAsyncEnumerable(returnType, out _);
+        var isTask = returnType.Name == "Task" && returnType is INamedTypeSymbol { TypeArguments.Length: 1 };
+        var isAsync = !isAsyncEnum;
+
+        AppendHeader(source, symbol, parameters, isAsync: isAsync);
+
+        source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
+        source.AppendLine($"            \"{GeneratorHelpers.Escape(procedureName)}\",");
+
+        if (procParams.Length > 0)
+        {
+            source.AppendLine("            new global::Inquiry.Parameters.InquiryParameter[]");
+            source.AppendLine("            {");
+            foreach (var p in procParams)
+            {
+                source.AppendLine($"                new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(p.Name)}\", (object?){p.Name} ?? global::System.DBNull.Value),");
+            }
+            source.AppendLine("            },");
+        }
+        else
+        {
+            source.AppendLine("            global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>(),");
+        }
+
+        source.AppendLine("            global::System.Data.CommandType.StoredProcedure);");
+
+        if (isAsyncEnum)
+        {
+            source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(_cmd, {cancellation});");
+        }
+        else if (isTask && symbol.ReturnType is INamedTypeSymbol taskType)
+        {
+            var inner = taskType.TypeArguments[0];
+            if (SymbolEqualityComparer.Default.Equals(inner, entity.Symbol))
+            {
+                source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(_cmd, {cancellation}).ConfigureAwait(false);");
+            }
+            else
+            {
+                // Task<int>
+                source.AppendLine($"        return await Inquiry.ExecuteAsync(_cmd, {cancellation}).ConfigureAwait(false);");
+            }
+        }
+
+        source.AppendLine("    }");
+    }
+
+    private static void EmitSelectOneByKeyEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string firstParam, EntityModel entity)
+    {
+        AppendHeader(source, symbol, parameters, isAsync: true);
+        source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+        source.AppendLine("            _sqlStatements.SelectByKey,");
+        source.AppendLine($"            new {{ key = {firstParam} }},");
+        source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+        source.AppendLine("        if (_entity is not null)");
+        source.AppendLine("        {");
+        foreach (var relation in entity.Relations)
+        {
+            var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var fieldName = $"_sql_{relation.PropertyName}";
+            source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
+            source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}>({fieldName}, new {{ value = _entity.{entity.Key.PropertyName} }}, {cancellation}).ConfigureAwait(false))");
+            source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
+            source.AppendLine($"            _entity.{relation.PropertyName} = _{relation.PropertyName}_list;");
+        }
+        source.AppendLine("        }");
+        source.AppendLine("        return _entity;");
+        source.AppendLine("    }");
+    }
+
+    private static void EmitSelectAllEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, EntityModel entity)
+    {
+        var parametersWithAttr = GeneratorHelpers.GetParameterDeclaration(symbol, enumeratorCancellation: true);
+        AppendHeader(source, symbol, parametersWithAttr, isAsync: true);
+        source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
+        source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}>(_sqlStatements.SelectAll, {cancellation}).ConfigureAwait(false))");
+        source.AppendLine("            _entities.Add(_e);");
+        source.AppendLine();
+
+        foreach (var relation in entity.Relations)
+        {
+            var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var fieldName = $"_sql_{relation.PropertyName}";
+            source.AppendLine($"        var _allChildren_{relation.PropertyName} = new global::System.Collections.Generic.List<{childType}>();");
+            source.AppendLine($"        await foreach (var _c in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
+            source.AppendLine($"            _allChildren_{relation.PropertyName}.Add(_c);");
+            source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, global::System.Collections.Generic.List<{childType}>>();");
+            source.AppendLine($"        foreach (var _c in _allChildren_{relation.PropertyName})");
+            source.AppendLine("        {");
+            source.AppendLine($"            var _fkVal = (object)_c.{relation.ForeignKeyProperty};");
+            source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue(_fkVal, out var _grp))");
+            source.AppendLine("            {");
+            source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
+            source.AppendLine($"                _grouped_{relation.PropertyName}[_fkVal] = _grp;");
+            source.AppendLine("            }");
+            source.AppendLine("            _grp.Add(_c);");
+            source.AppendLine("        }");
+        }
+
+        source.AppendLine("        foreach (var _entity in _entities)");
+        source.AppendLine("        {");
+        foreach (var relation in entity.Relations)
+        {
+            var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue((object)_entity.{entity.Key.PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+        }
+        source.AppendLine("        }");
+        source.AppendLine();
+        source.AppendLine("        foreach (var _entity in _entities)");
+        source.AppendLine("            yield return _entity;");
+        source.AppendLine("    }");
     }
 
     private static void AppendHeader(StringBuilder source, IMethodSymbol method, string parameters, bool isAsync)
@@ -188,16 +440,32 @@ internal static class StoreOperationEmitter
     {
         return operation switch
         {
-            StoreOperation.SelectAll or StoreOperation.SelectAllByField =>
+            StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.SelectAllByField =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entity.Symbol),
-            StoreOperation.SelectOneByKey =>
+            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entity.Symbol),
-            StoreOperation.Insert =>
+            StoreOperation.Insert or StoreOperation.BulkInsert or StoreOperation.BulkUpdate or StoreOperation.BulkDelete or StoreOperation.Upsert =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             StoreOperation.Update or StoreOperation.DeleteOneByKey =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
+            StoreOperation.StoredProcedure =>
+                IsValidStoredProcReturnType(returnType, entity),
             _ => false,
         };
+    }
+
+    private static bool IsValidStoredProcReturnType(ITypeSymbol returnType, EntityModel entity)
+    {
+        // IAsyncEnumerable<TEntity>
+        if (GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entity.Symbol))
+            return true;
+        // Task<TEntity?>
+        if (GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entity.Symbol))
+            return true;
+        // Task<int>
+        if (GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32))
+            return true;
+        return false;
     }
 
     private static bool HasSupportedParameters(IMethodSymbol method, StoreOperation operation, EntityModel entity, ColumnModel? fieldColumn)
@@ -209,19 +477,55 @@ internal static class StoreOperationEmitter
 
         return operation switch
         {
-            StoreOperation.SelectAll =>
+            StoreOperation.SelectAll or StoreOperation.SelectAllEager =>
                 method.Parameters.Length == 1,
-            StoreOperation.SelectOneByKey or StoreOperation.DeleteOneByKey =>
+            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.DeleteOneByKey =>
                 method.Parameters.Length == 2 &&
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, entity.Key.Type.Symbol),
             StoreOperation.SelectAllByField =>
                 method.Parameters.Length == 2 &&
                 fieldColumn is not null &&
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, fieldColumn.Type.Symbol),
-            StoreOperation.Insert or StoreOperation.Update =>
+            StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert =>
                 method.Parameters.Length == 2 &&
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, entity.Symbol),
+            StoreOperation.BulkInsert or StoreOperation.BulkUpdate =>
+                method.Parameters.Length == 2 &&
+                IsEnumerableOf(method.Parameters[0].Type, entity.Symbol),
+            StoreOperation.BulkDelete =>
+                method.Parameters.Length == 2 &&
+                IsEnumerableOf(method.Parameters[0].Type, entity.Key.Type.Symbol),
+            StoreOperation.StoredProcedure =>
+                true, // any parameters allowed
             _ => false,
         };
+    }
+
+    private static bool IsEnumerableOf(ITypeSymbol type, ITypeSymbol elementType)
+    {
+        if (type is not INamedTypeSymbol named || !named.IsGenericType || named.TypeArguments.Length != 1)
+            return false;
+        if (!SymbolEqualityComparer.Default.Equals(named.TypeArguments[0], elementType))
+            return false;
+        var fqn = named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return fqn is "global::System.Collections.Generic.IEnumerable<T>"
+                   or "global::System.Collections.Generic.IReadOnlyList<T>"
+                   or "global::System.Collections.Generic.IList<T>"
+                   or "global::System.Collections.Generic.List<T>"
+                   or "global::System.Collections.Generic.ICollection<T>";
+    }
+
+    private static bool IsAsyncEnumerable(ITypeSymbol type, out ITypeSymbol? elementType)
+    {
+        elementType = null;
+        if (type is INamedTypeSymbol { IsGenericType: true } named &&
+            named.TypeArguments.Length == 1 &&
+            named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                == "global::System.Collections.Generic.IAsyncEnumerable<T>")
+        {
+            elementType = named.TypeArguments[0];
+            return true;
+        }
+        return false;
     }
 }

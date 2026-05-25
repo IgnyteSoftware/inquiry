@@ -44,6 +44,7 @@ internal static class EntityProcessor
             var tableName = GeneratorHelpers.GetConstructorString(tableAttribute) ?? entitySymbol.Name;
             var schema = GeneratorHelpers.GetNamedString(tableAttribute, "Schema");
             var columns = DiscoverColumns(context, entitySymbol);
+            var relations = DiscoverRelations(entitySymbol);
 
             var keyColumns = columns.Where(static c => c.IsKey).ToArray();
             if (keyColumns.Length != 1)
@@ -57,7 +58,7 @@ internal static class EntityProcessor
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DuplicateColumn, classDeclaration.Identifier.GetLocation(), entitySymbol.Name, duplicate.Key));
             }
 
-            var entity = new EntityModel(entitySymbol, tableName, schema, columns, keyColumns[0]);
+            var entity = new EntityModel(entitySymbol, tableName, schema, columns, keyColumns[0], relations);
             entities[entitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)] = entity;
         }
 
@@ -133,6 +134,72 @@ internal static class EntityProcessor
         }
 
         return columns;
+    }
+
+    private static List<RelationModel> DiscoverRelations(INamedTypeSymbol entitySymbol)
+    {
+        var relations = new List<RelationModel>();
+
+        foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
+        {
+            var relationAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryRelationAttribute");
+            if (relationAttribute is null)
+            {
+                continue;
+            }
+
+            var foreignKeyProperty = GeneratorHelpers.GetConstructorString(relationAttribute);
+            if (string.IsNullOrEmpty(foreignKeyProperty))
+            {
+                continue;
+            }
+
+            // Determine child entity type. Supports List<T>, IReadOnlyList<T>, IEnumerable<T>, or T? directly.
+            if (!TryGetChildEntityType(property.Type, out var childEntitySymbol, out var isCollection))
+            {
+                continue;
+            }
+
+            relations.Add(new RelationModel(property, property.Name, foreignKeyProperty!, childEntitySymbol!, isCollection));
+        }
+
+        return relations;
+    }
+
+    private static bool TryGetChildEntityType(ITypeSymbol type, out INamedTypeSymbol? childEntitySymbol, out bool isCollection)
+    {
+        isCollection = false;
+        childEntitySymbol = null;
+
+        // Strip nullable wrapper first
+        var nonNullable = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } named
+            ? named.TypeArguments[0]
+            : type;
+
+        if (nonNullable is INamedTypeSymbol namedType)
+        {
+            if (namedType.IsGenericType && namedType.TypeArguments.Length == 1)
+            {
+                var fqn = namedType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                if (fqn is "global::System.Collections.Generic.List<T>"
+                         or "global::System.Collections.Generic.IReadOnlyList<T>"
+                         or "global::System.Collections.Generic.IList<T>"
+                         or "global::System.Collections.Generic.IEnumerable<T>"
+                         or "global::System.Collections.Generic.ICollection<T>")
+                {
+                    childEntitySymbol = namedType.TypeArguments[0] as INamedTypeSymbol;
+                    isCollection = true;
+                    return childEntitySymbol is not null;
+                }
+            }
+
+            // Single reference
+            childEntitySymbol = namedType;
+            isCollection = false;
+            return true;
+        }
+
+        return false;
     }
 
     private static string ResolveColumnName(AttributeData? columnAttribute, AttributeData? foreignKeyAttribute, string propertyName)

@@ -14,6 +14,7 @@ public sealed class InquirySqlStatementSet
         string deleteByKey,
         string insert,
         string update,
+        string upsert,
         IReadOnlyDictionary<string, string> selectByField)
     {
         SelectAll = selectAll ?? throw new ArgumentNullException(nameof(selectAll));
@@ -21,6 +22,7 @@ public sealed class InquirySqlStatementSet
         DeleteByKey = deleteByKey ?? throw new ArgumentNullException(nameof(deleteByKey));
         Insert = insert ?? throw new ArgumentNullException(nameof(insert));
         Update = update ?? throw new ArgumentNullException(nameof(update));
+        Upsert = upsert ?? throw new ArgumentNullException(nameof(upsert));
         SelectByField = selectByField ?? throw new ArgumentNullException(nameof(selectByField));
     }
 
@@ -38,6 +40,9 @@ public sealed class InquirySqlStatementSet
 
     /// <summary>Gets the statement used to update one row.</summary>
     public string Update { get; }
+
+    /// <summary>Gets the provider-specific statement used to upsert (insert-or-update) one row.</summary>
+    public string Upsert { get; }
 
     /// <summary>
     /// Gets statements that select all rows by a mapped field, keyed by the entity property name.

@@ -3,7 +3,7 @@ using Inquiry.Sql;
 namespace Inquiry.SqlServer;
 
 /// <summary>
-/// Provides SQL Server SQL naming and quoting behavior for Inquiry generated statements.
+/// Provides SQL Server SQL naming, quoting, and upsert behavior for Inquiry generated statements.
 /// </summary>
 public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
 {
@@ -19,5 +19,24 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
         }
 
         return "[" + identifier.Replace("]", "]]") + "]";
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Uses a <c>MERGE</c> statement to atomically insert or update a single row.
+    /// </remarks>
+    public override string BuildUpsertSql(
+        string table,
+        string insertColumns,
+        string insertParameters,
+        string setClauses,
+        string keyColumn,
+        string keyParam)
+    {
+        return
+            $"MERGE INTO {table} AS target " +
+            $"USING (SELECT {keyParam} AS k) AS source ON target.{keyColumn} = source.k " +
+            $"WHEN MATCHED THEN UPDATE SET {setClauses} " +
+            $"WHEN NOT MATCHED THEN INSERT ({insertColumns}) VALUES ({insertParameters});";
     }
 }

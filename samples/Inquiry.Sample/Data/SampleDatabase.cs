@@ -9,7 +9,6 @@ internal static class SampleDatabase
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync();
 
-        // SQLite does not enforce foreign-key constraints unless explicitly enabled per connection.
         await using (var pragma = connection.CreateCommand())
         {
             pragma.CommandText = "PRAGMA foreign_keys = ON;";
@@ -17,7 +16,6 @@ internal static class SampleDatabase
         }
 
         await using var command = connection.CreateCommand();
-        // SQL Server types translated for SQLite: UNIQUEIDENTIFIER -> TEXT, VARCHAR(N) -> TEXT, BIT -> INTEGER.
         command.CommandText = """
             CREATE TABLE IF NOT EXISTS TOrganization (
                 [Key] TEXT PRIMARY KEY,
@@ -39,6 +37,19 @@ internal static class SampleDatabase
                 IsActive INTEGER DEFAULT 1 NOT NULL,
                 FOREIGN KEY (TOrganizationKey) REFERENCES TOrganization([Key]),
                 FOREIGN KEY (TUserKey) REFERENCES TUser([Key])
+            );
+
+            CREATE TABLE IF NOT EXISTS TCategory (
+                [Key] TEXT PRIMARY KEY,
+                [Name] TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS TProduct (
+                [Key] TEXT PRIMARY KEY,
+                [Name] TEXT NOT NULL,
+                Price REAL NOT NULL,
+                TCategoryKey TEXT NOT NULL,
+                FOREIGN KEY (TCategoryKey) REFERENCES TCategory([Key])
             );
             """;
 
