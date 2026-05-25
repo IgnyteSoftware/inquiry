@@ -70,7 +70,10 @@ internal static class StoreOperationEmitter
         AttributeData attribute,
         EntityModel entity)
     {
-        if (!HasSupportedReturnType(operation, method.ReturnType, entity))
+        var returnsEntity = operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert &&
+            GeneratorHelpers.GetNamedBool(attribute, "ReturnEntity");
+
+        if (!HasSupportedReturnType(operation, method.ReturnType, entity, returnsEntity))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 InquiryDiagnosticDescriptors.UnsupportedReturnType,
@@ -123,7 +126,7 @@ internal static class StoreOperationEmitter
             return null;
         }
 
-        return new StoreMethodModel(method, operation, fieldColumn, procedureName);
+        return new StoreMethodModel(method, operation, fieldColumn, procedureName, returnsEntity);
     }
 
     public static void Emit(StringBuilder source, StoreMethodModel method, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
@@ -178,49 +181,52 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.Insert:
                 AppendHeader(source, symbol, parameters, isAsync: false);
-                source.AppendLine("        return Inquiry.ExecuteAsync(");
-                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                source.AppendLine("                _sqlInsert,");
-                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
-                source.AppendLine("                {");
-                foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
+                if (method.ReturnsEntity)
                 {
-                    source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {firstParameter}.{column.PropertyName}),");
+                    source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                    AppendMutationCommand(source, "_sqlInsertReturning", entity, firstParameter, indent: "            ");
+                    source.AppendLine($"            {cancellation});");
                 }
-                source.AppendLine("                }),");
-                source.AppendLine($"            {cancellation});");
+                else
+                {
+                    source.AppendLine("        return Inquiry.ExecuteAsync(");
+                    AppendMutationCommand(source, "_sqlInsert", entity, firstParameter, indent: "            ");
+                    source.AppendLine($"            {cancellation});");
+                }
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.Update:
                 AppendHeader(source, symbol, parameters, isAsync: true);
-                source.AppendLine("        return await Inquiry.ExecuteAsync(");
-                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                source.AppendLine("                _sqlUpdate,");
-                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
-                source.AppendLine("                {");
-                foreach (var column in entity.Columns.Where(c => c.IsKey || !c.IsGenerated))
+                if (method.ReturnsEntity)
                 {
-                    source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {firstParameter}.{column.PropertyName}),");
+                    source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                    AppendMutationCommand(source, "_sqlUpdateReturning", entity, firstParameter, indent: "            ", includeKey: true);
+                    source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 }
-                source.AppendLine("                }),");
-                source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
+                else
+                {
+                    source.AppendLine("        return await Inquiry.ExecuteAsync(");
+                    AppendMutationCommand(source, "_sqlUpdate", entity, firstParameter, indent: "            ", includeKey: true);
+                    source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
+                }
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.Upsert:
                 AppendHeader(source, symbol, parameters, isAsync: false);
-                source.AppendLine("        return Inquiry.ExecuteAsync(");
-                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                source.AppendLine("                _sqlUpsert,");
-                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
-                source.AppendLine("                {");
-                foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
+                if (method.ReturnsEntity)
                 {
-                    source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {firstParameter}.{column.PropertyName}),");
+                    source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                    AppendMutationCommand(source, "_sqlUpsertReturning", entity, firstParameter, indent: "            ");
+                    source.AppendLine($"            {cancellation});");
                 }
-                source.AppendLine("                }),");
-                source.AppendLine($"            {cancellation});");
+                else
+                {
+                    source.AppendLine("        return Inquiry.ExecuteAsync(");
+                    AppendMutationCommand(source, "_sqlUpsert", entity, firstParameter, indent: "            ");
+                    source.AppendLine($"            {cancellation});");
+                }
                 source.AppendLine("    }");
                 break;
 
@@ -244,6 +250,27 @@ internal static class StoreOperationEmitter
     }
 
     // ---- Private emit helpers ----
+
+    private static void AppendMutationCommand(
+        StringBuilder source,
+        string sqlField,
+        EntityModel entity,
+        string entityParameter,
+        string indent,
+        bool includeKey = false)
+    {
+        source.AppendLine($"{indent}new global::Inquiry.Commands.InquiryCommand(");
+        source.AppendLine($"{indent}    {sqlField},");
+        source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter[]");
+        source.AppendLine($"{indent}    {{");
+
+        foreach (var column in entity.Columns.Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated))
+        {
+            source.AppendLine($"{indent}        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {entityParameter}.{column.PropertyName}),");
+        }
+
+        source.AppendLine($"{indent}    }}),");
+    }
 
     private static void EmitStoredProcedure(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string procedureName, EntityModel entity)
     {
@@ -421,7 +448,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("    {");
     }
 
-    private static bool HasSupportedReturnType(StoreOperation operation, ITypeSymbol returnType, EntityModel entity)
+    private static bool HasSupportedReturnType(StoreOperation operation, ITypeSymbol returnType, EntityModel entity, bool returnsEntity)
     {
         return operation switch
         {
@@ -429,8 +456,12 @@ internal static class StoreOperationEmitter
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entity.Symbol),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entity.Symbol),
+            StoreOperation.Insert or StoreOperation.Upsert when returnsEntity =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entity.Symbol),
             StoreOperation.Insert or StoreOperation.Upsert =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
+            StoreOperation.Update when returnsEntity =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entity.Symbol),
             StoreOperation.Update or StoreOperation.DeleteOneByKey =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
             StoreOperation.StoredProcedure =>

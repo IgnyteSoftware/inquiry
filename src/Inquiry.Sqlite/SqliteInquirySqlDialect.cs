@@ -55,12 +55,28 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
     }
 
     /// <inheritdoc />
+    public override string BuildInsertReturningSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanInsert(context);
+        return BuildInsertSql(context) + " RETURNING " + context.SelectColumns;
+    }
+
+    /// <inheritdoc />
     public override string BuildUpdateSql(InquirySqlBuildContext context)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpdate(context);
         return "UPDATE " + context.Table + " SET " + context.SetClauses
             + " WHERE " + context.QuotedKeyColumn + " = " + context.KeyParameter;
+    }
+
+    /// <inheritdoc />
+    public override string BuildUpdateReturningSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanUpdate(context);
+        return BuildUpdateSql(context) + " RETURNING " + context.SelectColumns;
     }
 
     /// <inheritdoc />
@@ -83,5 +99,13 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
         return $"INSERT OR REPLACE INTO {context.Table} ({context.InsertColumns}) VALUES ({context.InsertParameters})";
+    }
+
+    /// <inheritdoc />
+    public override string BuildUpsertReturningSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanUpsert(context);
+        return BuildUpsertSql(context) + " RETURNING " + context.SelectColumns;
     }
 }

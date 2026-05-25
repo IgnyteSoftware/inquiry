@@ -136,12 +136,21 @@ public abstract class InquirySqlDialect
     /// <summary>Builds the INSERT statement.</summary>
     public abstract string BuildInsertSql(InquirySqlBuildContext context);
 
+    /// <summary>Builds the INSERT statement and returns the database row after mutation.</summary>
+    public abstract string BuildInsertReturningSql(InquirySqlBuildContext context);
+
     /// <summary>Builds the UPDATE-by-key statement.</summary>
     public abstract string BuildUpdateSql(InquirySqlBuildContext context);
+
+    /// <summary>Builds the UPDATE-by-key statement and returns the database row after mutation.</summary>
+    public abstract string BuildUpdateReturningSql(InquirySqlBuildContext context);
 
     /// <summary>Builds the DELETE-by-key statement.</summary>
     public abstract string BuildDeleteByKeySql(InquirySqlBuildContext context);
 
     /// <summary>Builds a provider-specific upsert (insert-or-update) statement.</summary>
     public abstract string BuildUpsertSql(InquirySqlBuildContext context);
+
+    /// <summary>Builds a provider-specific upsert statement and returns the database row after mutation.</summary>
+    public abstract string BuildUpsertReturningSql(InquirySqlBuildContext context);
 }

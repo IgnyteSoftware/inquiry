@@ -24,11 +24,20 @@ public abstract partial class ProductStore : InquiryStore<Product>
     [InquiryInsert]
     public abstract Task<int> InsertAsync(Product product, CancellationToken cancellationToken = default);
 
+    [InquiryInsert(ReturnEntity = true)]
+    public abstract Task<Product?> InsertReturningAsync(Product product, CancellationToken cancellationToken = default);
+
     [InquiryUpdate]
     public abstract Task<bool> UpdateAsync(Product product, CancellationToken cancellationToken = default);
 
+    [InquiryUpdate(ReturnEntity = true)]
+    public abstract Task<Product?> UpdateReturningAsync(Product product, CancellationToken cancellationToken = default);
+
     [InquiryUpsert]
     public abstract Task<int> UpsertAsync(Product product, CancellationToken cancellationToken = default);
+
+    [InquiryUpsert(ReturnEntity = true)]
+    public abstract Task<Product?> UpsertReturningAsync(Product product, CancellationToken cancellationToken = default);
 
     [InquiryDeleteOneByKey]
     public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);

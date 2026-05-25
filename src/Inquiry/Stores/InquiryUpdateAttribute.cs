@@ -6,4 +6,8 @@ namespace Inquiry.Stores;
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryUpdateAttribute : Attribute
 {
+    /// <summary>
+    /// Gets or sets a value indicating whether the generated method returns the row produced by the database.
+    /// </summary>
+    public bool ReturnEntity { get; set; }
 }

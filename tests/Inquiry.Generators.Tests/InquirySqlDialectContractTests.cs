@@ -83,9 +83,12 @@ public sealed class InquirySqlDialectContractTests
         Assert.Throws<ArgumentNullException>(() => dialect.BuildSelectAllSql(null!));
         Assert.Throws<ArgumentNullException>(() => dialect.BuildSelectByKeySql(null!));
         Assert.Throws<ArgumentNullException>(() => dialect.BuildInsertSql(null!));
+        Assert.Throws<ArgumentNullException>(() => dialect.BuildInsertReturningSql(null!));
         Assert.Throws<ArgumentNullException>(() => dialect.BuildUpdateSql(null!));
+        Assert.Throws<ArgumentNullException>(() => dialect.BuildUpdateReturningSql(null!));
         Assert.Throws<ArgumentNullException>(() => dialect.BuildDeleteByKeySql(null!));
         Assert.Throws<ArgumentNullException>(() => dialect.BuildUpsertSql(null!));
+        Assert.Throws<ArgumentNullException>(() => dialect.BuildUpsertReturningSql(null!));
     }
 
     [Theory]
@@ -106,6 +109,7 @@ public sealed class InquirySqlDialectContractTests
             new[] { new InquirySqlColumn("Id", "Id", isKey: true, isGenerated: true) });
 
         Assert.Throws<InvalidOperationException>(() => dialect.BuildInsertSql(context));
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildInsertReturningSql(context));
     }
 
     [Theory]
@@ -118,6 +122,7 @@ public sealed class InquirySqlDialectContractTests
             new[] { new InquirySqlColumn("Id", "Id", isKey: true) });
 
         Assert.Throws<InvalidOperationException>(() => dialect.BuildUpdateSql(context));
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpdateReturningSql(context));
     }
 
     [Theory]
@@ -134,6 +139,7 @@ public sealed class InquirySqlDialectContractTests
             });
 
         Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertSql(context));
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertReturningSql(context));
     }
 
     [Theory]
