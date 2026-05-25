@@ -1,15 +1,14 @@
 @page "/"
-@inject OrganizationService Organizations
-@inject UserService Users
-@inject MembershipService Memberships
+@inject CustomerService Customers
+@inject EmployeeService Employees
 @inject CatalogService Catalog
 
 <h1>Dashboard</h1>
 
 <p>
-    A snapshot of every entity in the sample database. Each table is rendered from a Blazor
-    page that injects the matching <em>service</em>, which in turn delegates to an Inquiry
-    generated store.
+    A snapshot of the classic Northwind sample database, mapped through Inquiry and stored in
+    SQLite. Each table is rendered from a Blazor page that injects a <em>service</em>, which
+    delegates to an Inquiry generated store.
 </p>
 
 @if (_loading)
@@ -19,42 +18,34 @@
 else
 {
     <section>
-        <h2>Organizations <span class="count">@_orgs.Count</span></h2>
+        <h2>Customers <span class="count">@_customers.Count</span></h2>
         <table>
-            <thead><tr><th>Name</th><th>Active</th></tr></thead>
+            <thead><tr><th>ID</th><th>Company</th><th>Contact</th><th>Country</th></tr></thead>
             <tbody>
-                @foreach (var o in _orgs)
-                {
-                    <tr><td>@o.Name</td><td>@(o.IsActive ? "yes" : "no")</td></tr>
-                }
-            </tbody>
-        </table>
-    </section>
-
-    <section>
-        <h2>Users <span class="count">@_users.Count</span></h2>
-        <table>
-            <thead><tr><th>Name</th><th>Email</th></tr></thead>
-            <tbody>
-                @foreach (var u in _users)
-                {
-                    <tr><td>@u.FirstName @u.LastName</td><td>@u.Email</td></tr>
-                }
-            </tbody>
-        </table>
-    </section>
-
-    <section>
-        <h2>Memberships <span class="count">@_memberships.Count</span></h2>
-        <table>
-            <thead><tr><th>Organization</th><th>User</th><th>Active</th></tr></thead>
-            <tbody>
-                @foreach (var row in _memberships)
+                @foreach (var c in _customers)
                 {
                     <tr>
-                        <td>@(row.Organization?.Name ?? "?")</td>
-                        <td>@(row.User is null ? "?" : $"{row.User.FirstName} {row.User.LastName}")</td>
-                        <td>@(row.Membership.IsActive ? "yes" : "no")</td>
+                        <td><code>@c.CustomerID</code></td>
+                        <td>@c.CompanyName</td>
+                        <td>@(c.ContactName ?? "—")</td>
+                        <td>@(c.Country ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Employees <span class="count">@_employees.Count</span></h2>
+        <table>
+            <thead><tr><th>Name</th><th>Title</th><th>Hire date</th></tr></thead>
+            <tbody>
+                @foreach (var e in _employees)
+                {
+                    <tr>
+                        <td>@e.FirstName @e.LastName</td>
+                        <td>@(e.Title ?? "—")</td>
+                        <td>@(e.HireDate?.ToString("yyyy-MM-dd") ?? "—")</td>
                     </tr>
                 }
             </tbody>
@@ -64,19 +55,20 @@ else
     <section>
         <h2>Catalog <span class="badge">Eager loaded</span></h2>
         <p class="hint">
-            Each category row above is materialized in one query; its <code>Products</code>
-            collection is loaded in a follow-up query and stitched in by the generator.
+            Categories are materialized in one query; each <code>Products</code> collection
+            is loaded in a follow-up query and stitched in by the generator.
         </p>
         @foreach (var cat in _catalog)
         {
+            var products = cat.Products ?? new List<Product>();
             <details open>
-                <summary><strong>@cat.Name</strong> — @(cat.Products?.Count ?? 0) products</summary>
+                <summary><strong>@cat.CategoryName</strong> — @products.Count products</summary>
                 <ul>
-                    @if (cat.Products is { Count: > 0 })
+                    @if (products.Count > 0)
                     {
-                        foreach (var p in cat.Products)
+                        foreach (var p in products)
                         {
-                            <li>@p.Name <span class="muted">$@p.Price.ToString("0.00")</span></li>
+                            <li>@p.ProductName <span class="muted">$@((p.UnitPrice ?? 0m).ToString("0.00"))</span></li>
                         }
                     }
                     else
@@ -91,16 +83,14 @@ else
 
 @code {
     private bool _loading = true;
-    private List<Organization> _orgs = new();
-    private List<User> _users = new();
-    private List<MembershipService.MembershipRow> _memberships = new();
+    private List<Customer> _customers = new();
+    private List<Employee> _employees = new();
     private List<Category> _catalog = new();
 
     protected override async Task OnInitializedAsync()
     {
-        _orgs = await Organizations.GetAllAsync();
-        _users = await Users.GetAllAsync();
-        _memberships = await Memberships.GetAllAsync();
+        _customers = await Customers.GetAllAsync();
+        _employees = await Employees.GetAllAsync();
         _catalog = await Catalog.GetCategoriesWithProductsAsync();
         _loading = false;
     }

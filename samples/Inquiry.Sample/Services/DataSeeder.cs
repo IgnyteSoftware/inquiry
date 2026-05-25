@@ -1,82 +1,86 @@
-using Inquiry.Sample.Models;
-using Inquiry.Sample.Stores;
+using Inquiry.Northwind.Models;
+using Inquiry.Northwind.Stores;
 
 namespace Inquiry.Sample.Services;
 
 /// <summary>
-/// Populates the sample database with a small fixture so the dashboard has something to show.
-/// Invoked once from <c>Program.cs</c> during startup; no-ops if data already exists.
+/// Populates the Northwind database with a small fixture so the dashboard has something to show.
+/// Invoked once from <c>Program.cs</c> during startup; no-ops if customers already exist.
 /// </summary>
 public sealed class DataSeeder
 {
-    private readonly OrganizationStore _organizations;
-    private readonly UserStore _users;
-    private readonly OrganizationToUserStore _memberships;
+    private readonly CustomerStore _customers;
+    private readonly EmployeeStore _employees;
     private readonly CategoryStore _categories;
     private readonly ProductStore _products;
+    private readonly ShipperStore _shippers;
 
     public DataSeeder(
-        OrganizationStore organizations,
-        UserStore users,
-        OrganizationToUserStore memberships,
+        CustomerStore customers,
+        EmployeeStore employees,
         CategoryStore categories,
-        ProductStore products)
+        ProductStore products,
+        ShipperStore shippers)
     {
-        _organizations = organizations;
-        _users = users;
-        _memberships = memberships;
+        _customers = customers;
+        _employees = employees;
         _categories = categories;
         _products = products;
+        _shippers = shippers;
     }
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        if (await HasAnyAsync(_organizations.SelectAllAsync(cancellationToken)).ConfigureAwait(false))
+        if (await HasAnyAsync(_customers.SelectAllAsync(cancellationToken)).ConfigureAwait(false))
         {
             return;
         }
 
-        // Organizations
-        var acme = new Organization { Key = Guid.NewGuid(), Name = "Acme Research", IsActive = true };
-        var globex = new Organization { Key = Guid.NewGuid(), Name = "Globex Industries", IsActive = true };
-        await _organizations.InsertAsync(acme, cancellationToken).ConfigureAwait(false);
-        await _organizations.InsertAsync(globex, cancellationToken).ConfigureAwait(false);
-
-        // Users
-        var alice = new User { Key = Guid.NewGuid(), FirstName = "Alice", LastName = "Anders", Email = "alice@example.com" };
-        var bob = new User { Key = Guid.NewGuid(), FirstName = "Bob", LastName = "Brown", Email = "bob@example.com" };
-        var carol = new User { Key = Guid.NewGuid(), FirstName = "Carol", LastName = "Carter", Email = "carol@example.com" };
-        foreach (var u in new[] { alice, bob, carol })
+        // Customers
+        foreach (var c in new[]
         {
-            await _users.InsertAsync(u, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Memberships
-        foreach (var m in new[]
-        {
-            new OrganizationToUser { Key = Guid.NewGuid(), OrganizationKey = acme.Key,   UserKey = alice.Key, IsActive = true },
-            new OrganizationToUser { Key = Guid.NewGuid(), OrganizationKey = acme.Key,   UserKey = bob.Key,   IsActive = true },
-            new OrganizationToUser { Key = Guid.NewGuid(), OrganizationKey = globex.Key, UserKey = alice.Key, IsActive = true },
-            new OrganizationToUser { Key = Guid.NewGuid(), OrganizationKey = globex.Key, UserKey = carol.Key, IsActive = true },
+            new Customer { CustomerID = "ALFKI", CompanyName = "Alfreds Futterkiste", ContactName = "Maria Anders",   Country = "Germany", City = "Berlin"  },
+            new Customer { CustomerID = "BLAUS", CompanyName = "Blauer See Delikatessen", ContactName = "Hanna Moos", Country = "Germany", City = "Mannheim" },
+            new Customer { CustomerID = "BONAP", CompanyName = "Bon app'", ContactName = "Laurence Lebihan",          Country = "France",  City = "Marseille" },
         })
         {
-            await _memberships.InsertAsync(m, cancellationToken).ConfigureAwait(false);
+            await _customers.InsertAsync(c, cancellationToken).ConfigureAwait(false);
         }
 
-        // Categories
-        var electronics = new Category { Key = Guid.NewGuid(), Name = "Electronics" };
-        var clothing = new Category { Key = Guid.NewGuid(), Name = "Clothing" };
-        await _categories.InsertAsync(electronics, cancellationToken).ConfigureAwait(false);
-        await _categories.InsertAsync(clothing, cancellationToken).ConfigureAwait(false);
+        // Employees
+        foreach (var e in new[]
+        {
+            new Employee { FirstName = "Nancy",    LastName = "Davolio",  Title = "Sales Representative", HireDate = new DateTime(1992, 5, 1)  },
+            new Employee { FirstName = "Andrew",   LastName = "Fuller",   Title = "Vice President, Sales", HireDate = new DateTime(1992, 8, 14) },
+            new Employee { FirstName = "Janet",    LastName = "Leverling", Title = "Sales Representative", HireDate = new DateTime(1992, 4, 1)  },
+        })
+        {
+            await _employees.InsertAsync(e, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Shippers
+        foreach (var s in new[]
+        {
+            new Shipper { CompanyName = "Speedy Express", Phone = "(503) 555-9831" },
+            new Shipper { CompanyName = "United Package", Phone = "(503) 555-3199" },
+        })
+        {
+            await _shippers.InsertAsync(s, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Categories — InsertReturning so we capture the IDENTITY-assigned CategoryID.
+        var beverages  = await _categories.InsertReturningAsync(new Category { CategoryName = "Beverages",   Description = "Soft drinks, coffees, teas, beers, and ales" }, cancellationToken).ConfigureAwait(false);
+        var condiments = await _categories.InsertReturningAsync(new Category { CategoryName = "Condiments",  Description = "Sweet and savory sauces, relishes, spreads, and seasonings" }, cancellationToken).ConfigureAwait(false);
+        var produce    = await _categories.InsertReturningAsync(new Category { CategoryName = "Produce",     Description = "Dried fruit and bean curd" }, cancellationToken).ConfigureAwait(false);
 
         // Products
         foreach (var p in new[]
         {
-            new Product { Key = Guid.NewGuid(), Name = "Laptop",     Price = 999.99m, CategoryKey = electronics.Key },
-            new Product { Key = Guid.NewGuid(), Name = "Phone",      Price = 699.99m, CategoryKey = electronics.Key },
-            new Product { Key = Guid.NewGuid(), Name = "Headphones", Price = 149.99m, CategoryKey = electronics.Key },
-            new Product { Key = Guid.NewGuid(), Name = "T-Shirt",    Price =  29.99m, CategoryKey = clothing.Key },
-            new Product { Key = Guid.NewGuid(), Name = "Jeans",      Price =  59.99m, CategoryKey = clothing.Key },
+            new Product { ProductName = "Chai",                  CategoryID = beverages?.CategoryID,  UnitPrice = 18m,    UnitsInStock = 39 },
+            new Product { ProductName = "Chang",                 CategoryID = beverages?.CategoryID,  UnitPrice = 19m,    UnitsInStock = 17 },
+            new Product { ProductName = "Aniseed Syrup",         CategoryID = condiments?.CategoryID, UnitPrice = 10m,    UnitsInStock = 13 },
+            new Product { ProductName = "Chef Anton's Cajun Seasoning", CategoryID = condiments?.CategoryID, UnitPrice = 22m, UnitsInStock = 53 },
+            new Product { ProductName = "Tofu",                  CategoryID = produce?.CategoryID,    UnitPrice = 23.25m, UnitsInStock = 35 },
         })
         {
             await _products.InsertAsync(p, cancellationToken).ConfigureAwait(false);

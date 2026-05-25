@@ -5,7 +5,7 @@
 
 <p>
     Categories are loaded via <code>[InquirySelectAllEager]</code>. Inquiry runs one query
-    for the parent rows and a second query for every child relation, then stitches the
+    for the parent rows and a second query for each child relation, then stitches the
     results in-memory by foreign key.
 </p>
 
@@ -17,20 +17,22 @@ else
 {
     @foreach (var category in _categories)
     {
+        var products = category.Products ?? new List<Product>();
         <section>
-            <h2>@category.Name <span class="count">@(category.Products?.Count ?? 0)</span></h2>
-            @if (category.Products is { Count: > 0 })
+            <h2>@category.CategoryName <span class="count">@products.Count</span></h2>
+            @if (products.Count > 0)
             {
                 <table>
                     <thead>
-                        <tr><th>Name</th><th>Price</th><th></th></tr>
+                        <tr><th>Name</th><th>Price</th><th>In stock</th><th></th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var p in category.Products)
+                        @foreach (var p in products)
                         {
                             <tr>
-                                <td><InputText @bind-Value="p.Name" class="input" /></td>
-                                <td><InputNumber @bind-Value="p.Price" class="input" /></td>
+                                <td><InputText   @bind-Value="p.ProductName" class="input" /></td>
+                                <td><InputNumber @bind-Value="p.UnitPrice"   class="input" /></td>
+                                <td><InputNumber @bind-Value="p.UnitsInStock" class="input" /></td>
                                 <td class="actions">
                                     <button class="btn" @onclick="() => UpsertAsync(p)">Upsert</button>
                                     <button class="btn danger" @onclick="() => DeleteAsync(p)">Delete</button>
@@ -69,7 +71,7 @@ else
 
     private async Task DeleteAsync(Product product)
     {
-        await CatalogSvc.DeleteProductAsync(product.Key);
+        await CatalogSvc.DeleteProductAsync(product.ProductID);
         await RefreshAsync();
     }
 }

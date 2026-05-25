@@ -1,5 +1,8 @@
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
+using Inquiry.Northwind;
+using Inquiry.Northwind.Models;
+using Inquiry.Northwind.Stores;
 using Inquiry.Pipeline;
 using Inquiry.Sql;
 using Inquiry.Sqlite.DependencyInjection;
@@ -26,40 +29,36 @@ public sealed class SqliteProviderIntegrationTests
     [Fact]
     public async Task GeneratedStoreExecutesCrudAgainstSqlite()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.Organization);
-        var store = harness.GetRequiredService<OrganizationStore>();
-        var key = Guid.NewGuid();
-        var organization = new Organization
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl);
+        var store = harness.GetRequiredService<CustomerStore>();
+        var customer = new Customer
         {
-            Key = key,
-            Name = "Acme",
-            IsActive = true,
+            CustomerID = "ACME1",
+            CompanyName = "Acme Research",
+            Country = "USA",
         };
 
-        var inserted = await store.InsertAsync(organization);
-        var selected = await store.SelectByKeyAsync(key);
-        var activeOrganizations = await store.SelectByIsActiveAsync(true).ToListAsync();
-        var customQueriedOrganizations = await store.SelectWithInquiryAsync().ToListAsync();
+        var inserted = await store.InsertAsync(customer);
+        var selected = await store.SelectByKeyAsync("ACME1");
+        var usCustomers = await store.SelectByCountryAsync("USA").ToListAsync();
 
-        organization.Name = "Acme Updated";
-        organization.IsActive = false;
-        var updated = await store.UpdateAsync(organization);
-        var selectedAfterUpdate = await store.SelectByKeyAsync(key);
+        customer.CompanyName = "Acme Updated";
+        customer.Country = "Canada";
+        var updated = await store.UpdateAsync(customer);
+        var selectedAfterUpdate = await store.SelectByKeyAsync("ACME1");
 
-        var deleted = await store.DeleteByKeyAsync(key);
-        var selectedAfterDelete = await store.SelectByKeyAsync(key);
+        var deleted = await store.DeleteByKeyAsync("ACME1");
+        var selectedAfterDelete = await store.SelectByKeyAsync("ACME1");
 
         Assert.Equal(1, inserted);
         Assert.NotNull(selected);
-        Assert.Equal("Acme", selected.Name);
-        Assert.True(selected.IsActive);
-        Assert.Single(activeOrganizations);
-        Assert.Single(customQueriedOrganizations);
-        Assert.Equal("Acme", customQueriedOrganizations[0].Name);
+        Assert.Equal("Acme Research", selected.CompanyName);
+        Assert.Equal("USA", selected.Country);
+        Assert.Single(usCustomers);
         Assert.True(updated);
         Assert.NotNull(selectedAfterUpdate);
-        Assert.Equal("Acme Updated", selectedAfterUpdate.Name);
-        Assert.False(selectedAfterUpdate.IsActive);
+        Assert.Equal("Acme Updated", selectedAfterUpdate.CompanyName);
+        Assert.Equal("Canada", selectedAfterUpdate.Country);
         Assert.True(deleted);
         Assert.Null(selectedAfterDelete);
     }

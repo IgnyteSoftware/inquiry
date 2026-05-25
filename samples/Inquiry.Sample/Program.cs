@@ -1,7 +1,8 @@
 using Inquiry.DependencyInjection;
-using Inquiry.Sample.Data;
+using Inquiry.Northwind;
 using Inquiry.Sample.Services;
-using Inquiry.SqlServer.DependencyInjection;
+using Inquiry.Sqlite.DependencyInjection;
+using Microsoft.Data.Sqlite;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,18 +12,24 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("Missing connection string 'InquirySample'. Add it to appsettings.json under ConnectionStrings.");
 }
 
-await SampleDatabase.CreateSchemaAsync(connectionString);
+// Create the Northwind schema on first run. Idempotent — the DDL uses CREATE TABLE IF NOT EXISTS.
+await using (var connection = new SqliteConnection(connectionString))
+{
+    await connection.OpenAsync();
+    await using var command = connection.CreateCommand();
+    command.CommandText = NorthwindSchema.SqliteDdl;
+    await command.ExecuteNonQueryAsync();
+}
 
 builder.Services
     .AddInquiry()
-    .AddInquirySqlServer(connectionString);
+    .AddInquirySqlite(connectionString);
 
 // One service per domain. Pages depend on these, not on stores directly.
-builder.Services.AddScoped<OrganizationService>();
-builder.Services.AddScoped<UserService>();
-builder.Services.AddScoped<MembershipService>();
+builder.Services.AddScoped<CustomerService>();
+builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<CatalogService>();
-builder.Services.AddScoped<TransactionDemoService>();
+builder.Services.AddScoped<OrderTransactionService>();
 builder.Services.AddScoped<DataSeeder>();
 
 // Blazor Server pipeline.

@@ -1,12 +1,11 @@
-using Inquiry.Sample.Models;
-using Inquiry.Sample.Stores;
+using Inquiry.Northwind.Models;
+using Inquiry.Northwind.Stores;
 
 namespace Inquiry.Sample.Services;
 
 /// <summary>
 /// Catalog operations spanning <see cref="Category"/> and <see cref="Product"/>.
-/// Demonstrates Inquiry's eager-loading via <c>[InquirySelectAllEager]</c> and
-/// <c>[InquirySelectOneByKeyEager]</c>.
+/// Uses Inquiry's eager-loading attributes via <see cref="CategoryStore.SelectAllWithProductsAsync"/>.
 /// </summary>
 public sealed class CatalogService
 {
@@ -29,15 +28,12 @@ public sealed class CatalogService
         return list;
     }
 
-    public Task<Category?> GetCategoryWithProductsAsync(Guid key, CancellationToken cancellationToken = default)
-        => _categories.SelectByKeyWithProductsAsync(key, cancellationToken);
-
-    public Task<int> CreateCategoryAsync(Category category, CancellationToken cancellationToken = default)
-        => _categories.InsertAsync(category, cancellationToken);
+    public Task<Category?> CreateCategoryAsync(Category category, CancellationToken cancellationToken = default)
+        => _categories.InsertReturningAsync(category, cancellationToken);
 
     public Task<int> UpsertProductAsync(Product product, CancellationToken cancellationToken = default)
         => _products.UpsertAsync(product, cancellationToken);
 
-    public Task<bool> DeleteProductAsync(Guid key, CancellationToken cancellationToken = default)
-        => _products.DeleteByKeyAsync(key, cancellationToken);
+    public Task<bool> DeleteProductAsync(int? productID, CancellationToken cancellationToken = default)
+        => _products.DeleteByKeyAsync(productID, cancellationToken);
 }

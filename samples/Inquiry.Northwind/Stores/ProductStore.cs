@@ -1,6 +1,7 @@
+using Inquiry.Northwind.Models;
 using Inquiry.Stores;
 
-namespace Inquiry.Sqlite.Tests.Fixtures;
+namespace Inquiry.Northwind.Stores;
 
 public abstract partial class ProductStore : InquiryStore<Product>
 {
@@ -10,16 +11,16 @@ public abstract partial class ProductStore : InquiryStore<Product>
     public abstract IAsyncEnumerable<Product> SelectAllAsync(CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
-    public abstract Task<Product?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
-
-    [InquirySelectOneByKeyEager]
-    public abstract Task<Product?> SelectByKeyWithCategoryAsync(Guid key, CancellationToken cancellationToken = default);
+    public abstract Task<Product?> SelectByKeyAsync(int? productID, CancellationToken cancellationToken = default);
 
     [InquirySelectAllEager]
     public abstract IAsyncEnumerable<Product> SelectAllWithCategoryAsync(CancellationToken cancellationToken = default);
 
-    [InquirySelectAllByField("CategoryKey")]
-    public abstract IAsyncEnumerable<Product> SelectByCategoryAsync(Guid categoryKey, CancellationToken cancellationToken = default);
+    [InquirySelectOneByKeyEager]
+    public abstract Task<Product?> SelectByKeyWithCategoryAsync(int? productID, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByField("CategoryID")]
+    public abstract IAsyncEnumerable<Product> SelectByCategoryAsync(int? categoryID, CancellationToken cancellationToken = default);
 
     [InquiryInsert]
     public abstract Task<int> InsertAsync(Product product, CancellationToken cancellationToken = default);
@@ -40,5 +41,5 @@ public abstract partial class ProductStore : InquiryStore<Product>
     public abstract Task<Product?> UpsertReturningAsync(Product product, CancellationToken cancellationToken = default);
 
     [InquiryDeleteOneByKey]
-    public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
+    public abstract Task<bool> DeleteByKeyAsync(int? productID, CancellationToken cancellationToken = default);
 }
