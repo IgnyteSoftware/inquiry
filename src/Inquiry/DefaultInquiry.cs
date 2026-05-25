@@ -13,7 +13,7 @@ namespace Inquiry;
 /// <summary>
 /// Default implementation of the high-level Inquiry facade.
 /// </summary>
-internal sealed class DefaultInquiry : IInquiry
+public sealed class DefaultInquiry : IInquiry
 {
     private readonly IInquiryRequestPipeline _requestPipeline;
     private readonly IInquiryConnectionFactory _connectionFactory;
