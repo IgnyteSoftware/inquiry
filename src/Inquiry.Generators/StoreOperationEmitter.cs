@@ -427,13 +427,26 @@ internal static class StoreOperationEmitter
             if (relation.IsCollection)
             {
                 // One-to-many: load all children, group by their FK value.
+                // If the child FK is nullable, skip rows where the FK is null — those
+                // children logically belong to no parent and must not bucket together.
+                var childFkColumn = relationChildEntities[relation.PropertyName].Columns.FirstOrDefault(c => c.PropertyName == relation.ForeignKeyProperty);
+                var childFkNullable = childFkColumn?.Type.IsNullable ?? false;
+
                 source.AppendLine($"        var _allChildren_{relation.PropertyName} = new global::System.Collections.Generic.List<{childType}>();");
                 source.AppendLine($"        await foreach (var _c in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
                 source.AppendLine($"            _allChildren_{relation.PropertyName}.Add(_c);");
                 source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, global::System.Collections.Generic.List<{childType}>>();");
                 source.AppendLine($"        foreach (var _c in _allChildren_{relation.PropertyName})");
                 source.AppendLine("        {");
-                source.AppendLine($"            var _fkVal = (object)_c.{relation.ForeignKeyProperty};");
+                if (childFkNullable)
+                {
+                    source.AppendLine($"            if (_c.{relation.ForeignKeyProperty} is null) continue;");
+                    source.AppendLine($"            var _fkVal = (object)_c.{relation.ForeignKeyProperty}!;");
+                }
+                else
+                {
+                    source.AppendLine($"            var _fkVal = (object)_c.{relation.ForeignKeyProperty};");
+                }
                 source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue(_fkVal, out var _grp))");
                 source.AppendLine("            {");
                 source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
@@ -445,10 +458,26 @@ internal static class StoreOperationEmitter
             else
             {
                 // Many-to-one: load all parents into a dict keyed by parent key.
-                var relatedKeyProperty = relationChildEntities[relation.PropertyName].Key.PropertyName;
+                // If the parent's key column is nullable (e.g. an IDENTITY surfaced as int?),
+                // skip rows with a null key — they can never satisfy any FK reference.
+                var childEntity = relationChildEntities[relation.PropertyName];
+                var relatedKeyProperty = childEntity.Key.PropertyName;
+                var childKeyNullable = childEntity.Key.Type.IsNullable;
+
                 source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, {childType}>();");
-                source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
-                source.AppendLine($"            _parents_{relation.PropertyName}[(object)_p.{relatedKeyProperty}] = _p;");
+                if (childKeyNullable)
+                {
+                    source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
+                    source.AppendLine("        {");
+                    source.AppendLine($"            if (_p.{relatedKeyProperty} is null) continue;");
+                    source.AppendLine($"            _parents_{relation.PropertyName}[(object)_p.{relatedKeyProperty}!] = _p;");
+                    source.AppendLine("        }");
+                }
+                else
+                {
+                    source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
+                    source.AppendLine($"            _parents_{relation.PropertyName}[(object)_p.{relatedKeyProperty}] = _p;");
+                }
             }
         }
 
@@ -459,11 +488,34 @@ internal static class StoreOperationEmitter
             var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (relation.IsCollection)
             {
-                source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue((object)_entity.{entity.Key.PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+                // Short-circuit when the parent's own key is null — its children list
+                // is empty by definition (no FK row could point at a null parent key).
+                if (entity.Key.Type.IsNullable)
+                {
+                    source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{entity.Key.PropertyName} is null");
+                    source.AppendLine($"                ? new global::System.Collections.Generic.List<{childType}>()");
+                    source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue((object)_entity.{entity.Key.PropertyName}!, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
+                }
+                else
+                {
+                    source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue((object)_entity.{entity.Key.PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+                }
             }
             else
             {
-                source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue((object)_entity.{relation.ForeignKeyProperty}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
+                // Short-circuit when this entity's FK is null — orphan, no parent.
+                var parentFkColumn = entity.Columns.FirstOrDefault(c => c.PropertyName == relation.ForeignKeyProperty);
+                var parentFkNullable = parentFkColumn?.Type.IsNullable ?? false;
+                if (parentFkNullable)
+                {
+                    source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{relation.ForeignKeyProperty} is null");
+                    source.AppendLine($"                ? null");
+                    source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue((object)_entity.{relation.ForeignKeyProperty}!, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
+                }
+                else
+                {
+                    source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue((object)_entity.{relation.ForeignKeyProperty}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
+                }
             }
         }
         source.AppendLine("        }");

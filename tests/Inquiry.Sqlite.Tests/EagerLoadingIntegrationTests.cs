@@ -1,181 +1,268 @@
+using Inquiry.Northwind;
+using Inquiry.Northwind.Models;
+using Inquiry.Northwind.Stores;
 using Inquiry.Sqlite.Tests.Fixtures;
 
 namespace Inquiry.Sqlite.Tests;
 
+/// <summary>
+/// Eager loading is exercised against two relationships:
+/// <list type="bullet">
+///   <item><see cref="Region"/>↔<see cref="Territory"/> — non-nullable PK and FK on both sides.</item>
+///   <item><see cref="Category"/>↔<see cref="Product"/> — nullable IDENTITY PK and nullable FK,
+///         exercising the null-skip / null-short-circuit paths the generator emits.</item>
+/// </list>
+/// </summary>
 public sealed class EagerLoadingIntegrationTests
 {
     [Fact]
     public async Task SelectOneByKeyEagerLoadsChildCollection()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
-        var catStore = harness.GetRequiredService<CategoryStore>();
-        var prodStore = harness.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Eager");
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        var category = new Category { Key = Guid.NewGuid(), Name = "Electronics" };
-        await catStore.InsertAsync(category);
+        var region = new Region { RegionID = 1, RegionDescription = "Eastern" };
+        await regionStore.InsertAsync(region);
 
-        var products = new[]
+        foreach (var t in new[]
         {
-            new Product { Key = Guid.NewGuid(), Name = "Phone", Price = 699m, CategoryKey = category.Key },
-            new Product { Key = Guid.NewGuid(), Name = "Tablet", Price = 499m, CategoryKey = category.Key },
-        };
-        foreach (var p in products) await prodStore.InsertAsync(p);
+            new Territory { TerritoryID = "01581", TerritoryDescription = "Westboro", RegionID = 1 },
+            new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford",  RegionID = 1 },
+        })
+        {
+            await territoryStore.InsertAsync(t);
+        }
 
-        var loaded = await catStore.SelectByKeyWithProductsAsync(category.Key);
+        var loaded = await regionStore.SelectByKeyWithTerritoriesAsync(1);
 
         Assert.NotNull(loaded);
-        Assert.Equal("Electronics", loaded.Name);
-        Assert.NotNull(loaded.Products);
-        Assert.Equal(2, loaded.Products.Count);
-        Assert.Contains(loaded.Products, p => p.Name == "Phone");
-        Assert.Contains(loaded.Products, p => p.Name == "Tablet");
+        Assert.Equal("Eastern", loaded.RegionDescription);
+        Assert.NotNull(loaded.Territories);
+        Assert.Equal(2, loaded.Territories!.Count);
+        Assert.Contains(loaded.Territories, t => t.TerritoryDescription == "Westboro");
+        Assert.Contains(loaded.Territories, t => t.TerritoryDescription == "Bedford");
     }
 
     [Fact]
     public async Task SelectOneByKeyEagerReturnsNullForMissingEntity()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
-        var catStore = harness.GetRequiredService<CategoryStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Eager");
+        var regionStore = harness.GetRequiredService<RegionStore>();
 
-        var loaded = await catStore.SelectByKeyWithProductsAsync(Guid.NewGuid());
+        var loaded = await regionStore.SelectByKeyWithTerritoriesAsync(99);
         Assert.Null(loaded);
     }
 
     [Fact]
     public async Task SelectOneByKeyEagerReturnsEmptyCollectionWhenNoChildren()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
-        var catStore = harness.GetRequiredService<CategoryStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Eager");
+        var regionStore = harness.GetRequiredService<RegionStore>();
 
-        var category = new Category { Key = Guid.NewGuid(), Name = "Empty Category" };
-        await catStore.InsertAsync(category);
+        await regionStore.InsertAsync(new Region { RegionID = 5, RegionDescription = "Empty" });
 
-        var loaded = await catStore.SelectByKeyWithProductsAsync(category.Key);
+        var loaded = await regionStore.SelectByKeyWithTerritoriesAsync(5);
 
         Assert.NotNull(loaded);
-        Assert.NotNull(loaded.Products);
-        Assert.Empty(loaded.Products);
+        Assert.NotNull(loaded.Territories);
+        Assert.Empty(loaded.Territories!);
     }
 
     [Fact]
     public async Task SelectAllEagerPopulatesChildrenForAllParents()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
-        var catStore = harness.GetRequiredService<CategoryStore>();
-        var prodStore = harness.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Eager");
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        var cat1 = new Category { Key = Guid.NewGuid(), Name = "Cat A" };
-        var cat2 = new Category { Key = Guid.NewGuid(), Name = "Cat B" };
-        await catStore.InsertAsync(cat1);
-        await catStore.InsertAsync(cat2);
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await regionStore.InsertAsync(new Region { RegionID = 2, RegionDescription = "Western" });
 
-        foreach (var p in new[]
+        foreach (var t in new[]
         {
-            new Product { Key = Guid.NewGuid(), Name = "P1", Price = 1m, CategoryKey = cat1.Key },
-            new Product { Key = Guid.NewGuid(), Name = "P2", Price = 2m, CategoryKey = cat1.Key },
-            new Product { Key = Guid.NewGuid(), Name = "P3", Price = 3m, CategoryKey = cat2.Key },
+            new Territory { TerritoryID = "T1", TerritoryDescription = "E1", RegionID = 1 },
+            new Territory { TerritoryID = "T2", TerritoryDescription = "E2", RegionID = 1 },
+            new Territory { TerritoryID = "T3", TerritoryDescription = "W1", RegionID = 2 },
         })
         {
-            await prodStore.InsertAsync(p);
+            await territoryStore.InsertAsync(t);
         }
 
-        var all = await catStore.SelectAllWithProductsAsync().ToListAsync();
+        var all = await regionStore.SelectAllWithTerritoriesAsync().ToListAsync();
 
         Assert.Equal(2, all.Count);
-        var a = all.Single(c => c.Name == "Cat A");
-        var b = all.Single(c => c.Name == "Cat B");
-        Assert.Equal(2, a.Products?.Count);
-        Assert.Equal(1, b.Products?.Count);
+        var eastern = all.Single(r => r.RegionDescription == "Eastern");
+        var western = all.Single(r => r.RegionDescription == "Western");
+        Assert.Equal(2, eastern.Territories?.Count);
+        Assert.Equal(1, western.Territories?.Count);
     }
 
     [Fact]
     public async Task SelectOneByKeyEagerLoadsParentReference()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
-        var catStore = harness.GetRequiredService<CategoryStore>();
-        var prodStore = harness.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Eager");
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        var category = new Category { Key = Guid.NewGuid(), Name = "Electronics" };
-        await catStore.InsertAsync(category);
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
 
-        var product = new Product { Key = Guid.NewGuid(), Name = "Phone", Price = 699m, CategoryKey = category.Key };
-        await prodStore.InsertAsync(product);
-
-        var loaded = await prodStore.SelectByKeyWithCategoryAsync(product.Key);
+        var loaded = await territoryStore.SelectByKeyWithRegionAsync("T1");
 
         Assert.NotNull(loaded);
-        Assert.Equal("Phone", loaded.Name);
-        Assert.NotNull(loaded.Category);
-        Assert.Equal(category.Key, loaded.Category!.Key);
-        Assert.Equal("Electronics", loaded.Category.Name);
+        Assert.Equal("Boston", loaded.TerritoryDescription);
+        Assert.NotNull(loaded.Region);
+        Assert.Equal(1, loaded.Region!.RegionID);
+        Assert.Equal("Eastern", loaded.Region.RegionDescription);
     }
 
     [Fact]
     public async Task SelectAllEagerPopulatesParentForAllChildren()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
-        var catStore = harness.GetRequiredService<CategoryStore>();
-        var prodStore = harness.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Eager");
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        var cat1 = new Category { Key = Guid.NewGuid(), Name = "Cat A" };
-        var cat2 = new Category { Key = Guid.NewGuid(), Name = "Cat B" };
-        await catStore.InsertAsync(cat1);
-        await catStore.InsertAsync(cat2);
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await regionStore.InsertAsync(new Region { RegionID = 2, RegionDescription = "Western" });
 
-        foreach (var p in new[]
+        foreach (var t in new[]
         {
-            new Product { Key = Guid.NewGuid(), Name = "P1", Price = 1m, CategoryKey = cat1.Key },
-            new Product { Key = Guid.NewGuid(), Name = "P2", Price = 2m, CategoryKey = cat1.Key },
-            new Product { Key = Guid.NewGuid(), Name = "P3", Price = 3m, CategoryKey = cat2.Key },
+            new Territory { TerritoryID = "T1", TerritoryDescription = "E1", RegionID = 1 },
+            new Territory { TerritoryID = "T2", TerritoryDescription = "E2", RegionID = 1 },
+            new Territory { TerritoryID = "T3", TerritoryDescription = "W1", RegionID = 2 },
         })
         {
-            await prodStore.InsertAsync(p);
+            await territoryStore.InsertAsync(t);
         }
 
-        var all = await prodStore.SelectAllWithCategoryAsync().ToListAsync();
+        var all = await territoryStore.SelectAllWithRegionAsync().ToListAsync();
 
         Assert.Equal(3, all.Count);
-        Assert.All(all, p => Assert.NotNull(p.Category));
-        Assert.Equal("Cat A", all.Single(p => p.Name == "P1").Category!.Name);
-        Assert.Equal("Cat A", all.Single(p => p.Name == "P2").Category!.Name);
-        Assert.Equal("Cat B", all.Single(p => p.Name == "P3").Category!.Name);
+        Assert.All(all, t => Assert.NotNull(t.Region));
+        Assert.Equal("Eastern", all.Single(t => t.TerritoryDescription == "E1").Region!.RegionDescription);
+        Assert.Equal("Eastern", all.Single(t => t.TerritoryDescription == "E2").Region!.RegionDescription);
+        Assert.Equal("Western", all.Single(t => t.TerritoryDescription == "W1").Region!.RegionDescription);
     }
 
     [Fact]
     public async Task SelectByKeyEagerLeavesParentNullForOrphanForeignKey()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
-        var prodStore = harness.GetRequiredService<ProductStore>();
+        // FK off so the orphan insert is allowed; otherwise SQLite rejects it.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Eager", foreignKeys: false);
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        // Insert a product whose CategoryKey points at a category that doesn't exist.
-        var product = new Product { Key = Guid.NewGuid(), Name = "Orphan", Price = 1m, CategoryKey = Guid.NewGuid() };
-        await prodStore.InsertAsync(product);
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T999", TerritoryDescription = "Orphan", RegionID = 99 });
 
-        var loaded = await prodStore.SelectByKeyWithCategoryAsync(product.Key);
+        var loaded = await territoryStore.SelectByKeyWithRegionAsync("T999");
 
         Assert.NotNull(loaded);
-        Assert.Null(loaded.Category);
+        Assert.Null(loaded.Region);
     }
 
     [Fact]
     public async Task SelectAllEagerLeavesParentNullForOrphanForeignKey()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.CategoryAndProduct, "Eager");
-        var catStore = harness.GetRequiredService<CategoryStore>();
-        var prodStore = harness.GetRequiredService<ProductStore>();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Eager", foreignKeys: false);
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        var category = new Category { Key = Guid.NewGuid(), Name = "Existing" };
-        await catStore.InsertAsync(category);
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Existing" });
 
-        var matched = new Product { Key = Guid.NewGuid(), Name = "Matched", Price = 1m, CategoryKey = category.Key };
-        var orphan = new Product { Key = Guid.NewGuid(), Name = "Orphan", Price = 2m, CategoryKey = Guid.NewGuid() };
-        await prodStore.InsertAsync(matched);
-        await prodStore.InsertAsync(orphan);
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1",   TerritoryDescription = "Matched", RegionID = 1 });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T999", TerritoryDescription = "Orphan",  RegionID = 99 });
 
-        var all = await prodStore.SelectAllWithCategoryAsync().ToListAsync();
+        var all = await territoryStore.SelectAllWithRegionAsync().ToListAsync();
 
         Assert.Equal(2, all.Count);
-        Assert.Equal("Existing", all.Single(p => p.Name == "Matched").Category?.Name);
-        Assert.Null(all.Single(p => p.Name == "Orphan").Category);
+        Assert.Equal("Existing", all.Single(t => t.TerritoryDescription == "Matched").Region?.RegionDescription);
+        Assert.Null(all.Single(t => t.TerritoryDescription == "Orphan").Region);
+    }
+
+    // ---- Nullable-key cases: Category (int? PK) ↔ Product (int? FK) ----
+
+    [Fact]
+    public async Task SelectOneByKeyEagerLoadsChildCollectionWithNullableKeys()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerNullable");
+        var categoryStore = harness.GetRequiredService<CategoryStore>();
+        var productStore = harness.GetRequiredService<ProductStore>();
+
+        var beverages = await categoryStore.InsertReturningAsync(new Category { CategoryName = "Beverages" });
+        Assert.NotNull(beverages);
+
+        await productStore.InsertAsync(new Product { ProductName = "Chai",  CategoryID = beverages!.CategoryID });
+        await productStore.InsertAsync(new Product { ProductName = "Chang", CategoryID = beverages.CategoryID });
+
+        var loaded = await categoryStore.SelectByKeyWithProductsAsync(beverages.CategoryID);
+
+        Assert.NotNull(loaded);
+        Assert.NotNull(loaded!.Products);
+        Assert.Equal(2, loaded.Products!.Count);
+        Assert.Contains(loaded.Products, p => p.ProductName == "Chai");
+        Assert.Contains(loaded.Products, p => p.ProductName == "Chang");
+    }
+
+    [Fact]
+    public async Task SelectAllEagerSkipsChildrenWithNullForeignKey()
+    {
+        // FK off so the orphan product (CategoryID = null) is allowed.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerNullable", foreignKeys: false);
+        var categoryStore = harness.GetRequiredService<CategoryStore>();
+        var productStore = harness.GetRequiredService<ProductStore>();
+
+        var beverages = await categoryStore.InsertReturningAsync(new Category { CategoryName = "Beverages" });
+        Assert.NotNull(beverages);
+
+        await productStore.InsertAsync(new Product { ProductName = "Chai",         CategoryID = beverages!.CategoryID });
+        await productStore.InsertAsync(new Product { ProductName = "Uncategorized", CategoryID = null });
+
+        var all = await categoryStore.SelectAllWithProductsAsync().ToListAsync();
+
+        var loaded = Assert.Single(all);
+        Assert.NotNull(loaded.Products);
+        var product = Assert.Single(loaded.Products!);
+        Assert.Equal("Chai", product.ProductName);
+    }
+
+    [Fact]
+    public async Task SelectAllEagerPopulatesParentForChildWithNullableForeignKey()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerNullable");
+        var categoryStore = harness.GetRequiredService<CategoryStore>();
+        var productStore = harness.GetRequiredService<ProductStore>();
+
+        var beverages = await categoryStore.InsertReturningAsync(new Category { CategoryName = "Beverages" });
+        Assert.NotNull(beverages);
+
+        await productStore.InsertAsync(new Product { ProductName = "Chai", CategoryID = beverages!.CategoryID });
+
+        var all = await productStore.SelectAllWithCategoryAsync().ToListAsync();
+
+        var loaded = Assert.Single(all);
+        Assert.NotNull(loaded.Category);
+        Assert.Equal("Beverages", loaded.Category!.CategoryName);
+    }
+
+    [Fact]
+    public async Task SelectAllEagerLeavesParentNullWhenForeignKeyIsNull()
+    {
+        // FK off so the null-FK product is allowed.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerNullable", foreignKeys: false);
+        var categoryStore = harness.GetRequiredService<CategoryStore>();
+        var productStore = harness.GetRequiredService<ProductStore>();
+
+        var beverages = await categoryStore.InsertReturningAsync(new Category { CategoryName = "Beverages" });
+        Assert.NotNull(beverages);
+
+        await productStore.InsertAsync(new Product { ProductName = "Chai",         CategoryID = beverages!.CategoryID });
+        await productStore.InsertAsync(new Product { ProductName = "Uncategorized", CategoryID = null });
+
+        var all = await productStore.SelectAllWithCategoryAsync().ToListAsync();
+
+        Assert.Equal(2, all.Count);
+        Assert.Equal("Beverages", all.Single(p => p.ProductName == "Chai").Category?.CategoryName);
+        Assert.Null(all.Single(p => p.ProductName == "Uncategorized").Category);
     }
 }

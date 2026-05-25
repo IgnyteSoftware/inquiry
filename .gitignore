@@ -427,3 +427,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Sample app SQLite database (created at runtime by Inquiry.Sample)
+samples/Inquiry.Sample/northwind.db
+samples/Inquiry.Sample/northwind.db-*

@@ -1,24 +1,38 @@
 @page "/transaction-demo"
-@inject TransactionDemoService Demo
+@inject OrderTransactionService Demo
+@inject CustomerService CustomerSvc
 
 <h1>Transaction demo</h1>
 
 <p>
-    Click the button to insert a new category and three products inside a single
-    <code>IInquiryTransaction</code>. Either every row commits or nothing changes.
+    Click the button to insert a new <code>Orders</code> row and two
+    <code>Order Details</code> rows inside a single <code>IInquiryTransaction</code>.
+    The order header goes through the generated <code>OrderStore</code> with
+    a RETURNING clause to surface the IDENTITY-assigned <code>OrderID</code>;
+    the detail rows use raw SQL because <code>Order Details</code> has a composite
+    primary key (see <code>Inquiry.Northwind/LIMITATIONS.md</code>).
 </p>
 
-<button class="btn primary" @onclick="RunAsync" disabled="@_running">
-    @(_running ? "Running…" : "Run transaction")
-</button>
+<div class="form-inline">
+    <label for="customer">Customer</label>
+    <select id="customer" class="input" @bind="_customerID">
+        @foreach (var c in _customers)
+        {
+            <option value="@c.CustomerID">@c.CustomerID — @c.CompanyName</option>
+        }
+    </select>
+    <button class="btn primary" @onclick="RunAsync" disabled="@(_running || _customers.Count == 0)">
+        @(_running ? "Running…" : "Run transaction")
+    </button>
+</div>
 
 @if (_lastResult is not null)
 {
     <div class="result-card">
         <p><strong>Committed.</strong></p>
         <ul>
-            <li>Category key: <code>@_lastResult.CategoryKey</code></li>
-            <li>Products inserted: @_lastResult.ProductsInserted</li>
+            <li>Order ID: <code>@_lastResult.OrderID</code></li>
+            <li>Detail lines inserted: @_lastResult.ProductLines</li>
         </ul>
     </div>
 }
@@ -32,16 +46,25 @@
 
 @code {
     private bool _running;
-    private TransactionDemoService.Result? _lastResult;
+    private OrderTransactionService.Result? _lastResult;
     private string? _error;
+    private string _customerID = string.Empty;
+    private List<Customer> _customers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await CustomerSvc.GetAllAsync();
+        _customerID = _customers.FirstOrDefault()?.CustomerID ?? string.Empty;
+    }
 
     private async Task RunAsync()
     {
+        if (string.IsNullOrWhiteSpace(_customerID)) return;
         _running = true;
         _error = null;
         try
         {
-            _lastResult = await Demo.RunAsync();
+            _lastResult = await Demo.RunAsync(_customerID);
         }
         catch (Exception ex)
         {

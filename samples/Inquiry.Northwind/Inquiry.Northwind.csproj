@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <Description>Inquiry-mapped classic Northwind schema. Shared by the Inquiry sample app and the integration tests so both work against the same realistic dataset.</Description>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+  </ItemGroup>
+</Project>

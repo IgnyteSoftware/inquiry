@@ -31,7 +31,14 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
     /// <summary>
     /// Spins up the harness and runs the supplied schema DDL on the keeper connection.
     /// </summary>
-    public static async Task<SqliteTestHarness> CreateAsync(string schemaDdl, string? namePrefix = null)
+    /// <param name="schemaDdl">The DDL to execute against the new database.</param>
+    /// <param name="namePrefix">Optional prefix for the in-memory database name.</param>
+    /// <param name="foreignKeys">
+    /// When false, sets <c>Foreign Keys=False</c> on the connection string so SQLite skips
+    /// FK enforcement. Use for the rare tests that intentionally insert orphan-FK rows.
+    /// Defaults to true (FK enforcement on), matching Microsoft.Data.Sqlite's default.
+    /// </param>
+    public static async Task<SqliteTestHarness> CreateAsync(string schemaDdl, string? namePrefix = null, bool foreignKeys = true)
     {
         var prefix = namePrefix ?? "Inquiry";
         var connectionString = new SqliteConnectionStringBuilder
@@ -39,6 +46,7 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
             DataSource = prefix + "_" + Guid.NewGuid().ToString("N"),
             Mode = SqliteOpenMode.Memory,
             Cache = SqliteCacheMode.Shared,
+            ForeignKeys = foreignKeys,
         }.ToString();
 
         var keeper = new SqliteConnection(connectionString);
