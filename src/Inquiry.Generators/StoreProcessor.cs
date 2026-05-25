@@ -63,9 +63,12 @@ internal static class StoreProcessor
         // Determine which statements this store actually needs.
         var needsSelectAll = methods.Any(m => m.Operation is StoreOperation.SelectAll or StoreOperation.SelectAllEager);
         var needsSelectByKey = methods.Any(m => m.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
-        var needsInsert = methods.Any(m => m.Operation == StoreOperation.Insert);
-        var needsUpdate = methods.Any(m => m.Operation == StoreOperation.Update);
-        var needsUpsert = methods.Any(m => m.Operation == StoreOperation.Upsert);
+        var needsInsert = methods.Any(m => m.Operation == StoreOperation.Insert && !m.ReturnsEntity);
+        var needsUpdate = methods.Any(m => m.Operation == StoreOperation.Update && !m.ReturnsEntity);
+        var needsUpsert = methods.Any(m => m.Operation == StoreOperation.Upsert && !m.ReturnsEntity);
+        var needsInsertReturning = methods.Any(m => m.Operation == StoreOperation.Insert && m.ReturnsEntity);
+        var needsUpdateReturning = methods.Any(m => m.Operation == StoreOperation.Update && m.ReturnsEntity);
+        var needsUpsertReturning = methods.Any(m => m.Operation == StoreOperation.Upsert && m.ReturnsEntity);
         var needsDelete = methods.Any(m => m.Operation == StoreOperation.DeleteOneByKey);
 
         var byFieldOps = methods
@@ -125,6 +128,9 @@ internal static class StoreProcessor
         if (needsInsert) source.AppendLine("    private readonly string _sqlInsert;");
         if (needsUpdate) source.AppendLine("    private readonly string _sqlUpdate;");
         if (needsUpsert) source.AppendLine("    private readonly string _sqlUpsert;");
+        if (needsInsertReturning) source.AppendLine("    private readonly string _sqlInsertReturning;");
+        if (needsUpdateReturning) source.AppendLine("    private readonly string _sqlUpdateReturning;");
+        if (needsUpsertReturning) source.AppendLine("    private readonly string _sqlUpsertReturning;");
         if (needsDelete) source.AppendLine("    private readonly string _sqlDeleteByKey;");
 
         foreach (var col in byFieldOps)
@@ -161,6 +167,9 @@ internal static class StoreProcessor
         if (needsInsert) source.AppendLine("        _sqlInsert = sqlDialect.BuildInsertSql(_ctx);");
         if (needsUpdate) source.AppendLine("        _sqlUpdate = sqlDialect.BuildUpdateSql(_ctx);");
         if (needsUpsert) source.AppendLine("        _sqlUpsert = sqlDialect.BuildUpsertSql(_ctx);");
+        if (needsInsertReturning) source.AppendLine("        _sqlInsertReturning = sqlDialect.BuildInsertReturningSql(_ctx);");
+        if (needsUpdateReturning) source.AppendLine("        _sqlUpdateReturning = sqlDialect.BuildUpdateReturningSql(_ctx);");
+        if (needsUpsertReturning) source.AppendLine("        _sqlUpsertReturning = sqlDialect.BuildUpsertReturningSql(_ctx);");
         if (needsDelete) source.AppendLine("        _sqlDeleteByKey = sqlDialect.BuildDeleteByKeySql(_ctx);");
 
         foreach (var col in byFieldOps)

@@ -139,4 +139,12 @@ public sealed class AttributeTests
     {
         Assert.Throws<ArgumentException>(() => new InquirySelectAllByFieldAttribute(""));
     }
+
+    [Fact]
+    public void MutationAttributesCanRequestReturnedEntity()
+    {
+        Assert.True(new InquiryInsertAttribute { ReturnEntity = true }.ReturnEntity);
+        Assert.True(new InquiryUpdateAttribute { ReturnEntity = true }.ReturnEntity);
+        Assert.True(new InquiryUpsertAttribute { ReturnEntity = true }.ReturnEntity);
+    }
 }

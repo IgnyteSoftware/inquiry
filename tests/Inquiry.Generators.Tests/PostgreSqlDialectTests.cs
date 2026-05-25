@@ -62,6 +62,10 @@ public sealed class PostgreSqlDialectTests
             "INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive) " +
             "ON CONFLICT (\"Key\") DO UPDATE SET \"Name\" = @Name, \"IsActive\" = @IsActive",
             dialect.BuildUpsertSql(ctx));
+        Assert.Equal(
+            "INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive) " +
+            "ON CONFLICT (\"Key\") DO UPDATE SET \"Name\" = @Name, \"IsActive\" = @IsActive RETURNING \"Key\", \"Name\", \"IsActive\"",
+            dialect.BuildUpsertReturningSql(ctx));
     }
 
     [Fact]
@@ -85,7 +89,9 @@ public sealed class PostgreSqlDialectTests
         var (dialect, ctx) = NewContext();
 
         Assert.Equal("INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive)", dialect.BuildInsertSql(ctx));
+        Assert.Equal("INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive) RETURNING \"Key\", \"Name\", \"IsActive\"", dialect.BuildInsertReturningSql(ctx));
         Assert.Equal("UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key", dialect.BuildUpdateSql(ctx));
+        Assert.Equal("UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key RETURNING \"Key\", \"Name\", \"IsActive\"", dialect.BuildUpdateReturningSql(ctx));
         Assert.Equal("DELETE FROM \"TOrganization\" WHERE \"Key\" = @key", dialect.BuildDeleteByKeySql(ctx));
     }
 

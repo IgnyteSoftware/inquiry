@@ -49,7 +49,9 @@ public sealed class SqlServerDialectTests
         var (dialect, ctx) = NewContext();
 
         Assert.Equal("INSERT INTO [dbo].[TOrganization] ([Key], [Name], [IsActive]) VALUES (@Key, @Name, @IsActive)", dialect.BuildInsertSql(ctx));
+        Assert.Equal("INSERT INTO [dbo].[TOrganization] ([Key], [Name], [IsActive]) OUTPUT INSERTED.[Key], INSERTED.[Name], INSERTED.[IsActive] VALUES (@Key, @Name, @IsActive)", dialect.BuildInsertReturningSql(ctx));
         Assert.Equal("UPDATE [dbo].[TOrganization] SET [Name] = @Name, [IsActive] = @IsActive WHERE [Key] = @Key", dialect.BuildUpdateSql(ctx));
+        Assert.Equal("UPDATE [dbo].[TOrganization] SET [Name] = @Name, [IsActive] = @IsActive OUTPUT INSERTED.[Key], INSERTED.[Name], INSERTED.[IsActive] WHERE [Key] = @Key", dialect.BuildUpdateReturningSql(ctx));
         Assert.Equal("DELETE FROM [dbo].[TOrganization] WHERE [Key] = @key", dialect.BuildDeleteByKeySql(ctx));
     }
 
@@ -75,6 +77,13 @@ public sealed class SqlServerDialectTests
             "WHEN MATCHED THEN UPDATE SET [Name] = @Name, [IsActive] = @IsActive " +
             "WHEN NOT MATCHED THEN INSERT ([Key], [Name], [IsActive]) VALUES (@Key, @Name, @IsActive);",
             dialect.BuildUpsertSql(ctx));
+        Assert.Equal(
+            "MERGE INTO [dbo].[TOrganization] AS target " +
+            "USING (SELECT @Key AS k) AS source ON target.[Key] = source.k " +
+            "WHEN MATCHED THEN UPDATE SET [Name] = @Name, [IsActive] = @IsActive " +
+            "WHEN NOT MATCHED THEN INSERT ([Key], [Name], [IsActive]) VALUES (@Key, @Name, @IsActive) " +
+            "OUTPUT INSERTED.[Key], INSERTED.[Name], INSERTED.[IsActive];",
+            dialect.BuildUpsertReturningSql(ctx));
     }
 
     [Fact]
@@ -103,5 +112,6 @@ public sealed class SqlServerDialectTests
         var ctx = dialect.CreateContext("dbo", "TItems", columns);
 
         Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertSql(ctx));
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertReturningSql(ctx));
     }
 }

@@ -8,12 +8,14 @@ internal sealed class StoreMethodModel
         IMethodSymbol symbol,
         StoreOperation operation,
         ColumnModel? fieldColumn = null,
-        string? procedureName = null)
+        string? procedureName = null,
+        bool returnsEntity = false)
     {
         Symbol = symbol;
         Operation = operation;
         FieldColumn = fieldColumn;
         ProcedureName = procedureName;
+        ReturnsEntity = returnsEntity;
     }
 
     public IMethodSymbol Symbol { get; }
@@ -24,4 +26,7 @@ internal sealed class StoreMethodModel
 
     /// <summary>The stored procedure name; only set for <see cref="StoreOperation.StoredProcedure"/>.</summary>
     public string? ProcedureName { get; }
+
+    /// <summary>Whether a mutation operation returns the database row after mutation.</summary>
+    public bool ReturnsEntity { get; }
 }

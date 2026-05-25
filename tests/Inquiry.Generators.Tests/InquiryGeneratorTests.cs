@@ -53,6 +53,9 @@ public sealed class InquiryGeneratorTests
                 [InquiryInsert]
                 public abstract Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);
 
+                [InquiryInsert(ReturnEntity = true)]
+                public abstract Task<Organization?> InsertReturningAsync(Organization organization, CancellationToken cancellationToken = default);
+
                 [InquiryUpdate]
                 public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);
 
@@ -79,6 +82,7 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("sqlDialect.BuildSelectAllSql(_ctx)", generatedText);
         Assert.Contains("sqlDialect.BuildSelectByKeySql(_ctx)", generatedText);
         Assert.Contains("sqlDialect.BuildInsertSql(_ctx)", generatedText);
+        Assert.Contains("sqlDialect.BuildInsertReturningSql(_ctx)", generatedText);
         Assert.Contains("sqlDialect.BuildUpdateSql(_ctx)", generatedText);
         Assert.Contains("sqlDialect.BuildDeleteByKeySql(_ctx)", generatedText);
         Assert.Contains("sqlDialect.BuildSelectByFieldSql(_ctx,", generatedText);
@@ -90,6 +94,7 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"Key\", organization.Key)", generatedText);
         Assert.Contains("_sqlSelectAll", generatedText);
         Assert.Contains("_sqlInsert", generatedText);
+        Assert.Contains("_sqlInsertReturning", generatedText);
         Assert.Contains("_sqlUpdate", generatedText);
         Assert.Contains("_sqlDeleteByKey", generatedText);
         Assert.DoesNotContain("_sqlStatements", generatedText);

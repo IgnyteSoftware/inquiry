@@ -50,8 +50,17 @@ public abstract partial class OrganizationStore : InquiryStore<Organization>
     public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken ct = default);
 
     [InquiryInsert]   public abstract Task<int>  InsertAsync(Organization o, CancellationToken ct = default);
+    [InquiryInsert(ReturnEntity = true)]
+    public abstract Task<Organization?> InsertReturningAsync(Organization o, CancellationToken ct = default);
+
     [InquiryUpdate]   public abstract Task<bool> UpdateAsync(Organization o, CancellationToken ct = default);
+    [InquiryUpdate(ReturnEntity = true)]
+    public abstract Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken ct = default);
+
     [InquiryUpsert]   public abstract Task<int>  UpsertAsync(Organization o, CancellationToken ct = default);
+    [InquiryUpsert(ReturnEntity = true)]
+    public abstract Task<Organization?> UpsertReturningAsync(Organization o, CancellationToken ct = default);
+
     [InquiryDeleteOneByKey] public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken ct = default);
 }
 ```
@@ -83,8 +92,11 @@ All store attributes live in `Inquiry.Stores`. The method must be `abstract`, th
 | `[InquirySelectOneByKeyEager]` | `Task<TEntity?>(TKey key, …)` | `BuildSelectByKeySql` on parent + `BuildSelectByFieldSql` on each child relation |
 | `[InquirySelectAllByField("FieldName")]` | `IAsyncEnumerable<TEntity>(TField value, …)` | `BuildSelectByFieldSql` |
 | `[InquiryInsert]` | `Task<int>(TEntity e, …)` | `BuildInsertSql` |
+| `[InquiryInsert(ReturnEntity = true)]` | `Task<TEntity?>(TEntity e, …)` | `BuildInsertReturningSql` |
 | `[InquiryUpdate]` | `Task<bool>(TEntity e, …)` | `BuildUpdateSql` |
+| `[InquiryUpdate(ReturnEntity = true)]` | `Task<TEntity?>(TEntity e, …)` | `BuildUpdateReturningSql` |
 | `[InquiryUpsert]` | `Task<int>(TEntity e, …)` | `BuildUpsertSql` |
+| `[InquiryUpsert(ReturnEntity = true)]` | `Task<TEntity?>(TEntity e, …)` | `BuildUpsertReturningSql` |
 | `[InquiryDeleteOneByKey]` | `Task<bool>(TKey key, …)` | `BuildDeleteByKeySql` |
 | `[InquiryStoredProcedure("ProcName")]` | `IAsyncEnumerable<T>` / `Task<T?>` / `Task<int>` | Raw `InquiryCommand` with `CommandType.StoredProcedure` |
 
@@ -211,9 +223,12 @@ public abstract class InquirySqlDialect
     public abstract string BuildSelectByKeySql     (InquirySqlBuildContext ctx);
     public abstract string BuildSelectByFieldSql   (InquirySqlBuildContext ctx, InquirySqlColumn column);
     public abstract string BuildInsertSql          (InquirySqlBuildContext ctx);
+    public abstract string BuildInsertReturningSql (InquirySqlBuildContext ctx);
     public abstract string BuildUpdateSql          (InquirySqlBuildContext ctx);
+    public abstract string BuildUpdateReturningSql (InquirySqlBuildContext ctx);
     public abstract string BuildDeleteByKeySql     (InquirySqlBuildContext ctx);
     public abstract string BuildUpsertSql          (InquirySqlBuildContext ctx);
+    public abstract string BuildUpsertReturningSql (InquirySqlBuildContext ctx);
 }
 ```
 

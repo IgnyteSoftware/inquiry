@@ -55,11 +55,31 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     }
 
     /// <inheritdoc />
+    public override string BuildInsertReturningSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanInsert(context);
+        return "INSERT INTO " + context.Table
+            + " (" + context.InsertColumns + ") OUTPUT " + InsertedColumns(context)
+            + " VALUES (" + context.InsertParameters + ")";
+    }
+
+    /// <inheritdoc />
     public override string BuildUpdateSql(InquirySqlBuildContext context)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpdate(context);
         return "UPDATE " + context.Table + " SET " + context.SetClauses
+            + " WHERE " + context.QuotedKeyColumn + " = " + context.KeyParameter;
+    }
+
+    /// <inheritdoc />
+    public override string BuildUpdateReturningSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanUpdate(context);
+        return "UPDATE " + context.Table + " SET " + context.SetClauses
+            + " OUTPUT " + InsertedColumns(context)
             + " WHERE " + context.QuotedKeyColumn + " = " + context.KeyParameter;
     }
 
@@ -85,4 +105,20 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
             $"WHEN MATCHED THEN UPDATE SET {context.SetClauses} " +
             $"WHEN NOT MATCHED THEN INSERT ({context.InsertColumns}) VALUES ({context.InsertParameters});";
     }
+
+    /// <inheritdoc />
+    public override string BuildUpsertReturningSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        EnsureCanUpsert(context);
+        return
+            $"MERGE INTO {context.Table} AS target " +
+            $"USING (SELECT {context.KeyParameter} AS k) AS source ON target.{context.QuotedKeyColumn} = source.k " +
+            $"WHEN MATCHED THEN UPDATE SET {context.SetClauses} " +
+            $"WHEN NOT MATCHED THEN INSERT ({context.InsertColumns}) VALUES ({context.InsertParameters}) " +
+            $"OUTPUT {InsertedColumns(context)};";
+    }
+
+    private string InsertedColumns(InquirySqlBuildContext context)
+        => string.Join(", ", context.Columns.Select(c => "INSERTED." + QuoteIdentifier(c.ColumnName)));
 }
