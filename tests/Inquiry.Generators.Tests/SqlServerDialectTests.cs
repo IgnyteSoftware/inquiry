@@ -82,4 +82,28 @@ public sealed class SqlServerDialectTests
     {
         Assert.Equal("SqlServer", new SqlServerInquirySqlDialect().Name);
     }
+
+    [Fact]
+    public void SchemaIsOmittedWhenNull()
+    {
+        var (dialect, ctx) = NewContext(schema: null);
+
+        Assert.Equal("SELECT [Key], [Name], [IsActive] FROM [TOrganization]", dialect.BuildSelectAllSql(ctx));
+    }
+
+    [Fact]
+    public void UpsertExcludesGeneratedKey()
+    {
+        var columns = new InquirySqlColumn[]
+        {
+            new("Id", "Id", isKey: true, isGenerated: true),
+            new("Name", "Name", isKey: false),
+        };
+        var dialect = new SqlServerInquirySqlDialect();
+        var ctx = dialect.CreateContext("dbo", "TItems", columns);
+
+        var upsert = dialect.BuildUpsertSql(ctx);
+        Assert.Contains("INSERT ([Name]) VALUES (@Name)", upsert);
+        Assert.DoesNotContain("[Id] = @Id", upsert);
+    }
 }

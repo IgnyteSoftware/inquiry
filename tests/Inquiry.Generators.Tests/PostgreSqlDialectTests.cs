@@ -69,4 +69,33 @@ public sealed class PostgreSqlDialectTests
     {
         Assert.Equal("PostgreSql", new PostgreSqlInquirySqlDialect().Name);
     }
+
+    [Fact]
+    public void SchemaPrefixIsRenderedWhenProvided()
+    {
+        var (dialect, ctx) = NewContext(schema: "public");
+
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"public\".\"TOrganization\"", dialect.BuildSelectAllSql(ctx));
+        Assert.Equal("DELETE FROM \"public\".\"TOrganization\" WHERE \"Key\" = @key", dialect.BuildDeleteByKeySql(ctx));
+    }
+
+    [Fact]
+    public void BuildsInsertUpdateDeleteStatements()
+    {
+        var (dialect, ctx) = NewContext();
+
+        Assert.Equal("INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive)", dialect.BuildInsertSql(ctx));
+        Assert.Equal("UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key", dialect.BuildUpdateSql(ctx));
+        Assert.Equal("DELETE FROM \"TOrganization\" WHERE \"Key\" = @key", dialect.BuildDeleteByKeySql(ctx));
+    }
+
+    [Fact]
+    public void BuildSelectByFieldSqlFiltersOnArbitraryColumn()
+    {
+        var (dialect, ctx) = NewContext();
+
+        Assert.Equal(
+            "SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"IsActive\" = @value",
+            dialect.BuildSelectByFieldSql(ctx, _columns[2]));
+    }
 }

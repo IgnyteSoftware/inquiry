@@ -344,6 +344,245 @@ public sealed class InquiryGeneratorTests
         Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ001");
     }
 
+    [Fact]
+    public void ReportsDiagnosticForMultipleKeys()
+    {
+        const string source = """
+            using System;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key1 { get; set; }
+
+                [InquiryKey]
+                public Guid Key2 { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ001");
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForDuplicateColumnName()
+    {
+        const string source = """
+            using System;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn("Name")]
+                public string A { get; set; } = string.Empty;
+
+                [InquiryColumn("Name")]
+                public string B { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ002");
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForUnsupportedPropertyType()
+    {
+        const string source = """
+            using System;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            public sealed class CustomThing { }
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn]
+                public CustomThing Thing { get; set; } = new();
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ003");
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForNonPartialStore()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+            }
+
+            public abstract class OrganizationStore : InquiryStore<Organization>
+            {
+                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
+
+                [InquirySelectAll]
+                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ004");
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForUnknownField()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+            }
+
+            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            {
+                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
+
+                [InquirySelectAllByField("DoesNotExist")]
+                public abstract IAsyncEnumerable<Organization> SelectByMissingAsync(string value, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ007");
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForStoreEntityNotMapped()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public sealed class Unmapped
+            {
+                public Guid Key { get; set; }
+            }
+
+            public abstract partial class UnmappedStore : InquiryStore<Unmapped>
+            {
+                protected UnmappedStore(IInquiry inquiry) : base(inquiry) {}
+
+                [InquirySelectAll]
+                public abstract IAsyncEnumerable<Unmapped> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ008");
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForPropertyWithoutPublicSetter()
+    {
+        const string source = """
+            using System;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn]
+                public string ReadOnly { get; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ009");
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForNonAbstractStoreMethod()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+            }
+
+            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            {
+                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
+
+                [InquirySelectAll]
+                public IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default)
+                    => throw new System.NotImplementedException();
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ010");
+    }
+
     private static GeneratorTestResult RunGenerator(string source)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);

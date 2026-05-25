@@ -11,4 +11,8 @@
     <ProjectReference Include="..\Inquiry.Generators\Inquiry.Generators.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <None Include="..\Inquiry.Generators\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Inquiry.Tests" />
+  </ItemGroup>
 </Project>
