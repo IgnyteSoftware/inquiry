@@ -14,6 +14,9 @@ Inquiry is an experimental .NET 6+ source-generated micro-ORM. You write attribu
 | `tests/Inquiry.Tests` | Core runtime tests (pipeline, parameter binding, transactions). |
 | `tests/Inquiry.Generators.Tests` | Source-generator tests + per-dialect SQL assertions. |
 | `tests/Inquiry.Sqlite.Tests` | End-to-end integration tests against in-memory SQLite. |
+| `tests/Inquiry.SqlServer.Tests` | End-to-end Northwind integration tests against a real SQL Server (opt-in via `INQUIRY_SQLSERVER_CONNECTION_STRING`). |
+| `tests/Inquiry.PostgreSql.Tests` | End-to-end Northwind integration tests against a real PostgreSQL (opt-in via `INQUIRY_POSTGRESQL_CONNECTION_STRING`). |
+| `samples/Inquiry.Northwind` | Shared classic-Northwind entities, stores, and per-provider DDL (`SqliteDdl`, `SqlServerDdl`, `PostgreSqlDdl`) consumed by every sample and integration-test project. |
 | `samples/Inquiry.Sample` | Runnable ASP.NET Core sample exercising CRUD, upsert, transactions, and eager loading on SQLite. |
 
 ## Authoring an Entity and Store
@@ -327,3 +330,12 @@ dotnet test
 ```
 
 Tests cover: parameter binding, the request pipeline, transactions, generator emission, per-dialect SQL strings, and end-to-end CRUD/eager-loading against in-memory SQLite.
+
+The SQL Server and PostgreSQL integration suites build with the rest of the solution but skip every fact unless their provider's connection string is exported:
+
+```powershell
+$env:INQUIRY_SQLSERVER_CONNECTION_STRING   = "Server=.;Database=master;Integrated Security=true;TrustServerCertificate=true"
+$env:INQUIRY_POSTGRESQL_CONNECTION_STRING  = "Host=localhost;Database=postgres;Username=postgres;Password=postgres"
+```
+
+The harnesses point at the named admin database (`master` / `postgres`), create a throwaway database per test, run `NorthwindSchema.SqlServerDdl` / `NorthwindSchema.PostgreSqlDdl`, and drop the database on teardown — parallel tests cannot collide.
