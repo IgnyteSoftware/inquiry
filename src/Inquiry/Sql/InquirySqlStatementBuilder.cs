@@ -55,6 +55,8 @@ public sealed class InquirySqlStatementBuilder
         var setClauses = string.Join(", ", columns
             .Where(c => !c.IsKey && !c.IsGenerated)
             .Select(c => _dialect.QuoteIdentifier(c.ColumnName) + " = " + _dialect.ParameterName(c.PropertyName)));
+        var quotedKeyColumn = _dialect.QuoteIdentifier(key.ColumnName);
+        var keyParam = _dialect.ParameterName(key.PropertyName);
 
         var selectByField = new Dictionary<string, string>(columns.Count, StringComparer.Ordinal);
         foreach (var column in columns)
@@ -63,12 +65,15 @@ public sealed class InquirySqlStatementBuilder
                 "SELECT " + selectColumns + " FROM " + table + " WHERE " + _dialect.QuoteIdentifier(column.ColumnName) + " = " + _dialect.ParameterName("value");
         }
 
+        var upsert = _dialect.BuildUpsertSql(table, insertColumns, insertParameters, setClauses, quotedKeyColumn, keyParam);
+
         return new InquirySqlStatementSet(
             selectAll: "SELECT " + selectColumns + " FROM " + table,
-            selectByKey: "SELECT " + selectColumns + " FROM " + table + " WHERE " + _dialect.QuoteIdentifier(key.ColumnName) + " = " + _dialect.ParameterName("key"),
-            deleteByKey: "DELETE FROM " + table + " WHERE " + _dialect.QuoteIdentifier(key.ColumnName) + " = " + _dialect.ParameterName("key"),
+            selectByKey: "SELECT " + selectColumns + " FROM " + table + " WHERE " + quotedKeyColumn + " = " + _dialect.ParameterName("key"),
+            deleteByKey: "DELETE FROM " + table + " WHERE " + quotedKeyColumn + " = " + _dialect.ParameterName("key"),
             insert: "INSERT INTO " + table + " (" + insertColumns + ") VALUES (" + insertParameters + ")",
-            update: "UPDATE " + table + " SET " + setClauses + " WHERE " + _dialect.QuoteIdentifier(key.ColumnName) + " = " + _dialect.ParameterName(key.PropertyName),
+            update: "UPDATE " + table + " SET " + setClauses + " WHERE " + quotedKeyColumn + " = " + keyParam,
+            upsert: upsert,
             selectByField: selectByField);
     }
 }

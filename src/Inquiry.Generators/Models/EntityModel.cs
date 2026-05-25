@@ -5,13 +5,20 @@ namespace Inquiry.Generators.Models;
 
 internal sealed class EntityModel
 {
-    public EntityModel(INamedTypeSymbol symbol, string tableName, string? schema, List<ColumnModel> columns, ColumnModel key)
+    public EntityModel(
+        INamedTypeSymbol symbol,
+        string tableName,
+        string? schema,
+        List<ColumnModel> columns,
+        ColumnModel key,
+        List<RelationModel> relations)
     {
         Symbol = symbol;
         TableName = tableName;
         Schema = schema;
         Columns = columns;
         Key = key;
+        Relations = relations;
     }
 
     public INamedTypeSymbol Symbol { get; }
@@ -23,4 +30,7 @@ internal sealed class EntityModel
     public List<ColumnModel> Columns { get; }
 
     public ColumnModel Key { get; }
+
+    /// <summary>Navigation properties marked with <c>[InquiryRelation]</c>.</summary>
+    public List<RelationModel> Relations { get; }
 }

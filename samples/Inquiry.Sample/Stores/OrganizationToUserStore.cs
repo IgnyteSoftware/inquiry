@@ -27,6 +27,9 @@ public abstract partial class OrganizationToUserStore : InquiryStore<Organizatio
     [InquiryInsert]
     public abstract Task<int> InsertAsync(OrganizationToUser membership, CancellationToken cancellationToken = default);
 
+    [InquiryBulkInsert]
+    public abstract Task<int> BulkInsertAsync(IEnumerable<OrganizationToUser> memberships, CancellationToken cancellationToken = default);
+
     [InquiryUpdate]
     public abstract Task<bool> UpdateAsync(OrganizationToUser membership, CancellationToken cancellationToken = default);
 

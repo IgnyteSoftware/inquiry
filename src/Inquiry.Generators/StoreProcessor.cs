@@ -3,6 +3,7 @@ using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
@@ -49,7 +50,8 @@ internal static class StoreProcessor
         SourceProductionContext context,
         INamedTypeSymbol storeSymbol,
         EntityModel entity,
-        ImmutableArray<StoreMethodModel> methods)
+        ImmutableArray<StoreMethodModel> methods,
+        Dictionary<string, EntityModel> allEntities)
     {
         var generatedName = $"Generated{storeSymbol.Name}";
         var source = new StringBuilder();
@@ -58,6 +60,8 @@ internal static class StoreProcessor
         GeneratorHelpers.AppendNamespaceStart(source, storeSymbol);
         source.AppendLine($"{GeneratorHelpers.GetAccessibility(storeSymbol.DeclaredAccessibility)} sealed class {generatedName} : {storeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}");
         source.AppendLine("{");
+
+        // Main entity columns
         source.AppendLine("    private static readonly global::Inquiry.Sql.InquirySqlColumn[] _columns =");
         source.AppendLine("    {");
         foreach (var column in entity.Columns)
@@ -65,13 +69,76 @@ internal static class StoreProcessor
             source.AppendLine($"        new global::Inquiry.Sql.InquirySqlColumn(\"{GeneratorHelpers.Escape(column.PropertyName)}\", \"{GeneratorHelpers.Escape(column.ColumnName)}\", isKey: {GeneratorHelpers.BooleanLiteral(column.IsKey)}, isGenerated: {GeneratorHelpers.BooleanLiteral(column.IsGenerated)}),");
         }
         source.AppendLine("    };");
+
+        // Child entity columns for each relation (deduplicated)
+        var eagerOps = methods.Where(m => m.Operation is StoreOperation.SelectOneByKeyEager or StoreOperation.SelectAllEager).ToArray();
+        var emittedRelations = new HashSet<string>();
+
+        if (eagerOps.Length > 0)
+        {
+            foreach (var relation in entity.Relations)
+            {
+                var childKey = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                if (!emittedRelations.Add(childKey))
+                    continue;
+
+                if (!allEntities.TryGetValue(childKey, out var childEntity))
+                    continue;
+
+                source.AppendLine($"    private static readonly global::Inquiry.Sql.InquirySqlColumn[] _columns_{relation.PropertyName} =");
+                source.AppendLine("    {");
+                foreach (var col in childEntity.Columns)
+                {
+                    source.AppendLine($"        new global::Inquiry.Sql.InquirySqlColumn(\"{GeneratorHelpers.Escape(col.PropertyName)}\", \"{GeneratorHelpers.Escape(col.ColumnName)}\", isKey: {GeneratorHelpers.BooleanLiteral(col.IsKey)}, isGenerated: {GeneratorHelpers.BooleanLiteral(col.IsGenerated)}),");
+                }
+                source.AppendLine("    };");
+            }
+        }
+
         source.AppendLine();
         source.AppendLine("    private readonly global::Inquiry.Sql.InquirySqlStatementSet _sqlStatements;");
+
+        // SQL fields for relation queries
+        if (eagerOps.Length > 0)
+        {
+            emittedRelations.Clear();
+            foreach (var relation in entity.Relations)
+            {
+                var childKey = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                if (!emittedRelations.Add(childKey))
+                    continue;
+                if (!allEntities.ContainsKey(childKey))
+                    continue;
+
+                source.AppendLine($"    private readonly string _sql_{relation.PropertyName};");
+                source.AppendLine($"    private readonly string _sql_{relation.PropertyName}_All;");
+            }
+        }
+
         source.AppendLine();
         source.AppendLine($"    public {generatedName}(global::Inquiry.IInquiry inquiry, global::Inquiry.Sql.InquirySqlDialect sqlDialect)");
         source.AppendLine("        : base(inquiry)");
         source.AppendLine("    {");
-        source.AppendLine($"        _sqlStatements = new global::Inquiry.Sql.InquirySqlStatementBuilder(sqlDialect ?? throw new global::System.ArgumentNullException(nameof(sqlDialect))).Build({GeneratorHelpers.Literal(entity.Schema)}, \"{GeneratorHelpers.Escape(entity.TableName)}\", _columns);");
+        source.AppendLine($"        var _builder = new global::Inquiry.Sql.InquirySqlStatementBuilder(sqlDialect ?? throw new global::System.ArgumentNullException(nameof(sqlDialect)));");
+        source.AppendLine($"        _sqlStatements = _builder.Build({GeneratorHelpers.Literal(entity.Schema)}, \"{GeneratorHelpers.Escape(entity.TableName)}\", _columns);");
+
+        if (eagerOps.Length > 0)
+        {
+            emittedRelations.Clear();
+            foreach (var relation in entity.Relations)
+            {
+                var childKey = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                if (!emittedRelations.Add(childKey))
+                    continue;
+                if (!allEntities.TryGetValue(childKey, out var childEntity))
+                    continue;
+
+                source.AppendLine($"        var _childSql_{relation.PropertyName} = _builder.Build({GeneratorHelpers.Literal(childEntity.Schema)}, \"{GeneratorHelpers.Escape(childEntity.TableName)}\", _columns_{relation.PropertyName});");
+                source.AppendLine($"        _sql_{relation.PropertyName} = _childSql_{relation.PropertyName}.SelectByField[\"{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\"];");
+                source.AppendLine($"        _sql_{relation.PropertyName}_All = _childSql_{relation.PropertyName}.SelectAll;");
+            }
+        }
+
         source.AppendLine("    }");
 
         foreach (var method in methods)

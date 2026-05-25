@@ -1,4 +1,6 @@
 using Inquiry.Commands;
+using Inquiry.Transactions;
+using System.Data;
 
 namespace Inquiry;
 
@@ -77,5 +79,14 @@ public interface IInquiry
     /// </summary>
     Task<int> ExecuteAsync(
         InquiryCommand command,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Opens a new database connection and begins a transaction.
+    /// All operations performed via <see cref="IInquiryTransaction.Inquiry"/> share that connection
+    /// and transaction. The transaction rolls back automatically if disposed without committing.
+    /// </summary>
+    Task<IInquiryTransaction> BeginTransactionAsync(
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default);
 }

@@ -89,14 +89,18 @@ internal static class GeneratorHelpers
         return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Threading.CancellationToken";
     }
 
-    public static string GetParameterDeclaration(IMethodSymbol method)
+    public static string GetParameterDeclaration(IMethodSymbol method, bool enumeratorCancellation = false)
     {
         var parts = new List<string>();
         for (var i = 0; i < method.Parameters.Length; i++)
         {
             var parameter = method.Parameters[i];
-            var declaration = $"{parameter.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat)} {parameter.Name}";
-            if (i == method.Parameters.Length - 1 && IsCancellationToken(parameter.Type))
+            var isCt = i == method.Parameters.Length - 1 && IsCancellationToken(parameter.Type);
+            var prefix = enumeratorCancellation && isCt
+                ? "[global::System.Runtime.CompilerServices.EnumeratorCancellation] "
+                : string.Empty;
+            var declaration = $"{prefix}{parameter.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat)} {parameter.Name}";
+            if (isCt)
             {
                 declaration += " = default";
             }
