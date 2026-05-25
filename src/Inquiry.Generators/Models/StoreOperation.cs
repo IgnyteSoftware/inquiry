@@ -11,9 +11,6 @@ internal enum StoreOperation
     Insert,
     Update,
     Upsert,
-    BulkInsert,
-    BulkUpdate,
-    BulkDelete,
     DeleteOneByKey,
     StoredProcedure,
 }

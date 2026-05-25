@@ -25,7 +25,7 @@ public sealed class EagerLoadingIntegrationTests
             new Product { Key = Guid.NewGuid(), Name = "Phone", Price = 699m, CategoryKey = category.Key },
             new Product { Key = Guid.NewGuid(), Name = "Tablet", Price = 499m, CategoryKey = category.Key },
         };
-        await prodStore.BulkInsertAsync(products);
+        foreach (var p in products) await prodStore.InsertAsync(p);
 
         var loaded = await catStore.SelectByKeyWithProductsAsync(category.Key);
 
@@ -81,12 +81,15 @@ public sealed class EagerLoadingIntegrationTests
         await catStore.InsertAsync(cat1);
         await catStore.InsertAsync(cat2);
 
-        await prodStore.BulkInsertAsync(new[]
+        foreach (var p in new[]
         {
             new Product { Key = Guid.NewGuid(), Name = "P1", Price = 1m, CategoryKey = cat1.Key },
             new Product { Key = Guid.NewGuid(), Name = "P2", Price = 2m, CategoryKey = cat1.Key },
             new Product { Key = Guid.NewGuid(), Name = "P3", Price = 3m, CategoryKey = cat2.Key },
-        });
+        })
+        {
+            await prodStore.InsertAsync(p);
+        }
 
         var all = await ToListAsync(catStore.SelectAllWithProductsAsync());
 

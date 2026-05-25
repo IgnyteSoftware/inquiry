@@ -12,6 +12,13 @@ public sealed class PostgreSqlDialectTests
         new("IsActive", "IsActive", isKey: false),
     };
 
+    private static (PostgreSqlInquirySqlDialect Dialect, InquirySqlBuildContext Context) NewContext(string? schema = null)
+    {
+        var dialect = new PostgreSqlInquirySqlDialect();
+        var context = dialect.CreateContext(schema, "TOrganization", _columns);
+        return (dialect, context);
+    }
+
     [Fact]
     public void QuoteIdentifierDoubleQuotes()
     {
@@ -29,31 +36,32 @@ public sealed class PostgreSqlDialectTests
     [Fact]
     public void BuildsSelectStatements()
     {
-        var statements = new InquirySqlStatementBuilder(new PostgreSqlInquirySqlDialect()).Build(null, "TOrganization", _columns);
+        var (dialect, ctx) = NewContext();
 
-        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\"", statements.SelectAll);
-        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Key\" = @key", statements.SelectByKey);
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\"", dialect.BuildSelectAllSql(ctx));
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Key\" = @key", dialect.BuildSelectByKeySql(ctx));
     }
 
     [Fact]
     public void BuildsUpsertWithOnConflict()
     {
-        var statements = new InquirySqlStatementBuilder(new PostgreSqlInquirySqlDialect()).Build(null, "TOrganization", _columns);
+        var (dialect, ctx) = NewContext();
+        var upsert = dialect.BuildUpsertSql(ctx);
 
-        Assert.Contains("ON CONFLICT", statements.Upsert);
-        Assert.Contains("DO UPDATE SET", statements.Upsert);
-        Assert.StartsWith("INSERT INTO \"TOrganization\"", statements.Upsert);
+        Assert.Contains("ON CONFLICT", upsert);
+        Assert.Contains("DO UPDATE SET", upsert);
+        Assert.StartsWith("INSERT INTO \"TOrganization\"", upsert);
     }
 
     [Fact]
     public void BuildsUpsertStatement()
     {
-        var statements = new InquirySqlStatementBuilder(new PostgreSqlInquirySqlDialect()).Build(null, "TOrganization", _columns);
+        var (dialect, ctx) = NewContext();
 
         Assert.Equal(
             "INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive) " +
             "ON CONFLICT (\"Key\") DO UPDATE SET \"Name\" = @Name, \"IsActive\" = @IsActive",
-            statements.Upsert);
+            dialect.BuildUpsertSql(ctx));
     }
 
     [Fact]
