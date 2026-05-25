@@ -127,7 +127,7 @@ public sealed class InquirySqlDialectContractTests
 
     [Theory]
     [MemberData(nameof(AllDialects))]
-    public void BuildUpsertSqlRejectsGeneratedKey(InquirySqlDialect dialect)
+    public void BuildUpsertSqlAllowsGeneratedKey(InquirySqlDialect dialect)
     {
         var context = dialect.CreateContext(
             null,
@@ -138,8 +138,8 @@ public sealed class InquirySqlDialectContractTests
                 new InquirySqlColumn("Name", "Name", isKey: false),
             });
 
-        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertSql(context));
-        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertReturningSql(context));
+        Assert.False(string.IsNullOrWhiteSpace(dialect.BuildUpsertSql(context)));
+        Assert.False(string.IsNullOrWhiteSpace(dialect.BuildUpsertReturningSql(context)));
     }
 
     [Theory]

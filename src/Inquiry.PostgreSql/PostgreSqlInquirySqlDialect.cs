@@ -95,6 +95,11 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
+        if (context.KeyColumn.IsGenerated)
+        {
+            return BuildGeneratedKeyUpsertSql(context, returning: false);
+        }
+
         return $"INSERT INTO {context.Table} ({context.InsertColumns}) VALUES ({context.InsertParameters}) " +
                $"ON CONFLICT ({context.QuotedKeyColumn}) DO UPDATE SET {context.SetClauses}";
     }
@@ -104,6 +109,43 @@ public sealed class PostgreSqlInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
+        if (context.KeyColumn.IsGenerated)
+        {
+            return BuildGeneratedKeyUpsertSql(context, returning: true);
+        }
+
         return BuildUpsertSql(context) + " RETURNING " + context.SelectColumns;
+    }
+
+    private string BuildGeneratedKeyUpsertSql(InquirySqlBuildContext context, bool returning)
+    {
+        var explicitInsertColumns = context.QuotedKeyColumn + ", " + context.InsertColumns;
+        var explicitInsertParameters = context.KeyParameter + ", " + context.InsertParameters;
+
+        if (!returning)
+        {
+            return
+                $"UPDATE {context.Table} SET {context.SetClauses} " +
+                $"WHERE {context.KeyParameter} IS NOT NULL AND {context.QuotedKeyColumn} = {context.KeyParameter}; " +
+                $"INSERT INTO {context.Table} ({context.InsertColumns}) " +
+                $"SELECT {context.InsertParameters} WHERE {context.KeyParameter} IS NULL; " +
+                $"INSERT INTO {context.Table} ({explicitInsertColumns}) " +
+                $"SELECT {explicitInsertParameters} WHERE {context.KeyParameter} IS NOT NULL " +
+                $"AND NOT EXISTS (SELECT 1 FROM {context.Table} WHERE {context.QuotedKeyColumn} = {context.KeyParameter});";
+        }
+
+        return
+            $"WITH updated AS (UPDATE {context.Table} SET {context.SetClauses} " +
+            $"WHERE {context.KeyParameter} IS NOT NULL AND {context.QuotedKeyColumn} = {context.KeyParameter} " +
+            $"RETURNING {context.SelectColumns}), " +
+            $"inserted_generated AS (INSERT INTO {context.Table} ({context.InsertColumns}) " +
+            $"SELECT {context.InsertParameters} WHERE {context.KeyParameter} IS NULL " +
+            $"RETURNING {context.SelectColumns}), " +
+            $"inserted_explicit AS (INSERT INTO {context.Table} ({explicitInsertColumns}) " +
+            $"SELECT {explicitInsertParameters} WHERE {context.KeyParameter} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM updated) " +
+            $"RETURNING {context.SelectColumns}) " +
+            $"SELECT {context.SelectColumns} FROM updated UNION ALL " +
+            $"SELECT {context.SelectColumns} FROM inserted_generated UNION ALL " +
+            $"SELECT {context.SelectColumns} FROM inserted_explicit";
     }
 }

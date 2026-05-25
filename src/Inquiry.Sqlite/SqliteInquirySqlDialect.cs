@@ -98,6 +98,11 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
+        if (context.KeyColumn.IsGenerated)
+        {
+            return BuildGeneratedKeyUpsertSql(context, returning: false);
+        }
+
         return $"INSERT OR REPLACE INTO {context.Table} ({context.InsertColumns}) VALUES ({context.InsertParameters})";
     }
 
@@ -106,6 +111,21 @@ public sealed class SqliteInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
+        if (context.KeyColumn.IsGenerated)
+        {
+            return BuildGeneratedKeyUpsertSql(context, returning: true);
+        }
+
         return BuildUpsertSql(context) + " RETURNING " + context.SelectColumns;
+    }
+
+    private string BuildGeneratedKeyUpsertSql(InquirySqlBuildContext context, bool returning)
+    {
+        var explicitInsertColumns = context.QuotedKeyColumn + ", " + context.InsertColumns;
+        var explicitInsertParameters = context.KeyParameter + ", " + context.InsertParameters;
+        var returningClause = returning ? " RETURNING " + context.SelectColumns : string.Empty;
+
+        return $"INSERT INTO {context.Table} ({explicitInsertColumns}) VALUES ({explicitInsertParameters}) " +
+            $"ON CONFLICT ({context.QuotedKeyColumn}) DO UPDATE SET {context.SetClauses}{returningClause}";
     }
 }

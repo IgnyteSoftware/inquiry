@@ -101,7 +101,7 @@ public sealed class SqlServerDialectTests
     }
 
     [Fact]
-    public void UpsertThrowsWhenKeyIsGenerated()
+    public void BuildsGeneratedKeyUpsertStatement()
     {
         var columns = new InquirySqlColumn[]
         {
@@ -111,7 +111,15 @@ public sealed class SqlServerDialectTests
         var dialect = new SqlServerInquirySqlDialect();
         var ctx = dialect.CreateContext("dbo", "TItems", columns);
 
-        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertSql(ctx));
-        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertReturningSql(ctx));
+        Assert.Equal(
+            "IF @Id IS NULL BEGIN INSERT INTO [dbo].[TItems] ([Name]) VALUES (@Name); END " +
+            "ELSE IF EXISTS (SELECT 1 FROM [dbo].[TItems] WHERE [Id] = @Id) BEGIN UPDATE [dbo].[TItems] SET [Name] = @Name WHERE [Id] = @Id; END " +
+            "ELSE BEGIN INSERT INTO [dbo].[TItems] ([Id], [Name]) VALUES (@Id, @Name); END",
+            dialect.BuildUpsertSql(ctx));
+        Assert.Equal(
+            "IF @Id IS NULL BEGIN INSERT INTO [dbo].[TItems] ([Name]) OUTPUT INSERTED.[Id], INSERTED.[Name] VALUES (@Name); END " +
+            "ELSE IF EXISTS (SELECT 1 FROM [dbo].[TItems] WHERE [Id] = @Id) BEGIN UPDATE [dbo].[TItems] SET [Name] = @Name OUTPUT INSERTED.[Id], INSERTED.[Name] WHERE [Id] = @Id; END " +
+            "ELSE BEGIN INSERT INTO [dbo].[TItems] ([Id], [Name]) OUTPUT INSERTED.[Id], INSERTED.[Name] VALUES (@Id, @Name); END",
+            dialect.BuildUpsertReturningSql(ctx));
     }
 }

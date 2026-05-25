@@ -146,7 +146,7 @@ public sealed class SqliteDialectTests
     }
 
     [Fact]
-    public void UpsertThrowsWhenKeyIsGenerated()
+    public void BuildsGeneratedKeyUpsertStatement()
     {
         var columns = new InquirySqlColumn[]
         {
@@ -155,6 +155,11 @@ public sealed class SqliteDialectTests
         };
         var (dialect, ctx) = NewContext(tableName: "TItems", columns: columns);
 
-        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertSql(ctx));
+        Assert.Equal(
+            "INSERT INTO \"TItems\" (\"Id\", \"Name\") VALUES (@Id, @Name) ON CONFLICT (\"Id\") DO UPDATE SET \"Name\" = @Name",
+            dialect.BuildUpsertSql(ctx));
+        Assert.Equal(
+            "INSERT INTO \"TItems\" (\"Id\", \"Name\") VALUES (@Id, @Name) ON CONFLICT (\"Id\") DO UPDATE SET \"Name\" = @Name RETURNING \"Id\", \"Name\"",
+            dialect.BuildUpsertReturningSql(ctx));
     }
 }
