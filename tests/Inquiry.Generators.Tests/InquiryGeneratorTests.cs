@@ -74,20 +74,27 @@ public sealed class InquiryGeneratorTests
         var generatedText = generatedStore.GetText().ToString();
 
         Assert.Contains("public sealed class GeneratedOrganizationStore : global::Demo.OrganizationStore", generatedText);
-        Assert.Contains("private readonly global::Inquiry.Sql.InquirySqlStatementSet _sqlStatements;", generatedText);
         Assert.Contains("public GeneratedOrganizationStore(global::Inquiry.IInquiry inquiry, global::Inquiry.Sql.InquirySqlDialect sqlDialect)", generatedText);
-        Assert.Contains("new global::Inquiry.Sql.InquirySqlStatementBuilder(sqlDialect", generatedText);
-        Assert.Contains(".Build(null, \"TOrganization\", _columns)", generatedText);
+        Assert.Contains("sqlDialect.CreateContext(null, \"TOrganization\", _columns)", generatedText);
+        Assert.Contains("sqlDialect.BuildSelectAllSql(_ctx)", generatedText);
+        Assert.Contains("sqlDialect.BuildSelectByKeySql(_ctx)", generatedText);
+        Assert.Contains("sqlDialect.BuildInsertSql(_ctx)", generatedText);
+        Assert.Contains("sqlDialect.BuildUpdateSql(_ctx)", generatedText);
+        Assert.Contains("sqlDialect.BuildDeleteByKeySql(_ctx)", generatedText);
+        Assert.Contains("sqlDialect.BuildSelectByFieldSql(_ctx,", generatedText);
         Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization>", generatedText);
         Assert.Contains("Inquiry.ExecuteAsync", generatedText);
         Assert.Contains("new { key = key }", generatedText);
         Assert.Contains("new { value = isActive }", generatedText);
         Assert.Contains("Key = organization.Key", generatedText);
-        Assert.Contains("_sqlStatements.SelectAll", generatedText);
-        Assert.Contains("_sqlStatements.Insert", generatedText);
-        Assert.Contains("_sqlStatements.Update", generatedText);
-        Assert.Contains("_sqlStatements.DeleteByKey", generatedText);
+        Assert.Contains("_sqlSelectAll", generatedText);
+        Assert.Contains("_sqlInsert", generatedText);
+        Assert.Contains("_sqlUpdate", generatedText);
+        Assert.Contains("_sqlDeleteByKey", generatedText);
+        Assert.DoesNotContain("_sqlStatements", generatedText);
+        Assert.DoesNotContain("InquirySqlStatementBuilder", generatedText);
+        Assert.DoesNotContain("InquirySqlStatementSet", generatedText);
         Assert.DoesNotContain("AddParameter", generatedText);
         Assert.DoesNotContain("SqlServer", generatedText);
         Assert.DoesNotContain("Sqlite", generatedText);
@@ -172,12 +179,12 @@ public sealed class InquiryGeneratorTests
     }
 
     [Theory]
-    [InlineData("[InquirySelectAll]", "public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);", "_sqlStatements.SelectAll")]
-    [InlineData("[InquirySelectOneByKey]", "public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlStatements.SelectByKey")]
-    [InlineData("[InquirySelectAllByField(\"IsActive\")]", "public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);", "_sqlStatements.SelectByField")]
-    [InlineData("[InquiryInsert]", "public abstract Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlStatements.Insert")]
-    [InlineData("[InquiryUpdate]", "public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlStatements.Update")]
-    [InlineData("[InquiryDeleteOneByKey]", "public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlStatements.DeleteByKey")]
+    [InlineData("[InquirySelectAll]", "public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);", "_sqlSelectAll")]
+    [InlineData("[InquirySelectOneByKey]", "public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlSelectByKey")]
+    [InlineData("[InquirySelectAllByField(\"IsActive\")]", "public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);", "_sqlSelectBy_IsActive")]
+    [InlineData("[InquiryInsert]", "public abstract Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlInsert")]
+    [InlineData("[InquiryUpdate]", "public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlUpdate")]
+    [InlineData("[InquiryDeleteOneByKey]", "public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlDeleteByKey")]
     public void GeneratesStoreMethodForEachOperationSlice(string attribute, string methodDeclaration, string expectedStatement)
     {
         var source = $$"""

@@ -25,15 +25,6 @@ public abstract partial class ProductStore : InquiryStore<Product>
     [InquiryUpsert]
     public abstract Task<int> UpsertAsync(Product product, CancellationToken cancellationToken = default);
 
-    [InquiryBulkInsert]
-    public abstract Task<int> BulkInsertAsync(IEnumerable<Product> products, CancellationToken cancellationToken = default);
-
-    [InquiryBulkUpdate]
-    public abstract Task<int> BulkUpdateAsync(IEnumerable<Product> products, CancellationToken cancellationToken = default);
-
-    [InquiryBulkDelete]
-    public abstract Task<int> BulkDeleteAsync(IEnumerable<Guid> keys, CancellationToken cancellationToken = default);
-
     [InquiryDeleteOneByKey]
     public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 }

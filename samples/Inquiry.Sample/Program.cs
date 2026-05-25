@@ -69,23 +69,11 @@ app.MapGet("/api/categories/{key:guid}", async (Guid key, CategoryStore store) =
 app.MapGet("/api/products", async (ProductStore store) =>
     await ToListAsync(store.SelectAllAsync()));
 
-app.MapPost("/api/products/bulk", async (List<Product> newProducts, ProductStore store) =>
-{
-    var inserted = await store.BulkInsertAsync(newProducts);
-    return Results.Ok(new { inserted });
-});
-
 app.MapPut("/api/products/{key:guid}", async (Guid key, Product updated, ProductStore store) =>
 {
     updated.Key = key;
     var rows = await store.UpsertAsync(updated);
     return Results.Ok(new { rows });
-});
-
-app.MapDelete("/api/products/bulk", async (List<Guid> keys, ProductStore store) =>
-{
-    var deleted = await store.BulkDeleteAsync(keys);
-    return Results.Ok(new { deleted });
 });
 
 // ── Transaction demo endpoint ─────────────────────────────────────────────────
@@ -147,31 +135,40 @@ static async Task SeedAsync(IServiceProvider services)
     var alice = new User { Key = Guid.NewGuid(), FirstName = "Alice", LastName = "Anders", Email = "alice@example.com" };
     var bob = new User { Key = Guid.NewGuid(), FirstName = "Bob", LastName = "Brown", Email = "bob@example.com" };
     var carol = new User { Key = Guid.NewGuid(), FirstName = "Carol", LastName = "Carter", Email = "carol@example.com" };
-    await users.BulkInsertAsync(new[] { alice, bob, carol });
+    foreach (var u in new[] { alice, bob, carol })
+    {
+        await users.InsertAsync(u);
+    }
 
     // Memberships
-    await memberships.BulkInsertAsync(new[]
+    foreach (var m in new[]
     {
         new OrganizationToUser { Key = Guid.NewGuid(), OrganizationKey = acme.Key, UserKey = alice.Key, IsActive = true },
         new OrganizationToUser { Key = Guid.NewGuid(), OrganizationKey = acme.Key, UserKey = bob.Key, IsActive = true },
         new OrganizationToUser { Key = Guid.NewGuid(), OrganizationKey = globex.Key, UserKey = alice.Key, IsActive = true },
         new OrganizationToUser { Key = Guid.NewGuid(), OrganizationKey = globex.Key, UserKey = carol.Key, IsActive = true },
-    });
+    })
+    {
+        await memberships.InsertAsync(m);
+    }
 
-    // Categories and products with bulk insert
+    // Categories and products
     var electronics = new Category { Key = Guid.NewGuid(), Name = "Electronics" };
     var clothing = new Category { Key = Guid.NewGuid(), Name = "Clothing" };
     await categories.InsertAsync(electronics);
     await categories.InsertAsync(clothing);
 
-    await products.BulkInsertAsync(new[]
+    foreach (var p in new[]
     {
         new Product { Key = Guid.NewGuid(), Name = "Laptop", Price = 999.99m, CategoryKey = electronics.Key },
         new Product { Key = Guid.NewGuid(), Name = "Phone", Price = 699.99m, CategoryKey = electronics.Key },
         new Product { Key = Guid.NewGuid(), Name = "Headphones", Price = 149.99m, CategoryKey = electronics.Key },
         new Product { Key = Guid.NewGuid(), Name = "T-Shirt", Price = 29.99m, CategoryKey = clothing.Key },
         new Product { Key = Guid.NewGuid(), Name = "Jeans", Price = 59.99m, CategoryKey = clothing.Key },
-    });
+    })
+    {
+        await products.InsertAsync(p);
+    }
 
     // Demonstrate upsert: update one product
     var allProducts = await ToListAsync(products.SelectAllAsync());
@@ -229,7 +226,7 @@ static string BuildHtml(
         </head>
         <body>
           <h1>🔍 Inquiry Sample Application</h1>
-          <p>Source-generated micro-ORM demonstrating: <strong>CRUD · Bulk Ops · Upsert · Transactions · Eager Loading</strong></p>
+          <p>Source-generated micro-ORM demonstrating: <strong>CRUD · Upsert · Transactions · Eager Loading</strong></p>
 
           <h2>Organizations</h2>
           <table>
@@ -257,9 +254,7 @@ static string BuildHtml(
               <li><code>GET /api/organizations/{key}</code> — find one by key</li>
               <li><code>GET /api/categories</code> — list categories with products (eager)</li>
               <li><code>GET /api/products</code> — list all products</li>
-              <li><code>POST /api/products/bulk</code> — bulk insert products</li>
               <li><code>PUT /api/products/{key}</code> — upsert a product</li>
-              <li><code>DELETE /api/products/bulk</code> — bulk delete by keys</li>
               <li><code>POST /api/demo/transaction</code> — insert category + products in a transaction</li>
             </ul>
           </div>

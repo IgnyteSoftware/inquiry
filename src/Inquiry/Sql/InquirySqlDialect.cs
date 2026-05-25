@@ -1,23 +1,20 @@
 namespace Inquiry.Sql;
 
 /// <summary>
-/// Provides provider-specific SQL naming, quoting, and statement generation for Inquiry.
+/// Provider-specific SQL naming, quoting, and statement generation for Inquiry.
 /// </summary>
 /// <remarks>
-/// The base class supplies only identifier/parameter naming primitives. All SQL statement
-/// bodies are produced by the provider packages so each one can be tuned independently
-/// (provider-optimized syntax, hints, RETURNING/OUTPUT clauses, etc.).
+/// Each provider package implements this class to own every SQL string Inquiry produces.
+/// The base type supplies only the dialect-agnostic plumbing — identifier/parameter naming,
+/// validation, and the context object that statement builders consume. All concrete SQL
+/// bodies live in the provider package and can be tuned independently.
 /// </remarks>
 public abstract class InquirySqlDialect
 {
-    /// <summary>
-    /// Gets the dialect name.
-    /// </summary>
+    /// <summary>Gets the dialect name.</summary>
     public abstract string Name { get; }
 
-    /// <summary>
-    /// Formats a logical parameter name for the provider.
-    /// </summary>
+    /// <summary>Formats a logical parameter name for the provider.</summary>
     public virtual string ParameterName(string logicalName)
     {
         if (string.IsNullOrWhiteSpace(logicalName))
@@ -28,9 +25,7 @@ public abstract class InquirySqlDialect
         return "@" + logicalName;
     }
 
-    /// <summary>
-    /// Formats a table name and optional schema for the provider.
-    /// </summary>
+    /// <summary>Formats a table name and optional schema for the provider.</summary>
     public string QuoteTable(string? schema, string tableName)
     {
         if (string.IsNullOrWhiteSpace(tableName))
@@ -43,10 +38,66 @@ public abstract class InquirySqlDialect
             : QuoteIdentifier(schema!) + "." + QuoteIdentifier(tableName);
     }
 
-    /// <summary>
-    /// Quotes an identifier for the provider.
-    /// </summary>
+    /// <summary>Quotes an identifier for the provider.</summary>
     public abstract string QuoteIdentifier(string identifier);
+
+    /// <summary>
+    /// Validates column metadata and returns a precomputed <see cref="InquirySqlBuildContext"/>
+    /// that the <c>Build*Sql</c> methods consume. Called once per (entity, dialect) pair —
+    /// usually in the generated store's constructor.
+    /// </summary>
+    public InquirySqlBuildContext CreateContext(string? schema, string tableName, IReadOnlyList<InquirySqlColumn> columns)
+    {
+        if (columns is null)
+        {
+            throw new ArgumentNullException(nameof(columns));
+        }
+
+        if (columns.Count == 0)
+        {
+            throw new ArgumentException("At least one column is required.", nameof(columns));
+        }
+
+        var keys = columns.Where(c => c.IsKey).ToArray();
+        if (keys.Length == 0)
+        {
+            throw new ArgumentException("Columns must contain exactly one key column; none were marked as a key.", nameof(columns));
+        }
+
+        if (keys.Length > 1)
+        {
+            throw new ArgumentException("Columns must contain exactly one key column; multiple columns are marked as keys.", nameof(columns));
+        }
+
+        var key = keys[0];
+        var insertableColumns = columns.Where(c => !c.IsGenerated).ToArray();
+        if (insertableColumns.Length == 0)
+        {
+            throw new ArgumentException("At least one column must not be database-generated so INSERT can supply a value.", nameof(columns));
+        }
+
+        var table = QuoteTable(schema, tableName);
+        var selectColumns = string.Join(", ", columns.Select(c => QuoteIdentifier(c.ColumnName)));
+        var insertColumns = string.Join(", ", insertableColumns.Select(c => QuoteIdentifier(c.ColumnName)));
+        var insertParameters = string.Join(", ", insertableColumns.Select(c => ParameterName(c.PropertyName)));
+        var setClauses = string.Join(", ", columns
+            .Where(c => !c.IsKey && !c.IsGenerated)
+            .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
+        var quotedKeyColumn = QuoteIdentifier(key.ColumnName);
+        var keyParam = ParameterName(key.PropertyName);
+
+        return new InquirySqlBuildContext(
+            table: table,
+            columns: columns,
+            keyColumn: key,
+            insertableColumns: insertableColumns,
+            selectColumns: selectColumns,
+            insertColumns: insertColumns,
+            insertParameters: insertParameters,
+            setClauses: setClauses,
+            quotedKeyColumn: quotedKeyColumn,
+            keyParameter: keyParam);
+    }
 
     /// <summary>Builds the SELECT-all statement.</summary>
     public abstract string BuildSelectAllSql(InquirySqlBuildContext context);

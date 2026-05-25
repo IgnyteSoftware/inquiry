@@ -12,6 +12,16 @@ public sealed class SqliteDialectTests
         new("IsActive", "IsActive", isKey: false),
     };
 
+    private static (SqliteInquirySqlDialect Dialect, InquirySqlBuildContext Context) NewContext(
+        string? schema = null,
+        string tableName = "TOrganization",
+        InquirySqlColumn[]? columns = null)
+    {
+        var dialect = new SqliteInquirySqlDialect();
+        var context = dialect.CreateContext(schema, tableName, columns ?? _columns);
+        return (dialect, context);
+    }
+
     [Fact]
     public void QuoteIdentifierDoubleQuotes()
     {
@@ -29,49 +39,39 @@ public sealed class SqliteDialectTests
     [Fact]
     public void BuildsSelectStatements()
     {
-        var statements = new InquirySqlStatementBuilder(new SqliteInquirySqlDialect()).Build(null, "TOrganization", _columns);
+        var (dialect, ctx) = NewContext();
 
-        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\"", statements.SelectAll);
-        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Key\" = @key", statements.SelectByKey);
-        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"IsActive\" = @value", statements.SelectByField["IsActive"]);
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\"", dialect.BuildSelectAllSql(ctx));
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Key\" = @key", dialect.BuildSelectByKeySql(ctx));
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"IsActive\" = @value", dialect.BuildSelectByFieldSql(ctx, _columns[2]));
     }
 
     [Fact]
     public void BuildsInsertUpdateDeleteStatements()
     {
-        var statements = new InquirySqlStatementBuilder(new SqliteInquirySqlDialect()).Build(null, "TOrganization", _columns);
+        var (dialect, ctx) = NewContext();
 
-        Assert.Equal("INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive)", statements.Insert);
-        Assert.Equal("UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key", statements.Update);
-        Assert.Equal("DELETE FROM \"TOrganization\" WHERE \"Key\" = @key", statements.DeleteByKey);
+        Assert.Equal("INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive)", dialect.BuildInsertSql(ctx));
+        Assert.Equal("UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key", dialect.BuildUpdateSql(ctx));
+        Assert.Equal("DELETE FROM \"TOrganization\" WHERE \"Key\" = @key", dialect.BuildDeleteByKeySql(ctx));
     }
 
     [Fact]
     public void BuildsUpsertWithInsertOrReplace()
     {
-        var statements = new InquirySqlStatementBuilder(new SqliteInquirySqlDialect()).Build(null, "TOrganization", _columns);
+        var (dialect, ctx) = NewContext();
 
-        Assert.StartsWith("INSERT OR REPLACE INTO \"TOrganization\"", statements.Upsert);
+        Assert.StartsWith("INSERT OR REPLACE INTO \"TOrganization\"", dialect.BuildUpsertSql(ctx));
     }
 
     [Fact]
     public void BuildsUpsertStatement()
     {
-        var statements = new InquirySqlStatementBuilder(new SqliteInquirySqlDialect()).Build(null, "TOrganization", _columns);
+        var (dialect, ctx) = NewContext();
 
         Assert.Equal(
             "INSERT OR REPLACE INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive)",
-            statements.Upsert);
-    }
-
-    [Fact]
-    public void SelectByFieldCoversAllColumns()
-    {
-        var statements = new InquirySqlStatementBuilder(new SqliteInquirySqlDialect()).Build(null, "TOrganization", _columns);
-
-        Assert.True(statements.SelectByField.ContainsKey("Key"));
-        Assert.True(statements.SelectByField.ContainsKey("Name"));
-        Assert.True(statements.SelectByField.ContainsKey("IsActive"));
+            dialect.BuildUpsertSql(ctx));
     }
 
     [Fact]
@@ -82,35 +82,35 @@ public sealed class SqliteDialectTests
             new("Id", "Id", isKey: true, isGenerated: true),
             new("Name", "Name", isKey: false),
         };
+        var (dialect, ctx) = NewContext(tableName: "TItems", columns: columns);
 
-        var statements = new InquirySqlStatementBuilder(new SqliteInquirySqlDialect()).Build(null, "TItems", columns);
-
-        Assert.DoesNotContain("Id", statements.Insert);
-        Assert.Equal("INSERT INTO \"TItems\" (\"Name\") VALUES (@Name)", statements.Insert);
+        var insert = dialect.BuildInsertSql(ctx);
+        Assert.DoesNotContain("Id", insert);
+        Assert.Equal("INSERT INTO \"TItems\" (\"Name\") VALUES (@Name)", insert);
     }
 
     [Fact]
-    public void BuildThrowsWhenNoKeyColumn()
+    public void CreateContextThrowsWhenNoKeyColumn()
     {
         var columns = new InquirySqlColumn[]
         {
             new("Name", "Name", isKey: false),
         };
+        var dialect = new SqliteInquirySqlDialect();
 
-        Assert.Throws<ArgumentException>(() =>
-            new InquirySqlStatementBuilder(new SqliteInquirySqlDialect()).Build(null, "T", columns));
+        Assert.Throws<ArgumentException>(() => dialect.CreateContext(null, "T", columns));
     }
 
     [Fact]
-    public void BuildThrowsWhenAllColumnsGenerated()
+    public void CreateContextThrowsWhenAllColumnsGenerated()
     {
         var columns = new InquirySqlColumn[]
         {
             new("Id", "Id", isKey: true, isGenerated: true),
         };
+        var dialect = new SqliteInquirySqlDialect();
 
-        Assert.Throws<ArgumentException>(() =>
-            new InquirySqlStatementBuilder(new SqliteInquirySqlDialect()).Build(null, "T", columns));
+        Assert.Throws<ArgumentException>(() => dialect.CreateContext(null, "T", columns));
     }
 
     [Fact]

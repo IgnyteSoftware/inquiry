@@ -81,7 +81,7 @@ public sealed class TransactionIntegrationTests
     }
 
     [Fact]
-    public async Task TransactionInquirySupportsBulkInsert()
+    public async Task TransactionInquirySupportsMultipleInsertsInOneCommit()
     {
         var cs = CreateConnectionString();
         await using var keeper = new SqliteConnection(cs);

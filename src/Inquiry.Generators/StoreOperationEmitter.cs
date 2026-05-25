@@ -49,15 +49,6 @@ internal static class StoreOperationEmitter
                 case "InquiryUpsertAttribute":
                     attribute = candidate;
                     return StoreOperation.Upsert;
-                case "InquiryBulkInsertAttribute":
-                    attribute = candidate;
-                    return StoreOperation.BulkInsert;
-                case "InquiryBulkUpdateAttribute":
-                    attribute = candidate;
-                    return StoreOperation.BulkUpdate;
-                case "InquiryBulkDeleteAttribute":
-                    attribute = candidate;
-                    return StoreOperation.BulkDelete;
                 case "InquiryDeleteOneByKeyAttribute":
                     attribute = candidate;
                     return StoreOperation.DeleteOneByKey;
@@ -146,7 +137,7 @@ internal static class StoreOperationEmitter
         {
             case StoreOperation.SelectAll:
                 AppendHeader(source, symbol, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(_sqlStatements.SelectAll, {cancellation});");
+                source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(_sqlSelectAll, {cancellation});");
                 source.AppendLine("    }");
                 break;
 
@@ -157,7 +148,7 @@ internal static class StoreOperationEmitter
             case StoreOperation.SelectOneByKey:
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
-                source.AppendLine("            _sqlStatements.SelectByKey,");
+                source.AppendLine("            _sqlSelectByKey,");
                 source.AppendLine($"            new {{ key = {firstParameter} }},");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
@@ -170,7 +161,7 @@ internal static class StoreOperationEmitter
             case StoreOperation.SelectAllByField:
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(");
-                source.AppendLine($"            _sqlStatements.SelectByField[\"{GeneratorHelpers.Escape(method.FieldColumn!.PropertyName)}\"],");
+                source.AppendLine($"            _sqlSelectBy_{method.FieldColumn!.PropertyName},");
                 source.AppendLine($"            new {{ value = {firstParameter} }},");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
@@ -179,7 +170,7 @@ internal static class StoreOperationEmitter
             case StoreOperation.Insert:
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 source.AppendLine("        return Inquiry.ExecuteAsync(");
-                source.AppendLine("            _sqlStatements.Insert,");
+                source.AppendLine("            _sqlInsert,");
                 source.AppendLine("            new");
                 source.AppendLine("            {");
                 foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
@@ -194,7 +185,7 @@ internal static class StoreOperationEmitter
             case StoreOperation.Update:
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 source.AppendLine("        return await Inquiry.ExecuteAsync(");
-                source.AppendLine("            _sqlStatements.Update,");
+                source.AppendLine("            _sqlUpdate,");
                 source.AppendLine("            new");
                 source.AppendLine("            {");
                 foreach (var column in entity.Columns.Where(c => c.IsKey || !c.IsGenerated))
@@ -209,7 +200,7 @@ internal static class StoreOperationEmitter
             case StoreOperation.Upsert:
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 source.AppendLine("        return Inquiry.ExecuteAsync(");
-                source.AppendLine("            _sqlStatements.Upsert,");
+                source.AppendLine("            _sqlUpsert,");
                 source.AppendLine("            new");
                 source.AppendLine("            {");
                 foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
@@ -221,22 +212,10 @@ internal static class StoreOperationEmitter
                 source.AppendLine("    }");
                 break;
 
-            case StoreOperation.BulkInsert:
-                EmitBulkInsert(source, symbol, parameters, cancellation, firstParameter, entity);
-                break;
-
-            case StoreOperation.BulkUpdate:
-                EmitBulkUpdate(source, symbol, parameters, cancellation, firstParameter, entity);
-                break;
-
-            case StoreOperation.BulkDelete:
-                EmitBulkDelete(source, symbol, parameters, cancellation, firstParameter, entity);
-                break;
-
             case StoreOperation.DeleteOneByKey:
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 source.AppendLine("        return await Inquiry.ExecuteAsync(");
-                source.AppendLine("            _sqlStatements.DeleteByKey,");
+                source.AppendLine("            _sqlDeleteByKey,");
                 source.AppendLine($"            new {{ key = {firstParameter} }},");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
                 source.AppendLine("    }");
@@ -249,65 +228,6 @@ internal static class StoreOperationEmitter
     }
 
     // ---- Private emit helpers ----
-
-    private static void EmitBulkInsert(StringBuilder source, IMethodSymbol symbol, string parameters, string cancellation, string firstParam, EntityModel entity)
-    {
-        AppendHeader(source, symbol, parameters, isAsync: true);
-        source.AppendLine($"        var _total = 0;");
-        source.AppendLine($"        foreach (var _item in {firstParam})");
-        source.AppendLine("        {");
-        source.AppendLine("            _total += await Inquiry.ExecuteAsync(");
-        source.AppendLine("                _sqlStatements.Insert,");
-        source.AppendLine("                new");
-        source.AppendLine("                {");
-        foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
-        {
-            source.AppendLine($"                    {column.PropertyName} = _item.{column.PropertyName},");
-        }
-        source.AppendLine("                },");
-        source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
-        source.AppendLine("        }");
-        source.AppendLine("        return _total;");
-        source.AppendLine("    }");
-    }
-
-    private static void EmitBulkUpdate(StringBuilder source, IMethodSymbol symbol, string parameters, string cancellation, string firstParam, EntityModel entity)
-    {
-        AppendHeader(source, symbol, parameters, isAsync: true);
-        source.AppendLine($"        var _total = 0;");
-        source.AppendLine($"        foreach (var _item in {firstParam})");
-        source.AppendLine("        {");
-        source.AppendLine("            var _affected = await Inquiry.ExecuteAsync(");
-        source.AppendLine("                _sqlStatements.Update,");
-        source.AppendLine("                new");
-        source.AppendLine("                {");
-        foreach (var column in entity.Columns.Where(c => c.IsKey || !c.IsGenerated))
-        {
-            source.AppendLine($"                    {column.PropertyName} = _item.{column.PropertyName},");
-        }
-        source.AppendLine("                },");
-        source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
-        source.AppendLine("            _total += _affected;");
-        source.AppendLine("        }");
-        source.AppendLine("        return _total;");
-        source.AppendLine("    }");
-    }
-
-    private static void EmitBulkDelete(StringBuilder source, IMethodSymbol symbol, string parameters, string cancellation, string firstParam, EntityModel entity)
-    {
-        AppendHeader(source, symbol, parameters, isAsync: true);
-        source.AppendLine($"        var _total = 0;");
-        source.AppendLine($"        foreach (var _key in {firstParam})");
-        source.AppendLine("        {");
-        source.AppendLine("            var _affected = await Inquiry.ExecuteAsync(");
-        source.AppendLine("                _sqlStatements.DeleteByKey,");
-        source.AppendLine($"                new {{ key = _key }},");
-        source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
-        source.AppendLine("            _total += _affected;");
-        source.AppendLine("        }");
-        source.AppendLine("        return _total;");
-        source.AppendLine("    }");
-    }
 
     private static void EmitStoredProcedure(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string procedureName, EntityModel entity)
     {
@@ -366,7 +286,7 @@ internal static class StoreOperationEmitter
     {
         AppendHeader(source, symbol, parameters, isAsync: true);
         source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
-        source.AppendLine("            _sqlStatements.SelectByKey,");
+        source.AppendLine("            _sqlSelectByKey,");
         source.AppendLine($"            new {{ key = {firstParam} }},");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
         source.AppendLine("        if (_entity is not null)");
@@ -390,7 +310,7 @@ internal static class StoreOperationEmitter
         var parametersWithAttr = GeneratorHelpers.GetParameterDeclaration(symbol, enumeratorCancellation: true);
         AppendHeader(source, symbol, parametersWithAttr, isAsync: true);
         source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
-        source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}>(_sqlStatements.SelectAll, {cancellation}).ConfigureAwait(false))");
+        source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}>(_sqlSelectAll, {cancellation}).ConfigureAwait(false))");
         source.AppendLine("            _entities.Add(_e);");
         source.AppendLine();
 
@@ -444,7 +364,7 @@ internal static class StoreOperationEmitter
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entity.Symbol),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entity.Symbol),
-            StoreOperation.Insert or StoreOperation.BulkInsert or StoreOperation.BulkUpdate or StoreOperation.BulkDelete or StoreOperation.Upsert =>
+            StoreOperation.Insert or StoreOperation.Upsert =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             StoreOperation.Update or StoreOperation.DeleteOneByKey =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
@@ -489,30 +409,10 @@ internal static class StoreOperationEmitter
             StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert =>
                 method.Parameters.Length == 2 &&
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, entity.Symbol),
-            StoreOperation.BulkInsert or StoreOperation.BulkUpdate =>
-                method.Parameters.Length == 2 &&
-                IsEnumerableOf(method.Parameters[0].Type, entity.Symbol),
-            StoreOperation.BulkDelete =>
-                method.Parameters.Length == 2 &&
-                IsEnumerableOf(method.Parameters[0].Type, entity.Key.Type.Symbol),
             StoreOperation.StoredProcedure =>
                 true, // any parameters allowed
             _ => false,
         };
-    }
-
-    private static bool IsEnumerableOf(ITypeSymbol type, ITypeSymbol elementType)
-    {
-        if (type is not INamedTypeSymbol named || !named.IsGenericType || named.TypeArguments.Length != 1)
-            return false;
-        if (!SymbolEqualityComparer.Default.Equals(named.TypeArguments[0], elementType))
-            return false;
-        var fqn = named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        return fqn is "global::System.Collections.Generic.IEnumerable<T>"
-                   or "global::System.Collections.Generic.IReadOnlyList<T>"
-                   or "global::System.Collections.Generic.IList<T>"
-                   or "global::System.Collections.Generic.List<T>"
-                   or "global::System.Collections.Generic.ICollection<T>";
     }
 
     private static bool IsAsyncEnumerable(ITypeSymbol type, out ITypeSymbol? elementType)
