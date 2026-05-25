@@ -10,11 +10,17 @@ namespace Inquiry.Pipeline;
 /// An <see cref="IInquiryRequestPipeline"/> that executes commands on an already-open connection
 /// within an active transaction.
 /// </summary>
+/// <remarks>
+/// A single <see cref="DbConnection"/> is not thread-safe, so this pipeline rejects concurrent
+/// operations: starting a second op while another is in flight throws
+/// <see cref="InvalidOperationException"/> instead of corrupting the connection state.
+/// </remarks>
 internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 {
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
     private readonly IInquiryCommandInterceptor[] _interceptors;
+    private int _inFlight; // 0 = idle, 1 = busy
 
     internal TransactedInquiryRequestPipeline(
         DbConnection connection,
@@ -35,11 +41,12 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materialize is null) throw new ArgumentNullException(nameof(materialize));
 
-        await using var dbCommand = _connection.CreateCommand();
-        dbCommand.Transaction = _transaction;
+        EnterInFlight();
         DbDataReader? reader = null;
+        var dbCommand = _connection.CreateCommand();
         try
         {
+            dbCommand.Transaction = _transaction;
             await InitializeCommandAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
             await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
 
@@ -93,6 +100,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             {
                 await reader.DisposeAsync().ConfigureAwait(false);
             }
+            await dbCommand.DisposeAsync().ConfigureAwait(false);
+            ExitInFlight();
         }
     }
 
@@ -105,34 +114,42 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materialize is null) throw new ArgumentNullException(nameof(materialize));
 
-        await using var dbCommand = _connection.CreateCommand();
-        dbCommand.Transaction = _transaction;
-
+        EnterInFlight();
         try
         {
-            await InitializeCommandAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
-            await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+            await using var dbCommand = _connection.CreateCommand();
+            dbCommand.Transaction = _transaction;
 
-            await using var reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            try
             {
+                await InitializeCommandAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+
+                await using var reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    await NotifyExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                    return default;
+                }
+
+                var result = materialize(reader);
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException("QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.");
+                }
+
                 await NotifyExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
-                return default;
+                return result;
             }
-
-            var result = materialize(reader);
-            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            catch (Exception exception)
             {
-                throw new InvalidOperationException("QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.");
+                await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
             }
-
-            await NotifyExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
-            return result;
         }
-        catch (Exception exception)
+        finally
         {
-            await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
-            throw;
+            ExitInFlight();
         }
     }
 
@@ -141,25 +158,45 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
 
-        await using var dbCommand = _connection.CreateCommand();
-        dbCommand.Transaction = _transaction;
-
+        EnterInFlight();
         try
         {
-            await InitializeCommandAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
-            await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+            await using var dbCommand = _connection.CreateCommand();
+            dbCommand.Transaction = _transaction;
 
-            var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await InitializeCommandAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
 
-            await NotifyExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
-            return recordsAffected;
+                var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+                await NotifyExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
+                return recordsAffected;
+            }
+            catch (Exception exception)
+            {
+                await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
         }
-        catch (Exception exception)
+        finally
         {
-            await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
-            throw;
+            ExitInFlight();
         }
     }
+
+    private void EnterInFlight()
+    {
+        if (System.Threading.Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
+        {
+            throw new InvalidOperationException(
+                "Cannot start a new Inquiry operation while another operation is in flight on the same transaction. " +
+                "DbConnection is not thread-safe; serialize operations within a single transaction (no Task.WhenAll, no concurrent foreach).");
+        }
+    }
+
+    private void ExitInFlight() => System.Threading.Interlocked.Exchange(ref _inFlight, 0);
 
     private async ValueTask InitializeCommandAsync(DbCommand dbCommand, InquiryCommand command, CancellationToken ct)
     {

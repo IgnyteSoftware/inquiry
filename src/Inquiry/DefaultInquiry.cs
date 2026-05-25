@@ -7,18 +7,46 @@ using Inquiry.Pipeline;
 using Inquiry.Transactions;
 using Microsoft.Extensions.DependencyInjection;
 using System.Data;
+using System.Data.Common;
 
 namespace Inquiry;
 
 /// <summary>
 /// Default implementation of the high-level Inquiry facade.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Holds an <see cref="AsyncLocal{T}"/> slot for the active transactional pipeline. When
+/// <see cref="BeginTransactionAsync"/> runs, it pushes a <see cref="TransactedInquiryRequestPipeline"/>
+/// onto that slot; every query/execute method then routes through the ambient pipeline instead
+/// of the default one. This is what makes generated stores — which hold a single <see cref="IInquiry"/>
+/// reference from DI — automatically participate in any transaction the caller opens.
+/// </para>
+/// <para>
+/// The slot is cleared on transaction commit, rollback, or dispose; straggler async work that
+/// fires after the transaction has been closed silently falls back to the default pipeline.
+/// </para>
+/// </remarks>
 public sealed class DefaultInquiry : IInquiry
 {
-    private readonly IInquiryRequestPipeline _requestPipeline;
+    private readonly IInquiryRequestPipeline _defaultPipeline;
     private readonly IInquiryConnectionFactory _connectionFactory;
     private readonly IInquiryCommandInterceptor[] _interceptors;
     private readonly IServiceProvider _serviceProvider;
+
+    // The slot stores a *holder* rather than the pipeline directly. Setting an AsyncLocal
+    // value from inside an async callee does not propagate back to the caller (see
+    // https://learn.microsoft.com/dotnet/api/system.threading.asynclocal-1), so we install
+    // the holder synchronously at the top of BeginTransactionAsync — before any await —
+    // and mutate the holder's Pipeline field once the connection/transaction is open.
+    // The caller's async context already references the same holder, so the mutation is
+    // visible across the await boundary.
+    private readonly AsyncLocal<AmbientTransactionSlot?> _ambientSlot = new();
+
+    private sealed class AmbientTransactionSlot
+    {
+        public TransactedInquiryRequestPipeline? Pipeline;
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DefaultInquiry"/> class.
@@ -29,11 +57,13 @@ public sealed class DefaultInquiry : IInquiry
         IEnumerable<IInquiryCommandInterceptor> interceptors,
         IServiceProvider serviceProvider)
     {
-        _requestPipeline = requestPipeline ?? throw new ArgumentNullException(nameof(requestPipeline));
+        _defaultPipeline = requestPipeline ?? throw new ArgumentNullException(nameof(requestPipeline));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _interceptors = interceptors?.ToArray() ?? throw new ArgumentNullException(nameof(interceptors));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
+
+    private IInquiryRequestPipeline ActivePipeline => _ambientSlot.Value?.Pipeline ?? _defaultPipeline;
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -55,7 +85,7 @@ public sealed class DefaultInquiry : IInquiry
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
-        => _requestPipeline.QueryAsync(command, GetMaterializer<TEntity>().Materialize, cancellationToken);
+        => ActivePipeline.QueryAsync(command, GetMaterializer<TEntity>().Materialize, cancellationToken);
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -77,7 +107,7 @@ public sealed class DefaultInquiry : IInquiry
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
-        => _requestPipeline.QuerySingleOrDefaultAsync(command, GetMaterializer<TEntity>().Materialize, cancellationToken);
+        => ActivePipeline.QuerySingleOrDefaultAsync(command, GetMaterializer<TEntity>().Materialize, cancellationToken);
 
     /// <inheritdoc />
     public Task<int> ExecuteAsync(
@@ -96,24 +126,51 @@ public sealed class DefaultInquiry : IInquiry
     public Task<int> ExecuteAsync(
         InquiryCommand command,
         CancellationToken cancellationToken = default)
-        => _requestPipeline.ExecuteAsync(command, cancellationToken);
+        => ActivePipeline.ExecuteAsync(command, cancellationToken);
 
     /// <inheritdoc />
-    public async Task<IInquiryTransaction> BeginTransactionAsync(
+    public Task<IInquiryTransaction> BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)
     {
-        var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        if (_ambientSlot.Value?.Pipeline is not null)
+        {
+            throw new InvalidOperationException("Nested transactions are not supported by Inquiry.");
+        }
+
+        // Install the slot *synchronously* (before any await) so the caller's async
+        // control flow sees it. The Pipeline field is mutated later, after the
+        // connection + transaction are open — the caller observes that mutation via
+        // the shared slot reference.
+        var slot = new AmbientTransactionSlot();
+        _ambientSlot.Value = slot;
+
+        return BeginTransactionCoreAsync(slot, isolationLevel, cancellationToken);
+    }
+
+    private async Task<IInquiryTransaction> BeginTransactionCoreAsync(
+        AmbientTransactionSlot slot,
+        IsolationLevel isolationLevel,
+        CancellationToken cancellationToken)
+    {
+        DbConnection? connection = null;
         try
         {
+            connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
             var transaction = await connection.BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
-            var transactedPipeline = new TransactedInquiryRequestPipeline(connection, transaction, _interceptors);
-            var transactedInquiry = new TransactedInquiry(transactedPipeline, _serviceProvider);
-            return new InquiryTransaction(connection, transaction, transactedInquiry);
+            slot.Pipeline = new TransactedInquiryRequestPipeline(connection, transaction, _interceptors);
+            return new InquiryTransaction(connection, transaction, this, onClose: () => slot.Pipeline = null);
         }
         catch
         {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            // Leave the slot installed but empty — Pipeline == null falls through to the
+            // default pipeline and the user can begin a fresh transaction (a new slot will
+            // replace this one synchronously next time).
+            slot.Pipeline = null;
+            if (connection is not null)
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+            }
             throw;
         }
     }
