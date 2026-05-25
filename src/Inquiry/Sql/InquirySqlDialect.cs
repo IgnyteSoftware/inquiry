@@ -61,15 +61,16 @@ public abstract class InquirySqlDialect
         var keys = columns.Where(c => c.IsKey).ToArray();
         if (keys.Length == 0)
         {
-            throw new ArgumentException("Columns must contain exactly one key column; none were marked as a key.", nameof(columns));
+            throw new ArgumentException("Columns must contain at least one key column; none were marked as a key.", nameof(columns));
         }
 
-        if (keys.Length > 1)
+        // Composite keys cannot contain database-generated columns (IDENTITY in a composite PK
+        // makes no sense — every column has to be client-supplied for the insert to be deterministic).
+        if (keys.Length > 1 && keys.Any(k => k.IsGenerated))
         {
-            throw new ArgumentException("Columns must contain exactly one key column; multiple columns are marked as keys.", nameof(columns));
+            throw new ArgumentException("Composite primary keys cannot contain database-generated columns.", nameof(columns));
         }
 
-        var key = keys[0];
         var insertableColumns = columns.Where(c => !c.IsGenerated && !c.UseDatabaseDefault).ToArray();
         var table = QuoteTable(schema, tableName);
         var selectColumns = string.Join(", ", columns.Select(c => QuoteIdentifier(c.ColumnName)));
@@ -78,20 +79,23 @@ public abstract class InquirySqlDialect
         var setClauses = string.Join(", ", columns
             .Where(c => !c.IsKey && !c.IsGenerated)
             .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
-        var quotedKeyColumn = QuoteIdentifier(key.ColumnName);
-        var keyParam = ParameterName(key.PropertyName);
+        var quotedKeyColumns = keys.Select(k => QuoteIdentifier(k.ColumnName)).ToArray();
+        var keyParameters = keys.Select(k => ParameterName(k.PropertyName)).ToArray();
+        var keyWhereClause = string.Join(" AND ", keys
+            .Select(k => QuoteIdentifier(k.ColumnName) + " = " + ParameterName(k.PropertyName)));
 
         return new InquirySqlBuildContext(
             table: table,
             columns: columns,
-            keyColumn: key,
+            keyColumns: keys,
             insertableColumns: insertableColumns,
             selectColumns: selectColumns,
             insertColumns: insertColumns,
             insertParameters: insertParameters,
             setClauses: setClauses,
-            quotedKeyColumn: quotedKeyColumn,
-            keyParameter: keyParam);
+            quotedKeyColumns: quotedKeyColumns,
+            keyParameters: keyParameters,
+            keyWhereClause: keyWhereClause);
     }
 
     /// <summary>Validates that an INSERT context was provided.</summary>
@@ -122,8 +126,18 @@ public abstract class InquirySqlDialect
     /// <summary>Builds the SELECT-one-by-key statement.</summary>
     public abstract string BuildSelectByKeySql(InquirySqlBuildContext context);
 
-    /// <summary>Builds a SELECT statement filtered by an arbitrary column.</summary>
-    public abstract string BuildSelectByFieldSql(InquirySqlBuildContext context, InquirySqlColumn column);
+    /// <summary>
+    /// Builds a SELECT statement filtered by one or more columns combined with AND.
+    /// Parameter names are derived from each column's <see cref="InquirySqlColumn.PropertyName"/>.
+    /// </summary>
+    public abstract string BuildSelectByFieldSql(InquirySqlBuildContext context, IReadOnlyList<InquirySqlColumn> columns);
+
+    /// <summary>Single-column convenience overload of <see cref="BuildSelectByFieldSql(InquirySqlBuildContext, IReadOnlyList{InquirySqlColumn})"/>.</summary>
+    public string BuildSelectByFieldSql(InquirySqlBuildContext context, InquirySqlColumn column)
+    {
+        if (column is null) throw new ArgumentNullException(nameof(column));
+        return BuildSelectByFieldSql(context, new[] { column });
+    }
 
     /// <summary>Builds the INSERT statement.</summary>
     public abstract string BuildInsertSql(InquirySqlBuildContext context);

@@ -24,6 +24,36 @@ internal static class GeneratorHelpers
         return attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value as string : null;
     }
 
+    /// <summary>
+    /// Reads the first constructor argument as a string array. Handles attributes whose
+    /// constructor is declared with <c>params string[]</c>, where the typed constant is
+    /// an array of typed-constant strings.
+    /// </summary>
+    public static string[]? GetConstructorStringArray(AttributeData attribute)
+    {
+        if (attribute.ConstructorArguments.Length == 0)
+        {
+            return null;
+        }
+
+        var first = attribute.ConstructorArguments[0];
+        if (first.Kind != TypedConstantKind.Array)
+        {
+            return null;
+        }
+
+        var result = new string[first.Values.Length];
+        for (var i = 0; i < first.Values.Length; i++)
+        {
+            if (first.Values[i].Value is not string value)
+            {
+                return null;
+            }
+            result[i] = value;
+        }
+        return result;
+    }
+
     public static string? GetNamedString(AttributeData attribute, string name)
     {
         foreach (var argument in attribute.NamedArguments)

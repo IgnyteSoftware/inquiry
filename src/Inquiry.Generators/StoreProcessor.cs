@@ -77,10 +77,12 @@ internal static class StoreProcessor
         var needsUpsertReturning = methods.Any(m => m.Operation == StoreOperation.Upsert && m.ReturnsEntity);
         var needsDelete = methods.Any(m => m.Operation == StoreOperation.DeleteOneByKey);
 
+        // Distinct sets of field columns referenced by SelectAllByField methods.
+        // Two methods that filter by the same ordered column tuple share one generated SQL field.
         var byFieldOps = methods
-            .Where(m => m.Operation == StoreOperation.SelectAllByField && m.FieldColumn is not null)
-            .GroupBy(m => m.FieldColumn!.PropertyName)
-            .Select(g => g.First().FieldColumn!)
+            .Where(m => m.Operation == StoreOperation.SelectAllByField && m.FieldColumns.Count > 0)
+            .GroupBy(m => BuildFieldSuffix(m.FieldColumns))
+            .Select(g => g.First().FieldColumns)
             .ToArray();
 
         var eagerOps = methods.Where(m => m.Operation is StoreOperation.SelectOneByKeyEager or StoreOperation.SelectAllEager).ToArray();
@@ -139,9 +141,9 @@ internal static class StoreProcessor
         if (needsUpsertReturning) source.AppendLine("    private readonly string _sqlUpsertReturning;");
         if (needsDelete) source.AppendLine("    private readonly string _sqlDeleteByKey;");
 
-        foreach (var col in byFieldOps)
+        foreach (var fieldColumns in byFieldOps)
         {
-            source.AppendLine($"    private readonly string _sqlSelectBy_{col.PropertyName};");
+            source.AppendLine($"    private readonly string _sqlSelectBy_{BuildFieldSuffix(fieldColumns)};");
         }
 
         if (eagerOps.Length > 0)
@@ -178,10 +180,19 @@ internal static class StoreProcessor
         if (needsUpsertReturning) source.AppendLine("        _sqlUpsertReturning = sqlDialect.BuildUpsertReturningSql(_ctx);");
         if (needsDelete) source.AppendLine("        _sqlDeleteByKey = sqlDialect.BuildDeleteByKeySql(_ctx);");
 
-        foreach (var col in byFieldOps)
+        foreach (var fieldColumns in byFieldOps)
         {
-            var index = entity.Columns.FindIndex(c => c.PropertyName == col.PropertyName);
-            source.AppendLine($"        _sqlSelectBy_{col.PropertyName} = sqlDialect.BuildSelectByFieldSql(_ctx, _columns[{index}]);");
+            var suffix = BuildFieldSuffix(fieldColumns);
+            if (fieldColumns.Count == 1)
+            {
+                var index = entity.Columns.FindIndex(c => c.PropertyName == fieldColumns[0].PropertyName);
+                source.AppendLine($"        _sqlSelectBy_{suffix} = sqlDialect.BuildSelectByFieldSql(_ctx, _columns[{index}]);");
+            }
+            else
+            {
+                var indexList = string.Join(", ", fieldColumns.Select(c => $"_columns[{entity.Columns.FindIndex(x => x.PropertyName == c.PropertyName)}]"));
+                source.AppendLine($"        _sqlSelectBy_{suffix} = sqlDialect.BuildSelectByFieldSql(_ctx, new global::Inquiry.Sql.InquirySqlColumn[] {{ {indexList} }});");
+            }
         }
 
         if (eagerOps.Length > 0)
@@ -220,5 +231,11 @@ internal static class StoreProcessor
 
         context.AddSource($"{storeSymbol.Name}.InquiryStore.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
         return new StoreRegistrationModel(storeSymbol, generatedName);
+    }
+
+    private static string BuildFieldSuffix(IReadOnlyList<Models.ColumnModel> columns)
+    {
+        if (columns.Count == 1) return columns[0].PropertyName;
+        return string.Join("_", columns.Select(c => c.PropertyName));
     }
 }

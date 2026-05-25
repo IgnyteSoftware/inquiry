@@ -65,12 +65,43 @@ public sealed class InquirySqlDialectContractTests
 
     [Theory]
     [MemberData(nameof(AllDialects))]
-    public void CreateContextRejectsMultipleKeyColumns(InquirySqlDialect dialect)
+    public void CreateContextAcceptsCompositePrimaryKey(InquirySqlDialect dialect)
     {
         var columns = new[]
         {
             new InquirySqlColumn("A", "A", isKey: true),
             new InquirySqlColumn("B", "B", isKey: true),
+            new InquirySqlColumn("Value", "Value", isKey: false),
+        };
+
+        var context = dialect.CreateContext(null, "T", columns);
+
+        Assert.Equal(2, context.KeyColumns.Count);
+        Assert.Equal(2, context.QuotedKeyColumns.Count);
+        Assert.Equal(2, context.KeyParameters.Count);
+        Assert.Contains(" AND ", context.KeyWhereClause);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllDialects))]
+    public void CreateContextRejectsCompositeKeyContainingGeneratedColumn(InquirySqlDialect dialect)
+    {
+        var columns = new[]
+        {
+            new InquirySqlColumn("A", "A", isKey: true, isGenerated: true),
+            new InquirySqlColumn("B", "B", isKey: true),
+        };
+
+        Assert.Throws<ArgumentException>(() => dialect.CreateContext(null, "T", columns));
+    }
+
+    [Theory]
+    [MemberData(nameof(AllDialects))]
+    public void CreateContextRejectsZeroKeyColumns(InquirySqlDialect dialect)
+    {
+        var columns = new[]
+        {
+            new InquirySqlColumn("A", "A", isKey: false),
         };
 
         Assert.Throws<ArgumentException>(() => dialect.CreateContext(null, "T", columns));
@@ -96,7 +127,8 @@ public sealed class InquirySqlDialectContractTests
     public void BuildSelectByFieldSqlRejectsNullColumn(InquirySqlDialect dialect)
     {
         var context = dialect.CreateContext(null, "TOrganization", _columns);
-        Assert.Throws<ArgumentNullException>(() => dialect.BuildSelectByFieldSql(context, null!));
+        Assert.Throws<ArgumentNullException>(() => dialect.BuildSelectByFieldSql(context, (InquirySqlColumn)null!));
+        Assert.Throws<ArgumentNullException>(() => dialect.BuildSelectByFieldSql(context, (IReadOnlyList<InquirySqlColumn>)null!));
     }
 
     [Theory]

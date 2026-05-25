@@ -42,8 +42,8 @@ public sealed class SqliteDialectTests
         var (dialect, ctx) = NewContext();
 
         Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\"", dialect.BuildSelectAllSql(ctx));
-        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Key\" = @key", dialect.BuildSelectByKeySql(ctx));
-        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"IsActive\" = @value", dialect.BuildSelectByFieldSql(ctx, _columns[2]));
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Key\" = @Key", dialect.BuildSelectByKeySql(ctx));
+        Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"IsActive\" = @IsActive", dialect.BuildSelectByFieldSql(ctx, _columns[2]));
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class SqliteDialectTests
         Assert.Equal("INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive) RETURNING \"Key\", \"Name\", \"IsActive\"", dialect.BuildInsertReturningSql(ctx));
         Assert.Equal("UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key", dialect.BuildUpdateSql(ctx));
         Assert.Equal("UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key RETURNING \"Key\", \"Name\", \"IsActive\"", dialect.BuildUpdateReturningSql(ctx));
-        Assert.Equal("DELETE FROM \"TOrganization\" WHERE \"Key\" = @key", dialect.BuildDeleteByKeySql(ctx));
+        Assert.Equal("DELETE FROM \"TOrganization\" WHERE \"Key\" = @Key", dialect.BuildDeleteByKeySql(ctx));
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public sealed class SqliteDialectTests
         var (dialect, ctx) = NewContext(schema: "main");
 
         Assert.Equal("SELECT \"Key\", \"Name\", \"IsActive\" FROM \"main\".\"TOrganization\"", dialect.BuildSelectAllSql(ctx));
-        Assert.Equal("DELETE FROM \"main\".\"TOrganization\" WHERE \"Key\" = @key", dialect.BuildDeleteByKeySql(ctx));
+        Assert.Equal("DELETE FROM \"main\".\"TOrganization\" WHERE \"Key\" = @Key", dialect.BuildDeleteByKeySql(ctx));
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public sealed class SqliteDialectTests
         var weird = new InquirySqlColumn("Weird", "Wei\"rd", isKey: false);
 
         Assert.Equal(
-            "SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Wei\"\"rd\" = @value",
+            "SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Wei\"\"rd\" = @Weird",
             dialect.BuildSelectByFieldSql(ctx, weird));
     }
 

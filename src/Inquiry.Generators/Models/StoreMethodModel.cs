@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using System.Collections.Generic;
 
 namespace Inquiry.Generators.Models;
 
@@ -7,13 +8,13 @@ internal sealed class StoreMethodModel
     public StoreMethodModel(
         IMethodSymbol symbol,
         StoreOperation operation,
-        ColumnModel? fieldColumn = null,
+        IReadOnlyList<ColumnModel>? fieldColumns = null,
         string? procedureName = null,
         bool returnsEntity = false)
     {
         Symbol = symbol;
         Operation = operation;
-        FieldColumn = fieldColumn;
+        FieldColumns = fieldColumns ?? System.Array.Empty<ColumnModel>();
         ProcedureName = procedureName;
         ReturnsEntity = returnsEntity;
     }
@@ -22,7 +23,11 @@ internal sealed class StoreMethodModel
 
     public StoreOperation Operation { get; }
 
-    public ColumnModel? FieldColumn { get; }
+    /// <summary>
+    /// The column(s) referenced by an <see cref="StoreOperation.SelectAllByField"/> method,
+    /// in attribute-declaration order. Empty for other operations.
+    /// </summary>
+    public IReadOnlyList<ColumnModel> FieldColumns { get; }
 
     /// <summary>The stored procedure name; only set for <see cref="StoreOperation.StoredProcedure"/>.</summary>
     public string? ProcedureName { get; }
