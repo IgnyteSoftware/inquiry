@@ -1,8 +1,13 @@
 namespace Inquiry.Sql;
 
 /// <summary>
-/// Provides provider-specific SQL naming, quoting, and upsert behavior for Inquiry generated statements.
+/// Provides provider-specific SQL naming, quoting, and statement generation for Inquiry.
 /// </summary>
+/// <remarks>
+/// The base class supplies only identifier/parameter naming primitives. All SQL statement
+/// bodies are produced by the provider packages so each one can be tuned independently
+/// (provider-optimized syntax, hints, RETURNING/OUTPUT clauses, etc.).
+/// </remarks>
 public abstract class InquirySqlDialect
 {
     /// <summary>
@@ -43,20 +48,24 @@ public abstract class InquirySqlDialect
     /// </summary>
     public abstract string QuoteIdentifier(string identifier);
 
-    /// <summary>
-    /// Builds a provider-specific upsert (insert-or-update) statement.
-    /// </summary>
-    /// <param name="table">The fully-quoted table name.</param>
-    /// <param name="insertColumns">Comma-separated quoted insert column list.</param>
-    /// <param name="insertParameters">Comma-separated parameter list for insert values.</param>
-    /// <param name="setClauses">Comma-separated SET clauses for the update path (col = @param).</param>
-    /// <param name="keyColumn">The quoted key column name.</param>
-    /// <param name="keyParam">The parameter name for the key value.</param>
-    public abstract string BuildUpsertSql(
-        string table,
-        string insertColumns,
-        string insertParameters,
-        string setClauses,
-        string keyColumn,
-        string keyParam);
+    /// <summary>Builds the SELECT-all statement.</summary>
+    public abstract string BuildSelectAllSql(InquirySqlBuildContext context);
+
+    /// <summary>Builds the SELECT-one-by-key statement.</summary>
+    public abstract string BuildSelectByKeySql(InquirySqlBuildContext context);
+
+    /// <summary>Builds a SELECT statement filtered by an arbitrary column.</summary>
+    public abstract string BuildSelectByFieldSql(InquirySqlBuildContext context, InquirySqlColumn column);
+
+    /// <summary>Builds the INSERT statement.</summary>
+    public abstract string BuildInsertSql(InquirySqlBuildContext context);
+
+    /// <summary>Builds the UPDATE-by-key statement.</summary>
+    public abstract string BuildUpdateSql(InquirySqlBuildContext context);
+
+    /// <summary>Builds the DELETE-by-key statement.</summary>
+    public abstract string BuildDeleteByKeySql(InquirySqlBuildContext context);
+
+    /// <summary>Builds a provider-specific upsert (insert-or-update) statement.</summary>
+    public abstract string BuildUpsertSql(InquirySqlBuildContext context);
 }

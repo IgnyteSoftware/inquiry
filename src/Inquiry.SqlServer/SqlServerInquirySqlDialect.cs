@@ -3,7 +3,7 @@ using Inquiry.Sql;
 namespace Inquiry.SqlServer;
 
 /// <summary>
-/// Provides SQL Server SQL naming, quoting, and upsert behavior for Inquiry generated statements.
+/// Provides SQL Server SQL naming, quoting, and statement generation for Inquiry.
 /// </summary>
 public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
 {
@@ -22,21 +22,64 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     }
 
     /// <inheritdoc />
+    public override string BuildSelectAllSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table;
+    }
+
+    /// <inheritdoc />
+    public override string BuildSelectByKeySql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table
+            + " WHERE " + context.QuotedKeyColumn + " = " + ParameterName("key");
+    }
+
+    /// <inheritdoc />
+    public override string BuildSelectByFieldSql(InquirySqlBuildContext context, InquirySqlColumn column)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        if (column is null) throw new ArgumentNullException(nameof(column));
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table
+            + " WHERE " + QuoteIdentifier(column.ColumnName) + " = " + ParameterName("value");
+    }
+
+    /// <inheritdoc />
+    public override string BuildInsertSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "INSERT INTO " + context.Table
+            + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ")";
+    }
+
+    /// <inheritdoc />
+    public override string BuildUpdateSql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "UPDATE " + context.Table + " SET " + context.SetClauses
+            + " WHERE " + context.QuotedKeyColumn + " = " + context.KeyParameter;
+    }
+
+    /// <inheritdoc />
+    public override string BuildDeleteByKeySql(InquirySqlBuildContext context)
+    {
+        if (context is null) throw new ArgumentNullException(nameof(context));
+        return "DELETE FROM " + context.Table
+            + " WHERE " + context.QuotedKeyColumn + " = " + ParameterName("key");
+    }
+
+    /// <inheritdoc />
     /// <remarks>
     /// Uses a <c>MERGE</c> statement to atomically insert or update a single row.
     /// </remarks>
-    public override string BuildUpsertSql(
-        string table,
-        string insertColumns,
-        string insertParameters,
-        string setClauses,
-        string keyColumn,
-        string keyParam)
+    public override string BuildUpsertSql(InquirySqlBuildContext context)
     {
+        if (context is null) throw new ArgumentNullException(nameof(context));
         return
-            $"MERGE INTO {table} AS target " +
-            $"USING (SELECT {keyParam} AS k) AS source ON target.{keyColumn} = source.k " +
-            $"WHEN MATCHED THEN UPDATE SET {setClauses} " +
-            $"WHEN NOT MATCHED THEN INSERT ({insertColumns}) VALUES ({insertParameters});";
+            $"MERGE INTO {context.Table} AS target " +
+            $"USING (SELECT {context.KeyParameter} AS k) AS source ON target.{context.QuotedKeyColumn} = source.k " +
+            $"WHEN MATCHED THEN UPDATE SET {context.SetClauses} " +
+            $"WHEN NOT MATCHED THEN INSERT ({context.InsertColumns}) VALUES ({context.InsertParameters});";
     }
 }
