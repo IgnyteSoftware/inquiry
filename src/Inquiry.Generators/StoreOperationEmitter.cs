@@ -163,7 +163,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.SelectOneByKeyEager:
-                EmitSelectOneByKeyEager(source, symbol, parameters, entityType, cancellation, firstParameter, entity, relationChildEntities);
+                EmitSelectOneByKeyEager(source, symbol, parameters, entityType, cancellation, firstParameter, entity);
                 break;
 
             case StoreOperation.SelectAllByField:
@@ -358,7 +358,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("    }");
     }
 
-    private static void EmitSelectOneByKeyEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string firstParam, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
+    private static void EmitSelectOneByKeyEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string firstParam, EntityModel entity)
     {
         AppendHeader(source, symbol, parameters, isAsync: true);
         source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");

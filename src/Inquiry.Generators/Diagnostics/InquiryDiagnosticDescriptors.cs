@@ -20,14 +20,6 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor UnsupportedPropertyType = new(
-        "INQ003",
-        "Entity property type is not supported",
-        "Entity property '{0}.{1}' has unsupported type '{2}'.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
     public static readonly DiagnosticDescriptor StoreMustBePartial = new(
         "INQ004",
         "Store class must be partial",

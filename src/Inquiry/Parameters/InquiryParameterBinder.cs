@@ -10,7 +10,7 @@ internal static class InquiryParameterBinder
         {
             var dbParameter = command.CreateParameter();
             dbParameter.ParameterName = NormalizeName(parameter.Name);
-            dbParameter.Value = parameter.Value ?? DBNull.Value;
+            dbParameter.Value = CoerceValue(parameter.Value);
 
             if (parameter.DbType is not null)
             {
@@ -39,6 +39,22 @@ internal static class InquiryParameterBinder
 
             command.Parameters.Add(dbParameter);
         }
+    }
+
+    private static object CoerceValue(object? value)
+    {
+        if (value is null)
+        {
+            return DBNull.Value;
+        }
+
+        var type = value.GetType();
+        if (type.IsEnum)
+        {
+            return Convert.ChangeType(value, Enum.GetUnderlyingType(type), System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return value;
     }
 
     private static string NormalizeName(string name)

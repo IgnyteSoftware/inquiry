@@ -4,15 +4,20 @@ namespace Inquiry.Generators.Models;
 
 internal sealed class TypeInfo
 {
-    private TypeInfo(ITypeSymbol symbol, SpecialType specialType, bool isNullable, bool isGuid, bool isDateTimeOffset, bool isByteArray)
+    private TypeInfo(
+        ITypeSymbol symbol,
+        SpecialType specialType,
+        bool isNullable,
+        bool isGuid,
+        bool isEnum,
+        SpecialType enumUnderlyingSpecialType)
     {
         Symbol = symbol;
         SpecialType = specialType;
         IsNullable = isNullable;
         IsGuid = isGuid;
-        IsDateTimeOffset = isDateTimeOffset;
-        IsByteArray = isByteArray;
-        IsSupported = IsSupportedType(specialType, isGuid, isDateTimeOffset, isByteArray);
+        IsEnum = isEnum;
+        EnumUnderlyingSpecialType = enumUnderlyingSpecialType;
         DisplayName = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         NonNullableDisplayName = GetNonNullableSymbol(symbol).ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
     }
@@ -25,11 +30,9 @@ internal sealed class TypeInfo
 
     public bool IsGuid { get; }
 
-    public bool IsDateTimeOffset { get; }
+    public bool IsEnum { get; }
 
-    public bool IsByteArray { get; }
-
-    public bool IsSupported { get; }
+    public SpecialType EnumUnderlyingSpecialType { get; }
 
     public string DisplayName { get; }
 
@@ -38,13 +41,18 @@ internal sealed class TypeInfo
     public static TypeInfo Create(ITypeSymbol symbol, NullableAnnotation nullableAnnotation)
     {
         var nonNullable = GetNonNullableSymbol(symbol);
+        var isEnum = nonNullable.TypeKind == TypeKind.Enum;
+        var enumUnderlyingSpecialType = isEnum && nonNullable is INamedTypeSymbol named
+            ? named.EnumUnderlyingType?.SpecialType ?? SpecialType.System_Int32
+            : SpecialType.None;
+
         return new TypeInfo(
             symbol,
             nonNullable.SpecialType,
             DetermineIsNullable(symbol, nullableAnnotation),
             nonNullable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Guid",
-            nonNullable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.DateTimeOffset",
-            nonNullable is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte });
+            isEnum,
+            enumUnderlyingSpecialType);
     }
 
     private static bool DetermineIsNullable(ITypeSymbol symbol, NullableAnnotation nullableAnnotation)
@@ -61,21 +69,5 @@ internal sealed class TypeInfo
         }
 
         return symbol;
-    }
-
-    private static bool IsSupportedType(SpecialType specialType, bool isGuid, bool isDateTimeOffset, bool isByteArray)
-    {
-        return specialType is SpecialType.System_String
-            or SpecialType.System_Int16
-            or SpecialType.System_Int32
-            or SpecialType.System_Int64
-            or SpecialType.System_Boolean
-            or SpecialType.System_Decimal
-            or SpecialType.System_Double
-            or SpecialType.System_Single
-            or SpecialType.System_DateTime
-            || isGuid
-            || isDateTimeOffset
-            || isByteArray;
     }
 }
