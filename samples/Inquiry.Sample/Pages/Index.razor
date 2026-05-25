@@ -1,0 +1,107 @@
+@page "/"
+@inject OrganizationService Organizations
+@inject UserService Users
+@inject MembershipService Memberships
+@inject CatalogService Catalog
+
+<h1>Dashboard</h1>
+
+<p>
+    A snapshot of every entity in the sample database. Each table is rendered from a Blazor
+    page that injects the matching <em>service</em>, which in turn delegates to an Inquiry
+    generated store.
+</p>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <section>
+        <h2>Organizations <span class="count">@_orgs.Count</span></h2>
+        <table>
+            <thead><tr><th>Name</th><th>Active</th></tr></thead>
+            <tbody>
+                @foreach (var o in _orgs)
+                {
+                    <tr><td>@o.Name</td><td>@(o.IsActive ? "yes" : "no")</td></tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Users <span class="count">@_users.Count</span></h2>
+        <table>
+            <thead><tr><th>Name</th><th>Email</th></tr></thead>
+            <tbody>
+                @foreach (var u in _users)
+                {
+                    <tr><td>@u.FirstName @u.LastName</td><td>@u.Email</td></tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Memberships <span class="count">@_memberships.Count</span></h2>
+        <table>
+            <thead><tr><th>Organization</th><th>User</th><th>Active</th></tr></thead>
+            <tbody>
+                @foreach (var row in _memberships)
+                {
+                    <tr>
+                        <td>@(row.Organization?.Name ?? "?")</td>
+                        <td>@(row.User is null ? "?" : $"{row.User.FirstName} {row.User.LastName}")</td>
+                        <td>@(row.Membership.IsActive ? "yes" : "no")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Catalog <span class="badge">Eager loaded</span></h2>
+        <p class="hint">
+            Each category row above is materialized in one query; its <code>Products</code>
+            collection is loaded in a follow-up query and stitched in by the generator.
+        </p>
+        @foreach (var cat in _catalog)
+        {
+            <details open>
+                <summary><strong>@cat.Name</strong> — @(cat.Products?.Count ?? 0) products</summary>
+                <ul>
+                    @if (cat.Products is { Count: > 0 })
+                    {
+                        foreach (var p in cat.Products)
+                        {
+                            <li>@p.Name <span class="muted">$@p.Price.ToString("0.00")</span></li>
+                        }
+                    }
+                    else
+                    {
+                        <li class="muted">no products</li>
+                    }
+                </ul>
+            </details>
+        }
+    </section>
+}
+
+@code {
+    private bool _loading = true;
+    private List<Organization> _orgs = new();
+    private List<User> _users = new();
+    private List<MembershipService.MembershipRow> _memberships = new();
+    private List<Category> _catalog = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _orgs = await Organizations.GetAllAsync();
+        _users = await Users.GetAllAsync();
+        _memberships = await Memberships.GetAllAsync();
+        _catalog = await Catalog.GetCategoriesWithProductsAsync();
+        _loading = false;
+    }
+}

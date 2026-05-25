@@ -1,0 +1,56 @@
+@page "/transaction-demo"
+@inject TransactionDemoService Demo
+
+<h1>Transaction demo</h1>
+
+<p>
+    Click the button to insert a new category and three products inside a single
+    <code>IInquiryTransaction</code>. Either every row commits or nothing changes.
+</p>
+
+<button class="btn primary" @onclick="RunAsync" disabled="@_running">
+    @(_running ? "Running…" : "Run transaction")
+</button>
+
+@if (_lastResult is not null)
+{
+    <div class="result-card">
+        <p><strong>Committed.</strong></p>
+        <ul>
+            <li>Category key: <code>@_lastResult.CategoryKey</code></li>
+            <li>Products inserted: @_lastResult.ProductsInserted</li>
+        </ul>
+    </div>
+}
+
+@if (_error is not null)
+{
+    <div class="result-card error">
+        <p><strong>Rolled back:</strong> @_error</p>
+    </div>
+}
+
+@code {
+    private bool _running;
+    private TransactionDemoService.Result? _lastResult;
+    private string? _error;
+
+    private async Task RunAsync()
+    {
+        _running = true;
+        _error = null;
+        try
+        {
+            _lastResult = await Demo.RunAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _lastResult = null;
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+}

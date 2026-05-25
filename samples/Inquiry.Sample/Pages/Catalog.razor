@@ -1,0 +1,75 @@
+@page "/catalog"
+@inject CatalogService CatalogSvc
+
+<h1>Catalog</h1>
+
+<p>
+    Categories are loaded via <code>[InquirySelectAllEager]</code>. Inquiry runs one query
+    for the parent rows and a second query for every child relation, then stitches the
+    results in-memory by foreign key.
+</p>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    @foreach (var category in _categories)
+    {
+        <section>
+            <h2>@category.Name <span class="count">@(category.Products?.Count ?? 0)</span></h2>
+            @if (category.Products is { Count: > 0 })
+            {
+                <table>
+                    <thead>
+                        <tr><th>Name</th><th>Price</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in category.Products)
+                        {
+                            <tr>
+                                <td><InputText @bind-Value="p.Name" class="input" /></td>
+                                <td><InputNumber @bind-Value="p.Price" class="input" /></td>
+                                <td class="actions">
+                                    <button class="btn" @onclick="() => UpsertAsync(p)">Upsert</button>
+                                    <button class="btn danger" @onclick="() => DeleteAsync(p)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="muted">No products.</p>
+            }
+        </section>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private List<Category> _categories = new();
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _categories = await CatalogSvc.GetCategoriesWithProductsAsync();
+        _loading = false;
+    }
+
+    private async Task UpsertAsync(Product product)
+    {
+        await CatalogSvc.UpsertProductAsync(product);
+        await RefreshAsync();
+    }
+
+    private async Task DeleteAsync(Product product)
+    {
+        await CatalogSvc.DeleteProductAsync(product.Key);
+        await RefreshAsync();
+    }
+}

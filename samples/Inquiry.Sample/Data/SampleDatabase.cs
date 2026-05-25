@@ -48,8 +48,8 @@ internal static class SampleDatabase
                 [Key] TEXT PRIMARY KEY,
                 [Name] TEXT NOT NULL,
                 Price REAL NOT NULL,
-                TCategoryKey TEXT NOT NULL,
-                FOREIGN KEY (TCategoryKey) REFERENCES TCategory([Key])
+                CategoryKey TEXT NOT NULL,
+                FOREIGN KEY (CategoryKey) REFERENCES TCategory([Key])
             );
             """;
 
