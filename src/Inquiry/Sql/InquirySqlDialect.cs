@@ -71,11 +71,6 @@ public abstract class InquirySqlDialect
 
         var key = keys[0];
         var insertableColumns = columns.Where(c => !c.IsGenerated).ToArray();
-        if (insertableColumns.Length == 0)
-        {
-            throw new ArgumentException("At least one column must not be database-generated so INSERT can supply a value.", nameof(columns));
-        }
-
         var table = QuoteTable(schema, tableName);
         var selectColumns = string.Join(", ", columns.Select(c => QuoteIdentifier(c.ColumnName)));
         var insertColumns = string.Join(", ", insertableColumns.Select(c => QuoteIdentifier(c.ColumnName)));
@@ -97,6 +92,36 @@ public abstract class InquirySqlDialect
             setClauses: setClauses,
             quotedKeyColumn: quotedKeyColumn,
             keyParameter: keyParam);
+    }
+
+    /// <summary>Throws if the context cannot produce a valid INSERT statement.</summary>
+    protected static void EnsureCanInsert(InquirySqlBuildContext context)
+    {
+        if (context.InsertableColumns.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot build INSERT SQL because all mapped columns are database-generated.");
+        }
+    }
+
+    /// <summary>Throws if the context cannot produce a valid UPDATE SET clause.</summary>
+    protected static void EnsureCanUpdate(InquirySqlBuildContext context)
+    {
+        if (string.IsNullOrWhiteSpace(context.SetClauses))
+        {
+            throw new InvalidOperationException("Cannot build UPDATE SQL because the entity has no non-key, non-generated columns to update.");
+        }
+    }
+
+    /// <summary>Throws if the context cannot produce a valid provider upsert statement.</summary>
+    protected static void EnsureCanUpsert(InquirySqlBuildContext context)
+    {
+        EnsureCanInsert(context);
+        EnsureCanUpdate(context);
+
+        if (context.KeyColumn.IsGenerated)
+        {
+            throw new InvalidOperationException("Cannot build UPSERT SQL for an entity whose key is database-generated.");
+        }
     }
 
     /// <summary>Builds the SELECT-all statement.</summary>

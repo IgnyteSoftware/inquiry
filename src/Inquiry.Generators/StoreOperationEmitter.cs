@@ -149,8 +149,12 @@ internal static class StoreOperationEmitter
             case StoreOperation.SelectOneByKey:
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
-                source.AppendLine("            _sqlSelectByKey,");
-                source.AppendLine($"            new {{ key = {firstParameter} }},");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine("                _sqlSelectByKey,");
+                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                {");
+                source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"key\", {firstParameter}),");
+                source.AppendLine("                }),");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
                 break;
@@ -162,8 +166,12 @@ internal static class StoreOperationEmitter
             case StoreOperation.SelectAllByField:
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(");
-                source.AppendLine($"            _sqlSelectBy_{method.FieldColumn!.PropertyName},");
-                source.AppendLine($"            new {{ value = {firstParameter} }},");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine($"                _sqlSelectBy_{method.FieldColumn!.PropertyName},");
+                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                {");
+                source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"value\", {firstParameter}),");
+                source.AppendLine("                }),");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
@@ -171,14 +179,15 @@ internal static class StoreOperationEmitter
             case StoreOperation.Insert:
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 source.AppendLine("        return Inquiry.ExecuteAsync(");
-                source.AppendLine("            _sqlInsert,");
-                source.AppendLine("            new");
-                source.AppendLine("            {");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine("                _sqlInsert,");
+                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                {");
                 foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
                 {
-                    source.AppendLine($"                {column.PropertyName} = {firstParameter}.{column.PropertyName},");
+                    source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {firstParameter}.{column.PropertyName}),");
                 }
-                source.AppendLine("            },");
+                source.AppendLine("                }),");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
@@ -186,14 +195,15 @@ internal static class StoreOperationEmitter
             case StoreOperation.Update:
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 source.AppendLine("        return await Inquiry.ExecuteAsync(");
-                source.AppendLine("            _sqlUpdate,");
-                source.AppendLine("            new");
-                source.AppendLine("            {");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine("                _sqlUpdate,");
+                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                {");
                 foreach (var column in entity.Columns.Where(c => c.IsKey || !c.IsGenerated))
                 {
-                    source.AppendLine($"                {column.PropertyName} = {firstParameter}.{column.PropertyName},");
+                    source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {firstParameter}.{column.PropertyName}),");
                 }
-                source.AppendLine("            },");
+                source.AppendLine("                }),");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
                 source.AppendLine("    }");
                 break;
@@ -201,14 +211,15 @@ internal static class StoreOperationEmitter
             case StoreOperation.Upsert:
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 source.AppendLine("        return Inquiry.ExecuteAsync(");
-                source.AppendLine("            _sqlUpsert,");
-                source.AppendLine("            new");
-                source.AppendLine("            {");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine("                _sqlUpsert,");
+                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                {");
                 foreach (var column in entity.Columns.Where(c => !c.IsGenerated))
                 {
-                    source.AppendLine($"                {column.PropertyName} = {firstParameter}.{column.PropertyName},");
+                    source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {firstParameter}.{column.PropertyName}),");
                 }
-                source.AppendLine("            },");
+                source.AppendLine("                }),");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
@@ -216,8 +227,12 @@ internal static class StoreOperationEmitter
             case StoreOperation.DeleteOneByKey:
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 source.AppendLine("        return await Inquiry.ExecuteAsync(");
-                source.AppendLine("            _sqlDeleteByKey,");
-                source.AppendLine($"            new {{ key = {firstParameter} }},");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine("                _sqlDeleteByKey,");
+                source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                {");
+                source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"key\", {firstParameter}),");
+                source.AppendLine("                }),");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
                 source.AppendLine("    }");
                 break;
@@ -287,8 +302,12 @@ internal static class StoreOperationEmitter
     {
         AppendHeader(source, symbol, parameters, isAsync: true);
         source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
-        source.AppendLine("            _sqlSelectByKey,");
-        source.AppendLine($"            new {{ key = {firstParam} }},");
+        source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+        source.AppendLine("                _sqlSelectByKey,");
+        source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
+        source.AppendLine("                {");
+        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"key\", {firstParam}),");
+        source.AppendLine("                }),");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
         source.AppendLine("        if (_entity is not null)");
         source.AppendLine("        {");
@@ -300,7 +319,14 @@ internal static class StoreOperationEmitter
             {
                 // One-to-many: load children filtered by parent's key.
                 source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
-                source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}>({fieldName}, new {{ value = _entity.{entity.Key.PropertyName} }}, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}>(");
+                source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine($"                    {fieldName},");
+                source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                    {");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"value\", _entity.{entity.Key.PropertyName}),");
+                source.AppendLine("                    }),");
+                source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
                 source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
                 source.AppendLine($"            _entity.{relation.PropertyName} = _{relation.PropertyName}_list;");
             }
@@ -308,8 +334,12 @@ internal static class StoreOperationEmitter
             {
                 // Many-to-one: load single parent using the current entity's FK value.
                 source.AppendLine($"            _entity.{relation.PropertyName} = await Inquiry.QuerySingleOrDefaultAsync<{childType}>(");
-                source.AppendLine($"                {fieldName},");
-                source.AppendLine($"                new {{ value = _entity.{relation.ForeignKeyProperty} }},");
+                source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine($"                    {fieldName},");
+                source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                    {");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"value\", _entity.{relation.ForeignKeyProperty}),");
+                source.AppendLine("                    }),");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
             }
         }
@@ -325,6 +355,8 @@ internal static class StoreOperationEmitter
         source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
         source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}>(_sqlSelectAll, {cancellation}).ConfigureAwait(false))");
         source.AppendLine("            _entities.Add(_e);");
+        source.AppendLine("        if (_entities.Count == 0)");
+        source.AppendLine("            yield break;");
         source.AppendLine();
 
         foreach (var relation in entity.Relations)

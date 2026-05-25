@@ -98,6 +98,46 @@ public sealed class InquirySqlDialectContractTests
 
     [Theory]
     [MemberData(nameof(AllDialects))]
+    public void BuildInsertSqlRejectsAllGeneratedColumns(InquirySqlDialect dialect)
+    {
+        var context = dialect.CreateContext(
+            null,
+            "T",
+            new[] { new InquirySqlColumn("Id", "Id", isKey: true, isGenerated: true) });
+
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildInsertSql(context));
+    }
+
+    [Theory]
+    [MemberData(nameof(AllDialects))]
+    public void BuildUpdateSqlRejectsEntitiesWithoutMutableColumns(InquirySqlDialect dialect)
+    {
+        var context = dialect.CreateContext(
+            null,
+            "T",
+            new[] { new InquirySqlColumn("Id", "Id", isKey: true) });
+
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpdateSql(context));
+    }
+
+    [Theory]
+    [MemberData(nameof(AllDialects))]
+    public void BuildUpsertSqlRejectsGeneratedKey(InquirySqlDialect dialect)
+    {
+        var context = dialect.CreateContext(
+            null,
+            "T",
+            new[]
+            {
+                new InquirySqlColumn("Id", "Id", isKey: true, isGenerated: true),
+                new InquirySqlColumn("Name", "Name", isKey: false),
+            });
+
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertSql(context));
+    }
+
+    [Theory]
+    [MemberData(nameof(AllDialects))]
     public void EveryDialectExposesNonEmptyName(InquirySqlDialect dialect)
     {
         Assert.False(string.IsNullOrWhiteSpace(dialect.Name));

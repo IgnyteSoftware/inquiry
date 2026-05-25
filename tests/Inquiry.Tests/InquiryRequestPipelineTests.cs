@@ -105,6 +105,80 @@ public sealed class InquiryRequestPipelineTests
     }
 
     [Fact]
+    public async Task QueryAsyncDoesNotReportFailureWhenEnumerationStopsEarly()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        await CreateSchemaAsync(keeperConnection);
+
+        var interceptor = new RecordingInterceptor();
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            new[] { interceptor });
+
+        await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)"));
+        await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (2, 'Beta', 1)"));
+
+        await foreach (var _ in pipeline.QueryAsync(
+            new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
+            MaterializeItem))
+        {
+            break;
+        }
+
+        Assert.Empty(interceptor.Failures);
+    }
+
+    [Fact]
+    public async Task QueryAsyncReportsMaterializerFailures()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        await CreateSchemaAsync(keeperConnection);
+
+        var interceptor = new RecordingInterceptor();
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            new[] { interceptor });
+
+        await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in pipeline.QueryAsync<TestItem>(
+                new InquiryCommand("SELECT Id, Name, IsActive FROM Items"),
+                _ => throw new InvalidOperationException("Bad materializer")))
+            {
+            }
+        });
+
+        Assert.Same(exception, interceptor.Failures.Single());
+    }
+
+    [Fact]
+    public async Task QuerySingleOrDefaultThrowsWhenMultipleRowsAreReturned()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        await CreateSchemaAsync(keeperConnection);
+
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            Array.Empty<IInquiryCommandInterceptor>());
+
+        await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)"));
+        await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (2, 'Beta', 1)"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            pipeline.QuerySingleOrDefaultAsync(
+                new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
+                MaterializeItem));
+    }
+
+    [Fact]
     public async Task InterceptorsObserveMutateAndReceiveFailures()
     {
         var connectionString = CreateSharedInMemoryConnectionString();

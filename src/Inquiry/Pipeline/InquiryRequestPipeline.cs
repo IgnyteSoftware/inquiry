@@ -44,20 +44,54 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var dbCommand = connection.CreateCommand();
-        var completed = false;
         DbDataReader? reader = null;
         try
         {
             await InitializeCommandAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
             await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
 
-            reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            try
             {
-                yield return materialize(reader);
+                reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
             }
 
-            completed = true;
+            while (true)
+            {
+                bool hasRow;
+                try
+                {
+                    hasRow = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+
+                if (!hasRow)
+                {
+                    break;
+                }
+
+                T item;
+                try
+                {
+                    item = materialize(reader);
+                }
+                catch (Exception exception)
+                {
+                    await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+
+                yield return item;
+            }
+
             await NotifyExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -65,22 +99,6 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             if (reader is not null)
             {
                 await reader.DisposeAsync().ConfigureAwait(false);
-            }
-
-            if (!completed)
-            {
-                // Consumer broke out of the enumeration or it threw — notify interceptors so tracing/metrics close cleanly.
-                try
-                {
-                    var abandoned = new OperationCanceledException(
-                        "Inquiry query enumeration was disposed before completion.",
-                        cancellationToken);
-                    await NotifyFailedAsync(command, dbCommand, abandoned, cancellationToken).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Interceptor failures during dispose must not mask resource cleanup.
-                }
             }
         }
     }
@@ -110,9 +128,17 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
 
             await using var reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            var result = await reader.ReadAsync(cancellationToken).ConfigureAwait(false)
-                ? materialize(reader)
-                : default;
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await NotifyExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
+                return default;
+            }
+
+            var result = materialize(reader);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException("QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.");
+            }
 
             await NotifyExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return result;

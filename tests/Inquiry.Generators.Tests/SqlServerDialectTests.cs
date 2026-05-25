@@ -92,7 +92,7 @@ public sealed class SqlServerDialectTests
     }
 
     [Fact]
-    public void UpsertExcludesGeneratedKey()
+    public void UpsertThrowsWhenKeyIsGenerated()
     {
         var columns = new InquirySqlColumn[]
         {
@@ -102,8 +102,6 @@ public sealed class SqlServerDialectTests
         var dialect = new SqlServerInquirySqlDialect();
         var ctx = dialect.CreateContext("dbo", "TItems", columns);
 
-        var upsert = dialect.BuildUpsertSql(ctx);
-        Assert.Contains("INSERT ([Name]) VALUES (@Name)", upsert);
-        Assert.DoesNotContain("[Id] = @Id", upsert);
+        Assert.Throws<InvalidOperationException>(() => dialect.BuildUpsertSql(ctx));
     }
 }

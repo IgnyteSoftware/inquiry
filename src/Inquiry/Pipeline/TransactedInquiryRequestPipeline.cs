@@ -37,20 +37,54 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
         await using var dbCommand = _connection.CreateCommand();
         dbCommand.Transaction = _transaction;
-        var completed = false;
         DbDataReader? reader = null;
         try
         {
             await InitializeCommandAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
             await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
 
-            reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            try
             {
-                yield return materialize(reader);
+                reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
             }
 
-            completed = true;
+            while (true)
+            {
+                bool hasRow;
+                try
+                {
+                    hasRow = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+
+                if (!hasRow)
+                {
+                    break;
+                }
+
+                T item;
+                try
+                {
+                    item = materialize(reader);
+                }
+                catch (Exception exception)
+                {
+                    await NotifyFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+
+                yield return item;
+            }
+
             await NotifyExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -58,17 +92,6 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             if (reader is not null)
             {
                 await reader.DisposeAsync().ConfigureAwait(false);
-            }
-
-            if (!completed)
-            {
-                try
-                {
-                    var abandoned = new OperationCanceledException(
-                        "Inquiry query enumeration was disposed before completion.", cancellationToken);
-                    await NotifyFailedAsync(command, dbCommand, abandoned, cancellationToken).ConfigureAwait(false);
-                }
-                catch { }
             }
         }
     }
@@ -91,9 +114,17 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             await NotifyExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
 
             await using var reader = await dbCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            var result = await reader.ReadAsync(cancellationToken).ConfigureAwait(false)
-                ? materialize(reader)
-                : default;
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await NotifyExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                return default;
+            }
+
+            var result = materialize(reader);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException("QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.");
+            }
 
             await NotifyExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
             return result;
