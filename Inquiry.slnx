@@ -12,7 +12,9 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj" />
+    <Project Path="tests/Inquiry.PostgreSql.Tests/Inquiry.PostgreSql.Tests.csproj" />
     <Project Path="tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj" />
+    <Project Path="tests/Inquiry.SqlServer.Tests/Inquiry.SqlServer.Tests.csproj" />
     <Project Path="tests/Inquiry.Tests/Inquiry.Tests.csproj" />
   </Folder>
 </Solution>
