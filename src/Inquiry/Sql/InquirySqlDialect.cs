@@ -117,11 +117,6 @@ public abstract class InquirySqlDialect
     {
         EnsureCanInsert(context);
         EnsureCanUpdate(context);
-
-        if (context.KeyColumn.IsGenerated)
-        {
-            throw new InvalidOperationException("Cannot build UPSERT SQL for an entity whose key is database-generated.");
-        }
     }
 
     /// <summary>Builds the SELECT-all statement.</summary>

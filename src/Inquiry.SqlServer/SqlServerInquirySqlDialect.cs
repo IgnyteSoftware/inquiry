@@ -99,6 +99,11 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
+        if (context.KeyColumn.IsGenerated)
+        {
+            return BuildGeneratedKeyUpsertSql(context, returning: false);
+        }
+
         return
             $"MERGE INTO {context.Table} AS target " +
             $"USING (SELECT {context.KeyParameter} AS k) AS source ON target.{context.QuotedKeyColumn} = source.k " +
@@ -111,6 +116,11 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
         EnsureCanUpsert(context);
+        if (context.KeyColumn.IsGenerated)
+        {
+            return BuildGeneratedKeyUpsertSql(context, returning: true);
+        }
+
         return
             $"MERGE INTO {context.Table} AS target " +
             $"USING (SELECT {context.KeyParameter} AS k) AS source ON target.{context.QuotedKeyColumn} = source.k " +
@@ -121,4 +131,25 @@ public sealed class SqlServerInquirySqlDialect : InquirySqlDialect
 
     private string InsertedColumns(InquirySqlBuildContext context)
         => string.Join(", ", context.Columns.Select(c => "INSERTED." + QuoteIdentifier(c.ColumnName)));
+
+    private string BuildGeneratedKeyUpsertSql(InquirySqlBuildContext context, bool returning)
+    {
+        var output = returning ? " OUTPUT " + InsertedColumns(context) : string.Empty;
+        var explicitInsertColumns = context.QuotedKeyColumn + ", " + context.InsertColumns;
+        var explicitInsertParameters = context.KeyParameter + ", " + context.InsertParameters;
+
+        return
+            $"IF {context.KeyParameter} IS NULL " +
+            "BEGIN " +
+            $"INSERT INTO {context.Table} ({context.InsertColumns}){output} VALUES ({context.InsertParameters}); " +
+            "END " +
+            $"ELSE IF EXISTS (SELECT 1 FROM {context.Table} WHERE {context.QuotedKeyColumn} = {context.KeyParameter}) " +
+            "BEGIN " +
+            $"UPDATE {context.Table} SET {context.SetClauses}{output} WHERE {context.QuotedKeyColumn} = {context.KeyParameter}; " +
+            "END " +
+            "ELSE " +
+            "BEGIN " +
+            $"INSERT INTO {context.Table} ({explicitInsertColumns}){output} VALUES ({explicitInsertParameters}); " +
+            "END";
+    }
 }

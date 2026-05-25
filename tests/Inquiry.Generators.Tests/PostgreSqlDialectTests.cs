@@ -104,4 +104,25 @@ public sealed class PostgreSqlDialectTests
             "SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"IsActive\" = @value",
             dialect.BuildSelectByFieldSql(ctx, _columns[2]));
     }
+
+    [Fact]
+    public void BuildsGeneratedKeyUpsertStatement()
+    {
+        var columns = new InquirySqlColumn[]
+        {
+            new("Id", "Id", isKey: true, isGenerated: true),
+            new("Name", "Name", isKey: false),
+        };
+        var dialect = new PostgreSqlInquirySqlDialect();
+        var ctx = dialect.CreateContext(null, "TItems", columns);
+
+        var upsert = dialect.BuildUpsertSql(ctx);
+        var returning = dialect.BuildUpsertReturningSql(ctx);
+
+        Assert.StartsWith("UPDATE \"TItems\" SET \"Name\" = @Name", upsert);
+        Assert.Contains("INSERT INTO \"TItems\" (\"Name\") SELECT @Name WHERE @Id IS NULL", upsert);
+        Assert.Contains("INSERT INTO \"TItems\" (\"Id\", \"Name\") SELECT @Id, @Name", upsert);
+        Assert.Contains("WITH updated AS", returning);
+        Assert.Contains("SELECT \"Id\", \"Name\" FROM updated", returning);
+    }
 }

@@ -218,13 +218,13 @@ internal static class StoreOperationEmitter
                 if (method.ReturnsEntity)
                 {
                     source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
-                    AppendMutationCommand(source, "_sqlUpsertReturning", entity, firstParameter, indent: "            ");
+                    AppendMutationCommand(source, "_sqlUpsertReturning", entity, firstParameter, indent: "            ", includeKey: true);
                     source.AppendLine($"            {cancellation});");
                 }
                 else
                 {
                     source.AppendLine("        return Inquiry.ExecuteAsync(");
-                    AppendMutationCommand(source, "_sqlUpsert", entity, firstParameter, indent: "            ");
+                    AppendMutationCommand(source, "_sqlUpsert", entity, firstParameter, indent: "            ", includeKey: true);
                     source.AppendLine($"            {cancellation});");
                 }
                 source.AppendLine("    }");

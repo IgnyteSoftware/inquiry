@@ -30,6 +30,13 @@ internal static class Schemas
         );
         """;
 
+    public const string GeneratedItem = """
+        CREATE TABLE TGeneratedItem (
+            Id INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL
+        );
+        """;
+
     /// <summary>Both category and product tables in one batch.</summary>
     public const string CategoryAndProduct = Category + "\n" + Product;
 }
