@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Inquiry.Northwind/Inquiry.Northwind.csproj" />
     <Project Path="samples/Inquiry.Sample/Inquiry.Sample.csproj" />
