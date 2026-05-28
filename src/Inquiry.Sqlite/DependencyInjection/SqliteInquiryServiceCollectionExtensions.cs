@@ -1,5 +1,4 @@
 using Inquiry.Connections;
-using Inquiry.Sql;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Sqlite.DependencyInjection;
@@ -20,7 +19,6 @@ public static class SqliteInquiryServiceCollectionExtensions
         }
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqliteInquiryConnectionFactory(connectionString));
-        services.AddSingleton<InquirySqlDialect, SqliteInquirySqlDialect>();
         return services;
     }
 }

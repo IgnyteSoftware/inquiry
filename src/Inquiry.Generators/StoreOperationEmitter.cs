@@ -613,7 +613,7 @@ internal static class StoreOperationEmitter
     {
         var returnType = method.ReturnType.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
         var asyncModifier = isAsync ? "async " : string.Empty;
-        source.AppendLine($"    public override {asyncModifier}{returnType} {method.Name}({parameters})");
+        source.AppendLine($"    public {asyncModifier}partial {returnType} {method.Name}({parameters})");
         source.AppendLine("    {");
     }
 
