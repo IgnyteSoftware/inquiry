@@ -1,5 +1,6 @@
 using Inquiry.Commands;
 using Inquiry.Materialization;
+using System.Data.Common;
 
 namespace Inquiry.Pipeline;
 
@@ -69,5 +70,22 @@ public interface IInquiryRequestPipeline
     /// <summary>Executes a non-query command and returns the affected row count.</summary>
     Task<int> ExecuteAsync(
         InquiryCommand command,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes a non-query command with parameters bound by a caller-supplied static delegate.
+    /// Avoids the <c>InquiryCommand</c> / <c>InquiryParameter[]</c> allocations of the boxed
+    /// path — generated stores pass a method group (no closure capture), and the binder uses
+    /// <c>DbCommand.CreateParameter</c> / <c>Parameters.Add</c> directly.
+    /// </summary>
+    /// <remarks>
+    /// When interceptors are registered, the pipeline still allocates a parameter-less
+    /// <c>InquiryCommand</c> to satisfy the interceptor contract; interceptors that need to
+    /// observe parameters should read them from the live <c>DbCommand</c> in the context.
+    /// </remarks>
+    Task<int> ExecuteAsync<TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
         CancellationToken cancellationToken = default);
 }

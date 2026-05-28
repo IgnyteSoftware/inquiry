@@ -240,8 +240,10 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
-    public void InsertWithOnlyDatabaseSuppliedColumnsUsesEmptyParameterArray()
+    public void InsertWithOnlyDatabaseSuppliedColumnsEmitsEmptyBindLambda()
     {
+        // When every column is database-generated, the fast-path Inquiry.ExecuteAsync still
+        // receives the entity + a static binder, but the binder body adds no parameters.
         const string source = """
             using System.Threading;
             using System.Threading.Tasks;
@@ -278,8 +280,12 @@ public sealed class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()", generatedText);
-        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", widget.Id)", generatedText);
+        // Fast path takes (sql, args, static lambda, ct); no InquiryParameter[] or CreateParameter call.
+        Assert.Contains("Inquiry.ExecuteAsync(", generatedText);
+        Assert.Contains("static (_cmd, _e) =>", generatedText);
+        Assert.DoesNotContain("_cmd.CreateParameter()", generatedText);
+        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"@Id\"", generatedText);
+        Assert.DoesNotContain("global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()", generatedText);
     }
 
     [Fact]

@@ -226,9 +226,7 @@ internal static class StoreOperationEmitter
                 }
                 else
                 {
-                    source.AppendLine("        return Inquiry.ExecuteAsync(");
-                    AppendMutationCommand(source, "_sqlInsert", entity, firstParameter, indent: "            ");
-                    source.AppendLine($"            {cancellation});");
+                    EmitFastExecuteFromEntity(source, "_sqlInsert", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: false, returnRowsAffectedAsBool: false);
                 }
                 source.AppendLine("    }");
                 break;
@@ -244,9 +242,7 @@ internal static class StoreOperationEmitter
                 }
                 else
                 {
-                    source.AppendLine("        return await Inquiry.ExecuteAsync(");
-                    AppendMutationCommand(source, "_sqlUpdate", entity, firstParameter, indent: "            ", includeKey: true);
-                    source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
+                    EmitFastExecuteFromEntity(source, "_sqlUpdate", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: true);
                 }
                 source.AppendLine("    }");
                 break;
@@ -278,27 +274,19 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"        if ({firstParameter}.{entity.Key.PropertyName} is null)");
                         source.AppendLine("        {");
-                        source.AppendLine("            return Inquiry.ExecuteAsync(");
-                        AppendMutationCommand(source, "_sqlInsert", entity, firstParameter, indent: "                ");
-                        source.AppendLine($"                {cancellation});");
+                        EmitFastExecuteFromEntity(source, "_sqlInsert", entity, firstParameter, entityType, cancellation, indent: "            ", includeKey: false, returnRowsAffectedAsBool: false);
                         source.AppendLine("        }");
                         source.AppendLine();
                     }
 
-                    source.AppendLine("        return Inquiry.ExecuteAsync(");
-                    AppendMutationCommand(source, "_sqlUpsert", entity, firstParameter, indent: "            ", includeKey: true);
-                    source.AppendLine($"            {cancellation});");
+                    EmitFastExecuteFromEntity(source, "_sqlUpsert", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: false);
                 }
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.DeleteOneByKey:
                 AppendHeader(source, symbol, parameters, isAsync: true);
-                source.AppendLine("        return await Inquiry.ExecuteAsync(");
-                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                source.AppendLine("                _sqlDeleteByKey,");
-                AppendPositionalParameters(source, entity.Keys, symbol.Parameters, indent: "                ");
-                source.AppendLine($"            {cancellation}).ConfigureAwait(false) > 0;");
+                EmitFastExecuteFromKeys(source, "_sqlDeleteByKey", entity.Keys, symbol.Parameters, cancellation, indent: "        ");
                 source.AppendLine("    }");
                 break;
 
@@ -309,6 +297,96 @@ internal static class StoreOperationEmitter
     }
 
     // ---- Private emit helpers ----
+
+    /// <summary>
+    /// Emits a call to the allocation-free <c>Inquiry.ExecuteAsync&lt;TArgs&gt;</c> overload, passing
+    /// the entity as <c>TArgs</c> and a <c>static</c> lambda that binds parameters directly into the
+    /// <c>DbCommand</c>. Skips the per-call <c>InquiryParameter[]</c> + <c>InquiryCommand</c>
+    /// allocations the old <see cref="AppendMutationCommand"/> path required.
+    /// </summary>
+    private static void EmitFastExecuteFromEntity(
+        StringBuilder source,
+        string sqlField,
+        EntityModel entity,
+        string entityParameter,
+        string entityType,
+        string cancellation,
+        string indent,
+        bool includeKey,
+        bool returnRowsAffectedAsBool)
+    {
+        var columns = entity.Columns
+            .Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault)
+            .ToArray();
+
+        var awaitPrefix = returnRowsAffectedAsBool ? "await " : string.Empty;
+        var returnSuffix = returnRowsAffectedAsBool ? ".ConfigureAwait(false) > 0" : string.Empty;
+
+        source.AppendLine($"{indent}return {awaitPrefix}Inquiry.ExecuteAsync(");
+        source.AppendLine($"{indent}    {sqlField},");
+        source.AppendLine($"{indent}    {entityParameter},");
+        source.AppendLine($"{indent}    static (_cmd, _e) =>");
+        source.AppendLine($"{indent}    {{");
+        for (var i = 0; i < columns.Length; i++)
+        {
+            var column = columns[i];
+            source.AppendLine($"{indent}        var _p{i} = _cmd.CreateParameter();");
+            source.AppendLine($"{indent}        _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
+            source.AppendLine($"{indent}        _p{i}.Value = (object?)_e.{column.PropertyName} ?? global::System.DBNull.Value;");
+            source.AppendLine($"{indent}        _cmd.Parameters.Add(_p{i});");
+        }
+        source.AppendLine($"{indent}    }},");
+        source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
+    }
+
+    /// <summary>
+    /// Emits an <c>Inquiry.ExecuteAsync&lt;TArgs&gt;</c> call where <c>TArgs</c> is the key value
+    /// (single-key) or a <c>ValueTuple</c> of key values (composite). Used by
+    /// <c>[InquiryDeleteOneByKey]</c>, which has no entity parameter — only the key(s).
+    /// </summary>
+    private static void EmitFastExecuteFromKeys(
+        StringBuilder source,
+        string sqlField,
+        IReadOnlyList<ColumnModel> keyColumns,
+        System.Collections.Immutable.ImmutableArray<IParameterSymbol> methodParameters,
+        string cancellation,
+        string indent)
+    {
+        if (keyColumns.Count == 1)
+        {
+            // Single key: pass the key value directly. The lambda accepts (cmd, key).
+            var keyParamName = methodParameters[0].Name;
+            source.AppendLine($"{indent}return await Inquiry.ExecuteAsync(");
+            source.AppendLine($"{indent}    {sqlField},");
+            source.AppendLine($"{indent}    {keyParamName},");
+            source.AppendLine($"{indent}    static (_cmd, _key) =>");
+            source.AppendLine($"{indent}    {{");
+            source.AppendLine($"{indent}        var _p0 = _cmd.CreateParameter();");
+            source.AppendLine($"{indent}        _p0.ParameterName = \"@{GeneratorHelpers.Escape(keyColumns[0].PropertyName)}\";");
+            source.AppendLine($"{indent}        _p0.Value = (object?)_key ?? global::System.DBNull.Value;");
+            source.AppendLine($"{indent}        _cmd.Parameters.Add(_p0);");
+            source.AppendLine($"{indent}    }},");
+            source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false) > 0;");
+            return;
+        }
+
+        // Composite key: pass a ValueTuple of the key arguments; the lambda accesses ItemN.
+        var tupleArgs = string.Join(", ", methodParameters.Take(keyColumns.Count).Select(p => p.Name));
+        source.AppendLine($"{indent}return await Inquiry.ExecuteAsync(");
+        source.AppendLine($"{indent}    {sqlField},");
+        source.AppendLine($"{indent}    ({tupleArgs}),");
+        source.AppendLine($"{indent}    static (_cmd, _keys) =>");
+        source.AppendLine($"{indent}    {{");
+        for (var i = 0; i < keyColumns.Count; i++)
+        {
+            source.AppendLine($"{indent}        var _p{i} = _cmd.CreateParameter();");
+            source.AppendLine($"{indent}        _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(keyColumns[i].PropertyName)}\";");
+            source.AppendLine($"{indent}        _p{i}.Value = (object?)_keys.Item{i + 1} ?? global::System.DBNull.Value;");
+            source.AppendLine($"{indent}        _cmd.Parameters.Add(_p{i});");
+        }
+        source.AppendLine($"{indent}    }},");
+        source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false) > 0;");
+    }
 
     private static void AppendMutationCommand(
         StringBuilder source,

@@ -424,6 +424,51 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
+    /// <inheritdoc />
+    public async Task<int> ExecuteAsync<TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        EnterInFlight();
+        try
+        {
+            await using var dbCommand = _connection.CreateCommand();
+            dbCommand.Transaction = _transaction;
+            var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+
+            try
+            {
+                dbCommand.CommandText = commandText;
+                bindParameters(dbCommand, args);
+
+                if (interceptorCommand is not null)
+                {
+                    await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+
+                var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+                if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
+                return recordsAffected;
+            }
+            catch (Exception exception)
+            {
+                if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
     // ---- Shared helpers --------------------------------------------------------------
 
     private void EnterInFlight()
