@@ -180,6 +180,14 @@ public sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteAsync(command, cancellationToken);
 
     /// <inheritdoc />
+    public Task<int> ExecuteAsync<TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteAsync(commandText, args, bindParameters, cancellationToken);
+
+    /// <inheritdoc />
     public Task<IInquiryTransaction> BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)

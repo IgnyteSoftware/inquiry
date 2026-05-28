@@ -393,6 +393,45 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
+    /// <inheritdoc />
+    public async Task<int> ExecuteAsync<TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbCommand = connection.CreateCommand();
+        // Lazy: only allocate the InquiryCommand if interceptors are present (and only for the
+        // failure path if execution throws before the first interceptor call).
+        InquiryCommand? interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+
+        try
+        {
+            dbCommand.CommandText = commandText;
+            bindParameters(dbCommand, args);
+
+            if (interceptorCommand is not null)
+            {
+                await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+            }
+
+            var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
+            return recordsAffected;
+        }
+        catch (Exception exception)
+        {
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
     // ---- Synchronous setup + interceptor slow paths --------------------------------------
 
     private static void InitializeCommandSync(DbCommand dbCommand, InquiryCommand command)
@@ -401,6 +440,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (command.CommandType is not null) dbCommand.CommandType = command.CommandType.Value;
         if (command.CommandTimeout is not null) dbCommand.CommandTimeout = command.CommandTimeout.Value;
         InquiryParameterBinder.Bind(dbCommand, command.ParametersArray);
+        command.DbCommandBinder?.Invoke(dbCommand);
     }
 
     private async ValueTask InvokeInitializedAsync(DbCommand dbCommand, InquiryCommand command, CancellationToken cancellationToken)

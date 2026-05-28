@@ -326,6 +326,115 @@ public sealed class InquiryRequestPipelineTests
         Assert.Contains("@Name", interceptor.InitializedParameterNames[0]);
     }
 
+    [Fact]
+    public async Task FastPathExecuteAsyncBindsParametersDirectlyToDbCommand()
+    {
+        // Exercises the new TArgs+Action overload on the real InquiryRequestPipeline.
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        await CreateSchemaAsync(keeperConnection);
+
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            Array.Empty<IInquiryCommandInterceptor>());
+
+        var inserted = await pipeline.ExecuteAsync(
+            "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
+            (Id: 7, Name: "Fast", IsActive: 1),
+            static (cmd, args) =>
+            {
+                var p0 = cmd.CreateParameter(); p0.ParameterName = "@Id"; p0.Value = args.Id; cmd.Parameters.Add(p0);
+                var p1 = cmd.CreateParameter(); p1.ParameterName = "@Name"; p1.Value = args.Name; cmd.Parameters.Add(p1);
+                var p2 = cmd.CreateParameter(); p2.ParameterName = "@IsActive"; p2.Value = args.IsActive; cmd.Parameters.Add(p2);
+            });
+
+        var selected = await pipeline.QuerySingleOrDefaultAsync(
+            new InquiryCommand("SELECT Id, Name, IsActive FROM Items WHERE Id = 7"),
+            MaterializerInstance);
+
+        Assert.Equal(1, inserted);
+        Assert.NotNull(selected);
+        Assert.Equal("Fast", selected.Name);
+    }
+
+    [Fact]
+    public async Task CustomPipelineWithoutFastPathOverrideFallsBackThroughInquiryCommand()
+    {
+        // A custom IInquiryRequestPipeline that does NOT override the new ExecuteAsync<TArgs>
+        // overload must still execute the call — the default interface method routes it through
+        // ExecuteAsync(InquiryCommand) using InquiryCommand.DbCommandBinder.
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        await CreateSchemaAsync(keeperConnection);
+
+        var inner = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            Array.Empty<IInquiryCommandInterceptor>());
+        var custom = new RecordingForwardingPipeline(inner);
+        // Default interface methods must be invoked through the interface, not the concrete type.
+        IInquiryRequestPipeline customAsInterface = custom;
+
+        var inserted = await customAsInterface.ExecuteAsync(
+            "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
+            (Id: 9, Name: "Forwarded", IsActive: 1),
+            static (cmd, args) =>
+            {
+                var p0 = cmd.CreateParameter(); p0.ParameterName = "@Id"; p0.Value = args.Id; cmd.Parameters.Add(p0);
+                var p1 = cmd.CreateParameter(); p1.ParameterName = "@Name"; p1.Value = args.Name; cmd.Parameters.Add(p1);
+                var p2 = cmd.CreateParameter(); p2.ParameterName = "@IsActive"; p2.Value = args.IsActive; cmd.Parameters.Add(p2);
+            });
+
+        var selected = await inner.QuerySingleOrDefaultAsync(
+            new InquiryCommand("SELECT Id, Name, IsActive FROM Items WHERE Id = 9"),
+            MaterializerInstance);
+
+        Assert.Equal(1, inserted);
+        Assert.NotNull(selected);
+        Assert.Equal("Forwarded", selected.Name);
+        // The default interface impl synthesised an InquiryCommand carrying the binder; the
+        // forwarding pipeline saw it on the InquiryCommand path.
+        Assert.Single(custom.SeenInquiryCommands);
+        Assert.NotNull(custom.SeenInquiryCommands[0].DbCommandBinder);
+    }
+
+    /// <summary>
+    /// Custom pipeline that only implements the existing InquiryCommand-based overloads.
+    /// Verifies the default impl of <c>ExecuteAsync&lt;TArgs&gt;</c> bridges to it.
+    /// </summary>
+    private sealed class RecordingForwardingPipeline : IInquiryRequestPipeline
+    {
+        private readonly InquiryRequestPipeline _inner;
+        public List<InquiryCommand> SeenInquiryCommands { get; } = new();
+
+        public RecordingForwardingPipeline(InquiryRequestPipeline inner) => _inner = inner;
+
+        public Task<int> ExecuteAsync(InquiryCommand command, CancellationToken cancellationToken = default)
+        {
+            SeenInquiryCommands.Add(command);
+            return _inner.ExecuteAsync(command, cancellationToken);
+        }
+
+        public IAsyncEnumerable<T> QueryAsync<T>(InquiryCommand command, IInquiryEntityMaterializer<T> materializer, CancellationToken cancellationToken = default) where T : class
+            => _inner.QueryAsync(command, materializer, cancellationToken);
+
+        public IAsyncEnumerable<T> QueryAsync<T, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default) where T : class where TMaterializer : struct, IInquiryEntityMaterializer<T>
+            => _inner.QueryAsync<T, TMaterializer>(command, materializer, cancellationToken);
+
+        public Task<IReadOnlyList<T>> QueryListAsync<T>(InquiryCommand command, IInquiryEntityMaterializer<T> materializer, CancellationToken cancellationToken = default) where T : class
+            => _inner.QueryListAsync(command, materializer, cancellationToken);
+
+        public Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default) where T : class where TMaterializer : struct, IInquiryEntityMaterializer<T>
+            => _inner.QueryListAsync<T, TMaterializer>(command, materializer, cancellationToken);
+
+        public Task<T?> QuerySingleOrDefaultAsync<T>(InquiryCommand command, IInquiryEntityMaterializer<T> materializer, CancellationToken cancellationToken = default) where T : class
+            => _inner.QuerySingleOrDefaultAsync(command, materializer, cancellationToken);
+
+        public Task<T?> QuerySingleOrDefaultAsync<T, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default) where T : class where TMaterializer : struct, IInquiryEntityMaterializer<T>
+            => _inner.QuerySingleOrDefaultAsync<T, TMaterializer>(command, materializer, cancellationToken);
+    }
+
     private static string CreateSharedInMemoryConnectionString()
     {
         var builder = new SqliteConnectionStringBuilder
