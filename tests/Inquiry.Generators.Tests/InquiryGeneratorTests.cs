@@ -240,8 +240,80 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
-    public void InsertWithOnlyDatabaseSuppliedColumnsUsesEmptyParameterArray()
+    public void FastPathBinderCoercesEnumColumnsToUnderlyingPrimitive()
     {
+        // Mirrors the historical InquiryParameterBinder behaviour: enum values must be assigned
+        // as their underlying primitive (long/int/short/...), not as boxed enum instances, so
+        // providers like Npgsql that reject unmapped enums see the value they expect.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public enum Status { Inactive = 0, Active = 1 }
+            public enum BigStatus : long { A = 0, B = 1 }
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey]
+                public Status Key { get; set; }
+
+                [InquiryColumn]
+                public Status PlainStatus { get; set; }
+
+                [InquiryColumn]
+                public Status? NullableStatus { get; set; }
+
+                [InquiryColumn]
+                public BigStatus BigStatus { get; set; }
+            }
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquiryInsert]
+                public partial Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
+
+                [InquiryDeleteOneByKey]
+                public partial Task<bool> DeleteByKeyAsync(Status key, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Non-nullable Int32-underlying enum → cast to int.
+        Assert.Contains("(object)(int)_e.PlainStatus", generatedText);
+        // Nullable Int32-underlying enum → HasValue-checked cast to int, DBNull otherwise.
+        Assert.Contains("_e.NullableStatus.HasValue ? (object)(int)_e.NullableStatus.Value : global::System.DBNull.Value", generatedText);
+        // Non-nullable Int64-underlying enum → cast to long.
+        Assert.Contains("(object)(long)_e.BigStatus", generatedText);
+        // Key parameter on DeleteByKey is also enum-typed → coerce on the lambda arg as well.
+        Assert.Contains("(object)(int)_key", generatedText);
+        // The raw "(object?)_e.PlainStatus ?? DBNull" form must not appear for enum columns.
+        Assert.DoesNotContain("(object?)_e.PlainStatus ?? global::System.DBNull.Value", generatedText);
+    }
+
+    [Fact]
+    public void InsertWithOnlyDatabaseSuppliedColumnsEmitsEmptyBindLambda()
+    {
+        // When every column is database-generated, the fast-path Inquiry.ExecuteAsync still
+        // receives the entity + a static binder, but the binder body adds no parameters.
         const string source = """
             using System.Threading;
             using System.Threading.Tasks;
@@ -278,8 +350,12 @@ public sealed class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()", generatedText);
-        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", widget.Id)", generatedText);
+        // Fast path takes (sql, args, static lambda, ct); no InquiryParameter[] or CreateParameter call.
+        Assert.Contains("Inquiry.ExecuteAsync(", generatedText);
+        Assert.Contains("static (_cmd, _e) =>", generatedText);
+        Assert.DoesNotContain("_cmd.CreateParameter()", generatedText);
+        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"@Id\"", generatedText);
+        Assert.DoesNotContain("global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()", generatedText);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using Inquiry.Commands;
 using Inquiry.Materialization;
+using System.Data.Common;
 
 namespace Inquiry.Pipeline;
 
@@ -70,4 +71,29 @@ public interface IInquiryRequestPipeline
     Task<int> ExecuteAsync(
         InquiryCommand command,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes a non-query command with parameters bound by a caller-supplied static delegate.
+    /// Avoids the <c>InquiryCommand</c> / <c>InquiryParameter[]</c> allocations of the boxed
+    /// path — generated stores pass a method group (no closure capture), and the binder uses
+    /// <c>DbCommand.CreateParameter</c> / <c>Parameters.Add</c> directly.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation routes the call through the existing <c>ExecuteAsync(InquiryCommand, …)</c>
+    /// path via <see cref="InquiryCommand.DbCommandBinder"/>, so custom <c>IInquiryRequestPipeline</c>
+    /// implementations stay source-compatible. The built-in <see cref="InquiryRequestPipeline"/>
+    /// overrides this with an allocation-free fast path.
+    /// </remarks>
+    Task<int> ExecuteAsync<TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return ExecuteAsync(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
+            cancellationToken);
+    }
 }

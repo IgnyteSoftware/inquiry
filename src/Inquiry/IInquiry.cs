@@ -2,6 +2,7 @@ using Inquiry.Commands;
 using Inquiry.Materialization;
 using Inquiry.Transactions;
 using System.Data;
+using System.Data.Common;
 
 namespace Inquiry;
 
@@ -120,6 +121,35 @@ public interface IInquiry
     Task<int> ExecuteAsync(
         InquiryCommand command,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes a SQL command, binding parameters via a caller-supplied static delegate. The
+    /// generated-store path uses this overload to avoid allocating an <c>InquiryParameter[]</c>
+    /// or <c>InquiryCommand</c> per call — the delegate writes directly into the
+    /// <see cref="DbCommand"/>'s parameter collection.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation routes the call through <c>ExecuteAsync(InquiryCommand, …)</c>
+    /// via <see cref="InquiryCommand.DbCommandBinder"/>, so existing <see cref="IInquiry"/>
+    /// implementations (e.g. test mocks) stay source-compatible. <see cref="DefaultInquiry"/>
+    /// overrides this and delegates to the pipeline's allocation-free fast path.
+    /// </remarks>
+    /// <typeparam name="TArgs">
+    /// The bound state (typically the entity or key). Pass a static method group / static
+    /// lambda for <paramref name="bindParameters"/> to keep this allocation-free.
+    /// </typeparam>
+    Task<int> ExecuteAsync<TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return ExecuteAsync(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
+            cancellationToken);
+    }
 
     // ---- Transactions -----------------------------------------------------------------
 
