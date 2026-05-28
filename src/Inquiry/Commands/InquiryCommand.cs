@@ -8,6 +8,8 @@ namespace Inquiry.Commands;
 /// </summary>
 public sealed class InquiryCommand
 {
+    private readonly InquiryParameter[] _parameters;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryCommand"/> class.
     /// </summary>
@@ -36,7 +38,7 @@ public sealed class InquiryCommand
         }
 
         CommandText = commandText;
-        Parameters = parameters switch
+        _parameters = parameters switch
         {
             null => throw new ArgumentNullException(nameof(parameters)),
             InquiryParameter[] array => array,
@@ -54,7 +56,13 @@ public sealed class InquiryCommand
     /// <summary>
     /// Gets the parameters to bind to the command.
     /// </summary>
-    public IReadOnlyList<InquiryParameter> Parameters { get; }
+    public IReadOnlyList<InquiryParameter> Parameters => _parameters;
+
+    /// <summary>
+    /// Internal accessor used by the pipeline binder to iterate the parameters as a strongly-typed
+    /// array — index-based, no enumerator boxing.
+    /// </summary>
+    internal InquiryParameter[] ParametersArray => _parameters;
 
     /// <summary>
     /// Gets the optional ADO.NET command type.

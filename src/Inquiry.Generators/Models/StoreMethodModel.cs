@@ -10,13 +10,15 @@ internal sealed class StoreMethodModel
         StoreOperation operation,
         IReadOnlyList<ColumnModel>? fieldColumns = null,
         string? procedureName = null,
-        bool returnsEntity = false)
+        bool returnsEntity = false,
+        bool returnsList = false)
     {
         Symbol = symbol;
         Operation = operation;
         FieldColumns = fieldColumns ?? System.Array.Empty<ColumnModel>();
         ProcedureName = procedureName;
         ReturnsEntity = returnsEntity;
+        ReturnsList = returnsList;
     }
 
     public IMethodSymbol Symbol { get; }
@@ -34,4 +36,11 @@ internal sealed class StoreMethodModel
 
     /// <summary>Whether a mutation operation returns the database row after mutation.</summary>
     public bool ReturnsEntity { get; }
+
+    /// <summary>
+    /// Whether a SelectAll-style method declared its return type as <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c>
+    /// (buffered) vs <c>IAsyncEnumerable&lt;T&gt;</c> (streaming). Buffered methods bypass the
+    /// IAsyncEnumerable state machine on the hot path.
+    /// </summary>
+    public bool ReturnsList { get; }
 }

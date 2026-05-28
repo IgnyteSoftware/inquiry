@@ -19,7 +19,8 @@ public sealed class InquiryParameterReaderTests
         var result = InquiryParameterReader.Read(parameter);
 
         Assert.Single(result);
-        Assert.Same(parameter, result[0]);
+        // InquiryParameter is a value type (readonly struct); compare by value.
+        Assert.Equal(parameter, result[0]);
     }
 
     [Fact]

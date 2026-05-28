@@ -4,10 +4,14 @@ namespace Inquiry.Parameters;
 
 internal static class InquiryParameterBinder
 {
-    public static void Bind(DbCommand command, IEnumerable<InquiryParameter> parameters)
+    public static void Bind(DbCommand command, InquiryParameter[] parameters)
     {
-        foreach (var parameter in parameters)
+        // Index-based loop on a typed array — no IEnumerator<T> box allocation, and `ref` on the
+        // array element avoids copying the struct on each iteration.
+        for (var i = 0; i < parameters.Length; i++)
         {
+            ref readonly var parameter = ref parameters[i];
+
             var dbParameter = command.CreateParameter();
             dbParameter.ParameterName = NormalizeName(parameter.Name);
             dbParameter.Value = CoerceValue(parameter.Value);
@@ -64,6 +68,9 @@ internal static class InquiryParameterBinder
             throw new ArgumentException("Parameter name cannot be null or empty.", nameof(name));
         }
 
+        // Generated stores emit names already prefixed with '@' so we take this fast path on
+        // every hot-path bind. The branch stays for hand-crafted callers (e.g. anonymous-object
+        // parameters via InquiryParameterReader) whose property names lack the prefix.
         return name[0] is '@' or ':' or '$' or '?'
             ? name
             : "@" + name;

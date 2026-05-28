@@ -41,14 +41,14 @@ public sealed class InquiryRequestPipelineTests
             new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 1) }),
-            MaterializeItem,
+            MaterializerInstance,
             cancellationTokenSource.Token);
 
         var missing = await pipeline.QuerySingleOrDefaultAsync(
             new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 404) }),
-            MaterializeItem,
+            MaterializerInstance,
             cancellationTokenSource.Token);
 
         var updated = await pipeline.ExecuteAsync(
@@ -93,7 +93,7 @@ public sealed class InquiryRequestPipelineTests
 
         await foreach (var item in pipeline.QueryAsync(
             new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
-            MaterializeItem))
+            MaterializerInstance))
         {
             Assert.Equal("Alpha", item.Name);
             break;
@@ -122,7 +122,7 @@ public sealed class InquiryRequestPipelineTests
 
         await foreach (var _ in pipeline.QueryAsync(
             new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
-            MaterializeItem))
+            MaterializerInstance))
         {
             break;
         }
@@ -149,7 +149,7 @@ public sealed class InquiryRequestPipelineTests
         {
             await foreach (var _ in pipeline.QueryAsync<TestItem>(
                 new InquiryCommand("SELECT Id, Name, IsActive FROM Items"),
-                _ => throw new InvalidOperationException("Bad materializer")))
+                new ThrowingMaterializer()))
             {
             }
         });
@@ -175,7 +175,7 @@ public sealed class InquiryRequestPipelineTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             pipeline.QuerySingleOrDefaultAsync(
                 new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
-                MaterializeItem));
+                MaterializerInstance));
     }
 
     [Fact]
@@ -317,7 +317,7 @@ public sealed class InquiryRequestPipelineTests
             new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 1) }),
-            MaterializeItem);
+            MaterializerInstance);
 
         Assert.Equal(1, inserted);
         Assert.NotNull(selected);
@@ -351,6 +351,8 @@ public sealed class InquiryRequestPipelineTests
 
         await command.ExecuteNonQueryAsync();
     }
+
+    private static readonly TestItemMaterializer MaterializerInstance = new();
 
     private static TestItem MaterializeItem(DbDataReader reader)
     {
@@ -441,5 +443,11 @@ public sealed class InquiryRequestPipelineTests
         {
             return MaterializeItem(reader);
         }
+    }
+
+    private sealed class ThrowingMaterializer : IInquiryEntityMaterializer<TestItem>
+    {
+        public TestItem Materialize(DbDataReader reader)
+            => throw new InvalidOperationException("Bad materializer");
     }
 }

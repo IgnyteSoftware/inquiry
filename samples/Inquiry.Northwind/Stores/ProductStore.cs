@@ -8,7 +8,7 @@ public abstract partial class ProductStore : InquiryStore<Product>
     protected ProductStore(IInquiry inquiry) : base(inquiry) { }
 
     [InquirySelectAll]
-    public abstract IAsyncEnumerable<Product> SelectAllAsync(CancellationToken cancellationToken = default);
+    public abstract Task<IReadOnlyList<Product>> SelectAllAsync(CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
     public abstract Task<Product?> SelectByKeyAsync(int? productID, CancellationToken cancellationToken = default);
@@ -20,7 +20,7 @@ public abstract partial class ProductStore : InquiryStore<Product>
     public abstract Task<Product?> SelectByKeyWithCategoryAsync(int? productID, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByField("CategoryID")]
-    public abstract IAsyncEnumerable<Product> SelectByCategoryAsync(int? categoryID, CancellationToken cancellationToken = default);
+    public abstract Task<IReadOnlyList<Product>> SelectByCategoryAsync(int? categoryID, CancellationToken cancellationToken = default);
 
     [InquiryInsert]
     public abstract Task<int> InsertAsync(Product product, CancellationToken cancellationToken = default);

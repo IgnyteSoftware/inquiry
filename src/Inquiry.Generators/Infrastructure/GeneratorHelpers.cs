@@ -193,6 +193,14 @@ internal static class GeneratorHelpers
         return "global::" + containingType.ContainingNamespace.ToDisplayString() + "." + generatedTypeName;
     }
 
+    /// <summary>
+    /// Returns the fully-qualified type name of the struct materializer emitted alongside the
+    /// class materializer in <c>EntityProcessor.EmitMaterializer</c>. The struct lives in the
+    /// same namespace as the entity, so this is just <c>entityType.Namespace + ".{Name}InquiryEntityStructMaterializer"</c>.
+    /// </summary>
+    public static string GetStructMaterializerFullName(INamedTypeSymbol entitySymbol)
+        => GetGeneratedTypeName(entitySymbol, entitySymbol.Name + "InquiryEntityStructMaterializer");
+
     private static string StripGlobalPrefix(string displayName)
     {
         return displayName.StartsWith(KnownSymbols.GlobalPrefix, StringComparison.Ordinal)

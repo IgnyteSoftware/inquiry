@@ -1,6 +1,7 @@
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
+using Inquiry.Generators.Sql;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -41,6 +42,10 @@ public sealed class InquiryGenerator : IIncrementalGenerator
             entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity));
         }
 
+        // Dialect is only required when there is at least one store to emit. Materializers and
+        // registrations are dialect-agnostic, so we still produce them when no provider is
+        // referenced (e.g. analyzer-only consumers).
+        SqlBuilder? sqlBuilder = null;
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistrationModel>();
         foreach (var classDeclaration in candidates)
         {
@@ -75,7 +80,15 @@ public sealed class InquiryGenerator : IIncrementalGenerator
                 continue;
             }
 
-            storeRegistrations.Add(StoreProcessor.Emit(context, storeSymbol, entity, methods, entities));
+            // Resolve the dialect lazily so consumers without any stores never see the diagnostic,
+            // and so the resolution diagnostic is reported at most once per compilation.
+            sqlBuilder ??= DialectResolver.Resolve(context, compilation);
+            if (sqlBuilder is null)
+            {
+                continue;
+            }
+
+            storeRegistrations.Add(StoreProcessor.Emit(context, storeSymbol, entity, methods, entities, sqlBuilder));
         }
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)

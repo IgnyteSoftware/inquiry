@@ -71,7 +71,7 @@ public sealed class TransactionIntegrationTests
         }
         await tx.CommitAsync();
 
-        var all = await store.SelectAllAsync().ToListAsync();
+        var all = await store.SelectAllAsync();
         Assert.Equal(5, all.Count);
     }
 

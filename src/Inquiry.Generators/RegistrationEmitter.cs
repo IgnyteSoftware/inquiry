@@ -43,7 +43,12 @@ internal static class RegistrationEmitter
         {
             var storeType = registration.StoreType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var generatedType = GeneratorHelpers.GetGeneratedTypeName(registration.StoreType, registration.GeneratedTypeName);
-            source.AppendLine($"            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddTransient<{storeType}, {generatedType}>(services);");
+            // Stores are scoped to align with IInquiry's lifetime: one store instance per
+            // request/scope, reused across every call in that scope, but never shared across
+            // scopes (so each store sees the scope-local IInquiry). The store itself is
+            // stateless after construction (all SQL is in const fields), so scoping is purely
+            // about the captured IInquiry reference.
+            source.AppendLine($"            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<{storeType}, {generatedType}>(services);");
         }
 
         source.AppendLine("        }");

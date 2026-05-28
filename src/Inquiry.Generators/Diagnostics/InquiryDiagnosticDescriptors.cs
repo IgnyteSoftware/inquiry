@@ -91,4 +91,28 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DialectMissing = new(
+        "INQ013",
+        "No Inquiry SQL dialect could be resolved",
+        "No Inquiry SQL dialect could be resolved. Reference one of the Inquiry provider packages (Inquiry.Sqlite, Inquiry.PostgreSql, Inquiry.SqlServer) or apply [assembly: InquiryDialect(\"<dialect>\")] to this assembly. Store SQL was not generated.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DialectAmbiguous = new(
+        "INQ014",
+        "Multiple Inquiry SQL dialects are referenced",
+        "Multiple Inquiry SQL dialects are referenced ({0}). Reference exactly one provider package or apply [assembly: InquiryDialect(\"<dialect>\")] to this assembly to disambiguate.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DialectUnknown = new(
+        "INQ015",
+        "Unknown Inquiry SQL dialect",
+        "Inquiry SQL dialect '{0}' is not recognised. Supported dialects: Sqlite, PostgreSql, SqlServer.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

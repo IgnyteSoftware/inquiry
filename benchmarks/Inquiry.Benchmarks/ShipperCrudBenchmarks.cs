@@ -76,8 +76,7 @@ public class ShipperCrudBenchmarks
     [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Inquiry()
     {
-        var list = new List<Shipper>(BenchmarkDatabase.SeedRows);
-        await foreach (var s in _db.Shippers.SelectAllAsync()) list.Add(s);
+        var list = await _db.Shippers.SelectAllAsync();
         return list.Count;
     }
 
@@ -154,8 +153,7 @@ public class ShipperCrudBenchmarks
     [BenchmarkCategory("SelectByField"), Benchmark]
     public async Task<int> SelectByField_Inquiry()
     {
-        var list = new List<Shipper>();
-        await foreach (var s in _db.Shippers.SelectByCompanyNameAsync(TargetCompanyName)) list.Add(s);
+        var list = await _db.Shippers.SelectByCompanyNameAsync(TargetCompanyName);
         return list.Count;
     }
 

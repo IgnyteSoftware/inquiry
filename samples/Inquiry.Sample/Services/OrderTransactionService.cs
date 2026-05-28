@@ -31,12 +31,8 @@ public sealed class OrderTransactionService
     public async Task<Result> RunAsync(string customerID, CancellationToken cancellationToken = default)
     {
         // Pick a couple of products to put on the new order. The seed always inserts at least 2.
-        var picks = new List<Product>();
-        await foreach (var p in _products.SelectAllAsync(cancellationToken).ConfigureAwait(false))
-        {
-            picks.Add(p);
-            if (picks.Count == 2) break;
-        }
+        var allProducts = await _products.SelectAllAsync(cancellationToken).ConfigureAwait(false);
+        var picks = allProducts.Take(2).ToList();
 
         if (picks.Count == 0)
         {

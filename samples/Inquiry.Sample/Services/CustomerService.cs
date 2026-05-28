@@ -18,12 +18,10 @@ public sealed class CustomerService
 
     public async Task<List<Customer>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var list = new List<Customer>();
-        await foreach (var c in _store.SelectAllAsync(cancellationToken).ConfigureAwait(false))
-        {
-            list.Add(c);
-        }
-        return list;
+        // The buffered store returns IReadOnlyList<T> backed by a List<T>; cast to surface
+        // the concrete type to Blazor pages without re-copying.
+        var list = await _store.SelectAllAsync(cancellationToken).ConfigureAwait(false);
+        return (List<Customer>)list;
     }
 
     public Task<Customer?> GetByKeyAsync(string customerID, CancellationToken cancellationToken = default)
@@ -31,12 +29,8 @@ public sealed class CustomerService
 
     public async Task<List<Customer>> GetByCountryAsync(string country, CancellationToken cancellationToken = default)
     {
-        var list = new List<Customer>();
-        await foreach (var c in _store.SelectByCountryAsync(country, cancellationToken).ConfigureAwait(false))
-        {
-            list.Add(c);
-        }
-        return list;
+        var list = await _store.SelectByCountryAsync(country, cancellationToken).ConfigureAwait(false);
+        return (List<Customer>)list;
     }
 
     public Task<int> CreateAsync(Customer customer, CancellationToken cancellationToken = default)

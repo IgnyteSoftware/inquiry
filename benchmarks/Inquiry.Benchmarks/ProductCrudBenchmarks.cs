@@ -82,8 +82,7 @@ public class ProductCrudBenchmarks
     [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Inquiry()
     {
-        var list = new List<Product>(BenchmarkDatabase.SeedRows);
-        await foreach (var p in _db.Products.SelectAllAsync()) list.Add(p);
+        var list = await _db.Products.SelectAllAsync();
         return list.Count;
     }
 
@@ -160,8 +159,7 @@ public class ProductCrudBenchmarks
     [BenchmarkCategory("SelectByField"), Benchmark]
     public async Task<int> SelectByField_Inquiry()
     {
-        var list = new List<Product>();
-        await foreach (var p in _db.Products.SelectByCategoryAsync(TargetCategoryId)) list.Add(p);
+        var list = await _db.Products.SelectByCategoryAsync(TargetCategoryId);
         return list.Count;
     }
 
