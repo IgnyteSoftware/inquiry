@@ -1,16 +1,16 @@
 # Inquiry
 
-Inquiry is an experimental .NET 6+ source-generated micro-ORM. You write attributed entity classes and abstract store classes; a Roslyn source generator emits the concrete store implementations, materializers, and dependency-injection wiring. Every SQL string is produced by a provider-specific dialect, so each database can be tuned independently.
+Inquiry is an experimental .NET 6+ source-generated micro-ORM. You write attributed entity classes and `partial` store classes with `partial` method declarations; a Roslyn source generator emits the matching partial with method bodies, materializers, and dependency-injection wiring. Every SQL string is built at compile time by a provider-specific `SqlBuilder` and baked into the generated source as `const string` fields, so each database can be tuned independently and the runtime carries no SQL.
 
 ## Repository Layout
 
 | Project | Purpose |
 | --- | --- |
-| `src/Inquiry` | Public runtime: `IInquiry` facade, request pipeline, attributes, command/parameter types, transactions, the `InquirySqlDialect` abstract base, and DI extension `AddInquiry()`. |
-| `src/Inquiry.Generators` | Roslyn incremental source generator. Discovers entities and stores, emits materializers, generated stores, and a DI registration class. |
-| `src/Inquiry.Sqlite` | SQLite provider: `SqliteInquiryConnectionFactory`, `SqliteInquirySqlDialect`, `AddInquirySqlite(...)`. |
-| `src/Inquiry.SqlServer` | SQL Server provider: equivalent factory, dialect, and `AddInquirySqlServer(...)`. |
-| `src/Inquiry.PostgreSql` | PostgreSQL provider: equivalent factory, dialect, and `AddInquiryPostgreSql(...)`. |
+| `src/Inquiry` | Public runtime: `IInquiry` facade, request pipeline, attributes, command/parameter types, transactions, and DI extension `AddInquiry()`. Ships no SQL — every statement is built at compile time. |
+| `src/Inquiry.Generators` | Roslyn incremental source generator. Discovers entities and stores, emits materializers, generated stores, and a DI registration class. Also owns the per-dialect `SqlBuilder` hierarchy that produces the SQL baked into generated stores. |
+| `src/Inquiry.Sqlite` | SQLite provider: `SqliteInquiryConnectionFactory`, `AddInquirySqlite(...)`, and `[assembly: InquiryDialect("Sqlite")]`. |
+| `src/Inquiry.SqlServer` | SQL Server provider: equivalent factory, DI extension, and dialect marker. |
+| `src/Inquiry.PostgreSql` | PostgreSQL provider: equivalent factory, DI extension, and dialect marker. |
 | `tests/Inquiry.Tests` | Core runtime tests (pipeline, parameter binding, transactions). |
 | `tests/Inquiry.Generators.Tests` | Source-generator tests + per-dialect SQL assertions. |
 | `tests/Inquiry.Sqlite.Tests` | End-to-end integration tests against in-memory SQLite. |
@@ -39,32 +39,30 @@ public sealed class Organization
     public bool IsActive { get; set; } = true;
 }
 
-public abstract partial class OrganizationStore : InquiryStore<Organization>
+public partial class OrganizationStore : InquiryStore<Organization>
 {
-    protected OrganizationStore(IInquiry inquiry) : base(inquiry) { }
-
     [InquirySelectAll]
-    public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken ct = default);
+    public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken ct = default);
 
     [InquirySelectOneByKey]
-    public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken ct = default);
+    public partial Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken ct = default);
 
     [InquirySelectAllByField("IsActive")]
-    public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken ct = default);
+    public partial IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken ct = default);
 
-    [InquiryInsert]   public abstract Task<int>  InsertAsync(Organization o, CancellationToken ct = default);
+    [InquiryInsert]   public partial Task<int>  InsertAsync(Organization o, CancellationToken ct = default);
     [InquiryInsert(ReturnEntity = true)]
-    public abstract Task<Organization?> InsertReturningAsync(Organization o, CancellationToken ct = default);
+    public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken ct = default);
 
-    [InquiryUpdate]   public abstract Task<bool> UpdateAsync(Organization o, CancellationToken ct = default);
+    [InquiryUpdate]   public partial Task<bool> UpdateAsync(Organization o, CancellationToken ct = default);
     [InquiryUpdate(ReturnEntity = true)]
-    public abstract Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken ct = default);
+    public partial Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken ct = default);
 
-    [InquiryUpsert]   public abstract Task<int>  UpsertAsync(Organization o, CancellationToken ct = default);
+    [InquiryUpsert]   public partial Task<int>  UpsertAsync(Organization o, CancellationToken ct = default);
     [InquiryUpsert(ReturnEntity = true)]
-    public abstract Task<Organization?> UpsertReturningAsync(Organization o, CancellationToken ct = default);
+    public partial Task<Organization?> UpsertReturningAsync(Organization o, CancellationToken ct = default);
 
-    [InquiryDeleteOneByKey] public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken ct = default);
+    [InquiryDeleteOneByKey] public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken ct = default);
 }
 ```
 
@@ -85,7 +83,7 @@ await foreach (var o in orgs.SelectAllAsync()) { /* ... */ }
 
 ## Supported Store Attributes
 
-All store attributes live in `Inquiry.Stores`. The method must be `abstract`, the enclosing class must be `partial`, and the last parameter must be `CancellationToken`.
+All store attributes live in `Inquiry.Stores`. The method must be a `partial` declaration, the enclosing class must be `partial`, and the last parameter must be `CancellationToken`. The generator emits the constructor and the method bodies into a second partial of the same class — no derived class, no user-written constructor.
 
 | Attribute | Required signature | Maps to |
 | --- | --- | --- |
@@ -129,7 +127,7 @@ For every discovered entity, immediately emits `<Entity>InquiryEntityMaterialize
 
 [`src/Inquiry.Generators/StoreProcessor.cs`](src/Inquiry.Generators/StoreProcessor.cs) drives store discovery; [`StoreOperationEmitter.cs`](src/Inquiry.Generators/StoreOperationEmitter.cs) is the per-method dispatcher.
 
-For each abstract method on each `partial class : InquiryStore<TEntity>`:
+For each `partial` method declaration on each `partial class : InquiryStore<TEntity>`:
 
 1. `StoreOperationEmitter.GetOperation` identifies the Inquiry attribute and returns a [`StoreOperation`](src/Inquiry.Generators/Models/StoreOperation.cs) enum value.
 2. `StoreOperationEmitter.Validate` checks the return type, parameter count, parameter types, and (for `[InquirySelectAllByField]`) confirms the named field exists in the entity. Reports diagnostics on mismatch.
@@ -140,56 +138,44 @@ For each abstract method on each `partial class : InquiryStore<TEntity>`:
 `StoreProcessor.Emit` writes `<Store>.InquiryStore.g.cs`. Each generated store has the same shape:
 
 ```csharp
-public sealed class GeneratedOrganizationStore : OrganizationStore
+// Second partial of the user's class — generated alongside the user-authored one.
+partial class OrganizationStore
 {
-    // Column metadata — one static array per entity (and per related child entity).
-    private static readonly InquirySqlColumn[] _columns = { /* one entry per [InquiryColumn] / [InquiryKey] */ };
+    // One const string per statement the store actually needs. SQL is built at compile time
+    // by the dialect-matched SqlBuilder and baked into the source.
+    private const string _sqlSelectAll = "SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\"";
+    private const string _sqlSelectByKey = "SELECT \"Key\", \"Name\", \"IsActive\" FROM \"TOrganization\" WHERE \"Key\" = @Key";
+    private const string _sqlInsert = "INSERT INTO \"TOrganization\" (\"Key\", \"Name\", \"IsActive\") VALUES (@Key, @Name, @IsActive)";
+    private const string _sqlUpdate = "UPDATE \"TOrganization\" SET \"Name\" = @Name, \"IsActive\" = @IsActive WHERE \"Key\" = @Key";
+    private const string _sqlDeleteByKey = "DELETE FROM \"TOrganization\" WHERE \"Key\" = @Key";
 
-    // One readonly string field per statement the store actually needs.
-    private readonly string _sqlSelectAll;
-    private readonly string _sqlSelectByKey;
-    private readonly string _sqlInsert;
-    private readonly string _sqlUpdate;
-    private readonly string _sqlUpsert;
-    private readonly string _sqlDeleteByKey;
-    private readonly string _sqlSelectBy_IsActive;     // one per [InquirySelectAllByField]
+    public OrganizationStore(IInquiry inquiry) : base(inquiry) { }
 
-    public GeneratedOrganizationStore(IInquiry inquiry, InquirySqlDialect sqlDialect) : base(inquiry)
-    {
-        if (sqlDialect is null) throw new ArgumentNullException(nameof(sqlDialect));
-        var _ctx = sqlDialect.CreateContext(/*schema*/ null, "TOrganization", _columns);
-        _sqlSelectAll         = sqlDialect.BuildSelectAllSql(_ctx);
-        _sqlSelectByKey       = sqlDialect.BuildSelectByKeySql(_ctx);
-        _sqlInsert            = sqlDialect.BuildInsertSql(_ctx);
-        _sqlUpdate            = sqlDialect.BuildUpdateSql(_ctx);
-        _sqlUpsert            = sqlDialect.BuildUpsertSql(_ctx);
-        _sqlDeleteByKey       = sqlDialect.BuildDeleteByKeySql(_ctx);
-        _sqlSelectBy_IsActive = sqlDialect.BuildSelectByFieldSql(_ctx, _columns[/*index*/]);
-    }
+    public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken ct)
+        => Inquiry.QueryAsync<Organization, OrganizationInquiryEntityStructMaterializer>(
+            new InquiryCommand(_sqlSelectAll), default, ct);
 
-    public override IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken ct = default)
-        => Inquiry.QueryAsync<Organization>(_sqlSelectAll, ct);
+    public partial async Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken ct)
+        => await Inquiry.QuerySingleOrDefaultAsync<Organization, OrganizationInquiryEntityStructMaterializer>(
+            new InquiryCommand(_sqlSelectByKey, new[] { new InquiryParameter("@Key", key) }),
+            default, ct).ConfigureAwait(false);
 
-    public override async Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken ct = default)
-        => await Inquiry.QuerySingleOrDefaultAsync<Organization>(_sqlSelectByKey, new { key }, ct);
-
-    // ... one override per attributed method
+    // ... one partial implementation per attributed method
 }
 ```
 
 Key points:
 
-- **Every SQL string is produced by the provider's dialect.** The generator emits a single `CreateContext` call followed by one `Build…Sql(...)` call per statement the store needs. There is no intermediate builder, no statement-set bag, no central CRUD compiler in the core package.
-- **Statements are built once, in the constructor, and cached as `readonly string` fields.** No SQL is rebuilt per call.
-- **Only the SQL the store actually uses is emitted.** A store that only declares `[InquiryInsert]` gets exactly one field.
-- **Eager-load attributes** generate additional `private static readonly InquirySqlColumn[] _columns_<Relation>` arrays and `_sql_<Relation>` / `_sql_<Relation>_All` fields, each built via the same dialect calls for the child entity.
-- **Stored procedures** bypass the dialect entirely; the generator emits a raw `InquiryCommand` with the procedure name and `CommandType.StoredProcedure`.
+- **Every SQL string is built at compile time by the generator-side `SqlBuilder`.** The runtime ships zero SQL — no dialect type, no per-call build, no constructor work. Each statement is emitted as a `private const string`.
+- **Only the SQL the store actually uses is emitted.** A store that only declares `[InquiryInsert]` gets exactly one const.
+- **Eager-load attributes** emit additional `_sql_<Relation>` / `_sql_<Relation>_All` const fields, each built via the same builder calls for the child entity.
+- **Stored procedures** bypass the builder entirely; the generator emits a raw `InquiryCommand` with the procedure name and `CommandType.StoredProcedure`.
 
 ### Step 5 — Emit the DI registration
 
 [`src/Inquiry.Generators/RegistrationEmitter.cs`](src/Inquiry.Generators/RegistrationEmitter.cs)
 
-Writes `InquiryGeneratedServiceRegistration.g.cs`: a sealed `Inquiry.Generated.InquiryGeneratedServiceRegistration : IInquiryServiceRegistration` whose `AddServices(IServiceCollection)` calls `TryAddSingleton` for every generated materializer and `TryAddTransient` for every generated store.
+Writes `InquiryGeneratedServiceRegistration.g.cs`: a sealed `Inquiry.Generated.InquiryGeneratedServiceRegistration : IInquiryServiceRegistration` whose `AddServices(IServiceCollection)` calls `TryAddSingleton` for every generated materializer and `TryAddScoped` for every store the generator emitted into.
 
 At application startup [`InquiryServiceCollectionExtensions.AddInquiry()`](src/Inquiry/DependencyInjection/InquiryServiceCollectionExtensions.cs) loops over all loaded assemblies, reflects out every concrete `IInquiryServiceRegistration`, and invokes `AddServices`. That is how generator output crosses the assembly boundary into your DI container without any manual wiring.
 
@@ -203,68 +189,67 @@ For a project with N entities and M attributed stores, the generator produces:
 
 ---
 
-## Flow 2: SQL Building (Provider Packages)
+## Flow 2: SQL Building (Compile Time)
 
-All SQL is owned by a single abstract class — [`InquirySqlDialect`](src/Inquiry/Sql/InquirySqlDialect.cs) in `Inquiry.Sql`. The core package declares the shape; each provider package supplies the bodies.
+All SQL is produced at compile time by an internal `SqlBuilder` hierarchy in `Inquiry.Generators`. The Inquiry runtime ships **zero SQL** — no abstract dialect, no per-call build, no statement cache. Each generated store carries the SQL strings it needs as `private const string` fields.
 
 ### The shape
 
 ```csharp
-public abstract class InquirySqlDialect
+// src/Inquiry.Generators/Sql/SqlBuilder.cs
+internal abstract class SqlBuilder
 {
-    public abstract string Name { get; }
+    public abstract string DialectName { get; }
     public abstract string QuoteIdentifier(string identifier);
-    public virtual  string ParameterName(string logical);           // default: "@" + logical
+    public virtual  string ParameterName(string logical);     // default: "@" + logical
     public          string QuoteTable(string? schema, string table);
 
-    public InquirySqlBuildContext CreateContext(
-        string? schema,
-        string tableName,
-        IReadOnlyList<InquirySqlColumn> columns);                   // validates + precomputes
-
-    public abstract string BuildSelectAllSql       (InquirySqlBuildContext ctx);
-    public abstract string BuildSelectByKeySql     (InquirySqlBuildContext ctx);
-    public abstract string BuildSelectByFieldSql   (InquirySqlBuildContext ctx, InquirySqlColumn column);
-    public abstract string BuildInsertSql          (InquirySqlBuildContext ctx);
-    public abstract string BuildInsertReturningSql (InquirySqlBuildContext ctx);
-    public abstract string BuildUpdateSql          (InquirySqlBuildContext ctx);
-    public abstract string BuildUpdateReturningSql (InquirySqlBuildContext ctx);
-    public abstract string BuildDeleteByKeySql     (InquirySqlBuildContext ctx);
-    public abstract string BuildUpsertSql          (InquirySqlBuildContext ctx);
-    public abstract string BuildUpsertReturningSql (InquirySqlBuildContext ctx);
+    public abstract string BuildSelectAllSql       (SqlBuildContext ctx);
+    public abstract string BuildSelectByKeySql     (SqlBuildContext ctx);
+    public abstract string BuildSelectByFieldSql   (SqlBuildContext ctx, IReadOnlyList<ColumnModel> filterColumns);
+    public abstract string BuildInsertSql          (SqlBuildContext ctx);
+    public abstract string BuildInsertReturningSql (SqlBuildContext ctx);
+    public abstract string BuildUpdateSql          (SqlBuildContext ctx);
+    public abstract string BuildUpdateReturningSql (SqlBuildContext ctx);
+    public abstract string BuildDeleteByKeySql     (SqlBuildContext ctx);
+    public abstract string BuildUpsertSql          (SqlBuildContext ctx);
+    public abstract string BuildUpsertReturningSql (SqlBuildContext ctx);
 }
 ```
 
-`CreateContext` validates that exactly one column is marked `[InquiryKey]` and that at least one column is not database-generated, then builds an [`InquirySqlBuildContext`](src/Inquiry/Sql/InquirySqlBuildContext.cs). That context holds precomputed fragments every `Build…Sql` method needs:
+`StoreProcessor` constructs a `SqlBuildContext` once per (entity, builder) pair and feeds it to whichever `Build…Sql` methods the store actually needs. The context precomputes the SQL fragments those methods consume:
 
 - `Table` — quoted `[schema].[table]`
 - `SelectColumns` — comma-joined quoted column list
 - `InsertColumns`, `InsertParameters` — insertable columns + matching `@name` parameters
 - `SetClauses` — `col = @col, ...` for non-key non-generated columns
-- `QuotedKeyColumn`, `KeyParameter`
-- The raw [`InquirySqlColumn`](src/Inquiry/Sql/InquirySqlColumn.cs) lists, so dialects can introspect (e.g., to emit `OUTPUT INSERTED.*` or `RETURNING`).
+- `QuotedKeyColumns`, `KeyParameters`, `KeyWhereClause`
+- The raw `ColumnModel` lists, so builders can introspect (e.g., to emit `OUTPUT INSERTED.*` or `RETURNING`).
 
-### Provider implementations
+### Builder implementations
 
 | File | Identifier quoting | Upsert strategy |
 | --- | --- | --- |
-| [`src/Inquiry.Sqlite/SqliteInquirySqlDialect.cs`](src/Inquiry.Sqlite/SqliteInquirySqlDialect.cs) | `"name"` (double quotes, doubled to escape) | `INSERT ... ON CONFLICT DO UPDATE` |
-| [`src/Inquiry.SqlServer/SqlServerInquirySqlDialect.cs`](src/Inquiry.SqlServer/SqlServerInquirySqlDialect.cs) | `[name]` (brackets, `]` doubled to escape) | `MERGE INTO ... WHEN MATCHED / WHEN NOT MATCHED` |
-| [`src/Inquiry.PostgreSql/PostgreSqlInquirySqlDialect.cs`](src/Inquiry.PostgreSql/PostgreSqlInquirySqlDialect.cs) | `"name"` (double quotes) | `INSERT … ON CONFLICT (...) DO UPDATE` |
+| [`src/Inquiry.Generators/Sql/SqliteSqlBuilder.cs`](src/Inquiry.Generators/Sql/SqliteSqlBuilder.cs) | `"name"` (double quotes, doubled to escape) | `INSERT ... ON CONFLICT DO UPDATE` |
+| [`src/Inquiry.Generators/Sql/SqlServerSqlBuilder.cs`](src/Inquiry.Generators/Sql/SqlServerSqlBuilder.cs) | `[name]` (brackets, `]` doubled to escape) | `MERGE INTO ... WHEN MATCHED / WHEN NOT MATCHED` |
+| [`src/Inquiry.Generators/Sql/PostgreSqlSqlBuilder.cs`](src/Inquiry.Generators/Sql/PostgreSqlSqlBuilder.cs) | `"name"` (double quotes) | `INSERT … ON CONFLICT (...) DO UPDATE` |
 
-To add a provider or tune one, edit only its `*InquirySqlDialect.cs` file. To change how a CRUD statement is emitted for one database without affecting the others, override the matching `Build…Sql` method in that provider's dialect.
+To change how a CRUD statement is emitted for one database without affecting the others, override the matching `Build…Sql` method in that builder.
+
+### Dialect selection
+
+Each provider runtime assembly declares `[assembly: InquiryDialect("Sqlite")]` (or `"SqlServer"` / `"PostgreSql"`). At generator time, [`DialectResolver`](src/Inquiry.Generators/Sql/DialectResolver.cs) walks the consuming compilation's referenced assemblies, picks the single matching dialect name, and instantiates the corresponding `SqlBuilder`. Ambiguity or missing markers surface as `INQ013` / `INQ014` / `INQ015` diagnostics.
 
 ### Provider DI registration
 
-Each provider package ships its own service-collection extension that registers the connection factory and dialect as singletons. Example:
+Each provider package ships its own service-collection extension that registers only the connection factory:
 
 ```csharp
 // src/Inquiry.Sqlite/DependencyInjection/SqliteInquiryServiceCollectionExtensions.cs
 services.AddSingleton<IInquiryConnectionFactory>(_ => new SqliteInquiryConnectionFactory(connectionString));
-services.AddSingleton<InquirySqlDialect, SqliteInquirySqlDialect>();
 ```
 
-The generated store ctor takes both `IInquiry` and `InquirySqlDialect`, so the DI container picks up the provider's dialect automatically.
+The generated store ctor takes only `IInquiry` — no dialect dependency to inject because every SQL string was baked in at compile time.
 
 ---
 

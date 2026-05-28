@@ -1,6 +1,5 @@
 using Inquiry.Connections;
 using Inquiry.Pipeline;
-using Inquiry.Sql;
 using Inquiry.SqlServer.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,7 +15,6 @@ public sealed class SqlServerProviderIntegrationTests
             .BuildServiceProvider();
 
         Assert.IsType<SqlServerInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());
-        Assert.IsType<SqlServerInquirySqlDialect>(serviceProvider.GetRequiredService<InquirySqlDialect>());
         Assert.Null(serviceProvider.GetService<IInquiry>());
         Assert.Null(serviceProvider.GetService<IInquiryRequestPipeline>());
     }

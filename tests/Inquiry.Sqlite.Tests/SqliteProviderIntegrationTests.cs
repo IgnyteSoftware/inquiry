@@ -4,7 +4,6 @@ using Inquiry.Northwind;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Pipeline;
-using Inquiry.Sql;
 using Inquiry.Sqlite.DependencyInjection;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +20,6 @@ public sealed class SqliteProviderIntegrationTests
             .BuildServiceProvider();
 
         Assert.IsType<SqliteInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());
-        Assert.IsType<SqliteInquirySqlDialect>(serviceProvider.GetRequiredService<InquirySqlDialect>());
         Assert.Null(serviceProvider.GetService<IInquiry>());
         Assert.Null(serviceProvider.GetService<IInquiryRequestPipeline>());
     }

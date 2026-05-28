@@ -1,5 +1,4 @@
 using Inquiry.Connections;
-using Inquiry.Sql;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.SqlServer.DependencyInjection;
@@ -20,7 +19,6 @@ public static class SqlServerInquiryServiceCollectionExtensions
         }
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(connectionString));
-        services.AddSingleton<InquirySqlDialect, SqlServerInquirySqlDialect>();
         return services;
     }
 }

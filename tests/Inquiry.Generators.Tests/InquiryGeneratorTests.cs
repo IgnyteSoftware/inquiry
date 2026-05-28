@@ -34,33 +34,29 @@ public sealed class InquiryGeneratorTests
                 public bool IsActive { get; set; } = true;
             }
 
-            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            public partial class OrganizationStore : InquiryStore<Organization>
             {
-                protected OrganizationStore(IInquiry inquiry)
-                    : base(inquiry)
-                {
-                }
 
                 [InquirySelectAll]
-                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
 
                 [InquirySelectOneByKey]
-                public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
+                public partial Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
                 [InquirySelectAllByField("IsActive")]
-                public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);
 
                 [InquiryInsert]
-                public abstract Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);
+                public partial Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);
 
                 [InquiryInsert(ReturnEntity = true)]
-                public abstract Task<Organization?> InsertReturningAsync(Organization organization, CancellationToken cancellationToken = default);
+                public partial Task<Organization?> InsertReturningAsync(Organization organization, CancellationToken cancellationToken = default);
 
                 [InquiryUpdate]
-                public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);
+                public partial Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);
 
                 [InquiryDeleteOneByKey]
-                public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
+                public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
             }
             """;
 
@@ -76,8 +72,8 @@ public sealed class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("public sealed class GeneratedOrganizationStore : global::Demo.OrganizationStore", generatedText);
-        Assert.Contains("public GeneratedOrganizationStore(global::Inquiry.IInquiry inquiry)", generatedText);
+        Assert.Contains("partial class OrganizationStore", generatedText);
+        Assert.Contains("public OrganizationStore(global::Inquiry.IInquiry inquiry)", generatedText);
 
         // All SQL is emitted as const string fields baked at generation time. No runtime
         // dialect call, no _ctx, no _columns array survives in the generated store.
@@ -134,7 +130,7 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("void AddServices(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)", generatedServicesText);
         Assert.DoesNotContain("IInquiryEntityMetadata", generatedServicesText);
         Assert.Contains("TryAddSingleton<global::Inquiry.Materialization.IInquiryEntityMaterializer<global::Demo.Organization>, global::Demo.OrganizationInquiryEntityMaterializer>", generatedServicesText);
-        Assert.Contains("TryAddScoped<global::Demo.OrganizationStore, global::Demo.GeneratedOrganizationStore>", generatedServicesText);
+        Assert.Contains("TryAddScoped<global::Demo.OrganizationStore>", generatedServicesText);
     }
 
     [Fact]
@@ -166,12 +162,11 @@ public sealed class InquiryGeneratorTests
                 public Guid OtherKey { get; set; }
             }
 
-            public abstract partial class UserStore : InquiryStore<User>
+            public partial class UserStore : InquiryStore<User>
             {
-                protected UserStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAll]
-                public abstract IAsyncEnumerable<User> SelectAllAsync(CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<User> SelectAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 
@@ -218,12 +213,11 @@ public sealed class InquiryGeneratorTests
                 public DateTime CreatedAt { get; set; }
             }
 
-            public abstract partial class WidgetStore : InquiryStore<Widget>
+            public partial class WidgetStore : InquiryStore<Widget>
             {
-                protected WidgetStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquiryInsert]
-                public abstract Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
+                public partial Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
             }
             """;
 
@@ -264,12 +258,11 @@ public sealed class InquiryGeneratorTests
                 public int Id { get; set; }
             }
 
-            public abstract partial class WidgetStore : InquiryStore<Widget>
+            public partial class WidgetStore : InquiryStore<Widget>
             {
-                protected WidgetStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquiryInsert]
-                public abstract Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
+                public partial Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
             }
             """;
 
@@ -312,12 +305,11 @@ public sealed class InquiryGeneratorTests
                 public string Name { get; set; } = string.Empty;
             }
 
-            public abstract partial class WidgetStore : InquiryStore<Widget>
+            public partial class WidgetStore : InquiryStore<Widget>
             {
-                protected WidgetStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAll]
-                public abstract IAsyncEnumerable<Widget> SelectAllAsync(CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Widget> SelectAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 
@@ -338,12 +330,12 @@ public sealed class InquiryGeneratorTests
     }
 
     [Theory]
-    [InlineData("[InquirySelectAll]", "public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);", "_sqlSelectAll")]
-    [InlineData("[InquirySelectOneByKey]", "public abstract Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlSelectByKey")]
-    [InlineData("[InquirySelectAllByField(\"IsActive\")]", "public abstract IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);", "_sqlSelectBy_IsActive")]
-    [InlineData("[InquiryInsert]", "public abstract Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlInsert")]
-    [InlineData("[InquiryUpdate]", "public abstract Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlUpdate")]
-    [InlineData("[InquiryDeleteOneByKey]", "public abstract Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlDeleteByKey")]
+    [InlineData("[InquirySelectAll]", "public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);", "_sqlSelectAll")]
+    [InlineData("[InquirySelectOneByKey]", "public partial Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlSelectByKey")]
+    [InlineData("[InquirySelectAllByField(\"IsActive\")]", "public partial IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);", "_sqlSelectBy_IsActive")]
+    [InlineData("[InquiryInsert]", "public partial Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlInsert")]
+    [InlineData("[InquiryUpdate]", "public partial Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlUpdate")]
+    [InlineData("[InquiryDeleteOneByKey]", "public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlDeleteByKey")]
     public void GeneratesStoreMethodForEachOperationSlice(string attribute, string methodDeclaration, string expectedStatement)
     {
         var source = $$"""
@@ -367,12 +359,8 @@ public sealed class InquiryGeneratorTests
                 public bool IsActive { get; set; }
             }
 
-            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            public partial class OrganizationStore : InquiryStore<Organization>
             {
-                protected OrganizationStore(IInquiry inquiry)
-                    : base(inquiry)
-                {
-                }
 
                 {{attribute}}
                 {{methodDeclaration}}
@@ -414,15 +402,11 @@ public sealed class InquiryGeneratorTests
                 public Guid Key { get; set; }
             }
 
-            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            public partial class OrganizationStore : InquiryStore<Organization>
             {
-                protected OrganizationStore(IInquiry inquiry)
-                    : base(inquiry)
-                {
-                }
 
                 [InquirySelectAll]
-                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 
@@ -684,10 +668,9 @@ public sealed class InquiryGeneratorTests
 
             public abstract class OrganizationStore : InquiryStore<Organization>
             {
-                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAll]
-                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 
@@ -716,12 +699,11 @@ public sealed class InquiryGeneratorTests
                 public Guid Key { get; set; }
             }
 
-            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            public partial class OrganizationStore : InquiryStore<Organization>
             {
-                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAllByField("DoesNotExist")]
-                public abstract IAsyncEnumerable<Organization> SelectByMissingAsync(string value, CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Organization> SelectByMissingAsync(string value, CancellationToken cancellationToken = default);
             }
             """;
 
@@ -747,12 +729,11 @@ public sealed class InquiryGeneratorTests
                 public Guid Key { get; set; }
             }
 
-            public abstract partial class UnmappedStore : InquiryStore<Unmapped>
+            public partial class UnmappedStore : InquiryStore<Unmapped>
             {
-                protected UnmappedStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAll]
-                public abstract IAsyncEnumerable<Unmapped> SelectAllAsync(CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Unmapped> SelectAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 
@@ -787,7 +768,7 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
-    public void ReportsDiagnosticForNonAbstractStoreMethod()
+    public void ReportsDiagnosticForNonPartialStoreMethod()
     {
         const string source = """
             using System;
@@ -806,9 +787,8 @@ public sealed class InquiryGeneratorTests
                 public Guid Key { get; set; }
             }
 
-            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            public partial class OrganizationStore : InquiryStore<Organization>
             {
-                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAll]
                 public IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default)
@@ -846,12 +826,11 @@ public sealed class InquiryGeneratorTests
                 public Guid Key { get; set; }
             }
 
-            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            public partial class OrganizationStore : InquiryStore<Organization>
             {
-                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAll]
-                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 
@@ -887,12 +866,11 @@ public sealed class InquiryGeneratorTests
                 public Guid Key { get; set; }
             }
 
-            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            public partial class OrganizationStore : InquiryStore<Organization>
             {
-                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
 
                 [InquirySelectAll]
-                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 

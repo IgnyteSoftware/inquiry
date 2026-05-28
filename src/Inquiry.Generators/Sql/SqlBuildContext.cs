@@ -5,15 +5,13 @@ using System.Linq;
 namespace Inquiry.Generators.Sql;
 
 /// <summary>
-/// Generator-side analogue of <c>InquirySqlBuildContext</c>. Precomputes the SQL fragments
-/// each <see cref="SqlBuilder"/> needs from an entity's column metadata, so each statement
-/// build is a small amount of string concatenation rather than re-running LINQ pipelines.
+/// Precomputed SQL fragments each <see cref="SqlBuilder"/> needs from an entity's column metadata,
+/// so each statement build is a small amount of string concatenation rather than re-running LINQ pipelines.
 /// </summary>
 /// <remarks>
-/// Constructed once per (entity, builder) pair inside <see cref="StoreProcessor"/> and reused
-/// for every statement built for that entity. The resulting SQL strings are then emitted as
-/// <c>const</c> fields on the generated store, so this work happens at compile time and never
-/// at runtime.
+/// Constructed once per (entity, builder) pair inside the generator and reused for every statement
+/// built for that entity. The resulting SQL strings are then emitted as <c>const</c> fields on the
+/// generated store, so this work happens at compile time and never at runtime.
 /// </remarks>
 internal sealed class SqlBuildContext
 {

@@ -4,13 +4,10 @@ namespace Inquiry.Generators.Models;
 
 internal sealed class StoreRegistrationModel
 {
-    public StoreRegistrationModel(INamedTypeSymbol storeType, string generatedTypeName)
+    public StoreRegistrationModel(INamedTypeSymbol storeType)
     {
         StoreType = storeType;
-        GeneratedTypeName = generatedTypeName;
     }
 
     public INamedTypeSymbol StoreType { get; }
-
-    public string GeneratedTypeName { get; }
 }

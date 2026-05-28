@@ -68,10 +68,10 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor MethodMustBeAbstract = new(
+    public static readonly DiagnosticDescriptor MethodMustBePartial = new(
         "INQ010",
-        "Query method must be abstract",
-        "Query method '{0}' must be abstract.",
+        "Query method must be a partial declaration",
+        "Query method '{0}' must be declared 'partial' (the source generator supplies the body).",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

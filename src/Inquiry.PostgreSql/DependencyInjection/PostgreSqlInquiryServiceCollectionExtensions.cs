@@ -1,5 +1,4 @@
 using Inquiry.Connections;
-using Inquiry.Sql;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.PostgreSql.DependencyInjection;
@@ -20,7 +19,6 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
         }
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(connectionString));
-        services.AddSingleton<InquirySqlDialect, PostgreSqlInquirySqlDialect>();
         return services;
     }
 }
