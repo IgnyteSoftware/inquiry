@@ -77,32 +77,36 @@ public sealed class InquiryGeneratorTests
         var generatedText = generatedStore.GetText().ToString();
 
         Assert.Contains("public sealed class GeneratedOrganizationStore : global::Demo.OrganizationStore", generatedText);
-        Assert.Contains("public GeneratedOrganizationStore(global::Inquiry.IInquiry inquiry, global::Inquiry.Sql.InquirySqlDialect sqlDialect)", generatedText);
-        Assert.Contains("sqlDialect.CreateContext(null, \"TOrganization\", _columns)", generatedText);
-        Assert.Contains("sqlDialect.BuildSelectAllSql(_ctx)", generatedText);
-        Assert.Contains("sqlDialect.BuildSelectByKeySql(_ctx)", generatedText);
-        Assert.Contains("sqlDialect.BuildInsertSql(_ctx)", generatedText);
-        Assert.Contains("sqlDialect.BuildInsertReturningSql(_ctx)", generatedText);
-        Assert.Contains("sqlDialect.BuildUpdateSql(_ctx)", generatedText);
-        Assert.Contains("sqlDialect.BuildDeleteByKeySql(_ctx)", generatedText);
-        Assert.Contains("sqlDialect.BuildSelectByFieldSql(_ctx,", generatedText);
-        Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization>", generatedText);
-        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization>", generatedText);
+        Assert.Contains("public GeneratedOrganizationStore(global::Inquiry.IInquiry inquiry)", generatedText);
+
+        // All SQL is emitted as const string fields baked at generation time. No runtime
+        // dialect call, no _ctx, no _columns array survives in the generated store.
+        Assert.Contains("private const string _sqlSelectAll = \"SELECT \\\"Key\\\", \\\"Name\\\", \\\"IsActive\\\" FROM \\\"TOrganization\\\"\";", generatedText);
+        Assert.Contains("private const string _sqlSelectByKey = \"SELECT \\\"Key\\\", \\\"Name\\\", \\\"IsActive\\\" FROM \\\"TOrganization\\\" WHERE \\\"Key\\\" = @Key\";", generatedText);
+        Assert.Contains("private const string _sqlInsert = \"INSERT INTO \\\"TOrganization\\\" (\\\"Key\\\", \\\"Name\\\", \\\"IsActive\\\") VALUES (@Key, @Name, @IsActive)\";", generatedText);
+        Assert.Contains("private const string _sqlInsertReturning = \"INSERT INTO \\\"TOrganization\\\" (\\\"Key\\\", \\\"Name\\\", \\\"IsActive\\\") VALUES (@Key, @Name, @IsActive) RETURNING \\\"Key\\\", \\\"Name\\\", \\\"IsActive\\\"\";", generatedText);
+        Assert.Contains("private const string _sqlUpdate = \"UPDATE \\\"TOrganization\\\" SET \\\"Name\\\" = @Name, \\\"IsActive\\\" = @IsActive WHERE \\\"Key\\\" = @Key\";", generatedText);
+        Assert.Contains("private const string _sqlDeleteByKey = \"DELETE FROM \\\"TOrganization\\\" WHERE \\\"Key\\\" = @Key\";", generatedText);
+        Assert.Contains("private const string _sqlSelectBy_IsActive = \"SELECT \\\"Key\\\", \\\"Name\\\", \\\"IsActive\\\" FROM \\\"TOrganization\\\" WHERE \\\"IsActive\\\" = @IsActive\";", generatedText);
+
+        // Read paths now dispatch through the struct-materializer overloads so the JIT can
+        // specialize per concrete TMaterializer and inline the Materialize call.
+        Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>", generatedText);
+        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>", generatedText);
         Assert.Contains("Inquiry.ExecuteAsync", generatedText);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"Key\", key)", generatedText);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"IsActive\", isActive)", generatedText);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"Key\", organization.Key)", generatedText);
-        Assert.Contains("_sqlSelectAll", generatedText);
-        Assert.Contains("_sqlInsert", generatedText);
-        Assert.Contains("_sqlInsertReturning", generatedText);
-        Assert.Contains("_sqlUpdate", generatedText);
-        Assert.Contains("_sqlDeleteByKey", generatedText);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Key\", key)", generatedText);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@IsActive\", isActive)", generatedText);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Key\", organization.Key)", generatedText);
+        Assert.DoesNotContain("InquirySqlDialect", generatedText);
+        Assert.DoesNotContain("CreateContext", generatedText);
+        Assert.DoesNotContain("BuildSelectAllSql", generatedText);
+        Assert.DoesNotContain("BuildInsertSql", generatedText);
+        Assert.DoesNotContain("InquirySqlColumn", generatedText);
+        Assert.DoesNotContain("_columns", generatedText);
         Assert.DoesNotContain("_sqlStatements", generatedText);
         Assert.DoesNotContain("InquirySqlStatementBuilder", generatedText);
         Assert.DoesNotContain("InquirySqlStatementSet", generatedText);
         Assert.DoesNotContain("AddParameter", generatedText);
-        Assert.DoesNotContain("SqlServer", generatedText);
-        Assert.DoesNotContain("Sqlite", generatedText);
         Assert.DoesNotContain("ConnectionFactory.OpenConnectionAsync", generatedText);
         Assert.DoesNotContain("CreateCommand()", generatedText);
         Assert.DoesNotContain("ExecuteReaderAsync", generatedText);
@@ -115,6 +119,12 @@ public sealed class InquiryGeneratorTests
 
         Assert.Contains("IInquiryEntityMaterializer<global::Demo.Organization>", generatedEntityText);
 
+        // Both materializer flavours emitted: class for ad-hoc IInquiry queries (DI singleton),
+        // struct for the generated-store hot path (`default(T)` passed inline so the JIT can
+        // specialize the pipeline body per concrete TMaterializer).
+        Assert.Contains("internal sealed class OrganizationInquiryEntityMaterializer", generatedEntityText);
+        Assert.Contains("internal readonly struct OrganizationInquiryEntityStructMaterializer", generatedEntityText);
+
         var generatedServices = Assert.Single(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("InquiryGeneratedServiceRegistration.g.cs", StringComparison.Ordinal));
@@ -124,7 +134,7 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("void AddServices(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)", generatedServicesText);
         Assert.DoesNotContain("IInquiryEntityMetadata", generatedServicesText);
         Assert.Contains("TryAddSingleton<global::Inquiry.Materialization.IInquiryEntityMaterializer<global::Demo.Organization>, global::Demo.OrganizationInquiryEntityMaterializer>", generatedServicesText);
-        Assert.Contains("TryAddTransient<global::Demo.OrganizationStore, global::Demo.GeneratedOrganizationStore>", generatedServicesText);
+        Assert.Contains("TryAddScoped<global::Demo.OrganizationStore, global::Demo.GeneratedOrganizationStore>", generatedServicesText);
     }
 
     [Fact]
@@ -177,10 +187,9 @@ public sealed class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("UserStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        // 2-arg FK: property name doubles as column name.
-        Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"TOrganizationKey\", \"TOrganizationKey\", isKey: false, isGenerated: false, useDatabaseDefault: false)", generatedText);
-        // 3-arg FK: explicit local column name is honored.
-        Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"OtherKey\", \"AltColumnName\", isKey: false, isGenerated: false, useDatabaseDefault: false)", generatedText);
+        // FK columns flow into the baked SELECT projection — 2-arg form uses the property name
+        // as the column name, 3-arg form uses the explicit local column name.
+        Assert.Contains("private const string _sqlSelectAll = \"SELECT \\\"Key\\\", \\\"TOrganizationKey\\\", \\\"AltColumnName\\\" FROM \\\"TUser\\\"\";", generatedText);
     }
 
     [Fact]
@@ -230,8 +239,10 @@ public sealed class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("new global::Inquiry.Sql.InquirySqlColumn(\"CreatedAt\", \"CreatedAt\", isKey: false, isGenerated: false, useDatabaseDefault: true)", generatedText);
-        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"CreatedAt\", widget.CreatedAt)", generatedText);
+        // Defaulted columns appear in SELECT projections (the database fills them in) but are
+        // omitted from INSERT column/value lists and from the parameter array.
+        Assert.Contains("private const string _sqlInsert = \"INSERT INTO \\\"TWidget\\\" (\\\"Key\\\", \\\"Name\\\") VALUES (@Key, @Name)\";", generatedText);
+        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"@CreatedAt\", widget.CreatedAt)", generatedText);
     }
 
     [Fact]
@@ -275,7 +286,7 @@ public sealed class InquiryGeneratorTests
         var generatedText = generatedStore.GetText().ToString();
 
         Assert.Contains("global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()", generatedText);
-        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"Id\", widget.Id)", generatedText);
+        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", widget.Id)", generatedText);
     }
 
     [Fact]
@@ -322,7 +333,8 @@ public sealed class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("sqlDialect.CreateContext(null, \"Widget\", _columns)", generatedText);
+        // Table name defaults to the entity type name when [InquiryTable] has no arguments.
+        Assert.Contains("private const string _sqlSelectAll = \"SELECT \\\"Key\\\", \\\"Name\\\" FROM \\\"Widget\\\"\";", generatedText);
     }
 
     [Theory]
@@ -809,13 +821,105 @@ public sealed class InquiryGeneratorTests
         Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ010");
     }
 
-    private static GeneratorTestResult RunGenerator(string source)
+    [Fact]
+    public void ReportsAmbiguousDialectWhenMultipleProvidersAreReferenced()
+    {
+        // The test compilation references all three Inquiry provider assemblies (Sqlite,
+        // PostgreSql, SqlServer); without an explicit [assembly: InquiryDialect] on the
+        // consumer, that's three markers and the generator reports INQ014. The fix path is to
+        // either drop the surplus provider references or apply an explicit consumer-level
+        // attribute (which is exactly what RunGenerator does in every other test).
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+            }
+
+            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            {
+                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
+
+                [InquirySelectAll]
+                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: null);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ014");
+        Assert.DoesNotContain(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        // Materializers don't depend on the dialect and should still be emitted.
+        Assert.Contains(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("Organization.InquiryEntity.g.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForUnknownDialectName()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+            }
+
+            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            {
+                protected OrganizationStore(IInquiry inquiry) : base(inquiry) {}
+
+                [InquirySelectAll]
+                public abstract IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ015");
+    }
+
+    private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite")
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
-        var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
+        var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
+
+        // The generator picks its SqlBuilder from [assembly: Inquiry.InquiryDialect(...)]; tests
+        // that exercise store emission inject it via this helper rather than repeating the
+        // attribute in every source literal. Pass dialect: null to omit it (used by tests that
+        // verify the missing-dialect diagnostic).
+        if (dialect is not null)
+        {
+            trees.Add(CSharpSyntaxTree.ParseText(
+                $"[assembly: global::Inquiry.InquiryDialect(\"{dialect}\")]",
+                parseOptions));
+        }
+
         var compilation = CSharpCompilation.Create(
             "InquiryGeneratorConsumerTests",
-            new[] { syntaxTree },
+            trees,
             GetReferences(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 

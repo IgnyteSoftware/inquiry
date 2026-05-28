@@ -8,13 +8,13 @@ public abstract partial class ShipperStore : InquiryStore<Shipper>
     protected ShipperStore(IInquiry inquiry) : base(inquiry) { }
 
     [InquirySelectAll]
-    public abstract IAsyncEnumerable<Shipper> SelectAllAsync(CancellationToken cancellationToken = default);
+    public abstract Task<IReadOnlyList<Shipper>> SelectAllAsync(CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
     public abstract Task<Shipper?> SelectByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByField("CompanyName")]
-    public abstract IAsyncEnumerable<Shipper> SelectByCompanyNameAsync(string companyName, CancellationToken cancellationToken = default);
+    public abstract Task<IReadOnlyList<Shipper>> SelectByCompanyNameAsync(string companyName, CancellationToken cancellationToken = default);
 
     [InquiryInsert]
     public abstract Task<int> InsertAsync(Shipper shipper, CancellationToken cancellationToken = default);

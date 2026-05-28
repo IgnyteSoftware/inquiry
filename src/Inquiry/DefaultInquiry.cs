@@ -85,7 +85,29 @@ public sealed class DefaultInquiry : IInquiry
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
-        => ActivePipeline.QueryAsync(command, GetMaterializer<TEntity>().Materialize, cancellationToken);
+        => ActivePipeline.QueryAsync(command, GetMaterializer<TEntity>(), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
+        string commandText,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        => QueryListAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
+        string commandText,
+        object? parameters,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        => QueryListAsync<TEntity>(new InquiryCommand(commandText, InquiryParameterReader.Read(parameters)), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        => ActivePipeline.QueryListAsync(command, GetMaterializer<TEntity>(), cancellationToken);
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -107,7 +129,36 @@ public sealed class DefaultInquiry : IInquiry
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
-        => ActivePipeline.QuerySingleOrDefaultAsync(command, GetMaterializer<TEntity>().Materialize, cancellationToken);
+        => ActivePipeline.QuerySingleOrDefaultAsync(command, GetMaterializer<TEntity>(), cancellationToken);
+
+    // ---- Struct-materializer overloads (generated-store path) ------------------------------
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryListAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
 
     /// <inheritdoc />
     public Task<int> ExecuteAsync(

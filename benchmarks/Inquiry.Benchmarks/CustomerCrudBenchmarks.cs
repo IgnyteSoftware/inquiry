@@ -83,11 +83,7 @@ public class CustomerCrudBenchmarks
     [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Inquiry()
     {
-        var list = new List<Customer>(BenchmarkDatabase.SeedRows);
-        await foreach (var c in _db.Customers.SelectAllAsync())
-        {
-            list.Add(c);
-        }
+        var list = await _db.Customers.SelectAllAsync();
         return list.Count;
     }
 
@@ -182,11 +178,7 @@ public class CustomerCrudBenchmarks
     [BenchmarkCategory("SelectByField"), Benchmark]
     public async Task<int> SelectByField_Inquiry()
     {
-        var list = new List<Customer>();
-        await foreach (var c in _db.Customers.SelectByCountryAsync(TargetCountry))
-        {
-            list.Add(c);
-        }
+        var list = await _db.Customers.SelectByCountryAsync(TargetCountry);
         return list.Count;
     }
 

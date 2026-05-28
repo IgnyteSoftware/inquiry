@@ -17,12 +17,8 @@ public sealed class ShipperService
 
     public async Task<List<Shipper>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var list = new List<Shipper>();
-        await foreach (var s in _store.SelectAllAsync(cancellationToken).ConfigureAwait(false))
-        {
-            list.Add(s);
-        }
-        return list;
+        var list = await _store.SelectAllAsync(cancellationToken).ConfigureAwait(false);
+        return (List<Shipper>)list;
     }
 
     public Task<Shipper?> GetByKeyAsync(int? shipperID, CancellationToken cancellationToken = default)

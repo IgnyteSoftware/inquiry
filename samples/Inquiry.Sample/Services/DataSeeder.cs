@@ -62,7 +62,8 @@ public sealed class DataSeeder
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        if (await HasAnyAsync(_customers.SelectAllAsync(cancellationToken)).ConfigureAwait(false))
+        var existingCustomers = await _customers.SelectAllAsync(cancellationToken).ConfigureAwait(false);
+        if (existingCustomers.Count > 0)
         {
             return;
         }
@@ -213,12 +214,4 @@ public sealed class DataSeeder
         }
     }
 
-    private static async Task<bool> HasAnyAsync<T>(IAsyncEnumerable<T> source)
-    {
-        await foreach (var _ in source.ConfigureAwait(false))
-        {
-            return true;
-        }
-        return false;
-    }
 }

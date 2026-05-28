@@ -8,13 +8,13 @@ public abstract partial class CustomerStore : InquiryStore<Customer>
     protected CustomerStore(IInquiry inquiry) : base(inquiry) { }
 
     [InquirySelectAll]
-    public abstract IAsyncEnumerable<Customer> SelectAllAsync(CancellationToken cancellationToken = default);
+    public abstract Task<IReadOnlyList<Customer>> SelectAllAsync(CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
     public abstract Task<Customer?> SelectByKeyAsync(string customerID, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByField("Country")]
-    public abstract IAsyncEnumerable<Customer> SelectByCountryAsync(string? country, CancellationToken cancellationToken = default);
+    public abstract Task<IReadOnlyList<Customer>> SelectByCountryAsync(string? country, CancellationToken cancellationToken = default);
 
     [InquiryInsert]
     public abstract Task<int> InsertAsync(Customer customer, CancellationToken cancellationToken = default);

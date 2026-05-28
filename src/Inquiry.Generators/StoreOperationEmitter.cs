@@ -152,13 +152,20 @@ internal static class StoreOperationEmitter
             return null;
         }
 
-        return new StoreMethodModel(method, operation, fieldColumns, procedureName, returnsEntity);
+        // SelectAll-style methods may return either IAsyncEnumerable<T> (streaming) or
+        // Task<IReadOnlyList<T>> (buffered). The buffered path is emitted as a tight
+        // QueryListAsync call with no IAsyncEnumerable state machine.
+        var returnsList = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField &&
+            IsTaskOfReadOnlyList(method.ReturnType, entity.Symbol);
+
+        return new StoreMethodModel(method, operation, fieldColumns, procedureName, returnsEntity, returnsList);
     }
 
     public static void Emit(StringBuilder source, StoreMethodModel method, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
     {
         var symbol = method.Symbol;
         var entityType = entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var structMat = GeneratorHelpers.GetStructMaterializerFullName(entity.Symbol);
         var cancellation = symbol.Parameters[symbol.Parameters.Length - 1].Name;
         var firstParameter = symbol.Parameters.Length > 1 ? symbol.Parameters[0].Name : "entity";
         var parameters = GeneratorHelpers.GetParameterDeclaration(symbol);
@@ -167,7 +174,12 @@ internal static class StoreOperationEmitter
         {
             case StoreOperation.SelectAll:
                 AppendHeader(source, symbol, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(_sqlSelectAll, {cancellation});");
+                source.AppendLine(method.ReturnsList
+                    ? $"        return Inquiry.QueryListAsync<{entityType}, {structMat}>("
+                    : $"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(_sqlSelectAll),");
+                source.AppendLine("            default,");
+                source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
 
@@ -177,10 +189,11 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectOneByKey:
                 AppendHeader(source, symbol, parameters, isAsync: true);
-                source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
                 source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine("                _sqlSelectByKey,");
                 AppendPositionalParameters(source, entity.Keys, symbol.Parameters, indent: "                ");
+                source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
                 break;
@@ -191,10 +204,13 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectAllByField:
                 AppendHeader(source, symbol, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(");
+                source.AppendLine(method.ReturnsList
+                    ? $"        return Inquiry.QueryListAsync<{entityType}, {structMat}>("
+                    : $"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
                 source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine($"                _sqlSelectBy_{BuildFieldSuffix(method.FieldColumns)},");
                 AppendPositionalParameters(source, method.FieldColumns, symbol.Parameters, indent: "                ");
+                source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
@@ -203,8 +219,9 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 if (method.ReturnsEntity)
                 {
-                    source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                    source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
                     AppendMutationCommand(source, "_sqlInsertReturning", entity, firstParameter, indent: "            ");
+                    source.AppendLine("            default,");
                     source.AppendLine($"            {cancellation});");
                 }
                 else
@@ -220,8 +237,9 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 if (method.ReturnsEntity)
                 {
-                    source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                    source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
                     AppendMutationCommand(source, "_sqlUpdateReturning", entity, firstParameter, indent: "            ", includeKey: true);
+                    source.AppendLine("            default,");
                     source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 }
                 else
@@ -241,15 +259,17 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"        if ({firstParameter}.{entity.Key.PropertyName} is null)");
                         source.AppendLine("        {");
-                        source.AppendLine($"            return Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                        source.AppendLine($"            return Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
                         AppendMutationCommand(source, "_sqlInsertReturning", entity, firstParameter, indent: "                ");
+                        source.AppendLine("                default,");
                         source.AppendLine($"                {cancellation});");
                         source.AppendLine("        }");
                         source.AppendLine();
                     }
 
-                    source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+                    source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
                     AppendMutationCommand(source, "_sqlUpsertReturning", entity, firstParameter, indent: "            ", includeKey: true);
+                    source.AppendLine("            default,");
                     source.AppendLine($"            {cancellation});");
                 }
                 else
@@ -283,7 +303,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.StoredProcedure:
-                EmitStoredProcedure(source, symbol, parameters, entityType, cancellation, method.ProcedureName!, entity);
+                EmitStoredProcedure(source, symbol, parameters, entityType, structMat, cancellation, method.ProcedureName!, entity);
                 break;
         }
     }
@@ -316,13 +336,15 @@ internal static class StoreOperationEmitter
 
         foreach (var column in parameterColumns)
         {
-            source.AppendLine($"{indent}        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(column.PropertyName)}\", {entityParameter}.{column.PropertyName}),");
+            // '@'-prefixed names let InquiryParameterBinder.NormalizeName take its no-allocation
+            // fast path. Hand-written callers can still pass bare names.
+            source.AppendLine($"{indent}        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(column.PropertyName)}\", {entityParameter}.{column.PropertyName}),");
         }
 
         source.AppendLine($"{indent}    }}),");
     }
 
-    private static void EmitStoredProcedure(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, string procedureName, EntityModel entity)
+    private static void EmitStoredProcedure(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string structMat, string cancellation, string procedureName, EntityModel entity)
     {
         // Build parameter array from method parameters (all except trailing CancellationToken)
         var procParams = symbol.Parameters.Take(symbol.Parameters.Length - 1).ToArray();
@@ -343,7 +365,7 @@ internal static class StoreOperationEmitter
             source.AppendLine("            {");
             foreach (var p in procParams)
             {
-                source.AppendLine($"                new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(p.Name)}\", (object?){p.Name} ?? global::System.DBNull.Value),");
+                source.AppendLine($"                new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(p.Name)}\", (object?){p.Name} ?? global::System.DBNull.Value),");
             }
             source.AppendLine("            },");
         }
@@ -356,14 +378,14 @@ internal static class StoreOperationEmitter
 
         if (isAsyncEnum)
         {
-            source.AppendLine($"        return Inquiry.QueryAsync<{entityType}>(_cmd, {cancellation});");
+            source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
         }
         else if (isTask && symbol.ReturnType is INamedTypeSymbol taskType)
         {
             var inner = taskType.TypeArguments[0];
             if (SymbolEqualityComparer.Default.Equals(inner, entity.Symbol))
             {
-                source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(_cmd, {cancellation}).ConfigureAwait(false);");
+                source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(_cmd, default, {cancellation}).ConfigureAwait(false);");
             }
             else
             {
@@ -379,33 +401,37 @@ internal static class StoreOperationEmitter
     {
         // Eager-on-composite is rejected in Validate, so entity.Keys.Count == 1 here.
         var keyParamName = symbol.Parameters[0].Name;
+        var parentStructMat = GeneratorHelpers.GetStructMaterializerFullName(entity.Symbol);
         AppendHeader(source, symbol, parameters, isAsync: true);
-        source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}>(");
+        source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {parentStructMat}>(");
         source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
         source.AppendLine("                _sqlSelectByKey,");
         source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine("                {");
-        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(entity.Key.PropertyName)}\", {keyParamName}),");
+        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Key.PropertyName)}\", {keyParamName}),");
         source.AppendLine("                }),");
+        source.AppendLine("            default,");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
         source.AppendLine("        if (_entity is not null)");
         source.AppendLine("        {");
         foreach (var relation in entity.Relations)
         {
             var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var childStructMat = GeneratorHelpers.GetStructMaterializerFullName(relation.ChildEntitySymbol);
             var fieldName = $"_sql_{relation.PropertyName}";
             if (relation.IsCollection)
             {
                 // One-to-many: load children filtered by their FK column. The SQL parameter
                 // name comes from the child's FK property name (which is relation.ForeignKeyProperty).
                 source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
-                source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}>(");
+                source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}, {childStructMat}>(");
                 source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", _entity.{entity.Key.PropertyName}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", _entity.{entity.Key.PropertyName}),");
                 source.AppendLine("                    }),");
+                source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
                 source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
                 source.AppendLine($"            _entity.{relation.PropertyName} = _{relation.PropertyName}_list;");
@@ -416,13 +442,14 @@ internal static class StoreOperationEmitter
                 // parameter name comes from the parent (child entity in the relation's terms)
                 // KEY property name.
                 var parentKeyPropertyName = relationChildEntities[relation.PropertyName].Key.PropertyName;
-                source.AppendLine($"            _entity.{relation.PropertyName} = await Inquiry.QuerySingleOrDefaultAsync<{childType}>(");
+                source.AppendLine($"            _entity.{relation.PropertyName} = await Inquiry.QuerySingleOrDefaultAsync<{childType}, {childStructMat}>(");
                 source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(parentKeyPropertyName)}\", _entity.{relation.ForeignKeyProperty}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(parentKeyPropertyName)}\", _entity.{relation.ForeignKeyProperty}),");
                 source.AppendLine("                    }),");
+                source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
             }
         }
@@ -446,7 +473,8 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}{{");
         for (var i = 0; i < columns.Count; i++)
         {
-            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(columns[i].PropertyName)}\", {methodParameters[i].Name}),");
+            // '@'-prefix lets the binder skip its NormalizeName string concat.
+            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(columns[i].PropertyName)}\", {methodParameters[i].Name}),");
         }
         source.AppendLine($"{indent}}}),");
     }
@@ -465,9 +493,10 @@ internal static class StoreOperationEmitter
     private static void EmitSelectAllEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
     {
         var parametersWithAttr = GeneratorHelpers.GetParameterDeclaration(symbol, enumeratorCancellation: true);
+        var parentStructMat = GeneratorHelpers.GetStructMaterializerFullName(entity.Symbol);
         AppendHeader(source, symbol, parametersWithAttr, isAsync: true);
         source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
-        source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}>(_sqlSelectAll, {cancellation}).ConfigureAwait(false))");
+        source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}, {parentStructMat}>(new global::Inquiry.Commands.InquiryCommand(_sqlSelectAll), default, {cancellation}).ConfigureAwait(false))");
         source.AppendLine("            _entities.Add(_e);");
         source.AppendLine("        if (_entities.Count == 0)");
         source.AppendLine("            yield break;");
@@ -478,6 +507,7 @@ internal static class StoreOperationEmitter
             var childType = relation.ChildEntitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var fieldName = $"_sql_{relation.PropertyName}";
 
+            var childStructMat = GeneratorHelpers.GetStructMaterializerFullName(relation.ChildEntitySymbol);
             if (relation.IsCollection)
             {
                 // One-to-many: load all children, group by their FK value.
@@ -487,7 +517,7 @@ internal static class StoreOperationEmitter
                 var childFkNullable = childFkColumn?.Type.IsNullable ?? false;
 
                 source.AppendLine($"        var _allChildren_{relation.PropertyName} = new global::System.Collections.Generic.List<{childType}>();");
-                source.AppendLine($"        await foreach (var _c in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"        await foreach (var _c in Inquiry.QueryAsync<{childType}, {childStructMat}>(new global::Inquiry.Commands.InquiryCommand({fieldName}_All), default, {cancellation}).ConfigureAwait(false))");
                 source.AppendLine($"            _allChildren_{relation.PropertyName}.Add(_c);");
                 source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, global::System.Collections.Generic.List<{childType}>>();");
                 source.AppendLine($"        foreach (var _c in _allChildren_{relation.PropertyName})");
@@ -521,7 +551,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, {childType}>();");
                 if (childKeyNullable)
                 {
-                    source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
+                    source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}, {childStructMat}>(new global::Inquiry.Commands.InquiryCommand({fieldName}_All), default, {cancellation}).ConfigureAwait(false))");
                     source.AppendLine("        {");
                     source.AppendLine($"            if (_p.{relatedKeyProperty} is null) continue;");
                     source.AppendLine($"            _parents_{relation.PropertyName}[(object)_p.{relatedKeyProperty}!] = _p;");
@@ -529,7 +559,7 @@ internal static class StoreOperationEmitter
                 }
                 else
                 {
-                    source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}>({fieldName}_All, {cancellation}).ConfigureAwait(false))");
+                    source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}, {childStructMat}>(new global::Inquiry.Commands.InquiryCommand({fieldName}_All), default, {cancellation}).ConfigureAwait(false))");
                     source.AppendLine($"            _parents_{relation.PropertyName}[(object)_p.{relatedKeyProperty}] = _p;");
                 }
             }
@@ -594,7 +624,12 @@ internal static class StoreOperationEmitter
     {
         return operation switch
         {
-            StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.SelectAllByField =>
+            // SelectAll / SelectAllByField accept both streaming and buffered shapes; the choice
+            // is made by the method's declared return type.
+            StoreOperation.SelectAll or StoreOperation.SelectAllByField =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entity.Symbol) ||
+                IsTaskOfReadOnlyList(returnType, entity.Symbol),
+            StoreOperation.SelectAllEager =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entity.Symbol),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entity.Symbol),
@@ -610,6 +645,30 @@ internal static class StoreOperationEmitter
                 IsValidStoredProcReturnType(returnType, entity),
             _ => false,
         };
+    }
+
+    /// <summary>
+    /// Returns true if <paramref name="returnType"/> is <c>Task&lt;IReadOnlyList&lt;TEntity&gt;&gt;</c>.
+    /// </summary>
+    private static bool IsTaskOfReadOnlyList(ITypeSymbol returnType, ITypeSymbol entitySymbol)
+    {
+        if (returnType is not INamedTypeSymbol task ||
+            !task.IsGenericType ||
+            task.TypeArguments.Length != 1 ||
+            task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Threading.Tasks.Task<TResult>")
+        {
+            return false;
+        }
+
+        if (task.TypeArguments[0] is not INamedTypeSymbol inner ||
+            !inner.IsGenericType ||
+            inner.TypeArguments.Length != 1 ||
+            inner.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Collections.Generic.IReadOnlyList<T>")
+        {
+            return false;
+        }
+
+        return SymbolEqualityComparer.Default.Equals(inner.TypeArguments[0], entitySymbol);
     }
 
     private static bool IsValidStoredProcReturnType(ITypeSymbol returnType, EntityModel entity)

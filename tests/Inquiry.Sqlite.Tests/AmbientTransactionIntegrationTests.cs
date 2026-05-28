@@ -176,9 +176,13 @@ public sealed class AmbientTransactionIntegrationTests
 
         await using var tx = await inquiry.BeginTransactionAsync();
 
-        // Read the first row but leave the iterator suspended — _inFlight stays set on
-        // the transactional pipeline until the iterator is disposed.
-        var enumerator = store.SelectAllAsync().GetAsyncEnumerator();
+        // Read the first row but leave the iterator suspended — _inFlight stays set on the
+        // transactional pipeline until the iterator is disposed. CustomerStore.SelectAllAsync
+        // is buffered now, so use IInquiry.QueryAsync directly to keep the streaming shape
+        // this test exercises.
+        var streaming = tx.Inquiry.QueryAsync<Customer>(
+            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+        var enumerator = streaming.GetAsyncEnumerator();
         try
         {
             var hasFirst = await enumerator.MoveNextAsync();

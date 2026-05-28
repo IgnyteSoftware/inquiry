@@ -25,7 +25,7 @@ public sealed class NorthwindCrudIntegrationTests
 
         var inserted = await store.InsertAsync(customer);
         var selected = await store.SelectByKeyAsync("ACME1");
-        var usCustomers = await store.SelectByCountryAsync("USA").ToListAsync();
+        var usCustomers = await store.SelectByCountryAsync("USA");
 
         customer.CompanyName = "Acme Updated";
         customer.Country = "Canada";
