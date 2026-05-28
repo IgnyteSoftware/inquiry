@@ -440,6 +440,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (command.CommandType is not null) dbCommand.CommandType = command.CommandType.Value;
         if (command.CommandTimeout is not null) dbCommand.CommandTimeout = command.CommandTimeout.Value;
         InquiryParameterBinder.Bind(dbCommand, command.ParametersArray);
+        command.DbCommandBinder?.Invoke(dbCommand);
     }
 
     private async ValueTask InvokeInitializedAsync(DbCommand dbCommand, InquiryCommand command, CancellationToken cancellationToken)

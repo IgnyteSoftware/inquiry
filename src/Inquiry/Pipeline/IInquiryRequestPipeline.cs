@@ -79,13 +79,21 @@ public interface IInquiryRequestPipeline
     /// <c>DbCommand.CreateParameter</c> / <c>Parameters.Add</c> directly.
     /// </summary>
     /// <remarks>
-    /// When interceptors are registered, the pipeline still allocates a parameter-less
-    /// <c>InquiryCommand</c> to satisfy the interceptor contract; interceptors that need to
-    /// observe parameters should read them from the live <c>DbCommand</c> in the context.
+    /// The default implementation routes the call through the existing <c>ExecuteAsync(InquiryCommand, …)</c>
+    /// path via <see cref="InquiryCommand.DbCommandBinder"/>, so custom <c>IInquiryRequestPipeline</c>
+    /// implementations stay source-compatible. The built-in <see cref="InquiryRequestPipeline"/>
+    /// overrides this with an allocation-free fast path.
     /// </remarks>
     Task<int> ExecuteAsync<TArgs>(
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return ExecuteAsync(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
+            cancellationToken);
+    }
 }

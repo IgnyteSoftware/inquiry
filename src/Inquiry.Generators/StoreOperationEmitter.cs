@@ -332,11 +332,42 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             source.AppendLine($"{indent}        var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}        _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
-            source.AppendLine($"{indent}        _p{i}.Value = (object?)_e.{column.PropertyName} ?? global::System.DBNull.Value;");
+            source.AppendLine($"{indent}        _p{i}.Value = {BuildParameterValueExpression(column, $"_e.{column.PropertyName}")};");
             source.AppendLine($"{indent}        _cmd.Parameters.Add(_p{i});");
         }
         source.AppendLine($"{indent}    }},");
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
+    }
+
+    /// <summary>
+    /// Builds the C# expression that assigns to <c>DbParameter.Value</c>. For non-enum columns the
+    /// expression is a simple null-coalesce; for enum columns it coerces to the underlying integer
+    /// type so providers that reject unmapped enums (e.g. Npgsql) see the same primitive value the
+    /// reflection-based <c>InquiryParameterBinder.CoerceValue</c> would have produced.
+    /// </summary>
+    private static string BuildParameterValueExpression(ColumnModel column, string accessor)
+    {
+        if (!column.Type.IsEnum)
+        {
+            return $"(object?){accessor} ?? global::System.DBNull.Value";
+        }
+
+        var underlying = column.Type.EnumUnderlyingSpecialType switch
+        {
+            SpecialType.System_Byte => "byte",
+            SpecialType.System_SByte => "sbyte",
+            SpecialType.System_Int16 => "short",
+            SpecialType.System_UInt16 => "ushort",
+            SpecialType.System_Int32 => "int",
+            SpecialType.System_UInt32 => "uint",
+            SpecialType.System_Int64 => "long",
+            SpecialType.System_UInt64 => "ulong",
+            _ => "int",
+        };
+
+        return column.Type.IsNullable
+            ? $"{accessor}.HasValue ? (object)({underlying}){accessor}.Value : global::System.DBNull.Value"
+            : $"(object)({underlying}){accessor}";
     }
 
     /// <summary>
@@ -363,7 +394,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    {{");
             source.AppendLine($"{indent}        var _p0 = _cmd.CreateParameter();");
             source.AppendLine($"{indent}        _p0.ParameterName = \"@{GeneratorHelpers.Escape(keyColumns[0].PropertyName)}\";");
-            source.AppendLine($"{indent}        _p0.Value = (object?)_key ?? global::System.DBNull.Value;");
+            source.AppendLine($"{indent}        _p0.Value = {BuildParameterValueExpression(keyColumns[0], "_key")};");
             source.AppendLine($"{indent}        _cmd.Parameters.Add(_p0);");
             source.AppendLine($"{indent}    }},");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false) > 0;");
@@ -381,7 +412,7 @@ internal static class StoreOperationEmitter
         {
             source.AppendLine($"{indent}        var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}        _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(keyColumns[i].PropertyName)}\";");
-            source.AppendLine($"{indent}        _p{i}.Value = (object?)_keys.Item{i + 1} ?? global::System.DBNull.Value;");
+            source.AppendLine($"{indent}        _p{i}.Value = {BuildParameterValueExpression(keyColumns[i], $"_keys.Item{i + 1}")};");
             source.AppendLine($"{indent}        _cmd.Parameters.Add(_p{i});");
         }
         source.AppendLine($"{indent}    }},");

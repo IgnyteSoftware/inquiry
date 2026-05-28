@@ -128,6 +128,12 @@ public interface IInquiry
     /// or <c>InquiryCommand</c> per call — the delegate writes directly into the
     /// <see cref="DbCommand"/>'s parameter collection.
     /// </summary>
+    /// <remarks>
+    /// The default implementation routes the call through <c>ExecuteAsync(InquiryCommand, …)</c>
+    /// via <see cref="InquiryCommand.DbCommandBinder"/>, so existing <see cref="IInquiry"/>
+    /// implementations (e.g. test mocks) stay source-compatible. <see cref="DefaultInquiry"/>
+    /// overrides this and delegates to the pipeline's allocation-free fast path.
+    /// </remarks>
     /// <typeparam name="TArgs">
     /// The bound state (typically the entity or key). Pass a static method group / static
     /// lambda for <paramref name="bindParameters"/> to keep this allocation-free.
@@ -136,7 +142,14 @@ public interface IInquiry
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return ExecuteAsync(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
+            cancellationToken);
+    }
 
     // ---- Transactions -----------------------------------------------------------------
 
