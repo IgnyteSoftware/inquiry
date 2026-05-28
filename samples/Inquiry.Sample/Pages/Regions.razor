@@ -1,0 +1,119 @@
+@page "/regions"
+@inject RegionService RegionSvc
+
+<h1>Regions &amp; territories</h1>
+
+<p>
+    Region uses a non-generated <code>RegionID</code> (the caller supplies it). Each region
+    has many territories. Loaded via <code>[InquirySelectAllEager]</code> — one query for
+    the parent rows, one for the child territories, stitched in-memory by foreign key.
+</p>
+
+<EditForm Model="_regionDraft" OnValidSubmit="CreateRegionAsync" class="form-inline">
+    <InputNumber @bind-Value="_regionDraft.RegionID"          class="input" />
+    <InputText   @bind-Value="_regionDraft.RegionDescription" placeholder="Description" class="input" />
+    <button type="submit" class="btn primary">Add region</button>
+</EditForm>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    @foreach (var region in _regions)
+    {
+        var territories = region.Territories ?? new List<Territory>();
+        <section>
+            <h2>
+                <code>@region.RegionID</code> · @region.RegionDescription
+                <span class="count">@territories.Count</span>
+                <button class="btn danger" @onclick="() => DeleteRegionAsync(region)">Delete region</button>
+            </h2>
+
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>Description</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in territories)
+                    {
+                        <tr>
+                            <td><code>@t.TerritoryID</code></td>
+                            <td><InputText @bind-Value="t.TerritoryDescription" class="input" /></td>
+                            <td class="actions">
+                                <button class="btn" @onclick="() => UpdateTerritoryAsync(t)">Save</button>
+                                <button class="btn danger" @onclick="() => DeleteTerritoryAsync(t)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="form-inline">
+                <InputText @bind-Value="_newTerritoryID"          placeholder="Territory ID"   class="input" />
+                <InputText @bind-Value="_newTerritoryDescription" placeholder="Description"    class="input" />
+                <button class="btn" @onclick="() => AddTerritoryAsync(region.RegionID)">Add territory</button>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private List<Region> _regions = new();
+    private Region _regionDraft = NewRegionDraft();
+    private string _newTerritoryID = string.Empty;
+    private string _newTerritoryDescription = string.Empty;
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _regions = await RegionSvc.GetAllWithTerritoriesAsync();
+        _loading = false;
+    }
+
+    private async Task CreateRegionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_regionDraft.RegionDescription)) return;
+        await RegionSvc.CreateRegionAsync(_regionDraft);
+        _regionDraft = NewRegionDraft();
+        await RefreshAsync();
+    }
+
+    private async Task DeleteRegionAsync(Region region)
+    {
+        await RegionSvc.DeleteRegionAsync(region.RegionID);
+        await RefreshAsync();
+    }
+
+    private async Task AddTerritoryAsync(int regionID)
+    {
+        if (string.IsNullOrWhiteSpace(_newTerritoryID) || string.IsNullOrWhiteSpace(_newTerritoryDescription)) return;
+        await RegionSvc.CreateTerritoryAsync(new Territory
+        {
+            TerritoryID = _newTerritoryID,
+            TerritoryDescription = _newTerritoryDescription,
+            RegionID = regionID,
+        });
+        _newTerritoryID = string.Empty;
+        _newTerritoryDescription = string.Empty;
+        await RefreshAsync();
+    }
+
+    private async Task UpdateTerritoryAsync(Territory territory)
+    {
+        await RegionSvc.UpdateTerritoryAsync(territory);
+        await RefreshAsync();
+    }
+
+    private async Task DeleteTerritoryAsync(Territory territory)
+    {
+        await RegionSvc.DeleteTerritoryAsync(territory.TerritoryID);
+        await RefreshAsync();
+    }
+
+    private static Region NewRegionDraft() => new() { RegionDescription = string.Empty };
+}

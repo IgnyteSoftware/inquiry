@@ -1,0 +1,85 @@
+@page "/suppliers"
+@inject SupplierService SupplierSvc
+
+<h1>Suppliers</h1>
+
+<p>
+    Demonstrates the same CRUD shape as <code>Customers</code>, but against an
+    IDENTITY-keyed table — <code>InsertReturning</code> surfaces the
+    database-assigned <code>SupplierID</code>.
+</p>
+
+<EditForm Model="_draft" OnValidSubmit="CreateAsync" class="form-inline">
+    <DataAnnotationsValidator />
+    <InputText @bind-Value="_draft.CompanyName" placeholder="Company name" class="input" />
+    <InputText @bind-Value="_draft.ContactName" placeholder="Contact"      class="input" />
+    <InputText @bind-Value="_draft.Country"     placeholder="Country"      class="input" />
+    <InputText @bind-Value="_draft.City"        placeholder="City"         class="input" />
+    <button type="submit" class="btn primary">Add</button>
+</EditForm>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Company</th><th>Contact</th><th>Country</th><th>City</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var s in _all)
+            {
+                <tr>
+                    <td><code>@s.SupplierID</code></td>
+                    <td><InputText @bind-Value="s.CompanyName" class="input" /></td>
+                    <td><InputText @bind-Value="s.ContactName" class="input" /></td>
+                    <td><InputText @bind-Value="s.Country"     class="input" /></td>
+                    <td><InputText @bind-Value="s.City"        class="input" /></td>
+                    <td class="actions">
+                        <button class="btn" @onclick="() => UpdateAsync(s)">Save</button>
+                        <button class="btn danger" @onclick="() => DeleteAsync(s)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool _loading = true;
+    private List<Supplier> _all = new();
+    private Supplier _draft = NewDraft();
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _all = await SupplierSvc.GetAllAsync();
+        _loading = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_draft.CompanyName)) return;
+        await SupplierSvc.CreateAsync(_draft);
+        _draft = NewDraft();
+        await RefreshAsync();
+    }
+
+    private async Task UpdateAsync(Supplier supplier)
+    {
+        await SupplierSvc.UpdateAsync(supplier);
+        await RefreshAsync();
+    }
+
+    private async Task DeleteAsync(Supplier supplier)
+    {
+        await SupplierSvc.DeleteAsync(supplier.SupplierID);
+        await RefreshAsync();
+    }
+
+    private static Supplier NewDraft() => new() { CompanyName = string.Empty };
+}

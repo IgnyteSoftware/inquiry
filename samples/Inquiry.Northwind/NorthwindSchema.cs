@@ -5,11 +5,12 @@ namespace Inquiry.Northwind;
 /// supported Inquiry provider.
 /// </summary>
 /// <remarks>
-/// All 13 classic tables are emitted so the schema is a faithful Northwind. Three of them —
-/// <c>Order Details</c>, <c>EmployeeTerritories</c>, and <c>CustomerCustomerDemo</c> — have
-/// composite primary keys, which Inquiry does not currently support. They exist in the schema
-/// but have no entity or store; consumers that need to read or write them must do so via
-/// <c>IInquiry.ExecuteAsync</c> / <c>QueryAsync</c> with raw SQL.
+/// All 13 classic tables are emitted so the schema is a faithful Northwind. Each table has
+/// a matching entity and generated store under <c>Inquiry.Northwind.Models</c> /
+/// <c>Inquiry.Northwind.Stores</c>, including the three composite-key tables
+/// (<c>Order Details</c>, <c>EmployeeTerritories</c>, <c>CustomerCustomerDemo</c>) — Inquiry
+/// supports composite primary keys so they are first-class generated stores like every
+/// other table.
 /// </remarks>
 public static class NorthwindSchema
 {

@@ -1,0 +1,142 @@
+@page "/demographics"
+@inject DemographicsService DemoSvc
+@inject CustomerService CustomerSvc
+
+<h1>Customer demographics</h1>
+
+<p>
+    Demonstrates the string + string composite-key join: <code>CustomerCustomerDemo</code>
+    bridges <code>Customers</code> and <code>CustomerDemographics</code>. Both stores share
+    the same <code>[InquirySelectOneByKey]</code> and <code>[InquiryDeleteOneByKey]</code>
+    shape — generated to take both key columns as positional parameters.
+</p>
+
+<h2>Demographic types</h2>
+
+<EditForm Model="_demoDraft" OnValidSubmit="CreateDemographicAsync" class="form-inline">
+    <InputText @bind-Value="_demoDraft.CustomerTypeID" placeholder="Type ID"     class="input" />
+    <InputText @bind-Value="_demoDraft.CustomerDesc"   placeholder="Description" class="input" />
+    <button type="submit" class="btn primary">Add type</button>
+</EditForm>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Description</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var d in _demographics)
+            {
+                <tr>
+                    <td><code>@d.CustomerTypeID</code></td>
+                    <td><InputText @bind-Value="d.CustomerDesc" class="input" /></td>
+                    <td class="actions">
+                        <button class="btn" @onclick="() => UpdateDemographicAsync(d)">Save</button>
+                        <button class="btn danger" @onclick="() => DeleteDemographicAsync(d)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Assignments</h2>
+
+    <div class="form-inline">
+        <select class="input" @bind="_assignCustomerID">
+            <option value="">— pick a customer —</option>
+            @foreach (var c in _customers)
+            {
+                <option value="@c.CustomerID">@c.CustomerID — @c.CompanyName</option>
+            }
+        </select>
+        <select class="input" @bind="_assignTypeID">
+            <option value="">— pick a type —</option>
+            @foreach (var d in _demographics)
+            {
+                <option value="@d.CustomerTypeID">@d.CustomerTypeID — @d.CustomerDesc</option>
+            }
+        </select>
+        <button class="btn" @onclick="AssignAsync">Assign</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr><th>Customer</th><th>Type</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var a in _assignments)
+            {
+                <tr>
+                    <td><code>@a.CustomerID</code></td>
+                    <td><code>@a.CustomerTypeID</code></td>
+                    <td class="actions">
+                        <button class="btn danger" @onclick="() => UnassignAsync(a)">Remove</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool _loading = true;
+    private List<Customer> _customers = new();
+    private List<CustomerDemographic> _demographics = new();
+    private List<CustomerCustomerDemo> _assignments = new();
+    private CustomerDemographic _demoDraft = NewDemoDraft();
+    private string _assignCustomerID = string.Empty;
+    private string _assignTypeID = string.Empty;
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _customers = await CustomerSvc.GetAllAsync();
+        _demographics = await DemoSvc.GetDemographicsAsync();
+        _assignments = await DemoSvc.GetAssignmentsAsync();
+        _loading = false;
+    }
+
+    private async Task CreateDemographicAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_demoDraft.CustomerTypeID)) return;
+        await DemoSvc.CreateDemographicAsync(_demoDraft);
+        _demoDraft = NewDemoDraft();
+        await RefreshAsync();
+    }
+
+    private async Task UpdateDemographicAsync(CustomerDemographic demographic)
+    {
+        await DemoSvc.UpdateDemographicAsync(demographic);
+        await RefreshAsync();
+    }
+
+    private async Task DeleteDemographicAsync(CustomerDemographic demographic)
+    {
+        await DemoSvc.DeleteDemographicAsync(demographic.CustomerTypeID);
+        await RefreshAsync();
+    }
+
+    private async Task AssignAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_assignCustomerID) || string.IsNullOrWhiteSpace(_assignTypeID)) return;
+        await DemoSvc.AssignAsync(_assignCustomerID, _assignTypeID);
+        _assignCustomerID = string.Empty;
+        _assignTypeID = string.Empty;
+        await RefreshAsync();
+    }
+
+    private async Task UnassignAsync(CustomerCustomerDemo assignment)
+    {
+        await DemoSvc.UnassignAsync(assignment.CustomerID, assignment.CustomerTypeID);
+        await RefreshAsync();
+    }
+
+    private static CustomerDemographic NewDemoDraft() => new() { CustomerTypeID = string.Empty };
+}
