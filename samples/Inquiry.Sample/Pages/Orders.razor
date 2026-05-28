@@ -1,0 +1,136 @@
+@page "/orders"
+@inject OrderService OrderSvc
+@inject CustomerService CustomerSvc
+@inject IInquiry Inquiry
+
+<h1>Orders</h1>
+
+<p>
+    Drill from a customer to their orders via
+    <code>[InquirySelectAllByField("CustomerID")]</code>, then from an order to its lines
+    via <code>OrderDetailStore.SelectByOrderAsync</code> — the same
+    <code>[InquirySelectAllByField]</code> shape but keyed on the first column of a
+    composite primary key.
+</p>
+
+<div class="form-inline">
+    <label for="customer">Customer</label>
+    <select id="customer" class="input" @bind="_customerID">
+        <option value="">— all customers —</option>
+        @foreach (var c in _customers)
+        {
+            <option value="@c.CustomerID">@c.CustomerID — @c.CompanyName</option>
+        }
+    </select>
+    <button class="btn primary" @onclick="RefreshOrdersAsync">Show orders</button>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_orders.Count == 0)
+{
+    <p class="muted">No orders.</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Customer</th><th>Employee</th><th>Order date</th><th>Freight</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var o in _orders)
+            {
+                <tr>
+                    <td><code>@o.OrderID</code></td>
+                    <td>@(o.CustomerID ?? "—")</td>
+                    <td>@(o.EmployeeID?.ToString() ?? "—")</td>
+                    <td>@(o.OrderDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                    <td>$@((o.Freight ?? 0m).ToString("0.00"))</td>
+                    <td class="actions">
+                        <button class="btn" @onclick="() => ToggleDetailsAsync(o.OrderID!.Value)">
+                            @(_expanded == o.OrderID ? "Hide lines" : "Show lines")
+                        </button>
+                        <button class="btn danger" @onclick="() => DeleteAsync(o)">Delete</button>
+                    </td>
+                </tr>
+                @if (_expanded == o.OrderID)
+                {
+                    <tr>
+                        <td colspan="6">
+                            @if (_details.Count == 0)
+                            {
+                                <p class="muted">No detail lines.</p>
+                            }
+                            else
+                            {
+                                <table>
+                                    <thead>
+                                        <tr><th>ProductID</th><th>Unit price</th><th>Quantity</th><th>Discount</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var d in _details)
+                                        {
+                                            <tr>
+                                                <td><code>@d.ProductID</code></td>
+                                                <td>$@d.UnitPrice.ToString("0.00")</td>
+                                                <td>@d.Quantity</td>
+                                                <td>@d.Discount.ToString("0.00")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool _loading = true;
+    private string _customerID = string.Empty;
+    private List<Customer> _customers = new();
+    private List<Order> _orders = new();
+    private int? _expanded;
+    private List<OrderDetail> _details = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await CustomerSvc.GetAllAsync();
+        await RefreshOrdersAsync();
+    }
+
+    private async Task RefreshOrdersAsync()
+    {
+        _loading = true;
+        _orders = string.IsNullOrWhiteSpace(_customerID)
+            ? await OrderSvc.GetAllAsync()
+            : await OrderSvc.GetByCustomerAsync(_customerID);
+        _expanded = null;
+        _details = new();
+        _loading = false;
+    }
+
+    private async Task ToggleDetailsAsync(int orderID)
+    {
+        if (_expanded == orderID)
+        {
+            _expanded = null;
+            _details = new();
+            return;
+        }
+        _expanded = orderID;
+        _details = await OrderSvc.GetDetailsAsync(orderID);
+    }
+
+    private async Task DeleteAsync(Order order)
+    {
+        if (order.OrderID is not int id) return;
+        await OrderSvc.DeleteOrderAsync(Inquiry, id);
+        await RefreshOrdersAsync();
+    }
+}

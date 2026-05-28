@@ -11,6 +11,12 @@ await InquiryProviderSetup.ConfigureAsync(builder);
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<CatalogService>();
+builder.Services.AddScoped<SupplierService>();
+builder.Services.AddScoped<ShipperService>();
+builder.Services.AddScoped<RegionService>();
+builder.Services.AddScoped<OrderService>();
+builder.Services.AddScoped<DemographicsService>();
+builder.Services.AddScoped<EmployeeTerritoryService>();
 builder.Services.AddScoped<OrderTransactionService>();
 builder.Services.AddScoped<DataSeeder>();
 

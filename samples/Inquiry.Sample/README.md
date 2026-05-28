@@ -42,17 +42,27 @@ credentials), so a default install just works.
 
 ## What it demonstrates
 
-- Entity mapping with `[InquiryTable]`, `[InquiryKey]`, `[InquiryColumn]`,
-  `[InquiryForeignKey]` (Northwind entities live in `Inquiry.Northwind/Models`)
+The sample exercises every classic Northwind table — including the three composite-key
+ones (`Order Details`, `EmployeeTerritories`, `CustomerCustomerDemo`) — through Inquiry's
+generated stores. Specifically:
+
+- Entity mapping with `[InquiryTable]`, `[InquiryKey]` (single and composite),
+  `[InquiryColumn]`, `[InquiryForeignKey]`, `[InquiryRelation]`
+  (Northwind entities live in `Inquiry.Northwind/Models`)
 - Store generation with `[InquirySelectAll]`, `[InquirySelectOneByKey]`,
-  `[InquirySelectAllByField]`, `[InquiryInsert]`, `[InquiryInsert(ReturnEntity = true)]`,
-  `[InquiryUpdate]`, `[InquiryUpsert]`, `[InquiryDeleteOneByKey]`
-- DI registration through `AddInquiry()` + `AddInquirySqlite(connectionString)`
-- Transactions through `IInquiry.BeginTransactionAsync()`, combining a generated-store
-  insert with raw-SQL inserts inside one commit
-- Manual parent/child stitching in `CatalogService` as a workaround for a current
-  generator limitation around nullable keys
-  (see [Inquiry.Northwind/LIMITATIONS.md](../Inquiry.Northwind/LIMITATIONS.md))
+  `[InquirySelectAllByField]` (single- and multi-column),
+  `[InquirySelectAllEager]`, `[InquirySelectOneByKeyEager]`,
+  `[InquiryInsert]`, `[InquiryInsert(ReturnEntity = true)]`,
+  `[InquiryUpdate]`, `[InquiryUpdate(ReturnEntity = true)]`,
+  `[InquiryUpsert]`, `[InquiryUpsert(ReturnEntity = true)]`,
+  `[InquiryDeleteOneByKey]`
+- Eager loading on both Region↔Territory (non-nullable key) and Category↔Product
+  (nullable IDENTITY key)
+- DI registration through `AddInquiry()` + `AddInquirySqlite(...)` /
+  `AddInquirySqlServer(...)` / `AddInquiryPostgreSql(...)`
+- Ambient transactions through `IInquiry.BeginTransactionAsync()`, combining an
+  IDENTITY-keyed parent insert (`Orders` via `InsertReturning`) with composite-key child
+  inserts (`Order Details`) inside one commit
 
 ## Project layout
 
@@ -64,15 +74,26 @@ samples/Inquiry.Sample/
 ├── Services/                        one service per domain – the public API for pages
 │   ├── CustomerService.cs           CRUD + country lookup for customers
 │   ├── EmployeeService.cs           CRUD for employees, uses InsertReturning for IDENTITY
-│   ├── CatalogService.cs            categories + products, in-memory stitch
+│   ├── CatalogService.cs            categories + products via eager loading
+│   ├── SupplierService.cs           CRUD for suppliers
+│   ├── ShipperService.cs            CRUD for shippers
+│   ├── RegionService.cs             regions + territories via eager loading
+│   ├── OrderService.cs              orders + composite-key order details
+│   ├── DemographicsService.cs       customer demographics + composite-key bridge
+│   ├── EmployeeTerritoryService.cs  int+string composite bridge
 │   ├── OrderTransactionService.cs   atomic Order + Order Details insert
-│   └── DataSeeder.cs                idempotent first-run seed
+│   └── DataSeeder.cs                idempotent first-run seed (all 13 tables)
 ├── Pages/
 │   ├── _Host.cshtml                 host page for Blazor Server
 │   ├── Index.razor                  dashboard (`/`)
 │   ├── Customers.razor              `/customers`
 │   ├── Employees.razor              `/employees`
 │   ├── Catalog.razor                `/catalog`
+│   ├── Suppliers.razor              `/suppliers`
+│   ├── Shippers.razor               `/shippers`
+│   ├── Regions.razor                `/regions`
+│   ├── Orders.razor                 `/orders`
+│   ├── Demographics.razor           `/demographics`
 │   └── TransactionDemo.razor        `/transaction-demo`
 ├── Shared/
 │   ├── MainLayout.razor             sidebar + content shell

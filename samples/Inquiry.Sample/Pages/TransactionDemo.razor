@@ -9,8 +9,8 @@
     <code>Order Details</code> rows inside a single <code>IInquiryTransaction</code>.
     The order header goes through the generated <code>OrderStore</code> with
     a RETURNING clause to surface the IDENTITY-assigned <code>OrderID</code>;
-    the detail rows use raw SQL because <code>Order Details</code> has a composite
-    primary key (see <code>Inquiry.Northwind/LIMITATIONS.md</code>).
+    the detail rows go through the composite-key <code>OrderDetailStore</code>. Both
+    stores share the same ambient transaction via <code>IInquiry.BeginTransactionAsync</code>.
 </p>
 
 <div class="form-inline">
