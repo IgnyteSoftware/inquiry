@@ -802,6 +802,196 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
+    public void ReportsDiagnosticForNestedStore()
+    {
+        // The generator emits its partial at the namespace level, so a store nested inside
+        // another type would land at the wrong scope and the partial method definitions
+        // would have no implementations. Reject up front.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+            }
+
+            public static class Outer
+            {
+                public partial class OrganizationStore : InquiryStore<Organization>
+                {
+                    [InquirySelectAll]
+                    public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+                }
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ016");
+    }
+
+    [Fact]
+    public void ReportsDiagnosticForAbstractStore()
+    {
+        // The generator now emits the constructor onto the user's class, so an abstract
+        // store would still be abstract after combining the partials and DI cannot instantiate
+        // it. Reject before emitting.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+            }
+
+            public abstract partial class OrganizationStore : InquiryStore<Organization>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ017");
+    }
+
+    [Fact]
+    public void SqlServerDialectEmitsBracketedIdentifiersAndMergeUpsert()
+    {
+        // Spot-checks the SqlServerSqlBuilder output by exercising the full CRUD surface
+        // including INSERT/UPDATE returning (OUTPUT INSERTED.*) and the MERGE-style upsert.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn("Name")]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class OrganizationStore : InquiryStore<Organization>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+
+                [InquiryInsert(ReturnEntity = true)]
+                public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
+
+                [InquiryUpdate(ReturnEntity = true)]
+                public partial Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken cancellationToken = default);
+
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(Organization o, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Bracket-quoted identifiers, OUTPUT INSERTED.* for returning mutations, and MERGE upsert.
+        Assert.Contains("private const string _sqlSelectAll = \"SELECT [Key], [Name] FROM [TOrganization]\";", generatedText);
+        Assert.Contains("[Key], [Name]) OUTPUT INSERTED.[Key], INSERTED.[Name] VALUES (@Key, @Name)", generatedText);
+        Assert.Contains("OUTPUT INSERTED.[Key], INSERTED.[Name] WHERE [Key] = @Key", generatedText);
+        Assert.Contains("MERGE INTO [TOrganization] AS target", generatedText);
+        Assert.Contains("WHEN MATCHED THEN UPDATE SET [Name] = @Name", generatedText);
+    }
+
+    [Fact]
+    public void PostgreSqlDialectEmitsDoubleQuotedIdentifiersAndOnConflictUpsert()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn("Name")]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class OrganizationStore : InquiryStore<Organization>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+
+                [InquiryInsert(ReturnEntity = true)]
+                public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
+
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(Organization o, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "PostgreSql");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Double-quoted identifiers, RETURNING for insert-returning, ON CONFLICT DO UPDATE upsert.
+        Assert.Contains("private const string _sqlSelectAll = \"SELECT \\\"Key\\\", \\\"Name\\\" FROM \\\"TOrganization\\\"\";", generatedText);
+        Assert.Contains("VALUES (@Key, @Name) RETURNING \\\"Key\\\", \\\"Name\\\"", generatedText);
+        Assert.Contains("ON CONFLICT (\\\"Key\\\") DO UPDATE SET \\\"Name\\\" = @Name", generatedText);
+    }
+
+    [Fact]
     public void ReportsAmbiguousDialectWhenMultipleProvidersAreReferenced()
     {
         // The test compilation references all three Inquiry provider assemblies (Sqlite,

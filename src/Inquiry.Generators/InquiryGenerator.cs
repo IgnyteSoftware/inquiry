@@ -67,6 +67,25 @@ public sealed class InquiryGenerator : IIncrementalGenerator
                 continue;
             }
 
+            if (storeSymbol.ContainingType is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.StoreCannotBeNested,
+                    classDeclaration.Identifier.GetLocation(),
+                    storeSymbol.Name,
+                    storeSymbol.ContainingType.ToDisplayString()));
+                continue;
+            }
+
+            if (storeSymbol.IsAbstract)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.StoreCannotBeAbstract,
+                    classDeclaration.Identifier.GetLocation(),
+                    storeSymbol.Name));
+                continue;
+            }
+
             var entityKey = entityType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (!entities.TryGetValue(entityKey, out var entity))
             {
