@@ -1,13 +1,36 @@
 <Project>
   <PropertyGroup>
-    <_InquiryProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry\Inquiry.csproj'))</_InquiryProjectPath>
-    <_InquiryGeneratorAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Generators\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.dll'))</_InquiryGeneratorAnalyzerPath>
+    <_InquirySqliteProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Sqlite\Inquiry.Sqlite.csproj'))</_InquirySqliteProjectPath>
+    <_InquirySqliteAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Sqlite.Analyzer.dll'))</_InquirySqliteAnalyzerPath>
+    <_InquirySqliteSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquirySqliteSharedPath>
+
+    <_InquirySqlServerProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.SqlServer\Inquiry.SqlServer.csproj'))</_InquirySqlServerProjectPath>
+    <_InquirySqlServerAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.SqlServer.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.SqlServer.Analyzer.dll'))</_InquirySqlServerAnalyzerPath>
+    <_InquirySqlServerSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.SqlServer.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquirySqlServerSharedPath>
+
+    <_InquiryPostgreSqlProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj'))</_InquiryPostgreSqlProjectPath>
+    <_InquiryPostgreSqlAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.PostgreSql.Analyzer.dll'))</_InquiryPostgreSqlAnalyzerPath>
+    <_InquiryPostgreSqlSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryPostgreSqlSharedPath>
   </PropertyGroup>
 
-  <Target Name="AddInquiryProjectReferenceAnalyzer" BeforeTargets="CoreCompile">
+  <!-- Roslyn analyzer auto-flow only attaches IsRoslynComponent project references one level deep,
+       so we manually attach each provider's analyzer (and the shared framework DLL it depends on)
+       for any project that references that provider's runtime package. Inside each provider's
+       NuGet, both DLLs ship side-by-side under analyzers/dotnet/cs/; we mirror that here for
+       project-reference dev builds so the load-context Roslyn picks contains both. -->
+  <Target Name="AddInquiryProjectReferenceAnalyzers" BeforeTargets="CoreCompile">
     <ItemGroup>
-      <_InquiryProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryProjectPath)'" />
-      <Analyzer Include="$(_InquiryGeneratorAnalyzerPath)" Condition="'@(_InquiryProjectReference)' != '' and Exists('$(_InquiryGeneratorAnalyzerPath)')" />
+      <_InquirySqliteProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquirySqliteProjectPath)'" />
+      <Analyzer Include="$(_InquirySqliteAnalyzerPath)" Condition="'@(_InquirySqliteProjectReference)' != '' and Exists('$(_InquirySqliteAnalyzerPath)')" />
+      <Analyzer Include="$(_InquirySqliteSharedPath)" Condition="'@(_InquirySqliteProjectReference)' != '' and Exists('$(_InquirySqliteSharedPath)')" />
+
+      <_InquirySqlServerProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquirySqlServerProjectPath)'" />
+      <Analyzer Include="$(_InquirySqlServerAnalyzerPath)" Condition="'@(_InquirySqlServerProjectReference)' != '' and Exists('$(_InquirySqlServerAnalyzerPath)')" />
+      <Analyzer Include="$(_InquirySqlServerSharedPath)" Condition="'@(_InquirySqlServerProjectReference)' != '' and Exists('$(_InquirySqlServerSharedPath)')" />
+
+      <_InquiryPostgreSqlProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryPostgreSqlProjectPath)'" />
+      <Analyzer Include="$(_InquiryPostgreSqlAnalyzerPath)" Condition="'@(_InquiryPostgreSqlProjectReference)' != '' and Exists('$(_InquiryPostgreSqlAnalyzerPath)')" />
+      <Analyzer Include="$(_InquiryPostgreSqlSharedPath)" Condition="'@(_InquiryPostgreSqlProjectReference)' != '' and Exists('$(_InquiryPostgreSqlSharedPath)')" />
     </ItemGroup>
   </Target>
 </Project>

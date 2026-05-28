@@ -107,35 +107,35 @@ Entity-mapping attributes live in `Inquiry.Entities`: `[InquiryTable]`, `[Inquir
 
 ## Flow 1: Source Generation (Compile Time)
 
-The generator is `InquiryGenerator : IIncrementalGenerator`. At compile time it walks the user's compilation, builds models, and emits three kinds of `.g.cs` files.
+The generator runs once per provider analyzer assembly loaded by Roslyn — each is a concrete `[Generator]` subclass of [`InquiryGeneratorBase`](src/Inquiry.Generators.Shared/InquiryGeneratorBase.cs) (e.g. [`InquirySqliteGenerator`](src/Inquiry.Sqlite.Analyzer/InquirySqliteGenerator.cs)). At compile time the base walks the user's compilation, builds models, decides whether this provider's dialect matches the resolved `[InquiryDialect]`, and (if so) emits three kinds of `.g.cs` files.
 
 ### Step 1 — Discover candidate classes
 
-[`src/Inquiry.Generators/InquiryGenerator.cs`](src/Inquiry.Generators/InquiryGenerator.cs)
+[`src/Inquiry.Generators.Shared/InquiryGeneratorBase.cs`](src/Inquiry.Generators.Shared/InquiryGeneratorBase.cs)
 
 Hooks `SyntaxProvider` to pull every `ClassDeclarationSyntax` that has either an attribute list or a base type. Cheap predicate keeps the incremental pipeline fast.
 
 ### Step 2 — Discover entities
 
-[`src/Inquiry.Generators/EntityProcessor.cs`](src/Inquiry.Generators/EntityProcessor.cs)
+[`src/Inquiry.Generators.Shared/EntityProcessor.cs`](src/Inquiry.Generators.Shared/EntityProcessor.cs)
 
-For each candidate, reads `[InquiryTable]`, then scans the type for `[InquiryColumn]`, `[InquiryKey]`, `[InquiryForeignKey]`, and `[InquiryRelation]`. Populates [`EntityModel`](src/Inquiry.Generators/Models/EntityModel.cs) (table name, schema, columns, key, relations). Reports diagnostics for missing keys, multiple keys, or invalid types.
+For each candidate, reads `[InquiryTable]`, then scans the type for `[InquiryColumn]`, `[InquiryKey]`, `[InquiryForeignKey]`, and `[InquiryRelation]`. Populates [`EntityModel`](src/Inquiry.Generators.Shared/Models/EntityModel.cs) (table name, schema, columns, key, relations). Reports diagnostics for missing keys, multiple keys, or invalid types.
 
 For every discovered entity, immediately emits `<Entity>InquiryEntityMaterializer.g.cs` — a sealed class implementing [`IInquiryEntityMaterializer<TEntity>`](src/Inquiry/Materialization/IInquiryEntityMaterializer.cs) that reads ordinals once and projects a `DbDataReader` row into a `TEntity`.
 
 ### Step 3 — Discover store methods
 
-[`src/Inquiry.Generators/StoreProcessor.cs`](src/Inquiry.Generators/StoreProcessor.cs) drives store discovery; [`StoreOperationEmitter.cs`](src/Inquiry.Generators/StoreOperationEmitter.cs) is the per-method dispatcher.
+[`src/Inquiry.Generators.Shared/StoreProcessor.cs`](src/Inquiry.Generators.Shared/StoreProcessor.cs) drives store discovery; [`StoreOperationEmitter.cs`](src/Inquiry.Generators.Shared/StoreOperationEmitter.cs) is the per-method dispatcher.
 
 For each `partial` method declaration on each `partial class : InquiryStore<TEntity>`:
 
-1. `StoreOperationEmitter.GetOperation` identifies the Inquiry attribute and returns a [`StoreOperation`](src/Inquiry.Generators/Models/StoreOperation.cs) enum value.
+1. `StoreOperationEmitter.GetOperation` identifies the Inquiry attribute and returns a [`StoreOperation`](src/Inquiry.Generators.Shared/Models/StoreOperation.cs) enum value.
 2. `StoreOperationEmitter.Validate` checks the return type, parameter count, parameter types, and (for `[InquirySelectAllByField]`) confirms the named field exists in the entity. Reports diagnostics on mismatch.
-3. A [`StoreMethodModel`](src/Inquiry.Generators/Models/StoreMethodModel.cs) is collected.
+3. A [`StoreMethodModel`](src/Inquiry.Generators.Shared/Models/StoreMethodModel.cs) is collected.
 
 ### Step 4 — Emit the concrete store
 
-`StoreProcessor.Emit` writes `<Store>.InquiryStore.g.cs`. Each generated store has the same shape:
+[`StoreProcessor.Emit`](src/Inquiry.Generators.Shared/StoreProcessor.cs) writes `<Store>.InquiryStore.g.cs`. Each generated store has the same shape:
 
 ```csharp
 // Second partial of the user's class — generated alongside the user-authored one.
@@ -173,7 +173,7 @@ Key points:
 
 ### Step 5 — Emit the DI registration
 
-[`src/Inquiry.Generators/RegistrationEmitter.cs`](src/Inquiry.Generators/RegistrationEmitter.cs)
+[`src/Inquiry.Generators.Shared/RegistrationEmitter.cs`](src/Inquiry.Generators.Shared/RegistrationEmitter.cs)
 
 Writes `InquiryGeneratedServiceRegistration.g.cs`: a sealed `Inquiry.Generated.InquiryGeneratedServiceRegistration : IInquiryServiceRegistration` whose `AddServices(IServiceCollection)` calls `TryAddSingleton` for every generated materializer and `TryAddScoped` for every store the generator emitted into.
 
@@ -196,8 +196,8 @@ All SQL is produced at compile time by an internal `SqlBuilder` hierarchy in `In
 ### The shape
 
 ```csharp
-// src/Inquiry.Generators/Sql/SqlBuilder.cs
-internal abstract class SqlBuilder
+// src/Inquiry.Generators.Shared/Abstractions/SqlBuilder.cs
+public abstract class SqlBuilder
 {
     public abstract string DialectName { get; }
     public abstract string QuoteIdentifier(string identifier);
@@ -206,7 +206,7 @@ internal abstract class SqlBuilder
 
     public abstract string BuildSelectAllSql       (SqlBuildContext ctx);
     public abstract string BuildSelectByKeySql     (SqlBuildContext ctx);
-    public abstract string BuildSelectByFieldSql   (SqlBuildContext ctx, IReadOnlyList<ColumnModel> filterColumns);
+    public abstract string BuildSelectByFieldSql   (SqlBuildContext ctx, IReadOnlyList<IColumn> filterColumns);
     public abstract string BuildInsertSql          (SqlBuildContext ctx);
     public abstract string BuildInsertReturningSql (SqlBuildContext ctx);
     public abstract string BuildUpdateSql          (SqlBuildContext ctx);
@@ -224,21 +224,23 @@ internal abstract class SqlBuilder
 - `InsertColumns`, `InsertParameters` — insertable columns + matching `@name` parameters
 - `SetClauses` — `col = @col, ...` for non-key non-generated columns
 - `QuotedKeyColumns`, `KeyParameters`, `KeyWhereClause`
-- The raw `ColumnModel` lists, so builders can introspect (e.g., to emit `OUTPUT INSERTED.*` or `RETURNING`).
+- The raw `IColumn` lists, so builders can introspect (e.g., to emit `OUTPUT INSERTED.*` or `RETURNING`).
 
 ### Builder implementations
 
 | File | Identifier quoting | Upsert strategy |
 | --- | --- | --- |
-| [`src/Inquiry.Generators/Sql/SqliteSqlBuilder.cs`](src/Inquiry.Generators/Sql/SqliteSqlBuilder.cs) | `"name"` (double quotes, doubled to escape) | `INSERT ... ON CONFLICT DO UPDATE` |
-| [`src/Inquiry.Generators/Sql/SqlServerSqlBuilder.cs`](src/Inquiry.Generators/Sql/SqlServerSqlBuilder.cs) | `[name]` (brackets, `]` doubled to escape) | `MERGE INTO ... WHEN MATCHED / WHEN NOT MATCHED` |
-| [`src/Inquiry.Generators/Sql/PostgreSqlSqlBuilder.cs`](src/Inquiry.Generators/Sql/PostgreSqlSqlBuilder.cs) | `"name"` (double quotes) | `INSERT … ON CONFLICT (...) DO UPDATE` |
+| [`src/Inquiry.Sqlite.Analyzer/SqliteSqlBuilder.cs`](src/Inquiry.Sqlite.Analyzer/SqliteSqlBuilder.cs) | `"name"` (double quotes, doubled to escape) | `INSERT ... ON CONFLICT DO UPDATE` |
+| [`src/Inquiry.SqlServer.Analyzer/SqlServerSqlBuilder.cs`](src/Inquiry.SqlServer.Analyzer/SqlServerSqlBuilder.cs) | `[name]` (brackets, `]` doubled to escape) | `MERGE INTO ... WHEN MATCHED / WHEN NOT MATCHED` |
+| [`src/Inquiry.PostgreSql.Analyzer/PostgreSqlSqlBuilder.cs`](src/Inquiry.PostgreSql.Analyzer/PostgreSqlSqlBuilder.cs) | `"name"` (double quotes) | `INSERT … ON CONFLICT (...) DO UPDATE` |
 
-To change how a CRUD statement is emitted for one database without affecting the others, override the matching `Build…Sql` method in that builder.
+Each `Inquiry.<Provider>.Analyzer` assembly is a self-contained Roslyn source generator. It bundles a private copy of the shared framework ([`src/Inquiry.Generators.Shared`](src/Inquiry.Generators.Shared)) — the framework cannot be a separate analyzer because Roslyn loads each provider's analyzer into its own `AssemblyLoadContext`, so static state and type identity do not cross provider boundaries. The provider analyzer DLL ships alongside the matching runtime DLL inside the provider's NuGet (`analyzers/dotnet/cs/`), and is wired into project-reference dev builds by [`Directory.Build.targets`](Directory.Build.targets).
+
+To change how a CRUD statement is emitted for one database without affecting the others, override the matching `Build…Sql` method in that provider's builder.
 
 ### Dialect selection
 
-Each provider runtime assembly declares `[assembly: InquiryDialect("Sqlite")]` (or `"SqlServer"` / `"PostgreSql"`). At generator time, [`DialectResolver`](src/Inquiry.Generators/Sql/DialectResolver.cs) walks the consuming compilation's referenced assemblies, picks the single matching dialect name, and instantiates the corresponding `SqlBuilder`. Ambiguity or missing markers surface as `INQ013` / `INQ014` / `INQ015` diagnostics.
+Each provider's analyzer ([`InquiryGeneratorBase`](src/Inquiry.Generators.Shared/InquiryGeneratorBase.cs)) hardcodes its own dialect name. When Roslyn loads the analyzer (because the consumer referenced the matching provider package), it inspects the compilation for `[assembly: InquiryDialect("...")]` — first on the consuming assembly (explicit override), then on referenced assemblies (provider runtime DLLs ship this attribute pre-applied). If the resolved name matches the generator's own dialect, it emits; otherwise it stays silent so a coexisting provider can claim the build. If no dialect attribute is found at all, the loaded generator treats that as implicit opt-in to its own dialect. Multiple matching dialects surface as `INQ014`, emitted once by the alphabetically-first provider in the conflict.
 
 ### Provider DI registration
 

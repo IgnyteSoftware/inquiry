@@ -1,12 +1,12 @@
-using Inquiry.Generators.Models;
+using Inquiry.Generators.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Inquiry.Generators.Sql;
+namespace Inquiry.PostgreSql.Analyzer;
 
-internal sealed class SqliteSqlBuilder : SqlBuilder
+internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 {
-    public override string DialectName => "Sqlite";
+    public override string DialectName => "PostgreSql";
 
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
@@ -17,7 +17,7 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
     public override string BuildSelectByKeySql(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
 
-    public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<ColumnModel> filterColumns)
+    public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         var where = string.Join(" AND ", filterColumns
             .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
@@ -74,10 +74,35 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
         var keyParameter = context.KeyParameters[0];
         var explicitInsertColumns = JoinSql(keyColumn, context.InsertColumns);
         var explicitInsertParameters = JoinSql(keyParameter, context.InsertParameters);
-        var returningClause = returning ? " RETURNING " + context.SelectColumns : string.Empty;
+        var generatedInsertColumns = " (" + context.InsertColumns + ") SELECT " + context.InsertParameters + " WHERE " + keyParameter + " IS NULL";
 
-        return "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") VALUES (" + explicitInsertParameters + ") " +
-            "ON CONFLICT (" + keyColumn + ") DO UPDATE SET " + context.SetClauses + returningClause;
+        if (!returning)
+        {
+            return
+                "UPDATE " + context.Table + " SET " + context.SetClauses + " " +
+                "WHERE " + keyParameter + " IS NOT NULL AND " + keyColumn + " = " + keyParameter + "; " +
+                "INSERT INTO " + context.Table + generatedInsertColumns + "; " +
+                "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") " +
+                "SELECT " + explicitInsertParameters + " WHERE " + keyParameter + " IS NOT NULL " +
+                "AND NOT EXISTS (SELECT 1 FROM " + context.Table + " WHERE " + keyColumn + " = " + keyParameter + ");";
+        }
+
+        var generatedReturningInsert =
+            "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") " +
+            "SELECT " + context.InsertParameters + " WHERE " + keyParameter + " IS NULL " +
+            "RETURNING " + context.SelectColumns;
+
+        return
+            "WITH updated AS (UPDATE " + context.Table + " SET " + context.SetClauses + " " +
+            "WHERE " + keyParameter + " IS NOT NULL AND " + keyColumn + " = " + keyParameter + " " +
+            "RETURNING " + context.SelectColumns + "), " +
+            "inserted_generated AS (" + generatedReturningInsert + "), " +
+            "inserted_explicit AS (INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") " +
+            "SELECT " + explicitInsertParameters + " WHERE " + keyParameter + " IS NOT NULL AND NOT EXISTS (SELECT 1 FROM updated) " +
+            "RETURNING " + context.SelectColumns + ") " +
+            "SELECT " + context.SelectColumns + " FROM updated UNION ALL " +
+            "SELECT " + context.SelectColumns + " FROM inserted_generated UNION ALL " +
+            "SELECT " + context.SelectColumns + " FROM inserted_explicit";
     }
 
     private static string JoinKeyColumns(SqlBuildContext context)

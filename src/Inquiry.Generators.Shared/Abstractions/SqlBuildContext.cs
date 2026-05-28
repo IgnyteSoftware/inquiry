@@ -1,8 +1,7 @@
-using Inquiry.Generators.Models;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Inquiry.Generators.Sql;
+namespace Inquiry.Generators.Abstractions;
 
 /// <summary>
 /// Precomputed SQL fragments each <see cref="SqlBuilder"/> needs from an entity's column metadata,
@@ -13,13 +12,13 @@ namespace Inquiry.Generators.Sql;
 /// built for that entity. The resulting SQL strings are then emitted as <c>const</c> fields on the
 /// generated store, so this work happens at compile time and never at runtime.
 /// </remarks>
-internal sealed class SqlBuildContext
+public sealed class SqlBuildContext
 {
     public SqlBuildContext(
         SqlBuilder builder,
         string? schema,
         string tableName,
-        IReadOnlyList<ColumnModel> columns)
+        IReadOnlyList<IColumn> columns)
     {
         Columns = columns;
         KeyColumns = columns.Where(c => c.IsKey).ToArray();
@@ -38,9 +37,9 @@ internal sealed class SqlBuildContext
     }
 
     public string Table { get; }
-    public IReadOnlyList<ColumnModel> Columns { get; }
-    public IReadOnlyList<ColumnModel> KeyColumns { get; }
-    public IReadOnlyList<ColumnModel> InsertableColumns { get; }
+    public IReadOnlyList<IColumn> Columns { get; }
+    public IReadOnlyList<IColumn> KeyColumns { get; }
+    public IReadOnlyList<IColumn> InsertableColumns { get; }
     public string SelectColumns { get; }
     public string InsertColumns { get; }
     public string InsertParameters { get; }

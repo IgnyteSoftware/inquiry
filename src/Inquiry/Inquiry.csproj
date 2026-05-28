@@ -1,15 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
-    <Description>Core abstractions and attributes for the Inquiry source-generated micro-ORM.</Description>
+    <Description>Core abstractions and attributes for the Inquiry source-generated micro-ORM. Reference one of the Inquiry.* provider packages (Inquiry.Sqlite, Inquiry.SqlServer, Inquiry.PostgreSql) to enable code generation.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <ProjectReference Include="..\Inquiry.Generators\Inquiry.Generators.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
-    <None Include="..\Inquiry.Generators\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

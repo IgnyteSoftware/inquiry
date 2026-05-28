@@ -7,10 +7,13 @@
     <Project Path="samples/Inquiry.Sample/Inquiry.Sample.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/Inquiry.Generators/Inquiry.Generators.csproj" />
+    <Project Path="src/Inquiry.Generators.Shared/Inquiry.Generators.Shared.csproj" />
     <Project Path="src/Inquiry.PostgreSql/Inquiry.PostgreSql.csproj" />
+    <Project Path="src/Inquiry.PostgreSql.Analyzer/Inquiry.PostgreSql.Analyzer.csproj" />
     <Project Path="src/Inquiry.Sqlite/Inquiry.Sqlite.csproj" />
+    <Project Path="src/Inquiry.Sqlite.Analyzer/Inquiry.Sqlite.Analyzer.csproj" />
     <Project Path="src/Inquiry.SqlServer/Inquiry.SqlServer.csproj" />
+    <Project Path="src/Inquiry.SqlServer.Analyzer/Inquiry.SqlServer.Analyzer.csproj" />
     <Project Path="src/Inquiry/Inquiry.csproj" />
   </Folder>
   <Folder Name="/tests/">

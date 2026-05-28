@@ -15,7 +15,10 @@
     <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
-    <ProjectReference Include="..\..\src\Inquiry.Generators\Inquiry.Generators.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Generators.Shared\Inquiry.Generators.Shared.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Sqlite.Analyzer\Inquiry.Sqlite.Analyzer.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.SqlServer.Analyzer\Inquiry.SqlServer.Analyzer.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.PostgreSql.Analyzer\Inquiry.PostgreSql.Analyzer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
