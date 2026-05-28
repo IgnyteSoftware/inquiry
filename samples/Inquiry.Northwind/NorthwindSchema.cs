@@ -370,11 +370,10 @@ public static class NorthwindSchema
     /// <c>IF NOT EXISTS</c> so re-running against the same database is safe.
     /// </summary>
     /// <remarks>
-    /// All identifiers are double-quoted to preserve their original mixed casing —
-    /// <see cref="Inquiry.PostgreSql.PostgreSqlInquirySqlDialect"/> emits quoted identifiers,
-    /// so the tables must be created the same way or the generated SQL will fail to resolve
-    /// them. PostgreSQL's <c>SERIAL</c> is used for IDENTITY columns; <c>BYTEA</c> stands in
-    /// for SQLite <c>BLOB</c>.
+    /// All identifiers are double-quoted to preserve their original mixed casing — the PostgreSQL
+    /// SQL builder emits quoted identifiers, so the tables must be created the same way or the
+    /// generated SQL will fail to resolve them. PostgreSQL's <c>SERIAL</c> is used for IDENTITY
+    /// columns; <c>BYTEA</c> stands in for SQLite <c>BLOB</c>.
     /// </remarks>
     public static readonly string PostgreSqlDdl = """
         CREATE TABLE IF NOT EXISTS "Categories" (

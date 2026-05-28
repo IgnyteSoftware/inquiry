@@ -4,11 +4,11 @@ using System.Collections.Generic;
 namespace Inquiry.Generators.Sql;
 
 /// <summary>
-/// Generator-side counterpart to the runtime <c>InquirySqlDialect</c>. Each provider package
-/// is mirrored here so the generator can produce all SQL at compile time and emit the result
-/// as <c>const string</c> fields on the generated store class. The runtime <c>InquirySqlDialect</c>
-/// remains for ad-hoc <c>IInquiry.QueryAsync(string, ...)</c> consumers but is no longer wired
-/// into generated stores.
+/// Compile-time SQL builder consumed by the Inquiry source generator. One concrete subclass exists
+/// per supported dialect; the generator resolves the matching subclass for the current
+/// compilation's <c>[InquiryDialect]</c> marker and uses it to produce the <c>const string</c>
+/// SQL fields baked into generated stores. The Inquiry runtime ships no SQL — every statement is
+/// produced here and emitted at compile time.
 /// </summary>
 internal abstract class SqlBuilder
 {

@@ -1,7 +1,6 @@
 using Inquiry.Connections;
 using Inquiry.Pipeline;
 using Inquiry.PostgreSql.DependencyInjection;
-using Inquiry.Sql;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.PostgreSql.Tests;
@@ -16,7 +15,6 @@ public sealed class PostgreSqlProviderIntegrationTests
             .BuildServiceProvider();
 
         Assert.IsType<PostgreSqlInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());
-        Assert.IsType<PostgreSqlInquirySqlDialect>(serviceProvider.GetRequiredService<InquirySqlDialect>());
         Assert.Null(serviceProvider.GetService<IInquiry>());
         Assert.Null(serviceProvider.GetService<IInquiryRequestPipeline>());
     }

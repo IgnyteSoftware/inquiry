@@ -3,31 +3,30 @@ using Inquiry.Stores;
 
 namespace Inquiry.Northwind.Stores;
 
-public abstract partial class ShipperStore : InquiryStore<Shipper>
+public partial class ShipperStore : InquiryStore<Shipper>
 {
-    protected ShipperStore(IInquiry inquiry) : base(inquiry) { }
 
     [InquirySelectAll]
-    public abstract Task<IReadOnlyList<Shipper>> SelectAllAsync(CancellationToken cancellationToken = default);
+    public partial Task<IReadOnlyList<Shipper>> SelectAllAsync(CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
-    public abstract Task<Shipper?> SelectByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);
+    public partial Task<Shipper?> SelectByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByField("CompanyName")]
-    public abstract Task<IReadOnlyList<Shipper>> SelectByCompanyNameAsync(string companyName, CancellationToken cancellationToken = default);
+    public partial Task<IReadOnlyList<Shipper>> SelectByCompanyNameAsync(string companyName, CancellationToken cancellationToken = default);
 
     [InquiryInsert]
-    public abstract Task<int> InsertAsync(Shipper shipper, CancellationToken cancellationToken = default);
+    public partial Task<int> InsertAsync(Shipper shipper, CancellationToken cancellationToken = default);
 
     [InquiryInsert(ReturnEntity = true)]
-    public abstract Task<Shipper?> InsertReturningAsync(Shipper shipper, CancellationToken cancellationToken = default);
+    public partial Task<Shipper?> InsertReturningAsync(Shipper shipper, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]
-    public abstract Task<bool> UpdateAsync(Shipper shipper, CancellationToken cancellationToken = default);
+    public partial Task<bool> UpdateAsync(Shipper shipper, CancellationToken cancellationToken = default);
 
     [InquiryUpsert]
-    public abstract Task<int> UpsertAsync(Shipper shipper, CancellationToken cancellationToken = default);
+    public partial Task<int> UpsertAsync(Shipper shipper, CancellationToken cancellationToken = default);
 
     [InquiryDeleteOneByKey]
-    public abstract Task<bool> DeleteByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);
+    public partial Task<bool> DeleteByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);
 }

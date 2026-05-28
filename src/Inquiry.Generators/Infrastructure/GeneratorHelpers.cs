@@ -121,6 +121,8 @@ internal static class GeneratorHelpers
 
     public static string GetParameterDeclaration(IMethodSymbol method, bool enumeratorCancellation = false)
     {
+        // Defaults live on the user's partial declaration; the generator's implementation half
+        // must not repeat them or CS1066 fires.
         var parts = new List<string>();
         for (var i = 0; i < method.Parameters.Length; i++)
         {
@@ -129,13 +131,7 @@ internal static class GeneratorHelpers
             var prefix = enumeratorCancellation && isCt
                 ? "[global::System.Runtime.CompilerServices.EnumeratorCancellation] "
                 : string.Empty;
-            var declaration = $"{prefix}{parameter.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat)} {parameter.Name}";
-            if (isCt)
-            {
-                declaration += " = default";
-            }
-
-            parts.Add(declaration);
+            parts.Add($"{prefix}{parameter.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat)} {parameter.Name}");
         }
 
         return string.Join(", ", parts);
