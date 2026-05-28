@@ -1,16 +1,14 @@
-using Inquiry.Generators.Models;
 using System.Collections.Generic;
 
-namespace Inquiry.Generators.Sql;
+namespace Inquiry.Generators.Abstractions;
 
 /// <summary>
 /// Compile-time SQL builder consumed by the Inquiry source generator. One concrete subclass exists
-/// per supported dialect; the generator resolves the matching subclass for the current
-/// compilation's <c>[InquiryDialect]</c> marker and uses it to produce the <c>const string</c>
-/// SQL fields baked into generated stores. The Inquiry runtime ships no SQL — every statement is
-/// produced here and emitted at compile time.
+/// per supported dialect, lives in that provider's analyzer assembly, and is registered with
+/// <see cref="SqlBuilderRegistry"/> at analyzer load time. The Inquiry runtime ships no SQL — every
+/// statement is produced here and emitted as a <c>const string</c> field at compile time.
 /// </summary>
-internal abstract class SqlBuilder
+public abstract class SqlBuilder
 {
     public abstract string DialectName { get; }
 
@@ -29,7 +27,7 @@ internal abstract class SqlBuilder
 
     public abstract string BuildSelectByKeySql(SqlBuildContext context);
 
-    public abstract string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<ColumnModel> filterColumns);
+    public abstract string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns);
 
     public abstract string BuildInsertSql(SqlBuildContext context);
 

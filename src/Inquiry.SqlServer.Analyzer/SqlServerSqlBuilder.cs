@@ -1,8 +1,8 @@
-using Inquiry.Generators.Models;
+using Inquiry.Generators.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Inquiry.Generators.Sql;
+namespace Inquiry.SqlServer.Analyzer;
 
 internal sealed class SqlServerSqlBuilder : SqlBuilder
 {
@@ -17,7 +17,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     public override string BuildSelectByKeySql(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
 
-    public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<ColumnModel> filterColumns)
+    public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         var where = string.Join(" AND ", filterColumns
             .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));

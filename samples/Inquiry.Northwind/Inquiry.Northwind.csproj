@@ -7,5 +7,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <!-- Northwind commits its store SQL to the Sqlite dialect (via [assembly: InquiryDialect]
+         in AssemblyInfo.cs). The SQL builder for that dialect lives in Inquiry.Sqlite.Analyzer,
+         which only gets loaded when something references Inquiry.Sqlite — hence the reference. -->
+    <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
   </ItemGroup>
 </Project>

@@ -1,13 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
-    <Description>SQL Server provider for Inquiry.</Description>
+    <Description>SQL Server provider for Inquiry. Bundles the SQL Server-flavoured source generator (Inquiry.SqlServer.Analyzer) so referencing this package alone enables store SQL generation.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\Inquiry.SqlServer.Analyzer\Inquiry.SqlServer.Analyzer.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <None Include="..\Inquiry.SqlServer.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.SqlServer.Analyzer.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="..\Inquiry.SqlServer.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>

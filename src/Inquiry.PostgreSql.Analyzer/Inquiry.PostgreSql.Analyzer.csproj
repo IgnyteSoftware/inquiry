@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Description>Roslyn source generator for Inquiry stores and entity accessors.</Description>
+    <Description>Compile-time PostgreSQL SQL generator for Inquiry. Self-contained Roslyn analyzer: bundles a private copy of the shared generator framework (Inquiry.Generators.Shared) so Roslyn's per-assembly load-context isolation doesn't fragment the runtime types.</Description>
     <IsRoslynComponent>true</IsRoslynComponent>
     <IsPackable>false</IsPackable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -13,6 +13,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    <ProjectReference Include="..\Inquiry.Generators.Shared\Inquiry.Generators.Shared.csproj" PrivateAssets="all" />
   </ItemGroup>
-
 </Project>

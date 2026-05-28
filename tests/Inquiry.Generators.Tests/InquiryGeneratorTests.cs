@@ -1113,8 +1113,13 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
-    public void ReportsDiagnosticForUnknownDialectName()
+    public void UnknownDialectProducesNoStoreSqlBecauseNoInstalledProviderMatches()
     {
+        // In the per-provider architecture there's no central registry that knows which dialect
+        // names are valid; each installed provider's generator only emits when the resolved
+        // dialect matches its own. Declaring an unrecognised dialect therefore silently leaves
+        // the store partial methods without implementations (a CS8795 the user resolves by
+        // installing a matching provider or fixing the dialect name).
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -1142,7 +1147,9 @@ public sealed class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "Oracle");
 
-        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ015");
+        Assert.DoesNotContain(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
     }
 
     private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite")
@@ -1167,8 +1174,16 @@ public sealed class InquiryGeneratorTests
             GetReferences(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
-        var generator = new InquiryGenerator();
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { generator.AsSourceGenerator() }, parseOptions: parseOptions);
+        // Each provider's analyzer ships a self-contained generator; drive all three to mirror a
+        // real consumer that has referenced multiple provider packages. Each generator runs the
+        // same arbitration logic and at most one of them emits (the one whose dialect matches).
+        var generators = new Microsoft.CodeAnalysis.ISourceGenerator[]
+        {
+            new global::Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator(),
+            new global::Inquiry.SqlServer.Analyzer.InquirySqlServerGenerator().AsSourceGenerator(),
+            new global::Inquiry.PostgreSql.Analyzer.InquiryPostgreSqlGenerator().AsSourceGenerator(),
+        };
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
         return new GeneratorTestResult(outputCompilation, generatorDiagnostics, driver.GetRunResult());
@@ -1186,6 +1201,14 @@ public sealed class InquiryGeneratorTests
         references.Add(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(ValueTask<>).Assembly.Location));
+
+        // Force-load each provider's runtime assembly so its [assembly: InquiryDialect] attribute
+        // ends up in the synthetic compilation's referenced-assembly set. Without this the test
+        // process loads only the analyzer DLLs (which carry no dialect attribute) and the
+        // ambiguous-dialect scenario can't be exercised.
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.Sqlite.SqliteInquiryConnectionFactory).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.SqlServer.SqlServerInquiryConnectionFactory).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.PostgreSql.PostgreSqlInquiryConnectionFactory).Assembly.Location));
 
         return references;
     }

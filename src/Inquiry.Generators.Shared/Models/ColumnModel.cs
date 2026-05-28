@@ -1,6 +1,8 @@
+using Inquiry.Generators.Abstractions;
+
 namespace Inquiry.Generators.Models;
 
-internal sealed class ColumnModel
+internal sealed class ColumnModel : IColumn
 {
     public ColumnModel(
         string propertyName,

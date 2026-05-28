@@ -1,13 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
-    <Description>SQLite provider for Inquiry.</Description>
+    <Description>SQLite provider for Inquiry. Bundles the SQLite-flavoured source generator (Inquiry.Sqlite.Analyzer) so referencing this package alone enables store SQL generation.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Inquiry\Inquiry.csproj" />
+    <!-- Build the analyzer + its shared framework dep so the bin paths below exist before pack. -->
+    <ProjectReference Include="..\Inquiry.Sqlite.Analyzer\Inquiry.Sqlite.Analyzer.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <!-- Both DLLs pack side-by-side under analyzers/dotnet/cs/ so Roslyn loads them into the same
+         AssemblyLoadContext (per-folder isolation). -->
+    <None Include="..\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Sqlite.Analyzer.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="..\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
