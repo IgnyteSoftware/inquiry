@@ -161,6 +161,28 @@ public sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryListAsync<TEntity, TArgs, TMaterializer>(commandText, args, bindParameters, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(commandText, args, bindParameters, materializer, cancellationToken);
+
+    /// <inheritdoc />
     public Task<int> ExecuteAsync(
         string commandText,
         CancellationToken cancellationToken = default)

@@ -35,16 +35,23 @@ public class ProductCrudBenchmarks
     [GlobalCleanup]
     public void GlobalCleanup() => _db.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
-    private const string SelectColumns = "ProductID, ProductName, CategoryID, UnitPrice, UnitsInStock, Discontinued";
+    // Read every column the Inquiry-mapped Product entity reads, so AdoNet/Dapper do equal
+    // per-row work to Inquiry (a fair comparison — not a hand-picked 6-of-10 subset).
+    private const string SelectColumns =
+        "ProductID, ProductName, SupplierID, CategoryID, QuantityPerUnit, UnitPrice, UnitsInStock, UnitsOnOrder, ReorderLevel, Discontinued";
 
     private static Product ReadProduct(System.Data.Common.DbDataReader reader) => new Product
     {
-        ProductID    = reader.GetInt32(0),
-        ProductName  = reader.GetString(1),
-        CategoryID   = reader.IsDBNull(2) ? null : reader.GetInt32(2),
-        UnitPrice    = reader.IsDBNull(3) ? null : reader.GetDecimal(3),
-        UnitsInStock = reader.IsDBNull(4) ? null : reader.GetInt16(4),
-        Discontinued = reader.GetInt32(5) != 0,
+        ProductID       = reader.GetInt32(0),
+        ProductName     = reader.GetString(1),
+        SupplierID      = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+        CategoryID      = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+        QuantityPerUnit = reader.IsDBNull(4) ? null : reader.GetString(4),
+        UnitPrice       = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+        UnitsInStock    = reader.IsDBNull(6) ? null : reader.GetInt16(6),
+        UnitsOnOrder    = reader.IsDBNull(7) ? null : reader.GetInt16(7),
+        ReorderLevel    = reader.IsDBNull(8) ? null : reader.GetInt16(8),
+        Discontinued    = reader.GetInt32(9) != 0,
     };
 
     // ---- SelectAll ----------------------------------------------------------------------

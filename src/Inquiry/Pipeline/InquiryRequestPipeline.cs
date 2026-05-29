@@ -365,6 +365,101 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbCommand = connection.CreateCommand();
+        // Lazy: only allocate the InquiryCommand if interceptors need to observe the command.
+        InquiryCommand? interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+
+        try
+        {
+            dbCommand.CommandText = commandText;
+            bindParameters(dbCommand, args);
+            if (interceptorCommand is not null)
+            {
+                await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+            }
+
+            await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+            var list = new List<T>();
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                list.Add(materializer.Materialize(reader));
+            }
+
+            if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
+            return list;
+        }
+        catch (Exception exception)
+        {
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbCommand = connection.CreateCommand();
+        InquiryCommand? interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+
+        try
+        {
+            dbCommand.CommandText = commandText;
+            bindParameters(dbCommand, args);
+            if (interceptorCommand is not null)
+            {
+                await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+            }
+
+            await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
+                return default;
+            }
+
+            var result = materializer.Materialize(reader);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException("QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.");
+            }
+
+            if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<int> ExecuteAsync(InquiryCommand command, CancellationToken cancellationToken = default)
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
