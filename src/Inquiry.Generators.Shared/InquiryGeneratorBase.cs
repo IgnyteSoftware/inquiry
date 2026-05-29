@@ -75,9 +75,22 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             return false;
         }
 
+        // Syntactic-only first pass (Execute re-validates semantically). Match the base type's
+        // right-most simple name identifier exactly — no whole-type ToString() allocation on this
+        // per-node hot path, and no false match against names that merely contain "InquiryStore"
+        // (e.g. MyInquiryStoreHelper). The real base is InquiryStore<T>, so it is a generic name,
+        // optionally qualified (Inquiry.Stores.InquiryStore<T> / global::...).
         foreach (var baseType in cls.BaseList.Types)
         {
-            if (baseType.Type.ToString().Contains("InquiryStore"))
+            var name = baseType.Type switch
+            {
+                QualifiedNameSyntax qualified => qualified.Right,
+                AliasQualifiedNameSyntax aliasQualified => aliasQualified.Name,
+                SimpleNameSyntax simple => simple,
+                _ => null,
+            };
+
+            if (name is not null && name.Identifier.ValueText == "InquiryStore")
             {
                 return true;
             }
