@@ -67,6 +67,52 @@ public interface IInquiryRequestPipeline
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>;
 
+    /// <summary>
+    /// Buffered query whose parameters are bound by a caller-supplied static delegate, avoiding
+    /// the <c>InquiryCommand</c> / <c>InquiryParameter[]</c> allocations of the boxed path —
+    /// generated stores pass a method group / static lambda (no closure capture).
+    /// </summary>
+    /// <remarks>
+    /// The default implementation routes through <c>QueryListAsync&lt;T, TMaterializer&gt;(InquiryCommand, …)</c>
+    /// via <see cref="InquiryCommand.DbCommandBinder"/>, so custom <c>IInquiryRequestPipeline</c>
+    /// implementations stay source-compatible. The built-in <see cref="InquiryRequestPipeline"/>
+    /// overrides this with an allocation-free fast path.
+    /// </remarks>
+    Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return QueryListAsync<T, TMaterializer>(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
+    }
+
+    /// <summary>
+    /// Single-or-default query whose parameters are bound by a caller-supplied static delegate.
+    /// See <see cref="QueryListAsync{T, TArgs, TMaterializer}(string, TArgs, Action{DbCommand, TArgs}, TMaterializer, CancellationToken)"/>
+    /// for the allocation rationale and source-compatibility note.
+    /// </summary>
+    Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return QuerySingleOrDefaultAsync<T, TMaterializer>(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
+    }
+
     /// <summary>Executes a non-query command and returns the affected row count.</summary>
     Task<int> ExecuteAsync(
         InquiryCommand command,

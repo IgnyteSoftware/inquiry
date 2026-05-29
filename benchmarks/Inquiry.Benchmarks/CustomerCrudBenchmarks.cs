@@ -37,6 +37,26 @@ public class CustomerCrudBenchmarks
     [GlobalCleanup]
     public void GlobalCleanup() => _db.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
+    // Read every column the Inquiry-mapped Customer entity reads, so AdoNet/Dapper do equal
+    // per-row work to Inquiry (a fair comparison — not a hand-picked 5-of-11 subset).
+    private const string SelectColumns =
+        "CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax";
+
+    private static Customer ReadCustomer(System.Data.Common.DbDataReader reader) => new Customer
+    {
+        CustomerID   = reader.GetString(0),
+        CompanyName  = reader.GetString(1),
+        ContactName  = reader.IsDBNull(2) ? null : reader.GetString(2),
+        ContactTitle = reader.IsDBNull(3) ? null : reader.GetString(3),
+        Address      = reader.IsDBNull(4) ? null : reader.GetString(4),
+        City         = reader.IsDBNull(5) ? null : reader.GetString(5),
+        Region       = reader.IsDBNull(6) ? null : reader.GetString(6),
+        PostalCode   = reader.IsDBNull(7) ? null : reader.GetString(7),
+        Country      = reader.IsDBNull(8) ? null : reader.GetString(8),
+        Phone        = reader.IsDBNull(9) ? null : reader.GetString(9),
+        Fax          = reader.IsDBNull(10) ? null : reader.GetString(10),
+    };
+
     // ---- SelectAll ----------------------------------------------------------------------
 
     [BenchmarkCategory("SelectAll"), Benchmark(Baseline = true)]
@@ -45,20 +65,10 @@ public class CustomerCrudBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT CustomerID, CompanyName, ContactName, Country, City FROM Customers;";
+        command.CommandText = $"SELECT {SelectColumns} FROM Customers;";
         var list = new List<Customer>(BenchmarkDatabase.SeedRows);
         await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            list.Add(new Customer
-            {
-                CustomerID  = reader.GetString(0),
-                CompanyName = reader.GetString(1),
-                ContactName = reader.IsDBNull(2) ? null : reader.GetString(2),
-                Country     = reader.IsDBNull(3) ? null : reader.GetString(3),
-                City        = reader.IsDBNull(4) ? null : reader.GetString(4),
-            });
-        }
+        while (await reader.ReadAsync()) list.Add(ReadCustomer(reader));
         return list.Count;
     }
 
@@ -68,7 +78,7 @@ public class CustomerCrudBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         var list = (await connection.QueryAsync<Customer>(
-            "SELECT CustomerID, CompanyName, ContactName, Country, City FROM Customers;")).AsList();
+            $"SELECT {SelectColumns} FROM Customers;")).AsList();
         return list.Count;
     }
 
@@ -95,18 +105,10 @@ public class CustomerCrudBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT CustomerID, CompanyName, ContactName, Country, City FROM Customers WHERE CustomerID = $id;";
+        command.CommandText = $"SELECT {SelectColumns} FROM Customers WHERE CustomerID = $id;";
         command.Parameters.Add("$id", SqliteType.Text).Value = TargetCustomerId;
         await using var reader = await command.ExecuteReaderAsync();
-        if (!await reader.ReadAsync()) return null;
-        return new Customer
-        {
-            CustomerID  = reader.GetString(0),
-            CompanyName = reader.GetString(1),
-            ContactName = reader.IsDBNull(2) ? null : reader.GetString(2),
-            Country     = reader.IsDBNull(3) ? null : reader.GetString(3),
-            City        = reader.IsDBNull(4) ? null : reader.GetString(4),
-        };
+        return await reader.ReadAsync() ? ReadCustomer(reader) : null;
     }
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
@@ -115,7 +117,7 @@ public class CustomerCrudBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         return await connection.QuerySingleOrDefaultAsync<Customer>(
-            "SELECT CustomerID, CompanyName, ContactName, Country, City FROM Customers WHERE CustomerID = @id;",
+            $"SELECT {SelectColumns} FROM Customers WHERE CustomerID = @id;",
             new { id = TargetCustomerId });
     }
 
@@ -138,21 +140,11 @@ public class CustomerCrudBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT CustomerID, CompanyName, ContactName, Country, City FROM Customers WHERE Country = $c;";
+        command.CommandText = $"SELECT {SelectColumns} FROM Customers WHERE Country = $c;";
         command.Parameters.Add("$c", SqliteType.Text).Value = TargetCountry;
         var list = new List<Customer>();
         await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            list.Add(new Customer
-            {
-                CustomerID  = reader.GetString(0),
-                CompanyName = reader.GetString(1),
-                ContactName = reader.IsDBNull(2) ? null : reader.GetString(2),
-                Country     = reader.IsDBNull(3) ? null : reader.GetString(3),
-                City        = reader.IsDBNull(4) ? null : reader.GetString(4),
-            });
-        }
+        while (await reader.ReadAsync()) list.Add(ReadCustomer(reader));
         return list.Count;
     }
 
@@ -162,7 +154,7 @@ public class CustomerCrudBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         var list = (await connection.QueryAsync<Customer>(
-            "SELECT CustomerID, CompanyName, ContactName, Country, City FROM Customers WHERE Country = @c;",
+            $"SELECT {SelectColumns} FROM Customers WHERE Country = @c;",
             new { c = TargetCountry })).AsList();
         return list.Count;
     }

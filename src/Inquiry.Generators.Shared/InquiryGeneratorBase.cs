@@ -38,22 +38,52 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var candidates = context.SyntaxProvider
+        // Entities are found through the attribute index (ForAttributeWithMetadataName) so only
+        // [InquiryTable] classes invoke the transform, rather than every class that happens to have
+        // an attribute or a base list. Stores carry no class-level attribute (they are identified by
+        // the InquiryStore<T> base), so they keep a syntactic predicate — but narrowed to classes
+        // whose base list actually names InquiryStore.
+        var entityClasses = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                KnownSymbols.EntityAttributeNamespace + ".InquiryTableAttribute",
+                predicate: static (node, _) => node is ClassDeclarationSyntax,
+                transform: static (ctx, _) => (ClassDeclarationSyntax)ctx.TargetNode)
+            .Collect();
+
+        var storeClasses = context.SyntaxProvider
             .CreateSyntaxProvider(
-                predicate: static (node, _) => IsCandidateClass(node),
+                predicate: static (node, _) => IsStoreCandidateClass(node),
                 transform: static (ctx, _) => (ClassDeclarationSyntax)ctx.Node)
             .Collect();
 
-        var source = context.CompilationProvider.Combine(candidates);
+        var source = context.CompilationProvider.Combine(entityClasses.Combine(storeClasses));
 
         context.RegisterSourceOutput(source, (spc, pair) =>
-            Execute(spc, pair.Left, pair.Right));
+        {
+            // Merge the two candidate streams (deduped by reference — a class is only ever in both
+            // if it is somehow [InquiryTable] *and* : InquiryStore<T>) and hand the combined set to
+            // the existing semantic pipeline unchanged.
+            var candidates = pair.Right.Left.Concat(pair.Right.Right).Distinct().ToImmutableArray();
+            Execute(spc, pair.Left, candidates);
+        });
     }
 
-    private static bool IsCandidateClass(SyntaxNode node)
+    private static bool IsStoreCandidateClass(SyntaxNode node)
     {
-        return node is ClassDeclarationSyntax cls &&
-            (cls.AttributeLists.Count > 0 || cls.BaseList is not null);
+        if (node is not ClassDeclarationSyntax cls || cls.BaseList is null)
+        {
+            return false;
+        }
+
+        foreach (var baseType in cls.BaseList.Types)
+        {
+            if (baseType.Type.ToString().Contains("InquiryStore"))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool HasStoreCandidate(ImmutableArray<ClassDeclarationSyntax> candidates)
