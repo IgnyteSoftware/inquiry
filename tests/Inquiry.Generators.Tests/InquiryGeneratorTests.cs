@@ -1239,6 +1239,53 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
+    public void EagerRelationToUnmappedChildDoesNotCrashGenerator()
+    {
+        // An [InquiryRelation] can point at a type that is not an [InquiryTable] entity. The eager
+        // emitter must skip such unresolved relations (like the SQL-field emission does) rather than
+        // index the relation→child map and throw KeyNotFoundException, which crashes the generator.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            // Deliberately NOT [InquiryTable]: referenced by a relation but never mapped.
+            public sealed class Unmapped
+            {
+                public int Id { get; set; }
+            }
+
+            [InquiryTable("TParent")]
+            public sealed class Parent
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryForeignKey("ChildId", "Unmapped", "Id")]
+                public int? ChildId { get; set; }
+
+                [InquiryRelation(nameof(ChildId))]
+                public Unmapped? Child { get; set; }
+            }
+
+            public partial class ParentStore : InquiryStore<Parent>
+            {
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Parent> SelectAllEagerAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        // No generator threw: every per-generator result must be exception-free.
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+    }
+
+    [Fact]
     public void IncrementalPipelineCachesWhenUnrelatedSourceChanges()
     {
         // Proves the incremental rewrite delivers real caching: editing an unrelated file must not
