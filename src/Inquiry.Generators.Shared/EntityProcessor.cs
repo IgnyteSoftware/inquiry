@@ -2,93 +2,91 @@ using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
-using GeneratorTypeInfo = Inquiry.Generators.Models.TypeInfo;
+using System.Threading;
 
 namespace Inquiry.Generators;
 
 /// <summary>
-/// Discovers <c>[InquiryTable]</c> entities and emits a materializer per entity.
+/// Discovers <c>[InquiryTable]</c> entities and emits a materializer per entity. Discovery runs in
+/// the syntax-provider transform and produces a value-equatable <see cref="EntityData"/> (carrying
+/// diagnostics as data); emission consumes that data with no symbols, so the output stage caches.
 /// </summary>
 internal static class EntityProcessor
 {
-    public static Dictionary<string, EntityModel> Discover(
-        SourceProductionContext context,
-        Compilation compilation,
-        ImmutableArray<ClassDeclarationSyntax> candidates)
+    /// <summary>Extracts the cacheable model for one <c>[InquiryTable]</c> entity symbol.</summary>
+    public static EntityData Extract(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
     {
-        var entities = new Dictionary<string, EntityModel>();
+        var diagnostics = ImmutableArray.CreateBuilder<DiagnosticData>();
+        var location = entitySymbol.Locations.FirstOrDefault();
 
-        foreach (var classDeclaration in candidates)
+        var tableAttribute = GeneratorHelpers.GetEntityAttribute(entitySymbol, "InquiryTableAttribute");
+        var tableName = (tableAttribute is not null ? GeneratorHelpers.GetConstructorString(tableAttribute) : null) ?? entitySymbol.Name;
+        var schema = tableAttribute is not null ? GeneratorHelpers.GetNamedString(tableAttribute, "Schema") : null;
+
+        var columns = DiscoverColumns(entitySymbol, diagnostics);
+        var relations = DiscoverRelations(entitySymbol, cancellationToken);
+
+        var keyColumns = columns.Where(static c => c.IsKey).ToImmutableArray();
+        var isMapped = true;
+
+        if (keyColumns.Length == 0)
         {
-            context.CancellationToken.ThrowIfCancellationRequested();
-
-            var model = compilation.GetSemanticModel(classDeclaration.SyntaxTree);
-            if (model.GetDeclaredSymbol(classDeclaration, context.CancellationToken) is not INamedTypeSymbol entitySymbol)
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.EntityKeyCount, location, entitySymbol.Name));
+            isMapped = false;
+        }
+        else if (keyColumns.Length > 1)
+        {
+            var generatedKey = keyColumns.FirstOrDefault(static k => k.IsGenerated);
+            if (generatedKey is not null)
             {
-                continue;
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.CompositeKeyContainsGenerated, location, entitySymbol.Name, generatedKey.PropertyName));
+                isMapped = false;
             }
-
-            var tableAttribute = GeneratorHelpers.GetEntityAttribute(entitySymbol, "InquiryTableAttribute");
-            if (tableAttribute is null)
-            {
-                continue;
-            }
-
-            var tableName = GeneratorHelpers.GetConstructorString(tableAttribute) ?? entitySymbol.Name;
-            var schema = GeneratorHelpers.GetNamedString(tableAttribute, "Schema");
-            var columns = DiscoverColumns(context, entitySymbol);
-            var relations = DiscoverRelations(entitySymbol);
-
-            var keyColumns = columns.Where(static c => c.IsKey).ToArray();
-            if (keyColumns.Length == 0)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.EntityKeyCount, classDeclaration.Identifier.GetLocation(), entitySymbol.Name));
-                continue;
-            }
-
-            if (keyColumns.Length > 1)
-            {
-                var generatedKey = keyColumns.FirstOrDefault(static k => k.IsGenerated);
-                if (generatedKey is not null)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.CompositeKeyContainsGenerated, classDeclaration.Identifier.GetLocation(), entitySymbol.Name, generatedKey.PropertyName));
-                    continue;
-                }
-            }
-
-            foreach (var duplicate in columns.GroupBy(static c => c.ColumnName, StringComparer.OrdinalIgnoreCase).Where(static g => g.Count() > 1))
-            {
-                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DuplicateColumn, classDeclaration.Identifier.GetLocation(), entitySymbol.Name, duplicate.Key));
-            }
-
-            var entity = new EntityModel(entitySymbol, tableName, schema, columns, keyColumns, relations);
-            entities[entitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)] = entity;
         }
 
-        return entities;
+        foreach (var duplicate in columns.GroupBy(static c => c.ColumnName, StringComparer.OrdinalIgnoreCase).Where(static g => g.Count() > 1))
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.DuplicateColumn, location, entitySymbol.Name, duplicate.Key));
+        }
+
+        var classMaterializerName = entitySymbol.Name + "InquiryEntityMaterializer";
+        var structMaterializerName = entitySymbol.Name + "InquiryEntityStructMaterializer";
+
+        return new EntityData(
+            FullyQualifiedName: entitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            Name: entitySymbol.Name,
+            Namespace: entitySymbol.ContainingNamespace.IsGlobalNamespace ? null : entitySymbol.ContainingNamespace.ToDisplayString(),
+            TableName: tableName,
+            Schema: schema,
+            Columns: new EquatableArray<ColumnData>(columns.ToImmutableArray()),
+            Keys: new EquatableArray<ColumnData>(keyColumns),
+            Relations: new EquatableArray<RelationData>(relations.ToImmutableArray()),
+            ClassMaterializerName: classMaterializerName,
+            StructMaterializerName: structMaterializerName,
+            ClassMaterializerFullName: GeneratorHelpers.GetGeneratedTypeName(entitySymbol, classMaterializerName),
+            StructMaterializerFullName: GeneratorHelpers.GetGeneratedTypeName(entitySymbol, structMaterializerName),
+            IsMapped: isMapped,
+            Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()));
     }
 
-    public static EntityRegistrationModel EmitMaterializer(SourceProductionContext context, EntityModel entity)
+    public static EntityRegistration EmitMaterializer(SourceProductionContext context, EntityData entity)
     {
-        var materializerName = $"{entity.Symbol.Name}InquiryEntityMaterializer";
-        var structMaterializerName = $"{entity.Symbol.Name}InquiryEntityStructMaterializer";
-        var entityType = entity.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var entityType = entity.FullyQualifiedName;
 
         var source = new StringBuilder();
         source.AppendLine("// <auto-generated />");
         source.AppendLine("#nullable enable");
-        GeneratorHelpers.AppendNamespaceStart(source, entity.Symbol);
+        GeneratorHelpers.AppendNamespaceStart(source, entity.Namespace);
 
         // Class materializer — registered as singleton in DI and used by ad-hoc IInquiry queries
         // that resolve the materializer at runtime.
-        source.AppendLine($"internal sealed class {materializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{entityType}>");
+        source.AppendLine($"internal sealed class {entity.ClassMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{entityType}>");
         source.AppendLine("{");
         source.AppendLine($"    public {entityType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
@@ -101,7 +99,7 @@ internal static class EntityProcessor
         // overloads. The struct has no fields; generated stores pass `default(...)`. The JIT
         // produces a separate specialization per TMaterializer so the read-loop call to
         // Materialize is inlined instead of dispatched through the interface.
-        source.AppendLine($"internal readonly struct {structMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{entityType}>");
+        source.AppendLine($"internal readonly struct {entity.StructMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{entityType}>");
         source.AppendLine("{");
         source.AppendLine($"    public {entityType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
@@ -109,13 +107,13 @@ internal static class EntityProcessor
         source.AppendLine("    }");
         source.AppendLine("}");
 
-        GeneratorHelpers.AppendNamespaceEnd(source, entity.Symbol);
+        GeneratorHelpers.AppendNamespaceEnd(source, entity.Namespace);
 
-        context.AddSource($"{entity.Symbol.Name}.InquiryEntity.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
-        return new EntityRegistrationModel(entity.Symbol, materializerName, structMaterializerName);
+        context.AddSource($"{entity.Name}.InquiryEntity.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        return new EntityRegistration(entityType, entity.ClassMaterializerFullName);
     }
 
-    private static void EmitMaterializeBody(StringBuilder source, EntityModel entity, string entityType, string indent)
+    private static void EmitMaterializeBody(StringBuilder source, EntityData entity, string entityType, string indent)
     {
         source.AppendLine($"{indent}return new {entityType}");
         source.AppendLine($"{indent}{{");
@@ -127,9 +125,9 @@ internal static class EntityProcessor
         source.AppendLine($"{indent}}};");
     }
 
-    private static List<ColumnModel> DiscoverColumns(SourceProductionContext context, INamedTypeSymbol entitySymbol)
+    private static List<ColumnData> DiscoverColumns(INamedTypeSymbol entitySymbol, ImmutableArray<DiagnosticData>.Builder diagnostics)
     {
-        var columns = new List<ColumnModel>();
+        var columns = new List<ColumnData>();
 
         foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
         {
@@ -142,16 +140,16 @@ internal static class EntityProcessor
             }
 
             var columnName = ResolveColumnName(columnAttribute, foreignKeyAttribute, property.Name);
-            var typeInfo = GeneratorTypeInfo.Create(property.Type, property.NullableAnnotation);
+            var typeData = TypeData.Create(property.Type, property.NullableAnnotation);
             var isGenerated = keyAttribute is not null && GeneratorHelpers.GetNamedBool(keyAttribute, "IsGenerated");
             var useDatabaseDefault =
                 columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "UseDatabaseDefault") ||
                 foreignKeyAttribute is not null && GeneratorHelpers.GetNamedBool(foreignKeyAttribute, "UseDatabaseDefault");
-            columns.Add(new ColumnModel(property.Name, columnName, typeInfo, keyAttribute is not null, isGenerated, useDatabaseDefault));
+            columns.Add(new ColumnData(property.Name, columnName, typeData, keyAttribute is not null, isGenerated, useDatabaseDefault));
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
             {
-                context.ReportDiagnostic(Diagnostic.Create(
+                diagnostics.Add(DiagnosticData.Create(
                     InquiryDiagnosticDescriptors.PropertyMustHavePublicSetter,
                     property.Locations.FirstOrDefault(),
                     entitySymbol.Name,
@@ -162,12 +160,14 @@ internal static class EntityProcessor
         return columns;
     }
 
-    private static List<RelationModel> DiscoverRelations(INamedTypeSymbol entitySymbol)
+    private static List<RelationData> DiscoverRelations(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
     {
-        var relations = new List<RelationModel>();
+        var relations = new List<RelationData>();
 
         foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var relationAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryRelationAttribute");
             if (relationAttribute is null)
             {
@@ -186,7 +186,11 @@ internal static class EntityProcessor
                 continue;
             }
 
-            relations.Add(new RelationModel(property.Name, foreignKeyProperty!, childEntitySymbol!, isCollection));
+            relations.Add(new RelationData(
+                property.Name,
+                foreignKeyProperty!,
+                childEntitySymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                isCollection));
         }
 
         return relations;
@@ -247,7 +251,7 @@ internal static class EntityProcessor
         return propertyName;
     }
 
-    private static string ReadExpression(GeneratorTypeInfo type, int index)
+    private static string ReadExpression(TypeData type, int index)
     {
         var nonNullable = type.NonNullableDisplayName;
         var read = type.IsEnum
@@ -261,7 +265,7 @@ internal static class EntityProcessor
             return read;
         }
 
-        if (type.Symbol.IsValueType)
+        if (type.IsValueType)
         {
             return $"reader.IsDBNull({index}) ? ({type.DisplayName})null : {read}";
         }

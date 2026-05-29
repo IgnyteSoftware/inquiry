@@ -1238,6 +1238,209 @@ public sealed class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void EagerRelationToUnmappedChildDoesNotCrashGenerator()
+    {
+        // An [InquiryRelation] can point at a type that is not an [InquiryTable] entity. The eager
+        // emitter must skip such unresolved relations (like the SQL-field emission does) rather than
+        // index the relation→child map and throw KeyNotFoundException, which crashes the generator.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            // Deliberately NOT [InquiryTable]: referenced by a relation but never mapped.
+            public sealed class Unmapped
+            {
+                public int Id { get; set; }
+            }
+
+            [InquiryTable("TParent")]
+            public sealed class Parent
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryForeignKey("ChildId", "Unmapped", "Id")]
+                public int? ChildId { get; set; }
+
+                [InquiryRelation(nameof(ChildId))]
+                public Unmapped? Child { get; set; }
+            }
+
+            public partial class ParentStore : InquiryStore<Parent>
+            {
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Parent> SelectAllEagerAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        // No generator threw: every per-generator result must be exception-free.
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+    }
+
+    [Fact]
+    public void IncrementalPipelineCachesWhenUnrelatedSourceChanges()
+    {
+        // Proves the incremental rewrite delivers real caching: editing an unrelated file must not
+        // re-run the entity/store discovery transforms. That only holds because their outputs are
+        // value-equatable models with no symbols.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Widget> SelectAllAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectOneByKey]
+                public partial Task<Widget?> SelectByKeyAsync(int id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+        var trees = new List<SyntaxTree>
+        {
+            CSharpSyntaxTree.ParseText(source, parseOptions),
+            CSharpSyntaxTree.ParseText("[assembly: global::Inquiry.InquiryDialect(\"Sqlite\")]", parseOptions),
+        };
+        var compilation = CSharpCompilation.Create(
+            "InquiryIncrementalTests",
+            trees,
+            GetReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new ISourceGenerator[] { new global::Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator() },
+            parseOptions: parseOptions,
+            driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true));
+
+        // First run primes the incremental cache.
+        driver = driver.RunGenerators(compilation);
+
+        // Add an unrelated source file (no Inquiry entities or stores) and re-run the same driver.
+        var updated = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            "namespace Other { internal sealed class Unrelated { public int Value { get; set; } } }", parseOptions));
+        driver = driver.RunGenerators(updated);
+
+        var result = driver.GetRunResult().Results[0];
+
+        AssertStepsCached(result, "InquiryEntities");
+        AssertStepsCached(result, "InquiryStores");
+    }
+
+    [Fact]
+    public void ChangedEntityReEmitsDependentStoreWithFreshSql()
+    {
+        // Correctness counterpart to the caching test: when an entity changes, its dependent store
+        // must be re-emitted with fresh SQL (the generator must never serve cached/stale store code
+        // for a changed entity, even though the store's own syntax is unchanged).
+        static string EntitySource(string extraColumn) => $$"""
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            {{extraColumn}}
+            }
+            """;
+
+        const string storeSource = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Widget> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+        var entityV1 = CSharpSyntaxTree.ParseText(EntitySource(string.Empty), parseOptions);
+        var storeTree = CSharpSyntaxTree.ParseText(storeSource, parseOptions);
+        var dialectTree = CSharpSyntaxTree.ParseText("[assembly: global::Inquiry.InquiryDialect(\"Sqlite\")]", parseOptions);
+
+        var compilation = CSharpCompilation.Create(
+            "InquiryReEmitTests",
+            new[] { entityV1, storeTree, dialectTree },
+            GetReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new ISourceGenerator[] { new global::Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator() },
+            parseOptions: parseOptions,
+            driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true));
+
+        driver = driver.RunGenerators(compilation);
+        Assert.DoesNotContain("Extra", GeneratedStoreText(driver));
+
+        // Add a column to the entity (store syntax untouched) and re-run the same driver.
+        var entityV2 = CSharpSyntaxTree.ParseText(
+            EntitySource("    [InquiryColumn]\r\n    public string Extra { get; set; } = string.Empty;"),
+            parseOptions);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(entityV1, entityV2));
+
+        // The store must reflect the new column — proof the changed entity re-emitted the store.
+        Assert.Contains("Extra", GeneratedStoreText(driver));
+    }
+
+    private static string GeneratedStoreText(GeneratorDriver driver)
+    {
+        var store = driver.GetRunResult().Results[0].GeneratedSources
+            .Single(s => s.HintName.EndsWith("WidgetStore.InquiryStore.g.cs", System.StringComparison.Ordinal));
+        return store.SourceText.ToString();
+    }
+
+    private static void AssertStepsCached(GeneratorRunResult result, string trackingName)
+    {
+        Assert.True(result.TrackedSteps.ContainsKey(trackingName), $"Expected a tracked step named '{trackingName}'.");
+        var steps = result.TrackedSteps[trackingName];
+        Assert.NotEmpty(steps);
+        foreach (var step in steps)
+        {
+            foreach (var output in step.Outputs)
+            {
+                Assert.True(
+                    output.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged,
+                    $"Tracked step '{trackingName}' produced reason '{output.Reason}'; expected Cached or Unchanged.");
+            }
+        }
+    }
+
     private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite")
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);

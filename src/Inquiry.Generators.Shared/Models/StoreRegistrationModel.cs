@@ -1,13 +1,7 @@
-using Microsoft.CodeAnalysis;
-
 namespace Inquiry.Generators.Models;
 
-internal sealed class StoreRegistrationModel
-{
-    public StoreRegistrationModel(INamedTypeSymbol storeType)
-    {
-        StoreType = storeType;
-    }
-
-    public INamedTypeSymbol StoreType { get; }
-}
+/// <summary>
+/// DI registration facts for one generated store. Produced during the emit stage and consumed by
+/// <c>RegistrationEmitter</c>.
+/// </summary>
+internal sealed record StoreRegistration(string StoreFullyQualifiedName);
