@@ -8,23 +8,26 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading;
 
 namespace Inquiry.Generators;
 
 /// <summary>
 /// Shared implementation of the Inquiry source generator. Each provider's analyzer assembly ships
 /// a concrete subclass marked with <c>[Generator]</c> that supplies its <see cref="SqlBuilder"/>
-/// via <see cref="CreateSqlBuilder"/> and declares its <see cref="Dialect"/> name. The base handles
-/// candidate discovery, dialect arbitration, materializer emission, and store emission.
+/// via <see cref="CreateSqlBuilder"/> and declares its <see cref="Dialect"/> name.
 /// </summary>
 /// <remarks>
-/// Roslyn loads each provider's analyzer assembly into its own AssemblyLoadContext, so no
-/// in-process state is shared across providers. When a consuming project references multiple
-/// provider packages, every loaded generator runs; each runs the same arbitration and the one
-/// whose <see cref="Dialect"/> matches the resolved attribute does the emission. The remaining
-/// generators stay silent. If the dialect is ambiguous, only the generator whose dialect sorts
-/// first ordinally emits materializers and the INQ014 diagnostic, so multi-provider builds
-/// produce one collision-free output rather than N.
+/// The pipeline is fully incremental: entities and stores are projected into value-equatable models
+/// in their syntax-provider transforms, dialect ownership is projected from the compilation into a
+/// small equatable value, and only those models flow into the output stage. An edit that does not
+/// change any entity, store, or the dialect set re-runs nothing downstream.
+///
+/// Roslyn loads each provider's analyzer assembly into its own AssemblyLoadContext, so no in-process
+/// state is shared across providers. When a consuming project references multiple provider packages
+/// every loaded generator runs; each runs the same arbitration and the one whose <see cref="Dialect"/>
+/// matches the resolved attribute does the emission. If the dialect is ambiguous, only the generator
+/// whose dialect sorts first ordinally emits materializers and the INQ014 diagnostic.
 /// </remarks>
 public abstract class InquiryGeneratorBase : IIncrementalGenerator
 {
@@ -38,35 +41,43 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Entities are found through the attribute index (ForAttributeWithMetadataName) so only
-        // [InquiryTable] classes invoke the transform, rather than every class that happens to have
-        // an attribute or a base list. Stores carry no class-level attribute (they are identified by
-        // the InquiryStore<T> base), so they keep a syntactic predicate — but narrowed to classes
-        // whose base list actually names InquiryStore.
-        var entityClasses = context.SyntaxProvider
+        // Entities via the attribute index; each [InquiryTable] class is projected into an
+        // equatable EntityData (diagnostics carried as data) so the transform caches.
+        var entities = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryTableAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax,
-                transform: static (ctx, _) => (ClassDeclarationSyntax)ctx.TargetNode)
+                transform: static (ctx, ct) => EntityProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
+            .WithTrackingName(EntitiesTrackingName)
             .Collect();
 
-        var storeClasses = context.SyntaxProvider
+        // Stores carry no class-level attribute (identified by the InquiryStore<T> base), so they use
+        // a narrow syntactic predicate; non-stores transform to null and are filtered out.
+        var stores = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => IsStoreCandidateClass(node),
-                transform: static (ctx, _) => (ClassDeclarationSyntax)ctx.Node)
+                transform: static (ctx, ct) => ExtractStore(ctx, ct))
+            .Where(static store => store is not null)
+            .Select(static (store, _) => store!)
+            .WithTrackingName(StoresTrackingName)
             .Collect();
 
-        var source = context.CompilationProvider.Combine(entityClasses.Combine(storeClasses));
+        // Dialect ownership depends on the whole compilation (assembly attributes + referenced
+        // assemblies), so it re-projects on every edit — but into a tiny equatable value, so the
+        // output stage still caches whenever ownership is unchanged.
+        var ownership = context.CompilationProvider
+            .Select((compilation, _) => ResolveOwnership(compilation))
+            .WithTrackingName(OwnershipTrackingName);
 
-        context.RegisterSourceOutput(source, (spc, pair) =>
-        {
-            // Merge the two candidate streams (deduped by reference — a class is only ever in both
-            // if it is somehow [InquiryTable] *and* : InquiryStore<T>) and hand the combined set to
-            // the existing semantic pipeline unchanged.
-            var candidates = pair.Right.Left.Concat(pair.Right.Right).Distinct().ToImmutableArray();
-            Execute(spc, pair.Left, candidates);
-        });
+        var combined = entities.Combine(stores).Combine(ownership);
+
+        context.RegisterSourceOutput(combined, (spc, data) =>
+            Execute(spc, data.Left.Left, data.Left.Right, data.Right));
     }
+
+    internal const string EntitiesTrackingName = "InquiryEntities";
+    internal const string StoresTrackingName = "InquiryStores";
+    internal const string OwnershipTrackingName = "InquiryDialectOwnership";
 
     private static bool IsStoreCandidateClass(SyntaxNode node)
     {
@@ -75,11 +86,9 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             return false;
         }
 
-        // Syntactic-only first pass (Execute re-validates semantically). Match the base type's
+        // Syntactic-only first pass (Extract re-validates semantically). Match the base type's
         // right-most simple name identifier exactly — no whole-type ToString() allocation on this
-        // per-node hot path, and no false match against names that merely contain "InquiryStore"
-        // (e.g. MyInquiryStoreHelper). The real base is InquiryStore<T>, so it is a generic name,
-        // optionally qualified (Inquiry.Stores.InquiryStore<T> / global::...).
+        // per-node hot path, and no false match against names that merely contain "InquiryStore".
         foreach (var baseType in cls.BaseList.Types)
         {
             var name = baseType.Type switch
@@ -99,53 +108,60 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         return false;
     }
 
-    private static bool HasStoreCandidate(ImmutableArray<ClassDeclarationSyntax> candidates)
+    private static StoreData? ExtractStore(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
-        // Cheap syntactic check: a store inherits from InquiryStore<T>. We don't need semantic
-        // accuracy here — false positives are fine since the worst case is we proceed and find
-        // nothing to emit.
-        foreach (var candidate in candidates)
+        if (context.SemanticModel.GetDeclaredSymbol((ClassDeclarationSyntax)context.Node, cancellationToken) is not INamedTypeSymbol storeSymbol)
         {
-            if (candidate.BaseList is null) continue;
-            foreach (var baseType in candidate.BaseList.Types)
-            {
-                var text = baseType.Type.ToString();
-                if (text.Contains("InquiryStore")) return true;
-            }
+            return null;
         }
-        return false;
+
+        return StoreProcessor.Extract(storeSymbol, cancellationToken);
     }
 
-    private void Execute(SourceProductionContext context, Compilation compilation, ImmutableArray<ClassDeclarationSyntax> candidates)
+    private void Execute(
+        SourceProductionContext context,
+        ImmutableArray<EntityData> entities,
+        ImmutableArray<StoreData> stores,
+        DialectOwnership ownership)
     {
-        var entities = EntityProcessor.Discover(context, compilation, candidates);
+        // Entity diagnostics are surfaced regardless of dialect ownership (matching the previous
+        // behavior, where entity discovery ran before arbitration).
+        foreach (var entity in entities)
+        {
+            foreach (var diagnostic in entity.Diagnostics)
+            {
+                context.ReportDiagnostic(diagnostic.ToDiagnostic());
+            }
+        }
 
-        // Nothing in this compilation needs codegen — skip everything (including dialect arbitration)
-        // so consumer projects that just reference the runtime don't get spurious diagnostics about
-        // referenced-package dialect collisions. We still proceed if there are candidate store
-        // classes even when no entity is mapped (those scenarios need their own diagnostics, e.g.
-        // INQ008 for an unmapped entity).
-        if (entities.Count == 0 && !HasStoreCandidate(candidates))
+        var mappedEntities = new Dictionary<string, EntityData>();
+        foreach (var entity in entities)
+        {
+            if (entity.IsMapped)
+            {
+                mappedEntities[entity.FullyQualifiedName] = entity;
+            }
+        }
+
+        // Nothing in this compilation needs codegen — skip arbitration so consumer projects that
+        // only reference the runtime don't get spurious referenced-package dialect-collision noise.
+        if (mappedEntities.Count == 0 && stores.IsEmpty)
         {
             return;
         }
 
-        var ownership = ResolveOwnership(compilation);
-        if (ownership.Kind == DialectOwnershipKind.NotMine ||
-            ownership.Kind == DialectOwnershipKind.AmbiguousFollower)
+        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower)
         {
             return;
         }
 
-        // From here we are either Owned (this dialect matches) or AmbiguousLeader (responsible for
-        // the once-per-compilation INQ014 even though we won't emit store SQL).
-        var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistrationModel>();
-        foreach (var entity in entities.Values)
+        var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistration>();
+        foreach (var entity in mappedEntities.Values)
         {
             entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity));
         }
 
-        var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistrationModel>();
+        var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
 
         if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
         {
@@ -157,59 +173,20 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         else
         {
             var sqlBuilder = CreateSqlBuilder();
-            foreach (var classDeclaration in candidates)
+            foreach (var store in stores)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
 
-                if (compilation.GetSemanticModel(classDeclaration.SyntaxTree).GetDeclaredSymbol(classDeclaration, context.CancellationToken) is not INamedTypeSymbol storeSymbol)
+                foreach (var diagnostic in store.Diagnostics)
                 {
-                    continue;
+                    context.ReportDiagnostic(diagnostic.ToDiagnostic());
                 }
 
-                if (!GeneratorHelpers.TryGetStoreEntityType(storeSymbol, out var entityType))
+                var registration = StoreProcessor.Emit(context, store, mappedEntities, sqlBuilder);
+                if (registration is not null)
                 {
-                    continue;
+                    storeRegistrations.Add(registration);
                 }
-
-                if (!classDeclaration.Modifiers.Any(SyntaxKind.PartialKeyword))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoreMustBePartial, classDeclaration.Identifier.GetLocation(), storeSymbol.Name));
-                    continue;
-                }
-
-                if (storeSymbol.ContainingType is not null)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InquiryDiagnosticDescriptors.StoreCannotBeNested,
-                        classDeclaration.Identifier.GetLocation(),
-                        storeSymbol.Name,
-                        storeSymbol.ContainingType.ToDisplayString()));
-                    continue;
-                }
-
-                if (storeSymbol.IsAbstract)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InquiryDiagnosticDescriptors.StoreCannotBeAbstract,
-                        classDeclaration.Identifier.GetLocation(),
-                        storeSymbol.Name));
-                    continue;
-                }
-
-                var entityKey = entityType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                if (!entities.TryGetValue(entityKey, out var entity))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoreEntityNotMapped, classDeclaration.Identifier.GetLocation(), storeSymbol.Name, entityType.ToDisplayString()));
-                    continue;
-                }
-
-                var methods = StoreProcessor.Discover(context, storeSymbol, entity);
-                if (methods.Length == 0)
-                {
-                    continue;
-                }
-
-                storeRegistrations.Add(StoreProcessor.Emit(context, storeSymbol, entity, methods, entities, sqlBuilder));
             }
         }
 
@@ -258,10 +235,9 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     {
         var ordered = dialects.OrderBy(d => d, System.StringComparer.Ordinal).ToArray();
         var joined = string.Join(", ", ordered);
-        // Only the alphabetically-first provider in the ambiguous set is responsible for
-        // diagnostics and materializer emission, so multi-provider builds produce one diagnostic
-        // (not N) and one set of materializer files (not N colliding copies). If our dialect
-        // isn't in the set at all, stay silent.
+        // Only the alphabetically-first provider in the ambiguous set is responsible for diagnostics
+        // and materializer emission, so multi-provider builds produce one diagnostic (not N) and one
+        // set of materializer files (not N colliding copies). If our dialect isn't in the set, stay silent.
         var kind = ordered.Contains(Dialect) && Dialect == ordered[0]
             ? DialectOwnershipKind.AmbiguousLeader
             : DialectOwnershipKind.AmbiguousFollower;
@@ -288,15 +264,11 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     private enum DialectOwnershipKind { Owned, NotMine, AmbiguousLeader, AmbiguousFollower }
 
-    private readonly struct DialectOwnership
+    private readonly record struct DialectOwnership(DialectOwnershipKind Kind, string AmbiguousDialects)
     {
-        public DialectOwnership(DialectOwnershipKind kind, string ambiguousDialects = "")
+        public DialectOwnership(DialectOwnershipKind kind)
+            : this(kind, string.Empty)
         {
-            Kind = kind;
-            AmbiguousDialects = ambiguousDialects;
         }
-
-        public DialectOwnershipKind Kind { get; }
-        public string AmbiguousDialects { get; }
     }
 }

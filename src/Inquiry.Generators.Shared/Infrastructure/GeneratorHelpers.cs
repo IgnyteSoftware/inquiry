@@ -1,6 +1,5 @@
 using Microsoft.CodeAnalysis;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace Inquiry.Generators.Infrastructure;
@@ -119,24 +118,6 @@ internal static class GeneratorHelpers
         return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Threading.CancellationToken";
     }
 
-    public static string GetParameterDeclaration(IMethodSymbol method, bool enumeratorCancellation = false)
-    {
-        // Defaults live on the user's partial declaration; the generator's implementation half
-        // must not repeat them or CS1066 fires.
-        var parts = new List<string>();
-        for (var i = 0; i < method.Parameters.Length; i++)
-        {
-            var parameter = method.Parameters[i];
-            var isCt = i == method.Parameters.Length - 1 && IsCancellationToken(parameter.Type);
-            var prefix = enumeratorCancellation && isCt
-                ? "[global::System.Runtime.CompilerServices.EnumeratorCancellation] "
-                : string.Empty;
-            parts.Add($"{prefix}{parameter.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat)} {parameter.Name}");
-        }
-
-        return string.Join(", ", parts);
-    }
-
     public static string Escape(string value)
     {
         return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
@@ -162,18 +143,20 @@ internal static class GeneratorHelpers
         };
     }
 
-    public static void AppendNamespaceStart(System.Text.StringBuilder source, INamedTypeSymbol symbol)
+    /// <summary>Namespace-open for a pre-extracted namespace string (null = global namespace).</summary>
+    public static void AppendNamespaceStart(System.Text.StringBuilder source, string? @namespace)
     {
-        if (!symbol.ContainingNamespace.IsGlobalNamespace)
+        if (@namespace is not null)
         {
-            source.AppendLine($"namespace {symbol.ContainingNamespace.ToDisplayString()}");
+            source.AppendLine($"namespace {@namespace}");
             source.AppendLine("{");
         }
     }
 
-    public static void AppendNamespaceEnd(System.Text.StringBuilder source, INamedTypeSymbol symbol)
+    /// <summary>Namespace-close for a pre-extracted namespace string (null = global namespace).</summary>
+    public static void AppendNamespaceEnd(System.Text.StringBuilder source, string? @namespace)
     {
-        if (!symbol.ContainingNamespace.IsGlobalNamespace)
+        if (@namespace is not null)
         {
             source.AppendLine("}");
         }
@@ -188,14 +171,6 @@ internal static class GeneratorHelpers
 
         return "global::" + containingType.ContainingNamespace.ToDisplayString() + "." + generatedTypeName;
     }
-
-    /// <summary>
-    /// Returns the fully-qualified type name of the struct materializer emitted alongside the
-    /// class materializer in <c>EntityProcessor.EmitMaterializer</c>. The struct lives in the
-    /// same namespace as the entity, so this is just <c>entityType.Namespace + ".{Name}InquiryEntityStructMaterializer"</c>.
-    /// </summary>
-    public static string GetStructMaterializerFullName(INamedTypeSymbol entitySymbol)
-        => GetGeneratedTypeName(entitySymbol, entitySymbol.Name + "InquiryEntityStructMaterializer");
 
     private static string StripGlobalPrefix(string displayName)
     {

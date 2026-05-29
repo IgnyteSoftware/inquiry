@@ -1238,6 +1238,89 @@ public sealed class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void IncrementalPipelineCachesWhenUnrelatedSourceChanges()
+    {
+        // Proves the incremental rewrite delivers real caching: editing an unrelated file must not
+        // re-run the entity/store discovery transforms. That only holds because their outputs are
+        // value-equatable models with no symbols.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Widget> SelectAllAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectOneByKey]
+                public partial Task<Widget?> SelectByKeyAsync(int id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+        var trees = new List<SyntaxTree>
+        {
+            CSharpSyntaxTree.ParseText(source, parseOptions),
+            CSharpSyntaxTree.ParseText("[assembly: global::Inquiry.InquiryDialect(\"Sqlite\")]", parseOptions),
+        };
+        var compilation = CSharpCompilation.Create(
+            "InquiryIncrementalTests",
+            trees,
+            GetReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new ISourceGenerator[] { new global::Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator() },
+            parseOptions: parseOptions,
+            driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true));
+
+        // First run primes the incremental cache.
+        driver = driver.RunGenerators(compilation);
+
+        // Add an unrelated source file (no Inquiry entities or stores) and re-run the same driver.
+        var updated = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            "namespace Other { internal sealed class Unrelated { public int Value { get; set; } } }", parseOptions));
+        driver = driver.RunGenerators(updated);
+
+        var result = driver.GetRunResult().Results[0];
+
+        AssertStepsCached(result, "InquiryEntities");
+        AssertStepsCached(result, "InquiryStores");
+    }
+
+    private static void AssertStepsCached(GeneratorRunResult result, string trackingName)
+    {
+        Assert.True(result.TrackedSteps.ContainsKey(trackingName), $"Expected a tracked step named '{trackingName}'.");
+        var steps = result.TrackedSteps[trackingName];
+        Assert.NotEmpty(steps);
+        foreach (var step in steps)
+        {
+            foreach (var output in step.Outputs)
+            {
+                Assert.True(
+                    output.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged,
+                    $"Tracked step '{trackingName}' produced reason '{output.Reason}'; expected Cached or Unchanged.");
+            }
+        }
+    }
+
     private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite")
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
