@@ -85,14 +85,28 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("private const string _sqlDeleteByKey = \"DELETE FROM \\\"TOrganization\\\" WHERE \\\"Key\\\" = @Key\";", generatedText);
         Assert.Contains("private const string _sqlSelectBy_IsActive = \"SELECT \\\"Key\\\", \\\"Name\\\", \\\"IsActive\\\" FROM \\\"TOrganization\\\" WHERE \\\"IsActive\\\" = @IsActive\";", generatedText);
 
-        // Read paths now dispatch through the struct-materializer overloads so the JIT can
-        // specialize per concrete TMaterializer and inline the Materialize call.
+        // Read paths dispatch through the struct-materializer overloads so the JIT can specialize
+        // per concrete TMaterializer and inline the Materialize call. Streaming SelectAll /
+        // SelectAllByField (IAsyncEnumerable) use the 2-arg struct QueryAsync overload.
         Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>", generatedText);
-        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>", generatedText);
+
+        // SelectByKey binds the key via the allocation-free static-delegate fast path: a 3-arg
+        // QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer> with an inline static binder —
+        // no InquiryParameter[] / InquiryCommand allocation per call.
+        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::System.Guid, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.Contains("static (_cmd, _key) =>", generatedText);
+        Assert.Contains("_p0.ParameterName = \"@Key\";", generatedText);
+
+        // Returning InsertReturning binds the whole entity via the same fast path (TArgs = entity).
+        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.Contains("static (_cmd, _e) =>", generatedText);
+
+        // Non-returning Insert/Update/Delete use the allocation-free ExecuteAsync<TArgs> fast path.
         Assert.Contains("Inquiry.ExecuteAsync", generatedText);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Key\", key)", generatedText);
+
+        // Streaming SelectAllByField (IAsyncEnumerable, no buffered list) keeps the InquiryParameter[]
+        // path — there is no fast streaming overload.
         Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@IsActive\", isActive)", generatedText);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Key\", organization.Key)", generatedText);
         Assert.DoesNotContain("InquirySqlDialect", generatedText);
         Assert.DoesNotContain("CreateContext", generatedText);
         Assert.DoesNotContain("BuildSelectAllSql", generatedText);
@@ -493,6 +507,78 @@ public sealed class InquiryGeneratorTests
         Assert.Contains(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void EagerLoadGroupsByTypedKeyNotBoxedObject()
+    {
+        // The eager loader joins parents and children in memory via dictionaries. Those dictionaries
+        // must be keyed by the FK/key's non-nullable type (here int), not object — otherwise every
+        // value-type FK is boxed twice per row (once on insert, once on lookup).
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Categories")]
+            public sealed class Category
+            {
+                [InquiryKey("CategoryID", IsGenerated = true)]
+                public int? CategoryID { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            [InquiryTable("Products")]
+            public sealed class Product
+            {
+                [InquiryKey("ProductID", IsGenerated = true)]
+                public int? ProductID { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+
+                [InquiryForeignKey("CategoryID", "Categories", "CategoryID")]
+                public int? CategoryID { get; set; }
+
+                [InquiryRelation(nameof(CategoryID))]
+                public Category? Category { get; set; }
+            }
+
+            public partial class ProductStore : InquiryStore<Product>
+            {
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Product> SelectAllWithCategoryAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        // The generator itself runs clean. We intentionally do NOT assert the *output* compiles in
+        // this minimal harness: the eager loader emits `IAsyncEnumerable<T>.ConfigureAwait(false)`,
+        // whose extension only resolves with an implicit/global `using System.Threading.Tasks` that
+        // real consumer projects (and Inquiry.Sqlite.Tests) have but this bare harness does not.
+        // End-to-end compilation + behavior of the eager path is covered by Inquiry.Sqlite.Tests
+        // (EagerLoadingIntegrationTests) and the full solution build.
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("ProductStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // The many-to-one join dictionary exists, is NOT keyed by object, and the value-type FK is
+        // unwrapped with .Value instead of boxed via an (object) cast.
+        Assert.Contains("_parents_Category", generatedText);
+        Assert.Contains("_entity.CategoryID.Value", generatedText);
+        Assert.DoesNotContain("Dictionary<object", generatedText);
+        Assert.DoesNotContain("(object)", generatedText);
     }
 
     [Fact]

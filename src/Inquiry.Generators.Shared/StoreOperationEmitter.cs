@@ -189,12 +189,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectOneByKey:
                 AppendHeader(source, symbol, parameters, isAsync: true);
-                source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
-                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                source.AppendLine("                _sqlSelectByKey,");
-                AppendPositionalParameters(source, entity.Keys, symbol.Parameters, indent: "                ");
-                source.AppendLine("            default,");
-                source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                EmitFastQuerySingleByKeys(source, entityType, structMat, "_sqlSelectByKey", entity.Keys, symbol.Parameters, cancellation, indent: "        ");
                 source.AppendLine("    }");
                 break;
 
@@ -204,14 +199,21 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectAllByField:
                 AppendHeader(source, symbol, parameters, isAsync: false);
-                source.AppendLine(method.ReturnsList
-                    ? $"        return Inquiry.QueryListAsync<{entityType}, {structMat}>("
-                    : $"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
-                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                source.AppendLine($"                _sqlSelectBy_{BuildFieldSuffix(method.FieldColumns)},");
-                AppendPositionalParameters(source, method.FieldColumns, symbol.Parameters, indent: "                ");
-                source.AppendLine("            default,");
-                source.AppendLine($"            {cancellation});");
+                if (method.ReturnsList)
+                {
+                    // Buffered: allocation-free fast path (static binder, no InquiryParameter[]).
+                    EmitFastQueryListByFields(source, symbol, method.FieldColumns, entityType, structMat, cancellation, indent: "        ");
+                }
+                else
+                {
+                    // Streaming IAsyncEnumerable: no fast streaming overload, keep the InquiryParameter[] path.
+                    source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
+                    source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+                    source.AppendLine($"                _sqlSelectBy_{BuildFieldSuffix(method.FieldColumns)},");
+                    AppendPositionalParameters(source, method.FieldColumns, symbol.Parameters, indent: "                ");
+                    source.AppendLine("            default,");
+                    source.AppendLine($"            {cancellation});");
+                }
                 source.AppendLine("    }");
                 break;
 
@@ -219,10 +221,7 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, symbol, parameters, isAsync: false);
                 if (method.ReturnsEntity)
                 {
-                    source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
-                    AppendMutationCommand(source, "_sqlInsertReturning", entity, firstParameter, indent: "            ");
-                    source.AppendLine("            default,");
-                    source.AppendLine($"            {cancellation});");
+                    EmitFastQuerySingleFromEntity(source, "_sqlInsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: false, isAwait: false);
                 }
                 else
                 {
@@ -235,10 +234,7 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, symbol, parameters, isAsync: true);
                 if (method.ReturnsEntity)
                 {
-                    source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
-                    AppendMutationCommand(source, "_sqlUpdateReturning", entity, firstParameter, indent: "            ", includeKey: true);
-                    source.AppendLine("            default,");
-                    source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                    EmitFastQuerySingleFromEntity(source, "_sqlUpdateReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: true);
                 }
                 else
                 {
@@ -255,18 +251,12 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"        if ({firstParameter}.{entity.Key.PropertyName} is null)");
                         source.AppendLine("        {");
-                        source.AppendLine($"            return Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
-                        AppendMutationCommand(source, "_sqlInsertReturning", entity, firstParameter, indent: "                ");
-                        source.AppendLine("                default,");
-                        source.AppendLine($"                {cancellation});");
+                        EmitFastQuerySingleFromEntity(source, "_sqlInsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "            ", includeKey: false, isAwait: false);
                         source.AppendLine("        }");
                         source.AppendLine();
                     }
 
-                    source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
-                    AppendMutationCommand(source, "_sqlUpsertReturning", entity, firstParameter, indent: "            ", includeKey: true);
-                    source.AppendLine("            default,");
-                    source.AppendLine($"            {cancellation});");
+                    EmitFastQuerySingleFromEntity(source, "_sqlUpsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: false);
                 }
                 else
                 {
@@ -302,7 +292,7 @@ internal static class StoreOperationEmitter
     /// Emits a call to the allocation-free <c>Inquiry.ExecuteAsync&lt;TArgs&gt;</c> overload, passing
     /// the entity as <c>TArgs</c> and a <c>static</c> lambda that binds parameters directly into the
     /// <c>DbCommand</c>. Skips the per-call <c>InquiryParameter[]</c> + <c>InquiryCommand</c>
-    /// allocations the old <see cref="AppendMutationCommand"/> path required.
+    /// allocations the boxed command path required.
     /// </summary>
     private static void EmitFastExecuteFromEntity(
         StringBuilder source,
@@ -419,38 +409,141 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false) > 0;");
     }
 
-    private static void AppendMutationCommand(
+    /// <summary>
+    /// Emits a <c>static (_cmd, &lt;lambdaParam&gt;) =&gt; { … }</c> binder that writes one
+    /// <c>DbParameter</c> per column straight into the <c>DbCommand</c>. <paramref name="accessor"/>
+    /// yields the value expression for column <c>i</c> (e.g. <c>_e.Name</c>, <c>_key</c>,
+    /// <c>_args.Item1</c>). Shared by the allocation-free read / returning-mutation query emitters.
+    /// </summary>
+    private static void AppendBinderLambda(
+        StringBuilder source,
+        string lambdaParam,
+        IReadOnlyList<ColumnModel> columns,
+        Func<int, string> accessor,
+        string indent)
+    {
+        source.AppendLine($"{indent}static (_cmd, {lambdaParam}) =>");
+        source.AppendLine($"{indent}{{");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
+            source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
+            source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i))};");
+            source.AppendLine($"{indent}    _cmd.Parameters.Add(_p{i});");
+        }
+        source.AppendLine($"{indent}}},");
+    }
+
+    /// <summary>
+    /// Emits a <c>QuerySingleOrDefaultAsync</c> call for <c>[InquirySelectOneByKey]</c> that binds the
+    /// key value(s) via a static delegate — no <c>InquiryParameter[]</c> / <c>InquiryCommand</c>.
+    /// Single key: <c>TArgs</c> is the key parameter's type. Composite key: <c>TArgs</c> is a
+    /// <c>ValueTuple</c> of the key parameter types.
+    /// </summary>
+    private static void EmitFastQuerySingleByKeys(
+        StringBuilder source,
+        string entityType,
+        string structMat,
+        string sqlField,
+        IReadOnlyList<ColumnModel> keyColumns,
+        System.Collections.Immutable.ImmutableArray<IParameterSymbol> methodParameters,
+        string cancellation,
+        string indent)
+    {
+        if (keyColumns.Count == 1)
+        {
+            var keyParam = methodParameters[0];
+            var argsType = keyParam.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
+            source.AppendLine($"{indent}return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {argsType}, {structMat}>(");
+            source.AppendLine($"{indent}    {sqlField},");
+            source.AppendLine($"{indent}    {keyParam.Name},");
+            AppendBinderLambda(source, "_key", keyColumns, _ => "_key", indent + "    ");
+            source.AppendLine($"{indent}    default,");
+            source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
+            return;
+        }
+
+        var tupleArgs = string.Join(", ", methodParameters.Take(keyColumns.Count).Select(p => p.Name));
+        var tupleType = "(" + string.Join(", ", methodParameters.Take(keyColumns.Count)
+            .Select(p => p.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat))) + ")";
+        source.AppendLine($"{indent}return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {tupleType}, {structMat}>(");
+        source.AppendLine($"{indent}    {sqlField},");
+        source.AppendLine($"{indent}    ({tupleArgs}),");
+        AppendBinderLambda(source, "_keys", keyColumns, i => $"_keys.Item{i + 1}", indent + "    ");
+        source.AppendLine($"{indent}    default,");
+        source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
+    }
+
+    /// <summary>
+    /// Emits a buffered <c>QueryListAsync</c> call for <c>[InquirySelectAllByField]</c> returning
+    /// <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c>, binding the filter value(s) via a static delegate.
+    /// Single filter column: <c>TArgs</c> is the parameter's type; multi-column: a <c>ValueTuple</c>.
+    /// </summary>
+    private static void EmitFastQueryListByFields(
+        StringBuilder source,
+        IMethodSymbol symbol,
+        IReadOnlyList<ColumnModel> fieldColumns,
+        string entityType,
+        string structMat,
+        string cancellation,
+        string indent)
+    {
+        var sqlField = "_sqlSelectBy_" + BuildFieldSuffix(fieldColumns);
+        if (fieldColumns.Count == 1)
+        {
+            var fieldParam = symbol.Parameters[0];
+            var argsType = fieldParam.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
+            source.AppendLine($"{indent}return Inquiry.QueryListAsync<{entityType}, {argsType}, {structMat}>(");
+            source.AppendLine($"{indent}    {sqlField},");
+            source.AppendLine($"{indent}    {fieldParam.Name},");
+            AppendBinderLambda(source, "_arg", fieldColumns, _ => "_arg", indent + "    ");
+            source.AppendLine($"{indent}    default,");
+            source.AppendLine($"{indent}    {cancellation});");
+            return;
+        }
+
+        var tupleArgs = string.Join(", ", symbol.Parameters.Take(fieldColumns.Count).Select(p => p.Name));
+        var tupleType = "(" + string.Join(", ", symbol.Parameters.Take(fieldColumns.Count)
+            .Select(p => p.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat))) + ")";
+        source.AppendLine($"{indent}return Inquiry.QueryListAsync<{entityType}, {tupleType}, {structMat}>(");
+        source.AppendLine($"{indent}    {sqlField},");
+        source.AppendLine($"{indent}    ({tupleArgs}),");
+        AppendBinderLambda(source, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "    ");
+        source.AppendLine($"{indent}    default,");
+        source.AppendLine($"{indent}    {cancellation});");
+    }
+
+    /// <summary>
+    /// Emits a <c>QuerySingleOrDefaultAsync</c> call for a returning mutation
+    /// (<c>[InquiryInsert/Update/Upsert(ReturnEntity = true)]</c>) that binds the entity's columns
+    /// via a static delegate — replacing the <c>InquiryParameter[]</c> + <c>InquiryCommand</c> path.
+    /// </summary>
+    private static void EmitFastQuerySingleFromEntity(
         StringBuilder source,
         string sqlField,
         EntityModel entity,
         string entityParameter,
+        string entityType,
+        string structMat,
+        string cancellation,
         string indent,
-        bool includeKey = false)
+        bool includeKey,
+        bool isAwait)
     {
-        source.AppendLine($"{indent}new global::Inquiry.Commands.InquiryCommand(");
-        source.AppendLine($"{indent}    {sqlField},");
-
-        var parameterColumns = entity.Columns
+        var columns = entity.Columns
             .Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault)
             .ToArray();
 
-        if (parameterColumns.Length == 0)
-        {
-            source.AppendLine($"{indent}    global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()),");
-            return;
-        }
+        var awaitPrefix = isAwait ? "await " : string.Empty;
+        var returnSuffix = isAwait ? ".ConfigureAwait(false)" : string.Empty;
 
-        source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter[]");
-        source.AppendLine($"{indent}    {{");
-
-        foreach (var column in parameterColumns)
-        {
-            // '@'-prefixed names let InquiryParameterBinder.NormalizeName take its no-allocation
-            // fast path. Hand-written callers can still pass bare names.
-            source.AppendLine($"{indent}        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(column.PropertyName)}\", {entityParameter}.{column.PropertyName}),");
-        }
-
-        source.AppendLine($"{indent}    }}),");
+        source.AppendLine($"{indent}return {awaitPrefix}Inquiry.QuerySingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
+        source.AppendLine($"{indent}    {sqlField},");
+        source.AppendLine($"{indent}    {entityParameter},");
+        AppendBinderLambda(source, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
+        source.AppendLine($"{indent}    default,");
+        source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
     }
 
     private static void EmitStoredProcedure(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string structMat, string cancellation, string procedureName, EntityModel entity)
@@ -599,6 +692,18 @@ internal static class StoreOperationEmitter
         return string.Join("_", columns.Select(c => c.PropertyName));
     }
 
+    /// <summary>
+    /// Produces an expression of <paramref name="type"/>'s NON-nullable form for use as a typed
+    /// dictionary key (avoiding the <c>object</c>-boxing the eager loader previously used).
+    /// Callers must have already excluded nulls (via <c>is null ⇒ continue</c> or a ternary guard):
+    /// nullable value types unwrap with <c>.Value</c>, nullable reference types use <c>!</c>.
+    /// </summary>
+    private static string NonNullableValueExpression(Models.TypeInfo type, string accessor)
+    {
+        if (!type.IsNullable) return accessor;
+        return type.Symbol.IsValueType ? $"{accessor}.Value" : $"{accessor}!";
+    }
+
     private static void EmitSelectAllEager(StringBuilder source, IMethodSymbol symbol, string parameters, string entityType, string cancellation, EntityModel entity, Dictionary<string, EntityModel> relationChildEntities)
     {
         var parametersWithAttr = GeneratorHelpers.GetParameterDeclaration(symbol, enumeratorCancellation: true);
@@ -624,21 +729,24 @@ internal static class StoreOperationEmitter
                 // children logically belong to no parent and must not bucket together.
                 var childFkColumn = relationChildEntities[relation.PropertyName].Columns.FirstOrDefault(c => c.PropertyName == relation.ForeignKeyProperty);
                 var childFkNullable = childFkColumn?.Type.IsNullable ?? false;
+                // Key the grouping dictionary by the FK's non-nullable type instead of `object`, so
+                // value-type FKs (int/long IDENTITY keys) are not boxed on every insert and lookup.
+                var fkKeyType = childFkColumn?.Type.NonNullableDisplayName ?? "object";
 
                 source.AppendLine($"        var _allChildren_{relation.PropertyName} = new global::System.Collections.Generic.List<{childType}>();");
                 source.AppendLine($"        await foreach (var _c in Inquiry.QueryAsync<{childType}, {childStructMat}>(new global::Inquiry.Commands.InquiryCommand({fieldName}_All), default, {cancellation}).ConfigureAwait(false))");
                 source.AppendLine($"            _allChildren_{relation.PropertyName}.Add(_c);");
-                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, global::System.Collections.Generic.List<{childType}>>();");
+                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{fkKeyType}, global::System.Collections.Generic.List<{childType}>>();");
                 source.AppendLine($"        foreach (var _c in _allChildren_{relation.PropertyName})");
                 source.AppendLine("        {");
                 if (childFkNullable)
                 {
                     source.AppendLine($"            if (_c.{relation.ForeignKeyProperty} is null) continue;");
-                    source.AppendLine($"            var _fkVal = (object)_c.{relation.ForeignKeyProperty}!;");
+                    source.AppendLine($"            var _fkVal = {NonNullableValueExpression(childFkColumn!.Type, $"_c.{relation.ForeignKeyProperty}")};");
                 }
                 else
                 {
-                    source.AppendLine($"            var _fkVal = (object)_c.{relation.ForeignKeyProperty};");
+                    source.AppendLine($"            var _fkVal = _c.{relation.ForeignKeyProperty};");
                 }
                 source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue(_fkVal, out var _grp))");
                 source.AppendLine("            {");
@@ -656,20 +764,22 @@ internal static class StoreOperationEmitter
                 var childEntity = relationChildEntities[relation.PropertyName];
                 var relatedKeyProperty = childEntity.Key.PropertyName;
                 var childKeyNullable = childEntity.Key.Type.IsNullable;
+                // Key by the related key's non-nullable type instead of `object` to avoid boxing.
+                var parentKeyType = childEntity.Key.Type.NonNullableDisplayName;
 
-                source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<object, {childType}>();");
+                source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, {childType}>();");
                 if (childKeyNullable)
                 {
                     source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}, {childStructMat}>(new global::Inquiry.Commands.InquiryCommand({fieldName}_All), default, {cancellation}).ConfigureAwait(false))");
                     source.AppendLine("        {");
                     source.AppendLine($"            if (_p.{relatedKeyProperty} is null) continue;");
-                    source.AppendLine($"            _parents_{relation.PropertyName}[(object)_p.{relatedKeyProperty}!] = _p;");
+                    source.AppendLine($"            _parents_{relation.PropertyName}[{NonNullableValueExpression(childEntity.Key.Type, $"_p.{relatedKeyProperty}")}] = _p;");
                     source.AppendLine("        }");
                 }
                 else
                 {
                     source.AppendLine($"        await foreach (var _p in Inquiry.QueryAsync<{childType}, {childStructMat}>(new global::Inquiry.Commands.InquiryCommand({fieldName}_All), default, {cancellation}).ConfigureAwait(false))");
-                    source.AppendLine($"            _parents_{relation.PropertyName}[(object)_p.{relatedKeyProperty}] = _p;");
+                    source.AppendLine($"            _parents_{relation.PropertyName}[_p.{relatedKeyProperty}] = _p;");
                 }
             }
         }
@@ -687,11 +797,11 @@ internal static class StoreOperationEmitter
                 {
                     source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{entity.Key.PropertyName} is null");
                     source.AppendLine($"                ? new global::System.Collections.Generic.List<{childType}>()");
-                    source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue((object)_entity.{entity.Key.PropertyName}!, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
+                    source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(entity.Key.Type, $"_entity.{entity.Key.PropertyName}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
                 }
                 else
                 {
-                    source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue((object)_entity.{entity.Key.PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+                    source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue(_entity.{entity.Key.PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
                 }
             }
             else
@@ -703,11 +813,11 @@ internal static class StoreOperationEmitter
                 {
                     source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{relation.ForeignKeyProperty} is null");
                     source.AppendLine($"                ? null");
-                    source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue((object)_entity.{relation.ForeignKeyProperty}!, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
+                    source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(parentFkColumn!.Type, $"_entity.{relation.ForeignKeyProperty}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
                 }
                 else
                 {
-                    source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue((object)_entity.{relation.ForeignKeyProperty}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
+                    source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue(_entity.{relation.ForeignKeyProperty}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
                 }
             }
         }
