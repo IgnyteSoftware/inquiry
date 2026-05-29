@@ -436,7 +436,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("        {");
         foreach (var relation in entity.Relations)
         {
-            var childEntity = relationChildEntities[relation.PropertyName];
+            if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity)) continue;
             var childType = childEntity.FullyQualifiedName;
             var childStructMat = childEntity.StructMaterializerFullName;
             var fieldName = $"_sql_{relation.PropertyName}";
@@ -488,7 +488,7 @@ internal static class StoreOperationEmitter
 
         foreach (var relation in entity.Relations)
         {
-            var childEntity = relationChildEntities[relation.PropertyName];
+            if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity)) continue;
             var childType = childEntity.FullyQualifiedName;
             var fieldName = $"_sql_{relation.PropertyName}";
             var childStructMat = childEntity.StructMaterializerFullName;
@@ -548,7 +548,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("        {");
         foreach (var relation in entity.Relations)
         {
-            var childEntity = relationChildEntities[relation.PropertyName];
+            if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity)) continue;
             var childType = childEntity.FullyQualifiedName;
             if (relation.IsCollection)
             {
