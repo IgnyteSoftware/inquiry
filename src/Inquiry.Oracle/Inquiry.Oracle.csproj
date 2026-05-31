@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <Description>Oracle provider for Inquiry. Bundles the Oracle-flavoured source generator (Inquiry.Oracle.Analyzer) so referencing this package alone enables store SQL generation.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\Inquiry.Oracle.Analyzer\Inquiry.Oracle.Analyzer.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <None Include="..\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Oracle.Analyzer.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="..\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Description>Compile-time Oracle SQL generator for Inquiry. Self-contained Roslyn analyzer: bundles a private copy of the shared generator framework (Inquiry.Generators.Shared) so Roslyn's per-assembly load-context isolation doesn't fragment the runtime types.</Description>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);RS1032;RS1036;RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    <ProjectReference Include="..\Inquiry.Generators.Shared\Inquiry.Generators.Shared.csproj" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
