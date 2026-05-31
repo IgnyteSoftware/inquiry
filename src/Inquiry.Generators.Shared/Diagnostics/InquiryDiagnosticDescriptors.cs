@@ -4,6 +4,27 @@ namespace Inquiry.Generators.Diagnostics;
 
 internal static class InquiryDiagnosticDescriptors
 {
+    // ---------------------------------------------------------------------------------------------
+    // DIAGNOSTIC-ID REGISTRY (Phase 0 / F7)
+    //
+    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017.
+    // Historically skipped (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015.
+    //
+    // RESERVED RANGES for in-flight feature workstreams so parallel branches do not collide on the
+    // next free ID. Claim from your reserved block; if you need more, extend past INQ040 and update
+    // this table in the same commit.
+    //   INQ018–INQ019  W1  Richer WHERE predicates      (e.g. bad IN collection, op/type mismatch)
+    //   INQ020–INQ021  W2  ORDER BY + pagination         (paging requires ORDER BY, unknown order field)
+    //   INQ022–INQ023  W3  Batch & bulk operations
+    //   INQ024–INQ027  W5  Projections + aggregations    (projection not mapped, unknown column, …)
+    //   INQ028–INQ029  W6  Optimistic concurrency        (>1 token, token==key, unsupported dialect)
+    //   INQ030–INQ032  W7  Migrations / schema DDL
+    //   INQ033–INQ034  W8  Soft deletes
+    //   INQ035         W9  Full-text search              (unsupported by dialect)
+    //   INQ036–INQ038  W10 JSON/array/value-converter column types
+    // ---------------------------------------------------------------------------------------------
+
+
     public static readonly DiagnosticDescriptor EntityKeyCount = new(
         "INQ001",
         "Entity must have at least one InquiryKey property",

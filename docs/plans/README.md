@@ -63,18 +63,24 @@ Nearly every workstream edits the same handful of files. These are where paralle
 These are small, behavior-preserving seams that turn the hot spine into stable extension points. Doing them up
 front is what makes Waves 1–3 safely parallel. **Do not parallelize Phase 0** — these files are the conflict epicenter.
 
-| Foundation | What it does | Unblocks |
-|-----------|--------------|----------|
-| **F1** | Convert `ColumnData` from a positional `record` to **init-only properties**; add nothing yet. Additive fields then merge clean. Mirror on `IColumn`. | W5, W6, W7, W8, W10 |
-| **F2** | Add a WHERE-fragment composition primitive to `SqlBuildContext` + an `AppendWhere(existing, extra)` helper on `SqlBuilder`, so multiple predicates (key + concurrency + soft-delete + filter) AND-compose through ONE path. | W1, W6, W8, W2 |
-| **F3** | Establish the convention: new `SqlBuilder` capabilities are added as **`virtual` with a base default** wherever the SQL is dialect-uniform, so adding one doesn't force-edit all 3 providers. Add a base WHERE/SELECT render helper. | W1, W2, W5, W7, W8, W9 |
-| **F4** | Add a defaulted `InitializeCommand(DbCommand)` hook to `IInquiryConnectionFactory` (default no-op) and call it after every `CreateCommand()` in both pipelines (refactor the ~20 sites to one helper). | E2 (BindByName), W4, E3 |
-| **F5** | Extract the materializer-emission helpers (`ReadExpression`/`ReadCallForSpecialType`/`EmitMaterializeBody`) out of `EntityProcessor` into a shared `MaterializerEmitter` — **behavior-preserving** (existing snapshots byte-identical). | W5, W10 |
-| **F6** | Emit `DbType` on generated parameters (new `DbTypeMapper` from existing `TypeData`) in `StoreOperationEmitter` binders. Improves correctness on its own. | W4, W3 |
-| **F7** | Create a single diagnostic-ID registry/allocation note in `InquiryDiagnosticDescriptors.cs` so workstreams don't all grab "INQ018". | W1, W2, W6, W7, W8, W9, W10 |
-| **F8** | Document the append-point convention for new providers (`Directory.Packages.props`, `Inquiry.slnx`, `NorthwindSchema.cs`, the `generators[]`/`GetReferences()` arrays in `InquiryGeneratorTests.cs`). | E1, E2 |
+**STATUS: Phase 0 complete** (branch `foundation/phase-0`). During execution, F4 and F6 were **folded into W4**
+and F2's per-feature fragments into their workstreams — see the note below — because re-editing the same hot
+pipeline/binder lines twice (Phase 0 then W4) is the opposite of merge-clean.
 
-> F1 + F3 + F7 are the cheapest and highest-leverage — do them even if you skip the rest.
+| Foundation | What it does | Unblocks | Status |
+|-----------|--------------|----------|--------|
+| **F1** | Convert `ColumnData` to **init-only properties** (with `required` polyfills) + document the additive convention: new column metadata is added as init props with defaults, never new ctor params. | W5, W6, W7, W8, W10 | ✅ done |
+| **F2** | Shared `AppendWhere(existing, extra)` primitive on `SqlBuilder` so key + concurrency + soft-delete + filter predicates AND-compose through ONE path. (The per-feature *fragments* on `SqlBuildContext` are added additively by each workstream.) | W1, W6, W8, W2 | ✅ done (shipped with F3) |
+| **F3** | Convention: new `SqlBuilder` capabilities are `virtual`-with-base-default where dialect-uniform; all WHERE-shaping funnels through `AppendWhere`. Documented on `SqlBuilder`. | W1, W2, W5, W7, W8, W9 | ✅ done |
+| **F4** | Defaulted `InitializeCommand(DbCommand)` hook on `IInquiryConnectionFactory` + both pipelines. | E2 (BindByName), W4, E3 | ↪ folded into **W4** (W4 owns the pipeline command-setup edits; E2/E3 rebase) |
+| **F5** | Extract materializer helpers (`ReadExpression`/`ReadCallForSpecialType`/`EmitMaterializeBody`) into a shared `MaterializerEmitter` — behavior-preserving, generalized to take a column list so projections reuse it. | W5, W10 | ✅ done |
+| **F6** | Emit `DbType` on generated parameters (`DbTypeMapper`) in `StoreOperationEmitter` binders. | W4, W3 | ↪ folded into **W4** (changes emitted code; done with its consumer + tests) |
+| **F7** | Diagnostic-ID registry reserving INQ018+ ranges per workstream in `InquiryDiagnosticDescriptors.cs`. | W1, W2, W6, W7, W8, W9, W10 | ✅ done |
+| **F8** | Provider append-point checklist → [adding-a-provider.md](adding-a-provider.md). | E1, E2 | ✅ done |
+
+> Net Phase 0 deliverables: F1, F2 (`AppendWhere`), F3, F5, F7, F8 — all behavior-preserving (39/39 generator
+> tests green). F4 + F6 move into W4; each WHERE-shaping workstream adds its own `SqlBuildContext` fragment and
+> composes it via `AppendWhere`.
 
 ---
 
