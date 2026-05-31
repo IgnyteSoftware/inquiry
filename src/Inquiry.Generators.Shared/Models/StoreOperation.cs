@@ -8,6 +8,7 @@ internal enum StoreOperation
     SelectOneByKey,
     SelectOneByKeyEager,
     SelectAllByField,
+    SelectAllByPredicate,
     Insert,
     Update,
     Upsert,
