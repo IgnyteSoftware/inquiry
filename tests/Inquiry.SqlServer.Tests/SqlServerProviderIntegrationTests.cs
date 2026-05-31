@@ -18,4 +18,16 @@ public sealed class SqlServerProviderIntegrationTests
         Assert.Null(serviceProvider.GetService<IInquiry>());
         Assert.Null(serviceProvider.GetService<IInquiryRequestPipeline>());
     }
+
+    [Fact]
+    public void OptionsOverloadRegistersFactory()
+    {
+        using var serviceProvider = new ServiceCollection()
+            .AddInquirySqlServer(
+                "Server=.;Database=master;Integrated Security=true;TrustServerCertificate=true",
+                o => o.Compatibility = SqlServerCompatibility.AzureSql)
+            .BuildServiceProvider();
+
+        Assert.IsType<SqlServerInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());
+    }
 }
