@@ -25,6 +25,14 @@ public sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFacto
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Npgsql keeps server-side prepared statements in a per-physical-connection cache that survives
+    /// the managed connection being returned to the pool, so per-command <c>Prepare()</c> pays off
+    /// across operations.
+    /// </remarks>
+    public bool SupportsPersistentPreparedStatements => true;
+
+    /// <inheritdoc />
     public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
         var connection = new NpgsqlConnection(_connectionString);
