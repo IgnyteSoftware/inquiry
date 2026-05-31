@@ -97,6 +97,12 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("static (_cmd, _key) =>", generatedText);
         Assert.Contains("_p0.ParameterName = \"@Key\";", generatedText);
 
+        // F6: generated binders set DbType from compile-time type metadata so Prepare() is
+        // effective. Key is a Guid; Name is a string; IsActive is a bool.
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.Guid;", generatedText);
+        Assert.Contains("_p1.DbType = global::System.Data.DbType.String;", generatedText);
+        Assert.Contains("_p2.DbType = global::System.Data.DbType.Boolean;", generatedText);
+
         // Returning InsertReturning binds the whole entity via the same fast path (TArgs = entity).
         Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
         Assert.Contains("static (_cmd, _e) =>", generatedText);
@@ -105,8 +111,9 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("Inquiry.ExecuteAsync", generatedText);
 
         // Streaming SelectAllByField (IAsyncEnumerable, no buffered list) keeps the InquiryParameter[]
-        // path — there is no fast streaming overload.
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@IsActive\", isActive)", generatedText);
+        // path — there is no fast streaming overload. F6 threads the compile-time DbType through the
+        // InquiryParameter constructor so the positional path is also prepare-ready.
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@IsActive\", isActive, dbType: global::System.Data.DbType.Boolean)", generatedText);
         Assert.DoesNotContain("InquirySqlDialect", generatedText);
         Assert.DoesNotContain("CreateContext", generatedText);
         Assert.DoesNotContain("BuildSelectAllSql", generatedText);
