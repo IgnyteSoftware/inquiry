@@ -1577,7 +1577,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "Oracle");
+        var result = RunGenerator(source, dialect: "Db2");
 
         Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
@@ -1818,6 +1818,7 @@ public sealed partial class InquiryGeneratorTests
             new global::Inquiry.SqlServer.Analyzer.InquirySqlServerGenerator().AsSourceGenerator(),
             new global::Inquiry.PostgreSql.Analyzer.InquiryPostgreSqlGenerator().AsSourceGenerator(),
             new global::Inquiry.MySql.Analyzer.InquiryMySqlGenerator().AsSourceGenerator(),
+            new global::Inquiry.Oracle.Analyzer.InquiryOracleGenerator().AsSourceGenerator(),
         };
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
@@ -1846,6 +1847,7 @@ public sealed partial class InquiryGeneratorTests
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.SqlServer.SqlServerInquiryConnectionFactory).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.PostgreSql.PostgreSqlInquiryConnectionFactory).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.MySql.MySqlInquiryConnectionFactory).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.Oracle.OracleInquiryConnectionFactory).Assembly.Location));
 
         return references;
     }
