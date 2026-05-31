@@ -11,4 +11,12 @@ internal sealed record ParameterData(
     string Name,
     string TypeDisplay,
     string ComparisonDisplay,
-    bool IsCancellationToken);
+    bool IsCancellationToken)
+{
+    /// <summary>
+    /// When the parameter is an <c>IEnumerable&lt;T&gt;</c> (used by <c>Compare.In</c>), the
+    /// <c>FullyQualifiedFormat</c> of its element type <c>T</c>; otherwise null. Lets the predicate
+    /// validator confirm an IN collection's element type matches the filtered column without a symbol.
+    /// </summary>
+    public string? ElementComparisonDisplay { get; init; }
+}

@@ -21,6 +21,28 @@ public partial class ProductStore : InquiryStore<Product>
     [InquirySelectAllByField("CategoryID")]
     public partial Task<IReadOnlyList<Product>> SelectByCategoryAsync(int? categoryID, CancellationToken cancellationToken = default);
 
+    [InquirySelectAllByPredicate]
+    [InquiryWhere("UnitPrice", Compare.GreaterThanOrEqual)]
+    [InquiryWhere("ProductName", Compare.Like)]
+    public partial Task<IReadOnlyList<Product>> SearchAsync(decimal? minPrice, string namePattern, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere("UnitsInStock", Compare.Between)]
+    public partial Task<IReadOnlyList<Product>> InStockRangeAsync(short? low, short? high, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere("CategoryID", Compare.In)]
+    public partial Task<IReadOnlyList<Product>> InCategoriesAsync(IReadOnlyList<int> categoryID, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere("CategoryID", Compare.IsNull)]
+    public partial Task<IReadOnlyList<Product>> WithoutCategoryAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere("Discontinued", Compare.Equal)]
+    [InquiryWhere("UnitsInStock", Compare.LessThan, Or = true)]
+    public partial Task<IReadOnlyList<Product>> DiscontinuedOrLowStockAsync(bool discontinued, short? threshold, CancellationToken cancellationToken = default);
+
     [InquiryInsert]
     public partial Task<int> InsertAsync(Product product, CancellationToken cancellationToken = default);
 
