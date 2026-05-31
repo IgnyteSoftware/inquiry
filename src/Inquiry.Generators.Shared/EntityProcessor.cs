@@ -90,7 +90,7 @@ internal static class EntityProcessor
         source.AppendLine("{");
         source.AppendLine($"    public {entityType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
-        EmitMaterializeBody(source, entity, entityType, indent: "        ");
+        MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
         source.AppendLine();
@@ -103,7 +103,7 @@ internal static class EntityProcessor
         source.AppendLine("{");
         source.AppendLine($"    public {entityType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
-        EmitMaterializeBody(source, entity, entityType, indent: "        ");
+        MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
 
@@ -111,18 +111,6 @@ internal static class EntityProcessor
 
         context.AddSource($"{entity.Name}.InquiryEntity.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
         return new EntityRegistration(entityType, entity.ClassMaterializerFullName);
-    }
-
-    private static void EmitMaterializeBody(StringBuilder source, EntityData entity, string entityType, string indent)
-    {
-        source.AppendLine($"{indent}return new {entityType}");
-        source.AppendLine($"{indent}{{");
-        for (var i = 0; i < entity.Columns.Count; i++)
-        {
-            var column = entity.Columns[i];
-            source.AppendLine($"{indent}    {column.PropertyName} = {ReadExpression(column.Type, i)},");
-        }
-        source.AppendLine($"{indent}}};");
     }
 
     private static List<ColumnData> DiscoverColumns(INamedTypeSymbol entitySymbol, ImmutableArray<DiagnosticData>.Builder diagnostics)
@@ -145,7 +133,15 @@ internal static class EntityProcessor
             var useDatabaseDefault =
                 columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "UseDatabaseDefault") ||
                 foreignKeyAttribute is not null && GeneratorHelpers.GetNamedBool(foreignKeyAttribute, "UseDatabaseDefault");
-            columns.Add(new ColumnData(property.Name, columnName, typeData, keyAttribute is not null, isGenerated, useDatabaseDefault));
+            columns.Add(new ColumnData
+            {
+                PropertyName = property.Name,
+                ColumnName = columnName,
+                Type = typeData,
+                IsKey = keyAttribute is not null,
+                IsGenerated = isGenerated,
+                UseDatabaseDefault = useDatabaseDefault,
+            });
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
             {
@@ -251,44 +247,4 @@ internal static class EntityProcessor
         return propertyName;
     }
 
-    private static string ReadExpression(TypeData type, int index)
-    {
-        var nonNullable = type.NonNullableDisplayName;
-        var read = type.IsEnum
-            ? $"({nonNullable}){ReadCallForSpecialType(type.EnumUnderlyingSpecialType, index, nonNullable)}"
-            : type.IsGuid
-                ? $"reader.GetGuid({index})"
-                : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
-
-        if (!type.IsNullable)
-        {
-            return read;
-        }
-
-        if (type.IsValueType)
-        {
-            return $"reader.IsDBNull({index}) ? ({type.DisplayName})null : {read}";
-        }
-
-        return $"reader.IsDBNull({index}) ? null : {read}";
-    }
-
-    private static string ReadCallForSpecialType(SpecialType specialType, int index, string fallbackTypeName)
-    {
-        return specialType switch
-        {
-            SpecialType.System_String => $"reader.GetString({index})",
-            SpecialType.System_Boolean => $"reader.GetBoolean({index})",
-            SpecialType.System_Byte => $"reader.GetByte({index})",
-            SpecialType.System_Char => $"reader.GetChar({index})",
-            SpecialType.System_Int16 => $"reader.GetInt16({index})",
-            SpecialType.System_Int32 => $"reader.GetInt32({index})",
-            SpecialType.System_Int64 => $"reader.GetInt64({index})",
-            SpecialType.System_Single => $"reader.GetFloat({index})",
-            SpecialType.System_Double => $"reader.GetDouble({index})",
-            SpecialType.System_Decimal => $"reader.GetDecimal({index})",
-            SpecialType.System_DateTime => $"reader.GetDateTime({index})",
-            _ => $"reader.GetFieldValue<{fallbackTypeName}>({index})",
-        };
-    }
 }
