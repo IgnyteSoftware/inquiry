@@ -34,6 +34,12 @@ public static class InquiryInExpansion
             return;
         }
 
+        // Coerce enum elements to their underlying integral type, matching the scalar binder's
+        // enum handling. Without this, enum-strict providers (e.g. Npgsql) reject a boxed enum
+        // bound against an integer column. Handles both T = MyEnum and T = MyEnum?.
+        var elementType = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        var enumUnderlyingType = elementType.IsEnum ? System.Enum.GetUnderlyingType(elementType) : null;
+
         var placeholders = new StringBuilder("(");
         var count = 0;
         foreach (var value in values)
@@ -46,9 +52,15 @@ public static class InquiryInExpansion
             var elementName = parameterName + count.ToString(System.Globalization.CultureInfo.InvariantCulture);
             placeholders.Append(elementName);
 
+            object? boxed = value;
+            if (boxed is not null && enumUnderlyingType is not null)
+            {
+                boxed = System.Convert.ChangeType(boxed, enumUnderlyingType, System.Globalization.CultureInfo.InvariantCulture);
+            }
+
             var parameter = command.CreateParameter();
             parameter.ParameterName = elementName;
-            parameter.Value = (object?)value ?? System.DBNull.Value;
+            parameter.Value = boxed ?? System.DBNull.Value;
             command.Parameters.Add(parameter);
 
             count++;
