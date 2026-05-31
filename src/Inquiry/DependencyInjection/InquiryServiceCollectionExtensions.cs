@@ -14,11 +14,32 @@ public static class InquiryServiceCollectionExtensions
     /// Registers Inquiry runtime services and generated stores/materializers.
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services)
+        => AddInquiryCore(services, configureOptions: null);
+
+    /// <summary>
+    /// Registers Inquiry runtime services and generated stores/materializers, applying the supplied
+    /// <see cref="InquiryOptions"/> configuration (e.g. <c>o.PrepareStatements = PreparedStatementMode.Auto</c>).
+    /// </summary>
+    public static IServiceCollection AddInquiry(this IServiceCollection services, Action<InquiryOptions> configureOptions)
+    {
+        if (configureOptions is null)
+        {
+            throw new ArgumentNullException(nameof(configureOptions));
+        }
+
+        return AddInquiryCore(services, configureOptions);
+    }
+
+    private static IServiceCollection AddInquiryCore(IServiceCollection services, Action<InquiryOptions>? configureOptions)
     {
         if (services is null)
         {
             throw new ArgumentNullException(nameof(services));
         }
+
+        var options = new InquiryOptions();
+        configureOptions?.Invoke(options);
+        services.TryAddSingleton(options);
 
         services.TryAddScoped<IInquiry, DefaultInquiry>();
         services.TryAddScoped<IInquiryRequestPipeline, InquiryRequestPipeline>();

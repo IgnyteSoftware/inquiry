@@ -252,6 +252,11 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
+            var dbType = DbTypeMapper.TryGetDbTypeExpression(column.Type);
+            if (dbType is not null)
+            {
+                source.AppendLine($"{indent}    _p{i}.DbType = {dbType};");
+            }
             source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i))};");
             source.AppendLine($"{indent}    _cmd.Parameters.Add(_p{i});");
         }
@@ -449,7 +454,9 @@ internal static class StoreOperationEmitter
         for (var i = 0; i < columns.Count; i++)
         {
             // '@'-prefix lets the binder skip its NormalizeName string concat.
-            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(columns[i].PropertyName)}\", {methodParameters[i].Name}),");
+            var dbType = DbTypeMapper.TryGetDbTypeExpression(columns[i].Type);
+            var dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
+            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(columns[i].PropertyName)}\", {methodParameters[i].Name}{dbTypeArg}),");
         }
         source.AppendLine($"{indent}}}),");
     }

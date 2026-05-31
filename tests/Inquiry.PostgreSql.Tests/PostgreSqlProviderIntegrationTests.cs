@@ -18,4 +18,14 @@ public sealed class PostgreSqlProviderIntegrationTests
         Assert.Null(serviceProvider.GetService<IInquiry>());
         Assert.Null(serviceProvider.GetService<IInquiryRequestPipeline>());
     }
+
+    [Fact]
+    public void PostgreSqlFactoryAdvertisesPersistentPreparedStatements()
+    {
+        var factory = new PostgreSqlInquiryConnectionFactory("Host=localhost;Database=postgres;Username=postgres;Password=postgres");
+
+        // W4: Npgsql keeps server-side prepared statements in a pool-level cache, so the capability
+        // gate is true (SqlClient/SQLite default to false).
+        Assert.True(((IInquiryConnectionFactory)factory).SupportsPersistentPreparedStatements);
+    }
 }
