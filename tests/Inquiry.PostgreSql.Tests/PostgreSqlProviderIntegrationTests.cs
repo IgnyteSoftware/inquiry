@@ -28,4 +28,18 @@ public sealed class PostgreSqlProviderIntegrationTests
         // gate is true (SqlClient/SQLite default to false).
         Assert.True(((IInquiryConnectionFactory)factory).SupportsPersistentPreparedStatements);
     }
+
+    [Theory]
+    [InlineData(PostgreSqlCompatibility.CockroachDb)]
+    [InlineData(PostgreSqlCompatibility.AuroraPostgreSql)]
+    public void OptionsOverloadRegistersFactory(PostgreSqlCompatibility compatibility)
+    {
+        using var serviceProvider = new ServiceCollection()
+            .AddInquiryPostgreSql(
+                "Host=localhost;Database=postgres;Username=postgres;Password=postgres",
+                o => o.Compatibility = compatibility)
+            .BuildServiceProvider();
+
+        Assert.IsType<PostgreSqlInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());
+    }
 }
