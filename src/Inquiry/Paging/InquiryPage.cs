@@ -23,12 +23,15 @@ public readonly struct InquiryPage<TEntity, TCursor>
     /// <param name="hasMore">Whether more rows exist beyond this page.</param>
     public InquiryPage(IReadOnlyList<TEntity> items, TCursor? nextCursor, bool hasMore)
     {
-        Items = items;
+        Items = items ?? System.Array.Empty<TEntity>();
         NextCursor = nextCursor;
         HasMore = hasMore;
     }
 
-    /// <summary>Gets the page items, in sort order, trimmed to the requested page size.</summary>
+    /// <summary>
+    /// Gets the page items, in sort order, trimmed to the requested page size. Never <see langword="null"/>
+    /// for a constructed page; <c>default(InquiryPage&lt;,&gt;)</c> leaves it null, so prefer the constructor.
+    /// </summary>
     public IReadOnlyList<TEntity> Items { get; }
 
     /// <summary>
