@@ -5,7 +5,7 @@ using System.Collections.Immutable;
 
 namespace Inquiry.Generators.Tests;
 
-public sealed class InquiryGeneratorTests
+public sealed partial class InquiryGeneratorTests
 {
     [Fact]
     public void GeneratesConcreteStoreForValidCrudStore()

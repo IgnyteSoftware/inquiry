@@ -30,4 +30,23 @@ internal sealed record StoreMethodData(
     bool ReturnsEntity,
     bool ReturnsList,
     ProcedureReturnKind ProcedureReturn,
-    LocationData? Location);
+    LocationData? Location)
+{
+    /// <summary>
+    /// Parsed ORDER BY terms (from <c>OrderBy = "…"</c> on a select attribute, or the keyset key fields),
+    /// in significance order. Empty when no ordering was requested. Fields are resolved/quoted at emit.
+    /// </summary>
+    public EquatableArray<OrderItem> OrderBy { get; init; } = EquatableArray<OrderItem>.Empty;
+
+    /// <summary>The pagination mode requested on this method.</summary>
+    public Pagination Pagination { get; init; } = Pagination.None;
+
+    /// <summary>
+    /// For <see cref="StoreOperation.KeysetPage"/>, the raw keyset field names (most-significant first),
+    /// resolved against the entity's columns at emit.
+    /// </summary>
+    public EquatableArray<string> KeysetFields { get; init; } = EquatableArray<string>.Empty;
+
+    /// <summary>For <see cref="StoreOperation.KeysetPage"/>, whether the keyset walks descending (Backward).</summary>
+    public bool KeysetDescending { get; init; }
+}

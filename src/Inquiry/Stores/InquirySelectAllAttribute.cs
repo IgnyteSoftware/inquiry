@@ -6,4 +6,18 @@ namespace Inquiry.Stores;
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquirySelectAllAttribute : Attribute
 {
+    /// <summary>
+    /// Gets or sets a compile-time ORDER BY specification, e.g. <c>"Name ASC, Id DESC"</c>. Each item
+    /// is <c>field [ASC|DESC]</c>; fields are resolved against the entity's mapped properties or columns
+    /// and quoted at generation time (an unknown field is a compile error). Direction defaults to ASC.
+    /// </summary>
+    public string? OrderBy { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the method emits an offset-paginated query
+    /// (<c>LIMIT/OFFSET</c>, or <c>OFFSET … FETCH</c> on SQL Server). When true the method must take an
+    /// <c>int offset</c> and <c>int limit</c> (in that order) ahead of the cancellation token, and
+    /// <see cref="OrderBy"/> is required for a deterministic page order.
+    /// </summary>
+    public bool Paged { get; set; }
 }

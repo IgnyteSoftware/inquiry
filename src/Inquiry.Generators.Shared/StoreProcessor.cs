@@ -153,6 +153,37 @@ internal static class StoreProcessor
             ? ClassifyProcedureReturn(method.ReturnType, entityType)
             : ProcedureReturnKind.None;
 
+        // ORDER BY / pagination (W2). Parsed here; order fields are resolved against the entity columns
+        // (and validated) in the combined emit stage, mirroring SelectAllByField field resolution.
+        var orderBy = ImmutableArray<OrderItem>.Empty;
+        var pagination = Pagination.None;
+        var keysetFields = ImmutableArray<string>.Empty;
+        var keysetDescending = false;
+
+        if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
+        {
+            orderBy = ParseOrderBy(GeneratorHelpers.GetNamedString(attribute, "OrderBy"));
+            if (GeneratorHelpers.GetNamedBool(attribute, "Paged"))
+            {
+                pagination = Pagination.Offset;
+            }
+        }
+        else if (operation == StoreOperation.KeysetPage)
+        {
+            var names = GeneratorHelpers.GetConstructorStringArray(attribute);
+            if (names is null || names.Length == 0)
+            {
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.UnknownOrderField, location, method.Name, "<none>"));
+                return null;
+            }
+
+            keysetFields = names.ToImmutableArray();
+            // Direction is an enum named arg; its underlying int is 0 = Forward, 1 = Backward.
+            keysetDescending = GeneratorHelpers.GetNamedInt(attribute, "Direction") == 1;
+            pagination = Pagination.Keyset;
+            orderBy = keysetFields.Select(f => new OrderItem(f, keysetDescending)).ToImmutableArray();
+        }
+
         var parameters = method.Parameters.Select(ToParameterData).ToImmutableArray();
 
         return new StoreMethodData(
@@ -166,7 +197,13 @@ internal static class StoreProcessor
             ReturnsEntity: returnsEntity,
             ReturnsList: returnsList,
             ProcedureReturn: procedureReturn,
-            Location: LocationData.From(location));
+            Location: LocationData.From(location))
+        {
+            OrderBy = new EquatableArray<OrderItem>(orderBy),
+            Pagination = pagination,
+            KeysetFields = new EquatableArray<string>(keysetFields),
+            KeysetDescending = keysetDescending,
+        };
     }
 
     private static ParameterData ToParameterData(IParameterSymbol parameter) => new(
@@ -238,6 +275,36 @@ internal static class StoreProcessor
         return builder.ToImmutable();
     }
 
+    /// <summary>
+    /// Parses an <c>OrderBy</c> attribute string (<c>"field [ASC|DESC], field2 [ASC|DESC]"</c>) into
+    /// ordered terms. Direction defaults to ASC. Fields are kept raw (resolved + quoted at emit). v1
+    /// supports only <c>field [ASC|DESC]</c> — collation/NULLS ordering is out of scope.
+    /// </summary>
+    private static ImmutableArray<OrderItem> ParseOrderBy(string? spec)
+    {
+        if (string.IsNullOrWhiteSpace(spec))
+        {
+            return ImmutableArray<OrderItem>.Empty;
+        }
+
+        var builder = ImmutableArray.CreateBuilder<OrderItem>();
+        foreach (var rawTerm in spec!.Split(','))
+        {
+            var term = rawTerm.Trim();
+            if (term.Length == 0)
+            {
+                continue;
+            }
+
+            var parts = term.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            var field = parts[0];
+            var descending = parts.Length > 1 && string.Equals(parts[1], "DESC", StringComparison.OrdinalIgnoreCase);
+            builder.Add(new OrderItem(field, descending));
+        }
+
+        return builder.ToImmutable();
+    }
+
     public static StoreOperation GetOperation(IMethodSymbol method, out AttributeData? attribute)
     {
         foreach (var candidate in method.GetAttributes())
@@ -255,6 +322,7 @@ internal static class StoreProcessor
                 case "InquirySelectOneByKeyEagerAttribute": attribute = candidate; return StoreOperation.SelectOneByKeyEager;
                 case "InquirySelectAllByFieldAttribute": attribute = candidate; return StoreOperation.SelectAllByField;
                 case "InquirySelectAllByPredicateAttribute": attribute = candidate; return StoreOperation.SelectAllByPredicate;
+                case "InquiryKeysetPageAttribute": attribute = candidate; return StoreOperation.KeysetPage;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
                 case "InquiryUpdateAttribute": attribute = candidate; return StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
@@ -278,6 +346,8 @@ internal static class StoreProcessor
             StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
                 IsTaskOfReadOnlyList(returnType, entityType),
+            StoreOperation.KeysetPage =>
+                IsTaskOfInquiryPage(returnType, entityType),
             StoreOperation.SelectAllEager =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager =>
@@ -315,6 +385,32 @@ internal static class StoreProcessor
         }
 
         return SymbolEqualityComparer.Default.Equals(inner.TypeArguments[0], entitySymbol);
+    }
+
+    /// <summary>
+    /// True when <paramref name="returnType"/> is <c>Task&lt;InquiryPage&lt;TEntity, TCursor&gt;&gt;</c>
+    /// for the store's entity. The cursor type argument is unconstrained here (validated against the
+    /// keyset key parameter at emit).
+    /// </summary>
+    private static bool IsTaskOfInquiryPage(ITypeSymbol returnType, ITypeSymbol entitySymbol)
+    {
+        if (returnType is not INamedTypeSymbol task ||
+            !task.IsGenericType ||
+            task.TypeArguments.Length != 1 ||
+            task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Threading.Tasks.Task<TResult>")
+        {
+            return false;
+        }
+
+        if (task.TypeArguments[0] is not INamedTypeSymbol page ||
+            !page.IsGenericType ||
+            page.TypeArguments.Length != 2 ||
+            page.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::Inquiry.Paging.InquiryPage<TEntity, TCursor>")
+        {
+            return false;
+        }
+
+        return SymbolEqualityComparer.Default.Equals(page.TypeArguments[0], entitySymbol);
     }
 
     private static ProcedureReturnKind ClassifyProcedureReturn(ITypeSymbol returnType, ITypeSymbol entityType)
@@ -361,13 +457,14 @@ internal static class StoreProcessor
         }
 
         // Per-method combined validation. Successful methods carry their resolved field columns and,
-        // for SelectAllByPredicate, the resolved predicate plan.
-        var valid = new List<(StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan)>();
+        // for SelectAllByPredicate, the resolved predicate plan; ordered/paged/keyset selects also carry
+        // a resolved select plan (ORDER BY columns + pagination).
+        var valid = new List<(StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan)>();
         foreach (var method in store.Methods)
         {
-            if (TryValidateForEmit(context, method, entity, out var fieldColumns, out var predicatePlan))
+            if (TryValidateForEmit(context, method, entity, out var fieldColumns, out var predicatePlan, out var selectPlan))
             {
-                valid.Add((method, fieldColumns, predicatePlan));
+                valid.Add((method, fieldColumns, predicatePlan, selectPlan));
             }
         }
 
@@ -384,7 +481,11 @@ internal static class StoreProcessor
         var nullableDatabaseSuppliedKeyUpsert = keyMayBeDatabaseSupplied && key.Type.IsNullable &&
             valid.Any(static m => m.Method.Operation == StoreOperation.Upsert);
 
-        var needsSelectAll = valid.Any(static m => m.Method.Operation is StoreOperation.SelectAll or StoreOperation.SelectAllEager);
+        // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so
+        // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll.
+        var needsSelectAll = valid.Any(static m =>
+            (m.Method.Operation == StoreOperation.SelectAll && m.SelectPlan is null) ||
+            m.Method.Operation == StoreOperation.SelectAllEager);
         var needsSelectByKey = valid.Any(static m => m.Method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
         var needsInsert = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && !m.Method.ReturnsEntity) ||
             nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity);
@@ -397,7 +498,7 @@ internal static class StoreProcessor
         var needsDelete = valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey);
 
         var byFieldOps = valid
-            .Where(static m => m.Method.Operation == StoreOperation.SelectAllByField && m.FieldColumns.Count > 0)
+            .Where(static m => m.Method.Operation == StoreOperation.SelectAllByField && m.SelectPlan is null && m.FieldColumns.Count > 0)
             .GroupBy(static m => StoreOperationEmitter.BuildFieldSuffix(m.FieldColumns))
             .Select(static g => g.First().FieldColumns)
             .ToArray();
@@ -424,11 +525,21 @@ internal static class StoreProcessor
             AppendConstSql(source, "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns), sqlBuilder.BuildSelectByFieldSql(ctx, ToColumnList(fieldColumns)));
         }
 
-        foreach (var (method, _, predicatePlan) in valid)
+        foreach (var (method, _, predicatePlan, _) in valid)
         {
             if (method.Operation == StoreOperation.SelectAllByPredicate && predicatePlan is not null)
             {
                 AppendConstSql(source, "_sqlPredicate_" + method.Name, sqlBuilder.BuildSelectByPredicateSql(ctx, predicatePlan.Predicates));
+            }
+        }
+
+        // Ordered / paged / keyset selects each get a self-contained per-method const built from the
+        // base SELECT plus a uniform ORDER BY and a (dialect-specific) pagination or keyset tail.
+        foreach (var (method, fieldColumns, _, selectPlan) in valid)
+        {
+            if (selectPlan is not null)
+            {
+                AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, ctx, fieldColumns, selectPlan));
             }
         }
 
@@ -463,10 +574,10 @@ internal static class StoreProcessor
         source.AppendLine("    {");
         source.AppendLine("    }");
 
-        foreach (var (method, fieldColumns, predicatePlan) in valid)
+        foreach (var (method, fieldColumns, predicatePlan, selectPlan) in valid)
         {
             source.AppendLine();
-            StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, entity, relationChildEntities);
+            StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities);
         }
 
         source.AppendLine("}");
@@ -476,10 +587,16 @@ internal static class StoreProcessor
         return new StoreRegistration(store.FullyQualifiedName);
     }
 
-    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan)
+    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
     {
         fieldColumns = Array.Empty<ColumnData>();
         predicatePlan = null;
+        selectPlan = null;
+
+        if (method.Operation == StoreOperation.KeysetPage)
+        {
+            return TryValidateKeysetPage(context, method, entity, out selectPlan);
+        }
 
         if (method.Operation == StoreOperation.SelectAllByField)
         {
@@ -521,6 +638,42 @@ internal static class StoreProcessor
             return false;
         }
 
+        // ORDER BY / offset pagination (W2) for SelectAll / SelectAllByField. Resolve order fields and,
+        // when paging, validate the trailing (offset, limit) int parameters; emit a per-method const.
+        if (method.Operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField &&
+            (method.OrderBy.Count > 0 || method.Pagination != Pagination.None))
+        {
+            if (!TryResolveOrderColumns(context, method, entity, out var orderColumns))
+            {
+                return false;
+            }
+
+            // Offset paging requires ORDER BY (deterministic order; SqlServer FETCH needs it) and must be
+            // buffered (Task<IReadOnlyList<T>>) so the offset/limit ints can sit ahead of the token.
+            if (method.Pagination == Pagination.Offset)
+            {
+                if (orderColumns.Count == 0 || !method.ReturnsList || !HasOffsetPagingParameters(method, entity, fieldColumns))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PagingRequiresOrderBy, method.Location?.ToLocation(), method.Name));
+                    return false;
+                }
+            }
+            else if (!HasSupportedParameters(method, entity, fieldColumns))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
+                return false;
+            }
+
+            selectPlan = new ResolvedSelectPlan
+            {
+                SqlFieldName = "_sql_" + method.Name,
+                OrderColumns = orderColumns,
+                Pagination = method.Pagination,
+            };
+
+            return true;
+        }
+
         if (!HasSupportedParameters(method, entity, fieldColumns))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
@@ -528,6 +681,128 @@ internal static class StoreProcessor
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Resolves a method's parsed ORDER BY terms against the entity columns, reporting INQ021 for an
+    /// unknown field. Empty input yields an empty list (caller decides whether that is allowed).
+    /// </summary>
+    private static bool TryResolveOrderColumns(SourceProductionContext context, StoreMethodData method, EntityData entity, out IReadOnlyList<(ColumnData Column, bool Descending)> orderColumns)
+    {
+        var resolved = new List<(ColumnData, bool)>(method.OrderBy.Count);
+        foreach (var term in method.OrderBy.AsImmutableArray())
+        {
+            var column = FindColumn(entity, term.Field);
+            if (column is null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnknownOrderField, method.Location?.ToLocation(), method.Name, term.Field));
+                orderColumns = Array.Empty<(ColumnData, bool)>();
+                return false;
+            }
+
+            resolved.Add((column, term.Descending));
+        }
+
+        orderColumns = resolved;
+        return true;
+    }
+
+    /// <summary>
+    /// Validates the parameter shape of an offset-paged method: the field/filter parameters (none for
+    /// SelectAll, the field columns for SelectAllByField) followed by two <c>int</c> parameters
+    /// (offset, limit) and the trailing cancellation token.
+    /// </summary>
+    private static bool HasOffsetPagingParameters(StoreMethodData method, EntityData entity, IReadOnlyList<ColumnData> fieldColumns)
+    {
+        var parameters = method.Parameters;
+        if (parameters.Count == 0 || !parameters[parameters.Count - 1].IsCancellationToken)
+        {
+            return false;
+        }
+
+        var filterCount = method.Operation == StoreOperation.SelectAllByField ? fieldColumns.Count : 0;
+        var nonCancellationCount = parameters.Count - 1;
+        if (nonCancellationCount != filterCount + 2)
+        {
+            return false;
+        }
+
+        if (method.Operation == StoreOperation.SelectAllByField &&
+            !MatchesPositionalColumns(method, filterCount, fieldColumns))
+        {
+            return false;
+        }
+
+        // The two paging parameters must be int (offset, then limit).
+        return parameters[filterCount].ComparisonDisplay == "int" &&
+            parameters[filterCount + 1].ComparisonDisplay == "int";
+    }
+
+    /// <summary>
+    /// Validates and resolves a keyset-page method: <c>Task&lt;InquiryPage&lt;TEntity, TCursor&gt;&gt;</c>
+    /// return shape, a nullable cursor parameter, an <c>int pageSize</c>, then the cancellation token. The
+    /// cursor parameter type must match the single key column's nullable type, or a nullable value tuple of
+    /// the key column types for a composite keyset.
+    /// </summary>
+    private static bool TryValidateKeysetPage(SourceProductionContext context, StoreMethodData method, EntityData entity, out ResolvedSelectPlan? selectPlan)
+    {
+        selectPlan = null;
+
+        var keysetColumns = new List<ColumnData>(method.KeysetFields.Count);
+        foreach (var name in method.KeysetFields.AsImmutableArray())
+        {
+            var column = FindColumn(entity, name);
+            if (column is null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnknownOrderField, method.Location?.ToLocation(), method.Name, name));
+                return false;
+            }
+
+            keysetColumns.Add(column);
+        }
+
+        var parameters = method.Parameters;
+        // (cursor, pageSize, cancellationToken)
+        if (parameters.Count != 3 ||
+            !parameters[2].IsCancellationToken ||
+            parameters[1].ComparisonDisplay != "int" ||
+            !CursorParameterMatches(parameters[0], keysetColumns))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PagingRequiresOrderBy, method.Location?.ToLocation(), method.Name));
+            return false;
+        }
+
+        var orderColumns = keysetColumns.Select(c => (c, method.KeysetDescending)).ToList();
+        selectPlan = new ResolvedSelectPlan
+        {
+            SqlFieldName = "_sql_" + method.Name,
+            OrderColumns = orderColumns,
+            Pagination = Pagination.Keyset,
+            KeysetColumns = keysetColumns,
+        };
+
+        return true;
+    }
+
+    /// <summary>
+    /// True when the keyset cursor parameter is the nullable form of the single key column's type, or a
+    /// nullable value tuple of the composite key columns' types.
+    /// </summary>
+    private static bool CursorParameterMatches(ParameterData cursor, IReadOnlyList<ColumnData> keysetColumns)
+    {
+        if (keysetColumns.Count == 1)
+        {
+            // The cursor is the nullable form of the key (null = first page). For a nullable key column
+            // (e.g. int?) that is the column's own display; for a non-nullable key (e.g. long) it is the
+            // key type plus "?".
+            var columnType = keysetColumns[0].Type;
+            var expectedNullable = columnType.IsNullable ? columnType.DisplayName : columnType.NonNullableDisplayName + "?";
+            return cursor.TypeDisplay == expectedNullable;
+        }
+
+        var tupleElements = string.Join(", ", keysetColumns.Select(c => c.Type.NonNullableDisplayName));
+        var expectedTuple = "(" + tupleElements + ")?";
+        return cursor.TypeDisplay == expectedTuple;
     }
 
     /// <summary>
@@ -765,6 +1040,74 @@ internal static class StoreProcessor
     private static void AppendConstSql(StringBuilder source, string fieldName, string sql)
     {
         source.AppendLine($"    private const string {fieldName} = \"{GeneratorHelpers.Escape(sql)}\";");
+    }
+
+    // Synthetic paging parameter names (not entity columns). Bound by the generated paging binder.
+    internal const string OffsetParameterName = "@__offset";
+    internal const string LimitParameterName = "@__limit";
+    internal const string PageSizeParameterName = "@__pageSize";
+
+    internal static string KeysetCursorParameterName(int index) => "@__cursor" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Composes the per-method SQL for an ordered / offset-paged / keyset-paged select: the dialect's
+    /// base SELECT (with WHERE for SelectAllByField or the keyset cursor predicate), a uniform ORDER BY,
+    /// and the dialect-specific pagination tail.
+    /// </summary>
+    private static string BuildSelectPlanSql(SqlBuilder sqlBuilder, SqlBuildContext ctx, IReadOnlyList<ColumnData> fieldColumns, ResolvedSelectPlan plan)
+    {
+        var orderTerms = new List<OrderByTerm>(plan.OrderColumns.Count);
+        foreach (var (column, descending) in plan.OrderColumns)
+        {
+            orderTerms.Add(new OrderByTerm(sqlBuilder.QuoteIdentifier(column.ColumnName), descending));
+        }
+
+        string baseSql;
+        SqlSelectOptions options;
+
+        if (plan.Pagination == Pagination.Keyset)
+        {
+            var keysetColumns = plan.KeysetColumns.Select(c => sqlBuilder.QuoteIdentifier(c.ColumnName)).ToList();
+            var cursorParams = new List<string>(keysetColumns.Count);
+            for (var i = 0; i < keysetColumns.Count; i++)
+            {
+                cursorParams.Add(KeysetCursorParameterName(i));
+            }
+
+            // Keyset requests pageSize+1 rows via FETCH/LIMIT. SqlServer FETCH needs an OFFSET, which is
+            // a literal 0 here (keyset never skips), so the same BuildPaginationClause serves all dialects.
+            // Keyset terms all share one direction, so the first order column's direction is the keyset's.
+            options = new SqlSelectOptions(
+                orderTerms,
+                offsetParameter: "0",
+                limitParameter: PageSizeParameterName,
+                keysetColumns: keysetColumns,
+                keysetCursorParameters: cursorParams,
+                keysetDescending: plan.OrderColumns.Count > 0 && plan.OrderColumns[0].Descending);
+
+            var keysetWhere = sqlBuilder.BuildKeysetPredicate(options);
+            baseSql = "SELECT " + ctx.SelectColumns + " FROM " + ctx.Table + " WHERE " + keysetWhere;
+        }
+        else
+        {
+            options = plan.Pagination == Pagination.Offset
+                ? new SqlSelectOptions(orderTerms, offsetParameter: OffsetParameterName, limitParameter: LimitParameterName)
+                : new SqlSelectOptions(orderTerms);
+
+            baseSql = fieldColumns.Count > 0
+                ? sqlBuilder.BuildSelectByFieldSql(ctx, ToColumnList(fieldColumns))
+                : sqlBuilder.BuildSelectAllSql(ctx);
+        }
+
+        var orderByClause = sqlBuilder.BuildOrderByClause(options);
+        var sql = orderByClause.Length > 0 ? baseSql + " " + orderByClause : baseSql;
+
+        if (plan.Pagination != Pagination.None)
+        {
+            sql += " " + sqlBuilder.BuildPaginationClause(options);
+        }
+
+        return sql;
     }
 
     private static string StripGlobalPrefix(string fullyQualifiedName)
