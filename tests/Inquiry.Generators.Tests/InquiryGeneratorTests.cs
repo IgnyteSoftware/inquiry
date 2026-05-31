@@ -1154,6 +1154,126 @@ public sealed class InquiryGeneratorTests
     }
 
     [Fact]
+    public void MySqlDialectEmitsBacktickIdentifiersAndOnDuplicateKeyUpsertWithEmulatedReturning()
+    {
+        // Spot-checks the MySqlSqlBuilder output for a client-supplied (non-generated) key:
+        // backtick quoting, ON DUPLICATE KEY UPDATE ... VALUES(col) upsert, and the emulated
+        // returning batch (INSERT ...; SELECT ... WHERE key = @Key) since MySQL lacks RETURNING.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn("Name")]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class OrganizationStore : InquiryStore<Organization>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+
+                [InquiryInsert(ReturnEntity = true)]
+                public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
+
+                [InquiryUpdate(ReturnEntity = true)]
+                public partial Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken cancellationToken = default);
+
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(Organization o, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "MySql");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Backtick-quoted identifiers.
+        Assert.Contains("private const string _sqlSelectAll = \"SELECT `Key`, `Name` FROM `TOrganization`\";", generatedText);
+        // Insert-returning: two-statement batch ending in SELECT ... WHERE key = @Key (client key).
+        Assert.Contains("private const string _sqlInsertReturning = \"INSERT INTO `TOrganization` (`Key`, `Name`) VALUES (@Key, @Name); SELECT `Key`, `Name` FROM `TOrganization` WHERE `Key` = @Key\";", generatedText);
+        // Update-returning: UPDATE ...; SELECT ... WHERE keywhere.
+        Assert.Contains("private const string _sqlUpdateReturning = \"UPDATE `TOrganization` SET `Name` = @Name WHERE `Key` = @Key; SELECT `Key`, `Name` FROM `TOrganization` WHERE `Key` = @Key\";", generatedText);
+        // Upsert: ON DUPLICATE KEY UPDATE col = VALUES(col).
+        Assert.Contains("private const string _sqlUpsert = \"INSERT INTO `TOrganization` (`Key`, `Name`) VALUES (@Key, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\";", generatedText);
+    }
+
+    [Fact]
+    public void MySqlDialectEmitsLastInsertIdReturningForGeneratedKey()
+    {
+        // For a database-generated (AUTO_INCREMENT) key, the emulated returning batch selects the
+        // freshly inserted row via LAST_INSERT_ID() (session-scoped, safe on a dedicated connection),
+        // and the generated-key upsert uses the native ON DUPLICATE KEY UPDATE form.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Categories")]
+            public sealed class Category
+            {
+                [InquiryKey("CategoryID", IsGenerated = true)]
+                public int? CategoryID { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class CategoryStore : InquiryStore<Category>
+            {
+                [InquiryInsert(ReturnEntity = true)]
+                public partial Task<Category?> InsertReturningAsync(Category c, CancellationToken cancellationToken = default);
+
+                [InquiryUpsert(ReturnEntity = true)]
+                public partial Task<Category?> UpsertReturningAsync(Category c, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "MySql");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("CategoryStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Generated key omitted from the INSERT column list; returning SELECT keyed on LAST_INSERT_ID().
+        Assert.Contains("private const string _sqlInsertReturning = \"INSERT INTO `Categories` (`Name`) VALUES (@Name); SELECT `CategoryID`, `Name` FROM `Categories` WHERE `CategoryID` = LAST_INSERT_ID()\";", generatedText);
+        // Generated-key upsert-returning: native ON DUPLICATE KEY UPDATE, returning via LAST_INSERT_ID().
+        Assert.Contains("private const string _sqlUpsertReturning = \"INSERT INTO `Categories` (`CategoryID`, `Name`) VALUES (@CategoryID, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `CategoryID`, `Name` FROM `Categories` WHERE `CategoryID` = LAST_INSERT_ID()\";", generatedText);
+    }
+
+    [Fact]
     public void ReportsAmbiguousDialectWhenMultipleProvidersAreReferenced()
     {
         // The test compilation references all three Inquiry provider assemblies (Sqlite,
@@ -1471,6 +1591,7 @@ public sealed class InquiryGeneratorTests
             new global::Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator(),
             new global::Inquiry.SqlServer.Analyzer.InquirySqlServerGenerator().AsSourceGenerator(),
             new global::Inquiry.PostgreSql.Analyzer.InquiryPostgreSqlGenerator().AsSourceGenerator(),
+            new global::Inquiry.MySql.Analyzer.InquiryMySqlGenerator().AsSourceGenerator(),
         };
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
@@ -1498,6 +1619,7 @@ public sealed class InquiryGeneratorTests
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.Sqlite.SqliteInquiryConnectionFactory).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.SqlServer.SqlServerInquiryConnectionFactory).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.PostgreSql.PostgreSqlInquiryConnectionFactory).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.MySql.MySqlInquiryConnectionFactory).Assembly.Location));
 
         return references;
     }
