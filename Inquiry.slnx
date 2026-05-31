@@ -8,6 +8,8 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Inquiry.Generators.Shared/Inquiry.Generators.Shared.csproj" />
+    <Project Path="src/Inquiry.MySql/Inquiry.MySql.csproj" />
+    <Project Path="src/Inquiry.MySql.Analyzer/Inquiry.MySql.Analyzer.csproj" />
     <Project Path="src/Inquiry.PostgreSql/Inquiry.PostgreSql.csproj" />
     <Project Path="src/Inquiry.PostgreSql.Analyzer/Inquiry.PostgreSql.Analyzer.csproj" />
     <Project Path="src/Inquiry.Sqlite/Inquiry.Sqlite.csproj" />
@@ -18,6 +20,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj" />
+    <Project Path="tests/Inquiry.MySql.Tests/Inquiry.MySql.Tests.csproj" />
     <Project Path="tests/Inquiry.PostgreSql.Tests/Inquiry.PostgreSql.Tests.csproj" />
     <Project Path="tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj" />
     <Project Path="tests/Inquiry.SqlServer.Tests/Inquiry.SqlServer.Tests.csproj" />

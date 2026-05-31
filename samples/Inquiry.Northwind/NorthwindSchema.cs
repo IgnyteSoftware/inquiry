@@ -519,4 +519,159 @@ public static class NorthwindSchema
             FOREIGN KEY ("ProductID") REFERENCES "Products"("ProductID")
         );
         """;
+
+    /// <summary>
+    /// MySQL/MariaDB DDL for the full classic Northwind schema. Idempotent: every CREATE uses
+    /// <c>IF NOT EXISTS</c> so re-running against the same database is safe.
+    /// </summary>
+    /// <remarks>
+    /// Identifiers are backtick-quoted (MySQL's native quoting). Generated keys use
+    /// <c>AUTO_INCREMENT</c>; string primary/foreign keys use bounded <c>VARCHAR(n)</c> because MySQL
+    /// cannot index <c>LONGTEXT</c>; unbounded text and blobs use <c>LONGTEXT</c>/<c>LONGBLOB</c> for
+    /// parity with SQLite's unbounded TEXT/BLOB; <c>bool</c> maps to <c>TINYINT(1)</c>.
+    /// </remarks>
+    public static readonly string MySqlDdl = """
+        CREATE TABLE IF NOT EXISTS `Categories` (
+            `CategoryID`    INT AUTO_INCREMENT PRIMARY KEY,
+            `CategoryName`  VARCHAR(40) NOT NULL,
+            `Description`   LONGTEXT,
+            `Picture`       LONGBLOB
+        );
+
+        CREATE TABLE IF NOT EXISTS `Region` (
+            `RegionID`           INT PRIMARY KEY NOT NULL,
+            `RegionDescription`  LONGTEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS `Territories` (
+            `TerritoryID`           VARCHAR(40) PRIMARY KEY NOT NULL,
+            `TerritoryDescription`  LONGTEXT NOT NULL,
+            `RegionID`              INT NOT NULL,
+            FOREIGN KEY (`RegionID`) REFERENCES `Region`(`RegionID`)
+        );
+
+        CREATE TABLE IF NOT EXISTS `Suppliers` (
+            `SupplierID`    INT AUTO_INCREMENT PRIMARY KEY,
+            `CompanyName`   VARCHAR(40) NOT NULL,
+            `ContactName`   LONGTEXT,
+            `ContactTitle`  LONGTEXT,
+            `Address`       LONGTEXT,
+            `City`          LONGTEXT,
+            `Region`        LONGTEXT,
+            `PostalCode`    LONGTEXT,
+            `Country`       LONGTEXT,
+            `Phone`         LONGTEXT,
+            `Fax`           LONGTEXT,
+            `HomePage`      LONGTEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS `Customers` (
+            `CustomerID`    VARCHAR(5) PRIMARY KEY NOT NULL,
+            `CompanyName`   VARCHAR(40) NOT NULL,
+            `ContactName`   LONGTEXT,
+            `ContactTitle`  LONGTEXT,
+            `Address`       LONGTEXT,
+            `City`          LONGTEXT,
+            `Region`        LONGTEXT,
+            `PostalCode`    LONGTEXT,
+            `Country`       LONGTEXT,
+            `Phone`         LONGTEXT,
+            `Fax`           LONGTEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS `CustomerDemographics` (
+            `CustomerTypeID`  VARCHAR(10) PRIMARY KEY NOT NULL,
+            `CustomerDesc`    LONGTEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS `CustomerCustomerDemo` (
+            `CustomerID`      VARCHAR(5)  NOT NULL,
+            `CustomerTypeID`  VARCHAR(10) NOT NULL,
+            PRIMARY KEY (`CustomerID`, `CustomerTypeID`),
+            FOREIGN KEY (`CustomerID`)     REFERENCES `Customers`(`CustomerID`),
+            FOREIGN KEY (`CustomerTypeID`) REFERENCES `CustomerDemographics`(`CustomerTypeID`)
+        );
+
+        CREATE TABLE IF NOT EXISTS `Employees` (
+            `EmployeeID`       INT AUTO_INCREMENT PRIMARY KEY,
+            `LastName`         VARCHAR(40) NOT NULL,
+            `FirstName`        VARCHAR(40) NOT NULL,
+            `Title`            LONGTEXT,
+            `TitleOfCourtesy`  LONGTEXT,
+            `BirthDate`        DATETIME,
+            `HireDate`         DATETIME,
+            `Address`          LONGTEXT,
+            `City`             LONGTEXT,
+            `Region`           LONGTEXT,
+            `PostalCode`       LONGTEXT,
+            `Country`          LONGTEXT,
+            `HomePhone`        LONGTEXT,
+            `Extension`        LONGTEXT,
+            `Photo`            LONGBLOB,
+            `Notes`            LONGTEXT,
+            `ReportsTo`        INT,
+            `PhotoPath`        LONGTEXT,
+            FOREIGN KEY (`ReportsTo`) REFERENCES `Employees`(`EmployeeID`)
+        );
+
+        CREATE TABLE IF NOT EXISTS `EmployeeTerritories` (
+            `EmployeeID`   INT NOT NULL,
+            `TerritoryID`  VARCHAR(40) NOT NULL,
+            PRIMARY KEY (`EmployeeID`, `TerritoryID`),
+            FOREIGN KEY (`EmployeeID`)  REFERENCES `Employees`(`EmployeeID`),
+            FOREIGN KEY (`TerritoryID`) REFERENCES `Territories`(`TerritoryID`)
+        );
+
+        CREATE TABLE IF NOT EXISTS `Shippers` (
+            `ShipperID`    INT AUTO_INCREMENT PRIMARY KEY,
+            `CompanyName`  VARCHAR(40) NOT NULL,
+            `Phone`        LONGTEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS `Products` (
+            `ProductID`        INT AUTO_INCREMENT PRIMARY KEY,
+            `ProductName`      VARCHAR(40) NOT NULL,
+            `SupplierID`       INT,
+            `CategoryID`       INT,
+            `QuantityPerUnit`  LONGTEXT,
+            `UnitPrice`        DECIMAL(19,4) DEFAULT 0,
+            `UnitsInStock`     SMALLINT      DEFAULT 0,
+            `UnitsOnOrder`     SMALLINT      DEFAULT 0,
+            `ReorderLevel`     SMALLINT      DEFAULT 0,
+            `Discontinued`     TINYINT(1)    NOT NULL DEFAULT 0,
+            FOREIGN KEY (`SupplierID`) REFERENCES `Suppliers`(`SupplierID`),
+            FOREIGN KEY (`CategoryID`) REFERENCES `Categories`(`CategoryID`)
+        );
+
+        CREATE TABLE IF NOT EXISTS `Orders` (
+            `OrderID`         INT AUTO_INCREMENT PRIMARY KEY,
+            `CustomerID`      VARCHAR(5),
+            `EmployeeID`      INT,
+            `OrderDate`       DATETIME,
+            `RequiredDate`    DATETIME,
+            `ShippedDate`     DATETIME,
+            `ShipVia`         INT,
+            `Freight`         DECIMAL(19,4) DEFAULT 0,
+            `ShipName`        LONGTEXT,
+            `ShipAddress`     LONGTEXT,
+            `ShipCity`        LONGTEXT,
+            `ShipRegion`      LONGTEXT,
+            `ShipPostalCode`  LONGTEXT,
+            `ShipCountry`     LONGTEXT,
+            FOREIGN KEY (`CustomerID`) REFERENCES `Customers`(`CustomerID`),
+            FOREIGN KEY (`EmployeeID`) REFERENCES `Employees`(`EmployeeID`),
+            FOREIGN KEY (`ShipVia`)    REFERENCES `Shippers`(`ShipperID`)
+        );
+
+        CREATE TABLE IF NOT EXISTS `Order Details` (
+            `OrderID`    INT NOT NULL,
+            `ProductID`  INT NOT NULL,
+            `UnitPrice`  DECIMAL(19,4) NOT NULL DEFAULT 0,
+            `Quantity`   SMALLINT      NOT NULL DEFAULT 1,
+            `Discount`   FLOAT         NOT NULL DEFAULT 0,
+            PRIMARY KEY (`OrderID`, `ProductID`),
+            FOREIGN KEY (`OrderID`)   REFERENCES `Orders`(`OrderID`),
+            FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
+        );
+        """;
 }
