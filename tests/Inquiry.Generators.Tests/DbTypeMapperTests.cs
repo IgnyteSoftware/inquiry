@@ -21,7 +21,7 @@ public sealed class DbTypeMapperTests
     [InlineData(SpecialType.System_Decimal, "global::System.Data.DbType.Decimal")]
     [InlineData(SpecialType.System_String, "global::System.Data.DbType.String")]
     [InlineData(SpecialType.System_Char, "global::System.Data.DbType.StringFixedLength")]
-    [InlineData(SpecialType.System_DateTime, "global::System.Data.DbType.DateTime")]
+    [InlineData(SpecialType.System_DateTime, "global::System.Data.DbType.DateTime2")]
     public void MapsSpecialTypesToDbType(SpecialType specialType, string expected)
     {
         var type = Type(specialType);
