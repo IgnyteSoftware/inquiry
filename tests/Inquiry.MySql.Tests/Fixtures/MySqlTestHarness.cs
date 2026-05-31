@@ -12,11 +12,19 @@ namespace Inquiry.MySql.Tests.Fixtures;
 /// classes never collide on table state.
 /// </summary>
 /// <remarks>
-/// The shared <c>Inquiry.Northwind</c> stores bake their SQL against the SQLite dialect, which quotes
-/// identifiers with double quotes. MySQL only treats <c>"..."</c> as an identifier (rather than a
-/// string literal) under <c>ANSI_QUOTES</c>, so the harness appends that to the session
-/// <c>sql_mode</c> via the connection string. SQL Server tolerates the same SQLite-dialect SQL
-/// natively because its default <c>QUOTED_IDENTIFIER</c> mode is on.
+/// KNOWN LIMITATION — the live CRUD facts in this project are scaffolding and do NOT yet run green
+/// against a real server, even with <see cref="ConnectionStringEnvironmentVariable"/> set. The shared
+/// <c>Inquiry.Northwind</c> stores bake their SQL against the SQLite dialect (double-quoted
+/// identifiers). MySQL only treats <c>"..."</c> as an identifier under <c>ANSI_QUOTES</c>, but that is
+/// a session setting that does NOT propagate across the pooled connections the runtime opens per call
+/// — the <c>SET SESSION sql_mode</c> below only affects the one-off DDL connection. Forcing
+/// <c>ANSI_QUOTES</c> in the production <see cref="MySqlInquiryConnectionFactory"/> would be wrong (a
+/// real consumer compiles their entities with the MySQL analyzer and gets correct backtick SQL with no
+/// mode change). The proper fix is a MySQL-analyzer build of the Northwind entities/stores for this
+/// test project — tracked as a follow-up. The provider's emitted SQL is verified correct by the
+/// generator emission tests; this gap is purely a shared-test-fixture dialect mismatch.
+/// (SQL Server tolerates the SQLite-dialect SQL natively because its default
+/// <c>QUOTED_IDENTIFIER</c> mode is on.)
 /// </remarks>
 internal sealed class MySqlTestHarness : IAsyncDisposable
 {
@@ -63,9 +71,9 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         var connectionString = new MySqlConnectionStringBuilder(adminConnectionString)
         {
             Database = databaseName,
-            // See remarks: make the SQLite-dialect (double-quoted) generated SQL resolve on MySQL.
-            // Also keep MySqlConnector's default multi-statement support on for the emulated
-            // INSERT ...; SELECT returning batches.
+            // Keep MySqlConnector's default multi-statement support on for the emulated
+            // INSERT ...; SELECT returning batches. NOTE: this does NOT make the SQLite-dialect
+            // Northwind SQL resolve on MySQL — see the type remarks for the known limitation.
             AllowUserVariables = true,
         }.ToString();
 
