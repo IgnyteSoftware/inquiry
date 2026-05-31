@@ -37,6 +37,16 @@ public abstract class SqlBuilder
 
     public abstract string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns);
 
+    /// <summary>
+    /// Builds a SELECT whose WHERE clause is the AND/OR composition of <paramref name="predicates"/>.
+    /// Dialect-uniform: the base implementation renders every operator portably (comparison, BETWEEN,
+    /// IS [NOT] NULL, plus the <see cref="RenderLike"/>/<see cref="RenderIn"/> hooks). Providers only
+    /// override a hook when their LIKE/IN syntax differs. The composed predicate body is routed through
+    /// <see cref="AppendWhere"/> so it stays consistent with key/field WHERE shaping.
+    /// </summary>
+    public virtual string BuildSelectByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + RenderPredicates(predicates);
+
     public abstract string BuildInsertSql(SqlBuildContext context);
 
     public abstract string BuildInsertReturningSql(SqlBuildContext context);
@@ -76,4 +86,61 @@ public abstract class SqlBuilder
             ? extraPredicate!
             : whereClause + " AND " + extraPredicate;
     }
+
+    /// <summary>
+    /// Renders the predicate body (no leading <c>WHERE</c>) by joining each criterion with AND, or OR
+    /// when <see cref="SqlPredicate.IsOr"/> is set. Composition is left-to-right with no parentheses
+    /// (single flat OR level, per W1's YAGNI boundary).
+    /// </summary>
+    protected string RenderPredicates(IReadOnlyList<SqlPredicate> predicates)
+    {
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < predicates.Count; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(predicates[i].IsOr ? " OR " : " AND ");
+            }
+
+            sb.Append(RenderPredicate(predicates[i]));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>Renders a single criterion. Dispatches LIKE and IN to overridable hooks.</summary>
+    protected string RenderPredicate(SqlPredicate predicate)
+    {
+        var column = QuoteIdentifier(predicate.Column.ColumnName);
+        switch (predicate.Op)
+        {
+            case SqlCompareOp.Equal: return column + " = " + predicate.ParameterName;
+            case SqlCompareOp.NotEqual: return column + " <> " + predicate.ParameterName;
+            case SqlCompareOp.GreaterThan: return column + " > " + predicate.ParameterName;
+            case SqlCompareOp.GreaterThanOrEqual: return column + " >= " + predicate.ParameterName;
+            case SqlCompareOp.LessThan: return column + " < " + predicate.ParameterName;
+            case SqlCompareOp.LessThanOrEqual: return column + " <= " + predicate.ParameterName;
+            case SqlCompareOp.Between: return column + " BETWEEN " + predicate.ParameterName + " AND " + predicate.ParameterNameHi;
+            case SqlCompareOp.IsNull: return column + " IS NULL";
+            case SqlCompareOp.IsNotNull: return column + " IS NOT NULL";
+            case SqlCompareOp.Like: return RenderLike(column, predicate.ParameterName!);
+            case SqlCompareOp.In: return RenderIn(column, predicate.ParameterName!);
+            default: return column + " = " + predicate.ParameterName;
+        }
+    }
+
+    /// <summary>
+    /// Renders a LIKE criterion. The parameter value carries the pattern (callers escape <c>%</c>/<c>_</c>);
+    /// override to add a dialect-specific <c>ESCAPE</c> clause.
+    /// </summary>
+    protected virtual string RenderLike(string quotedColumn, string parameterName)
+        => quotedColumn + " LIKE " + parameterName;
+
+    /// <summary>
+    /// Renders an IN criterion as a single-placeholder sentinel — the runtime binder expands the one
+    /// parameter into <c>(@p0, @p1, …)</c> or <c>(NULL)</c>/<c>1=0</c> for an empty collection. Override
+    /// only if a dialect prefers array parameters (e.g. PostgreSQL <c>= ANY</c>).
+    /// </summary>
+    protected virtual string RenderIn(string quotedColumn, string parameterName)
+        => quotedColumn + " IN (" + parameterName + ")";
 }

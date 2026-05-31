@@ -136,4 +136,20 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor PredicateInRequiresCollection = new(
+        "INQ018",
+        "InquiryWhere In operator requires a collection parameter of the column type",
+        "Query method '{0}' uses Compare.In on field '{1}', which requires a single IEnumerable<T> parameter whose element type matches the column type.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor PredicateParameterMismatch = new(
+        "INQ019",
+        "InquiryWhere criteria do not match the method parameters",
+        "Query method '{0}' has [InquiryWhere] criteria whose operators and parameters do not line up (check arity, parameter order, and that Like is applied to a string field).",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
