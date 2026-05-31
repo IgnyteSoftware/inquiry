@@ -1153,6 +1153,225 @@ public sealed class InquiryGeneratorTests
         Assert.Contains("ON CONFLICT (\\\"Key\\\") DO UPDATE SET \\\"Name\\\" = @Name", generatedText);
     }
 
+    private const string PredicateEntitySource = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("Products")]
+        public sealed class Product
+        {
+            [InquiryKey]
+            public Guid Id { get; set; }
+
+            [InquiryColumn]
+            public string ProductName { get; set; } = string.Empty;
+
+            [InquiryColumn]
+            public decimal? UnitPrice { get; set; }
+
+            [InquiryColumn]
+            public short? UnitsInStock { get; set; }
+
+            [InquiryColumn]
+            public int? CategoryId { get; set; }
+
+            [InquiryColumn]
+            public bool Discontinued { get; set; }
+        }
+
+        public partial class ProductStore : InquiryStore<Product>
+        {
+            STORE_METHODS
+        }
+        """;
+
+    private static string PredicateSource(string storeMethods)
+        => PredicateEntitySource.Replace("STORE_METHODS", storeMethods);
+
+    [Fact]
+    public void SelectAllByPredicateEmitsComparisonAndLikeWhereClause()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("UnitPrice", Compare.GreaterThanOrEqual)]
+                [InquiryWhere("ProductName", Compare.Like)]
+                public partial Task<IReadOnlyList<Product>> SearchAsync(decimal? minPrice, string namePattern, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        // Comparison + LIKE compose with AND; parameter names derive from the resolved column.
+        Assert.Contains(
+            "private const string _sqlPredicate_SearchAsync = \"SELECT \\\"Id\\\", \\\"ProductName\\\", \\\"UnitPrice\\\", \\\"UnitsInStock\\\", \\\"CategoryId\\\", \\\"Discontinued\\\" FROM \\\"Products\\\" WHERE \\\"UnitPrice\\\" >= @UnitPrice AND \\\"ProductName\\\" LIKE @ProductName\";",
+            generatedText);
+
+        // Scalar predicates bind through a DbCommand binder with the same column-derived names.
+        Assert.Contains("_p0.ParameterName = \"@UnitPrice\";", generatedText);
+        Assert.Contains("_p1.ParameterName = \"@ProductName\";", generatedText);
+    }
+
+    [Fact]
+    public void SelectAllByPredicateEmitsBetweenWithLoHiParameters()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("UnitsInStock", Compare.Between)]
+                public partial Task<IReadOnlyList<Product>> InStockRangeAsync(short? low, short? high, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        Assert.Contains(
+            "WHERE \\\"UnitsInStock\\\" BETWEEN @UnitsInStock_lo AND @UnitsInStock_hi\";",
+            generatedText);
+        Assert.Contains("_p0.ParameterName = \"@UnitsInStock_lo\";", generatedText);
+        Assert.Contains("_p1.ParameterName = \"@UnitsInStock_hi\";", generatedText);
+    }
+
+    [Fact]
+    public void SelectAllByPredicateEmitsInSentinelAndRuntimeExpansion()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> InCategoriesAsync(IReadOnlyList<int> categoryIds, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        // IN bakes a single-placeholder sentinel into the const SQL; the binder expands it at run time.
+        Assert.Contains("WHERE \\\"CategoryId\\\" IN (@CategoryId)\";", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@CategoryId\", categoryIds);", generatedText);
+    }
+
+    [Fact]
+    public void SelectAllByPredicateEmitsIsNullWithNoParameters()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.IsNull)]
+                public partial Task<IReadOnlyList<Product>> WithoutCategoryAsync(CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        Assert.Contains("WHERE \\\"CategoryId\\\" IS NULL\";", generatedText);
+        // No parameters are created for a null-test predicate.
+        Assert.DoesNotContain("CreateParameter()", generatedText);
+    }
+
+    [Fact]
+    public void SelectAllByPredicateEmitsOrGroupInDeclarationOrder()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("Discontinued", Compare.Equal)]
+                [InquiryWhere("UnitsInStock", Compare.LessThan, Or = true)]
+                public partial Task<IReadOnlyList<Product>> DiscontinuedOrLowStockAsync(bool discontinued, short? threshold, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        Assert.Contains(
+            "WHERE \\\"Discontinued\\\" = @Discontinued OR \\\"UnitsInStock\\\" < @UnitsInStock\";",
+            generatedText);
+    }
+
+    [Fact]
+    public void SqlServerSelectAllByPredicateUsesBracketIdentifiers()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("UnitPrice", Compare.GreaterThanOrEqual)]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> SearchAsync(decimal? minPrice, System.Collections.Generic.IReadOnlyList<int> categoryIds, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        Assert.Contains("WHERE [UnitPrice] >= @UnitPrice AND [CategoryId] IN (@CategoryId)", generatedText);
+    }
+
+    [Fact]
+    public void ReportsInRequiresCollectionDiagnostic()
+    {
+        // Compare.In with a scalar parameter (not a collection) is INQ018.
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> InCategoriesAsync(int categoryId, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ018");
+    }
+
+    [Fact]
+    public void ReportsParameterMismatchDiagnosticForWrongArity()
+    {
+        // Two scalar criteria but only one non-CancellationToken parameter is INQ019.
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("UnitPrice", Compare.GreaterThanOrEqual)]
+                [InquiryWhere("ProductName", Compare.Like)]
+                public partial Task<IReadOnlyList<Product>> SearchAsync(decimal? minPrice, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ019");
+    }
+
+    [Fact]
+    public void ReportsUnknownFieldDiagnosticForUnmappedPredicateField()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("DoesNotExist", Compare.Equal)]
+                public partial Task<IReadOnlyList<Product>> SearchAsync(int value, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ007");
+    }
+
+    private static string GeneratedProductStoreText(GeneratorTestResult result)
+    {
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.Empty(errors);
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("ProductStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        return generatedStore.GetText().ToString();
+    }
+
     [Fact]
     public void MySqlDialectEmitsBacktickIdentifiersAndOnDuplicateKeyUpsertWithEmulatedReturning()
     {

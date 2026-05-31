@@ -19,6 +19,7 @@ internal static class StoreOperationEmitter
         StringBuilder source,
         StoreMethodData method,
         IReadOnlyList<ColumnData> fieldColumns,
+        ResolvedPredicatePlan? predicatePlan,
         EntityData entity,
         Dictionary<string, EntityData> relationChildEntities)
     {
@@ -72,6 +73,12 @@ internal static class StoreOperationEmitter
                     source.AppendLine("            default,");
                     source.AppendLine($"            {cancellation});");
                 }
+                source.AppendLine("    }");
+                break;
+
+            case StoreOperation.SelectAllByPredicate:
+                AppendHeader(source, method, parameters, isAsync: false);
+                EmitSelectAllByPredicate(source, method, predicatePlan!, entityType, structMat, cancellation);
                 source.AppendLine("    }");
                 break;
 
@@ -313,6 +320,53 @@ internal static class StoreOperationEmitter
         AppendBinderLambda(source, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "    ");
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation});");
+    }
+
+    /// <summary>
+    /// Emits a <c>SelectAllByPredicate</c> body. Predicate methods route through an
+    /// <see cref="global::Inquiry.Commands.InquiryCommand"/> with a <c>DbCommandBinder</c> closure so a
+    /// single path covers both scalar binding and the IN command-text rewrite (the binder runs after the
+    /// pipeline assigns the command text, which is what lets <see cref="global::Inquiry.Parameters.InquiryInExpansion"/>
+    /// expand the sentinel). Buffered methods use the list overload; streaming ones use QueryAsync.
+    /// </summary>
+    private static void EmitSelectAllByPredicate(
+        StringBuilder source,
+        StoreMethodData method,
+        ResolvedPredicatePlan plan,
+        string entityType,
+        string structMat,
+        string cancellation)
+    {
+        source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
+        source.AppendLine($"            _sqlPredicate_{method.Name},");
+        source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
+        source.AppendLine("            {");
+        for (var i = 0; i < plan.Bindings.Count; i++)
+        {
+            var binding = plan.Bindings[i];
+            var arg = method.Parameters[binding.MethodParameterIndex].Name;
+            if (binding.IsCollection)
+            {
+                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg});");
+            }
+            else
+            {
+                source.AppendLine($"                var _p{i} = _c.CreateParameter();");
+                source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
+                source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg)};");
+                source.AppendLine($"                _c.Parameters.Add(_p{i});");
+            }
+        }
+        source.AppendLine("            });");
+
+        if (method.ReturnsList)
+        {
+            source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
+        }
+        else
+        {
+            source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
+        }
     }
 
     private static void EmitFastQuerySingleFromEntity(
