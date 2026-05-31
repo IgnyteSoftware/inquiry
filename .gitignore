@@ -11,6 +11,9 @@
 *.sln.docstates
 *.env
 
+# Claude Code local worktrees (transient agent worktrees; never commit)
+.claude/worktrees/
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
