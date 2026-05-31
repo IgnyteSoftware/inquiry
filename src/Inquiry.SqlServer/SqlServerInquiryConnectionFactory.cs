@@ -39,7 +39,7 @@ public sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFactor
         {
             _retryingOpener = new RetryingConnectionOpener(
                 new SqlServerTransientErrorDetector(),
-                _options.MaxRetries,
+                _options.MaxAttempts,
                 _options.RetryBaseDelay);
         }
     }

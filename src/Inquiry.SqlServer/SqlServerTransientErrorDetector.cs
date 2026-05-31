@@ -13,7 +13,9 @@ public sealed class SqlServerTransientErrorDetector : ITransientErrorDetector
     /// <summary>
     /// Azure SQL transient fault numbers (throttling, failover, connection-broker, and
     /// connection-reset conditions). Sources: Azure SQL "troubleshoot transient connection errors"
-    /// guidance.
+    /// guidance; the set intentionally aligns with EF Core's canonical
+    /// <c>SqlServerTransientExceptionDetector</c> (hence the connection-level additions 20/64/4221),
+    /// so it is a deliberate, slightly broader superset of the bare spec list rather than drift.
     /// </summary>
     private static readonly HashSet<int> TransientErrorNumbers = new()
     {

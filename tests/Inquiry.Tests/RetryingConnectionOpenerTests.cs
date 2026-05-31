@@ -129,4 +129,23 @@ public sealed class RetryingConnectionOpenerTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new RetryingConnectionOpener(new PredicateDetector(_ => true), maxAttempts: 0, TimeSpan.Zero));
     }
+
+    [Fact]
+    public async Task CancellationIsNotRetriedAndPropagates()
+    {
+        var opener = TransientOpener(maxAttempts: 5, out var delays);
+        var attempts = 0;
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => opener.OpenAsync(ct =>
+        {
+            attempts++;
+            ct.ThrowIfCancellationRequested();
+            return new ValueTask<DbConnection>(new FakeConnection());
+        }, cts.Token).AsTask());
+
+        Assert.Equal(1, attempts); // a cancelled token is not transient — no retry
+        Assert.Empty(delays);
+    }
 }

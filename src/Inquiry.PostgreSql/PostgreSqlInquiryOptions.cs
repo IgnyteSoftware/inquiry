@@ -20,7 +20,7 @@ public sealed class PostgreSqlInquiryOptions
     /// Gets or sets the total number of connection-open attempts (initial try plus retries) used
     /// when <see cref="Compatibility"/> enables retry. Defaults to <c>5</c>.
     /// </summary>
-    public int MaxRetries { get; set; } = 5;
+    public int MaxAttempts { get; set; } = 5;
 
     /// <summary>
     /// Gets or sets the base exponential-backoff delay between open attempts. Defaults to
