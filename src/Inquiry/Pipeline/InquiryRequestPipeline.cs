@@ -37,18 +37,58 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     private readonly IInquiryConnectionFactory _connectionFactory;
     private readonly IInquiryCommandInterceptor[] _interceptors;
 
+    // True when Auto preparation is configured AND the provider's prepared state survives the
+    // connection lifecycle. The per-command StoredProcedure check is applied at the call site.
+    private readonly bool _prepareEnabled;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryRequestPipeline"/> class.
     /// </summary>
     public InquiryRequestPipeline(
         IInquiryConnectionFactory connectionFactory,
         IEnumerable<IInquiryCommandInterceptor> interceptors)
+        : this(connectionFactory, interceptors, options: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InquiryRequestPipeline"/> class with options.
+    /// </summary>
+    public InquiryRequestPipeline(
+        IInquiryConnectionFactory connectionFactory,
+        IEnumerable<IInquiryCommandInterceptor> interceptors,
+        InquiryOptions? options)
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _interceptors = interceptors?.ToArray() ?? throw new ArgumentNullException(nameof(interceptors));
+        _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.None) == PreparedStatementMode.Auto
+            && _connectionFactory.SupportsPersistentPreparedStatements;
     }
 
     private bool HasInterceptors => _interceptors.Length > 0;
+
+    /// <summary>
+    /// Creates a command on <paramref name="connection"/> and runs the factory's
+    /// <see cref="IInquiryConnectionFactory.InitializeCommand"/> hook (F4).
+    /// </summary>
+    private DbCommand CreateCommand(DbConnection connection)
+    {
+        var dbCommand = connection.CreateCommand();
+        _connectionFactory.InitializeCommand(dbCommand);
+        return dbCommand;
+    }
+
+    // Prepares the command when enabled and it is not a stored procedure. Kept as a single guarded
+    // statement so the default (off) path stays branch-cheap.
+    private ValueTask MaybePrepareAsync(DbCommand dbCommand, CancellationToken cancellationToken)
+    {
+        if (_prepareEnabled && dbCommand.CommandType != CommandType.StoredProcedure)
+        {
+            return new ValueTask(dbCommand.PrepareAsync(cancellationToken));
+        }
+
+        return default;
+    }
 
     // ---- Class-materializer overloads (ad-hoc IInquiry path) -----------------------------
 
@@ -63,7 +103,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
         DbDataReader? reader = null;
         try
         {
@@ -76,6 +116,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             try
             {
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
@@ -132,7 +173,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
 
         try
         {
@@ -143,6 +184,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
             var list = new List<T>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -171,7 +213,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
 
         try
         {
@@ -182,6 +224,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -222,7 +265,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (command is null) throw new ArgumentNullException(nameof(command));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
         DbDataReader? reader = null;
         try
         {
@@ -235,6 +278,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             try
             {
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
@@ -291,7 +335,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (command is null) throw new ArgumentNullException(nameof(command));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
 
         try
         {
@@ -302,6 +346,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
             var list = new List<T>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -330,7 +375,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (command is null) throw new ArgumentNullException(nameof(command));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
 
         try
         {
@@ -341,6 +386,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -378,7 +424,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
         // Lazy: only allocate the InquiryCommand if interceptors need to observe the command.
         InquiryCommand? interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
@@ -392,6 +438,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
             var list = new List<T>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -423,7 +470,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
         InquiryCommand? interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
         try
@@ -436,6 +483,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -465,7 +513,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (command is null) throw new ArgumentNullException(nameof(command));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
 
         try
         {
@@ -476,6 +524,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
@@ -499,7 +548,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
 
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var dbCommand = connection.CreateCommand();
+        await using var dbCommand = CreateCommand(connection);
         // Lazy: only allocate the InquiryCommand if interceptors are present (and only for the
         // failure path if execution throws before the first interceptor call).
         InquiryCommand? interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
@@ -515,6 +564,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);

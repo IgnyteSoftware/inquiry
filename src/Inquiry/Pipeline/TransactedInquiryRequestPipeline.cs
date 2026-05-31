@@ -1,4 +1,5 @@
 using Inquiry.Commands;
+using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Parameters;
@@ -25,19 +26,49 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
     private readonly IInquiryCommandInterceptor[] _interceptors;
+    private readonly IInquiryConnectionFactory _connectionFactory;
+    private readonly bool _prepareEnabled;
     private int _inFlight; // 0 = idle, 1 = busy
 
     internal TransactedInquiryRequestPipeline(
         DbConnection connection,
         DbTransaction transaction,
-        IInquiryCommandInterceptor[] interceptors)
+        IInquiryCommandInterceptor[] interceptors,
+        IInquiryConnectionFactory connectionFactory,
+        InquiryOptions? options)
     {
         _connection = connection;
         _transaction = transaction;
         _interceptors = interceptors;
+        _connectionFactory = connectionFactory;
+        _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.None) == PreparedStatementMode.Auto
+            && _connectionFactory.SupportsPersistentPreparedStatements;
     }
 
     private bool HasInterceptors => _interceptors.Length > 0;
+
+    /// <summary>
+    /// Creates a transaction-enlisted command and runs the factory's
+    /// <see cref="IInquiryConnectionFactory.InitializeCommand"/> hook (F4).
+    /// </summary>
+    private DbCommand CreateCommand()
+    {
+        var dbCommand = _connection.CreateCommand();
+        _connectionFactory.InitializeCommand(dbCommand);
+        return dbCommand;
+    }
+
+    // Prepares the command when enabled and it is not a stored procedure. In a transaction the same
+    // physical connection is reused across operations, so preparation is especially valuable here.
+    private ValueTask MaybePrepareAsync(DbCommand dbCommand, CancellationToken cancellationToken)
+    {
+        if (_prepareEnabled && dbCommand.CommandType != CommandType.StoredProcedure)
+        {
+            return new ValueTask(dbCommand.PrepareAsync(cancellationToken));
+        }
+
+        return default;
+    }
 
     // ---- Class-materializer overloads (ad-hoc IInquiry path) -----------------------------
 
@@ -53,7 +84,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
         EnterInFlight();
         DbDataReader? reader = null;
-        var dbCommand = _connection.CreateCommand();
+        var dbCommand = CreateCommand();
         try
         {
             dbCommand.Transaction = _transaction;
@@ -66,6 +97,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
             try
             {
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
@@ -126,7 +158,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = _connection.CreateCommand();
+            await using var dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
 
             try
@@ -138,6 +170,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -173,7 +206,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = _connection.CreateCommand();
+            await using var dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
 
             try
@@ -185,6 +218,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -227,7 +261,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
         EnterInFlight();
         DbDataReader? reader = null;
-        var dbCommand = _connection.CreateCommand();
+        var dbCommand = CreateCommand();
         try
         {
             dbCommand.Transaction = _transaction;
@@ -240,6 +274,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
             try
             {
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
@@ -300,7 +335,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = _connection.CreateCommand();
+            await using var dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
 
             try
@@ -312,6 +347,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -347,7 +383,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = _connection.CreateCommand();
+            await using var dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
 
             try
@@ -359,6 +395,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -403,7 +440,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = _connection.CreateCommand();
+            await using var dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
             var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
@@ -417,6 +454,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -455,7 +493,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = _connection.CreateCommand();
+            await using var dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
             var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
@@ -469,6 +507,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -505,7 +544,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = _connection.CreateCommand();
+            await using var dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
 
             try
@@ -517,6 +556,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
                 if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
@@ -547,7 +587,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = _connection.CreateCommand();
+            await using var dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
             var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
@@ -562,6 +602,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
                 if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);

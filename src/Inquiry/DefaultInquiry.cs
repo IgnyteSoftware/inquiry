@@ -33,6 +33,7 @@ public sealed class DefaultInquiry : IInquiry
     private readonly IInquiryConnectionFactory _connectionFactory;
     private readonly IInquiryCommandInterceptor[] _interceptors;
     private readonly IServiceProvider _serviceProvider;
+    private readonly InquiryOptions? _options;
 
     // The slot stores a *holder* rather than the pipeline directly. Setting an AsyncLocal
     // value from inside an async callee does not propagate back to the caller (see
@@ -55,12 +56,14 @@ public sealed class DefaultInquiry : IInquiry
         IInquiryRequestPipeline requestPipeline,
         IInquiryConnectionFactory connectionFactory,
         IEnumerable<IInquiryCommandInterceptor> interceptors,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        InquiryOptions? options = null)
     {
         _defaultPipeline = requestPipeline ?? throw new ArgumentNullException(nameof(requestPipeline));
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _interceptors = interceptors?.ToArray() ?? throw new ArgumentNullException(nameof(interceptors));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _options = options;
     }
 
     private IInquiryRequestPipeline ActivePipeline => _ambientSlot.Value?.Pipeline ?? _defaultPipeline;
@@ -239,7 +242,7 @@ public sealed class DefaultInquiry : IInquiry
         {
             connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
             var transaction = await connection.BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
-            slot.Pipeline = new TransactedInquiryRequestPipeline(connection, transaction, _interceptors);
+            slot.Pipeline = new TransactedInquiryRequestPipeline(connection, transaction, _interceptors, _connectionFactory, _options);
             return new InquiryTransaction(connection, transaction, this, onClose: () => slot.Pipeline = null);
         }
         catch
