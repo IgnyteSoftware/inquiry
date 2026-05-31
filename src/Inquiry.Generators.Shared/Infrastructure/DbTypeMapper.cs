@@ -45,7 +45,12 @@ internal static class DbTypeMapper
         SpecialType.System_Decimal => "global::System.Data.DbType.Decimal",
         SpecialType.System_String => "global::System.Data.DbType.String",
         SpecialType.System_Char => "global::System.Data.DbType.StringFixedLength",
-        SpecialType.System_DateTime => "global::System.Data.DbType.DateTime",
+        // DateTime2, not DateTime: an explicit DbType is emitted on every mapped parameter even when
+        // prepared statements are off, and SqlClient maps DbType.DateTime to the legacy `datetime`
+        // SQL type (range 1753+, ~3.33ms precision) which can truncate/throw against modern
+        // `datetime2` columns. DbType.DateTime2 round-trips both legacy `datetime` and `datetime2`
+        // and is the modern default; other providers (Npgsql/SQLite/MySQL) treat them equivalently.
+        SpecialType.System_DateTime => "global::System.Data.DbType.DateTime2",
         _ => null,
     };
 }
