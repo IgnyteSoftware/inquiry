@@ -1,4 +1,5 @@
 using Inquiry.Northwind.Models;
+using Inquiry.Paging;
 using Inquiry.Stores;
 
 namespace Inquiry.Northwind.Stores;
@@ -8,6 +9,18 @@ public partial class ProductStore : InquiryStore<Product>
 
     [InquirySelectAll]
     public partial Task<IReadOnlyList<Product>> SelectAllAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAll(OrderBy = "ProductName ASC")]
+    public partial Task<IReadOnlyList<Product>> SelectAllOrderedByNameAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAll(OrderBy = "ProductID ASC", Paged = true)]
+    public partial Task<IReadOnlyList<Product>> PageByIdAsync(int offset, int limit, CancellationToken cancellationToken = default);
+
+    [InquiryKeysetPage("ProductID")]
+    public partial Task<InquiryPage<Product, int>> KeysetByIdAsync(int? afterProductID, int pageSize, CancellationToken cancellationToken = default);
+
+    [InquiryKeysetPage("ProductName", "ProductID")]
+    public partial Task<InquiryPage<Product, (string, int)>> KeysetByNameThenIdAsync((string, int)? after, int pageSize, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
     public partial Task<Product?> SelectByKeyAsync(int? productID, CancellationToken cancellationToken = default);

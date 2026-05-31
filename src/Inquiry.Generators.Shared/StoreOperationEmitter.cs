@@ -20,6 +20,7 @@ internal static class StoreOperationEmitter
         StoreMethodData method,
         IReadOnlyList<ColumnData> fieldColumns,
         ResolvedPredicatePlan? predicatePlan,
+        ResolvedSelectPlan? selectPlan,
         EntityData entity,
         Dictionary<string, EntityData> relationChildEntities)
     {
@@ -29,14 +30,33 @@ internal static class StoreOperationEmitter
         var firstParameter = method.Parameters.Count > 1 ? method.Parameters[0].Name : "entity";
         var parameters = GetParameterDeclaration(method.Parameters);
 
+        // SelectAllByField with a plan (ordered and/or offset-paged) and SelectAll that is offset-paged
+        // route through a dedicated emitter (own SQL const + filter/offset/limit binder). Ordered-only
+        // SelectAll has no parameters to bind, so it falls through to the shared SelectAll case below
+        // (which references selectPlan.SqlFieldName).
+        if (selectPlan is not null &&
+            (selectPlan.Pagination == Pagination.Offset || method.Operation == StoreOperation.SelectAllByField))
+        {
+            AppendHeader(source, method, parameters, isAsync: false);
+            EmitOffsetPaged(source, method, fieldColumns, selectPlan, entityType, structMat, cancellation);
+            source.AppendLine("    }");
+            return;
+        }
+
         switch (method.Operation)
         {
+            case StoreOperation.KeysetPage:
+                AppendHeader(source, method, parameters, isAsync: true);
+                EmitKeysetPage(source, method, selectPlan!, entityType, structMat, cancellation);
+                source.AppendLine("    }");
+                break;
+
             case StoreOperation.SelectAll:
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine(method.ReturnsList
                     ? $"        return Inquiry.QueryListAsync<{entityType}, {structMat}>("
                     : $"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
-                source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(_sqlSelectAll),");
+                source.AppendLine($"            new global::Inquiry.Commands.InquiryCommand({(selectPlan is null ? "_sqlSelectAll" : selectPlan.SqlFieldName)}),");
                 source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
@@ -373,6 +393,142 @@ internal static class StoreOperationEmitter
             source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
         }
     }
+
+    /// <summary>
+    /// Emits an ordered and/or offset-paged buffered select. Binds the field/filter parameters (for
+    /// SelectAllByField) and, when offset-paged, the synthetic <c>@__offset</c>/<c>@__limit</c> int
+    /// parameters via a <c>DbCommandBinder</c> closure over the per-method SQL const.
+    /// </summary>
+    private static void EmitOffsetPaged(
+        StringBuilder source,
+        StoreMethodData method,
+        IReadOnlyList<ColumnData> fieldColumns,
+        ResolvedSelectPlan plan,
+        string entityType,
+        string structMat,
+        string cancellation)
+    {
+        var paged = plan.Pagination == Pagination.Offset;
+
+        source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
+        source.AppendLine($"            {plan.SqlFieldName},");
+        source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
+        source.AppendLine("            {");
+
+        var pi = 0;
+        for (var i = 0; i < fieldColumns.Count; i++)
+        {
+            var arg = method.Parameters[i].Name;
+            source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+            source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(fieldColumns[i].PropertyName)}\";");
+            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg)};");
+            source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+            pi++;
+        }
+
+        if (paged)
+        {
+            var offsetArg = method.Parameters[fieldColumns.Count].Name;
+            var limitArg = method.Parameters[fieldColumns.Count + 1].Name;
+            AppendScalarIntParameter(source, ref pi, "@__offset", offsetArg);
+            AppendScalarIntParameter(source, ref pi, "@__limit", limitArg);
+        }
+
+        source.AppendLine("            });");
+        source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
+    }
+
+    /// <summary>
+    /// Emits a keyset-paged select returning <c>InquiryPage&lt;TEntity, TCursor&gt;</c>. Binds the cursor
+    /// (or its tuple elements) and <c>pageSize + 1</c> to the per-method SQL const, materializes the
+    /// over-fetched list, trims to the page size, derives <c>NextCursor</c> from the last item's key, and
+    /// reports <c>HasMore</c>.
+    /// </summary>
+    private static void EmitKeysetPage(
+        StringBuilder source,
+        StoreMethodData method,
+        ResolvedSelectPlan plan,
+        string entityType,
+        string structMat,
+        string cancellation)
+    {
+        var cursorParam = method.Parameters[0].Name;
+        var pageSizeParam = method.Parameters[1].Name;
+        var cursorType = method.Parameters[0].TypeDisplay;
+        var single = plan.KeysetColumns.Count == 1;
+
+        source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
+        source.AppendLine($"            {plan.SqlFieldName},");
+        source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
+        source.AppendLine("            {");
+
+        var pi = 0;
+        for (var i = 0; i < plan.KeysetColumns.Count; i++)
+        {
+            // Each cursor column gets its own parameter; a null cursor binds DBNull (the SQL guard makes
+            // the comparison a no-op on the first/null page).
+            var valueExpr = single
+                ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
+                : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
+            source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+            source.AppendLine($"                _p{pi}.ParameterName = \"@__cursor{i}\";");
+            source.AppendLine($"                _p{pi}.Value = {valueExpr};");
+            source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+            pi++;
+        }
+
+        AppendScalarIntParameter(source, ref pi, "@__pageSize", pageSizeParam + " + 1");
+
+        source.AppendLine("            });");
+        source.AppendLine($"        var _rows = await Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation}).ConfigureAwait(false);");
+        source.AppendLine($"        var _hasMore = _rows.Count > {pageSizeParam};");
+        source.AppendLine($"        var _items = _hasMore ? new global::System.Collections.Generic.List<{entityType}>(_rows.Count - 1) : _rows;");
+        source.AppendLine("        if (_hasMore)");
+        source.AppendLine("        {");
+        source.AppendLine($"            for (var _i = 0; _i < {pageSizeParam}; _i++) ((global::System.Collections.Generic.List<{entityType}>)_items).Add(_rows[_i]);");
+        source.AppendLine("        }");
+
+        // NextCursor from the last returned item's key column(s); null on an empty page.
+        var nonNullableCursor = StripNullable(cursorType);
+        if (single)
+        {
+            var keyAccess = "_items[_items.Count - 1]." + plan.KeysetColumns[0].PropertyName;
+            source.AppendLine($"        {cursorType} _next = _items.Count > 0 ? ({cursorType})({keyAccess}) : default;");
+        }
+        else
+        {
+            var tupleElems = string.Join(", ", plan.KeysetColumns.Select(c =>
+            {
+                var access = "_last." + c.PropertyName;
+                if (!c.Type.IsNullable)
+                {
+                    return access;
+                }
+
+                // A returned row's key is never null in practice, but the compiler can't prove it; coerce
+                // value types with GetValueOrDefault and reference types with the null-forgiving operator.
+                return c.Type.IsValueType ? access + ".GetValueOrDefault()" : access + "!";
+            }));
+            source.AppendLine("        var _last = _items.Count > 0 ? _items[_items.Count - 1] : null;");
+            source.AppendLine($"        {cursorType} _next = _last is not null ? ({nonNullableCursor})({tupleElems}) : default;");
+        }
+
+        source.AppendLine($"        return new global::Inquiry.Paging.InquiryPage<{entityType}, {nonNullableCursor}>(_items, _next, _hasMore);");
+    }
+
+    private static void AppendScalarIntParameter(StringBuilder source, ref int pi, string name, string valueExpr)
+    {
+        source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+        source.AppendLine($"                _p{pi}.ParameterName = \"{name}\";");
+        source.AppendLine($"                _p{pi}.DbType = global::System.Data.DbType.Int32;");
+        source.AppendLine($"                _p{pi}.Value = {valueExpr};");
+        source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+        pi++;
+    }
+
+    /// <summary>Strips a trailing nullable annotation/<c>Nullable&lt;&gt;</c> marker from a cursor type display.</summary>
+    private static string StripNullable(string typeDisplay)
+        => typeDisplay.EndsWith("?", StringComparison.Ordinal) ? typeDisplay.Substring(0, typeDisplay.Length - 1) : typeDisplay;
 
     private static void EmitFastQuerySingleFromEntity(
         StringBuilder source,
