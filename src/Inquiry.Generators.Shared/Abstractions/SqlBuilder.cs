@@ -61,6 +61,64 @@ public abstract class SqlBuilder
 
     public abstract string BuildUpsertReturningSql(SqlBuildContext context);
 
+    /// <summary>
+    /// Builds the ORDER BY clause body (no leading space) for the resolved terms, e.g.
+    /// <c>ORDER BY "Name" ASC, "Id" DESC</c>. Dialect-uniform, so this is the single implementation all
+    /// providers inherit. Returns the empty string when there are no terms.
+    /// </summary>
+    public virtual string BuildOrderByClause(SqlSelectOptions options)
+    {
+        if (options.OrderBy.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var sb = new System.Text.StringBuilder("ORDER BY ");
+        for (var i = 0; i < options.OrderBy.Count; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
+
+            var term = options.OrderBy[i];
+            sb.Append(term.QuotedColumn);
+            sb.Append(term.Descending ? " DESC" : " ASC");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds the offset-pagination tail (no leading space). The portable default is the
+    /// <c>LIMIT @limit OFFSET @offset</c> form used by SQLite, PostgreSQL, and MySQL; SQL Server (and
+    /// Oracle) override with the <c>OFFSET … FETCH</c> form, which requires a preceding ORDER BY.
+    /// </summary>
+    public virtual string BuildPaginationClause(SqlSelectOptions options)
+        => "LIMIT " + options.LimitParameter + " OFFSET " + options.OffsetParameter;
+
+    /// <summary>
+    /// Builds the keyset comparison predicate body (no leading <c>WHERE</c>) for the cursor, wrapped in a
+    /// <c>(@cursor IS NULL OR …)</c> guard so a null cursor selects from the start of the (first) page.
+    /// The portable default uses a row-value comparison <c>(a, b) &gt; (@c0, @c1)</c>; SQL Server, which
+    /// lacks row-value <c>&gt;</c>, overrides with the lexicographic OR-form. Single-column keysets use a
+    /// plain scalar comparison in both.
+    /// </summary>
+    public virtual string BuildKeysetPredicate(SqlSelectOptions options)
+    {
+        var op = options.KeysetDescending ? " < " : " > ";
+        var firstCursor = options.KeysetCursorParameters[0];
+
+        if (options.KeysetColumns.Count == 1)
+        {
+            return "(" + firstCursor + " IS NULL OR " + options.KeysetColumns[0] + op + firstCursor + ")";
+        }
+
+        var columns = "(" + string.Join(", ", options.KeysetColumns) + ")";
+        var cursors = "(" + string.Join(", ", options.KeysetCursorParameters) + ")";
+        return "(" + firstCursor + " IS NULL OR " + columns + op + cursors + ")";
+    }
+
     protected static bool DatabaseMaySupplyKey(SqlBuildContext context)
     {
         if (context.KeyColumns.Count != 1) return false;
