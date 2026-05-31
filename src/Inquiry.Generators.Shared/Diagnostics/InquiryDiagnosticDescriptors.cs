@@ -7,14 +7,14 @@ internal static class InquiryDiagnosticDescriptors
     // ---------------------------------------------------------------------------------------------
     // DIAGNOSTIC-ID REGISTRY (Phase 0 / F7)
     //
-    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017.
+    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ021.
     // Historically skipped (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015.
     //
     // RESERVED RANGES for in-flight feature workstreams so parallel branches do not collide on the
     // next free ID. Claim from your reserved block; if you need more, extend past INQ040 and update
     // this table in the same commit.
-    //   INQ018–INQ019  W1  Richer WHERE predicates      (e.g. bad IN collection, op/type mismatch)
-    //   INQ020–INQ021  W2  ORDER BY + pagination         (paging requires ORDER BY, unknown order field)
+    //   INQ018–INQ019  W1  Richer WHERE predicates      (e.g. bad IN collection, op/type mismatch)  [IN USE]
+    //   INQ020–INQ021  W2  ORDER BY + pagination         (paging requires ORDER BY, unknown order field) [IN USE]
     //   INQ022–INQ023  W3  Batch & bulk operations
     //   INQ024–INQ027  W5  Projections + aggregations    (projection not mapped, unknown column, …)
     //   INQ028–INQ029  W6  Optimistic concurrency        (>1 token, token==key, unsupported dialect)
@@ -149,6 +149,22 @@ internal static class InquiryDiagnosticDescriptors
         "INQ019",
         "InquiryWhere criteria do not match the method parameters",
         "Query method '{0}' has [InquiryWhere] criteria whose operators and parameters do not line up (check arity, parameter order, and that Like is applied to a string field).",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor PagingRequiresOrderBy = new(
+        "INQ020",
+        "Paged query requires an ORDER BY and matching offset/limit (or pageSize) parameters",
+        "Query method '{0}' uses pagination but is missing an ORDER BY clause or the expected paging parameters (offset paging needs OrderBy plus two int parameters; keyset paging needs a nullable cursor plus an int pageSize, and returns InquiryPage<TEntity, TCursor>).",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnknownOrderField = new(
+        "INQ021",
+        "ORDER BY / keyset references an unmapped property or column",
+        "Query method '{0}' orders by unmapped field '{1}'.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

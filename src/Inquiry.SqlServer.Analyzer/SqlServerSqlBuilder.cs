@@ -89,6 +89,49 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             "OUTPUT " + InsertedColumns(context) + ";";
     }
 
+    /// <summary>
+    /// SQL Server offset pagination uses the ANSI <c>OFFSET … ROWS FETCH NEXT … ROWS ONLY</c> form,
+    /// which requires a preceding ORDER BY (enforced in the generator for all dialects).
+    /// </summary>
+    public override string BuildPaginationClause(SqlSelectOptions options)
+        => "OFFSET " + options.OffsetParameter + " ROWS FETCH NEXT " + options.LimitParameter + " ROWS ONLY";
+
+    /// <summary>
+    /// SQL Server lacks the row-value <c>(a, b) &gt; (@c0, @c1)</c> comparison, so a multi-column keyset
+    /// renders the lexicographic OR-form <c>(a &gt; @c0) OR (a = @c0 AND b &gt; @c1)</c>. Single-column
+    /// keysets fall back to the portable scalar form.
+    /// </summary>
+    public override string BuildKeysetPredicate(SqlSelectOptions options)
+    {
+        if (options.KeysetColumns.Count == 1)
+        {
+            return base.BuildKeysetPredicate(options);
+        }
+
+        var op = options.KeysetDescending ? " < " : " > ";
+        var firstCursor = options.KeysetCursorParameters[0];
+        var sb = new System.Text.StringBuilder();
+        sb.Append('(').Append(firstCursor).Append(" IS NULL OR (");
+        for (var i = 0; i < options.KeysetColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(" OR ");
+            }
+
+            sb.Append('(');
+            for (var j = 0; j < i; j++)
+            {
+                sb.Append(options.KeysetColumns[j]).Append(" = ").Append(options.KeysetCursorParameters[j]).Append(" AND ");
+            }
+
+            sb.Append(options.KeysetColumns[i]).Append(op).Append(options.KeysetCursorParameters[i]).Append(')');
+        }
+
+        sb.Append("))");
+        return sb.ToString();
+    }
+
     private string InsertedColumns(SqlBuildContext context)
         => string.Join(", ", context.Columns.Select(c => "INSERTED." + QuoteIdentifier(c.ColumnName)));
 

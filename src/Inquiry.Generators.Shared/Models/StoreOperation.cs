@@ -9,6 +9,7 @@ internal enum StoreOperation
     SelectOneByKeyEager,
     SelectAllByField,
     SelectAllByPredicate,
+    KeysetPage,
     Insert,
     Update,
     Upsert,
