@@ -71,6 +71,13 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     {
         if (DatabaseMaySupplyKey(context))
         {
+            // KNOWN LIMITATION (follow-up: live MySQL integration): the trailing returning SELECT
+            // keys off LAST_INSERT_ID(). On the INSERT branch that is the freshly generated key, but
+            // on the ON DUPLICATE KEY UPDATE branch no auto-increment is generated, so
+            // LAST_INSERT_ID() reflects the session's prior insert rather than the updated row — the
+            // returned entity may be wrong or empty. Verify and fix (e.g. LAST_INSERT_ID(id) trick or
+            // a key-based predicate) before relying on generated-key upsert-returning against a live
+            // server. The non-generated-key path below is correct (keyed by @Key).
             return BuildGeneratedKeyUpsertSql(context) + "; " + BuildReturningSelect(context);
         }
 
