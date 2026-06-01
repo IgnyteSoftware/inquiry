@@ -17,7 +17,8 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ020–INQ021  W2  ORDER BY + pagination         (paging requires ORDER BY, unknown order field) [IN USE]
     //   INQ022–INQ023  W3  Batch & bulk operations
     //   INQ024–INQ027  W5  Projections + aggregations    (projection not mapped, unknown column, …)
-    //   INQ028–INQ029  W6  Optimistic concurrency        (>1 token, token==key, unsupported dialect)
+    //   INQ028–INQ029  W6  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
+    //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per W8 convention)
     //   INQ030–INQ032  W7  Migrations / schema DDL
     //   INQ033–INQ034  W8  Soft deletes
     //   INQ035         W9  Full-text search              (unsupported by dialect)
@@ -165,6 +166,22 @@ internal static class InquiryDiagnosticDescriptors
         "INQ021",
         "ORDER BY / keyset references an unmapped property or column",
         "Query method '{0}' orders by unmapped field '{1}'.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MultipleConcurrencyTokens = new(
+        "INQ028",
+        "Entity declares more than one InquiryConcurrencyToken column",
+        "Entity '{0}' marks more than one property with [InquiryConcurrencyToken] (e.g. '{1}'). At most one concurrency token is allowed.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConcurrencyTokenIsKey = new(
+        "INQ029",
+        "InquiryConcurrencyToken cannot also be the primary key",
+        "Entity '{0}' marks key property '{1}' with [InquiryConcurrencyToken]. A concurrency token must be a non-key column.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

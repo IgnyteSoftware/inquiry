@@ -849,7 +849,10 @@ internal static class StoreOperationEmitter
 
     private static ColumnData[] SelectMutationColumns(EntityData entity, bool includeKey)
         => entity.Columns.AsImmutableArray()
-            .Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault)
+            // W6: a database-managed token (rowversion) is supplied by the database, so it is never bound
+            // for INSERT (includeKey == false). For UPDATE (includeKey == true) it stays bound — the
+            // WHERE composes @token from its original value, the SET never touches it.
+            .Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken)
             .ToArray();
 
     private static ColumnData? FindColumn(EntityData entity, string propertyName)

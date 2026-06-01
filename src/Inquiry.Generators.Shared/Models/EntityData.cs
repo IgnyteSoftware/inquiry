@@ -31,4 +31,10 @@ internal sealed record EntityData(
     /// here so the store emitter can decide delete→update routing and SELECT filtering without rescanning.
     /// </summary>
     public ColumnData? SoftDeleteColumn { get; init; }
+
+    /// <summary>
+    /// W6: the entity's single <c>[InquiryConcurrencyToken]</c> column, or null when none is declared.
+    /// Cached so the store emitter can emit the conflict-throw branch only for token entities.
+    /// </summary>
+    public ColumnData? ConcurrencyToken { get; init; }
 }
