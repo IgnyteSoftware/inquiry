@@ -42,6 +42,9 @@ public partial class SoftDeleteWidgetStore : InquiryStore<SoftDeleteWidget>
 
     [InquiryRestoreOneByKey]
     public partial Task<bool> RestoreAsync(long id, CancellationToken cancellationToken = default);
+
+    [InquiryCount]
+    public partial Task<long> CountActiveAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -90,6 +93,19 @@ public sealed class SoftDeleteIntegrationTests
         var only = Assert.Single(await store.AllAsync());
         Assert.False(only.IsDeleted);
         Assert.Equal(id, only.Id);
+    }
+
+    [Fact]
+    public async Task CountExcludesSoftDeletedRows()
+    {
+        var (harness, store, id) = await SeedOneAsync();
+        await using var _ = harness;
+        await store.InsertAsync(new SoftDeleteWidget { Name = "Beta" });
+
+        Assert.Equal(2L, await store.CountActiveAsync());
+
+        await store.SoftDeleteAsync(id);
+        Assert.Equal(1L, await store.CountActiveAsync());
     }
 
     [Fact]

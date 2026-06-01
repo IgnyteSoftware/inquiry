@@ -161,6 +161,31 @@ public interface IInquiry
     }
 
     /// <summary>
+    /// W5: executes a command returning a single scalar value (COUNT/SUM/MIN/MAX/AVG). A null/DBNull
+    /// result maps to <c>default(T)</c> (e.g. <see langword="null"/> for a nullable T).
+    /// </summary>
+    /// <remarks>The default throws; <see cref="DefaultInquiry"/> implements it over the pipeline, so
+    /// existing <see cref="IInquiry"/> implementations stay source-compatible.</remarks>
+    Task<T> ExecuteScalarAsync<T>(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Scalar execution requires the built-in DefaultInquiry.");
+
+    /// <summary>W5: scalar query binding parameters via a caller-supplied static delegate (fast path).</summary>
+    Task<T> ExecuteScalarAsync<T, TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return ExecuteScalarAsync<T>(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Buffered query with a struct materializer, binding parameters via a caller-supplied static
     /// delegate. The generated-store path uses this overload to avoid allocating an
     /// <c>InquiryParameter[]</c> or <c>InquiryCommand</c> per call — the delegate writes directly
