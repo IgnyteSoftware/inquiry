@@ -69,6 +69,9 @@ public sealed class DefaultInquiry : IInquiry
     private IInquiryRequestPipeline ActivePipeline => _ambientSlot.Value?.Pipeline ?? _defaultPipeline;
 
     /// <inheritdoc />
+    public bool ThrowOnConcurrencyConflict => _options?.ThrowOnConcurrencyConflict ?? false;
+
+    /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
         string commandText,
         CancellationToken cancellationToken = default)

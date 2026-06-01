@@ -11,6 +11,15 @@ namespace Inquiry;
 /// </summary>
 public interface IInquiry
 {
+    /// <summary>
+    /// Gets whether a 0-row UPDATE/DELETE on an optimistic-concurrency token entity (W6) should throw
+    /// <see cref="InquiryConcurrencyException"/> rather than report <see langword="false"/>. Generated
+    /// stores for token entities read this at the mutation call site; non-token entities never reference
+    /// it. Defaults to <see langword="false"/> so existing <see cref="IInquiry"/> implementations stay
+    /// source-compatible; <see cref="DefaultInquiry"/> surfaces <see cref="InquiryOptions.ThrowOnConcurrencyConflict"/>.
+    /// </summary>
+    bool ThrowOnConcurrencyConflict => false;
+
     // ---- Ad-hoc string overloads (DI-resolved class materializer) ----------------------
 
     /// <summary>Executes a SQL query and streams mapped entities.</summary>
