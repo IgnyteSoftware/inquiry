@@ -282,6 +282,44 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void PostgreSqlSchemaEmitsIndexesWithIfNotExists()
+    {
+        var result = RunGenerator(IndexedUserSource, dialect: "PostgreSql");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("CREATE UNIQUE INDEX IF NOT EXISTS \"UX_AppUser_Email\" ON \"AppUser\" (\"Email\");", ddl);
+        Assert.Contains("CREATE INDEX IF NOT EXISTS \"IX_AppUser_Name\" ON \"AppUser\" (\"Name\");", ddl);
+    }
+
+    [Fact]
+    public void ExplicitIndexNameOverridesDefault()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("AppUser")]
+            public sealed class AppUser
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Email", Length = 128, IsUnique = true, IndexName = "UX_Users_Email_Lower")]
+                public string Email { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("CREATE UNIQUE INDEX IF NOT EXISTS \"UX_Users_Email_Lower\" ON \"AppUser\" (\"Email\");", ddl);
+        Assert.DoesNotContain("UX_AppUser_Email", ddl);
+    }
+
+    [Fact]
     public void PostgreSqlSchemaUsesSerialAndQuotedIdentifiers()
     {
         const string source = """

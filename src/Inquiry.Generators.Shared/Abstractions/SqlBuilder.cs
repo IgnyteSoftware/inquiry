@@ -304,7 +304,9 @@ public abstract class SqlBuilder
 
     /// <summary>
     /// W7b: whether <c>CREATE INDEX IF NOT EXISTS</c> is supported (SQLite/PostgreSQL). False for SQL
-    /// Server, MySQL, and Oracle, whose <c>CREATE INDEX</c> has no portable existence guard.
+    /// Server, MySQL, and Oracle, whose <c>CREATE INDEX</c> has no portable existence guard — on those
+    /// dialects the emitted index DDL is therefore run-once (re-running the schema fails on the index),
+    /// matching Oracle's already non-idempotent <c>CREATE TABLE</c>. Documented on <c>[InquiryColumn]</c>.
     /// </summary>
     protected virtual bool SupportsCreateIndexIfNotExists => false;
 
