@@ -282,7 +282,7 @@ internal static class StoreOperationEmitter
                 for (var _c = 0; _c < insertable.Length; _c++)
                 {
                     var col = insertable[_c];
-                    var dbType = DbTypeMapper.TryGetDbTypeExpression(col.Type);
+                    var dbType = col.EnumAsString ? "global::System.Data.DbType.String" : DbTypeMapper.TryGetDbTypeExpression(col.Type);
                     source.AppendLine("                    {");
                     source.AppendLine("                        var _p = _cmd.CreateParameter();");
                     source.AppendLine($"                        _p.ParameterName = \"@p\" + _r + \"_{_c}\";");
@@ -361,6 +361,14 @@ internal static class StoreOperationEmitter
     /// </summary>
     private static string BuildParameterValueExpression(ColumnData column, string accessor)
     {
+        // W10: enum-as-string binds the enum's member name (a string). A null nullable-enum → NULL.
+        if (column.EnumAsString)
+        {
+            return column.Type.IsNullable
+                ? $"{accessor}.HasValue ? (object){accessor}.Value.ToString() : global::System.DBNull.Value"
+                : $"(object){accessor}.ToString()";
+        }
+
         if (!column.Type.IsEnum)
         {
             return $"(object?){accessor} ?? global::System.DBNull.Value";
@@ -443,7 +451,9 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
-            var dbType = DbTypeMapper.TryGetDbTypeExpression(column.Type);
+            // W10: enum-as-string binds a string value, so force DbType.String (the type's own mapping
+            // would yield the enum's underlying integer DbType, which mismatches the bound value).
+            var dbType = column.EnumAsString ? "global::System.Data.DbType.String" : DbTypeMapper.TryGetDbTypeExpression(column.Type);
             if (dbType is not null)
             {
                 source.AppendLine($"{indent}    _p{i}.DbType = {dbType};");
