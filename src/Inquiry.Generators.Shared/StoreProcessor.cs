@@ -1062,8 +1062,14 @@ internal static class StoreProcessor
         return method.Operation switch
         {
             StoreOperation.SelectAll or StoreOperation.SelectAllEager => parameters.Count == 1,
-            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey =>
+            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>
                 MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
+            // W6: a concurrency-checked DELETE takes the whole entity (so the expected token value
+            // binds, symmetric with UPDATE); a plain DELETE on a non-token entity stays key-positional.
+            StoreOperation.DeleteOneByKey =>
+                entity.ConcurrencyToken is not null
+                    ? parameters.Count == 2 && parameters[0].ComparisonDisplay == entity.FullyQualifiedName
+                    : MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
             StoreOperation.SelectAllByField =>
                 fieldColumns.Count > 0 && MatchesPositionalColumns(method, nonCancellationCount, fieldColumns),
             StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert =>

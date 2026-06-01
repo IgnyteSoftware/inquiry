@@ -169,8 +169,24 @@ internal static class StoreOperationEmitter
                     ? "_sqlHardDeleteByKey"
                     : "_sqlDeleteByKey";
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastExecuteFromKeys(source, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ",
-                    emitConcurrencyGuard: entity.ConcurrencyToken is not null);
+                if (entity.ConcurrencyToken is not null)
+                {
+                    // W6: a concurrency-checked DELETE takes the entity and binds the key + token (the
+                    // DELETE WHERE references both); a 0-row result is a conflict and throws when the
+                    // runtime option is set.
+                    var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
+                    source.AppendLine("        var _rows = await Inquiry.ExecuteAsync(");
+                    source.AppendLine($"            {deleteField},");
+                    source.AppendLine($"            {firstParameter},");
+                    AppendBinderLambda(source, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "            ");
+                    source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                    AppendConcurrencyConflictGuard(source, "        ");
+                    source.AppendLine("        return _rows > 0;");
+                }
+                else
+                {
+                    EmitFastExecuteFromKeys(source, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ");
+                }
                 source.AppendLine("    }");
                 break;
             }
