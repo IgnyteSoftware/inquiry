@@ -147,6 +147,25 @@ internal static class StoreProcessor
             }
         }
 
+        string? aggregateFunction = null;
+        string? aggregateColumn = null;
+        string? scalarResultType = null;
+        if (operation == StoreOperation.Aggregate)
+        {
+            var fnValue = attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value : null;
+            aggregateFunction = (fnValue is int fnInt ? fnInt : 0) switch
+            {
+                1 => "AVG",
+                2 => "MIN",
+                3 => "MAX",
+                _ => "SUM",
+            };
+            aggregateColumn = attribute.ConstructorArguments.Length > 1 ? attribute.ConstructorArguments[1].Value as string : null;
+            scalarResultType = method.ReturnType is INamedTypeSymbol { TypeArguments.Length: 1 } aggTask
+                ? aggTask.TypeArguments[0].ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat)
+                : null;
+        }
+
         var returnsList = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate &&
             IsTaskOfReadOnlyList(method.ReturnType, entityType);
         var procedureReturn = operation == StoreOperation.StoredProcedure
@@ -214,6 +233,9 @@ internal static class StoreProcessor
             KeysetDescending = keysetDescending,
             IncludeDeleted = includeDeleted,
             HardDelete = hardDelete,
+            AggregateFunction = aggregateFunction,
+            AggregateColumn = aggregateColumn,
+            ScalarResultType = scalarResultType,
         };
     }
 
@@ -335,6 +357,7 @@ internal static class StoreProcessor
                 case "InquirySelectAllByPredicateAttribute": attribute = candidate; return StoreOperation.SelectAllByPredicate;
                 case "InquiryKeysetPageAttribute": attribute = candidate; return StoreOperation.KeysetPage;
                 case "InquiryCountAttribute": attribute = candidate; return StoreOperation.Count;
+                case "InquiryAggregateAttribute": attribute = candidate; return StoreOperation.Aggregate;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
                 case "InquiryUpdateAttribute": attribute = candidate; return StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
@@ -375,11 +398,18 @@ internal static class StoreProcessor
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
             StoreOperation.Count =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
+            StoreOperation.Aggregate => IsTaskOfSingleTypeArgument(returnType),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
             _ => false,
         };
     }
+
+    private static bool IsTaskOfSingleTypeArgument(ITypeSymbol returnType)
+        => returnType is INamedTypeSymbol task
+            && task.IsGenericType
+            && task.TypeArguments.Length == 1
+            && task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Threading.Tasks.Task<TResult>";
 
     private static bool IsTaskOfReadOnlyList(ITypeSymbol returnType, ITypeSymbol entitySymbol)
     {
@@ -595,6 +625,15 @@ internal static class StoreProcessor
             }
         }
 
+        foreach (var (method, _, _, _) in valid)
+        {
+            if (method.Operation == StoreOperation.Aggregate)
+            {
+                var aggColumn = FindColumn(entity, method.AggregateColumn!)!;
+                AppendConstSql(source, "_sqlAgg_" + method.Name, sqlBuilder.BuildAggregateSql(ctx, method.AggregateFunction!, sqlBuilder.QuoteIdentifier(aggColumn.ColumnName)));
+            }
+        }
+
         // Ordered / paged / keyset selects each get a self-contained per-method const built from the
         // base SELECT plus a uniform ORDER BY and a (dialect-specific) pagination or keyset tail.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
@@ -723,6 +762,12 @@ internal static class StoreProcessor
                 resolved.Add(column);
             }
             fieldColumns = resolved;
+        }
+
+        if (method.Operation == StoreOperation.Aggregate && FindColumn(entity, method.AggregateColumn!) is null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnknownField, method.Location?.ToLocation(), method.Name, method.AggregateColumn));
+            return false;
         }
 
         if (method.Operation == StoreOperation.SelectAllByPredicate)
@@ -1066,7 +1111,7 @@ internal static class StoreProcessor
 
         return method.Operation switch
         {
-            StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count => parameters.Count == 1,
+            StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count or StoreOperation.Aggregate => parameters.Count == 1,
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>
                 MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
             // W6: a concurrency-checked DELETE takes the whole entity (so the expected token value

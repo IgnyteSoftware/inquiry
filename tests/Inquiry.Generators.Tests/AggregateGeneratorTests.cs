@@ -44,6 +44,48 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void AggregateEmitsFunctionSqlAndScalarCall()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TSale")]
+            public sealed class Sale
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryColumn("Amount")]
+                public decimal Amount { get; set; }
+            }
+
+            public partial class SaleStore : Inquiry.Stores.InquiryStore<Demo.Sale>
+            {
+                [InquiryAggregate(InquiryAggregateFunction.Sum, "Amount")]
+                public partial Task<decimal?> SumAsync(CancellationToken cancellationToken = default);
+
+                [InquiryAggregate(InquiryAggregateFunction.Max, "Amount")]
+                public partial Task<decimal?> MaxAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("SaleStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("private const string _sqlAgg_SumAsync = \"SELECT SUM(\\\"Amount\\\") FROM \\\"TSale\\\"\";", text);
+        Assert.Contains("return Inquiry.ExecuteScalarAsync<decimal?>(new global::Inquiry.Commands.InquiryCommand(_sqlAgg_SumAsync)", text);
+        Assert.Contains("private const string _sqlAgg_MaxAsync = \"SELECT MAX(\\\"Amount\\\") FROM \\\"TSale\\\"\";", text);
+    }
+
+    [Fact]
     public void CountRespectsSoftDeleteFilter()
     {
         var result = RunGenerator(WidgetStore("""

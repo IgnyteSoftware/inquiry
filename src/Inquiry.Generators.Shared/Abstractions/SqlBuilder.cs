@@ -108,6 +108,14 @@ public abstract class SqlBuilder
         => "SELECT COUNT(*) FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
 
     /// <summary>
+    /// W5: builds a scalar aggregate (<c>SELECT SUM("col") FROM …</c>). <paramref name="function"/> is the
+    /// ANSI function name (SUM/AVG/MIN/MAX) and <paramref name="quotedColumn"/> is already dialect-quoted.
+    /// Dialect-uniform, so concrete and inherited; composes the soft-delete active filter.
+    /// </summary>
+    public virtual string BuildAggregateSql(SqlBuildContext context, string function, string quotedColumn)
+        => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
+
+    /// <summary>
     /// Builds the ORDER BY clause body (no leading space) for the resolved terms, e.g.
     /// <c>ORDER BY "Name" ASC, "Id" DESC</c>. Dialect-uniform, so this is the single implementation all
     /// providers inherit. Returns the empty string when there are no terms.
