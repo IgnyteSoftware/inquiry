@@ -22,21 +22,24 @@ internal static class MaterializerEmitter
         for (var i = 0; i < columns.Count; i++)
         {
             var column = columns[i];
-            source.AppendLine($"{indent}    {column.PropertyName} = {ReadExpression(column.Type, i, column.EnumAsString)},");
+            source.AppendLine($"{indent}    {column.PropertyName} = {ReadExpression(column.Type, i, column.EnumAsString, column.Converter)},");
         }
         source.AppendLine($"{indent}}};");
     }
 
-    public static string ReadExpression(TypeData type, int index, bool enumAsString = false)
+    public static string ReadExpression(TypeData type, int index, bool enumAsString = false, ConverterData? converter = null)
     {
         var nonNullable = type.NonNullableDisplayName;
-        var read = enumAsString
-            ? $"global::System.Enum.Parse<{nonNullable}>(reader.GetString({index}))"
-            : type.IsEnum
-                ? $"({nonNullable}){ReadCallForSpecialType(type.EnumUnderlyingSpecialType, index, nonNullable)}"
-                : type.IsGuid
-                    ? $"reader.GetGuid({index})"
-                    : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
+        // W10b: a converter reads the provider primitive and maps it back via FromProvider.
+        var read = converter is not null
+            ? $"new {converter.ConverterTypeDisplay}().FromProvider({ReadCallForSpecialType(converter.ProviderSpecialType, index, converter.ProviderTypeDisplay)})"
+            : enumAsString
+                ? $"global::System.Enum.Parse<{nonNullable}>(reader.GetString({index}))"
+                : type.IsEnum
+                    ? $"({nonNullable}){ReadCallForSpecialType(type.EnumUnderlyingSpecialType, index, nonNullable)}"
+                    : type.IsGuid
+                        ? $"reader.GetGuid({index})"
+                        : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
 
         if (!type.IsNullable)
         {
