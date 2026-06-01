@@ -170,7 +170,7 @@ internal static class StoreProcessor
         // type for projection resolution at emit; other select ops stay entity-typed.
         string? resultElementTypeFqn = null;
         bool returnsList;
-        if (operation == StoreOperation.SelectAll)
+        if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
         {
             returnsList = TryGetSelectElementType(method.ReturnType, out var selectElement, out var isList) && isList;
             if (selectElement is not null)
@@ -180,7 +180,7 @@ internal static class StoreProcessor
         }
         else
         {
-            returnsList = operation is StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch &&
+            returnsList = operation is StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch &&
                 IsTaskOfReadOnlyList(method.ReturnType, entityType);
         }
         var procedureReturn = operation == StoreOperation.StoredProcedure
@@ -399,11 +399,12 @@ internal static class StoreProcessor
     {
         return operation switch
         {
-            // W5b: SelectAll's element type may be the entity OR an [InquiryProjection] of it, so it is
-            // accepted by shape here (any named element) and resolved against the projection registry at emit.
-            StoreOperation.SelectAll =>
+            // W5b/W5c: SelectAll and SelectAllByField element types may be the entity OR an
+            // [InquiryProjection] of it, so they are accepted by shape here (any named element) and
+            // resolved against the projection registry at emit.
+            StoreOperation.SelectAll or StoreOperation.SelectAllByField =>
                 TryGetSelectElementType(returnType, out _, out _),
-            StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch =>
+            StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
                 IsTaskOfReadOnlyList(returnType, entityType),
             StoreOperation.KeysetPage =>
@@ -781,7 +782,11 @@ internal static class StoreProcessor
         {
             if (selectPlan is not null)
             {
-                AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, CtxFor(method), fieldColumns, selectPlan));
+                // W5c: an ordered/paged projection method builds its plan SQL over the projection's columns.
+                var planCtx = projectionMethods.TryGetValue(method.Name, out var projForPlan)
+                    ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns))
+                    : CtxFor(method);
+                AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan));
             }
         }
 
@@ -849,11 +854,21 @@ internal static class StoreProcessor
             }
         }
 
-        // W5b: one SELECT-over-projection-columns const per projection-returning method.
-        foreach (var pair in projectionMethods)
+        // W5b/W5c: one SELECT-over-projection-columns const per non-plan projection-returning method
+        // (SelectAll → SELECT all projection cols; SelectAllByField → … WHERE field = @x). Ordered/paged
+        // projection methods get their const from the plan loop above (also over the projection ctx).
+        foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
-            var projCtx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(pair.Value.Columns));
-            AppendConstSql(source, "_sqlProj_" + pair.Key, sqlBuilder.BuildSelectAllSql(projCtx));
+            if (selectPlan is not null || !projectionMethods.TryGetValue(method.Name, out var proj))
+            {
+                continue;
+            }
+
+            var projCtx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(proj.Columns));
+            var projSql = method.Operation == StoreOperation.SelectAllByField
+                ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns))
+                : sqlBuilder.BuildSelectAllSql(projCtx);
+            AppendConstSql(source, "_sqlProj_" + method.Name, projSql);
         }
 
         source.AppendLine();
