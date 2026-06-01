@@ -48,13 +48,14 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
         => BuildInsertSql(context) + "; " + BuildReturningSelect(context);
 
     public override string BuildUpdateSql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SetClauses + " WHERE " + context.KeyWhereClause;
+        => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
+            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
         => BuildUpdateSql(context) + "; SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + context.KeyWhereClause;
+        => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
 
     public override string BuildUpsertSql(SqlBuildContext context)
     {

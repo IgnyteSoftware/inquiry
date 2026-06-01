@@ -64,6 +64,18 @@ internal static class EntityProcessor
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MultipleSoftDeleteColumns, location, entitySymbol.Name, softDeleteColumns[1].PropertyName));
         }
 
+        // W6: at most one [InquiryConcurrencyToken] (INQ028), and it must not be the key (INQ029).
+        var concurrencyTokens = columns.Where(static c => c.IsConcurrencyToken).ToImmutableArray();
+        if (concurrencyTokens.Length > 1)
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MultipleConcurrencyTokens, location, entitySymbol.Name, concurrencyTokens[1].PropertyName));
+        }
+
+        foreach (var keyToken in concurrencyTokens.Where(static c => c.IsKey))
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.ConcurrencyTokenIsKey, location, entitySymbol.Name, keyToken.PropertyName));
+        }
+
         var classMaterializerName = entitySymbol.Name + "InquiryEntityMaterializer";
         var structMaterializerName = entitySymbol.Name + "InquiryEntityStructMaterializer";
 
@@ -84,6 +96,7 @@ internal static class EntityProcessor
             Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()))
         {
             SoftDeleteColumn = softDeleteColumns.Length > 0 ? softDeleteColumns[0] : null,
+            ConcurrencyToken = concurrencyTokens.Length > 0 ? concurrencyTokens[0] : null,
         };
     }
 
@@ -132,7 +145,10 @@ internal static class EntityProcessor
         foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
         {
             var keyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryKeyAttribute");
-            var columnAttribute = keyAttribute ?? GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
+            // W6: [InquiryConcurrencyToken] derives InquiryColumnAttribute, so it is discovered as a
+            // column (like [InquiryKey]). Probed after the key but before the plain column probe.
+            var concurrencyTokenAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryConcurrencyTokenAttribute");
+            var columnAttribute = keyAttribute ?? concurrencyTokenAttribute ?? GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
             var foreignKeyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryForeignKeyAttribute");
             if (columnAttribute is null && foreignKeyAttribute is null)
             {
@@ -160,6 +176,10 @@ internal static class EntityProcessor
                 }
             }
 
+            var isConcurrencyToken = concurrencyTokenAttribute is not null;
+            var isDatabaseGeneratedToken = isConcurrencyToken &&
+                GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute!, "DatabaseGenerated");
+
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
@@ -169,6 +189,8 @@ internal static class EntityProcessor
                 IsGenerated = isGenerated,
                 UseDatabaseDefault = useDatabaseDefault,
                 SoftDelete = softDelete,
+                IsConcurrencyToken = isConcurrencyToken,
+                IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
             });
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
