@@ -11,6 +11,10 @@
     <_InquiryPostgreSqlProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj'))</_InquiryPostgreSqlProjectPath>
     <_InquiryPostgreSqlAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.PostgreSql.Analyzer.dll'))</_InquiryPostgreSqlAnalyzerPath>
     <_InquiryPostgreSqlSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryPostgreSqlSharedPath>
+
+    <_InquiryMySqlProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql\Inquiry.MySql.csproj'))</_InquiryMySqlProjectPath>
+    <_InquiryMySqlAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.MySql.Analyzer.dll'))</_InquiryMySqlAnalyzerPath>
+    <_InquiryMySqlSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryMySqlSharedPath>
   </PropertyGroup>
 
   <!-- Roslyn analyzer auto-flow only attaches IsRoslynComponent project references one level deep,
@@ -31,6 +35,10 @@
       <_InquiryPostgreSqlProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryPostgreSqlProjectPath)'" />
       <Analyzer Include="$(_InquiryPostgreSqlAnalyzerPath)" Condition="'@(_InquiryPostgreSqlProjectReference)' != '' and Exists('$(_InquiryPostgreSqlAnalyzerPath)')" />
       <Analyzer Include="$(_InquiryPostgreSqlSharedPath)" Condition="'@(_InquiryPostgreSqlProjectReference)' != '' and Exists('$(_InquiryPostgreSqlSharedPath)')" />
+
+      <_InquiryMySqlProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryMySqlProjectPath)'" />
+      <Analyzer Include="$(_InquiryMySqlAnalyzerPath)" Condition="'@(_InquiryMySqlProjectReference)' != '' and Exists('$(_InquiryMySqlAnalyzerPath)')" />
+      <Analyzer Include="$(_InquiryMySqlSharedPath)" Condition="'@(_InquiryMySqlProjectReference)' != '' and Exists('$(_InquiryMySqlSharedPath)')" />
     </ItemGroup>
   </Target>
 </Project>
