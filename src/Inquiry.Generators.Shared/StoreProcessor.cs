@@ -114,7 +114,7 @@ internal static class StoreProcessor
         }
 
         var fieldNames = ImmutableArray<string>.Empty;
-        if (operation == StoreOperation.SelectAllByField)
+        if (operation is StoreOperation.SelectAllByField or StoreOperation.FullTextSearch)
         {
             var names = GeneratorHelpers.GetConstructorStringArray(attribute);
             if (names is null || names.Length == 0)
@@ -166,7 +166,7 @@ internal static class StoreProcessor
                 : null;
         }
 
-        var returnsList = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate &&
+        var returnsList = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch &&
             IsTaskOfReadOnlyList(method.ReturnType, entityType);
         var procedureReturn = operation == StoreOperation.StoredProcedure
             ? ClassifyProcedureReturn(method.ReturnType, entityType)
@@ -358,6 +358,7 @@ internal static class StoreProcessor
                 case "InquiryKeysetPageAttribute": attribute = candidate; return StoreOperation.KeysetPage;
                 case "InquiryCountAttribute": attribute = candidate; return StoreOperation.Count;
                 case "InquiryAggregateAttribute": attribute = candidate; return StoreOperation.Aggregate;
+                case "InquiryFullTextSearchAttribute": attribute = candidate; return StoreOperation.FullTextSearch;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
                 case "InquiryUpdateAttribute": attribute = candidate; return StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
@@ -379,7 +380,7 @@ internal static class StoreProcessor
     {
         return operation switch
         {
-            StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate =>
+            StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
                 IsTaskOfReadOnlyList(returnType, entityType),
             StoreOperation.KeysetPage =>
@@ -507,7 +508,7 @@ internal static class StoreProcessor
         var valid = new List<(StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan)>();
         foreach (var method in store.Methods)
         {
-            if (TryValidateForEmit(context, method, entity, out var fieldColumns, out var predicatePlan, out var selectPlan))
+            if (TryValidateForEmit(context, method, entity, sqlBuilder, out var fieldColumns, out var predicatePlan, out var selectPlan))
             {
                 valid.Add((method, fieldColumns, predicatePlan, selectPlan));
             }
@@ -634,6 +635,14 @@ internal static class StoreProcessor
             }
         }
 
+        foreach (var (method, fieldColumns, _, _) in valid)
+        {
+            if (method.Operation == StoreOperation.FullTextSearch)
+            {
+                AppendConstSql(source, "_sqlFts_" + method.Name, sqlBuilder.BuildFullTextSearchSql(CtxFor(method), fieldColumns));
+            }
+        }
+
         // Ordered / paged / keyset selects each get a self-contained per-method const built from the
         // base SELECT plus a uniform ORDER BY and a (dialect-specific) pagination or keyset tail.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
@@ -728,7 +737,7 @@ internal static class StoreProcessor
         return new StoreRegistration(store.FullyQualifiedName);
     }
 
-    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
+    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
     {
         fieldColumns = Array.Empty<ColumnData>();
         predicatePlan = null;
@@ -748,7 +757,13 @@ internal static class StoreProcessor
             return TryValidateKeysetPage(context, method, entity, out selectPlan);
         }
 
-        if (method.Operation == StoreOperation.SelectAllByField)
+        if (method.Operation == StoreOperation.FullTextSearch && !sqlBuilder.SupportsFullTextSearch)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.FullTextSearchNotSupported, method.Location?.ToLocation(), method.Name));
+            return false;
+        }
+
+        if (method.Operation is StoreOperation.SelectAllByField or StoreOperation.FullTextSearch)
         {
             var resolved = new List<ColumnData>(method.FieldNames.Count);
             foreach (var name in method.FieldNames)
@@ -1112,6 +1127,7 @@ internal static class StoreProcessor
         return method.Operation switch
         {
             StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count or StoreOperation.Aggregate => parameters.Count == 1,
+            StoreOperation.FullTextSearch => parameters.Count == 2 && parameters[0].ComparisonDisplay == "string",
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>
                 MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
             // W6: a concurrency-checked DELETE takes the whole entity (so the expected token value

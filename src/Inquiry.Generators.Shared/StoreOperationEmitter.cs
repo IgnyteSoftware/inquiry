@@ -212,6 +212,40 @@ internal static class StoreOperationEmitter
                 source.AppendLine("    }");
                 break;
 
+            case StoreOperation.FullTextSearch:
+            {
+                // W9: one string search-term parameter bound to @searchTerm; the SQL is the dialect's
+                // full-text predicate over the searched columns.
+                var searchArg = method.Parameters[0].Name;
+                AppendHeader(source, method, parameters, isAsync: false);
+                if (method.ReturnsList)
+                {
+                    source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, string, {structMat}>(");
+                    source.AppendLine($"            _sqlFts_{method.Name},");
+                    source.AppendLine($"            {searchArg},");
+                    source.AppendLine("            static (_cmd, _arg) =>");
+                    source.AppendLine("            {");
+                    source.AppendLine("                var _p = _cmd.CreateParameter();");
+                    source.AppendLine("                _p.ParameterName = \"@searchTerm\";");
+                    source.AppendLine("                _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
+                    source.AppendLine("                _cmd.Parameters.Add(_p);");
+                    source.AppendLine("            },");
+                    source.AppendLine("            default,");
+                    source.AppendLine($"            {cancellation});");
+                }
+                else
+                {
+                    source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
+                    source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+                    source.AppendLine($"                _sqlFts_{method.Name},");
+                    source.AppendLine($"                new global::Inquiry.Parameters.InquiryParameter[] {{ new global::Inquiry.Parameters.InquiryParameter(\"@searchTerm\", {searchArg}) }}),");
+                    source.AppendLine("            default,");
+                    source.AppendLine($"            {cancellation});");
+                }
+                source.AppendLine("    }");
+                break;
+            }
+
             case StoreOperation.StoredProcedure:
                 EmitStoredProcedure(source, method, parameters, entityType, structMat, cancellation);
                 break;

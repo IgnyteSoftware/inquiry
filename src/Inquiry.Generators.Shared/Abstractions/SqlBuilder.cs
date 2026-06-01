@@ -116,6 +116,20 @@ public abstract class SqlBuilder
         => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
 
     /// <summary>
+    /// W9: whether this dialect supports <c>[InquiryFullTextSearch]</c>. Default <see langword="false"/>
+    /// (SQLite/Oracle in v1); PostgreSQL, SQL Server, and MySQL override to <see langword="true"/>.
+    /// </summary>
+    public virtual bool SupportsFullTextSearch => false;
+
+    /// <summary>
+    /// W9: builds a full-text search SELECT over <paramref name="searchColumns"/>, bound to a single
+    /// <c>@searchTerm</c> parameter. Composes the soft-delete active filter. Supporting dialects
+    /// override this; the base throws so an unsupported dialect is caught at generation time.
+    /// </summary>
+    public virtual string BuildFullTextSearchSql(SqlBuildContext context, IReadOnlyList<IColumn> searchColumns)
+        => throw new System.NotSupportedException(DialectName + " does not support full-text search.");
+
+    /// <summary>
     /// Builds the ORDER BY clause body (no leading space) for the resolved terms, e.g.
     /// <c>ORDER BY "Name" ASC, "Id" DESC</c>. Dialect-uniform, so this is the single implementation all
     /// providers inherit. Returns the empty string when there are no terms.
