@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace Inquiry.Generators.Tests;
 
@@ -99,5 +100,9 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         Assert.Contains(result.GeneratorDiagnostics, d => d.Id == "INQ036");
+        // The diagnostic must not cascade: no other error-severity diagnostics from broken codegen.
+        Assert.All(
+            result.GeneratorDiagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error),
+            d => Assert.Equal("INQ036", d.Id));
     }
 }

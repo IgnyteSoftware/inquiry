@@ -35,6 +35,9 @@ public partial class TicketStore : InquiryStore<Ticket>
 
     [InquirySelectAllByField(nameof(Ticket.Status))]
     public partial Task<System.Collections.Generic.IReadOnlyList<Ticket>> ByStatusAsync(TicketStatus status, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByField(nameof(Ticket.Status))]
+    public partial System.Collections.Generic.IAsyncEnumerable<Ticket> StreamByStatusAsync(TicketStatus status, CancellationToken cancellationToken = default);
 }
 
 /// <summary>W10 enum-as-string end-to-end against SQLite: the column stores the member name as text,
@@ -89,5 +92,25 @@ public sealed class EnumAsStringIntegrationTests
 
         var active = await store.ByStatusAsync(TicketStatus.Active);
         Assert.Equal(2, active.Count);
+    }
+
+    [Fact]
+    public async Task StreamingFilterBindsEnumAsString()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "EnumAsString");
+        var store = harness.GetRequiredService<TicketStore>();
+
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Closed });
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+
+        var count = 0;
+        await foreach (var ticket in store.StreamByStatusAsync(TicketStatus.Active))
+        {
+            Assert.Equal(TicketStatus.Active, ticket.Status);
+            count++;
+        }
+
+        Assert.Equal(2, count);
     }
 }

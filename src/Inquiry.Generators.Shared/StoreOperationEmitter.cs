@@ -807,10 +807,27 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}{{");
         for (var i = 0; i < columns.Count; i++)
         {
+            var column = columns[i];
+            var paramName = methodParameters[i].Name;
             // '@'-prefix lets the binder skip its NormalizeName string concat.
-            var dbType = DbTypeMapper.TryGetDbTypeExpression(columns[i].Type);
-            var dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
-            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(columns[i].PropertyName)}\", {methodParameters[i].Name}{dbTypeArg}),");
+            // W10: enum-as-string filters bind the member name; the runtime's CoerceValue would
+            // otherwise integerize the enum, mismatching the text column.
+            string valueArg;
+            string dbTypeArg;
+            if (column.EnumAsString)
+            {
+                valueArg = column.Type.IsNullable
+                    ? $"{paramName}.HasValue ? (object){paramName}.Value.ToString() : null"
+                    : $"{paramName}.ToString()";
+                dbTypeArg = ", dbType: global::System.Data.DbType.String";
+            }
+            else
+            {
+                valueArg = paramName;
+                var dbType = DbTypeMapper.TryGetDbTypeExpression(column.Type);
+                dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
+            }
+            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(column.PropertyName)}\", {valueArg}{dbTypeArg}),");
         }
         source.AppendLine($"{indent}}}),");
     }
