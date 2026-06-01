@@ -61,4 +61,17 @@ internal sealed record StoreMethodData(
     /// a literal <c>DELETE</c> is emitted even when the entity declares a soft-delete column.
     /// </summary>
     public bool HardDelete { get; init; }
+
+    /// <summary>W5: for <see cref="StoreOperation.Aggregate"/>, the SQL function (SUM/AVG/MIN/MAX).</summary>
+    public string? AggregateFunction { get; init; }
+
+    /// <summary>W5: for <see cref="StoreOperation.Aggregate"/>, the raw column name (resolved at emit).</summary>
+    public string? AggregateColumn { get; init; }
+
+    /// <summary>
+    /// W5: for <see cref="StoreOperation.Aggregate"/>/<see cref="StoreOperation.Count"/>, the scalar
+    /// result type the method returns (the <c>T</c> in <c>Task&lt;T&gt;</c>), passed to
+    /// <c>ExecuteScalarAsync&lt;T&gt;</c>.
+    /// </summary>
+    public string? ScalarResultType { get; init; }
 }
