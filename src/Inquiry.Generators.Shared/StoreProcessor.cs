@@ -377,6 +377,7 @@ internal static class StoreProcessor
                 case "InquiryFullTextSearchAttribute": attribute = candidate; return StoreOperation.FullTextSearch;
                 case "InquiryInsertAllAttribute": attribute = candidate; return StoreOperation.InsertAll;
                 case "InquiryDeleteAllAttribute": attribute = candidate; return StoreOperation.DeleteAll;
+                case "InquiryUpdateAllAttribute": attribute = candidate; return StoreOperation.UpdateAll;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
                 case "InquiryUpdateAttribute": attribute = candidate; return StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
@@ -422,7 +423,7 @@ internal static class StoreProcessor
             StoreOperation.Count =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
             StoreOperation.Aggregate => IsTaskOfSingleTypeArgument(returnType),
-            StoreOperation.InsertAll or StoreOperation.DeleteAll =>
+            StoreOperation.InsertAll or StoreOperation.DeleteAll or StoreOperation.UpdateAll =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
@@ -709,6 +710,7 @@ internal static class StoreProcessor
         var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count);
         var needsInsertAll = valid.Any(static m => m.Method.Operation == StoreOperation.InsertAll);
         var needsDeleteAll = valid.Any(static m => m.Method.Operation == StoreOperation.DeleteAll);
+        var needsUpdateAll = valid.Any(static m => m.Method.Operation == StoreOperation.UpdateAll);
 
         var byFieldOps = valid
             .Where(m => UsesSharedSelect(m) && m.Method.Operation == StoreOperation.SelectAllByField && m.SelectPlan is null && m.FieldColumns.Count > 0)
@@ -741,6 +743,7 @@ internal static class StoreProcessor
         if (needsCount) AppendConstSql(source, "_sqlCount", sqlBuilder.BuildCountSql(ctx));
         if (needsInsertAll) AppendConstSql(source, "_sqlInsertAllPrefix", "INSERT INTO " + ctx.Table + " (" + ctx.InsertColumns + ") VALUES ");
         if (needsDeleteAll) AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
+        if (needsUpdateAll) AppendConstSql(source, "_sqlUpdateAllRow", BuildUpdateAllRowTemplate(sqlBuilder, ctx, entity));
 
         foreach (var fieldColumns in byFieldOps)
         {
@@ -1273,7 +1276,7 @@ internal static class StoreProcessor
         {
             StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count or StoreOperation.Aggregate => parameters.Count == 1,
             StoreOperation.FullTextSearch => parameters.Count == 2 && parameters[0].ComparisonDisplay == "string",
-            StoreOperation.InsertAll => parameters.Count == 2 && IsEnumerableOfEntity(parameters[0], entity),
+            StoreOperation.InsertAll or StoreOperation.UpdateAll => parameters.Count == 2 && IsEnumerableOfEntity(parameters[0], entity),
             // DeleteAll takes a collection of the single key's type; composite-key entities are unsupported.
             StoreOperation.DeleteAll => entity.Keys.Count == 1 && parameters.Count == 2 && IsEnumerableOfType(parameters[0], entity.Keys[0].Type.DisplayName),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>
@@ -1350,6 +1353,21 @@ internal static class StoreProcessor
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// W3b: per-row UPDATE template for batch update, with a <c>{r}</c> token the emitter replaces with
+    /// each row index — e.g. <c>UPDATE "T" SET "A" = @u{r}_0 WHERE "Id" = @u{r}_k0;</c>. The <c>@</c>
+    /// sigil is literal (consistent with the parameterized-predicate convention; shares the documented
+    /// Oracle limitation).
+    /// </summary>
+    private static string BuildUpdateAllRowTemplate(SqlBuilder sqlBuilder, SqlBuildContext ctx, EntityData entity)
+    {
+        var setColumns = StoreOperationEmitter.SelectUpdateSetColumns(entity);
+        var keyColumns = entity.Keys.AsImmutableArray();
+        var setList = string.Join(", ", setColumns.Select((c, i) => sqlBuilder.QuoteIdentifier(c.ColumnName) + " = @u{r}_" + i));
+        var whereList = string.Join(" AND ", keyColumns.Select((k, i) => sqlBuilder.QuoteIdentifier(k.ColumnName) + " = @u{r}_k" + i));
+        return "UPDATE " + ctx.Table + " SET " + setList + " WHERE " + whereList + ";";
     }
 
     private static List<IColumn> ToColumnList(IReadOnlyList<ColumnData> columns)
