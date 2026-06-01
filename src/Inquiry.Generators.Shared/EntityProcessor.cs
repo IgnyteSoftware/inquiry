@@ -214,6 +214,10 @@ internal static class EntityProcessor
             var defaultExpression = columnAttribute is not null ? GeneratorHelpers.GetNamedString(columnAttribute, "DefaultExpression") : null;
             var (foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
 
+            // W10b: a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
+            // converter) maps a non-primitive property to/from a provider primitive.
+            var converter = ResolveConverter(property, columnAttribute, typeData, entitySymbol, diagnostics);
+
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
@@ -226,7 +230,8 @@ internal static class EntityProcessor
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 EnumAsString = enumAsString,
-                TypeClass = MapTypeClass(typeData),
+                // W10b: a converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
+                TypeClass = converter is not null ? MapSpecialType(converter.ProviderSpecialType) : MapTypeClass(typeData),
                 IsNullable = !isKey && typeData.IsNullable,
                 SqlType = sqlType,
                 Length = length,
@@ -235,6 +240,7 @@ internal static class EntityProcessor
                 DefaultExpression = defaultExpression,
                 ForeignKeyTable = foreignKeyTable,
                 ForeignKeyColumn = foreignKeyColumn,
+                Converter = converter,
             });
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
@@ -260,21 +266,84 @@ internal static class EntityProcessor
         if (type.IsGuid) return DbTypeClass.Guid;
         if (type.NonNullableDisplayName == "global::System.DateTimeOffset") return DbTypeClass.DateTimeOffset;
 
-        var special = type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType;
-        return special switch
+        return MapSpecialType(type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType);
+    }
+
+    /// <summary>Maps a <see cref="SpecialType"/> to its <see cref="DbTypeClass"/> (text fallback for string/char/other).</summary>
+    private static DbTypeClass MapSpecialType(SpecialType special) => special switch
+    {
+        SpecialType.System_Boolean => DbTypeClass.Boolean,
+        SpecialType.System_Byte or SpecialType.System_SByte => DbTypeClass.Byte,
+        SpecialType.System_Int16 or SpecialType.System_UInt16 => DbTypeClass.Int16,
+        SpecialType.System_Int32 or SpecialType.System_UInt32 => DbTypeClass.Int32,
+        SpecialType.System_Int64 or SpecialType.System_UInt64 => DbTypeClass.Int64,
+        SpecialType.System_Single => DbTypeClass.Single,
+        SpecialType.System_Double => DbTypeClass.Double,
+        SpecialType.System_Decimal => DbTypeClass.Decimal,
+        SpecialType.System_DateTime => DbTypeClass.DateTime,
+        // String, Char, and anything else fall back to a text column.
+        _ => DbTypeClass.String,
+    };
+
+    /// <summary>
+    /// W10b: resolves the value converter for a column — an explicit <c>Converter = typeof(X)</c> (its
+    /// <c>IInquiryValueConverter&lt;,&gt;</c> provider type drives the read/write primitive), or
+    /// <c>[InquiryJson]</c> (the built-in <c>InquiryJsonConverter&lt;T&gt;</c> over <c>string</c>).
+    /// Returns null when neither applies; reports INQ037 when an explicit converter type does not
+    /// implement the converter interface.
+    /// </summary>
+    private static ConverterData? ResolveConverter(
+        IPropertySymbol property,
+        AttributeData? columnAttribute,
+        TypeData typeData,
+        INamedTypeSymbol entitySymbol,
+        ImmutableArray<DiagnosticData>.Builder diagnostics)
+    {
+        var converterType = columnAttribute is not null ? GeneratorHelpers.GetNamedType(columnAttribute, "Converter") : null;
+        if (converterType is not null)
         {
-            SpecialType.System_Boolean => DbTypeClass.Boolean,
-            SpecialType.System_Byte or SpecialType.System_SByte => DbTypeClass.Byte,
-            SpecialType.System_Int16 or SpecialType.System_UInt16 => DbTypeClass.Int16,
-            SpecialType.System_Int32 or SpecialType.System_UInt32 => DbTypeClass.Int32,
-            SpecialType.System_Int64 or SpecialType.System_UInt64 => DbTypeClass.Int64,
-            SpecialType.System_Single => DbTypeClass.Single,
-            SpecialType.System_Double => DbTypeClass.Double,
-            SpecialType.System_Decimal => DbTypeClass.Decimal,
-            SpecialType.System_DateTime => DbTypeClass.DateTime,
-            // String, Char, and anything else fall back to a text column.
-            _ => DbTypeClass.String,
-        };
+            var providerType = FindConverterProviderType(converterType);
+            if (providerType is null)
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterInvalid,
+                    property.Locations.FirstOrDefault(),
+                    entitySymbol.Name,
+                    converterType.Name,
+                    property.Name));
+                return null;
+            }
+
+            return new ConverterData(
+                converterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                providerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                providerType.SpecialType);
+        }
+
+        if (GeneratorHelpers.GetEntityAttribute(property, "InquiryJsonAttribute") is not null)
+        {
+            return new ConverterData(
+                "global::Inquiry.Converters.InquiryJsonConverter<" + typeData.NonNullableDisplayName + ">",
+                "string",
+                SpecialType.System_String);
+        }
+
+        return null;
+    }
+
+    /// <summary>Returns the <c>TProvider</c> of the converter's <c>IInquiryValueConverter&lt;TModel, TProvider&gt;</c> interface, or null.</summary>
+    private static ITypeSymbol? FindConverterProviderType(INamedTypeSymbol converterType)
+    {
+        foreach (var iface in converterType.AllInterfaces)
+        {
+            if (iface.TypeArguments.Length == 2 &&
+                iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Inquiry.Entities.IInquiryValueConverter<TModel, TProvider>")
+            {
+                return iface.TypeArguments[1];
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

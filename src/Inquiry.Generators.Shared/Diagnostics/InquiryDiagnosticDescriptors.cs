@@ -258,6 +258,14 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor ConverterInvalid = new(
+        "INQ037",
+        "Converter type does not implement IInquiryValueConverter<,>",
+        "Entity '{0}' sets Converter = typeof({1}) on property '{2}', but '{1}' does not implement IInquiryValueConverter<TModel, TProvider>.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public static readonly DiagnosticDescriptor EnumAsStringNonEnum = new(
         "INQ036",
         "InquiryEnumAsString applied to a non-enum property",
