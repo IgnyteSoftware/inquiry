@@ -12,17 +12,20 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         => "[" + identifier.Replace("]", "]]") + "]";
 
     public override string BuildSelectAllSql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table;
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
 
     public override string BuildSelectByKeySql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.SoftDeleteActivePredicate);
 
     public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         var where = string.Join(" AND ", filterColumns
             .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
-        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + where;
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.SoftDeleteActivePredicate);
     }
+
+    /// <summary>SQL Server uses <c>GETUTCDATE()</c> for the soft-delete (and restore) timestamp clock.</summary>
+    public override string CurrentTimestampExpression => "GETUTCDATE()";
 
     public override string BuildInsertSql(SqlBuildContext context)
     {

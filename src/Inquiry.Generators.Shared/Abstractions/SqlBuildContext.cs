@@ -14,11 +14,18 @@ namespace Inquiry.Generators.Abstractions;
 /// </remarks>
 public sealed class SqlBuildContext
 {
+    /// <param name="suppressSoftDelete">
+    /// W8: when true, the soft-delete active filter (<see cref="SoftDeleteActivePredicate"/>) is left
+    /// empty so SELECTs built from this context are unfiltered. Used for the per-statement context the
+    /// store emitter builds for an <c>IncludeDeleted = true</c> select; the SET clauses are still
+    /// computed (they are never suppressed — delete/restore always touch the indicator).
+    /// </param>
     public SqlBuildContext(
         SqlBuilder builder,
         string? schema,
         string tableName,
-        IReadOnlyList<IColumn> columns)
+        IReadOnlyList<IColumn> columns,
+        bool suppressSoftDelete = false)
     {
         Columns = columns;
         KeyColumns = columns.Where(c => c.IsKey).ToArray();
@@ -34,6 +41,28 @@ public sealed class SqlBuildContext
         KeyParameters = KeyColumns.Select(k => builder.ParameterName(k.PropertyName)).ToArray();
         KeyWhereClause = string.Join(" AND ", KeyColumns
             .Select(k => builder.QuoteIdentifier(k.ColumnName) + " = " + builder.ParameterName(k.PropertyName)));
+
+        // W8 soft delete. The single soft-delete column (if any) drives three precomputed fragments —
+        // the active-row filter every SELECT AND-composes (suppressed for IncludeDeleted), and the SET
+        // clauses for the soft-delete and restore UPDATEs — so providers consume strings and never
+        // reimplement the dialect literals.
+        var softDeleteColumn = columns.FirstOrDefault(c => c.SoftDelete != SoftDeleteKind.None);
+        if (softDeleteColumn is not null)
+        {
+            var quoted = builder.QuoteIdentifier(softDeleteColumn.ColumnName);
+            if (softDeleteColumn.SoftDelete == SoftDeleteKind.BooleanFlag)
+            {
+                SoftDeleteActivePredicate = suppressSoftDelete ? string.Empty : quoted + " = " + builder.SoftDeleteFalseLiteral;
+                SoftDeleteSetClause = quoted + " = " + builder.SoftDeleteTrueLiteral;
+                SoftDeleteRestoreSetClause = quoted + " = " + builder.SoftDeleteFalseLiteral;
+            }
+            else
+            {
+                SoftDeleteActivePredicate = suppressSoftDelete ? string.Empty : quoted + " IS NULL";
+                SoftDeleteSetClause = quoted + " = " + builder.CurrentTimestampExpression;
+                SoftDeleteRestoreSetClause = quoted + " = NULL";
+            }
+        }
     }
 
     public string Table { get; }
@@ -47,4 +76,17 @@ public sealed class SqlBuildContext
     public IReadOnlyList<string> QuotedKeyColumns { get; }
     public IReadOnlyList<string> KeyParameters { get; }
     public string KeyWhereClause { get; }
+
+    /// <summary>
+    /// W8: the active-row filter (<c>"IsDeleted" = 0</c> / <c>"DeletedAt" IS NULL</c>) every SELECT
+    /// AND-composes via <see cref="SqlBuilder.AppendWhere"/>. Empty when the entity has no soft-delete
+    /// column or this context was built with soft-delete suppressed (IncludeDeleted).
+    /// </summary>
+    public string SoftDeleteActivePredicate { get; } = string.Empty;
+
+    /// <summary>W8: the SET-clause body that marks a row deleted (<c>"IsDeleted" = 1</c> / <c>"DeletedAt" = CURRENT_TIMESTAMP</c>). Empty when no soft-delete column.</summary>
+    public string SoftDeleteSetClause { get; } = string.Empty;
+
+    /// <summary>W8: the SET-clause body that restores a row (<c>"IsDeleted" = 0</c> / <c>"DeletedAt" = NULL</c>). Empty when no soft-delete column.</summary>
+    public string SoftDeleteRestoreSetClause { get; } = string.Empty;
 }

@@ -8,4 +8,10 @@ namespace Inquiry.Stores;
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class InquirySelectOneByKeyEagerAttribute : Attribute
 {
+    /// <summary>
+    /// Gets or sets a value indicating whether the parent lookup includes a soft-deleted row. Has an
+    /// effect only when the entity declares an <c>[InquirySoftDelete]</c> column. Note this controls
+    /// only the parent query; eager-loaded children are always filtered by their own soft-delete column.
+    /// </summary>
+    public bool IncludeDeleted { get; set; }
 }
