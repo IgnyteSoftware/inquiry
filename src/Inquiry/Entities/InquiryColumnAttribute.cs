@@ -36,4 +36,23 @@ public class InquiryColumnAttribute : Attribute
     /// so the database default expression supplies the value.
     /// </summary>
     public bool UseDatabaseDefault { get; set; }
+
+    /// <summary>
+    /// W7 (DDL generation): explicit physical SQL type for this column (e.g. <c>"NVARCHAR(64)"</c>).
+    /// Used verbatim, overriding the inferred type. Dialect-specific — only set it when targeting a
+    /// single provider; otherwise rely on <see cref="Length"/>/<see cref="Precision"/>/inference.
+    /// </summary>
+    public string? SqlType { get; set; }
+
+    /// <summary>W7 (DDL generation): declared length for string/binary columns; 0 uses the dialect default.</summary>
+    public int Length { get; set; }
+
+    /// <summary>W7 (DDL generation): declared numeric precision for decimal columns; 0 uses the dialect default.</summary>
+    public int Precision { get; set; }
+
+    /// <summary>W7 (DDL generation): declared numeric scale for decimal columns; 0 uses the dialect default.</summary>
+    public int Scale { get; set; }
+
+    /// <summary>W7 (DDL generation): raw SQL <c>DEFAULT</c> expression for the column (e.g. <c>"0"</c>), or null.</summary>
+    public string? DefaultExpression { get; set; }
 }

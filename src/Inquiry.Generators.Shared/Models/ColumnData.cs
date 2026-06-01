@@ -25,4 +25,15 @@ internal sealed record ColumnData : IColumn
     public bool IsConcurrencyToken { get; init; }
     public bool IsDatabaseGeneratedToken { get; init; }
     public bool EnumAsString { get; init; }
+
+    // W7 DDL generation metadata.
+    public DbTypeClass TypeClass { get; init; }
+    public bool IsNullable { get; init; }
+    public string? SqlType { get; init; }
+    public int Length { get; init; }
+    public int Precision { get; init; }
+    public int Scale { get; init; }
+    public string? DefaultExpression { get; init; }
+    public string? ForeignKeyTable { get; init; }
+    public string? ForeignKeyColumn { get; init; }
 }

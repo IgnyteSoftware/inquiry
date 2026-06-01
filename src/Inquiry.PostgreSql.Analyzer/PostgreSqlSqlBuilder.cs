@@ -130,4 +130,27 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;
+
+    // ---- W7 DDL --------------------------------------------------------------------------------
+
+    protected override string MapColumnType(IColumn column) => column.TypeClass switch
+    {
+        DbTypeClass.Boolean => "BOOLEAN",
+        DbTypeClass.Byte or DbTypeClass.Int16 => "SMALLINT",
+        DbTypeClass.Int32 => "INTEGER",
+        DbTypeClass.Int64 => "BIGINT",
+        DbTypeClass.Single => "REAL",
+        DbTypeClass.Double => "DOUBLE PRECISION",
+        DbTypeClass.Decimal => "NUMERIC(" + DecimalSpec(column, 18, 2) + ")",
+        DbTypeClass.DateTime => "TIMESTAMP",
+        DbTypeClass.DateTimeOffset => "TIMESTAMPTZ",
+        DbTypeClass.Guid => "UUID",
+        DbTypeClass.ByteArray => "BYTEA",
+        _ => column.Length > 0 ? "VARCHAR(" + column.Length + ")" : "TEXT",
+    };
+
+    // PostgreSQL identity uses SERIAL / BIGSERIAL (which create the backing sequence) rather than an
+    // explicit type + IDENTITY clause, matching the conventional Northwind mapping.
+    protected override string GeneratedKeyClause(IColumn column)
+        => (column.TypeClass == DbTypeClass.Int64 ? "BIGSERIAL" : "SERIAL") + " PRIMARY KEY";
 }
