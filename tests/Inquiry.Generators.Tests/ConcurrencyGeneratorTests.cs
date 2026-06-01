@@ -300,11 +300,14 @@ public sealed partial class InquiryGeneratorTests
     {
         var pg = GetTokenStore(RunGenerator(TokenStore(TokenCrud), dialect: "PostgreSql"));
         Assert.Contains("SET \\\"Name\\\" = @Name, \\\"Version\\\" = \\\"Version\\\" + 1 WHERE \\\"Id\\\" = @Id AND \\\"Version\\\" = @Version", pg);
+        Assert.Contains("DELETE FROM \\\"TWidget\\\" WHERE \\\"Id\\\" = @Id AND \\\"Version\\\" = @Version", pg);
 
         var mysql = GetTokenStore(RunGenerator(TokenStore(TokenCrud), dialect: "MySql"));
         Assert.Contains("SET `Name` = @Name, `Version` = `Version` + 1 WHERE `Id` = @Id AND `Version` = @Version", mysql);
+        Assert.Contains("DELETE FROM `TWidget` WHERE `Id` = @Id AND `Version` = @Version", mysql);
 
         var oracle = GetTokenStore(RunGenerator(TokenStore(TokenCrud), dialect: "Oracle"));
         Assert.Contains("SET Name = :Name, Version = Version + 1 WHERE Id = :Id AND Version = :Version", oracle);
+        Assert.Contains("DELETE FROM TWidget WHERE Id = :Id AND Version = :Version", oracle);
     }
 }
