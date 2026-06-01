@@ -538,6 +538,73 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
+    public async Task<T> ExecuteScalarAsync<T>(InquiryCommand command, CancellationToken cancellationToken = default)
+    {
+        if (command is null) throw new ArgumentNullException(nameof(command));
+
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbCommand = CreateCommand(connection);
+
+        try
+        {
+            InitializeCommandSync(dbCommand, command);
+            if (HasInterceptors)
+            {
+                await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+            }
+
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            var value = await dbCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+
+            if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
+            return ScalarConvert.From<T>(value);
+        }
+        catch (Exception exception)
+        {
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<T> ExecuteScalarAsync<T, TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbCommand = CreateCommand(connection);
+        InquiryCommand? interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+
+        try
+        {
+            dbCommand.CommandText = commandText;
+            bindParameters(dbCommand, args);
+            if (interceptorCommand is not null)
+            {
+                await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+            }
+
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            var value = await dbCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+
+            if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
+            return ScalarConvert.From<T>(value);
+        }
+        catch (Exception exception)
+        {
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<int> ExecuteAsync<TArgs>(
         string commandText,
         TArgs args,
