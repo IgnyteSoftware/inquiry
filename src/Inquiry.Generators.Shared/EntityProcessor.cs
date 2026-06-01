@@ -29,6 +29,9 @@ internal static class EntityProcessor
         var tableAttribute = GeneratorHelpers.GetEntityAttribute(entitySymbol, "InquiryTableAttribute");
         var tableName = (tableAttribute is not null ? GeneratorHelpers.GetConstructorString(tableAttribute) : null) ?? entitySymbol.Name;
         var schema = tableAttribute is not null ? GeneratorHelpers.GetNamedString(tableAttribute, "Schema") : null;
+        // W7: GenerateForeignKeys defaults to true; only an explicit `= false` named arg disables FK DDL.
+        var generateForeignKeys = tableAttribute is null ||
+            GeneratorHelpers.GetNamedBool(tableAttribute, "GenerateForeignKeys", defaultValue: true);
 
         var columns = DiscoverColumns(entitySymbol, diagnostics);
         var relations = DiscoverRelations(entitySymbol, cancellationToken);
@@ -97,6 +100,7 @@ internal static class EntityProcessor
         {
             SoftDeleteColumn = softDeleteColumns.Length > 0 ? softDeleteColumns[0] : null,
             ConcurrencyToken = concurrencyTokens.Length > 0 ? concurrencyTokens[0] : null,
+            GenerateForeignKeys = generateForeignKeys,
         };
     }
 
@@ -199,18 +203,38 @@ internal static class EntityProcessor
                 }
             }
 
+            // W7 DDL metadata. Named args live on InquiryColumnAttribute (inherited by Key/FK/token
+            // attributes), so read them off the resolved column attribute. NOT NULL is inferred: key
+            // columns are always NOT NULL, otherwise the CLR type's nullability decides.
+            var isKey = keyAttribute is not null;
+            var sqlType = columnAttribute is not null ? GeneratorHelpers.GetNamedString(columnAttribute, "SqlType") : null;
+            var length = (columnAttribute is not null ? GeneratorHelpers.GetNamedInt(columnAttribute, "Length") : null) ?? 0;
+            var precision = (columnAttribute is not null ? GeneratorHelpers.GetNamedInt(columnAttribute, "Precision") : null) ?? 0;
+            var scale = (columnAttribute is not null ? GeneratorHelpers.GetNamedInt(columnAttribute, "Scale") : null) ?? 0;
+            var defaultExpression = columnAttribute is not null ? GeneratorHelpers.GetNamedString(columnAttribute, "DefaultExpression") : null;
+            var (foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
+
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
                 ColumnName = columnName,
                 Type = typeData,
-                IsKey = keyAttribute is not null,
+                IsKey = isKey,
                 IsGenerated = isGenerated,
                 UseDatabaseDefault = useDatabaseDefault,
                 SoftDelete = softDelete,
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 EnumAsString = enumAsString,
+                TypeClass = MapTypeClass(typeData),
+                IsNullable = !isKey && typeData.IsNullable,
+                SqlType = sqlType,
+                Length = length,
+                Precision = precision,
+                Scale = scale,
+                DefaultExpression = defaultExpression,
+                ForeignKeyTable = foreignKeyTable,
+                ForeignKeyColumn = foreignKeyColumn,
             });
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
@@ -224,6 +248,59 @@ internal static class EntityProcessor
         }
 
         return columns;
+    }
+
+    /// <summary>
+    /// W7: collapses a CLR type into the dialect-neutral <see cref="DbTypeClass"/> the DDL builder maps
+    /// to a physical type. Enums collapse to their underlying integer class so DDL never special-cases them.
+    /// </summary>
+    private static DbTypeClass MapTypeClass(TypeData type)
+    {
+        if (type.IsByteArray) return DbTypeClass.ByteArray;
+        if (type.IsGuid) return DbTypeClass.Guid;
+        if (type.NonNullableDisplayName == "global::System.DateTimeOffset") return DbTypeClass.DateTimeOffset;
+
+        var special = type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType;
+        return special switch
+        {
+            SpecialType.System_Boolean => DbTypeClass.Boolean,
+            SpecialType.System_Byte or SpecialType.System_SByte => DbTypeClass.Byte,
+            SpecialType.System_Int16 or SpecialType.System_UInt16 => DbTypeClass.Int16,
+            SpecialType.System_Int32 or SpecialType.System_UInt32 => DbTypeClass.Int32,
+            SpecialType.System_Int64 or SpecialType.System_UInt64 => DbTypeClass.Int64,
+            SpecialType.System_Single => DbTypeClass.Single,
+            SpecialType.System_Double => DbTypeClass.Double,
+            SpecialType.System_Decimal => DbTypeClass.Decimal,
+            SpecialType.System_DateTime => DbTypeClass.DateTime,
+            // String, Char, and anything else fall back to a text column.
+            _ => DbTypeClass.String,
+        };
+    }
+
+    /// <summary>
+    /// W7: extracts the referenced (table, column) from an <c>[InquiryForeignKey]</c>. The 2-arg form is
+    /// <c>(referencedTable, referencedColumn)</c>; the 3-arg form is <c>(localColumn, referencedTable,
+    /// referencedColumn)</c>. Returns (null, null) when the property has no foreign-key attribute.
+    /// </summary>
+    private static (string?, string?) ReadForeignKeyReference(AttributeData? foreignKeyAttribute)
+    {
+        if (foreignKeyAttribute is null)
+        {
+            return (null, null);
+        }
+
+        var args = foreignKeyAttribute.ConstructorArguments;
+        if (args.Length == 3)
+        {
+            return (args[1].Value as string, args[2].Value as string);
+        }
+
+        if (args.Length == 2)
+        {
+            return (args[0].Value as string, args[1].Value as string);
+        }
+
+        return (null, null);
     }
 
     private static List<RelationData> DiscoverRelations(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)

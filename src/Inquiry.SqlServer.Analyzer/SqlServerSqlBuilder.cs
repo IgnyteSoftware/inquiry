@@ -183,4 +183,33 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;
+
+    // ---- W7 DDL --------------------------------------------------------------------------------
+
+    protected override string MapColumnType(IColumn column) => column.TypeClass switch
+    {
+        DbTypeClass.Boolean => "BIT",
+        DbTypeClass.Byte => "TINYINT",
+        DbTypeClass.Int16 => "SMALLINT",
+        DbTypeClass.Int32 => "INT",
+        DbTypeClass.Int64 => "BIGINT",
+        DbTypeClass.Single => "REAL",
+        DbTypeClass.Double => "FLOAT",
+        DbTypeClass.Decimal => "DECIMAL(" + DecimalSpec(column, 18, 2) + ")",
+        DbTypeClass.DateTime => "DATETIME2",
+        DbTypeClass.DateTimeOffset => "DATETIMEOFFSET",
+        DbTypeClass.Guid => "UNIQUEIDENTIFIER",
+        DbTypeClass.ByteArray => "VARBINARY(MAX)",
+        // SQL Server cannot key on NVARCHAR(MAX); a bounded Length is required for PK/FK string columns.
+        _ => column.Length > 0 ? "NVARCHAR(" + column.Length + ")" : "NVARCHAR(MAX)",
+    };
+
+    protected override string GeneratedKeyClause(IColumn column)
+        => MapColumnType(column) + " IDENTITY(1,1) PRIMARY KEY";
+
+    protected override string WrapCreateTable(SqlBuildContext context, string body)
+    {
+        var name = string.IsNullOrEmpty(context.RawSchema) ? context.RawTableName : context.RawSchema + "." + context.RawTableName;
+        return "IF OBJECT_ID(N'" + name.Replace("'", "''") + "', N'U') IS NULL\nBEGIN\n    CREATE TABLE " + context.Table + " (\n        " + body + "\n    );\nEND;";
+    }
 }

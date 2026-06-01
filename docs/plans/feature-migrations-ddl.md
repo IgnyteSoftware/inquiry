@@ -1,5 +1,20 @@
 # W7 — Migrations / Schema DDL (Phase A only)
 
+> **STATUS (shipped):** Phase A DDL-generation **engine** delivered. `[InquiryColumn]` gains
+> `SqlType`/`Length`/`Precision`/`Scale`/`DefaultExpression`; `[InquiryTable]` gains
+> `GenerateForeignKeys`; `[InquiryForeignKey]` references are threaded through `ColumnData`/`IColumn`.
+> `SqlBuilder.BuildCreateTableSql` (base orchestrator) + abstract `MapColumnType`/`GeneratedKeyClause`
+> are implemented for all five dialects; `SchemaEmitter` emits one per-assembly **internal**
+> `Inquiry.Generated.InquiryGeneratedSchema.Ddl`, FK-topologically ordered (self-FK safe). Verified by
+> golden generator tests (SQLite/SqlServer/PostgreSql) and a SQLite execute-then-CRUD round-trip.
+>
+> **Deferred (documented):** byte-parity with the hand-tuned `NorthwindSchema.cs` and retiring it —
+> not mechanically reproducible without per-dialect type overrides (same logical column needs
+> bounded vs. unbounded types per dialect). Also deferred: indexes (`IsUnique`/`IsIndexed`), explicit
+> per-dialect nullability override (nullability is **inferred**: keys NOT NULL, else CLR nullability),
+> and all of Phase B (ALTER/diff, versioning, history table, apply runner — delegate to DbUp/FluentMigrator).
+
+
 > See [README.md](README.md). Depends on: **F1** (ColumnData shape); consumes **W6** rowversion column + **E3** identity strategy. Integrator — land **late**. Size: **L** (Phase A). Contention: **VERY HIGH** (ColumnData/IColumn + SqlBuilder DDL across all providers + attributes).
 
 ## 1. Recommended scope

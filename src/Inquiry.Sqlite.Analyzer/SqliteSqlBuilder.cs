@@ -86,4 +86,19 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;
+
+    // ---- W7 DDL --------------------------------------------------------------------------------
+    // SQLite has dynamic typing; these affinities match the conventional Northwind mapping.
+
+    protected override string MapColumnType(IColumn column) => column.TypeClass switch
+    {
+        DbTypeClass.Boolean or DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64 => "INTEGER",
+        DbTypeClass.Single or DbTypeClass.Double => "REAL",
+        DbTypeClass.Decimal => "NUMERIC",
+        DbTypeClass.ByteArray => "BLOB",
+        _ => "TEXT",
+    };
+
+    // SQLite's auto-increment rowid alias is always INTEGER PRIMARY KEY AUTOINCREMENT regardless of CLR width.
+    protected override string GeneratedKeyClause(IColumn column) => "INTEGER PRIMARY KEY AUTOINCREMENT";
 }

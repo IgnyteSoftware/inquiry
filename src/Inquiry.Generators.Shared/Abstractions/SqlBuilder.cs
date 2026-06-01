@@ -187,6 +187,109 @@ public abstract class SqlBuilder
         return "(" + firstCursor + " IS NULL OR " + columns + op + cursors + ")";
     }
 
+    // ---- W7 schema DDL generation -----------------------------------------------------------
+
+    /// <summary>
+    /// W7: builds the <c>CREATE TABLE</c> DDL for the entity described by <paramref name="context"/>.
+    /// Dialect-uniform skeleton (column list, primary key, foreign keys) composed from the per-dialect
+    /// hooks <see cref="MapColumnType"/>, <see cref="GeneratedKeyClause"/>, and <see cref="WrapCreateTable"/>:
+    /// <list type="bullet">
+    /// <item>a single generated key is emitted via <see cref="GeneratedKeyClause"/> (inline identity + PK);</item>
+    /// <item>a single non-generated key gets an inline <c>PRIMARY KEY</c>;</item>
+    /// <item>a composite key gets a table-level <c>PRIMARY KEY (…)</c> constraint;</item>
+    /// <item>foreign keys become table-level <c>FOREIGN KEY … REFERENCES …</c> when the entity opts in.</item>
+    /// </list>
+    /// </summary>
+    public virtual string BuildCreateTableSql(SqlBuildContext context)
+    {
+        var keyColumns = context.KeyColumns;
+        var singleGeneratedKey = keyColumns.Count == 1 && keyColumns[0].IsGenerated;
+        var compositeKey = keyColumns.Count > 1;
+
+        var lines = new List<string>();
+        foreach (var column in context.Columns)
+        {
+            if (singleGeneratedKey && column.IsKey)
+            {
+                lines.Add(QuoteIdentifier(column.ColumnName) + " " + GeneratedKeyClause(column));
+                continue;
+            }
+
+            var def = QuoteIdentifier(column.ColumnName) + " " + ColumnType(column);
+            if (!compositeKey && column.IsKey)
+            {
+                def += " PRIMARY KEY";
+            }
+
+            if (!column.IsNullable)
+            {
+                def += " NOT NULL";
+            }
+
+            if (!string.IsNullOrEmpty(column.DefaultExpression))
+            {
+                def += " DEFAULT " + column.DefaultExpression;
+            }
+
+            lines.Add(def);
+        }
+
+        if (compositeKey)
+        {
+            lines.Add("PRIMARY KEY (" + string.Join(", ", context.QuotedKeyColumns) + ")");
+        }
+
+        if (context.GenerateForeignKeys)
+        {
+            foreach (var column in context.Columns)
+            {
+                if (string.IsNullOrEmpty(column.ForeignKeyTable) || string.IsNullOrEmpty(column.ForeignKeyColumn))
+                {
+                    continue;
+                }
+
+                lines.Add("FOREIGN KEY (" + QuoteIdentifier(column.ColumnName) + ") REFERENCES "
+                    + QuoteIdentifier(column.ForeignKeyTable!) + "(" + QuoteIdentifier(column.ForeignKeyColumn!) + ")");
+            }
+        }
+
+        return WrapCreateTable(context, string.Join(",\n    ", lines));
+    }
+
+    /// <summary>The physical column type: the explicit <see cref="IColumn.SqlType"/> override if set, else <see cref="MapColumnType"/>.</summary>
+    protected string ColumnType(IColumn column)
+        => string.IsNullOrEmpty(column.SqlType) ? MapColumnType(column) : column.SqlType!;
+
+    /// <summary>
+    /// Renders the <c>precision, scale</c> body for a decimal column type, using the column's declared
+    /// <see cref="IColumn.Precision"/>/<see cref="IColumn.Scale"/> when set, else the dialect defaults.
+    /// </summary>
+    protected static string DecimalSpec(IColumn column, int defaultPrecision, int defaultScale)
+        => column.Precision > 0
+            ? column.Precision + ", " + column.Scale
+            : defaultPrecision + ", " + defaultScale;
+
+    /// <summary>
+    /// W7: maps a column's dialect-neutral <see cref="IColumn.TypeClass"/> (plus length/precision/scale)
+    /// to a physical column type for this dialect. No leading column name. Abstract so every provider
+    /// supplies its own type table — adding a dialect forces an explicit mapping rather than a silent default.
+    /// </summary>
+    protected abstract string MapColumnType(IColumn column);
+
+    /// <summary>
+    /// W7: the full column definition (after the quoted name) for a single database-generated primary key,
+    /// e.g. <c>INTEGER PRIMARY KEY AUTOINCREMENT</c> / <c>INT IDENTITY(1,1) PRIMARY KEY</c> / <c>SERIAL PRIMARY KEY</c>.
+    /// </summary>
+    protected abstract string GeneratedKeyClause(IColumn column);
+
+    /// <summary>
+    /// W7: wraps the comma-separated column/constraint <paramref name="body"/> in the dialect's
+    /// <c>CREATE TABLE</c> statement. Default is the idempotent <c>CREATE TABLE IF NOT EXISTS</c> form
+    /// (SQLite/PostgreSQL/MySQL); SQL Server wraps in an <c>OBJECT_ID</c> guard and Oracle omits the guard.
+    /// </summary>
+    protected virtual string WrapCreateTable(SqlBuildContext context, string body)
+        => "CREATE TABLE IF NOT EXISTS " + context.Table + " (\n    " + body + "\n)";
+
     protected static bool DatabaseMaySupplyKey(SqlBuildContext context)
     {
         if (context.KeyColumns.Count != 1) return false;

@@ -188,6 +188,11 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                     storeRegistrations.Add(registration);
                 }
             }
+
+            // W7: emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
+            // entity array (source order) filtered to mapped entities so emission is deterministic.
+            var schemaEntities = entities.Where(e => e.IsMapped).ToList();
+            SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);
         }
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)
