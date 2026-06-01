@@ -78,6 +78,67 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void StreamingProjectionReadsEnumAndNullableByOrdinal()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public enum Status { Open, Closed }
+
+            [InquiryTable("Item")]
+            public sealed class Item
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Status"), InquiryEnumAsString]
+                public Status Status { get; set; }
+
+                [InquiryColumn("Note")]
+                public string? Note { get; set; }
+            }
+
+            [InquiryProjection(typeof(Item))]
+            public sealed record ItemView
+            {
+                [InquiryColumn("Note")]
+                public string? Note { get; init; }
+
+                [InquiryColumn("Status"), InquiryEnumAsString]
+                public Status Status { get; init; }
+            }
+
+            public partial class ItemStore : Inquiry.Stores.InquiryStore<Demo.Item>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<ItemView> StreamViewsAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var projection = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemView.InquiryProjection.g.cs", StringComparison.Ordinal));
+        var projText = projection.GetText().ToString();
+        // Nullable string at ordinal 0; enum-as-string parsed at ordinal 1.
+        Assert.Contains("Note = reader.IsDBNull(0) ? null : reader.GetString(0)", projText);
+        Assert.Contains("Status = global::System.Enum.Parse<global::Demo.Status>(reader.GetString(1))", projText);
+
+        var store = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var storeText = store.GetText().ToString();
+        Assert.Contains("private const string _sqlProj_StreamViewsAsync = \"SELECT \\\"Note\\\", \\\"Status\\\" FROM \\\"Item\\\"\";", storeText);
+        // Streaming → QueryAsync, not QueryListAsync.
+        Assert.Contains("Inquiry.QueryAsync<global::Demo.ItemView, global::Demo.ItemViewInquiryProjectionStructMaterializer>(", storeText);
+    }
+
+    [Fact]
     public void SelectReturningUnmappedTypeReportsDiagnostic()
     {
         const string source = """
