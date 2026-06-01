@@ -166,8 +166,23 @@ internal static class StoreProcessor
                 : null;
         }
 
-        var returnsList = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch &&
-            IsTaskOfReadOnlyList(method.ReturnType, entityType);
+        // W5b: SelectAll uses the shape (buffered IReadOnlyList vs streaming) and records its element
+        // type for projection resolution at emit; other select ops stay entity-typed.
+        string? resultElementTypeFqn = null;
+        bool returnsList;
+        if (operation == StoreOperation.SelectAll)
+        {
+            returnsList = TryGetSelectElementType(method.ReturnType, out var selectElement, out var isList) && isList;
+            if (selectElement is not null)
+            {
+                resultElementTypeFqn = selectElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+        }
+        else
+        {
+            returnsList = operation is StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch &&
+                IsTaskOfReadOnlyList(method.ReturnType, entityType);
+        }
         var procedureReturn = operation == StoreOperation.StoredProcedure
             ? ClassifyProcedureReturn(method.ReturnType, entityType)
             : ProcedureReturnKind.None;
@@ -236,6 +251,7 @@ internal static class StoreProcessor
             AggregateFunction = aggregateFunction,
             AggregateColumn = aggregateColumn,
             ScalarResultType = scalarResultType,
+            ResultElementTypeFqn = resultElementTypeFqn,
         };
     }
 
@@ -382,7 +398,11 @@ internal static class StoreProcessor
     {
         return operation switch
         {
-            StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch =>
+            // W5b: SelectAll's element type may be the entity OR an [InquiryProjection] of it, so it is
+            // accepted by shape here (any named element) and resolved against the projection registry at emit.
+            StoreOperation.SelectAll =>
+                TryGetSelectElementType(returnType, out _, out _),
+            StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
                 IsTaskOfReadOnlyList(returnType, entityType),
             StoreOperation.KeysetPage =>
@@ -431,6 +451,50 @@ internal static class StoreProcessor
             && task.IsGenericType
             && task.TypeArguments.Length == 1
             && task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Threading.Tasks.Task<TResult>";
+
+    /// <summary>
+    /// W5b: extracts the element type of a select-list return — the <c>T</c> in
+    /// <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> (<paramref name="isList"/> true) or
+    /// <c>IAsyncEnumerable&lt;T&gt;</c> (false), where <c>T</c> is a named type. Returns false for any
+    /// other shape. The element may be the store's entity or an <c>[InquiryProjection]</c> of it.
+    /// </summary>
+    private static bool TryGetSelectElementType(ITypeSymbol returnType, out INamedTypeSymbol element, out bool isList)
+    {
+        element = null!;
+        isList = false;
+
+        if (returnType is not INamedTypeSymbol outer || !outer.IsGenericType || outer.TypeArguments.Length != 1)
+        {
+            return false;
+        }
+
+        var outerName = outer.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (outerName == "global::System.Collections.Generic.IAsyncEnumerable<T>")
+        {
+            if (outer.TypeArguments[0] is INamedTypeSymbol asyncElement)
+            {
+                element = asyncElement;
+                isList = false;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (outerName == "global::System.Threading.Tasks.Task<TResult>" &&
+            outer.TypeArguments[0] is INamedTypeSymbol inner &&
+            inner.IsGenericType &&
+            inner.TypeArguments.Length == 1 &&
+            inner.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Collections.Generic.IReadOnlyList<T>" &&
+            inner.TypeArguments[0] is INamedTypeSymbol listElement)
+        {
+            element = listElement;
+            isList = true;
+            return true;
+        }
+
+        return false;
+    }
 
     private static bool IsTaskOfReadOnlyList(ITypeSymbol returnType, ITypeSymbol entitySymbol)
     {
@@ -505,6 +569,7 @@ internal static class StoreProcessor
         SourceProductionContext context,
         StoreData store,
         IReadOnlyDictionary<string, EntityData> entities,
+        IReadOnlyDictionary<string, ProjectionData> projections,
         SqlBuilder sqlBuilder)
     {
         if (!store.IsEmittable)
@@ -532,6 +597,46 @@ internal static class StoreProcessor
             {
                 valid.Add((method, fieldColumns, predicatePlan, selectPlan));
             }
+        }
+
+        // W5b: resolve projection-returning SelectAll methods. A select whose element type is not the
+        // store's entity must be a known [InquiryProjection] of it (and the entity must not be soft-delete,
+        // since projections do not apply the soft-delete filter in v1). Invalid ones are diagnosed and dropped.
+        var projectionMethods = new Dictionary<string, ProjectionData>(StringComparer.Ordinal);
+        for (var i = valid.Count - 1; i >= 0; i--)
+        {
+            var m = valid[i].Method;
+            if (m.ResultElementTypeFqn is null || m.ResultElementTypeFqn == store.EntityFullyQualifiedName)
+            {
+                continue;
+            }
+
+            if (!projections.TryGetValue(m.ResultElementTypeFqn, out var projection))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ProjectionNotMapped,
+                    m.Location?.ToLocation(), m.Name, StripGlobalPrefix(m.ResultElementTypeFqn)));
+                valid.RemoveAt(i);
+                continue;
+            }
+
+            if (projection.EntityFullyQualifiedName != store.EntityFullyQualifiedName)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ProjectionEntityMismatch,
+                    m.Location?.ToLocation(), m.Name, StripGlobalPrefix(m.ResultElementTypeFqn),
+                    StripGlobalPrefix(projection.EntityFullyQualifiedName), StripGlobalPrefix(store.EntityFullyQualifiedName)));
+                valid.RemoveAt(i);
+                continue;
+            }
+
+            if (entity.SoftDeleteColumn is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ProjectionOnSoftDeleteEntity,
+                    m.Location?.ToLocation(), m.Name, StripGlobalPrefix(m.ResultElementTypeFqn), StripGlobalPrefix(store.EntityFullyQualifiedName)));
+                valid.RemoveAt(i);
+                continue;
+            }
+
+            projectionMethods[m.Name] = projection;
         }
 
         if (valid.Count == 0)
@@ -741,6 +846,13 @@ internal static class StoreProcessor
             }
         }
 
+        // W5b: one SELECT-over-projection-columns const per projection-returning method.
+        foreach (var pair in projectionMethods)
+        {
+            var projCtx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(pair.Value.Columns));
+            AppendConstSql(source, "_sqlProj_" + pair.Key, sqlBuilder.BuildSelectAllSql(projCtx));
+        }
+
         source.AppendLine();
         source.AppendLine($"    public {store.Name}(global::Inquiry.IInquiry inquiry)");
         source.AppendLine("        : base(inquiry)");
@@ -750,8 +862,17 @@ internal static class StoreProcessor
         foreach (var (method, fieldColumns, predicatePlan, selectPlan) in valid)
         {
             source.AppendLine();
-            baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
-            StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, baseSelectField);
+            if (projectionMethods.TryGetValue(method.Name, out var projection))
+            {
+                // Project: select the projection's columns and materialize the projection type.
+                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities,
+                    "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
+            }
+            else
+            {
+                baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
+                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, baseSelectField);
+            }
         }
 
         source.AppendLine("}");
