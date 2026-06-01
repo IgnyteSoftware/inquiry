@@ -92,6 +92,45 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void OracleDialectRejectsUpsertOnGeneratedKey()
+    {
+        // KNOWN v1 LIMITATION: an Oracle MERGE joins on the key, which is NULL for a DB-generated
+        // key, so it would never match (insert-only) and could not round-trip the generated value.
+        // The builder throws rather than emit silently-wrong SQL; Roslyn surfaces that as a
+        // generator diagnostic (a loud build failure), not a runtime data bug.
+        const string source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey(IsGenerated = true)]
+                public int? Id { get; set; }
+
+                [InquiryColumn("Name")]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(Widget widget, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+
+        Assert.NotEmpty(result.GeneratorDiagnostics);
+    }
+
+    [Fact]
     public void OracleDialectEmitsValuesDefaultForAllGeneratedInsert()
     {
         // Oracle has no DEFAULT VALUES clause; an all-database-supplied insert uses VALUES (DEFAULT).
@@ -149,10 +188,12 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetStore(result);
 
-        // The ORDER BY column is unquoted (Oracle policy). The synthetic paging parameters keep the
-        // shared '@__offset'/'@__limit' names in the SQL text (they originate from SqlSelectOptions,
-        // not the dialect ParameterName hook) — consistent with the runtime binder, which also binds
-        // them as '@__offset'/'@__limit', so BindByName matches them exactly.
+        // KNOWN v1 LIMITATION (see OracleSqlBuilder remarks): the synthetic paging parameters keep
+        // the shared '@__offset'/'@__limit' names baked by StoreProcessor. Oracle's SQL parser does
+        // NOT treat '@__offset' as a bind placeholder (Oracle uses ':'), so a paged/keyset query does
+        // not run against a live Oracle yet — the proper fix is a dialect-aware synthetic-parameter
+        // prefix in the shared generator, deferred to avoid colliding with in-flight workstreams.
+        // This test pins the CURRENT emitted text, not a working live contract.
         Assert.Contains("ORDER BY Id ASC OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY", text);
         Assert.Contains("_p0.ParameterName = \"@__offset\";", text);
         Assert.Contains("_p1.ParameterName = \"@__limit\";", text);
