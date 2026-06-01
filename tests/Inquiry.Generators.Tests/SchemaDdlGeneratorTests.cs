@@ -234,6 +234,91 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain(sqlite.RunResult.Diagnostics, d => d.Id == "INQ031");
     }
 
+    private const string IndexedUserSource = """
+        using Inquiry.Entities;
+
+        namespace Demo;
+
+        [InquiryTable("AppUser")]
+        public sealed class AppUser
+        {
+            [InquiryKey(IsGenerated = true)]
+            public long Id { get; set; }
+
+            [InquiryColumn("Email", Length = 128, IsUnique = true)]
+            public string Email { get; set; } = string.Empty;
+
+            [InquiryColumn("Name", IsIndexed = true)]
+            public string Name { get; set; } = string.Empty;
+        }
+        """;
+
+    [Fact]
+    public void SqliteSchemaEmitsUniqueAndPlainIndexesWithIfNotExists()
+    {
+        var result = RunGenerator(IndexedUserSource);
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("CREATE UNIQUE INDEX IF NOT EXISTS \"UX_AppUser_Email\" ON \"AppUser\" (\"Email\");", ddl);
+        Assert.Contains("CREATE INDEX IF NOT EXISTS \"IX_AppUser_Name\" ON \"AppUser\" (\"Name\");", ddl);
+        // Indexes follow the table.
+        Assert.True(
+            ddl.IndexOf("CREATE TABLE", StringComparison.Ordinal) < ddl.IndexOf("CREATE UNIQUE INDEX", StringComparison.Ordinal),
+            "Indexes must be emitted after the table.");
+    }
+
+    [Fact]
+    public void SqlServerSchemaEmitsIndexesWithoutIfNotExists()
+    {
+        var result = RunGenerator(IndexedUserSource, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        // SQL Server CREATE INDEX has no IF NOT EXISTS guard.
+        Assert.Contains("CREATE UNIQUE INDEX [UX_AppUser_Email] ON [AppUser] ([Email]);", ddl);
+        Assert.Contains("CREATE INDEX [IX_AppUser_Name] ON [AppUser] ([Name]);", ddl);
+        Assert.DoesNotContain("INDEX IF NOT EXISTS", ddl);
+    }
+
+    [Fact]
+    public void PostgreSqlSchemaEmitsIndexesWithIfNotExists()
+    {
+        var result = RunGenerator(IndexedUserSource, dialect: "PostgreSql");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("CREATE UNIQUE INDEX IF NOT EXISTS \"UX_AppUser_Email\" ON \"AppUser\" (\"Email\");", ddl);
+        Assert.Contains("CREATE INDEX IF NOT EXISTS \"IX_AppUser_Name\" ON \"AppUser\" (\"Name\");", ddl);
+    }
+
+    [Fact]
+    public void ExplicitIndexNameOverridesDefault()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("AppUser")]
+            public sealed class AppUser
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Email", Length = 128, IsUnique = true, IndexName = "UX_Users_Email_Lower")]
+                public string Email { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("CREATE UNIQUE INDEX IF NOT EXISTS \"UX_Users_Email_Lower\" ON \"AppUser\" (\"Email\");", ddl);
+        Assert.DoesNotContain("UX_AppUser_Email", ddl);
+    }
+
     [Fact]
     public void PostgreSqlSchemaUsesSerialAndQuotedIdentifiers()
     {

@@ -240,6 +240,9 @@ internal static class EntityProcessor
                 DefaultExpression = defaultExpression,
                 ForeignKeyTable = foreignKeyTable,
                 ForeignKeyColumn = foreignKeyColumn,
+                IsIndexed = columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "IsIndexed"),
+                IsUnique = columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "IsUnique"),
+                IndexName = columnAttribute is not null ? GeneratorHelpers.GetNamedString(columnAttribute, "IndexName") : null,
                 Converter = converter,
             });
 
