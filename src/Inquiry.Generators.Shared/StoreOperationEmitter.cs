@@ -251,12 +251,10 @@ internal static class StoreOperationEmitter
             {
                 // W3: batch insert — one multi-row INSERT built at runtime for the whole collection,
                 // bound via the existing ExecuteAsync<TArgs> fast path (one statement, not N round-trips).
-                var insertable = new List<ColumnData>();
-                for (var _i = 0; _i < entity.Columns.Count; _i++)
-                {
-                    var _c = entity.Columns[_i];
-                    if (!_c.IsGenerated && !_c.UseDatabaseDefault) insertable.Add(_c);
-                }
+                // Reuse SelectMutationColumns so the bound columns stay in lockstep with the prefix const
+                // (_sqlInsertAllPrefix from ctx.InsertColumns) — both exclude generated, db-default, and
+                // database-generated-token columns.
+                var insertable = SelectMutationColumns(entity, includeKey: false);
 
                 var itemsParam = method.Parameters[0].Name;
                 AppendHeader(source, method, parameters, isAsync: true);
@@ -266,7 +264,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
                 source.AppendLine("        {");
                 source.AppendLine("            if (_r > 0) _sb.Append(',');");
-                for (var _c = 0; _c < insertable.Count; _c++)
+                for (var _c = 0; _c < insertable.Length; _c++)
                 {
                     var seg = _c == 0 ? "(@p" : ", @p";
                     source.AppendLine($"            _sb.Append(\"{seg}\").Append(_r).Append(\"_{_c}\");");
@@ -281,7 +279,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("                for (var _r = 0; _r < _items.Count; _r++)");
                 source.AppendLine("                {");
                 source.AppendLine("                    var _it = _items[_r];");
-                for (var _c = 0; _c < insertable.Count; _c++)
+                for (var _c = 0; _c < insertable.Length; _c++)
                 {
                     var col = insertable[_c];
                     var dbType = DbTypeMapper.TryGetDbTypeExpression(col.Type);
