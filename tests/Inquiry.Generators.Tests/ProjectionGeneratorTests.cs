@@ -78,6 +78,116 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void ProjectionSelectAllByFieldSelectsSubsetWithFilter()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Customer")]
+            public sealed class Customer
+            {
+                [InquiryKey]
+                public string Id { get; set; } = string.Empty;
+
+                [InquiryColumn("CompanyName")]
+                public string Name { get; set; } = string.Empty;
+
+                [InquiryColumn("City")]
+                public string? City { get; set; }
+            }
+
+            [InquiryProjection(typeof(Customer))]
+            public sealed record CustomerSummary
+            {
+                [InquiryColumn("Id")]
+                public string Id { get; init; } = string.Empty;
+
+                [InquiryColumn("CompanyName")]
+                public string Name { get; init; } = string.Empty;
+            }
+
+            public partial class CustomerStore : Inquiry.Stores.InquiryStore<Demo.Customer>
+            {
+                [InquirySelectAllByField(nameof(Customer.City))]
+                public partial Task<IReadOnlyList<CustomerSummary>> ByCityAsync(string city, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("CustomerStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // SELECT lists the projection columns; WHERE filters on the entity field column.
+        Assert.Contains("private const string _sqlProj_ByCityAsync = \"SELECT \\\"Id\\\", \\\"CompanyName\\\" FROM \\\"Customer\\\" WHERE \\\"City\\\" = @City\";", text);
+        // Buffered single-field fast path: QueryListAsync<TResult, TArg, TStructMat> over _sqlProj_.
+        Assert.Contains("Inquiry.QueryListAsync<global::Demo.CustomerSummary, string, global::Demo.CustomerSummaryInquiryProjectionStructMaterializer>(", text);
+        Assert.Contains("_sqlProj_ByCityAsync,", text);
+    }
+
+    [Fact]
+    public void OrderedProjectionByFieldBuildsPlanOverProjectionColumns()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Customer")]
+            public sealed class Customer
+            {
+                [InquiryKey]
+                public string Id { get; set; } = string.Empty;
+
+                [InquiryColumn("CompanyName")]
+                public string Name { get; set; } = string.Empty;
+
+                [InquiryColumn("City")]
+                public string? City { get; set; }
+            }
+
+            [InquiryProjection(typeof(Customer))]
+            public sealed record CustomerSummary
+            {
+                [InquiryColumn("Id")]
+                public string Id { get; init; } = string.Empty;
+
+                [InquiryColumn("CompanyName")]
+                public string Name { get; init; } = string.Empty;
+            }
+
+            public partial class CustomerStore : Inquiry.Stores.InquiryStore<Demo.Customer>
+            {
+                [InquirySelectAllByField(nameof(Customer.City), OrderBy = "Name")]
+                public partial Task<IReadOnlyList<CustomerSummary>> ByCityOrderedAsync(string city, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("CustomerStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // The plan const SELECTs the projection columns; the ORDER BY uses the entity column.
+        Assert.Contains("private const string _sql_ByCityOrderedAsync = \"SELECT \\\"Id\\\", \\\"CompanyName\\\" FROM \\\"Customer\\\" WHERE \\\"City\\\" = @City ORDER BY \\\"CompanyName\\\" ASC\";", text);
+        Assert.Contains("global::Demo.CustomerSummaryInquiryProjectionStructMaterializer", text);
+    }
+
+    [Fact]
     public void StreamingProjectionReadsEnumAndNullableByOrdinal()
     {
         const string source = """
