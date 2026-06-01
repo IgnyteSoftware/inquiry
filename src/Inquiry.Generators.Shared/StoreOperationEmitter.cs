@@ -120,7 +120,7 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: true);
                 if (method.ReturnsEntity)
                 {
-                    EmitFastQuerySingleFromEntity(source, "_sqlUpdateReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: true);
+                    EmitFastQuerySingleFromEntity(source, "_sqlUpdateReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: true, emitConcurrencyGuard: true);
                 }
                 else
                 {
@@ -169,7 +169,8 @@ internal static class StoreOperationEmitter
                     ? "_sqlHardDeleteByKey"
                     : "_sqlDeleteByKey";
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastExecuteFromKeys(source, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ");
+                EmitFastExecuteFromKeys(source, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ",
+                    emitConcurrencyGuard: entity.ConcurrencyToken is not null);
                 source.AppendLine("    }");
                 break;
             }
@@ -201,6 +202,20 @@ internal static class StoreOperationEmitter
     {
         var columns = SelectMutationColumns(entity, includeKey);
 
+        // W6: a bool-returning mutation on a token entity captures the row count so a 0-row conflict can
+        // (when the runtime option is set) throw instead of silently returning false.
+        if (returnRowsAffectedAsBool && entity.ConcurrencyToken is not null)
+        {
+            source.AppendLine($"{indent}var _rows = await Inquiry.ExecuteAsync(");
+            source.AppendLine($"{indent}    {sqlField},");
+            source.AppendLine($"{indent}    {entityParameter},");
+            AppendBinderLambda(source, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
+            source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
+            AppendConcurrencyConflictGuard(source, indent);
+            source.AppendLine($"{indent}return _rows > 0;");
+            return;
+        }
+
         var awaitPrefix = returnRowsAffectedAsBool ? "await " : string.Empty;
         var returnSuffix = returnRowsAffectedAsBool ? ".ConfigureAwait(false) > 0" : string.Empty;
 
@@ -210,6 +225,14 @@ internal static class StoreOperationEmitter
         AppendBinderLambda(source, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
     }
+
+    /// <summary>
+    /// W6: emits the optimistic-concurrency conflict guard for a captured <c>_rows</c> count — a 0-row
+    /// mutation on a token entity throws <see cref="global::Inquiry.InquiryConcurrencyException"/> only
+    /// when the runtime option is enabled (gated at the call site so non-token entities are unaffected).
+    /// </summary>
+    private static void AppendConcurrencyConflictGuard(StringBuilder source, string indent)
+        => source.AppendLine($"{indent}if (_rows == 0 && Inquiry.ThrowOnConcurrencyConflict) throw new global::Inquiry.InquiryConcurrencyException();");
 
     /// <summary>
     /// Builds the C# expression assigned to <c>DbParameter.Value</c>. Non-enum columns use a simple
@@ -247,25 +270,38 @@ internal static class StoreOperationEmitter
         EquatableArray<ColumnData> keyColumns,
         EquatableArray<ParameterData> methodParameters,
         string cancellation,
-        string indent)
+        string indent,
+        bool emitConcurrencyGuard = false)
     {
+        // W6: when the entity has a concurrency token, capture the row count and gate a conflict throw on
+        // the runtime option; otherwise emit the original inline `… > 0` tail (byte-identical to before).
+        var capture = emitConcurrencyGuard ? "var _rows = await Inquiry.ExecuteAsync(" : "return await Inquiry.ExecuteAsync(";
+        var tail = emitConcurrencyGuard ? ").ConfigureAwait(false);" : ").ConfigureAwait(false) > 0;";
+
         if (keyColumns.Count == 1)
         {
             var keyParamName = methodParameters[0].Name;
-            source.AppendLine($"{indent}return await Inquiry.ExecuteAsync(");
+            source.AppendLine($"{indent}{capture}");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {keyParamName},");
             AppendBinderLambda(source, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ");
-            source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false) > 0;");
-            return;
+            source.AppendLine($"{indent}    {cancellation}{tail}");
+        }
+        else
+        {
+            var tupleArgs = string.Join(", ", Take(methodParameters, keyColumns.Count).Select(p => p.Name));
+            source.AppendLine($"{indent}{capture}");
+            source.AppendLine($"{indent}    {sqlField},");
+            source.AppendLine($"{indent}    ({tupleArgs}),");
+            AppendBinderLambda(source, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ");
+            source.AppendLine($"{indent}    {cancellation}{tail}");
         }
 
-        var tupleArgs = string.Join(", ", Take(methodParameters, keyColumns.Count).Select(p => p.Name));
-        source.AppendLine($"{indent}return await Inquiry.ExecuteAsync(");
-        source.AppendLine($"{indent}    {sqlField},");
-        source.AppendLine($"{indent}    ({tupleArgs}),");
-        AppendBinderLambda(source, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ");
-        source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false) > 0;");
+        if (emitConcurrencyGuard)
+        {
+            AppendConcurrencyConflictGuard(source, indent);
+            source.AppendLine($"{indent}return _rows > 0;");
+        }
     }
 
     /// <summary>
@@ -556,9 +592,25 @@ internal static class StoreOperationEmitter
         string cancellation,
         string indent,
         bool includeKey,
-        bool isAwait)
+        bool isAwait,
+        bool emitConcurrencyGuard = false)
     {
         var columns = SelectMutationColumns(entity, includeKey);
+
+        // W6: a ReturnEntity update on a token entity captures the (nullable) result so a null — which
+        // otherwise conflates "stale token" with "row deleted" — can throw when the runtime option is set.
+        if (emitConcurrencyGuard && entity.ConcurrencyToken is not null)
+        {
+            source.AppendLine($"{indent}var _result = await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
+            source.AppendLine($"{indent}    {sqlField},");
+            source.AppendLine($"{indent}    {entityParameter},");
+            AppendBinderLambda(source, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
+            source.AppendLine($"{indent}    default,");
+            source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
+            source.AppendLine($"{indent}if (_result is null && Inquiry.ThrowOnConcurrencyConflict) throw new global::Inquiry.InquiryConcurrencyException();");
+            source.AppendLine($"{indent}return _result;");
+            return;
+        }
 
         var awaitPrefix = isAwait ? "await " : string.Empty;
         var returnSuffix = isAwait ? ".ConfigureAwait(false)" : string.Empty;
