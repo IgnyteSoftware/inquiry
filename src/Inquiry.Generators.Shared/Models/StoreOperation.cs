@@ -12,6 +12,7 @@ internal enum StoreOperation
     KeysetPage,
     Count,
     Aggregate,
+    FullTextSearch,
     Insert,
     Update,
     Upsert,
