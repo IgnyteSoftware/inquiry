@@ -13,6 +13,7 @@ internal enum StoreOperation
     Count,
     Aggregate,
     FullTextSearch,
+    InsertAll,
     Insert,
     Update,
     Upsert,

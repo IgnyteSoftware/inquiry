@@ -21,6 +21,9 @@ public partial class SaleStore : InquiryStore<Sale>
     [InquiryInsert]
     public partial Task<int> InsertAsync(Sale sale, CancellationToken cancellationToken = default);
 
+    [InquiryInsertAll]
+    public partial Task<int> InsertAllAsync(System.Collections.Generic.IEnumerable<Sale> sales, CancellationToken cancellationToken = default);
+
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
 
@@ -55,6 +58,29 @@ public sealed class AggregateIntegrationTests
         Assert.Equal(3L, await store.CountAsync());
         Assert.Equal(60m, await store.SumAmountAsync());
         Assert.Equal(30m, await store.MaxAmountAsync());
+    }
+
+    [Fact]
+    public async Task BatchInsertsAllRowsInOneStatement()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "Batch");
+        var store = harness.GetRequiredService<SaleStore>();
+
+        var affected = await store.InsertAllAsync(new[] { new Sale { Amount = 1m }, new Sale { Amount = 2m }, new Sale { Amount = 3m } });
+
+        Assert.Equal(3, affected);
+        Assert.Equal(3L, await store.CountAsync());
+        Assert.Equal(6m, await store.SumAmountAsync());
+    }
+
+    [Fact]
+    public async Task BatchInsertEmptyIsNoOp()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "Batch");
+        var store = harness.GetRequiredService<SaleStore>();
+
+        Assert.Equal(0, await store.InsertAllAsync(System.Array.Empty<Sale>()));
+        Assert.Equal(0L, await store.CountAsync());
     }
 
     [Fact]
