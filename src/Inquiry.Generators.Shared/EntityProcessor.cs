@@ -180,6 +180,25 @@ internal static class EntityProcessor
             var isDatabaseGeneratedToken = isConcurrencyToken &&
                 GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute!, "DatabaseGenerated");
 
+            // W10: [InquiryEnumAsString] stores an enum column as its member name. Only valid on an
+            // enum (or nullable enum) property; otherwise report INQ036 and leave the flag clear.
+            var enumAsString = false;
+            if (GeneratorHelpers.GetEntityAttribute(property, "InquiryEnumAsStringAttribute") is not null)
+            {
+                if (typeData.IsEnum)
+                {
+                    enumAsString = true;
+                }
+                else
+                {
+                    diagnostics.Add(DiagnosticData.Create(
+                        InquiryDiagnosticDescriptors.EnumAsStringNonEnum,
+                        property.Locations.FirstOrDefault(),
+                        entitySymbol.Name,
+                        property.Name));
+                }
+            }
+
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
@@ -191,6 +210,7 @@ internal static class EntityProcessor
                 SoftDelete = softDelete,
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
+                EnumAsString = enumAsString,
             });
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)

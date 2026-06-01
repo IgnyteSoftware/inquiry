@@ -22,19 +22,21 @@ internal static class MaterializerEmitter
         for (var i = 0; i < columns.Count; i++)
         {
             var column = columns[i];
-            source.AppendLine($"{indent}    {column.PropertyName} = {ReadExpression(column.Type, i)},");
+            source.AppendLine($"{indent}    {column.PropertyName} = {ReadExpression(column.Type, i, column.EnumAsString)},");
         }
         source.AppendLine($"{indent}}};");
     }
 
-    public static string ReadExpression(TypeData type, int index)
+    public static string ReadExpression(TypeData type, int index, bool enumAsString = false)
     {
         var nonNullable = type.NonNullableDisplayName;
-        var read = type.IsEnum
-            ? $"({nonNullable}){ReadCallForSpecialType(type.EnumUnderlyingSpecialType, index, nonNullable)}"
-            : type.IsGuid
-                ? $"reader.GetGuid({index})"
-                : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
+        var read = enumAsString
+            ? $"global::System.Enum.Parse<{nonNullable}>(reader.GetString({index}))"
+            : type.IsEnum
+                ? $"({nonNullable}){ReadCallForSpecialType(type.EnumUnderlyingSpecialType, index, nonNullable)}"
+                : type.IsGuid
+                    ? $"reader.GetGuid({index})"
+                    : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
 
         if (!type.IsNullable)
         {
