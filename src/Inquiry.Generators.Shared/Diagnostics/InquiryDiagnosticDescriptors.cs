@@ -201,4 +201,12 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor FullTextSearchNotSupported = new(
+        "INQ035",
+        "Full-text search is not supported by the target dialect",
+        "Query method '{0}' uses [InquiryFullTextSearch], which the current dialect does not support. Full-text search is available on PostgreSQL, SQL Server, and MySQL.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

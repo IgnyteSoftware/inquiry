@@ -32,6 +32,16 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
         return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.SoftDeleteActivePredicate);
     }
 
+    public override bool SupportsFullTextSearch => true;
+
+    public override string BuildFullTextSearchSql(SqlBuildContext context, IReadOnlyList<IColumn> searchColumns)
+    {
+        // MATCH ... AGAINST natural-language search (requires a FULLTEXT index on the columns).
+        var cols = string.Join(", ", searchColumns.Select(c => QuoteIdentifier(c.ColumnName)));
+        var predicate = "MATCH(" + cols + ") AGAINST (" + ParameterName("searchTerm") + " IN NATURAL LANGUAGE MODE)";
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(predicate, context.SoftDeleteActivePredicate);
+    }
+
     public override string BuildInsertSql(SqlBuildContext context)
     {
         if (context.InsertableColumns.Count == 0)
