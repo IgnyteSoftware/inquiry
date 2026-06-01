@@ -36,6 +36,9 @@ internal sealed record ColumnData : IColumn
     public string? DefaultExpression { get; init; }
     public string? ForeignKeyTable { get; init; }
     public string? ForeignKeyColumn { get; init; }
+    public bool IsIndexed { get; init; }
+    public bool IsUnique { get; init; }
+    public string? IndexName { get; init; }
 
     /// <summary>W10b: the value converter applied to this column, or null for a directly-mapped type.</summary>
     public ConverterData? Converter { get; init; }

@@ -87,4 +87,13 @@ public interface IColumn
 
     /// <summary>W7: referenced column name when this column is a foreign key, or null.</summary>
     string? ForeignKeyColumn { get; }
+
+    /// <summary>W7b: emit a single-column index on this column.</summary>
+    bool IsIndexed { get; }
+
+    /// <summary>W7b: emit a single-column UNIQUE index on this column.</summary>
+    bool IsUnique { get; }
+
+    /// <summary>W7b: explicit index name, or null to use the default.</summary>
+    string? IndexName { get; }
 }

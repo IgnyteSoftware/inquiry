@@ -153,4 +153,6 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     // explicit type + IDENTITY clause, matching the conventional Northwind mapping.
     protected override string GeneratedKeyClause(IColumn column)
         => (column.TypeClass == DbTypeClass.Int64 ? "BIGSERIAL" : "SERIAL") + " PRIMARY KEY";
+
+    protected override bool SupportsCreateIndexIfNotExists => true;
 }

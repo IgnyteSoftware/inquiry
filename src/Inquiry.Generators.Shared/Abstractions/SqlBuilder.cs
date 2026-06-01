@@ -274,6 +274,40 @@ public abstract class SqlBuilder
         return WrapCreateTable(context, string.Join(",\n    ", lines));
     }
 
+    /// <summary>
+    /// W7b: builds the <c>CREATE INDEX</c> statements for the entity — one per column flagged
+    /// <see cref="IColumn.IsIndexed"/> or <see cref="IColumn.IsUnique"/>. The index name defaults to
+    /// <c>IX_&lt;table&gt;_&lt;column&gt;</c> (<c>UX_</c> for unique). Dialect-uniform apart from the
+    /// idempotency guard, which is gated by <see cref="SupportsCreateIndexIfNotExists"/>.
+    /// </summary>
+    public virtual IReadOnlyList<string> BuildCreateIndexSql(SqlBuildContext context)
+    {
+        var statements = new List<string>();
+        foreach (var column in context.Columns)
+        {
+            if (!column.IsIndexed && !column.IsUnique)
+            {
+                continue;
+            }
+
+            var indexName = string.IsNullOrEmpty(column.IndexName)
+                ? (column.IsUnique ? "UX_" : "IX_") + context.RawTableName + "_" + column.ColumnName
+                : column.IndexName!;
+            var unique = column.IsUnique ? "UNIQUE " : string.Empty;
+            var guard = SupportsCreateIndexIfNotExists ? "IF NOT EXISTS " : string.Empty;
+            statements.Add("CREATE " + unique + "INDEX " + guard + QuoteIdentifier(indexName)
+                + " ON " + context.Table + " (" + QuoteIdentifier(column.ColumnName) + ")");
+        }
+
+        return statements;
+    }
+
+    /// <summary>
+    /// W7b: whether <c>CREATE INDEX IF NOT EXISTS</c> is supported (SQLite/PostgreSQL). False for SQL
+    /// Server, MySQL, and Oracle, whose <c>CREATE INDEX</c> has no portable existence guard.
+    /// </summary>
+    protected virtual bool SupportsCreateIndexIfNotExists => false;
+
     /// <summary>The physical column type: the explicit <see cref="IColumn.SqlType"/> override if set, else <see cref="MapColumnType"/>.</summary>
     protected string ColumnType(IColumn column)
         => string.IsNullOrEmpty(column.SqlType) ? MapColumnType(column) : column.SqlType!;
