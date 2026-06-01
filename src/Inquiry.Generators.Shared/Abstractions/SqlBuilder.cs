@@ -85,7 +85,8 @@ public abstract class SqlBuilder
     /// <see cref="BuildDeleteByKeySql"/> for a non-hard delete.
     /// </summary>
     public virtual string BuildSoftDeleteByKeySql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + context.KeyWhereClause;
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
+            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
 
     /// <summary>
     /// Builds the restore UPDATE (clear the soft-delete indicator) by key. Concrete and inherited by

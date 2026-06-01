@@ -22,4 +22,6 @@ internal sealed record ColumnData : IColumn
     public bool IsGenerated { get; init; }
     public bool UseDatabaseDefault { get; init; }
     public SoftDeleteKind SoftDelete { get; init; } = SoftDeleteKind.None;
+    public bool IsConcurrencyToken { get; init; }
+    public bool IsDatabaseGeneratedToken { get; init; }
 }
