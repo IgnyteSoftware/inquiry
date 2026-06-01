@@ -54,7 +54,7 @@ public sealed partial class InquiryGeneratorTests
         public partial Task<bool> UpdateAsync(Widget widget, CancellationToken cancellationToken = default);
 
         [InquiryDeleteOneByKey]
-        public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
+        public partial Task<bool> DeleteAsync(Widget widget, CancellationToken cancellationToken = default);
         """;
 
     [Fact]
@@ -66,6 +66,10 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("_sqlUpdate = \"UPDATE \\\"TWidget\\\" SET \\\"Name\\\" = @Name, \\\"Version\\\" = \\\"Version\\\" + 1 WHERE \\\"Id\\\" = @Id AND \\\"Version\\\" = @Version\";", text);
         Assert.Contains("_sqlDeleteByKey = \"DELETE FROM \\\"TWidget\\\" WHERE \\\"Id\\\" = @Id AND \\\"Version\\\" = @Version\";", text);
+        // The concurrency DELETE takes the entity and binds BOTH the key and the token, otherwise
+        // @Version in the DELETE WHERE would be unbound at runtime.
+        Assert.Contains("_p0.ParameterName = \"@Id\";", text);
+        Assert.Contains("_p1.ParameterName = \"@Version\";", text);
     }
 
     [Fact]
