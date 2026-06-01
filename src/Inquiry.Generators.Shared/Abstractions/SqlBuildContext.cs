@@ -29,13 +29,16 @@ public sealed class SqlBuildContext
     {
         Columns = columns;
         KeyColumns = columns.Where(c => c.IsKey).ToArray();
-        InsertableColumns = columns.Where(c => !c.IsGenerated && !c.UseDatabaseDefault).ToArray();
+        // W6: a database-managed token (rowversion) is supplied by the database, so exclude it from INSERT.
+        InsertableColumns = columns.Where(c => !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken).ToArray();
         Table = builder.QuoteTable(schema, tableName);
         SelectColumns = string.Join(", ", columns.Select(c => builder.QuoteIdentifier(c.ColumnName)));
         InsertColumns = string.Join(", ", InsertableColumns.Select(c => builder.QuoteIdentifier(c.ColumnName)));
         InsertParameters = string.Join(", ", InsertableColumns.Select(c => builder.ParameterName(c.PropertyName)));
+        // W6: the concurrency token is never SET to a parameter — a DB-managed token is advanced by the
+        // database, and an ORM-managed numeric token is advanced via ConcurrencyVersionSet (+1), not @token.
         SetClauses = string.Join(", ", columns
-            .Where(c => !c.IsKey && !c.IsGenerated)
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken)
             .Select(c => builder.QuoteIdentifier(c.ColumnName) + " = " + builder.ParameterName(c.PropertyName)));
         QuotedKeyColumns = KeyColumns.Select(k => builder.QuoteIdentifier(k.ColumnName)).ToArray();
         KeyParameters = KeyColumns.Select(k => builder.ParameterName(k.PropertyName)).ToArray();
@@ -63,6 +66,33 @@ public sealed class SqlBuildContext
                 SoftDeleteRestoreSetClause = quoted + " = NULL";
             }
         }
+
+        // W6 optimistic concurrency. The single token column (if any) drives the WHERE predicate every
+        // UPDATE/DELETE AND-composes (against the original value, @token) and — for the ORM-managed form
+        // — the SET fragment that bumps the version. SetClausesWithVersion is what provider UPDATE methods
+        // consume in place of SetClauses, so the +1 bump is uniform across dialects.
+        ConcurrencyToken = columns.FirstOrDefault(c => c.IsConcurrencyToken);
+        if (ConcurrencyToken is not null)
+        {
+            var quoted = builder.QuoteIdentifier(ConcurrencyToken.ColumnName);
+            ConcurrencyWhereClause = quoted + " = " + builder.ParameterName(ConcurrencyToken.PropertyName);
+            if (ConcurrencyToken.IsDatabaseGeneratedToken)
+            {
+                // DB-managed token: the database advances it, so the ORM never SETs it.
+                SetClausesWithVersion = SetClauses;
+            }
+            else
+            {
+                ConcurrencyVersionSet = quoted + " = " + quoted + " + 1";
+                SetClausesWithVersion = SetClauses.Length == 0
+                    ? ConcurrencyVersionSet
+                    : SetClauses + ", " + ConcurrencyVersionSet;
+            }
+        }
+        else
+        {
+            SetClausesWithVersion = SetClauses;
+        }
     }
 
     public string Table { get; }
@@ -89,4 +119,26 @@ public sealed class SqlBuildContext
 
     /// <summary>W8: the SET-clause body that restores a row (<c>"IsDeleted" = 0</c> / <c>"DeletedAt" = NULL</c>). Empty when no soft-delete column.</summary>
     public string SoftDeleteRestoreSetClause { get; } = string.Empty;
+
+    /// <summary>W6: the entity's single concurrency-token column, or null when none is declared.</summary>
+    public IColumn? ConcurrencyToken { get; }
+
+    /// <summary>
+    /// W6: the concurrency predicate (<c>"Version" = @Version</c>) every UPDATE/DELETE AND-composes via
+    /// <see cref="SqlBuilder.AppendWhere"/> onto the key WHERE. Empty when the entity has no token.
+    /// </summary>
+    public string ConcurrencyWhereClause { get; } = string.Empty;
+
+    /// <summary>
+    /// W6: the SET fragment that bumps an ORM-managed numeric token (<c>"Version" = "Version" + 1</c>).
+    /// Empty when there is no token or the token is database-managed (the database advances it).
+    /// </summary>
+    public string ConcurrencyVersionSet { get; } = string.Empty;
+
+    /// <summary>
+    /// W6: <see cref="SetClauses"/> plus the version bump for an ORM-managed token. Provider UPDATE
+    /// methods consume this instead of <see cref="SetClauses"/>. Identical to <see cref="SetClauses"/>
+    /// when there is no token or it is database-managed.
+    /// </summary>
+    public string SetClausesWithVersion { get; }
 }

@@ -485,6 +485,25 @@ internal static class StoreProcessor
             return null;
         }
 
+        // W6: a database-managed concurrency token (e.g. rowversion) is only supported on dialects with a
+        // native row-version type — currently SQL Server. On any other dialect it has no portable
+        // semantics, so reject it at emit (reusing INQ006; the W6 reserved block is fully claimed by the
+        // entity-level INQ028/INQ029). Upsert on a token entity has unclear conflict semantics in v1, so
+        // it is likewise rejected.
+        if (entity.ConcurrencyToken is { IsDatabaseGeneratedToken: true } && sqlBuilder.DialectName != "SqlServer")
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.InvalidParameters, store.Location?.ToLocation(), store.Name));
+            return null;
+        }
+
+        if (entity.ConcurrencyToken is not null && store.Methods.AsImmutableArray().Any(static m => m.Operation == StoreOperation.Upsert))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.InvalidParameters, store.Location?.ToLocation(), store.Name));
+            return null;
+        }
+
         var relationChildEntities = BuildRelationChildEntities(entity, entities);
         var entityColumns = ToColumnList(entity.Columns);
         var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns);
