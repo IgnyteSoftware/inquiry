@@ -29,6 +29,9 @@ internal static class DbTypeMapper
         return Map(special);
     }
 
+    /// <summary>W10b: DbType expression for a converter's provider <see cref="SpecialType"/>, or null.</summary>
+    public static string? TryGetDbTypeForSpecialType(SpecialType specialType) => Map(specialType);
+
     private static string? Map(SpecialType specialType) => specialType switch
     {
         SpecialType.System_Boolean => "global::System.Data.DbType.Boolean",

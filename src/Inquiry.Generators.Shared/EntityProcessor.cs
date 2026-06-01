@@ -214,6 +214,10 @@ internal static class EntityProcessor
             var defaultExpression = columnAttribute is not null ? GeneratorHelpers.GetNamedString(columnAttribute, "DefaultExpression") : null;
             var (foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
 
+            // W10b: a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
+            // converter) maps a non-primitive property to/from a provider primitive.
+            var converter = ResolveConverter(property, columnAttribute, typeData, entitySymbol, diagnostics);
+
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
@@ -235,6 +239,7 @@ internal static class EntityProcessor
                 DefaultExpression = defaultExpression,
                 ForeignKeyTable = foreignKeyTable,
                 ForeignKeyColumn = foreignKeyColumn,
+                Converter = converter,
             });
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
@@ -275,6 +280,69 @@ internal static class EntityProcessor
             // String, Char, and anything else fall back to a text column.
             _ => DbTypeClass.String,
         };
+    }
+
+    /// <summary>
+    /// W10b: resolves the value converter for a column — an explicit <c>Converter = typeof(X)</c> (its
+    /// <c>IInquiryValueConverter&lt;,&gt;</c> provider type drives the read/write primitive), or
+    /// <c>[InquiryJson]</c> (the built-in <c>InquiryJsonConverter&lt;T&gt;</c> over <c>string</c>).
+    /// Returns null when neither applies; reports INQ037 when an explicit converter type does not
+    /// implement the converter interface.
+    /// </summary>
+    private static ConverterData? ResolveConverter(
+        IPropertySymbol property,
+        AttributeData? columnAttribute,
+        TypeData typeData,
+        INamedTypeSymbol entitySymbol,
+        ImmutableArray<DiagnosticData>.Builder diagnostics)
+    {
+        var converterType = columnAttribute is not null ? GeneratorHelpers.GetNamedType(columnAttribute, "Converter") : null;
+        if (converterType is not null)
+        {
+            var providerType = FindConverterProviderType(converterType);
+            if (providerType is null)
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterInvalid,
+                    property.Locations.FirstOrDefault(),
+                    entitySymbol.Name,
+                    converterType.Name,
+                    property.Name));
+                return null;
+            }
+
+            return new ConverterData(
+                converterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                providerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                providerType.SpecialType,
+                providerType.IsValueType);
+        }
+
+        if (GeneratorHelpers.GetEntityAttribute(property, "InquiryJsonAttribute") is not null)
+        {
+            return new ConverterData(
+                "global::Inquiry.Converters.InquiryJsonConverter<" + typeData.NonNullableDisplayName + ">",
+                "string",
+                SpecialType.System_String,
+                ProviderIsValueType: false);
+        }
+
+        return null;
+    }
+
+    /// <summary>Returns the <c>TProvider</c> of the converter's <c>IInquiryValueConverter&lt;TModel, TProvider&gt;</c> interface, or null.</summary>
+    private static ITypeSymbol? FindConverterProviderType(INamedTypeSymbol converterType)
+    {
+        foreach (var iface in converterType.AllInterfaces)
+        {
+            if (iface.TypeArguments.Length == 2 &&
+                iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Inquiry.Entities.IInquiryValueConverter<TModel, TProvider>")
+            {
+                return iface.TypeArguments[1];
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
