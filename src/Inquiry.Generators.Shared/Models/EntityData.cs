@@ -24,4 +24,11 @@ internal sealed record EntityData(
     string ClassMaterializerFullName,
     string StructMaterializerFullName,
     bool IsMapped,
-    EquatableArray<DiagnosticData> Diagnostics);
+    EquatableArray<DiagnosticData> Diagnostics)
+{
+    /// <summary>
+    /// W8: the entity's single <c>[InquirySoftDelete]</c> column, or null when none is declared. Cached
+    /// here so the store emitter can decide delete→update routing and SELECT filtering without rescanning.
+    /// </summary>
+    public ColumnData? SoftDeleteColumn { get; init; }
+}

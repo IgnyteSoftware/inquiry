@@ -186,6 +186,15 @@ internal static class StoreProcessor
 
         var parameters = method.Parameters.Select(ToParameterData).ToImmutableArray();
 
+        // W8: IncludeDeleted opts a SELECT out of the soft-delete filter; HardDelete keeps a literal
+        // DELETE on a soft-delete entity. Both are read regardless of operation (no-ops where the named
+        // argument is absent) — routing decides where they matter.
+        var includeDeleted = operation is StoreOperation.SelectAll or StoreOperation.SelectAllEager
+            or StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager
+            or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate &&
+            GeneratorHelpers.GetNamedBool(attribute, "IncludeDeleted");
+        var hardDelete = operation == StoreOperation.DeleteOneByKey && GeneratorHelpers.GetNamedBool(attribute, "HardDelete");
+
         return new StoreMethodData(
             Name: method.Name,
             Operation: operation,
@@ -203,6 +212,8 @@ internal static class StoreProcessor
             Pagination = pagination,
             KeysetFields = new EquatableArray<string>(keysetFields),
             KeysetDescending = keysetDescending,
+            IncludeDeleted = includeDeleted,
+            HardDelete = hardDelete,
         };
     }
 
@@ -327,6 +338,7 @@ internal static class StoreProcessor
                 case "InquiryUpdateAttribute": attribute = candidate; return StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
                 case "InquiryDeleteOneByKeyAttribute": attribute = candidate; return StoreOperation.DeleteOneByKey;
+                case "InquiryRestoreOneByKeyAttribute": attribute = candidate; return StoreOperation.RestoreOneByKey;
                 case "InquiryStoredProcedureAttribute": attribute = candidate; return StoreOperation.StoredProcedure;
             }
         }
@@ -358,7 +370,7 @@ internal static class StoreProcessor
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             StoreOperation.Update when returnsEntity =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
-            StoreOperation.Update or StoreOperation.DeleteOneByKey =>
+            StoreOperation.Update or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
@@ -474,7 +486,17 @@ internal static class StoreProcessor
         }
 
         var relationChildEntities = BuildRelationChildEntities(entity, entities);
-        var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(entity.Columns));
+        var entityColumns = ToColumnList(entity.Columns);
+        var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns);
+
+        // W8: when the entity has a soft-delete column, an IncludeDeleted select is built from a context
+        // with the soft-delete filter suppressed (keeps the SqlBuilder select signatures stable). When
+        // there is no soft-delete column this is identical to ctx and is never used.
+        var hasSoftDelete = entity.SoftDeleteColumn is not null;
+        var ctxIncludeDeleted = hasSoftDelete
+            ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns, suppressSoftDelete: true)
+            : ctx;
+        SqlBuildContext CtxFor(StoreMethodData m) => hasSoftDelete && m.IncludeDeleted ? ctxIncludeDeleted : ctx;
 
         var key = entity.Keys[0];
         var keyMayBeDatabaseSupplied = key.IsGenerated || key.UseDatabaseDefault;
@@ -482,11 +504,15 @@ internal static class StoreProcessor
             valid.Any(static m => m.Method.Operation == StoreOperation.Upsert);
 
         // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so
-        // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll.
-        var needsSelectAll = valid.Any(static m =>
-            (m.Method.Operation == StoreOperation.SelectAll && m.SelectPlan is null) ||
-            m.Method.Operation == StoreOperation.SelectAllEager);
-        var needsSelectByKey = valid.Any(static m => m.Method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
+        // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. W8: a method that
+        // opts into IncludeDeleted gets its own unfiltered per-method const instead of the shared one.
+        bool UsesSharedSelect((StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan) m)
+            => !(hasSoftDelete && m.Method.IncludeDeleted);
+
+        var needsSelectAll = valid.Any(m => UsesSharedSelect(m) &&
+            ((m.Method.Operation == StoreOperation.SelectAll && m.SelectPlan is null) ||
+             m.Method.Operation == StoreOperation.SelectAllEager));
+        var needsSelectByKey = valid.Any(m => UsesSharedSelect(m) && m.Method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
         var needsInsert = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && !m.Method.ReturnsEntity) ||
             nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity);
         var needsUpdate = valid.Any(static m => m.Method.Operation == StoreOperation.Update && !m.Method.ReturnsEntity);
@@ -495,13 +521,23 @@ internal static class StoreProcessor
             nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && m.Method.ReturnsEntity);
         var needsUpdateReturning = valid.Any(static m => m.Method.Operation == StoreOperation.Update && m.Method.ReturnsEntity);
         var needsUpsertReturning = valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && m.Method.ReturnsEntity);
-        var needsDelete = valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey);
+
+        // W8 delete routing. The shared _sqlDeleteByKey is the "default" delete statement: a literal
+        // DELETE for an ordinary entity, or the soft UPDATE for a soft-delete entity. A HardDelete method
+        // on a soft-delete entity additionally needs a separate literal-DELETE const so both can coexist.
+        var needsDeleteByKey = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && !(m.Method.HardDelete && hasSoftDelete));
+        var needsHardDeleteByKey = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.HardDelete);
+        var needsRestore = valid.Any(static m => m.Method.Operation == StoreOperation.RestoreOneByKey);
 
         var byFieldOps = valid
-            .Where(static m => m.Method.Operation == StoreOperation.SelectAllByField && m.SelectPlan is null && m.FieldColumns.Count > 0)
+            .Where(m => UsesSharedSelect(m) && m.Method.Operation == StoreOperation.SelectAllByField && m.SelectPlan is null && m.FieldColumns.Count > 0)
             .GroupBy(static m => StoreOperationEmitter.BuildFieldSuffix(m.FieldColumns))
             .Select(static g => g.First().FieldColumns)
             .ToArray();
+
+        // W8: per-method base SELECT const name for each non-plan select. Defaults to the shared const;
+        // an IncludeDeleted select on a soft-delete entity gets its own unfiltered per-method const.
+        var baseSelectFields = new Dictionary<string, string>(System.StringComparer.Ordinal);
 
         var source = new StringBuilder();
         source.AppendLine("// <auto-generated />");
@@ -518,7 +554,9 @@ internal static class StoreProcessor
         if (needsInsertReturning) AppendConstSql(source, "_sqlInsertReturning", sqlBuilder.BuildInsertReturningSql(ctx));
         if (needsUpdateReturning) AppendConstSql(source, "_sqlUpdateReturning", sqlBuilder.BuildUpdateReturningSql(ctx));
         if (needsUpsertReturning) AppendConstSql(source, "_sqlUpsertReturning", sqlBuilder.BuildUpsertReturningSql(ctx));
-        if (needsDelete) AppendConstSql(source, "_sqlDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
+        if (needsDeleteByKey) AppendConstSql(source, "_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
+        if (needsHardDeleteByKey) AppendConstSql(source, "_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
+        if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
 
         foreach (var fieldColumns in byFieldOps)
         {
@@ -529,7 +567,7 @@ internal static class StoreProcessor
         {
             if (method.Operation == StoreOperation.SelectAllByPredicate && predicatePlan is not null)
             {
-                AppendConstSql(source, "_sqlPredicate_" + method.Name, sqlBuilder.BuildSelectByPredicateSql(ctx, predicatePlan.Predicates));
+                AppendConstSql(source, "_sqlPredicate_" + method.Name, sqlBuilder.BuildSelectByPredicateSql(CtxFor(method), predicatePlan.Predicates));
             }
         }
 
@@ -539,7 +577,46 @@ internal static class StoreProcessor
         {
             if (selectPlan is not null)
             {
-                AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, ctx, fieldColumns, selectPlan));
+                AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, CtxFor(method), fieldColumns, selectPlan));
+            }
+        }
+
+        // W8: emit an unfiltered per-method base SELECT const for each non-plan IncludeDeleted select on
+        // a soft-delete entity, and record the field name the emitter should use for that method.
+        foreach (var (method, fieldColumns, _, selectPlan) in valid)
+        {
+            if (!(hasSoftDelete && method.IncludeDeleted) || selectPlan is not null)
+            {
+                continue;
+            }
+
+            switch (method.Operation)
+            {
+                case StoreOperation.SelectAll:
+                case StoreOperation.SelectAllEager:
+                {
+                    var field = "_sqlSelectAll_" + method.Name;
+                    AppendConstSql(source, field, sqlBuilder.BuildSelectAllSql(ctxIncludeDeleted));
+                    baseSelectFields[method.Name] = field;
+                    break;
+                }
+
+                case StoreOperation.SelectOneByKey:
+                case StoreOperation.SelectOneByKeyEager:
+                {
+                    var field = "_sqlSelectByKey_" + method.Name;
+                    AppendConstSql(source, field, sqlBuilder.BuildSelectByKeySql(ctxIncludeDeleted));
+                    baseSelectFields[method.Name] = field;
+                    break;
+                }
+
+                case StoreOperation.SelectAllByField when fieldColumns.Count > 0:
+                {
+                    var field = "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns) + "_" + method.Name;
+                    AppendConstSql(source, field, sqlBuilder.BuildSelectByFieldSql(ctxIncludeDeleted, ToColumnList(fieldColumns)));
+                    baseSelectFields[method.Name] = field;
+                    break;
+                }
             }
         }
 
@@ -577,7 +654,8 @@ internal static class StoreProcessor
         foreach (var (method, fieldColumns, predicatePlan, selectPlan) in valid)
         {
             source.AppendLine();
-            StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities);
+            baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
+            StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, baseSelectField);
         }
 
         source.AppendLine("}");
@@ -592,6 +670,15 @@ internal static class StoreProcessor
         fieldColumns = Array.Empty<ColumnData>();
         predicatePlan = null;
         selectPlan = null;
+
+        // W8: restore only makes sense on a soft-delete entity. Without the indicator column the restore
+        // UPDATE has nothing to clear, so reject the method (reusing the invalid-parameters diagnostic —
+        // the W8 ID block, INQ033/INQ034, is fully claimed by the column-level diagnostics).
+        if (method.Operation == StoreOperation.RestoreOneByKey && entity.SoftDeleteColumn is null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
+            return false;
+        }
 
         if (method.Operation == StoreOperation.KeysetPage)
         {
@@ -956,7 +1043,7 @@ internal static class StoreProcessor
         return method.Operation switch
         {
             StoreOperation.SelectAll or StoreOperation.SelectAllEager => parameters.Count == 1,
-            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.DeleteOneByKey =>
+            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey =>
                 MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
             StoreOperation.SelectAllByField =>
                 fieldColumns.Count > 0 && MatchesPositionalColumns(method, nonCancellationCount, fieldColumns),
@@ -1086,6 +1173,13 @@ internal static class StoreProcessor
                 keysetDescending: plan.OrderColumns.Count > 0 && plan.OrderColumns[0].Descending);
 
             var keysetWhere = sqlBuilder.BuildKeysetPredicate(options);
+            // W8: keyset selects compose the soft-delete active filter onto the cursor predicate (the
+            // keyset op has no IncludeDeleted opt-out). AppendWhere is internal to SqlBuilder, so the same
+            // AND-composition is applied inline here against the precomputed fragment.
+            if (ctx.SoftDeleteActivePredicate.Length > 0)
+            {
+                keysetWhere += " AND " + ctx.SoftDeleteActivePredicate;
+            }
             baseSql = "SELECT " + ctx.SelectColumns + " FROM " + ctx.Table + " WHERE " + keysetWhere;
         }
         else
