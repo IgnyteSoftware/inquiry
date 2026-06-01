@@ -1,4 +1,5 @@
 using Inquiry.Generators.Abstractions;
+using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
@@ -31,6 +32,8 @@ internal static class SchemaEmitter
         {
             return;
         }
+
+        ReportKeyDiagnostics(context, entities, builder);
 
         var ordered = OrderByForeignKeyDependencies(entities);
 
@@ -71,6 +74,34 @@ internal static class SchemaEmitter
 
         context.AddSource($"{GeneratedClassName}.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
     }
+
+    /// <summary>
+    /// W7: reports generation-time errors for key columns that would produce invalid DDL — a
+    /// database-generated key that is not an integer (INQ030), and an unbounded string key on a dialect
+    /// that cannot key on unbounded text (INQ031). Location-less (the cached model carries no symbol).
+    /// </summary>
+    private static void ReportKeyDiagnostics(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
+    {
+        foreach (var entity in entities)
+        {
+            foreach (var key in entity.Keys.AsImmutableArray())
+            {
+                if (key.IsGenerated && !IsIntegerClass(key.TypeClass))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.GeneratedKeyNotInteger, location: null, entity.TableName, key.PropertyName));
+                }
+                else if (key.TypeClass == DbTypeClass.String && key.Length == 0 && string.IsNullOrEmpty(key.SqlType) && builder.RequiresBoundedStringKeys)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.StringKeyRequiresLength, location: null, entity.TableName, key.PropertyName, builder.DialectName));
+                }
+            }
+        }
+    }
+
+    private static bool IsIntegerClass(DbTypeClass typeClass)
+        => typeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64;
 
     /// <summary>
     /// Kahn's topological sort keyed by table name (case-insensitive). Edges point from a referencing

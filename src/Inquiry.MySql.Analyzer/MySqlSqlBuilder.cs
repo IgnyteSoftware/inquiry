@@ -138,6 +138,9 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
 
     // ---- W7 DDL --------------------------------------------------------------------------------
 
+    // MySQL cannot index LONGTEXT without a prefix length; a string key needs an explicit Length.
+    public override bool RequiresBoundedStringKeys => true;
+
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
         DbTypeClass.Boolean => "TINYINT(1)",
