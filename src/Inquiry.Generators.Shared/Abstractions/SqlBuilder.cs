@@ -270,6 +270,13 @@ public abstract class SqlBuilder
             : defaultPrecision + ", " + defaultScale;
 
     /// <summary>
+    /// W7: whether this dialect rejects a primary key over an unbounded text column (so a string key
+    /// needs an explicit <see cref="IColumn.Length"/>). False for SQLite/PostgreSQL (unbounded TEXT keys
+    /// are allowed); SQL Server, MySQL, and Oracle override to true.
+    /// </summary>
+    public virtual bool RequiresBoundedStringKeys => false;
+
+    /// <summary>
     /// W7: maps a column's dialect-neutral <see cref="IColumn.TypeClass"/> (plus length/precision/scale)
     /// to a physical column type for this dialect. No leading column name. Abstract so every provider
     /// supplies its own type table — adding a dialect forces an explicit mapping rather than a silent default.

@@ -186,6 +186,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     // ---- W7 DDL --------------------------------------------------------------------------------
 
+    // SQL Server cannot key on NVARCHAR(MAX); a string key needs an explicit Length.
+    public override bool RequiresBoundedStringKeys => true;
+
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
         DbTypeClass.Boolean => "BIT",

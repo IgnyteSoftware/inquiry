@@ -190,6 +190,51 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void GeneratedNonIntegerKeyReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Doc")]
+            public sealed class Doc
+            {
+                [InquiryKey(IsGenerated = true)]
+                public Guid Id { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ030");
+    }
+
+    [Fact]
+    public void UnboundedStringKeyOnSqlServerReportsDiagnostic()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Doc")]
+            public sealed class Doc
+            {
+                [InquiryKey("Code")]
+                public string Code { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ031");
+
+        // SQLite keys on unbounded TEXT fine — no diagnostic there.
+        var sqlite = RunGenerator(source);
+        Assert.DoesNotContain(sqlite.RunResult.Diagnostics, d => d.Id == "INQ031");
+    }
+
+    [Fact]
     public void PostgreSqlSchemaUsesSerialAndQuotedIdentifiers()
     {
         const string source = """

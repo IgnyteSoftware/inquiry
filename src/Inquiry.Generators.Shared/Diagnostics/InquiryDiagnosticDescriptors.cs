@@ -19,7 +19,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ024–INQ027  W5  Projections + aggregations    (projection not mapped, unknown column, …)
     //   INQ028–INQ029  W6  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
     //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per W8 convention)
-    //   INQ030–INQ032  W7  Migrations / schema DDL
+    //   INQ030–INQ032  W7  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length) [IN USE]
     //   INQ033–INQ034  W8  Soft deletes
     //   INQ035         W9  Full-text search              (unsupported by dialect)
     //   INQ036–INQ038  W10 JSON/array/value-converter column types
@@ -206,6 +206,22 @@ internal static class InquiryDiagnosticDescriptors
         "INQ035",
         "Full-text search is not supported by the target dialect",
         "Query method '{0}' uses [InquiryFullTextSearch], which the current dialect does not support. Full-text search is available on PostgreSQL, SQL Server, and MySQL.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor GeneratedKeyNotInteger = new(
+        "INQ030",
+        "Database-generated key must be an integer type",
+        "Entity '{0}' marks key column '{1}' as database-generated (IsGenerated), but its type is not an integer. Generated keys map to IDENTITY/AUTOINCREMENT/SERIAL, which require an integer column; use a database default expression for non-integer generated values.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor StringKeyRequiresLength = new(
+        "INQ031",
+        "String key column requires an explicit Length for this dialect",
+        "Entity '{0}' has string key column '{1}' with no [InquiryColumn(Length = …)]. The '{2}' dialect cannot create a primary key over an unbounded text column, so generated DDL would fail. Set an explicit Length.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

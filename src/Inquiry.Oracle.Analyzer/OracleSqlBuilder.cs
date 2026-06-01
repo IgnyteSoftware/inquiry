@@ -182,6 +182,9 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     // ---- W7 DDL --------------------------------------------------------------------------------
 
+    // Oracle cannot key on CLOB (the unbounded-text fallback); a string key needs an explicit Length.
+    public override bool RequiresBoundedStringKeys => true;
+
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
         DbTypeClass.Boolean => "NUMBER(1)",
