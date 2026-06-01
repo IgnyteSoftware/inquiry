@@ -80,6 +80,70 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void ConverterColumnDdlUsesProviderType()
+    {
+        var result = RunGenerator(ConverterSource);
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        // The Money converter's provider is decimal → NUMERIC (SQLite), not TEXT; JSON provider is string → TEXT.
+        Assert.Contains("\"Balance\" NUMERIC", ddl);
+        Assert.Contains("\"Meta\" TEXT", ddl);
+    }
+
+    [Fact]
+    public void NullableValueTypeConverterGuardsBothSides()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public struct Money { public decimal Amount { get; set; } }
+
+            public sealed class MoneyConverter : IInquiryValueConverter<Money, decimal>
+            {
+                public decimal ToProvider(Money model) => model.Amount;
+                public Money FromProvider(decimal provider) => new Money { Amount = provider };
+            }
+
+            [InquiryTable("Account")]
+            public sealed class Account
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Balance", Converter = typeof(MoneyConverter))]
+                public Money? Balance { get; set; }
+            }
+
+            public partial class AccountStore : Inquiry.Stores.InquiryStore<Demo.Account>
+            {
+                [InquiryInsert]
+                public partial Task<int> InsertAsync(Account account, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var entity = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("Account.InquiryEntity.g.cs", StringComparison.Ordinal));
+        var entityText = entity.GetText().ToString();
+        // Read: nullable value-type guard wraps the FromProvider call.
+        Assert.Contains("reader.IsDBNull(1) ? (global::Demo.Money?)null : new global::Demo.MoneyConverter().FromProvider(reader.GetDecimal(1))", entityText);
+
+        var store = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("AccountStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var storeText = store.GetText().ToString();
+        // Write: null guard, then ToProvider on the unwrapped .Value.
+        Assert.Contains(".ToProvider(", storeText);
+        Assert.Contains(".Value", storeText);
+    }
+
+    [Fact]
     public void ConverterNotImplementingInterfaceReportsDiagnostic()
     {
         const string source = """

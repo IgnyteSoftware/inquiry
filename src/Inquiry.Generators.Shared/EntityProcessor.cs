@@ -230,7 +230,8 @@ internal static class EntityProcessor
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 EnumAsString = enumAsString,
-                TypeClass = MapTypeClass(typeData),
+                // W10b: a converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
+                TypeClass = converter is not null ? MapSpecialType(converter.ProviderSpecialType) : MapTypeClass(typeData),
                 IsNullable = !isKey && typeData.IsNullable,
                 SqlType = sqlType,
                 Length = length,
@@ -265,22 +266,24 @@ internal static class EntityProcessor
         if (type.IsGuid) return DbTypeClass.Guid;
         if (type.NonNullableDisplayName == "global::System.DateTimeOffset") return DbTypeClass.DateTimeOffset;
 
-        var special = type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType;
-        return special switch
-        {
-            SpecialType.System_Boolean => DbTypeClass.Boolean,
-            SpecialType.System_Byte or SpecialType.System_SByte => DbTypeClass.Byte,
-            SpecialType.System_Int16 or SpecialType.System_UInt16 => DbTypeClass.Int16,
-            SpecialType.System_Int32 or SpecialType.System_UInt32 => DbTypeClass.Int32,
-            SpecialType.System_Int64 or SpecialType.System_UInt64 => DbTypeClass.Int64,
-            SpecialType.System_Single => DbTypeClass.Single,
-            SpecialType.System_Double => DbTypeClass.Double,
-            SpecialType.System_Decimal => DbTypeClass.Decimal,
-            SpecialType.System_DateTime => DbTypeClass.DateTime,
-            // String, Char, and anything else fall back to a text column.
-            _ => DbTypeClass.String,
-        };
+        return MapSpecialType(type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType);
     }
+
+    /// <summary>Maps a <see cref="SpecialType"/> to its <see cref="DbTypeClass"/> (text fallback for string/char/other).</summary>
+    private static DbTypeClass MapSpecialType(SpecialType special) => special switch
+    {
+        SpecialType.System_Boolean => DbTypeClass.Boolean,
+        SpecialType.System_Byte or SpecialType.System_SByte => DbTypeClass.Byte,
+        SpecialType.System_Int16 or SpecialType.System_UInt16 => DbTypeClass.Int16,
+        SpecialType.System_Int32 or SpecialType.System_UInt32 => DbTypeClass.Int32,
+        SpecialType.System_Int64 or SpecialType.System_UInt64 => DbTypeClass.Int64,
+        SpecialType.System_Single => DbTypeClass.Single,
+        SpecialType.System_Double => DbTypeClass.Double,
+        SpecialType.System_Decimal => DbTypeClass.Decimal,
+        SpecialType.System_DateTime => DbTypeClass.DateTime,
+        // String, Char, and anything else fall back to a text column.
+        _ => DbTypeClass.String,
+    };
 
     /// <summary>
     /// W10b: resolves the value converter for a column — an explicit <c>Converter = typeof(X)</c> (its
@@ -314,8 +317,7 @@ internal static class EntityProcessor
             return new ConverterData(
                 converterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 providerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                providerType.SpecialType,
-                providerType.IsValueType);
+                providerType.SpecialType);
         }
 
         if (GeneratorHelpers.GetEntityAttribute(property, "InquiryJsonAttribute") is not null)
@@ -323,8 +325,7 @@ internal static class EntityProcessor
             return new ConverterData(
                 "global::Inquiry.Converters.InquiryJsonConverter<" + typeData.NonNullableDisplayName + ">",
                 "string",
-                SpecialType.System_String,
-                ProviderIsValueType: false);
+                SpecialType.System_String);
         }
 
         return null;
