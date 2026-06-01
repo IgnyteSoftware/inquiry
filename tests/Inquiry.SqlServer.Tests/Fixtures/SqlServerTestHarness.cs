@@ -13,13 +13,6 @@ namespace Inquiry.SqlServer.Tests.Fixtures;
 /// </summary>
 internal sealed class SqlServerTestHarness : IAsyncDisposable
 {
-    /// <summary>
-    /// Connection string to a database the test process can use to <c>CREATE DATABASE</c>
-    /// (typically <c>master</c>). When unset, <see cref="SqlServerFactAttribute"/> skips the
-    /// test rather than failing it.
-    /// </summary>
-    public const string ConnectionStringEnvironmentVariable = "INQUIRY_SQLSERVER_CONNECTION_STRING";
-
     private readonly string _adminConnectionString;
     private readonly string _databaseName;
 
@@ -37,12 +30,11 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
 
     public T GetRequiredService<T>() where T : notnull => Services.GetRequiredService<T>();
 
-    public static async Task<SqlServerTestHarness> CreateAsync(string? namePrefix = null)
-    {
-        var adminConnectionString = Environment.GetEnvironmentVariable(ConnectionStringEnvironmentVariable)
-            ?? throw new InvalidOperationException(
-                $"Environment variable {ConnectionStringEnvironmentVariable} is not set; SqlServerFactAttribute should have skipped this test.");
+    public static Task<SqlServerTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
+        => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.SqlServerDdl, namePrefix);
 
+    public static async Task<SqlServerTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    {
         var prefix = namePrefix ?? "Inquiry";
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
 
@@ -63,7 +55,7 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
         {
             await db.OpenAsync();
             await using var cmd = db.CreateCommand();
-            cmd.CommandText = NorthwindSchema.SqlServerDdl;
+            cmd.CommandText = ddl;
             await cmd.ExecuteNonQueryAsync();
         }
 

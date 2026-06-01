@@ -10,12 +10,17 @@ namespace Inquiry.SqlServer.Tests;
 /// Each fact runs in its own throwaway database so parallel facts cannot collide on
 /// table state.
 /// </summary>
+[Collection(SqlServerCollection.Name)]
 public sealed class NorthwindCoverageIntegrationTests
 {
-    [SqlServerFact]
+    private readonly SqlServerContainerFixture _fixture;
+    public NorthwindCoverageIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task SupplierIdentityCrudRoundTrip()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("Supplier");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "Supplier");
         var store = harness.GetRequiredService<SupplierStore>();
 
         var inserted = await store.InsertReturningAsync(new Supplier
@@ -38,10 +43,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Null(await store.SelectByKeyAsync(inserted.SupplierID));
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task ShipperIdentityCrudRoundTrip()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("Shipper");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "Shipper");
         var store = harness.GetRequiredService<ShipperStore>();
 
         var inserted = await store.InsertReturningAsync(new Shipper { CompanyName = "Speedy Express", Phone = "(503) 555-9831" });
@@ -55,10 +61,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.True(await store.DeleteByKeyAsync(inserted.ShipperID));
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task OrderInsertReturningSurfacesGeneratedIdentity()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("Order");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "Order");
         var customers = harness.GetRequiredService<CustomerStore>();
         var orders = harness.GetRequiredService<OrderStore>();
 
@@ -79,10 +86,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal(32.38m, fetched!.Freight);
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task OrderDetailCompositeKeyCrud()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("OrderDetail");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "OrderDetail");
         var customers = harness.GetRequiredService<CustomerStore>();
         var categories = harness.GetRequiredService<CategoryStore>();
         var products = harness.GetRequiredService<ProductStore>();
@@ -116,10 +124,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Null(await orderDetails.SelectByKeyAsync(orderID, chai.ProductID!.Value));
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task EmployeeTerritoryIntStringCompositeKeyRoundTrips()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("EmpTerritory");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "EmpTerritory");
         var employees = harness.GetRequiredService<EmployeeStore>();
         var regions = harness.GetRequiredService<RegionStore>();
         var territories = harness.GetRequiredService<TerritoryStore>();
@@ -141,10 +150,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Null(await bridge.SelectByKeyAsync(nancy.EmployeeID!.Value, "01581"));
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task MultiFieldSelectFiltersByBothColumns()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("MultiField");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "MultiField");
         var customers = harness.GetRequiredService<CustomerStore>();
         var employees = harness.GetRequiredService<EmployeeStore>();
         var orders = harness.GetRequiredService<OrderStore>();
@@ -163,10 +173,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal("Berlin", only.ShipCity);
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task MutationReturningSurfacesUpdatedAndUpsertedRows()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("Returning");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "Returning");
         var store = harness.GetRequiredService<CustomerStore>();
 
         await store.InsertAsync(new Customer { CustomerID = "UPD01", CompanyName = "Original", Country = "USA" });
@@ -184,10 +195,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal("New", upserted!.CompanyName);
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task CategoryProductEagerLoadStitchesNullableForeignKey()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("EagerCat");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "EagerCat");
         var categories = harness.GetRequiredService<CategoryStore>();
         var products = harness.GetRequiredService<ProductStore>();
 
@@ -204,10 +216,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.All(withCategory, p => Assert.Equal("Beverages", p.Category?.CategoryName));
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task TransactionSpansIdentityParentAndCompositeChild()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("TxOrder");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "TxOrder");
         var inquiry = harness.GetRequiredService<IInquiry>();
         var customers = harness.GetRequiredService<CustomerStore>();
         var categories = harness.GetRequiredService<CategoryStore>();
@@ -244,10 +257,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal(3, allDetails[0].Quantity);
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task EmployeeReportsToSelfReferenceRoundTrips()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("Emp");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "Emp");
         var employees = harness.GetRequiredService<EmployeeStore>();
 
         var manager = await employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller", Title = "VP" });
@@ -258,10 +272,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal(manager.EmployeeID, fetched!.ReportsTo);
     }
 
-    [SqlServerFact]
+    [SkippableFact]
     public async Task TerritoryByRegionSelectsOnlyMatchingRegion()
     {
-        await using var harness = await SqlServerTestHarness.CreateAsync("TerrByRegion");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "TerrByRegion");
         var regions = harness.GetRequiredService<RegionStore>();
         var territories = harness.GetRequiredService<TerritoryStore>();
 
