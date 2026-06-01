@@ -1,7 +1,9 @@
 # Inquiry Feature Roadmap — Parallel Implementation Plan
 
-> Status: **planning only** (no code written). Generated 2026-05-31 from a deep-research pass on database-engine
-> features + a 13-way parallel design study of the inquiry codebase.
+> Status: **IMPLEMENTED** — all 13 workstreams below have been built and merged to `main` (as of `fcfaa3e`,
+> 2026-06-01). This document is retained as the design + dependency record; for current state, development
+> process, and remaining follow-ups see [`../STATUS.md`](../STATUS.md). Originally generated 2026-05-31 from a
+> deep-research pass on database-engine features + a 13-way parallel design study of the inquiry codebase.
 >
 > Goal: add the database engines and concepts inquiry is missing, structured so the work can be executed in
 > **parallel git worktrees** with minimal merge conflict. You sequence the merges; this doc gives you the
@@ -17,6 +19,8 @@ upsert, composite/generated keys, FK metadata, eager loading via **separate quer
 equality-only WHERE, stored-proc passthrough.
 
 ## The 13 workstreams
+
+> **All 13 workstreams below are ✅ implemented and merged to `main`.** See [`../STATUS.md`](../STATUS.md) for current state and remaining follow-ups.
 
 | ID | Workstream | Size | Spec |
 |----|-----------|------|------|

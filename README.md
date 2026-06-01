@@ -2,21 +2,26 @@
 
 Inquiry is an experimental .NET 6+ source-generated micro-ORM. You write attributed entity classes and `partial` store classes with `partial` method declarations; a Roslyn source generator emits the matching partial with method bodies, materializers, and dependency-injection wiring. Every SQL string is built at compile time by a provider-specific `SqlBuilder` and baked into the generated source as `const string` fields, so each database can be tuned independently and the runtime carries no SQL.
 
+> **New here?** Start with **[docs/STATUS.md](docs/STATUS.md)** — current state, development process, and what's left to do. This README is the architecture deep-dive.
+
 ## Repository Layout
 
 | Project | Purpose |
 | --- | --- |
 | `src/Inquiry` | Public runtime: `IInquiry` facade, request pipeline, attributes, command/parameter types, transactions, and DI extension `AddInquiry()`. Ships no SQL — every statement is built at compile time. |
-| `src/Inquiry.Generators` | Roslyn incremental source generator. Discovers entities and stores, emits materializers, generated stores, and a DI registration class. Also owns the per-dialect `SqlBuilder` hierarchy that produces the SQL baked into generated stores. |
+| `src/Inquiry.Generators.Shared` | Roslyn incremental source-generator framework. Discovers entities and stores; emits materializers, generated stores, a DI registration class, and `InquiryGeneratedSchema.Ddl`. Owns the per-dialect `SqlBuilder` hierarchy that produces the baked SQL. Bundled privately into each provider analyzer. |
+| `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,Oracle}.Analyzer` | Per-dialect Roslyn analyzer assemblies — each is a `[Generator]` that bundles `Inquiry.Generators.Shared` and emits only when its dialect matches the resolved `[InquiryDialect]`. |
 | `src/Inquiry.Sqlite` | SQLite provider: `SqliteInquiryConnectionFactory`, `AddInquirySqlite(...)`, and `[assembly: InquiryDialect("Sqlite")]`. |
 | `src/Inquiry.SqlServer` | SQL Server provider: equivalent factory, DI extension, and dialect marker. |
 | `src/Inquiry.PostgreSql` | PostgreSQL provider: equivalent factory, DI extension, and dialect marker. |
+| `src/Inquiry.MySql` | MySQL / MariaDB provider: equivalent factory, DI extension, and dialect marker. |
+| `src/Inquiry.Oracle` | Oracle provider: equivalent factory, DI extension, and dialect marker. |
 | `tests/Inquiry.Tests` | Core runtime tests (pipeline, parameter binding, transactions). |
 | `tests/Inquiry.Generators.Tests` | Source-generator tests + per-dialect SQL assertions. |
-| `tests/Inquiry.Sqlite.Tests` | End-to-end integration tests against in-memory SQLite. |
-| `tests/Inquiry.SqlServer.Tests` | End-to-end Northwind integration tests against a real SQL Server (opt-in via `INQUIRY_SQLSERVER_CONNECTION_STRING`). |
-| `tests/Inquiry.PostgreSql.Tests` | End-to-end Northwind integration tests against a real PostgreSQL (opt-in via `INQUIRY_POSTGRESQL_CONNECTION_STRING`). |
-| `samples/Inquiry.Northwind` | Shared classic-Northwind entities, stores, and per-provider DDL (`SqliteDdl`, `SqlServerDdl`, `PostgreSqlDdl`) consumed by every sample and integration-test project. |
+| `tests/Inquiry.IntegrationTesting` | Shared test-support library: the canonical expected-Northwind schema contract, the schema-fidelity comparator, and the `ISchemaIntrospector` abstraction. |
+| `tests/Inquiry.Sqlite.Tests` | End-to-end integration + schema-fidelity tests against in-memory SQLite (no Docker). |
+| `tests/Inquiry.{SqlServer,PostgreSql,MySql,Oracle}.Tests` | End-to-end Northwind + generated-DDL + fidelity tests. Each compiles Northwind under its own dialect and runs against a real engine via Testcontainers; skips gracefully when Docker is absent. |
+| `samples/Inquiry.Northwind` | Shared classic-Northwind entities, stores, and per-provider DDL (`SqliteDdl`, `SqlServerDdl`, `PostgreSqlDdl`, `MySqlDdl`, `OracleDdl`) consumed by every sample and integration-test project. |
 | `samples/Inquiry.Sample` | Runnable ASP.NET Core sample exercising CRUD, upsert, transactions, and eager loading on SQLite. |
 
 ## Authoring an Entity and Store
@@ -102,6 +107,8 @@ All store attributes live in `Inquiry.Stores`. The method must be a `partial` de
 | `[InquiryStoredProcedure("ProcName")]` | `IAsyncEnumerable<T>` / `Task<T?>` / `Task<int>` | Raw `InquiryCommand` with `CommandType.StoredProcedure` |
 
 Entity-mapping attributes live in `Inquiry.Entities`: `[InquiryTable]`, `[InquiryColumn]`, `[InquiryKey]`, `[InquiryForeignKey]`, `[InquiryRelation]`.
+
+> Beyond this core CRUD surface, Inquiry also supports richer WHERE predicates, ORDER BY + offset/keyset pagination, batch & bulk operations, projections + aggregations, optimistic concurrency, soft deletes, full-text search, JSON/array/value-converter columns, and `CREATE TABLE` schema-DDL generation. Each has a self-contained spec under [`docs/plans/`](docs/plans); see [`docs/STATUS.md`](docs/STATUS.md) for the full feature inventory.
 
 ---
 
@@ -233,6 +240,8 @@ public abstract class SqlBuilder
 | [`src/Inquiry.Sqlite.Analyzer/SqliteSqlBuilder.cs`](src/Inquiry.Sqlite.Analyzer/SqliteSqlBuilder.cs) | `"name"` (double quotes, doubled to escape) | `INSERT ... ON CONFLICT DO UPDATE` |
 | [`src/Inquiry.SqlServer.Analyzer/SqlServerSqlBuilder.cs`](src/Inquiry.SqlServer.Analyzer/SqlServerSqlBuilder.cs) | `[name]` (brackets, `]` doubled to escape) | `MERGE INTO ... WHEN MATCHED / WHEN NOT MATCHED` |
 | [`src/Inquiry.PostgreSql.Analyzer/PostgreSqlSqlBuilder.cs`](src/Inquiry.PostgreSql.Analyzer/PostgreSqlSqlBuilder.cs) | `"name"` (double quotes) | `INSERT … ON CONFLICT (...) DO UPDATE` |
+| [`src/Inquiry.MySql.Analyzer/MySqlSqlBuilder.cs`](src/Inquiry.MySql.Analyzer/MySqlSqlBuilder.cs) | `` `name` `` (backticks, doubled to escape) | `INSERT … ON DUPLICATE KEY UPDATE` |
+| [`src/Inquiry.Oracle.Analyzer/OracleSqlBuilder.cs`](src/Inquiry.Oracle.Analyzer/OracleSqlBuilder.cs) | `"name"` (double quotes) | `MERGE INTO … WHEN MATCHED / WHEN NOT MATCHED` |
 
 Each `Inquiry.<Provider>.Analyzer` assembly is a self-contained Roslyn source generator. It bundles a private copy of the shared framework ([`src/Inquiry.Generators.Shared`](src/Inquiry.Generators.Shared)) — the framework cannot be a separate analyzer because Roslyn loads each provider's analyzer into its own `AssemblyLoadContext`, so static state and type identity do not cross provider boundaries. The provider analyzer DLL ships alongside the matching runtime DLL inside the provider's NuGet (`analyzers/dotnet/cs/`), and is wired into project-reference dev builds by [`Directory.Build.targets`](Directory.Build.targets).
 
@@ -316,13 +325,8 @@ The sample seeds an in-process SQLite database, exposes a small HTML dashboard a
 dotnet test
 ```
 
-Tests cover: parameter binding, the request pipeline, transactions, generator emission, per-dialect SQL strings, and end-to-end CRUD/eager-loading against in-memory SQLite.
+Tests cover: parameter binding, the request pipeline, transactions, generator emission, per-dialect SQL strings, end-to-end CRUD/eager-loading against in-memory SQLite, and — for every provider — live CRUD, schema-fidelity, and generated-DDL verification against the real engine.
 
-The SQL Server and PostgreSQL integration suites build with the rest of the solution but skip every fact unless their provider's connection string is exported:
+The SQL Server, PostgreSQL, MySQL, and Oracle integration suites provision their engine with **[Testcontainers](https://dotnet.testcontainers.org/)** — the only host dependency is **Docker**. Each suite starts one container per test assembly, compiles Northwind under its own dialect, creates a throwaway database/schema per test, runs the matching `NorthwindSchema.*Ddl`, and tears it down so parallel tests cannot collide. When Docker is unavailable every live fact **skips** (via `Xunit.SkippableFact`) rather than failing, so `dotnet test` stays green on a machine without Docker.
 
-```powershell
-$env:INQUIRY_SQLSERVER_CONNECTION_STRING   = "Server=.;Database=master;Integrated Security=true;TrustServerCertificate=true"
-$env:INQUIRY_POSTGRESQL_CONNECTION_STRING  = "Host=localhost;Database=postgres;Username=postgres;Password=postgres"
-```
-
-The harnesses point at the named admin database (`master` / `postgres`), create a throwaway database per test, run `NorthwindSchema.SqlServerDdl` / `NorthwindSchema.PostgreSqlDdl`, and drop the database on teardown — parallel tests cannot collide.
+CI runs PostgreSQL / MySQL / SQL Server on every PR and Oracle nightly. See [`docs/STATUS.md`](docs/STATUS.md) for the current state, development process, and remaining work.

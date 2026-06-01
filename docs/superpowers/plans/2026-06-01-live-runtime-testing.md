@@ -1,5 +1,9 @@
 # Live-runtime provider testing & benchmarking — Implementation Plan
 
+> **STATUS (2026-06-01):** Phases 0–7 are **COMPLETE** and merged to `main` (`fcfaa3e`). Only **Phase 8/9
+> (live-environment benchmark)** remains — intentionally deferred. The `- [ ]` checkboxes below were **not**
+> maintained during execution; treat [`../../STATUS.md`](../../STATUS.md) as the authoritative status.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Verify every Inquiry provider's *own* generated SQL against a real database engine (provisioned by Testcontainers) over a faithful, fully-indexed Northwind schema, on every PR, with a catalog-introspection guardrail that fails if anything is missing.
