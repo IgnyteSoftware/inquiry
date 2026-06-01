@@ -22,7 +22,8 @@ internal static class StoreOperationEmitter
         ResolvedPredicatePlan? predicatePlan,
         ResolvedSelectPlan? selectPlan,
         EntityData entity,
-        Dictionary<string, EntityData> relationChildEntities)
+        Dictionary<string, EntityData> relationChildEntities,
+        string? baseSelectField = null)
     {
         var entityType = entity.FullyQualifiedName;
         var structMat = entity.StructMaterializerFullName;
@@ -56,24 +57,24 @@ internal static class StoreOperationEmitter
                 source.AppendLine(method.ReturnsList
                     ? $"        return Inquiry.QueryListAsync<{entityType}, {structMat}>("
                     : $"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
-                source.AppendLine($"            new global::Inquiry.Commands.InquiryCommand({(selectPlan is null ? "_sqlSelectAll" : selectPlan.SqlFieldName)}),");
+                source.AppendLine($"            new global::Inquiry.Commands.InquiryCommand({(selectPlan is not null ? selectPlan.SqlFieldName : baseSelectField ?? "_sqlSelectAll")}),");
                 source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.SelectAllEager:
-                EmitSelectAllEager(source, method, entityType, cancellation, entity, relationChildEntities);
+                EmitSelectAllEager(source, method, entityType, cancellation, entity, relationChildEntities, baseSelectField ?? "_sqlSelectAll");
                 break;
 
             case StoreOperation.SelectOneByKey:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastQuerySingleByKeys(source, entityType, structMat, "_sqlSelectByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
+                EmitFastQuerySingleByKeys(source, entityType, structMat, baseSelectField ?? "_sqlSelectByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.SelectOneByKeyEager:
-                EmitSelectOneByKeyEager(source, method, parameters, entityType, cancellation, entity, relationChildEntities);
+                EmitSelectOneByKeyEager(source, method, parameters, entityType, cancellation, entity, relationChildEntities, baseSelectField ?? "_sqlSelectByKey");
                 break;
 
             case StoreOperation.SelectAllByField:
@@ -81,14 +82,14 @@ internal static class StoreOperationEmitter
                 if (method.ReturnsList)
                 {
                     // Buffered: allocation-free fast path (static binder, no InquiryParameter[]).
-                    EmitFastQueryListByFields(source, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ");
+                    EmitFastQueryListByFields(source, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ", sqlField: baseSelectField);
                 }
                 else
                 {
                     // Streaming IAsyncEnumerable: no fast streaming overload, keep the InquiryParameter[] path.
                     source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
                     source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                    source.AppendLine($"                _sqlSelectBy_{BuildFieldSuffix(fieldColumns)},");
+                    source.AppendLine($"                {baseSelectField ?? "_sqlSelectBy_" + BuildFieldSuffix(fieldColumns)},");
                     AppendPositionalParameters(source, fieldColumns, method.Parameters, indent: "                ");
                     source.AppendLine("            default,");
                     source.AppendLine($"            {cancellation});");
@@ -160,8 +161,22 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.DeleteOneByKey:
+            {
+                // W8: the shared _sqlDeleteByKey is the soft UPDATE for a soft-delete entity (or the literal
+                // DELETE otherwise). A HardDelete method on a soft-delete entity uses the separate literal
+                // const. Either way it is a rows-affected ExecuteAsync, so binder/return are unchanged.
+                var deleteField = method.HardDelete && entity.SoftDeleteColumn is not null
+                    ? "_sqlHardDeleteByKey"
+                    : "_sqlDeleteByKey";
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastExecuteFromKeys(source, "_sqlDeleteByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
+                EmitFastExecuteFromKeys(source, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ");
+                source.AppendLine("    }");
+                break;
+            }
+
+            case StoreOperation.RestoreOneByKey:
+                AppendHeader(source, method, parameters, isAsync: true);
+                EmitFastExecuteFromKeys(source, "_sqlRestoreByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
                 source.AppendLine("    }");
                 break;
 
@@ -322,9 +337,10 @@ internal static class StoreOperationEmitter
         string entityType,
         string structMat,
         string cancellation,
-        string indent)
+        string indent,
+        string? sqlField = null)
     {
-        var sqlField = "_sqlSelectBy_" + BuildFieldSuffix(fieldColumns);
+        sqlField ??= "_sqlSelectBy_" + BuildFieldSuffix(fieldColumns);
         if (fieldColumns.Count == 1)
         {
             var fieldParam = methodParameters[0];
@@ -634,7 +650,7 @@ internal static class StoreOperationEmitter
         return type.IsValueType ? $"{accessor}.Value" : $"{accessor}!";
     }
 
-    private static void EmitSelectOneByKeyEager(StringBuilder source, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities)
+    private static void EmitSelectOneByKeyEager(StringBuilder source, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
     {
         // Eager-on-composite is rejected in validation, so entity.Keys.Count == 1 here.
         var keyParamName = method.Parameters[0].Name;
@@ -642,7 +658,7 @@ internal static class StoreOperationEmitter
         AppendHeader(source, method, parameters, isAsync: true);
         source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {parentStructMat}>(");
         source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-        source.AppendLine("                _sqlSelectByKey,");
+        source.AppendLine($"                {parentSelectField},");
         source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine("                {");
         source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {keyParamName}),");
@@ -691,13 +707,13 @@ internal static class StoreOperationEmitter
         source.AppendLine("    }");
     }
 
-    private static void EmitSelectAllEager(StringBuilder source, StoreMethodData method, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities)
+    private static void EmitSelectAllEager(StringBuilder source, StoreMethodData method, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
     {
         var parametersWithAttr = GetParameterDeclaration(method.Parameters, enumeratorCancellation: true);
         var parentStructMat = entity.StructMaterializerFullName;
         AppendHeader(source, method, parametersWithAttr, isAsync: true);
         source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
-        source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}, {parentStructMat}>(new global::Inquiry.Commands.InquiryCommand(_sqlSelectAll), default, {cancellation}).ConfigureAwait(false))");
+        source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}, {parentStructMat}>(new global::Inquiry.Commands.InquiryCommand({parentSelectField}), default, {cancellation}).ConfigureAwait(false))");
         source.AppendLine("            _entities.Add(_e);");
         source.AppendLine("        if (_entities.Count == 0)");
         source.AppendLine("            yield break;");

@@ -45,7 +45,8 @@ public abstract class SqlBuilder
     /// <see cref="AppendWhere"/> so it stays consistent with key/field WHERE shaping.
     /// </summary>
     public virtual string BuildSelectByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + RenderPredicates(predicates);
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table
+            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.SoftDeleteActivePredicate);
 
     public abstract string BuildInsertSql(SqlBuildContext context);
 
@@ -56,6 +57,42 @@ public abstract class SqlBuilder
     public abstract string BuildUpdateReturningSql(SqlBuildContext context);
 
     public abstract string BuildDeleteByKeySql(SqlBuildContext context);
+
+    // ---- Soft delete (W8) -------------------------------------------------------------------
+
+    /// <summary>
+    /// SQL literal for an active (not-deleted) boolean soft-delete flag. Default <c>0</c> (SQLite/
+    /// SqlServer/MySQL); PostgreSQL overrides with <c>FALSE</c>.
+    /// </summary>
+    public virtual string SoftDeleteFalseLiteral => "0";
+
+    /// <summary>
+    /// SQL literal for a deleted boolean soft-delete flag. Default <c>1</c> (SQLite/SqlServer/MySQL);
+    /// PostgreSQL overrides with <c>TRUE</c>.
+    /// </summary>
+    public virtual string SoftDeleteTrueLiteral => "1";
+
+    /// <summary>
+    /// SQL expression yielding the database clock used to stamp a timestamp-form soft delete. Default
+    /// <c>CURRENT_TIMESTAMP</c> (SQLite/PostgreSQL/MySQL); SqlServer overrides with <c>GETUTCDATE()</c>.
+    /// </summary>
+    public virtual string CurrentTimestampExpression => "CURRENT_TIMESTAMP";
+
+    /// <summary>
+    /// Builds the soft-delete UPDATE (set the indicator to deleted) by key. Dialect-uniform once the
+    /// indicator literals are abstracted, so this is concrete and every provider inherits it. Only
+    /// emitted when the entity has a soft-delete column; callers pick this over
+    /// <see cref="BuildDeleteByKeySql"/> for a non-hard delete.
+    /// </summary>
+    public virtual string BuildSoftDeleteByKeySql(SqlBuildContext context)
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + context.KeyWhereClause;
+
+    /// <summary>
+    /// Builds the restore UPDATE (clear the soft-delete indicator) by key. Concrete and inherited by
+    /// every provider, mirroring <see cref="BuildSoftDeleteByKeySql"/>.
+    /// </summary>
+    public virtual string BuildRestoreByKeySql(SqlBuildContext context)
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteRestoreSetClause + " WHERE " + context.KeyWhereClause;
 
     public abstract string BuildUpsertSql(SqlBuildContext context);
 
@@ -144,6 +181,14 @@ public abstract class SqlBuilder
             ? extraPredicate!
             : whereClause + " AND " + extraPredicate;
     }
+
+    /// <summary>
+    /// Renders a leading <c>" WHERE &lt;body&gt;"</c> suffix, or the empty string when
+    /// <paramref name="predicateBody"/> is null/empty. Used by <c>SELECT *</c>-style statements (no key/
+    /// field WHERE of their own) so they pick up a WHERE only when the soft-delete filter is active.
+    /// </summary>
+    protected static string WhereSuffix(string? predicateBody)
+        => string.IsNullOrEmpty(predicateBody) ? string.Empty : " WHERE " + predicateBody;
 
     /// <summary>
     /// Renders the predicate body (no leading <c>WHERE</c>) by joining each criterion with AND, or OR

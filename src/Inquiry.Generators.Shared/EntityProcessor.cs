@@ -1,3 +1,4 @@
+using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
@@ -55,6 +56,14 @@ internal static class EntityProcessor
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.DuplicateColumn, location, entitySymbol.Name, duplicate.Key));
         }
 
+        // W8: at most one [InquirySoftDelete] column. Columns whose type was unsupported carry
+        // SoftDeleteKind.None (already reported), so they are excluded from this count.
+        var softDeleteColumns = columns.Where(static c => c.SoftDelete != SoftDeleteKind.None).ToImmutableArray();
+        if (softDeleteColumns.Length > 1)
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MultipleSoftDeleteColumns, location, entitySymbol.Name, softDeleteColumns[1].PropertyName));
+        }
+
         var classMaterializerName = entitySymbol.Name + "InquiryEntityMaterializer";
         var structMaterializerName = entitySymbol.Name + "InquiryEntityStructMaterializer";
 
@@ -72,7 +81,10 @@ internal static class EntityProcessor
             ClassMaterializerFullName: GeneratorHelpers.GetGeneratedTypeName(entitySymbol, classMaterializerName),
             StructMaterializerFullName: GeneratorHelpers.GetGeneratedTypeName(entitySymbol, structMaterializerName),
             IsMapped: isMapped,
-            Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()));
+            Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()))
+        {
+            SoftDeleteColumn = softDeleteColumns.Length > 0 ? softDeleteColumns[0] : null,
+        };
     }
 
     public static EntityRegistration EmitMaterializer(SourceProductionContext context, EntityData entity)
@@ -133,6 +145,21 @@ internal static class EntityProcessor
             var useDatabaseDefault =
                 columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "UseDatabaseDefault") ||
                 foreignKeyAttribute is not null && GeneratorHelpers.GetNamedBool(foreignKeyAttribute, "UseDatabaseDefault");
+
+            var softDelete = SoftDeleteKind.None;
+            if (GeneratorHelpers.GetEntityAttribute(property, "InquirySoftDeleteAttribute") is not null)
+            {
+                softDelete = InferSoftDeleteKind(typeData);
+                if (softDelete == SoftDeleteKind.None)
+                {
+                    diagnostics.Add(DiagnosticData.Create(
+                        InquiryDiagnosticDescriptors.SoftDeleteUnsupportedType,
+                        property.Locations.FirstOrDefault(),
+                        entitySymbol.Name,
+                        property.Name));
+                }
+            }
+
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
@@ -141,6 +168,7 @@ internal static class EntityProcessor
                 IsKey = keyAttribute is not null,
                 IsGenerated = isGenerated,
                 UseDatabaseDefault = useDatabaseDefault,
+                SoftDelete = softDelete,
             });
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
@@ -226,6 +254,28 @@ internal static class EntityProcessor
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Infers the soft-delete representation from the marked property's type: a non-nullable
+    /// <c>bool</c> is a flag, a nullable <c>DateTime</c>/<c>DateTimeOffset</c> is a timestamp, and
+    /// anything else is unsupported (<see cref="SoftDeleteKind.None"/>, reported by the caller).
+    /// </summary>
+    private static SoftDeleteKind InferSoftDeleteKind(TypeData type)
+    {
+        if (!type.IsNullable && type.SpecialType == SpecialType.System_Boolean)
+        {
+            return SoftDeleteKind.BooleanFlag;
+        }
+
+        if (type.IsNullable &&
+            (type.NonNullableDisplayName == "global::System.DateTime" ||
+             type.NonNullableDisplayName == "global::System.DateTimeOffset"))
+        {
+            return SoftDeleteKind.Timestamp;
+        }
+
+        return SoftDeleteKind.None;
     }
 
     private static string ResolveColumnName(AttributeData? columnAttribute, AttributeData? foreignKeyAttribute, string propertyName)

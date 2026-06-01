@@ -168,4 +168,20 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor SoftDeleteUnsupportedType = new(
+        "INQ033",
+        "InquirySoftDelete column type is not supported",
+        "Entity '{0}' marks property '{1}' with [InquirySoftDelete], but its type is not a supported soft-delete representation. Use a bool (flag) or a nullable DateTime/DateTimeOffset (timestamp).",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MultipleSoftDeleteColumns = new(
+        "INQ034",
+        "Entity declares more than one InquirySoftDelete column",
+        "Entity '{0}' marks more than one property with [InquirySoftDelete] (e.g. '{1}'). At most one soft-delete column is allowed.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
