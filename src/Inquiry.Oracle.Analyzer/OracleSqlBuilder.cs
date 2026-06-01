@@ -51,16 +51,18 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     public override string QuoteIdentifier(string identifier) => identifier;
 
     public override string BuildSelectAllSql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table;
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
 
     public override string BuildSelectByKeySql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table
+            + " WHERE " + AppendWhere(context.KeyWhereClause, context.SoftDeleteActivePredicate);
 
     public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         var where = string.Join(" AND ", filterColumns
             .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
-        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + where;
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table
+            + " WHERE " + AppendWhere(where, context.SoftDeleteActivePredicate);
     }
 
     public override string BuildInsertSql(SqlBuildContext context)
