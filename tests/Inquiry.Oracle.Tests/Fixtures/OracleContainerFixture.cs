@@ -27,18 +27,47 @@ public sealed class OracleContainerFixture : IAsyncLifetime
     {
         try
         {
-            _container = new OracleBuilder().WithImage("gvenzl/oracle-free:23-slim-faststart").Build();
+            // Use the XE image whose service name (XEPDB1) matches what Testcontainers.Oracle bakes into
+            // its connection string. The oracle-free image serves FREEPDB1 instead, so its generated
+            // connection string fails with ORA-12514 (service not known).
+            _container = new OracleBuilder().WithImage("gvenzl/oracle-xe:21-slim-faststart").Build();
             await _container.StartAsync();
             AdminConnectionString = new OracleConnectionStringBuilder(_container.GetConnectionString())
             {
                 UserID = "SYSTEM",
             }.ToString();
+
+            // The faststart image's listener accepts connections a moment before the database service is
+            // registered, so an immediate SYSTEM connect can hit ORA-12514 ("listener does not currently
+            // know of service"). Poll until the service is actually serving before declaring availability.
+            await WaitForServiceAsync(AdminConnectionString);
             IsAvailable = true;
         }
         catch (Exception ex)
         {
             IsAvailable = false;
             SkipReason = "Oracle container unavailable (is Docker running?): " + ex.Message;
+        }
+    }
+
+    private static async Task WaitForServiceAsync(string connectionString)
+    {
+        const int maxAttempts = 30;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await using var connection = new OracleConnection(connectionString);
+                await connection.OpenAsync();
+                await using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT 1 FROM dual";
+                await cmd.ExecuteScalarAsync();
+                return;
+            }
+            catch (OracleException) when (attempt < maxAttempts)
+            {
+                await Task.Delay(2000);
+            }
         }
     }
 

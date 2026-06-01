@@ -734,14 +734,14 @@ internal static class StoreProcessor
         if (needsSelectByKey) AppendConstSql(source, "_sqlSelectByKey", sqlBuilder.BuildSelectByKeySql(ctx));
         if (needsInsert) AppendConstSql(source, "_sqlInsert", sqlBuilder.BuildInsertSql(ctx));
         if (needsUpdate) AppendConstSql(source, "_sqlUpdate", sqlBuilder.BuildUpdateSql(ctx));
-        if (needsUpsert) AppendConstSql(source, "_sqlUpsert", sqlBuilder.BuildUpsertSql(ctx));
-        // RETURNING is not universally supported (e.g. Oracle has no INSERT/UPDATE/UPSERT ... RETURNING
-        // that yields a result set). The builder throws NotSupportedException for those; catch it so a
-        // single unsupported operation degrades to a diagnostic + throwing stub (below) instead of
-        // silently aborting the whole generator. A null reason means "supported (or not needed)".
-        var insertReturningError = TryBuildReturningConst(source, "_sqlInsertReturning", needsInsertReturning, () => sqlBuilder.BuildInsertReturningSql(ctx));
-        var updateReturningError = TryBuildReturningConst(source, "_sqlUpdateReturning", needsUpdateReturning, () => sqlBuilder.BuildUpdateReturningSql(ctx));
-        var upsertReturningError = TryBuildReturningConst(source, "_sqlUpsertReturning", needsUpsertReturning, () => sqlBuilder.BuildUpsertReturningSql(ctx));
+        // Some operations are not universally supported (e.g. Oracle has no RETURNING result set, and no
+        // MERGE upsert on a database-generated key). The builder throws NotSupportedException for those;
+        // catch it so a single unsupported operation degrades to a diagnostic + throwing stub (below)
+        // instead of silently aborting the whole generator. A null reason means "supported (or not needed)".
+        var upsertError = TryBuildDegradableConst(source, "_sqlUpsert", needsUpsert, () => sqlBuilder.BuildUpsertSql(ctx));
+        var insertReturningError = TryBuildDegradableConst(source, "_sqlInsertReturning", needsInsertReturning, () => sqlBuilder.BuildInsertReturningSql(ctx));
+        var updateReturningError = TryBuildDegradableConst(source, "_sqlUpdateReturning", needsUpdateReturning, () => sqlBuilder.BuildUpdateReturningSql(ctx));
+        var upsertReturningError = TryBuildDegradableConst(source, "_sqlUpsertReturning", needsUpsertReturning, () => sqlBuilder.BuildUpsertReturningSql(ctx));
         if (needsDeleteByKey) AppendConstSql(source, "_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsHardDeleteByKey) AppendConstSql(source, "_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
@@ -887,15 +887,16 @@ internal static class StoreProcessor
 
             // Graceful degradation: if this method's RETURNING operation could not be emitted for the
             // active dialect, report INQ039 and emit a throwing stub instead of an un-compilable body.
-            var unsupportedReason = method.ReturnsEntity
-                ? method.Operation switch
-                {
-                    StoreOperation.Insert => insertReturningError,
-                    StoreOperation.Update => updateReturningError,
-                    StoreOperation.Upsert => upsertReturningError ?? insertReturningError,
-                    _ => null,
-                }
-                : null;
+            var unsupportedReason = method.Operation switch
+            {
+                StoreOperation.Insert when method.ReturnsEntity => insertReturningError,
+                StoreOperation.Update when method.ReturnsEntity => updateReturningError,
+                // Returning upsert uses _sqlUpsertReturning, or _sqlInsertReturning on the null-key path.
+                StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ?? insertReturningError,
+                // Non-returning upsert uses _sqlUpsert (throws for a generated-key MERGE on Oracle).
+                StoreOperation.Upsert => upsertError,
+                _ => null,
+            };
             if (unsupportedReason is not null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -1428,12 +1429,12 @@ internal static class StoreProcessor
     }
 
     /// <summary>
-    /// Builds and emits a RETURNING SQL const when <paramref name="needed"/>. Returns null when the
-    /// const was emitted (supported) or not needed; returns the <see cref="System.NotSupportedException"/>
-    /// message when the active dialect cannot emit it — the caller then degrades the affected methods to
-    /// throwing stubs (INQ039) rather than aborting the whole generator.
+    /// Builds and emits a SQL const when <paramref name="needed"/>. Returns null when the const was
+    /// emitted (supported) or not needed; returns the <see cref="System.NotSupportedException"/> message
+    /// when the active dialect cannot emit the operation — the caller then degrades the affected methods
+    /// to throwing stubs (INQ039) rather than aborting the whole generator.
     /// </summary>
-    private static string? TryBuildReturningConst(StringBuilder source, string fieldName, bool needed, System.Func<string> build)
+    private static string? TryBuildDegradableConst(StringBuilder source, string fieldName, bool needed, System.Func<string> build)
     {
         if (!needed)
         {

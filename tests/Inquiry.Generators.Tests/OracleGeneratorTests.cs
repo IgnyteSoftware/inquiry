@@ -96,8 +96,9 @@ public sealed partial class InquiryGeneratorTests
     {
         // KNOWN v1 LIMITATION: an Oracle MERGE joins on the key, which is NULL for a DB-generated
         // key, so it would never match (insert-only) and could not round-trip the generated value.
-        // The builder throws rather than emit silently-wrong SQL; Roslyn surfaces that as a
-        // generator diagnostic (a loud build failure), not a runtime data bug.
+        // The builder throws rather than emit silently-wrong SQL; the generator degrades gracefully —
+        // it reports INQ039 (Warning) and emits a throwing stub for the upsert method, so the rest of
+        // the compilation still succeeds rather than the whole generator aborting.
         const string source = """
             using System;
             using System.Threading;
@@ -127,7 +128,16 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "Oracle");
 
-        Assert.NotEmpty(result.GeneratorDiagnostics);
+        var allDiagnostics = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics).ToArray();
+        Assert.Contains(allDiagnostics, d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var tree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+        Assert.Contains("throw new global::System.NotSupportedException(", text);
+        Assert.DoesNotContain("_sqlUpsert ", text); // the unsupported upsert const was skipped
     }
 
     [Fact]
