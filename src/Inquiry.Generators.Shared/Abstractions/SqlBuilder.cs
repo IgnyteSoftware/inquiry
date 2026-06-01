@@ -100,6 +100,14 @@ public abstract class SqlBuilder
     public abstract string BuildUpsertReturningSql(SqlBuildContext context);
 
     /// <summary>
+    /// W5: builds a <c>SELECT COUNT(*)</c> over the entity's table. Dialect-uniform (ANSI), so this is
+    /// concrete and inherited by every provider; it composes the soft-delete active filter via
+    /// <see cref="WhereSuffix"/> so a count excludes soft-deleted rows when applicable.
+    /// </summary>
+    public virtual string BuildCountSql(SqlBuildContext context)
+        => "SELECT COUNT(*) FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
+
+    /// <summary>
     /// Builds the ORDER BY clause body (no leading space) for the resolved terms, e.g.
     /// <c>ORDER BY "Name" ASC, "Id" DESC</c>. Dialect-uniform, so this is the single implementation all
     /// providers inherit. Returns the empty string when there are no terms.

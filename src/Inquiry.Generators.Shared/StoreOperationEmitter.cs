@@ -197,6 +197,14 @@ internal static class StoreOperationEmitter
                 source.AppendLine("    }");
                 break;
 
+            case StoreOperation.Count:
+                // W5: COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
+                // so the Task is returned directly (no async state machine).
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long>(new global::Inquiry.Commands.InquiryCommand(_sqlCount), {cancellation});");
+                source.AppendLine("    }");
+                break;
+
             case StoreOperation.StoredProcedure:
                 EmitStoredProcedure(source, method, parameters, entityType, structMat, cancellation);
                 break;
