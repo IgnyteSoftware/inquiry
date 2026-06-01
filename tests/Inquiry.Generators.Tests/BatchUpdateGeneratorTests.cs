@@ -52,4 +52,48 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_0\";", text);
         Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_k0\";", text);
     }
+
+    [Fact]
+    public void UpdateAllCompositeKeyAndsAllKeyColumns()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("OrderLine")]
+            public sealed class OrderLine
+            {
+                [InquiryKey("OrderId")]
+                public long OrderId { get; set; }
+
+                [InquiryKey("ProductId")]
+                public long ProductId { get; set; }
+
+                [InquiryColumn("Qty")]
+                public int Qty { get; set; }
+            }
+
+            public partial class OrderLineStore : Inquiry.Stores.InquiryStore<Demo.OrderLine>
+            {
+                [InquiryUpdateAll]
+                public partial Task<int> UpdateAllAsync(IEnumerable<OrderLine> lines, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("OrderLineStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // Composite key: both key columns AND-composed in the WHERE, bound as @u{r}_k0 / @u{r}_k1.
+        Assert.Contains("WHERE \\\"OrderId\\\" = @u{r}_k0 AND \\\"ProductId\\\" = @u{r}_k1;", text);
+        Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_k0\";", text);
+        Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_k1\";", text);
+    }
 }

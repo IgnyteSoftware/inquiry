@@ -1134,10 +1134,6 @@ internal static class StoreOperationEmitter
         return string.Join(", ", parts);
     }
 
-    /// <summary>
-    /// W3b: the columns a batch UPDATE assigns — non-key, non-generated, non-concurrency-token — matching
-    /// the single-row update's SET composition (the key columns go in the WHERE, the token is untouched).
-    /// </summary>
     /// <summary>W3b: emits one bound DbParameter for a batch-update column (name expression + DbType + value).</summary>
     private static void AppendUpdateAllParam(StringBuilder source, ColumnData column, string nameExpression)
     {
@@ -1154,6 +1150,10 @@ internal static class StoreOperationEmitter
         source.AppendLine("                    }");
     }
 
+    /// <summary>
+    /// W3b: the columns a batch UPDATE assigns — non-key, non-generated, non-concurrency-token — matching
+    /// the single-row update's SET composition (the key columns go in the WHERE, the token is untouched).
+    /// </summary>
     internal static ColumnData[] SelectUpdateSetColumns(EntityData entity)
         => entity.Columns.AsImmutableArray()
             .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken)
