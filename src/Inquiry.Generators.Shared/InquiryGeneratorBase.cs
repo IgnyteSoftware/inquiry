@@ -51,6 +51,16 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .WithTrackingName(EntitiesTrackingName)
             .Collect();
 
+        // W5b projections: each [InquiryProjection] class is projected into an equatable ProjectionData
+        // (a keyless column subset) so its materializer caches like an entity's.
+        var projections = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                KnownSymbols.EntityAttributeNamespace + ".InquiryProjectionAttribute",
+                predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                transform: static (ctx, _) => ProjectionProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol))
+            .WithTrackingName(ProjectionsTrackingName)
+            .Collect();
+
         // Stores carry no class-level attribute (identified by the InquiryStore<T> base), so they use
         // a narrow syntactic predicate; non-stores transform to null and are filtered out.
         var stores = context.SyntaxProvider
@@ -69,14 +79,15 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .Select((compilation, _) => ResolveOwnership(compilation))
             .WithTrackingName(OwnershipTrackingName);
 
-        var combined = entities.Combine(stores).Combine(ownership);
+        var combined = entities.Combine(stores).Combine(projections).Combine(ownership);
 
         context.RegisterSourceOutput(combined, (spc, data) =>
-            Execute(spc, data.Left.Left, data.Left.Right, data.Right));
+            Execute(spc, data.Left.Left.Left, data.Left.Left.Right, data.Left.Right, data.Right));
     }
 
     internal const string EntitiesTrackingName = "InquiryEntities";
     internal const string StoresTrackingName = "InquiryStores";
+    internal const string ProjectionsTrackingName = "InquiryProjections";
     internal const string OwnershipTrackingName = "InquiryDialectOwnership";
 
     private static bool IsStoreCandidateClass(SyntaxNode node)
@@ -122,13 +133,22 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         SourceProductionContext context,
         ImmutableArray<EntityData> entities,
         ImmutableArray<StoreData> stores,
+        ImmutableArray<ProjectionData> projections,
         DialectOwnership ownership)
     {
-        // Entity diagnostics are surfaced regardless of dialect ownership (matching the previous
-        // behavior, where entity discovery ran before arbitration).
+        // Entity (and projection) diagnostics are surfaced regardless of dialect ownership (matching the
+        // previous behavior, where entity discovery ran before arbitration).
         foreach (var entity in entities)
         {
             foreach (var diagnostic in entity.Diagnostics)
+            {
+                context.ReportDiagnostic(diagnostic.ToDiagnostic());
+            }
+        }
+
+        foreach (var projection in projections)
+        {
+            foreach (var diagnostic in projection.Diagnostics)
             {
                 context.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
@@ -143,9 +163,18 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             }
         }
 
+        var mappedProjections = new Dictionary<string, ProjectionData>();
+        foreach (var projection in projections)
+        {
+            if (projection.IsMapped)
+            {
+                mappedProjections[projection.FullyQualifiedName] = projection;
+            }
+        }
+
         // Nothing in this compilation needs codegen — skip arbitration so consumer projects that
         // only reference the runtime don't get spurious referenced-package dialect-collision noise.
-        if (mappedEntities.Count == 0 && stores.IsEmpty)
+        if (mappedEntities.Count == 0 && stores.IsEmpty && mappedProjections.Count == 0)
         {
             return;
         }
@@ -159,6 +188,13 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         foreach (var entity in mappedEntities.Values)
         {
             entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity));
+        }
+
+        // W5b: projection materializers register and emit exactly like entity materializers (same
+        // IInquiryEntityMaterializer<T> contract), so they share the registration set.
+        foreach (var projection in mappedProjections.Values)
+        {
+            entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection));
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
@@ -182,7 +218,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                     context.ReportDiagnostic(diagnostic.ToDiagnostic());
                 }
 
-                var registration = StoreProcessor.Emit(context, store, mappedEntities, sqlBuilder);
+                var registration = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
                 if (registration is not null)
                 {
                     storeRegistrations.Add(registration);

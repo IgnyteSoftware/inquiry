@@ -16,7 +16,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ018–INQ019  W1  Richer WHERE predicates      (e.g. bad IN collection, op/type mismatch)  [IN USE]
     //   INQ020–INQ021  W2  ORDER BY + pagination         (paging requires ORDER BY, unknown order field) [IN USE]
     //   INQ022–INQ023  W3  Batch & bulk operations
-    //   INQ024–INQ027  W5  Projections + aggregations    (projection not mapped, unknown column, …)
+    //   INQ024–INQ027  W5  Projections + aggregations    (INQ024 no columns, INQ025 not mapped, INQ026 entity mismatch, INQ027 soft-delete) [IN USE]
     //   INQ028–INQ029  W6  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
     //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per W8 convention)
     //   INQ030–INQ032  W7  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length) [IN USE]
@@ -206,6 +206,38 @@ internal static class InquiryDiagnosticDescriptors
         "INQ035",
         "Full-text search is not supported by the target dialect",
         "Query method '{0}' uses [InquiryFullTextSearch], which the current dialect does not support. Full-text search is available on PostgreSQL, SQL Server, and MySQL.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ProjectionNoColumns = new(
+        "INQ024",
+        "Projection declares no mapped columns",
+        "Projection '{0}' declares no [InquiryColumn] properties. A projection must map at least one column.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ProjectionNotMapped = new(
+        "INQ025",
+        "Query method result type is not the entity or a known projection",
+        "Query method '{0}' returns element type '{1}', which is neither the store's entity nor an [InquiryProjection] of it.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ProjectionEntityMismatch = new(
+        "INQ026",
+        "Projection targets a different entity than the store",
+        "Query method '{0}' returns projection '{1}', which projects entity '{2}' — not the store's entity '{3}'.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ProjectionOnSoftDeleteEntity = new(
+        "INQ027",
+        "Projection on a soft-delete entity is not supported",
+        "Query method '{0}' returns projection '{1}' of soft-delete entity '{2}'. Projections do not apply the soft-delete filter in v1; query the entity directly instead.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

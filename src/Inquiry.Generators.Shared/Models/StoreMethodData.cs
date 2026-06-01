@@ -74,4 +74,12 @@ internal sealed record StoreMethodData(
     /// <c>ExecuteScalarAsync&lt;T&gt;</c>.
     /// </summary>
     public string? ScalarResultType { get; init; }
+
+    /// <summary>
+    /// W5b: for a select-list operation, the fully-qualified element type the method returns (the
+    /// <c>T</c> in <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> / <c>IAsyncEnumerable&lt;T&gt;</c>). Equal to
+    /// the store's entity for an ordinary select; a different type is resolved against the projection
+    /// registry at emit. Null for non-select operations.
+    /// </summary>
+    public string? ResultElementTypeFqn { get; init; }
 }
