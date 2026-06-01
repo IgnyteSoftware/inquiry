@@ -323,6 +323,45 @@ internal static class StoreOperationEmitter
                 break;
             }
 
+            case StoreOperation.UpdateAll:
+            {
+                // W3b: batch update — one UPDATE statement per row in a single multi-statement command.
+                // The _sqlUpdateAllRow template carries a {r} token replaced with each row index; the
+                // binder writes @u{r}_<n> for SET columns and @u{r}_k<n> for key columns to match.
+                var itemsParam = method.Parameters[0].Name;
+                var setColumns = SelectUpdateSetColumns(entity);
+                var keyColumns = entity.Keys;
+                AppendHeader(source, method, parameters, isAsync: true);
+                source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}> ?? global::System.Linq.Enumerable.ToList({itemsParam});");
+                source.AppendLine("        if (_list.Count == 0) return 0;");
+                source.AppendLine("        var _sb = new global::System.Text.StringBuilder();");
+                source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
+                source.AppendLine("        {");
+                source.AppendLine("            _sb.Append(_sqlUpdateAllRow.Replace(\"{r}\", _r.ToString(global::System.Globalization.CultureInfo.InvariantCulture)));");
+                source.AppendLine("        }");
+                source.AppendLine($"        return await Inquiry.ExecuteAsync<global::System.Collections.Generic.IReadOnlyList<{entityType}>>(");
+                source.AppendLine("            _sb.ToString(),");
+                source.AppendLine("            _list,");
+                source.AppendLine("            static (_cmd, _items) =>");
+                source.AppendLine("            {");
+                source.AppendLine("                for (var _r = 0; _r < _items.Count; _r++)");
+                source.AppendLine("                {");
+                source.AppendLine("                    var _it = _items[_r];");
+                for (var _c = 0; _c < setColumns.Length; _c++)
+                {
+                    AppendUpdateAllParam(source, setColumns[_c], "\"@u\" + _r + \"_" + _c + "\"");
+                }
+                for (var _k = 0; _k < keyColumns.Count; _k++)
+                {
+                    AppendUpdateAllParam(source, keyColumns[_k], "\"@u\" + _r + \"_k" + _k + "\"");
+                }
+                source.AppendLine("                }");
+                source.AppendLine("            },");
+                source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                source.AppendLine("    }");
+                break;
+            }
+
             case StoreOperation.StoredProcedure:
                 EmitStoredProcedure(source, method, parameters, entityType, structMat, cancellation);
                 break;
@@ -1094,6 +1133,31 @@ internal static class StoreOperationEmitter
 
         return string.Join(", ", parts);
     }
+
+    /// <summary>
+    /// W3b: the columns a batch UPDATE assigns — non-key, non-generated, non-concurrency-token — matching
+    /// the single-row update's SET composition (the key columns go in the WHERE, the token is untouched).
+    /// </summary>
+    /// <summary>W3b: emits one bound DbParameter for a batch-update column (name expression + DbType + value).</summary>
+    private static void AppendUpdateAllParam(StringBuilder source, ColumnData column, string nameExpression)
+    {
+        var dbType = ResolveDbType(column);
+        source.AppendLine("                    {");
+        source.AppendLine("                        var _p = _cmd.CreateParameter();");
+        source.AppendLine($"                        _p.ParameterName = {nameExpression};");
+        if (dbType is not null)
+        {
+            source.AppendLine($"                        _p.DbType = {dbType};");
+        }
+        source.AppendLine($"                        _p.Value = {BuildParameterValueExpression(column, "_it." + column.PropertyName)};");
+        source.AppendLine("                        _cmd.Parameters.Add(_p);");
+        source.AppendLine("                    }");
+    }
+
+    internal static ColumnData[] SelectUpdateSetColumns(EntityData entity)
+        => entity.Columns.AsImmutableArray()
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken)
+            .ToArray();
 
     private static ColumnData[] SelectMutationColumns(EntityData entity, bool includeKey)
         => entity.Columns.AsImmutableArray()
