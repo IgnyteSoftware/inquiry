@@ -23,6 +23,11 @@ public enum InquiryAggregateFunction
 /// receive <see langword="null"/> when there are no rows). Respects the soft-delete active filter
 /// when the entity declares one.
 /// </summary>
+/// <remarks>
+/// The scalar result is coerced to <c>T</c> from the provider's returned type. SUM/AVG over a
+/// floating-point column can come back as a <c>double</c>; coercing that to a <c>decimal T</c> carries
+/// IEEE-754 rounding. Use a decimal/integer column (and matching <c>T</c>) when exact results matter.
+/// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryAggregateAttribute : Attribute
 {
