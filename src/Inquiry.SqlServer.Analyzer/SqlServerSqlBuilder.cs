@@ -27,6 +27,16 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     /// <summary>SQL Server uses <c>GETUTCDATE()</c> for the soft-delete (and restore) timestamp clock.</summary>
     public override string CurrentTimestampExpression => "GETUTCDATE()";
 
+    public override bool SupportsFullTextSearch => true;
+
+    public override string BuildFullTextSearchSql(SqlBuildContext context, IReadOnlyList<IColumn> searchColumns)
+    {
+        // FREETEXT does natural-language matching over the searched columns (requires a full-text index).
+        var cols = string.Join(", ", searchColumns.Select(c => QuoteIdentifier(c.ColumnName)));
+        var predicate = "FREETEXT((" + cols + "), " + ParameterName("searchTerm") + ")";
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(predicate, context.SoftDeleteActivePredicate);
+    }
+
     public override string BuildInsertSql(SqlBuildContext context)
     {
         if (context.InsertableColumns.Count == 0)

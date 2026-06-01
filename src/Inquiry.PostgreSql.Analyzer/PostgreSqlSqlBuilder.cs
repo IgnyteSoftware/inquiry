@@ -24,6 +24,16 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.SoftDeleteActivePredicate);
     }
 
+    public override bool SupportsFullTextSearch => true;
+
+    public override string BuildFullTextSearchSql(SqlBuildContext context, IReadOnlyList<IColumn> searchColumns)
+    {
+        // Concatenate the searched columns into one tsvector and match a plain (natural-language) query.
+        var vector = string.Join(" || ' ' || ", searchColumns.Select(c => "coalesce(" + QuoteIdentifier(c.ColumnName) + ", '')"));
+        var predicate = "to_tsvector('simple', " + vector + ") @@ plainto_tsquery('simple', " + ParameterName("searchTerm") + ")";
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(predicate, context.SoftDeleteActivePredicate);
+    }
+
     /// <summary>PostgreSQL uses native boolean literals for the soft-delete flag.</summary>
     public override string SoftDeleteFalseLiteral => "FALSE";
 
