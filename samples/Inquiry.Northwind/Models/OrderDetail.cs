@@ -11,7 +11,7 @@ public sealed class OrderDetail
     [InquiryKey("ProductID")]
     public int ProductID { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(Precision = 19, Scale = 4)]
     public decimal UnitPrice { get; set; }
 
     [InquiryColumn]

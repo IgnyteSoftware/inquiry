@@ -8,19 +8,19 @@ public sealed class Product
     [InquiryKey("ProductID", IsGenerated = true)]
     public int? ProductID { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string ProductName { get; set; } = string.Empty;
 
-    [InquiryForeignKey("SupplierID", "Suppliers", "SupplierID")]
+    [InquiryForeignKey("SupplierID", "Suppliers", "SupplierID", IsIndexed = true)]
     public int? SupplierID { get; set; }
 
-    [InquiryForeignKey("CategoryID", "Categories", "CategoryID")]
+    [InquiryForeignKey("CategoryID", "Categories", "CategoryID", IsIndexed = true)]
     public int? CategoryID { get; set; }
 
     [InquiryColumn]
     public string? QuantityPerUnit { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(Precision = 19, Scale = 4)]
     public decimal? UnitPrice { get; set; }
 
     [InquiryColumn]

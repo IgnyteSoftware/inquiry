@@ -58,6 +58,39 @@ public static class SchemaFidelity
                 string.Join(Environment.NewLine, problems.Select(p => "  - " + p)));
     }
 
+    /// <summary>Structural-only check (tables present, primary keys, and foreign keys) without
+    /// per-column nullability or secondary-index assertions. Use for schemas stood up from Inquiry's
+    /// own generated DDL, whose entity surface may intentionally omit columns (e.g. BLOB columns) and
+    /// whose secondary-index emission is annotation-bounded. The strict full-contract
+    /// <see cref="AssertMatches"/> still runs against the authoritative hand-written DDL.</summary>
+    public static void AssertStructure(SchemaSnapshot expected, SchemaSnapshot actual)
+    {
+        var problems = new List<string>();
+        foreach (var et in expected.Tables)
+        {
+            var at = actual.Tables.FirstOrDefault(t => Id.Equals(t.Name, et.Name));
+            if (at is null) { problems.Add($"Missing table '{et.Name}'."); continue; }
+
+            if (!SameColumns(et.PrimaryKey, at.PrimaryKey))
+                problems.Add($"{et.Name}: PK expected ({Join(et.PrimaryKey)}), found ({Join(at.PrimaryKey)}).");
+
+            foreach (var efk in et.ForeignKeys)
+            {
+                var ok = at.ForeignKeys.Any(afk =>
+                    SameColumns(afk.Columns, efk.Columns) &&
+                    Id.Equals(afk.ReferencedTable, efk.ReferencedTable) &&
+                    SameColumns(afk.ReferencedColumns, efk.ReferencedColumns));
+                if (!ok)
+                    problems.Add($"{et.Name}: missing FK ({Join(efk.Columns)}) -> {efk.ReferencedTable}({Join(efk.ReferencedColumns)}).");
+            }
+        }
+
+        if (problems.Count > 0)
+            throw new SchemaFidelityException(
+                "Schema structure check failed:" + Environment.NewLine +
+                string.Join(Environment.NewLine, problems.Select(p => "  - " + p)));
+    }
+
     private static bool SameColumns(IReadOnlyList<string> a, IReadOnlyList<string> b)
         => a.Count == b.Count && a.Zip(b, (x, y) => Id.Equals(x, y)).All(eq => eq);
 
