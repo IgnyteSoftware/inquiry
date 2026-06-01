@@ -82,6 +82,19 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void StreamingFullTextSearchBindsSearchTerm()
+    {
+        var result = RunGenerator(FtsStore("""
+            [InquiryFullTextSearch("Title", "Body")]
+            public partial IAsyncEnumerable<Doc> StreamAsync(string term, CancellationToken cancellationToken = default);
+            """), dialect: "PostgreSql");
+        AssertNoErrors(result);
+        var text = GetDocStore(result);
+
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@searchTerm\", term)", text);
+    }
+
+    [Fact]
     public void SqliteRejectsFullTextSearchWithInq035()
     {
         // SQLite (the default dialect) does not support [InquiryFullTextSearch] in v1.
