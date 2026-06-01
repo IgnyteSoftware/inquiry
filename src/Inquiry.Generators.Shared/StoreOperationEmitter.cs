@@ -197,6 +197,24 @@ internal static class StoreOperationEmitter
                 source.AppendLine("    }");
                 break;
 
+            case StoreOperation.DeleteAll:
+            {
+                // W3b: batch delete over a key collection. The (@keys) sentinel in _sqlDeleteAll is
+                // expanded at runtime into one placeholder per key by InquiryInExpansion. Returns rows
+                // affected; for a soft-delete entity _sqlDeleteAll is the soft UPDATE form.
+                var keysParam = method.Parameters[0].Name;
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine("            _sqlDeleteAll,");
+                source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
+                source.AppendLine("            {");
+                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@keys\", {keysParam});");
+                source.AppendLine("            });");
+                source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
+                source.AppendLine("    }");
+                break;
+            }
+
             case StoreOperation.Count:
                 // W5: COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
                 // so the Task is returned directly (no async state machine).
