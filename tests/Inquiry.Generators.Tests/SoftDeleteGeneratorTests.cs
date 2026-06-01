@@ -1,0 +1,254 @@
+using System;
+using System.Linq;
+using Microsoft.CodeAnalysis;
+
+namespace Inquiry.Generators.Tests;
+
+/// <summary>
+/// W8 soft-delete emission tests: every SELECT AND-composes the active-row filter (via the Phase 0
+/// <c>AppendWhere</c> primitive), <c>[InquiryDeleteOneByKey]</c> becomes a soft UPDATE,
+/// <c>HardDelete = true</c> keeps a literal DELETE, <c>IncludeDeleted = true</c> opts out, and
+/// <c>[InquiryRestoreOneByKey]</c> clears the indicator. Also verifies the filter composes with the
+/// W1 predicate path and the W2 paged path, the per-dialect literals (PG TRUE/FALSE, SqlServer
+/// GETUTCDATE), the timestamp form, and the duplicate-column diagnostic.
+/// </summary>
+public sealed partial class InquiryGeneratorTests
+{
+    private const string FlagEntity = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("TWidget")]
+        public sealed class Widget
+        {
+            [InquiryKey]
+            public long Id { get; set; }
+
+            [InquiryColumn("Name")]
+            public string Name { get; set; } = string.Empty;
+
+            [InquiryColumn("IsDeleted"), InquirySoftDelete]
+            public bool IsDeleted { get; set; }
+        }
+        """;
+
+    private static string WidgetStore(string methods) =>
+        FlagEntity + "\n\npublic partial class WidgetStore : Inquiry.Stores.InquiryStore<Demo.Widget>\n{\n" + methods + "\n}\n";
+
+    private static string GetWidgetStore(GeneratorTestResult result)
+    {
+        var tree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        return tree.GetText().ToString();
+    }
+
+    private const string CrudMethods = """
+        [InquirySelectAll]
+        public partial Task<IReadOnlyList<Widget>> SelectAllAsync(CancellationToken cancellationToken = default);
+
+        [InquirySelectOneByKey]
+        public partial Task<Widget?> SelectByKeyAsync(long id, CancellationToken cancellationToken = default);
+
+        [InquirySelectAllByField("Name")]
+        public partial Task<IReadOnlyList<Widget>> SelectByNameAsync(string name, CancellationToken cancellationToken = default);
+
+        [InquiryDeleteOneByKey]
+        public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
+
+        [InquiryRestoreOneByKey]
+        public partial Task<bool> RestoreAsync(long id, CancellationToken cancellationToken = default);
+        """;
+
+    [Fact]
+    public void SoftDeleteFiltersSelectsAndConvertsDeleteToUpdate_Sqlite()
+    {
+        var result = RunGenerator(WidgetStore(CrudMethods));
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        // Every SELECT gains the active-row filter.
+        Assert.Contains("private const string _sqlSelectAll = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"IsDeleted\\\" FROM \\\"TWidget\\\" WHERE \\\"IsDeleted\\\" = 0\";", text);
+        Assert.Contains("_sqlSelectByKey = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"IsDeleted\\\" FROM \\\"TWidget\\\" WHERE \\\"Id\\\" = @Id AND \\\"IsDeleted\\\" = 0\";", text);
+        Assert.Contains("_sqlSelectBy_Name = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"IsDeleted\\\" FROM \\\"TWidget\\\" WHERE \\\"Name\\\" = @Name AND \\\"IsDeleted\\\" = 0\";", text);
+
+        // Delete becomes a soft UPDATE; restore clears the flag.
+        Assert.Contains("_sqlDeleteByKey = \"UPDATE \\\"TWidget\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"Id\\\" = @Id\";", text);
+        Assert.Contains("_sqlRestoreByKey = \"UPDATE \\\"TWidget\\\" SET \\\"IsDeleted\\\" = 0 WHERE \\\"Id\\\" = @Id\";", text);
+        Assert.DoesNotContain("DELETE FROM", text);
+    }
+
+    [Fact]
+    public void HardDeleteKeepsLiteralDeleteAlongsideSoftDefault_Sqlite()
+    {
+        var result = RunGenerator(WidgetStore("""
+            [InquiryDeleteOneByKey(HardDelete = true)]
+            public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains("_sqlHardDeleteByKey = \"DELETE FROM \\\"TWidget\\\" WHERE \\\"Id\\\" = @Id\";", text);
+        Assert.DoesNotContain("SET \\\"IsDeleted\\\"", text);
+    }
+
+    [Fact]
+    public void IncludeDeletedEmitsUnfilteredSelect_Sqlite()
+    {
+        var result = RunGenerator(WidgetStore("""
+            [InquirySelectAll(IncludeDeleted = true)]
+            public partial Task<IReadOnlyList<Widget>> SelectAllIncludingDeletedAsync(CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        // The unfiltered per-method const has no WHERE clause.
+        Assert.Contains("FROM \\\"TWidget\\\"\";", text);
+        Assert.DoesNotContain("WHERE \\\"IsDeleted\\\" = 0", text);
+    }
+
+    [Fact]
+    public void SoftDeleteFilterComposesWithPredicate_Sqlite()
+    {
+        // W1 composition: a predicate select also AND-composes the soft-delete filter.
+        var result = RunGenerator(WidgetStore("""
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Name", Compare.Like)]
+            public partial Task<IReadOnlyList<Widget>> SearchAsync(string name, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains("\\\"Name\\\" LIKE @Name AND \\\"IsDeleted\\\" = 0", text);
+    }
+
+    [Fact]
+    public void SoftDeleteFilterComposesWithPaging_Sqlite()
+    {
+        // W2 composition: an offset-paged select keeps the filter before ORDER BY / LIMIT.
+        var result = RunGenerator(WidgetStore("""
+            [InquirySelectAll(OrderBy = "Id ASC", Paged = true)]
+            public partial Task<IReadOnlyList<Widget>> PageAsync(int offset, int limit, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains("WHERE \\\"IsDeleted\\\" = 0 ORDER BY \\\"Id\\\" ASC LIMIT @__limit OFFSET @__offset", text);
+    }
+
+    [Fact]
+    public void PostgreSqlUsesTrueFalseLiterals()
+    {
+        var result = RunGenerator(WidgetStore(CrudMethods), dialect: "PostgreSql");
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains("WHERE \\\"IsDeleted\\\" = FALSE", text);
+        Assert.Contains("SET \\\"IsDeleted\\\" = TRUE WHERE", text);
+    }
+
+    [Fact]
+    public void MySqlUsesBacktickIdentifiers()
+    {
+        var result = RunGenerator(WidgetStore(CrudMethods), dialect: "MySql");
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains("FROM `TWidget` WHERE `IsDeleted` = 0", text);
+        Assert.Contains("UPDATE `TWidget` SET `IsDeleted` = 1 WHERE `Id` = @Id", text);
+    }
+
+    [Fact]
+    public void OracleComposesSoftDeleteFilterUnquoted()
+    {
+        // Oracle's SELECT overrides (added by the Oracle provider) must also compose the filter.
+        var result = RunGenerator(WidgetStore(CrudMethods), dialect: "Oracle");
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains("FROM TWidget WHERE IsDeleted = 0", text);
+        Assert.Contains("WHERE Id = :Id AND IsDeleted = 0", text);
+        Assert.Contains("WHERE Name = :Name AND IsDeleted = 0", text);
+    }
+
+    [Fact]
+    public void TimestampFormFiltersIsNullAndStampsOnDelete_SqlServer()
+    {
+        const string tsEntity = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TDoc")]
+            public sealed class Doc
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryColumn("DeletedAt"), InquirySoftDelete]
+                public DateTime? DeletedAt { get; set; }
+            }
+
+            public partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>
+            {
+                [InquirySelectAll]
+                public partial Task<IReadOnlyList<Doc>> SelectAllAsync(CancellationToken cancellationToken = default);
+
+                [InquiryDeleteOneByKey]
+                public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(tsEntity, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("WHERE [DeletedAt] IS NULL", text);
+        Assert.Contains("SET [DeletedAt] = GETUTCDATE() WHERE [Id] = @Id", text);
+    }
+
+    [Fact]
+    public void MultipleSoftDeleteColumnsReportsDiagnostic()
+    {
+        const string source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TBad")]
+            public sealed class Bad
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryColumn("A"), InquirySoftDelete]
+                public bool A { get; set; }
+
+                [InquiryColumn("B"), InquirySoftDelete]
+                public bool B { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ033" || d.Id == "INQ034");
+    }
+}
