@@ -248,7 +248,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryColumn("Email", Length = 128, IsUnique = true)]
             public string Email { get; set; } = string.Empty;
 
-            [InquiryColumn("Name", IsIndexed = true)]
+            [InquiryColumn("Name", Length = 64, IsIndexed = true)]
             public string Name { get; set; } = string.Empty;
         }
         """;
