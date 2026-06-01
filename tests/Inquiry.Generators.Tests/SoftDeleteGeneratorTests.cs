@@ -144,6 +144,36 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SoftDeleteFilterComposesWithKeyset_Sqlite()
+    {
+        // W2 keyset composition: the soft-delete filter is AND-appended after the cursor predicate
+        // (this path composes inline in StoreProcessor, not via the SqlBuilder AppendWhere helper).
+        var result = RunGenerator(WidgetStore("""
+            [InquiryKeysetPage("Id")]
+            public partial Task<Inquiry.Paging.InquiryPage<Widget, long>> PageAsync(long? afterId, int pageSize, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains("> @__cursor0) AND \\\"IsDeleted\\\" = 0 ORDER BY", text);
+    }
+
+    [Fact]
+    public void IncludeDeletedPagedSelectIsUnfiltered_Sqlite()
+    {
+        // Combined W2 paging + W8 IncludeDeleted: ORDER BY/LIMIT present, soft-delete filter suppressed.
+        var result = RunGenerator(WidgetStore("""
+            [InquirySelectAll(OrderBy = "Id ASC", Paged = true, IncludeDeleted = true)]
+            public partial Task<IReadOnlyList<Widget>> PageAllAsync(int offset, int limit, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains("FROM \\\"TWidget\\\" ORDER BY \\\"Id\\\" ASC LIMIT @__limit OFFSET @__offset", text);
+        Assert.DoesNotContain("\\\"IsDeleted\\\" = 0", text);
+    }
+
+    [Fact]
     public void PostgreSqlUsesTrueFalseLiterals()
     {
         var result = RunGenerator(WidgetStore(CrudMethods), dialect: "PostgreSql");
