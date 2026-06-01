@@ -1,7 +1,7 @@
 # Live-runtime testing & benchmarking for Inquiry providers
 
 - **Date:** 2026-06-01
-- **Status:** Approved (design) — pending spec review
+- **Status:** Implemented — Phases 0–7 merged to `main` (`fcfaa3e`, 2026-06-01); Phase 8 benchmark deferred. See [`../../STATUS.md`](../../STATUS.md).
 - **Author:** jake.overstreet@ignyte.com (with Claude)
 
 ## 1. Problem & goals

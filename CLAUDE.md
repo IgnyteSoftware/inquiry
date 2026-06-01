@@ -2,6 +2,8 @@
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
+> **Project state:** For where the codebase is, how we develop it, and what's left to do, see **[docs/STATUS.md](docs/STATUS.md)** — the onboarding source of truth.
+
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
 ## 1. Think Before Coding
