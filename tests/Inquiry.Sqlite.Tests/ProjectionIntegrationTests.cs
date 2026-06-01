@@ -44,6 +44,9 @@ public partial class PersonStore : InquiryStore<Person>
 
     [InquirySelectAll]
     public partial Task<IReadOnlyList<PersonName>> NamesAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByField(nameof(Person.Age))]
+    public partial Task<IReadOnlyList<PersonName>> NamesByAgeAsync(int age, CancellationToken cancellationToken = default);
 }
 
 /// <summary>W5b projection end-to-end against SQLite: a projection-returning SelectAll selects only the
@@ -70,5 +73,21 @@ public sealed class ProjectionIntegrationTests
         var all = await store.AllAsync();
         Assert.Equal(36, all.Single(p => p.Id == 1).Age);
         Assert.Null(all.Single(p => p.Id == 2).Email);
+    }
+
+    [Fact]
+    public async Task ProjectionByFieldFiltersAndProjects()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "Projection");
+        var store = harness.GetRequiredService<PersonStore>();
+
+        await store.InsertAsync(new Person { FullName = "Ada", Age = 36 });
+        await store.InsertAsync(new Person { FullName = "Alan", Age = 41 });
+        await store.InsertAsync(new Person { FullName = "Grace", Age = 36 });
+
+        var aged36 = await store.NamesByAgeAsync(36);
+        Assert.Equal(2, aged36.Count);
+        Assert.Contains(aged36, n => n.Name == "Ada");
+        Assert.Contains(aged36, n => n.Name == "Grace");
     }
 }
