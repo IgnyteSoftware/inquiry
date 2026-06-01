@@ -96,8 +96,9 @@ public sealed partial class InquiryGeneratorTests
     {
         // KNOWN v1 LIMITATION: an Oracle MERGE joins on the key, which is NULL for a DB-generated
         // key, so it would never match (insert-only) and could not round-trip the generated value.
-        // The builder throws rather than emit silently-wrong SQL; Roslyn surfaces that as a
-        // generator diagnostic (a loud build failure), not a runtime data bug.
+        // The builder throws rather than emit silently-wrong SQL; the generator degrades gracefully —
+        // it reports INQ039 (Warning) and emits a throwing stub for the upsert method, so the rest of
+        // the compilation still succeeds rather than the whole generator aborting.
         const string source = """
             using System;
             using System.Threading;
@@ -127,7 +128,16 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "Oracle");
 
-        Assert.NotEmpty(result.GeneratorDiagnostics);
+        var allDiagnostics = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics).ToArray();
+        Assert.Contains(allDiagnostics, d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var tree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+        Assert.Contains("throw new global::System.NotSupportedException(", text);
+        Assert.DoesNotContain("_sqlUpsert ", text); // the unsupported upsert const was skipped
     }
 
     [Fact]
@@ -197,5 +207,65 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("ORDER BY Id ASC OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY", text);
         Assert.Contains("_p0.ParameterName = \"@__offset\";", text);
         Assert.Contains("_p1.ParameterName = \"@__limit\";", text);
+    }
+
+    [Fact]
+    public void OracleInsertReturningDegradesToThrowingStubWithWarning()
+    {
+        // Oracle cannot emit INSERT … RETURNING as a result set (v1 limitation). Rather than the builder's
+        // NotSupportedException aborting the whole compilation, the generator must report INQ039 (Warning)
+        // and emit a throwing stub for the offending method while still emitting the rest of the store.
+        const string source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey(IsGenerated = true)]
+                public int? Id { get; set; }
+
+                [InquiryColumn("Name")]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquiryInsert(ReturnEntity = true)]
+                public partial Task<Widget?> InsertReturningAsync(Widget widget, CancellationToken cancellationToken = default);
+
+                [InquiryInsert]
+                public partial Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
+
+                [InquirySelectOneByKey]
+                public partial Task<Widget?> SelectByKeyAsync(int? id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+
+        // No generator crash, and the compilation has no errors (the stub satisfies the partial decl).
+        var allDiagnostics = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics).ToArray();
+        Assert.Contains(allDiagnostics, d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning);
+        Assert.DoesNotContain(allDiagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = generatedStore.GetText().ToString();
+
+        // The insert-returning method is a throwing stub; the other methods still emit normally.
+        Assert.Contains("InsertReturningAsync", text);
+        Assert.Contains("throw new global::System.NotSupportedException(", text);
+        Assert.Contains("_sqlInsert ", text);          // plain insert const still emitted
+        Assert.Contains("_sqlSelectByKey ", text);     // select-by-key still emitted
+        Assert.DoesNotContain("_sqlInsertReturning", text); // the unsupported const was skipped
     }
 }

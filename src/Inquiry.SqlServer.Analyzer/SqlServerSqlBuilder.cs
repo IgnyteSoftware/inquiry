@@ -210,6 +210,41 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     protected override string GeneratedKeyClause(IColumn column)
         => MapColumnType(column) + " IDENTITY(1,1) PRIMARY KEY";
 
+    // SQL Server cannot index an NVARCHAR(MAX) column. A string column flagged [InquiryColumn(IsIndexed)]
+    // without a Length (or explicit SqlType) maps to NVARCHAR(MAX), so its CREATE INDEX would be rejected
+    // at execution time. Skip those indexes rather than emit invalid DDL — the authoritative secondary-index
+    // contract is verified against the hand-written schema, which bounds such columns.
+    public override IReadOnlyList<string> BuildCreateIndexSql(SqlBuildContext context)
+    {
+        var statements = new List<string>();
+        foreach (var column in context.Columns)
+        {
+            if (!column.IsIndexed && !column.IsUnique)
+            {
+                continue;
+            }
+
+            if (IsUnboundedString(column))
+            {
+                continue;
+            }
+
+            var indexName = string.IsNullOrEmpty(column.IndexName)
+                ? (column.IsUnique ? "UX_" : "IX_") + context.RawTableName + "_" + column.ColumnName
+                : column.IndexName!;
+            var unique = column.IsUnique ? "UNIQUE " : string.Empty;
+            statements.Add("CREATE " + unique + "INDEX " + QuoteIdentifier(indexName)
+                + " ON " + context.Table + " (" + QuoteIdentifier(column.ColumnName) + ")");
+        }
+
+        return statements;
+    }
+
+    private static bool IsUnboundedString(IColumn column)
+        => column.TypeClass == DbTypeClass.String
+           && column.Length == 0
+           && string.IsNullOrEmpty(column.SqlType);
+
     protected override string WrapCreateTable(SqlBuildContext context, string body)
     {
         var name = string.IsNullOrEmpty(context.RawSchema) ? context.RawTableName : context.RawSchema + "." + context.RawTableName;

@@ -13,13 +13,6 @@ namespace Inquiry.PostgreSql.Tests.Fixtures;
 /// </summary>
 internal sealed class PostgreSqlTestHarness : IAsyncDisposable
 {
-    /// <summary>
-    /// Connection string to a database the test process can use to <c>CREATE DATABASE</c>
-    /// (typically <c>postgres</c>). When unset, <see cref="PostgreSqlFactAttribute"/> skips
-    /// the test rather than failing it.
-    /// </summary>
-    public const string ConnectionStringEnvironmentVariable = "INQUIRY_POSTGRESQL_CONNECTION_STRING";
-
     private readonly string _adminConnectionString;
     private readonly string _databaseName;
 
@@ -37,12 +30,11 @@ internal sealed class PostgreSqlTestHarness : IAsyncDisposable
 
     public T GetRequiredService<T>() where T : notnull => Services.GetRequiredService<T>();
 
-    public static async Task<PostgreSqlTestHarness> CreateAsync(string? namePrefix = null)
-    {
-        var adminConnectionString = Environment.GetEnvironmentVariable(ConnectionStringEnvironmentVariable)
-            ?? throw new InvalidOperationException(
-                $"Environment variable {ConnectionStringEnvironmentVariable} is not set; PostgreSqlFactAttribute should have skipped this test.");
+    public static Task<PostgreSqlTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
+        => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.PostgreSqlDdl, namePrefix);
 
+    public static async Task<PostgreSqlTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    {
         var prefix = (namePrefix ?? "inquiry").ToLowerInvariant();
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
 
@@ -65,7 +57,7 @@ internal sealed class PostgreSqlTestHarness : IAsyncDisposable
         {
             await db.OpenAsync();
             await using var cmd = db.CreateCommand();
-            cmd.CommandText = NorthwindSchema.PostgreSqlDdl;
+            cmd.CommandText = ddl;
             await cmd.ExecuteNonQueryAsync();
         }
 

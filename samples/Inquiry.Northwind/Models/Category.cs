@@ -8,7 +8,7 @@ public sealed class Category
     [InquiryKey("CategoryID", IsGenerated = true)]
     public int? CategoryID { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string CategoryName { get; set; } = string.Empty;
 
     [InquiryColumn]

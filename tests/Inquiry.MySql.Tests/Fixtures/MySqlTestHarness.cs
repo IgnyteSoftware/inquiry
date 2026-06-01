@@ -7,33 +7,12 @@ using MySqlConnector;
 namespace Inquiry.MySql.Tests.Fixtures;
 
 /// <summary>
-/// Creates a throwaway MySQL/MariaDB database, runs the Northwind DDL against it, and exposes a
+/// Creates a throwaway MySQL database, runs the Northwind DDL against it, and exposes a
 /// configured <see cref="ServiceProvider"/>. The database is dropped on disposal so parallel test
 /// classes never collide on table state.
 /// </summary>
-/// <remarks>
-/// KNOWN LIMITATION — the live CRUD facts in this project are scaffolding and do NOT yet run green
-/// against a real server, even with <see cref="ConnectionStringEnvironmentVariable"/> set. The shared
-/// <c>Inquiry.Northwind</c> stores bake their SQL against the SQLite dialect (double-quoted
-/// identifiers). MySQL only treats <c>"..."</c> as an identifier under <c>ANSI_QUOTES</c>, but that is
-/// a session setting that does NOT propagate across the pooled connections the runtime opens per call
-/// — the <c>SET SESSION sql_mode</c> below only affects the one-off DDL connection. Forcing
-/// <c>ANSI_QUOTES</c> in the production <see cref="MySqlInquiryConnectionFactory"/> would be wrong (a
-/// real consumer compiles their entities with the MySQL analyzer and gets correct backtick SQL with no
-/// mode change). The proper fix is a MySQL-analyzer build of the Northwind entities/stores for this
-/// test project — tracked as a follow-up. The provider's emitted SQL is verified correct by the
-/// generator emission tests; this gap is purely a shared-test-fixture dialect mismatch.
-/// (SQL Server tolerates the SQLite-dialect SQL natively because its default
-/// <c>QUOTED_IDENTIFIER</c> mode is on.)
-/// </remarks>
 internal sealed class MySqlTestHarness : IAsyncDisposable
 {
-    /// <summary>
-    /// Connection string to a database the test process can use to <c>CREATE DATABASE</c>. When
-    /// unset, <see cref="MySqlFactAttribute"/> skips the test rather than failing it.
-    /// </summary>
-    public const string ConnectionStringEnvironmentVariable = "INQUIRY_MYSQL_CONNECTION_STRING";
-
     private readonly string _adminConnectionString;
     private readonly string _databaseName;
 
@@ -51,12 +30,11 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
 
     public T GetRequiredService<T>() where T : notnull => Services.GetRequiredService<T>();
 
-    public static async Task<MySqlTestHarness> CreateAsync(string? namePrefix = null)
-    {
-        var adminConnectionString = Environment.GetEnvironmentVariable(ConnectionStringEnvironmentVariable)
-            ?? throw new InvalidOperationException(
-                $"Environment variable {ConnectionStringEnvironmentVariable} is not set; MySqlFactAttribute should have skipped this test.");
+    public static Task<MySqlTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
+        => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.MySqlDdl, namePrefix);
 
+    public static async Task<MySqlTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    {
         var prefix = (namePrefix ?? "inquiry").ToLowerInvariant();
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
 
@@ -71,23 +49,16 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         var connectionString = new MySqlConnectionStringBuilder(adminConnectionString)
         {
             Database = databaseName,
-            // Keep MySqlConnector's default multi-statement support on for the emulated
-            // INSERT ...; SELECT returning batches. NOTE: this does NOT make the SQLite-dialect
-            // Northwind SQL resolve on MySQL — see the type remarks for the known limitation.
+            // Keep MySqlConnector's multi-statement support on for the emulated
+            // INSERT ...; SELECT returning batches.
             AllowUserVariables = true,
         }.ToString();
 
         await using (var db = new MySqlConnection(connectionString))
         {
             await db.OpenAsync();
-            await using (var mode = db.CreateCommand())
-            {
-                mode.CommandText = "SET SESSION sql_mode = CONCAT(@@sql_mode, ',ANSI_QUOTES');";
-                await mode.ExecuteNonQueryAsync();
-            }
-
             await using var cmd = db.CreateCommand();
-            cmd.CommandText = NorthwindSchema.MySqlDdl;
+            cmd.CommandText = ddl;
             await cmd.ExecuteNonQueryAsync();
         }
 

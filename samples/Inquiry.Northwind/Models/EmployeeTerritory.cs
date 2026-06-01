@@ -8,6 +8,6 @@ public sealed class EmployeeTerritory
     [InquiryKey("EmployeeID")]
     public int EmployeeID { get; set; }
 
-    [InquiryKey("TerritoryID")]
+    [InquiryKey("TerritoryID", Length = 40)]
     public string TerritoryID { get; set; } = string.Empty;
 }

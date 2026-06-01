@@ -8,25 +8,25 @@ public sealed class Order
     [InquiryKey("OrderID", IsGenerated = true)]
     public int? OrderID { get; set; }
 
-    [InquiryForeignKey("CustomerID", "Customers", "CustomerID")]
+    [InquiryForeignKey("CustomerID", "Customers", "CustomerID", Length = 5, IsIndexed = true)]
     public string? CustomerID { get; set; }
 
-    [InquiryForeignKey("EmployeeID", "Employees", "EmployeeID")]
+    [InquiryForeignKey("EmployeeID", "Employees", "EmployeeID", IsIndexed = true)]
     public int? EmployeeID { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public DateTime? OrderDate { get; set; }
 
     [InquiryColumn]
     public DateTime? RequiredDate { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public DateTime? ShippedDate { get; set; }
 
-    [InquiryForeignKey("ShipVia", "Shippers", "ShipperID")]
+    [InquiryForeignKey("ShipVia", "Shippers", "ShipperID", IsIndexed = true)]
     public int? ShipVia { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(Precision = 19, Scale = 4)]
     public decimal? Freight { get; set; }
 
     [InquiryColumn]
@@ -41,7 +41,7 @@ public sealed class Order
     [InquiryColumn]
     public string? ShipRegion { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string? ShipPostalCode { get; set; }
 
     [InquiryColumn]

@@ -23,6 +23,16 @@ public interface IInquiryConnectionFactory
     }
 
     /// <summary>
+    /// Applies provider-specific fixups to a command after the pipeline has bound its parameters but
+    /// before execution. The default implementation is a no-op; providers override it for parameter
+    /// adjustments that depend on the bound set — e.g. Oracle strips the dialect-agnostic <c>@</c>
+    /// sigil from parameter names so they bind by name against the <c>:name</c> references in its SQL.
+    /// </summary>
+    void FinalizeCommand(DbCommand command)
+    {
+    }
+
+    /// <summary>
     /// Gets whether prepared statements created on a connection survive the connection's lifecycle
     /// (e.g. a pool-level / server-side prepared-statement cache). When <see langword="true"/> and
     /// <see cref="PreparedStatementMode.Auto"/> is configured, the pipeline issues

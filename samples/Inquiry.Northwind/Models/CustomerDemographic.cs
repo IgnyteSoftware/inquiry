@@ -5,7 +5,7 @@ namespace Inquiry.Northwind.Models;
 [InquiryTable("CustomerDemographics")]
 public sealed class CustomerDemographic
 {
-    [InquiryKey("CustomerTypeID")]
+    [InquiryKey("CustomerTypeID", Length = 10)]
     public string CustomerTypeID { get; set; } = string.Empty;
 
     [InquiryColumn]
