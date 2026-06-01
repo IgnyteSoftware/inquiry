@@ -203,15 +203,19 @@ internal static class EntityProcessor
                 }
             }
 
-            // W7 DDL metadata. Named args live on InquiryColumnAttribute (inherited by Key/FK/token
-            // attributes), so read them off the resolved column attribute. NOT NULL is inferred: key
-            // columns are always NOT NULL, otherwise the CLR type's nullability decides.
+            // W7 DDL metadata. Named args (Length/SqlType/Precision/Scale/DefaultExpression/index flags)
+            // live on InquiryColumnAttribute, which InquiryForeignKeyAttribute also inherits. When a
+            // property is mapped solely by [InquiryForeignKey] (no separate [InquiryColumn]/[InquiryKey]),
+            // read those named args off the FK attribute so e.g. Length is honored on the FK column.
+            // ResolveColumnName/ResolveConverter still use columnAttribute alone — the FK attribute's
+            // constructor args are (table, column), not a column name.
+            var metadataAttribute = columnAttribute ?? foreignKeyAttribute;
             var isKey = keyAttribute is not null;
-            var sqlType = columnAttribute is not null ? GeneratorHelpers.GetNamedString(columnAttribute, "SqlType") : null;
-            var length = (columnAttribute is not null ? GeneratorHelpers.GetNamedInt(columnAttribute, "Length") : null) ?? 0;
-            var precision = (columnAttribute is not null ? GeneratorHelpers.GetNamedInt(columnAttribute, "Precision") : null) ?? 0;
-            var scale = (columnAttribute is not null ? GeneratorHelpers.GetNamedInt(columnAttribute, "Scale") : null) ?? 0;
-            var defaultExpression = columnAttribute is not null ? GeneratorHelpers.GetNamedString(columnAttribute, "DefaultExpression") : null;
+            var sqlType = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "SqlType") : null;
+            var length = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Length") : null) ?? 0;
+            var precision = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Precision") : null) ?? 0;
+            var scale = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Scale") : null) ?? 0;
+            var defaultExpression = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "DefaultExpression") : null;
             var (foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
 
             // W10b: a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
@@ -240,9 +244,9 @@ internal static class EntityProcessor
                 DefaultExpression = defaultExpression,
                 ForeignKeyTable = foreignKeyTable,
                 ForeignKeyColumn = foreignKeyColumn,
-                IsIndexed = columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "IsIndexed"),
-                IsUnique = columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "IsUnique"),
-                IndexName = columnAttribute is not null ? GeneratorHelpers.GetNamedString(columnAttribute, "IndexName") : null,
+                IsIndexed = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsIndexed"),
+                IsUnique = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnique"),
+                IndexName = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "IndexName") : null,
                 Converter = converter,
             });
 

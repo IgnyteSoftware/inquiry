@@ -11,9 +11,15 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Xunit.SkippableFact" />
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
-    <ProjectReference Include="..\..\samples\Inquiry.Northwind\Inquiry.Northwind.csproj" />
+    <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
+
+    <Compile Include="..\..\samples\Inquiry.Northwind\Models\**\*.cs" LinkBase="Northwind\Models" />
+    <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
+    <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
   </ItemGroup>
 
   <ItemGroup>
