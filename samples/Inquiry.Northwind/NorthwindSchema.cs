@@ -241,7 +241,7 @@ public static class NorthwindSchema
                 Address       NVARCHAR(MAX) NULL,
                 City          NVARCHAR(MAX) NULL,
                 Region        NVARCHAR(MAX) NULL,
-                PostalCode    NVARCHAR(MAX) NULL,
+                PostalCode    NVARCHAR(20) NULL,
                 Country       NVARCHAR(MAX) NULL,
                 Phone         NVARCHAR(MAX) NULL,
                 Fax           NVARCHAR(MAX) NULL,
@@ -257,9 +257,9 @@ public static class NorthwindSchema
                 ContactName   NVARCHAR(MAX) NULL,
                 ContactTitle  NVARCHAR(MAX) NULL,
                 Address       NVARCHAR(MAX) NULL,
-                City          NVARCHAR(MAX) NULL,
-                Region        NVARCHAR(MAX) NULL,
-                PostalCode    NVARCHAR(MAX) NULL,
+                City          NVARCHAR(60) NULL,
+                Region        NVARCHAR(60) NULL,
+                PostalCode    NVARCHAR(20) NULL,
                 Country       NVARCHAR(MAX) NULL,
                 Phone         NVARCHAR(MAX) NULL,
                 Fax           NVARCHAR(MAX) NULL
@@ -298,7 +298,7 @@ public static class NorthwindSchema
                 Address          NVARCHAR(MAX) NULL,
                 City             NVARCHAR(MAX) NULL,
                 Region           NVARCHAR(MAX) NULL,
-                PostalCode       NVARCHAR(MAX) NULL,
+                PostalCode       NVARCHAR(20) NULL,
                 Country          NVARCHAR(MAX) NULL,
                 HomePhone        NVARCHAR(MAX) NULL,
                 Extension        NVARCHAR(MAX) NULL,
@@ -363,7 +363,7 @@ public static class NorthwindSchema
                 ShipAddress     NVARCHAR(MAX) NULL,
                 ShipCity        NVARCHAR(MAX) NULL,
                 ShipRegion      NVARCHAR(MAX) NULL,
-                ShipPostalCode  NVARCHAR(MAX) NULL,
+                ShipPostalCode  NVARCHAR(20) NULL,
                 ShipCountry     NVARCHAR(MAX) NULL,
                 CONSTRAINT FK_Orders_Customers FOREIGN KEY (CustomerID) REFERENCES Customers(CustomerID),
                 CONSTRAINT FK_Orders_Employees FOREIGN KEY (EmployeeID) REFERENCES Employees(EmployeeID),
@@ -384,6 +384,27 @@ public static class NorthwindSchema
                 CONSTRAINT FK_OD_Products FOREIGN KEY (ProductID) REFERENCES Products(ProductID)
             );
         END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Categories_CategoryName') CREATE INDEX IX_Categories_CategoryName ON Categories (CategoryName);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Suppliers_CompanyName') CREATE INDEX IX_Suppliers_CompanyName ON Suppliers (CompanyName);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Suppliers_PostalCode') CREATE INDEX IX_Suppliers_PostalCode ON Suppliers (PostalCode);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Customers_City') CREATE INDEX IX_Customers_City ON Customers (City);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Customers_CompanyName') CREATE INDEX IX_Customers_CompanyName ON Customers (CompanyName);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Customers_PostalCode') CREATE INDEX IX_Customers_PostalCode ON Customers (PostalCode);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Customers_Region') CREATE INDEX IX_Customers_Region ON Customers (Region);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Employees_LastName') CREATE INDEX IX_Employees_LastName ON Employees (LastName);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Employees_PostalCode') CREATE INDEX IX_Employees_PostalCode ON Employees (PostalCode);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Products_CategoryID') CREATE INDEX IX_Products_CategoryID ON Products (CategoryID);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Products_ProductName') CREATE INDEX IX_Products_ProductName ON Products (ProductName);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Products_SupplierID') CREATE INDEX IX_Products_SupplierID ON Products (SupplierID);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Orders_CustomerID') CREATE INDEX IX_Orders_CustomerID ON Orders (CustomerID);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Orders_EmployeeID') CREATE INDEX IX_Orders_EmployeeID ON Orders (EmployeeID);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Orders_OrderDate') CREATE INDEX IX_Orders_OrderDate ON Orders (OrderDate);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Orders_ShippedDate') CREATE INDEX IX_Orders_ShippedDate ON Orders (ShippedDate);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Orders_ShipVia') CREATE INDEX IX_Orders_ShipVia ON Orders (ShipVia);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Orders_ShipPostalCode') CREATE INDEX IX_Orders_ShipPostalCode ON Orders (ShipPostalCode);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Order_Details_OrderID') CREATE INDEX IX_Order_Details_OrderID ON [Order Details] (OrderID);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Order_Details_ProductID') CREATE INDEX IX_Order_Details_ProductID ON [Order Details] (ProductID);
         """;
 
     /// <summary>
@@ -539,6 +560,27 @@ public static class NorthwindSchema
             FOREIGN KEY ("OrderID")   REFERENCES "Orders"("OrderID"),
             FOREIGN KEY ("ProductID") REFERENCES "Products"("ProductID")
         );
+
+        CREATE INDEX IF NOT EXISTS "IX_Categories_CategoryName" ON "Categories" ("CategoryName");
+        CREATE INDEX IF NOT EXISTS "IX_Suppliers_CompanyName" ON "Suppliers" ("CompanyName");
+        CREATE INDEX IF NOT EXISTS "IX_Suppliers_PostalCode" ON "Suppliers" ("PostalCode");
+        CREATE INDEX IF NOT EXISTS "IX_Customers_City" ON "Customers" ("City");
+        CREATE INDEX IF NOT EXISTS "IX_Customers_CompanyName" ON "Customers" ("CompanyName");
+        CREATE INDEX IF NOT EXISTS "IX_Customers_PostalCode" ON "Customers" ("PostalCode");
+        CREATE INDEX IF NOT EXISTS "IX_Customers_Region" ON "Customers" ("Region");
+        CREATE INDEX IF NOT EXISTS "IX_Employees_LastName" ON "Employees" ("LastName");
+        CREATE INDEX IF NOT EXISTS "IX_Employees_PostalCode" ON "Employees" ("PostalCode");
+        CREATE INDEX IF NOT EXISTS "IX_Products_CategoryID" ON "Products" ("CategoryID");
+        CREATE INDEX IF NOT EXISTS "IX_Products_ProductName" ON "Products" ("ProductName");
+        CREATE INDEX IF NOT EXISTS "IX_Products_SupplierID" ON "Products" ("SupplierID");
+        CREATE INDEX IF NOT EXISTS "IX_Orders_CustomerID" ON "Orders" ("CustomerID");
+        CREATE INDEX IF NOT EXISTS "IX_Orders_EmployeeID" ON "Orders" ("EmployeeID");
+        CREATE INDEX IF NOT EXISTS "IX_Orders_OrderDate" ON "Orders" ("OrderDate");
+        CREATE INDEX IF NOT EXISTS "IX_Orders_ShippedDate" ON "Orders" ("ShippedDate");
+        CREATE INDEX IF NOT EXISTS "IX_Orders_ShipVia" ON "Orders" ("ShipVia");
+        CREATE INDEX IF NOT EXISTS "IX_Orders_ShipPostalCode" ON "Orders" ("ShipPostalCode");
+        CREATE INDEX IF NOT EXISTS "IX_Order_Details_OrderID" ON "Order Details" ("OrderID");
+        CREATE INDEX IF NOT EXISTS "IX_Order_Details_ProductID" ON "Order Details" ("ProductID");
         """;
 
     /// <summary>
@@ -694,6 +736,27 @@ public static class NorthwindSchema
             FOREIGN KEY (`OrderID`)   REFERENCES `Orders`(`OrderID`),
             FOREIGN KEY (`ProductID`) REFERENCES `Products`(`ProductID`)
         );
+
+        CREATE INDEX IX_Categories_CategoryName ON `Categories` (`CategoryName`);
+        CREATE INDEX IX_Suppliers_CompanyName ON `Suppliers` (`CompanyName`);
+        CREATE INDEX IX_Suppliers_PostalCode ON `Suppliers` (`PostalCode`(20));
+        CREATE INDEX IX_Customers_City ON `Customers` (`City`(50));
+        CREATE INDEX IX_Customers_CompanyName ON `Customers` (`CompanyName`);
+        CREATE INDEX IX_Customers_PostalCode ON `Customers` (`PostalCode`(20));
+        CREATE INDEX IX_Customers_Region ON `Customers` (`Region`(50));
+        CREATE INDEX IX_Employees_LastName ON `Employees` (`LastName`);
+        CREATE INDEX IX_Employees_PostalCode ON `Employees` (`PostalCode`(20));
+        CREATE INDEX IX_Products_CategoryID ON `Products` (`CategoryID`);
+        CREATE INDEX IX_Products_ProductName ON `Products` (`ProductName`);
+        CREATE INDEX IX_Products_SupplierID ON `Products` (`SupplierID`);
+        CREATE INDEX IX_Orders_CustomerID ON `Orders` (`CustomerID`);
+        CREATE INDEX IX_Orders_EmployeeID ON `Orders` (`EmployeeID`);
+        CREATE INDEX IX_Orders_OrderDate ON `Orders` (`OrderDate`);
+        CREATE INDEX IX_Orders_ShippedDate ON `Orders` (`ShippedDate`);
+        CREATE INDEX IX_Orders_ShipVia ON `Orders` (`ShipVia`);
+        CREATE INDEX IX_Orders_ShipPostalCode ON `Orders` (`ShipPostalCode`(20));
+        CREATE INDEX IX_Order_Details_OrderID ON `Order Details` (`OrderID`);
+        CREATE INDEX IX_Order_Details_ProductID ON `Order Details` (`ProductID`);
         """;
 
     /// <summary>
@@ -854,5 +917,26 @@ public static class NorthwindSchema
             FOREIGN KEY (OrderID)   REFERENCES Orders(OrderID),
             FOREIGN KEY (ProductID) REFERENCES Products(ProductID)
         );
+
+        CREATE INDEX IX_Categories_CategoryName ON Categories (CategoryName);
+        CREATE INDEX IX_Suppliers_CompanyName ON Suppliers (CompanyName);
+        CREATE INDEX IX_Suppliers_PostalCode ON Suppliers (PostalCode);
+        CREATE INDEX IX_Customers_City ON Customers (City);
+        CREATE INDEX IX_Customers_CompanyName ON Customers (CompanyName);
+        CREATE INDEX IX_Customers_PostalCode ON Customers (PostalCode);
+        CREATE INDEX IX_Customers_Region ON Customers (Region);
+        CREATE INDEX IX_Employees_LastName ON Employees (LastName);
+        CREATE INDEX IX_Employees_PostalCode ON Employees (PostalCode);
+        CREATE INDEX IX_Products_CategoryID ON Products (CategoryID);
+        CREATE INDEX IX_Products_ProductName ON Products (ProductName);
+        CREATE INDEX IX_Products_SupplierID ON Products (SupplierID);
+        CREATE INDEX IX_Orders_CustomerID ON Orders (CustomerID);
+        CREATE INDEX IX_Orders_EmployeeID ON Orders (EmployeeID);
+        CREATE INDEX IX_Orders_OrderDate ON Orders (OrderDate);
+        CREATE INDEX IX_Orders_ShippedDate ON Orders (ShippedDate);
+        CREATE INDEX IX_Orders_ShipVia ON Orders (ShipVia);
+        CREATE INDEX IX_Orders_ShipPostalCode ON Orders (ShipPostalCode);
+        CREATE INDEX IX_OrderDetails_OrderID ON "Order Details" (OrderID);
+        CREATE INDEX IX_OrderDetails_ProductID ON "Order Details" (ProductID);
         """;
 }
