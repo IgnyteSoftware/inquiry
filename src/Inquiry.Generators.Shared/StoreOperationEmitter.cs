@@ -304,7 +304,7 @@ internal static class StoreOperationEmitter
                 for (var _c = 0; _c < insertable.Length; _c++)
                 {
                     var col = insertable[_c];
-                    var dbType = col.EnumAsString ? "global::System.Data.DbType.String" : DbTypeMapper.TryGetDbTypeExpression(col.Type);
+                    var dbType = ResolveDbType(col);
                     source.AppendLine("                    {");
                     source.AppendLine("                        var _p = _cmd.CreateParameter();");
                     source.AppendLine($"                        _p.ParameterName = \"@p\" + _r + \"_{_c}\";");
@@ -381,8 +381,37 @@ internal static class StoreOperationEmitter
     /// null-coalesce; enum columns coerce to the underlying integer type so providers that reject
     /// unmapped enums (e.g. Npgsql) see the same primitive value the reflection binder would.
     /// </summary>
+    /// <summary>
+    /// The DbType expression to assign on a bound parameter, or null when none applies: a converter
+    /// column uses its provider type (W10b), an enum-as-string column binds a string (W10), otherwise
+    /// the column's own mapping.
+    /// </summary>
+    private static string? ResolveDbType(ColumnData column)
+    {
+        if (column.Converter is { } converter)
+        {
+            return DbTypeMapper.TryGetDbTypeForSpecialType(converter.ProviderSpecialType);
+        }
+
+        if (column.EnumAsString)
+        {
+            return "global::System.Data.DbType.String";
+        }
+
+        return DbTypeMapper.TryGetDbTypeExpression(column.Type);
+    }
+
     private static string BuildParameterValueExpression(ColumnData column, string accessor)
     {
+        // W10b: a converter column binds ToProvider(value); a null nullable model → NULL (converter not called).
+        if (column.Converter is { } converter)
+        {
+            var toProvider = $"new {converter.ConverterTypeDisplay}().ToProvider({NonNullableValueExpression(column.Type, accessor)})";
+            return column.Type.IsNullable
+                ? $"{accessor} is null ? global::System.DBNull.Value : (object){toProvider}"
+                : $"(object){toProvider}";
+        }
+
         // W10: enum-as-string binds the enum's member name (a string). A null nullable-enum → NULL.
         if (column.EnumAsString)
         {
@@ -473,9 +502,7 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
-            // W10: enum-as-string binds a string value, so force DbType.String (the type's own mapping
-            // would yield the enum's underlying integer DbType, which mismatches the bound value).
-            var dbType = column.EnumAsString ? "global::System.Data.DbType.String" : DbTypeMapper.TryGetDbTypeExpression(column.Type);
+            var dbType = ResolveDbType(column);
             if (dbType is not null)
             {
                 source.AppendLine($"{indent}    _p{i}.DbType = {dbType};");

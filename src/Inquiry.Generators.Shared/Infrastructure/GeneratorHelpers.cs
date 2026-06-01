@@ -66,6 +66,20 @@ internal static class GeneratorHelpers
         return null;
     }
 
+    /// <summary>W10b: reads a named <c>System.Type</c> argument as its symbol, or null when absent.</summary>
+    public static INamedTypeSymbol? GetNamedType(AttributeData attribute, string name)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == name && argument.Value.Value is INamedTypeSymbol type)
+            {
+                return type;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>Reads a named enum/int argument as its underlying int, or null when absent.</summary>
     public static int? GetNamedInt(AttributeData attribute, string name)
     {

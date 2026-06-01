@@ -55,4 +55,11 @@ public class InquiryColumnAttribute : Attribute
 
     /// <summary>W7 (DDL generation): raw SQL <c>DEFAULT</c> expression for the column (e.g. <c>"0"</c>), or null.</summary>
     public string? DefaultExpression { get; set; }
+
+    /// <summary>
+    /// W10b: a value-converter type implementing <see cref="IInquiryValueConverter{TModel,TProvider}"/>
+    /// that maps this property's CLR type to/from a provider primitive. Must be stateless with a public
+    /// parameterless constructor.
+    /// </summary>
+    public Type? Converter { get; set; }
 }
