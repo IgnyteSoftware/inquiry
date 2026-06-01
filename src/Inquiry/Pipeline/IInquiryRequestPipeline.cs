@@ -144,9 +144,12 @@ public interface IInquiryRequestPipeline
     }
 
     /// <summary>W5: executes a command returning a single scalar value (e.g. COUNT/SUM/MIN/MAX).</summary>
+    /// <remarks>A default-interface-method (throwing) so custom pipelines stay source-compatible; the
+    /// built-in pipelines provide the real implementation.</remarks>
     Task<T> ExecuteScalarAsync<T>(
         InquiryCommand command,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Scalar execution is implemented by the built-in Inquiry pipeline.");
 
     /// <summary>
     /// W5: scalar query with parameters bound by a caller-supplied static delegate (allocation-free

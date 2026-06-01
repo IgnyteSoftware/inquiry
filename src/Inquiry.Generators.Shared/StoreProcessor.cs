@@ -334,6 +334,7 @@ internal static class StoreProcessor
                 case "InquirySelectAllByFieldAttribute": attribute = candidate; return StoreOperation.SelectAllByField;
                 case "InquirySelectAllByPredicateAttribute": attribute = candidate; return StoreOperation.SelectAllByPredicate;
                 case "InquiryKeysetPageAttribute": attribute = candidate; return StoreOperation.KeysetPage;
+                case "InquiryCountAttribute": attribute = candidate; return StoreOperation.Count;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
                 case "InquiryUpdateAttribute": attribute = candidate; return StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
@@ -372,6 +373,8 @@ internal static class StoreProcessor
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
             StoreOperation.Update or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
+            StoreOperation.Count =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
             _ => false,
@@ -547,6 +550,7 @@ internal static class StoreProcessor
         var needsDeleteByKey = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && !(m.Method.HardDelete && hasSoftDelete));
         var needsHardDeleteByKey = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.HardDelete);
         var needsRestore = valid.Any(static m => m.Method.Operation == StoreOperation.RestoreOneByKey);
+        var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count);
 
         var byFieldOps = valid
             .Where(m => UsesSharedSelect(m) && m.Method.Operation == StoreOperation.SelectAllByField && m.SelectPlan is null && m.FieldColumns.Count > 0)
@@ -576,6 +580,7 @@ internal static class StoreProcessor
         if (needsDeleteByKey) AppendConstSql(source, "_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsHardDeleteByKey) AppendConstSql(source, "_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
+        if (needsCount) AppendConstSql(source, "_sqlCount", sqlBuilder.BuildCountSql(ctx));
 
         foreach (var fieldColumns in byFieldOps)
         {
@@ -1061,7 +1066,7 @@ internal static class StoreProcessor
 
         return method.Operation switch
         {
-            StoreOperation.SelectAll or StoreOperation.SelectAllEager => parameters.Count == 1,
+            StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count => parameters.Count == 1,
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>
                 MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
             // W6: a concurrency-checked DELETE takes the whole entity (so the expected token value
