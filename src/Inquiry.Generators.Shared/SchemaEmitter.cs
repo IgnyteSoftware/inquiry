@@ -38,6 +38,9 @@ internal static class SchemaEmitter
         var ordered = OrderByForeignKeyDependencies(entities);
 
         var ddl = new StringBuilder();
+        // Index statements are collected and appended after every CREATE TABLE so a referenced table
+        // always exists before its index is created.
+        var indexStatements = new List<string>();
         for (var i = 0; i < ordered.Count; i++)
         {
             if (i > 0)
@@ -56,6 +59,12 @@ internal static class SchemaEmitter
                 generateForeignKeys: entity.GenerateForeignKeys);
             ddl.Append(builder.BuildCreateTableSql(ctx));
             ddl.Append(';');
+            indexStatements.AddRange(builder.BuildCreateIndexSql(ctx));
+        }
+
+        foreach (var indexStatement in indexStatements)
+        {
+            ddl.Append("\n\n").Append(indexStatement).Append(';');
         }
 
         var source = new StringBuilder();

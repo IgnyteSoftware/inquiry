@@ -101,4 +101,6 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 
     // SQLite's auto-increment rowid alias is always INTEGER PRIMARY KEY AUTOINCREMENT regardless of CLR width.
     protected override string GeneratedKeyClause(IColumn column) => "INTEGER PRIMARY KEY AUTOINCREMENT";
+
+    protected override bool SupportsCreateIndexIfNotExists => true;
 }
