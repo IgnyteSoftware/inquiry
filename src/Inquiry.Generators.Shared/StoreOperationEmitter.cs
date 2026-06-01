@@ -247,6 +247,60 @@ internal static class StoreOperationEmitter
                 break;
             }
 
+            case StoreOperation.InsertAll:
+            {
+                // W3: batch insert — one multi-row INSERT built at runtime for the whole collection,
+                // bound via the existing ExecuteAsync<TArgs> fast path (one statement, not N round-trips).
+                // Reuse SelectMutationColumns so the bound columns stay in lockstep with the prefix const
+                // (_sqlInsertAllPrefix from ctx.InsertColumns) — both exclude generated, db-default, and
+                // database-generated-token columns.
+                var insertable = SelectMutationColumns(entity, includeKey: false);
+
+                var itemsParam = method.Parameters[0].Name;
+                AppendHeader(source, method, parameters, isAsync: true);
+                source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}> ?? global::System.Linq.Enumerable.ToList({itemsParam});");
+                source.AppendLine("        if (_list.Count == 0) return 0;");
+                source.AppendLine("        var _sb = new global::System.Text.StringBuilder(_sqlInsertAllPrefix);");
+                source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
+                source.AppendLine("        {");
+                source.AppendLine("            if (_r > 0) _sb.Append(',');");
+                for (var _c = 0; _c < insertable.Length; _c++)
+                {
+                    var seg = _c == 0 ? "(@p" : ", @p";
+                    source.AppendLine($"            _sb.Append(\"{seg}\").Append(_r).Append(\"_{_c}\");");
+                }
+                source.AppendLine("            _sb.Append(')');");
+                source.AppendLine("        }");
+                source.AppendLine($"        return await Inquiry.ExecuteAsync<global::System.Collections.Generic.IReadOnlyList<{entityType}>>(");
+                source.AppendLine("            _sb.ToString(),");
+                source.AppendLine("            _list,");
+                source.AppendLine("            static (_cmd, _items) =>");
+                source.AppendLine("            {");
+                source.AppendLine("                for (var _r = 0; _r < _items.Count; _r++)");
+                source.AppendLine("                {");
+                source.AppendLine("                    var _it = _items[_r];");
+                for (var _c = 0; _c < insertable.Length; _c++)
+                {
+                    var col = insertable[_c];
+                    var dbType = DbTypeMapper.TryGetDbTypeExpression(col.Type);
+                    source.AppendLine("                    {");
+                    source.AppendLine("                        var _p = _cmd.CreateParameter();");
+                    source.AppendLine($"                        _p.ParameterName = \"@p\" + _r + \"_{_c}\";");
+                    if (dbType is not null)
+                    {
+                        source.AppendLine($"                        _p.DbType = {dbType};");
+                    }
+                    source.AppendLine($"                        _p.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName)};");
+                    source.AppendLine("                        _cmd.Parameters.Add(_p);");
+                    source.AppendLine("                    }");
+                }
+                source.AppendLine("                }");
+                source.AppendLine("            },");
+                source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                source.AppendLine("    }");
+                break;
+            }
+
             case StoreOperation.StoredProcedure:
                 EmitStoredProcedure(source, method, parameters, entityType, structMat, cancellation);
                 break;
