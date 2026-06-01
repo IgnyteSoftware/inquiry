@@ -227,6 +227,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine("            {");
                     source.AppendLine("                var _p = _cmd.CreateParameter();");
                     source.AppendLine("                _p.ParameterName = \"@searchTerm\";");
+                    source.AppendLine("                _p.DbType = global::System.Data.DbType.String;");
                     source.AppendLine("                _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
                     source.AppendLine("                _cmd.Parameters.Add(_p);");
                     source.AppendLine("            },");
