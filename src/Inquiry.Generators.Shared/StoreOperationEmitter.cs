@@ -1106,6 +1106,21 @@ internal static class StoreOperationEmitter
         source.AppendLine("    }");
     }
 
+    /// <summary>
+    /// Emits a throwing-stub body for a method whose operation the active dialect cannot emit (e.g.
+    /// Oracle INSERT…RETURNING). The partial declaration is still satisfied so the rest of the store
+    /// compiles; calling the method throws <see cref="System.NotSupportedException"/>. Paired with the
+    /// INQ039 diagnostic reported by <c>StoreProcessor</c>.
+    /// </summary>
+    public static void EmitUnsupportedStub(StringBuilder source, StoreMethodData method, string reason)
+    {
+        var parameters = GetParameterDeclaration(method.Parameters);
+        AppendHeader(source, method, parameters, isAsync: false);
+        var escaped = reason.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        source.AppendLine($"        throw new global::System.NotSupportedException(\"{escaped}\");");
+        source.AppendLine("    }");
+    }
+
     private static void AppendHeader(StringBuilder source, StoreMethodData method, string parameters, bool isAsync)
     {
         var asyncModifier = isAsync ? "async " : string.Empty;
