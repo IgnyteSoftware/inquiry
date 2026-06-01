@@ -168,6 +168,27 @@ public static class NorthwindSchema
             FOREIGN KEY (OrderID)   REFERENCES Orders(OrderID),
             FOREIGN KEY (ProductID) REFERENCES Products(ProductID)
         );
+
+        CREATE INDEX IF NOT EXISTS IX_Categories_CategoryName ON Categories (CategoryName);
+        CREATE INDEX IF NOT EXISTS IX_Suppliers_CompanyName ON Suppliers (CompanyName);
+        CREATE INDEX IF NOT EXISTS IX_Suppliers_PostalCode ON Suppliers (PostalCode);
+        CREATE INDEX IF NOT EXISTS IX_Customers_City ON Customers (City);
+        CREATE INDEX IF NOT EXISTS IX_Customers_CompanyName ON Customers (CompanyName);
+        CREATE INDEX IF NOT EXISTS IX_Customers_PostalCode ON Customers (PostalCode);
+        CREATE INDEX IF NOT EXISTS IX_Customers_Region ON Customers (Region);
+        CREATE INDEX IF NOT EXISTS IX_Employees_LastName ON Employees (LastName);
+        CREATE INDEX IF NOT EXISTS IX_Employees_PostalCode ON Employees (PostalCode);
+        CREATE INDEX IF NOT EXISTS IX_Products_CategoryID ON Products (CategoryID);
+        CREATE INDEX IF NOT EXISTS IX_Products_ProductName ON Products (ProductName);
+        CREATE INDEX IF NOT EXISTS IX_Products_SupplierID ON Products (SupplierID);
+        CREATE INDEX IF NOT EXISTS IX_Orders_CustomerID ON Orders (CustomerID);
+        CREATE INDEX IF NOT EXISTS IX_Orders_EmployeeID ON Orders (EmployeeID);
+        CREATE INDEX IF NOT EXISTS IX_Orders_OrderDate ON Orders (OrderDate);
+        CREATE INDEX IF NOT EXISTS IX_Orders_ShippedDate ON Orders (ShippedDate);
+        CREATE INDEX IF NOT EXISTS IX_Orders_ShipVia ON Orders (ShipVia);
+        CREATE INDEX IF NOT EXISTS IX_Orders_ShipPostalCode ON Orders (ShipPostalCode);
+        CREATE INDEX IF NOT EXISTS "IX_Order_Details_OrderID" ON "Order Details" (OrderID);
+        CREATE INDEX IF NOT EXISTS "IX_Order_Details_ProductID" ON "Order Details" (ProductID);
         """;
 
     /// <summary>

@@ -5,10 +5,10 @@ namespace Inquiry.Northwind.Models;
 [InquiryTable("Customers")]
 public sealed class Customer
 {
-    [InquiryKey("CustomerID")]
+    [InquiryKey("CustomerID", Length = 5)]
     public string CustomerID { get; set; } = string.Empty;
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string CompanyName { get; set; } = string.Empty;
 
     [InquiryColumn]
@@ -20,13 +20,13 @@ public sealed class Customer
     [InquiryColumn]
     public string? Address { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string? City { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string? Region { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string? PostalCode { get; set; }
 
     [InquiryColumn]
