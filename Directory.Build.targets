@@ -15,6 +15,10 @@
     <_InquiryMySqlProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql\Inquiry.MySql.csproj'))</_InquiryMySqlProjectPath>
     <_InquiryMySqlAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.MySql.Analyzer.dll'))</_InquiryMySqlAnalyzerPath>
     <_InquiryMySqlSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryMySqlSharedPath>
+
+    <_InquiryOracleProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle\Inquiry.Oracle.csproj'))</_InquiryOracleProjectPath>
+    <_InquiryOracleAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Oracle.Analyzer.dll'))</_InquiryOracleAnalyzerPath>
+    <_InquiryOracleSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryOracleSharedPath>
   </PropertyGroup>
 
   <!-- Roslyn analyzer auto-flow only attaches IsRoslynComponent project references one level deep,
@@ -39,6 +43,10 @@
       <_InquiryMySqlProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryMySqlProjectPath)'" />
       <Analyzer Include="$(_InquiryMySqlAnalyzerPath)" Condition="'@(_InquiryMySqlProjectReference)' != '' and Exists('$(_InquiryMySqlAnalyzerPath)')" />
       <Analyzer Include="$(_InquiryMySqlSharedPath)" Condition="'@(_InquiryMySqlProjectReference)' != '' and Exists('$(_InquiryMySqlSharedPath)')" />
+
+      <_InquiryOracleProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryOracleProjectPath)'" />
+      <Analyzer Include="$(_InquiryOracleAnalyzerPath)" Condition="'@(_InquiryOracleProjectReference)' != '' and Exists('$(_InquiryOracleAnalyzerPath)')" />
+      <Analyzer Include="$(_InquiryOracleSharedPath)" Condition="'@(_InquiryOracleProjectReference)' != '' and Exists('$(_InquiryOracleSharedPath)')" />
     </ItemGroup>
   </Target>
 </Project>
