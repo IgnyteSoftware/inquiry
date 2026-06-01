@@ -216,6 +216,20 @@ public sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteAsync(commandText, args, bindParameters, cancellationToken);
 
     /// <inheritdoc />
+    public Task<T> ExecuteScalarAsync<T>(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteScalarAsync<T>(command, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<T> ExecuteScalarAsync<T, TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteScalarAsync<T, TArgs>(commandText, args, bindParameters, cancellationToken);
+
+    /// <inheritdoc />
     public Task<IInquiryTransaction> BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)

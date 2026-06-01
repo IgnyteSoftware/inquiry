@@ -142,4 +142,27 @@ public interface IInquiryRequestPipeline
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
             cancellationToken);
     }
+
+    /// <summary>W5: executes a command returning a single scalar value (e.g. COUNT/SUM/MIN/MAX).</summary>
+    Task<T> ExecuteScalarAsync<T>(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// W5: scalar query with parameters bound by a caller-supplied static delegate (allocation-free
+    /// fast path). The default routes through <c>ExecuteScalarAsync&lt;T&gt;(InquiryCommand, …)</c> so
+    /// custom pipelines stay source-compatible; the built-in pipeline overrides it.
+    /// </summary>
+    Task<T> ExecuteScalarAsync<T, TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return ExecuteScalarAsync<T>(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
+            cancellationToken);
+    }
 }
