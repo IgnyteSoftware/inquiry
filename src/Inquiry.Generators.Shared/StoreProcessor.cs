@@ -359,6 +359,7 @@ internal static class StoreProcessor
                 case "InquiryCountAttribute": attribute = candidate; return StoreOperation.Count;
                 case "InquiryAggregateAttribute": attribute = candidate; return StoreOperation.Aggregate;
                 case "InquiryFullTextSearchAttribute": attribute = candidate; return StoreOperation.FullTextSearch;
+                case "InquiryInsertAllAttribute": attribute = candidate; return StoreOperation.InsertAll;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
                 case "InquiryUpdateAttribute": attribute = candidate; return StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
@@ -400,10 +401,24 @@ internal static class StoreProcessor
             StoreOperation.Count =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
             StoreOperation.Aggregate => IsTaskOfSingleTypeArgument(returnType),
+            StoreOperation.InsertAll =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
             _ => false,
         };
+    }
+
+    private static bool IsEnumerableOfEntity(ParameterData parameter, EntityData entity)
+    {
+        var fqn = entity.FullyQualifiedName;
+        var d = parameter.ComparisonDisplay;
+        return d == "global::System.Collections.Generic.IEnumerable<" + fqn + ">"
+            || d == "global::System.Collections.Generic.IReadOnlyList<" + fqn + ">"
+            || d == "global::System.Collections.Generic.IReadOnlyCollection<" + fqn + ">"
+            || d == "global::System.Collections.Generic.IList<" + fqn + ">"
+            || d == "global::System.Collections.Generic.ICollection<" + fqn + ">"
+            || d == "global::System.Collections.Generic.List<" + fqn + ">";
     }
 
     private static bool IsTaskOfSingleTypeArgument(ITypeSymbol returnType)
@@ -582,6 +597,7 @@ internal static class StoreProcessor
         var needsHardDeleteByKey = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.HardDelete);
         var needsRestore = valid.Any(static m => m.Method.Operation == StoreOperation.RestoreOneByKey);
         var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count);
+        var needsInsertAll = valid.Any(static m => m.Method.Operation == StoreOperation.InsertAll);
 
         var byFieldOps = valid
             .Where(m => UsesSharedSelect(m) && m.Method.Operation == StoreOperation.SelectAllByField && m.SelectPlan is null && m.FieldColumns.Count > 0)
@@ -612,6 +628,7 @@ internal static class StoreProcessor
         if (needsHardDeleteByKey) AppendConstSql(source, "_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
         if (needsCount) AppendConstSql(source, "_sqlCount", sqlBuilder.BuildCountSql(ctx));
+        if (needsInsertAll) AppendConstSql(source, "_sqlInsertAllPrefix", "INSERT INTO " + ctx.Table + " (" + ctx.InsertColumns + ") VALUES ");
 
         foreach (var fieldColumns in byFieldOps)
         {
@@ -1128,6 +1145,7 @@ internal static class StoreProcessor
         {
             StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count or StoreOperation.Aggregate => parameters.Count == 1,
             StoreOperation.FullTextSearch => parameters.Count == 2 && parameters[0].ComparisonDisplay == "string",
+            StoreOperation.InsertAll => parameters.Count == 2 && IsEnumerableOfEntity(parameters[0], entity),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>
                 MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
             // W6: a concurrency-checked DELETE takes the whole entity (so the expected token value
