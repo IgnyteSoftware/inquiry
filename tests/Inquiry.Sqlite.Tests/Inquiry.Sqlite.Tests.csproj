@@ -14,6 +14,7 @@
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
     <ProjectReference Include="..\..\samples\Inquiry.Northwind\Inquiry.Northwind.csproj" />
+    <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
   </ItemGroup>
 
   <ItemGroup>

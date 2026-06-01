@@ -6,18 +6,19 @@ namespace Inquiry.Oracle.Tests;
 
 /// <summary>
 /// End-to-end CRUD coverage for the Oracle provider, executed against the shared Northwind schema.
-/// Each fact runs in its own throwaway schema so parallel tests cannot collide on table state. Skipped
-/// automatically unless <see cref="OracleTestHarness.ConnectionStringEnvironmentVariable"/> is set.
-/// Only the operations the Oracle provider supports in v1 are exercised — full reads plus non-returning
-/// Insert/Update/Delete/Upsert (no <c>ReturnEntity = true</c>; see <see cref="OracleTestHarness"/> and
-/// the E2 report for the RETURNING limitation and the SQLite-dialect fixture caveat).
+/// Each fact runs in its own throwaway schema so parallel tests cannot collide on table state.
 /// </summary>
+[Collection(OracleCollection.Name)]
 public sealed class NorthwindCrudIntegrationTests
 {
-    [OracleFact]
+    private readonly OracleContainerFixture _fixture;
+    public NorthwindCrudIntegrationTests(OracleContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task StringKeyEntitySupportsFullCrud()
     {
-        await using var harness = await OracleTestHarness.CreateAsync("crud_string");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "crud_string");
         var store = harness.GetRequiredService<CustomerStore>();
         var customer = new Customer
         {
@@ -51,10 +52,31 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Null(selectedAfterDelete);
     }
 
-    [OracleFact]
+    [SkippableFact]
+    public async Task GeneratedKeyEntitySupportsInsertAndSelect()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "crud_identity");
+        var store = harness.GetRequiredService<CategoryStore>();
+
+        var inserted = await store.InsertAsync(new Category { CategoryName = "Beverages" });
+        Assert.Equal(1, inserted);
+
+        var all = await store.SelectAllAsync().ToListAsync();
+        Assert.Single(all);
+        Assert.Equal("Beverages", all[0].CategoryName);
+        Assert.True(all[0].CategoryID > 0);
+
+        var deleted = await store.DeleteByKeyAsync(all[0].CategoryID);
+        Assert.True(deleted);
+        Assert.Null(await store.SelectByKeyAsync(all[0].CategoryID));
+    }
+
+    [SkippableFact]
     public async Task UpsertInsertsThenUpdatesAcrossInvocations()
     {
-        await using var harness = await OracleTestHarness.CreateAsync("upsert");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "upsert");
         var store = harness.GetRequiredService<CustomerStore>();
         var customer = new Customer { CustomerID = "UPS01", CompanyName = "First", Country = "USA" };
 
@@ -73,10 +95,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Equal("Canada", afterUpdate.Country);
     }
 
-    [OracleFact]
+    [SkippableFact]
     public async Task CompositeKeyEntityRoundTripsThroughGeneratedStore()
     {
-        await using var harness = await OracleTestHarness.CreateAsync("composite");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "composite");
         var customers = harness.GetRequiredService<CustomerStore>();
         var demographics = harness.GetRequiredService<CustomerDemographicStore>();
         var bridge = harness.GetRequiredService<CustomerCustomerDemoStore>();
@@ -92,5 +115,49 @@ public sealed class NorthwindCrudIntegrationTests
 
         Assert.True(await bridge.DeleteByKeyAsync("ALFKI", "VIP"));
         Assert.Null(await bridge.SelectByKeyAsync("ALFKI", "VIP"));
+    }
+
+    [SkippableFact]
+    public async Task EagerLoadPopulatesChildCollection()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "eager");
+        var regions = harness.GetRequiredService<RegionStore>();
+        var territories = harness.GetRequiredService<TerritoryStore>();
+
+        await regions.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territories.InsertAsync(new Territory { TerritoryID = "01581", TerritoryDescription = "Westboro", RegionID = 1 });
+        await territories.InsertAsync(new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford",  RegionID = 1 });
+
+        var loaded = await regions.SelectByKeyWithTerritoriesAsync(1);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("Eastern", loaded!.RegionDescription);
+        Assert.NotNull(loaded.Territories);
+        Assert.Equal(2, loaded.Territories!.Count);
+    }
+
+    [SkippableFact]
+    public async Task TransactionCommitPersistsAndRollbackReverts()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await using (var tx = await inquiry.BeginTransactionAsync())
+        {
+            await store.InsertAsync(new Customer { CustomerID = "COMM1", CompanyName = "Committed" });
+            await tx.CommitAsync();
+        }
+
+        await using (var tx = await inquiry.BeginTransactionAsync())
+        {
+            await store.InsertAsync(new Customer { CustomerID = "ROLL1", CompanyName = "Rolled Back" });
+            // dispose without commit → rollback
+        }
+
+        Assert.NotNull(await store.SelectByKeyAsync("COMM1"));
+        Assert.Null(await store.SelectByKeyAsync("ROLL1"));
     }
 }

@@ -448,6 +448,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             {
                 dbCommand.CommandText = commandText;
                 bindParameters(dbCommand, args);
+                _connectionFactory.FinalizeCommand(dbCommand);
                 if (interceptorCommand is not null)
                 {
                     await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
@@ -501,6 +502,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             {
                 dbCommand.CommandText = commandText;
                 bindParameters(dbCommand, args);
+                _connectionFactory.FinalizeCommand(dbCommand);
                 if (interceptorCommand is not null)
                 {
                     await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
@@ -595,6 +597,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             {
                 dbCommand.CommandText = commandText;
                 bindParameters(dbCommand, args);
+                _connectionFactory.FinalizeCommand(dbCommand);
 
                 if (interceptorCommand is not null)
                 {
@@ -679,6 +682,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             {
                 dbCommand.CommandText = commandText;
                 bindParameters(dbCommand, args);
+                _connectionFactory.FinalizeCommand(dbCommand);
 
                 if (interceptorCommand is not null)
                 {
@@ -718,13 +722,14 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     private void ExitInFlight() => System.Threading.Interlocked.Exchange(ref _inFlight, 0);
 
-    private static void InitializeCommandSync(DbCommand dbCommand, InquiryCommand command)
+    private void InitializeCommandSync(DbCommand dbCommand, InquiryCommand command)
     {
         dbCommand.CommandText = command.CommandText;
         if (command.CommandType is not null) dbCommand.CommandType = command.CommandType.Value;
         if (command.CommandTimeout is not null) dbCommand.CommandTimeout = command.CommandTimeout.Value;
         InquiryParameterBinder.Bind(dbCommand, command.ParametersArray);
         command.DbCommandBinder?.Invoke(dbCommand);
+        _connectionFactory.FinalizeCommand(dbCommand);
     }
 
     private async ValueTask InvokeInitializedAsync(DbCommand dbCommand, InquiryCommand command, CancellationToken ct)

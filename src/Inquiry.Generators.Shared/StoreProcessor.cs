@@ -734,10 +734,14 @@ internal static class StoreProcessor
         if (needsSelectByKey) AppendConstSql(source, "_sqlSelectByKey", sqlBuilder.BuildSelectByKeySql(ctx));
         if (needsInsert) AppendConstSql(source, "_sqlInsert", sqlBuilder.BuildInsertSql(ctx));
         if (needsUpdate) AppendConstSql(source, "_sqlUpdate", sqlBuilder.BuildUpdateSql(ctx));
-        if (needsUpsert) AppendConstSql(source, "_sqlUpsert", sqlBuilder.BuildUpsertSql(ctx));
-        if (needsInsertReturning) AppendConstSql(source, "_sqlInsertReturning", sqlBuilder.BuildInsertReturningSql(ctx));
-        if (needsUpdateReturning) AppendConstSql(source, "_sqlUpdateReturning", sqlBuilder.BuildUpdateReturningSql(ctx));
-        if (needsUpsertReturning) AppendConstSql(source, "_sqlUpsertReturning", sqlBuilder.BuildUpsertReturningSql(ctx));
+        // Some operations are not universally supported (e.g. Oracle has no RETURNING result set, and no
+        // MERGE upsert on a database-generated key). The builder throws NotSupportedException for those;
+        // catch it so a single unsupported operation degrades to a diagnostic + throwing stub (below)
+        // instead of silently aborting the whole generator. A null reason means "supported (or not needed)".
+        var upsertError = TryBuildDegradableConst(source, "_sqlUpsert", needsUpsert, () => sqlBuilder.BuildUpsertSql(ctx));
+        var insertReturningError = TryBuildDegradableConst(source, "_sqlInsertReturning", needsInsertReturning, () => sqlBuilder.BuildInsertReturningSql(ctx));
+        var updateReturningError = TryBuildDegradableConst(source, "_sqlUpdateReturning", needsUpdateReturning, () => sqlBuilder.BuildUpdateReturningSql(ctx));
+        var upsertReturningError = TryBuildDegradableConst(source, "_sqlUpsertReturning", needsUpsertReturning, () => sqlBuilder.BuildUpsertReturningSql(ctx));
         if (needsDeleteByKey) AppendConstSql(source, "_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsHardDeleteByKey) AppendConstSql(source, "_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
@@ -880,6 +884,29 @@ internal static class StoreProcessor
         foreach (var (method, fieldColumns, predicatePlan, selectPlan) in valid)
         {
             source.AppendLine();
+
+            // Graceful degradation: if this method's RETURNING operation could not be emitted for the
+            // active dialect, report INQ039 and emit a throwing stub instead of an un-compilable body.
+            var unsupportedReason = method.Operation switch
+            {
+                StoreOperation.Insert when method.ReturnsEntity => insertReturningError,
+                StoreOperation.Update when method.ReturnsEntity => updateReturningError,
+                // Returning upsert uses _sqlUpsertReturning, or _sqlInsertReturning on the null-key path.
+                StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ?? insertReturningError,
+                // Non-returning upsert uses _sqlUpsert (throws for a generated-key MERGE on Oracle).
+                StoreOperation.Upsert => upsertError,
+                _ => null,
+            };
+            if (unsupportedReason is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.DialectOperationNotSupported,
+                    method.Location?.ToLocation(),
+                    method.Name, sqlBuilder.DialectName, unsupportedReason));
+                StoreOperationEmitter.EmitUnsupportedStub(source, method, unsupportedReason);
+                continue;
+            }
+
             if (projectionMethods.TryGetValue(method.Name, out var projection))
             {
                 // Project: select the projection's columns and materialize the projection type.
@@ -1399,6 +1426,30 @@ internal static class StoreProcessor
     private static void AppendConstSql(StringBuilder source, string fieldName, string sql)
     {
         source.AppendLine($"    private const string {fieldName} = \"{GeneratorHelpers.Escape(sql)}\";");
+    }
+
+    /// <summary>
+    /// Builds and emits a SQL const when <paramref name="needed"/>. Returns null when the const was
+    /// emitted (supported) or not needed; returns the <see cref="System.NotSupportedException"/> message
+    /// when the active dialect cannot emit the operation — the caller then degrades the affected methods
+    /// to throwing stubs (INQ039) rather than aborting the whole generator.
+    /// </summary>
+    private static string? TryBuildDegradableConst(StringBuilder source, string fieldName, bool needed, System.Func<string> build)
+    {
+        if (!needed)
+        {
+            return null;
+        }
+
+        try
+        {
+            AppendConstSql(source, fieldName, build());
+            return null;
+        }
+        catch (System.NotSupportedException ex)
+        {
+            return ex.Message;
+        }
     }
 
     // Synthetic paging parameter names (not entity columns). Bound by the generated paging binder.

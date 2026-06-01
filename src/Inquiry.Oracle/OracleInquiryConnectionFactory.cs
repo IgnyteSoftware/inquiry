@@ -54,4 +54,23 @@ public sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             oracleCommand.BindByName = true;
         }
     }
+
+    /// <summary>
+    /// Strips the dialect-agnostic <c>@</c> (or <c>:</c>) sigil the shared parameter binder prepends to
+    /// every parameter name. Oracle's SQL references bind variables as <c>:name</c>, and ODP.NET with
+    /// <see cref="OracleCommand.BindByName"/> matches a parameter to a placeholder by its bare name — it
+    /// does not reconcile a leading <c>@</c>, so without this fixup every bound query fails with ORA-50028
+    /// ("invalid parameter binding"). Runs after the pipeline binds parameters, before execution.
+    /// </summary>
+    public void FinalizeCommand(DbCommand command)
+    {
+        foreach (DbParameter parameter in command.Parameters)
+        {
+            var name = parameter.ParameterName;
+            if (!string.IsNullOrEmpty(name) && (name[0] == '@' || name[0] == ':'))
+            {
+                parameter.ParameterName = name.Substring(1);
+            }
+        }
+    }
 }

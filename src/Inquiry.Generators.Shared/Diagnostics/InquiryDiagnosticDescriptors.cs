@@ -23,6 +23,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ033–INQ034  W8  Soft deletes
     //   INQ035         W9  Full-text search              (unsupported by dialect)
     //   INQ036–INQ038  W10 JSON/array/value-converter column types
+    //   INQ039         Graceful degradation: operation unsupported by the active dialect (stub + warning) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -272,5 +273,17 @@ internal static class InquiryDiagnosticDescriptors
         "Entity '{0}' marks property '{1}' with [InquiryEnumAsString], but its type is not an enum (or nullable enum). Remove the attribute or change the property to an enum type.",
         "Inquiry",
         DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ039: a store method maps to an operation the active dialect cannot emit (e.g. Oracle has no
+    // INSERT/UPDATE/UPSERT ... RETURNING). Reported as a Warning so the build degrades gracefully —
+    // the generator emits a stub that throws NotSupportedException at runtime instead of aborting the
+    // entire compilation. Elevate to error via .editorconfig if a dialect must be fully supported.
+    public static readonly DiagnosticDescriptor DialectOperationNotSupported = new(
+        "INQ039",
+        "Operation is not supported by the target dialect",
+        "Store method '{0}' maps to an operation the '{1}' dialect cannot emit ({2}). A stub that throws NotSupportedException at runtime was generated; calling it will fail. Use a dialect-supported pattern (for RETURNING, fetch the generated key separately) or compile against a dialect that supports it.",
+        "Inquiry",
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 }

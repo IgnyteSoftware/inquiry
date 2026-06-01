@@ -9,12 +9,17 @@ namespace Inquiry.PostgreSql.Tests;
 /// Northwind schema. Each fact runs in its own throwaway database so parallel tests cannot
 /// collide on table state.
 /// </summary>
+[Collection(PostgreSqlCollection.Name)]
 public sealed class NorthwindCrudIntegrationTests
 {
-    [PostgreSqlFact]
+    private readonly PostgreSqlContainerFixture _fixture;
+    public NorthwindCrudIntegrationTests(PostgreSqlContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task StringKeyEntitySupportsFullCrud()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("crud_string");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "crud_string");
         var store = harness.GetRequiredService<CustomerStore>();
         var customer = new Customer
         {
@@ -48,10 +53,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Null(selectedAfterDelete);
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task GeneratedKeyEntitySupportsInsertReturningAndUpsert()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("crud_identity");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "crud_identity");
         var store = harness.GetRequiredService<CategoryStore>();
 
         var inserted = await store.InsertReturningAsync(new Category { CategoryName = "Beverages" });
@@ -68,10 +74,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Null(await store.SelectByKeyAsync(inserted.CategoryID));
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task UpsertInsertsThenUpdatesAcrossInvocations()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("upsert");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "upsert");
         var store = harness.GetRequiredService<CustomerStore>();
         var customer = new Customer { CustomerID = "UPS01", CompanyName = "First", Country = "USA" };
 
@@ -92,10 +99,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Equal("Canada", afterUpdate.Country);
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task CompositeKeyEntityRoundTripsThroughGeneratedStore()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("composite");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "composite");
         var customers = harness.GetRequiredService<CustomerStore>();
         var demographics = harness.GetRequiredService<CustomerDemographicStore>();
         var bridge = harness.GetRequiredService<CustomerCustomerDemoStore>();
@@ -113,10 +121,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Null(await bridge.SelectByKeyAsync("ALFKI", "VIP"));
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task EagerLoadPopulatesChildCollection()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("eager");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "eager");
         var regions = harness.GetRequiredService<RegionStore>();
         var territories = harness.GetRequiredService<TerritoryStore>();
 
@@ -132,10 +141,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Equal(2, loaded.Territories!.Count);
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task TransactionCommitPersistsAndRollbackReverts()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("tx");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "tx");
         var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<CustomerStore>();
 

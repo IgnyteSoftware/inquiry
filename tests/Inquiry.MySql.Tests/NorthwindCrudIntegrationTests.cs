@@ -10,12 +10,17 @@ namespace Inquiry.MySql.Tests;
 /// state. Skipped automatically unless <see cref="MySqlTestHarness.ConnectionStringEnvironmentVariable"/>
 /// is set.
 /// </summary>
+[Collection(MySqlCollection.Name)]
 public sealed class NorthwindCrudIntegrationTests
 {
-    [MySqlFact]
+    private readonly MySqlContainerFixture _fixture;
+    public NorthwindCrudIntegrationTests(MySqlContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task StringKeyEntitySupportsFullCrud()
     {
-        await using var harness = await MySqlTestHarness.CreateAsync("crud_string");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "crud_string");
         var store = harness.GetRequiredService<CustomerStore>();
         var customer = new Customer
         {
@@ -49,10 +54,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Null(selectedAfterDelete);
     }
 
-    [MySqlFact]
+    [SkippableFact]
     public async Task GeneratedKeyEntitySupportsInsertReturningAndUpsert()
     {
-        await using var harness = await MySqlTestHarness.CreateAsync("crud_identity");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "crud_identity");
         var store = harness.GetRequiredService<CategoryStore>();
 
         var inserted = await store.InsertReturningAsync(new Category { CategoryName = "Beverages" });
@@ -69,10 +75,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Null(await store.SelectByKeyAsync(inserted.CategoryID));
     }
 
-    [MySqlFact]
+    [SkippableFact]
     public async Task UpsertInsertsThenUpdatesAcrossInvocations()
     {
-        await using var harness = await MySqlTestHarness.CreateAsync("upsert");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "upsert");
         var store = harness.GetRequiredService<CustomerStore>();
         var customer = new Customer { CustomerID = "UPS01", CompanyName = "First", Country = "USA" };
 
@@ -94,10 +101,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Equal(2, secondRows);
     }
 
-    [MySqlFact]
+    [SkippableFact]
     public async Task CompositeKeyEntityRoundTripsThroughGeneratedStore()
     {
-        await using var harness = await MySqlTestHarness.CreateAsync("composite");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "composite");
         var customers = harness.GetRequiredService<CustomerStore>();
         var demographics = harness.GetRequiredService<CustomerDemographicStore>();
         var bridge = harness.GetRequiredService<CustomerCustomerDemoStore>();
@@ -115,10 +123,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Null(await bridge.SelectByKeyAsync("ALFKI", "VIP"));
     }
 
-    [MySqlFact]
+    [SkippableFact]
     public async Task EagerLoadPopulatesChildCollection()
     {
-        await using var harness = await MySqlTestHarness.CreateAsync("eager");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "eager");
         var regions = harness.GetRequiredService<RegionStore>();
         var territories = harness.GetRequiredService<TerritoryStore>();
 
@@ -134,10 +143,11 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Equal(2, loaded.Territories!.Count);
     }
 
-    [MySqlFact]
+    [SkippableFact]
     public async Task TransactionCommitPersistsAndRollbackReverts()
     {
-        await using var harness = await MySqlTestHarness.CreateAsync("tx");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "tx");
         var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<CustomerStore>();
 

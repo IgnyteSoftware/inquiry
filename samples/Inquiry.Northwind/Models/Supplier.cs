@@ -8,7 +8,7 @@ public sealed class Supplier
     [InquiryKey("SupplierID", IsGenerated = true)]
     public int? SupplierID { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string CompanyName { get; set; } = string.Empty;
 
     [InquiryColumn]
@@ -26,7 +26,7 @@ public sealed class Supplier
     [InquiryColumn]
     public string? Region { get; set; }
 
-    [InquiryColumn]
+    [InquiryColumn(IsIndexed = true)]
     public string? PostalCode { get; set; }
 
     [InquiryColumn]
