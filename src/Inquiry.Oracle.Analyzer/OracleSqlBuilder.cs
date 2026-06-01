@@ -20,6 +20,21 @@ namespace Inquiry.Oracle.Analyzer;
 /// set, so it is incompatible with the reader-based returning pipeline. v1 does not support
 /// <c>ReturnEntity = true</c> insert/update/upsert (see the returning builders below).</description></item>
 /// </list>
+/// <para>
+/// KNOWN v1 LIMITATIONS (documented; tracked as follow-ups, currently behind unrunnable live tests):
+/// </para>
+/// <list type="number">
+/// <item><description><b>Paged / keyset selects are not yet valid against a live Oracle.</b> The
+/// synthetic pagination parameters (<c>@__offset</c>, <c>@__limit</c>, <c>@__cursorN</c>) are baked
+/// with the <c>@</c> sigil by the shared <c>StoreProcessor</c>, which Oracle's SQL parser does not
+/// recognize as a bind placeholder (BindByName reconciles parameter <i>names</i>, not the SQL sigil).
+/// The proper fix is making the synthetic-parameter prefix dialect-aware in the shared generator — a
+/// cross-cutting change deferred so it does not collide with in-flight workstreams.</description></item>
+/// <item><description><b>Upsert on a database-generated key is unsupported</b> — see
+/// <see cref="BuildUpsertSql"/>. An Oracle MERGE joins on the key, which is NULL for a DB-generated
+/// key, so it would never match and behave as insert-only. Rather than emit silently-wrong SQL, the
+/// builder fails the build with a clear message.</description></item>
+/// </list>
 /// </summary>
 internal sealed class OracleSqlBuilder : SqlBuilder
 {
@@ -68,6 +83,15 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     public override string BuildUpsertSql(SqlBuildContext context)
     {
+        if (DatabaseMaySupplyKey(context))
+        {
+            // An Oracle MERGE joins on the key; a DB-generated key is NULL in the source row, so it
+            // never matches and the statement degrades to insert-only (and cannot round-trip the
+            // generated value). Fail loudly at build time rather than emit silently-wrong SQL. See
+            // the type-level "KNOWN v1 LIMITATIONS" note.
+            throw new NotSupportedException(GeneratedKeyUpsertUnsupportedMessage);
+        }
+
         var insertColumns = context.InsertColumns;
         var insertParameters = context.InsertParameters;
 
@@ -88,6 +112,12 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         "binds OUT parameters instead of producing a result set the reader pipeline can consume. Use " +
         "the non-returning Insert/Update/Upsert and re-select by key, or target a provider that " +
         "supports result-set RETURNING (PostgreSql/SqlServer).";
+
+    private const string GeneratedKeyUpsertUnsupportedMessage =
+        "Inquiry Oracle provider (v1) does not support upsert on a database-generated key. An Oracle " +
+        "MERGE joins on the key, which is NULL for a generated key, so it would never match (insert-" +
+        "only) and could not round-trip the generated value. Use a client-supplied key for upsert, or " +
+        "split into explicit insert/update.";
 
     public override string BuildInsertReturningSql(SqlBuildContext context)
         => throw new NotSupportedException(ReturningUnsupportedMessage);
