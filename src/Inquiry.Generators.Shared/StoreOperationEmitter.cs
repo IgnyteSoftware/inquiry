@@ -282,7 +282,7 @@ internal static class StoreOperationEmitter
                 for (var _c = 0; _c < insertable.Length; _c++)
                 {
                     var col = insertable[_c];
-                    var dbType = DbTypeMapper.TryGetDbTypeExpression(col.Type);
+                    var dbType = col.EnumAsString ? "global::System.Data.DbType.String" : DbTypeMapper.TryGetDbTypeExpression(col.Type);
                     source.AppendLine("                    {");
                     source.AppendLine("                        var _p = _cmd.CreateParameter();");
                     source.AppendLine($"                        _p.ParameterName = \"@p\" + _r + \"_{_c}\";");
@@ -361,6 +361,14 @@ internal static class StoreOperationEmitter
     /// </summary>
     private static string BuildParameterValueExpression(ColumnData column, string accessor)
     {
+        // W10: enum-as-string binds the enum's member name (a string). A null nullable-enum → NULL.
+        if (column.EnumAsString)
+        {
+            return column.Type.IsNullable
+                ? $"{accessor}.HasValue ? (object){accessor}.Value.ToString() : global::System.DBNull.Value"
+                : $"(object){accessor}.ToString()";
+        }
+
         if (!column.Type.IsEnum)
         {
             return $"(object?){accessor} ?? global::System.DBNull.Value";
@@ -443,7 +451,9 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
-            var dbType = DbTypeMapper.TryGetDbTypeExpression(column.Type);
+            // W10: enum-as-string binds a string value, so force DbType.String (the type's own mapping
+            // would yield the enum's underlying integer DbType, which mismatches the bound value).
+            var dbType = column.EnumAsString ? "global::System.Data.DbType.String" : DbTypeMapper.TryGetDbTypeExpression(column.Type);
             if (dbType is not null)
             {
                 source.AppendLine($"{indent}    _p{i}.DbType = {dbType};");
@@ -797,10 +807,27 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}{{");
         for (var i = 0; i < columns.Count; i++)
         {
+            var column = columns[i];
+            var paramName = methodParameters[i].Name;
             // '@'-prefix lets the binder skip its NormalizeName string concat.
-            var dbType = DbTypeMapper.TryGetDbTypeExpression(columns[i].Type);
-            var dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
-            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(columns[i].PropertyName)}\", {methodParameters[i].Name}{dbTypeArg}),");
+            // W10: enum-as-string filters bind the member name; the runtime's CoerceValue would
+            // otherwise integerize the enum, mismatching the text column.
+            string valueArg;
+            string dbTypeArg;
+            if (column.EnumAsString)
+            {
+                valueArg = column.Type.IsNullable
+                    ? $"{paramName}.HasValue ? (object){paramName}.Value.ToString() : null"
+                    : $"{paramName}.ToString()";
+                dbTypeArg = ", dbType: global::System.Data.DbType.String";
+            }
+            else
+            {
+                valueArg = paramName;
+                var dbType = DbTypeMapper.TryGetDbTypeExpression(column.Type);
+                dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
+            }
+            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(column.PropertyName)}\", {valueArg}{dbTypeArg}),");
         }
         source.AppendLine($"{indent}}}),");
     }

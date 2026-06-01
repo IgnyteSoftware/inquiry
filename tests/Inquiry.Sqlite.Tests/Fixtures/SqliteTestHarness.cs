@@ -28,6 +28,17 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
 
     public T GetRequiredService<T>() where T : notnull => Services.GetRequiredService<T>();
 
+    /// <summary>Runs a raw scalar query against the shared in-memory database (test assertions only).</summary>
+    public async Task<object?> ExecuteScalarAsync(string sql)
+    {
+        await using var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        var result = await cmd.ExecuteScalarAsync();
+        return result is DBNull ? null : result;
+    }
+
     /// <summary>
     /// Spins up the harness and runs the supplied schema DDL on the keeper connection.
     /// </summary>

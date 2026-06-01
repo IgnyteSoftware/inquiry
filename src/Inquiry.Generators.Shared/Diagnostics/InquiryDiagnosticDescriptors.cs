@@ -209,4 +209,12 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor EnumAsStringNonEnum = new(
+        "INQ036",
+        "InquiryEnumAsString applied to a non-enum property",
+        "Entity '{0}' marks property '{1}' with [InquiryEnumAsString], but its type is not an enum (or nullable enum). Remove the attribute or change the property to an enum type.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

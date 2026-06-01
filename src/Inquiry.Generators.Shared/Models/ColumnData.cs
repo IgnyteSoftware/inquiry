@@ -24,4 +24,5 @@ internal sealed record ColumnData : IColumn
     public SoftDeleteKind SoftDelete { get; init; } = SoftDeleteKind.None;
     public bool IsConcurrencyToken { get; init; }
     public bool IsDatabaseGeneratedToken { get; init; }
+    public bool EnumAsString { get; init; }
 }
