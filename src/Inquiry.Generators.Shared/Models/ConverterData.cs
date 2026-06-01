@@ -11,5 +11,4 @@ namespace Inquiry.Generators.Models;
 internal sealed record ConverterData(
     string ConverterTypeDisplay,
     string ProviderTypeDisplay,
-    SpecialType ProviderSpecialType,
-    bool ProviderIsValueType);
+    SpecialType ProviderSpecialType);
