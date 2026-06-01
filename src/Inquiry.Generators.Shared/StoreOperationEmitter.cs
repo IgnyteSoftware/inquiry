@@ -23,10 +23,14 @@ internal static class StoreOperationEmitter
         ResolvedSelectPlan? selectPlan,
         EntityData entity,
         Dictionary<string, EntityData> relationChildEntities,
-        string? baseSelectField = null)
+        string? baseSelectField = null,
+        string? resultTypeOverride = null,
+        string? structMatOverride = null)
     {
-        var entityType = entity.FullyQualifiedName;
-        var structMat = entity.StructMaterializerFullName;
+        // W5b: a projection-returning select overrides the materialized result type and its struct
+        // materializer; all other operations use the store's entity.
+        var entityType = resultTypeOverride ?? entity.FullyQualifiedName;
+        var structMat = structMatOverride ?? entity.StructMaterializerFullName;
         var cancellation = method.Parameters[method.Parameters.Count - 1].Name;
         var firstParameter = method.Parameters.Count > 1 ? method.Parameters[0].Name : "entity";
         var parameters = GetParameterDeclaration(method.Parameters);
