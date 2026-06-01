@@ -49,4 +49,16 @@ internal sealed record StoreMethodData(
 
     /// <summary>For <see cref="StoreOperation.KeysetPage"/>, whether the keyset walks descending (Backward).</summary>
     public bool KeysetDescending { get; init; }
+
+    /// <summary>
+    /// W8: for a select operation, whether <c>IncludeDeleted = true</c> was set so the soft-delete
+    /// active filter is suppressed. Ignored for entities without a soft-delete column.
+    /// </summary>
+    public bool IncludeDeleted { get; init; }
+
+    /// <summary>
+    /// W8: for <see cref="StoreOperation.DeleteOneByKey"/>, whether <c>HardDelete = true</c> was set so
+    /// a literal <c>DELETE</c> is emitted even when the entity declares a soft-delete column.
+    /// </summary>
+    public bool HardDelete { get; init; }
 }

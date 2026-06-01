@@ -21,4 +21,5 @@ internal sealed record ColumnData : IColumn
     public bool IsKey { get; init; }
     public bool IsGenerated { get; init; }
     public bool UseDatabaseDefault { get; init; }
+    public SoftDeleteKind SoftDelete { get; init; } = SoftDeleteKind.None;
 }

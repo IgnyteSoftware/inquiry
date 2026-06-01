@@ -20,4 +20,12 @@ public sealed class InquirySelectAllAttribute : Attribute
     /// <see cref="OrderBy"/> is required for a deterministic page order.
     /// </summary>
     public bool Paged { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the generated query includes soft-deleted rows. Has an
+    /// effect only when the entity declares an <c>[InquirySoftDelete]</c> column: when false (the
+    /// default) the query auto-appends the active filter (<c>= 0</c> / <c>IS NULL</c>); when true the
+    /// query is emitted unfiltered so soft-deleted rows are returned.
+    /// </summary>
+    public bool IncludeDeleted { get; set; }
 }

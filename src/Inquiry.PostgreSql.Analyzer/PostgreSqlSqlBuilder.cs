@@ -12,17 +12,26 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
 
     public override string BuildSelectAllSql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table;
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
 
     public override string BuildSelectByKeySql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.SoftDeleteActivePredicate);
 
     public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         var where = string.Join(" AND ", filterColumns
             .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
-        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + where;
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.SoftDeleteActivePredicate);
     }
+
+    /// <summary>PostgreSQL uses native boolean literals for the soft-delete flag.</summary>
+    public override string SoftDeleteFalseLiteral => "FALSE";
+
+    /// <summary>PostgreSQL uses native boolean literals for the soft-delete flag.</summary>
+    public override string SoftDeleteTrueLiteral => "TRUE";
+
+    /// <summary>PostgreSQL stamps the soft-delete (and restore) timestamp from <c>now()</c>.</summary>
+    public override string CurrentTimestampExpression => "now()";
 
     public override string BuildInsertSql(SqlBuildContext context)
     {
