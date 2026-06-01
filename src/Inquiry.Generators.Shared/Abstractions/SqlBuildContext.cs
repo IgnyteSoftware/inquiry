@@ -25,9 +25,13 @@ public sealed class SqlBuildContext
         string? schema,
         string tableName,
         IReadOnlyList<IColumn> columns,
-        bool suppressSoftDelete = false)
+        bool suppressSoftDelete = false,
+        bool generateForeignKeys = true)
     {
         Columns = columns;
+        RawSchema = schema;
+        RawTableName = tableName;
+        GenerateForeignKeys = generateForeignKeys;
         KeyColumns = columns.Where(c => c.IsKey).ToArray();
         // W6: a database-managed token (rowversion) is supplied by the database, so exclude it from INSERT.
         InsertableColumns = columns.Where(c => !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken).ToArray();
@@ -96,6 +100,16 @@ public sealed class SqlBuildContext
     }
 
     public string Table { get; }
+
+    /// <summary>W7: the raw (unquoted) table name, for idempotency wrappers like SQL Server's <c>OBJECT_ID(N'…')</c>.</summary>
+    public string RawTableName { get; }
+
+    /// <summary>W7: the raw (unquoted) schema name, or null.</summary>
+    public string? RawSchema { get; }
+
+    /// <summary>W7: whether <c>BuildCreateTableSql</c> should emit FOREIGN KEY constraints.</summary>
+    public bool GenerateForeignKeys { get; }
+
     public IReadOnlyList<IColumn> Columns { get; }
     public IReadOnlyList<IColumn> KeyColumns { get; }
     public IReadOnlyList<IColumn> InsertableColumns { get; }

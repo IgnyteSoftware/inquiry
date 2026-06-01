@@ -24,6 +24,8 @@ public class SqlBuilderHelpersTests
         public override string BuildDeleteByKeySql(SqlBuildContext context) => string.Empty;
         public override string BuildUpsertSql(SqlBuildContext context) => string.Empty;
         public override string BuildUpsertReturningSql(SqlBuildContext context) => string.Empty;
+        protected override string MapColumnType(IColumn column) => "TEXT";
+        protected override string GeneratedKeyClause(IColumn column) => "INTEGER PRIMARY KEY";
 
         public static string Combine(string where, string? extra) => AppendWhere(where, extra);
     }

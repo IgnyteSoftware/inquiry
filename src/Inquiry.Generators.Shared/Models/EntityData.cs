@@ -37,4 +37,10 @@ internal sealed record EntityData(
     /// Cached so the store emitter can emit the conflict-throw branch only for token entities.
     /// </summary>
     public ColumnData? ConcurrencyToken { get; init; }
+
+    /// <summary>
+    /// W7: whether generated <c>CREATE TABLE</c> DDL emits <c>FOREIGN KEY</c> constraints for this
+    /// entity's foreign-key columns (<see cref="InquiryTableAttribute.GenerateForeignKeys"/>). Default true.
+    /// </summary>
+    public bool GenerateForeignKeys { get; init; } = true;
 }
