@@ -20,11 +20,15 @@ internal sealed record TypeData(
     bool IsGuid,
     bool IsEnum)
 {
+    /// <summary>W7: true when the type is <c>byte[]</c> (or nullable <c>byte[]</c>), mapped to a binary/BLOB column.</summary>
+    public bool IsByteArray { get; init; }
+
     /// <summary>Builds a <see cref="TypeData"/> from a type symbol. Called only during discovery —
     /// the result holds no symbol. Mirrors the old <c>TypeInfo.Create</c> exactly.</summary>
     public static TypeData Create(ITypeSymbol symbol, NullableAnnotation nullableAnnotation)
     {
         var nonNullable = GetNonNullableSymbol(symbol);
+        var isByteArray = nonNullable is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte };
         var isEnum = nonNullable.TypeKind == TypeKind.Enum;
         var enumUnderlyingSpecialType = isEnum && nonNullable is INamedTypeSymbol named
             ? named.EnumUnderlyingType?.SpecialType ?? SpecialType.System_Int32
@@ -39,7 +43,10 @@ internal sealed record TypeData(
             IsNullable: DetermineIsNullable(symbol, nullableAnnotation),
             IsValueType: symbol.IsValueType,
             IsGuid: nonNullableDisplay == "global::System.Guid",
-            IsEnum: isEnum);
+            IsEnum: isEnum)
+        {
+            IsByteArray = isByteArray,
+        };
     }
 
     private static bool DetermineIsNullable(ITypeSymbol symbol, NullableAnnotation nullableAnnotation)

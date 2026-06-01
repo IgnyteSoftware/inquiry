@@ -135,4 +135,29 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
 
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;
+
+    // ---- W7 DDL --------------------------------------------------------------------------------
+
+    // MySQL cannot index LONGTEXT without a prefix length; a string key needs an explicit Length.
+    public override bool RequiresBoundedStringKeys => true;
+
+    protected override string MapColumnType(IColumn column) => column.TypeClass switch
+    {
+        DbTypeClass.Boolean => "TINYINT(1)",
+        DbTypeClass.Byte => "TINYINT UNSIGNED",
+        DbTypeClass.Int16 => "SMALLINT",
+        DbTypeClass.Int32 => "INT",
+        DbTypeClass.Int64 => "BIGINT",
+        DbTypeClass.Single => "FLOAT",
+        DbTypeClass.Double => "DOUBLE",
+        DbTypeClass.Decimal => "DECIMAL(" + DecimalSpec(column, 18, 2) + ")",
+        DbTypeClass.DateTime or DbTypeClass.DateTimeOffset => "DATETIME",
+        DbTypeClass.Guid => "CHAR(36)",
+        DbTypeClass.ByteArray => "LONGBLOB",
+        // MySQL cannot index LONGTEXT; a bounded Length is required for PK/FK string columns.
+        _ => column.Length > 0 ? "VARCHAR(" + column.Length + ")" : "LONGTEXT",
+    };
+
+    protected override string GeneratedKeyClause(IColumn column)
+        => MapColumnType(column) + " AUTO_INCREMENT PRIMARY KEY";
 }

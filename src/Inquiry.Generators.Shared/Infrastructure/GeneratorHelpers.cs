@@ -81,6 +81,10 @@ internal static class GeneratorHelpers
     }
 
     public static bool GetNamedBool(AttributeData attribute, string name)
+        => GetNamedBool(attribute, name, defaultValue: false);
+
+    /// <summary>Reads a named bool argument, returning <paramref name="defaultValue"/> when absent.</summary>
+    public static bool GetNamedBool(AttributeData attribute, string name, bool defaultValue)
     {
         foreach (var argument in attribute.NamedArguments)
         {
@@ -90,7 +94,7 @@ internal static class GeneratorHelpers
             }
         }
 
-        return false;
+        return defaultValue;
     }
 
     public static bool TryGetStoreEntityType(INamedTypeSymbol symbol, out ITypeSymbol entityType)
