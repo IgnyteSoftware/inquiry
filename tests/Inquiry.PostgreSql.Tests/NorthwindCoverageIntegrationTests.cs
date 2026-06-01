@@ -10,12 +10,17 @@ namespace Inquiry.PostgreSql.Tests;
 /// Each fact runs in its own throwaway database so parallel facts cannot collide on
 /// table state.
 /// </summary>
+[Collection(PostgreSqlCollection.Name)]
 public sealed class NorthwindCoverageIntegrationTests
 {
-    [PostgreSqlFact]
+    private readonly PostgreSqlContainerFixture _fixture;
+    public NorthwindCoverageIntegrationTests(PostgreSqlContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task SupplierIdentityCrudRoundTrip()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("supplier");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "supplier");
         var store = harness.GetRequiredService<SupplierStore>();
 
         var inserted = await store.InsertReturningAsync(new Supplier
@@ -38,10 +43,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Null(await store.SelectByKeyAsync(inserted.SupplierID));
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task ShipperIdentityCrudRoundTrip()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("shipper");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "shipper");
         var store = harness.GetRequiredService<ShipperStore>();
 
         var inserted = await store.InsertReturningAsync(new Shipper { CompanyName = "Speedy Express", Phone = "(503) 555-9831" });
@@ -55,10 +61,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.True(await store.DeleteByKeyAsync(inserted.ShipperID));
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task OrderInsertReturningSurfacesGeneratedIdentity()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("order");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "order");
         var customers = harness.GetRequiredService<CustomerStore>();
         var orders = harness.GetRequiredService<OrderStore>();
 
@@ -79,10 +86,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal(32.38m, fetched!.Freight);
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task OrderDetailCompositeKeyCrud()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("orderdetail");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "orderdetail");
         var customers = harness.GetRequiredService<CustomerStore>();
         var categories = harness.GetRequiredService<CategoryStore>();
         var products = harness.GetRequiredService<ProductStore>();
@@ -116,10 +124,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Null(await orderDetails.SelectByKeyAsync(orderID, chai.ProductID!.Value));
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task EmployeeTerritoryIntStringCompositeKeyRoundTrips()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("empterritory");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "empterritory");
         var employees = harness.GetRequiredService<EmployeeStore>();
         var regions = harness.GetRequiredService<RegionStore>();
         var territories = harness.GetRequiredService<TerritoryStore>();
@@ -141,10 +150,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Null(await bridge.SelectByKeyAsync(nancy.EmployeeID!.Value, "01581"));
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task MultiFieldSelectFiltersByBothColumns()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("multifield");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "multifield");
         var customers = harness.GetRequiredService<CustomerStore>();
         var employees = harness.GetRequiredService<EmployeeStore>();
         var orders = harness.GetRequiredService<OrderStore>();
@@ -163,10 +173,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal("Berlin", only.ShipCity);
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task MutationReturningSurfacesUpdatedAndUpsertedRows()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("returning");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "returning");
         var store = harness.GetRequiredService<CustomerStore>();
 
         await store.InsertAsync(new Customer { CustomerID = "UPD01", CompanyName = "Original", Country = "USA" });
@@ -184,10 +195,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal("New", upserted!.CompanyName);
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task CategoryProductEagerLoadStitchesNullableForeignKey()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("eagercat");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "eagercat");
         var categories = harness.GetRequiredService<CategoryStore>();
         var products = harness.GetRequiredService<ProductStore>();
 
@@ -204,10 +216,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.All(withCategory, p => Assert.Equal("Beverages", p.Category?.CategoryName));
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task TransactionSpansIdentityParentAndCompositeChild()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("txorder");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "txorder");
         var inquiry = harness.GetRequiredService<IInquiry>();
         var customers = harness.GetRequiredService<CustomerStore>();
         var categories = harness.GetRequiredService<CategoryStore>();
@@ -244,10 +257,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal(3, allDetails[0].Quantity);
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task EmployeeReportsToSelfReferenceRoundTrips()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("emp");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "emp");
         var employees = harness.GetRequiredService<EmployeeStore>();
 
         var manager = await employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller", Title = "VP" });
@@ -258,10 +272,11 @@ public sealed class NorthwindCoverageIntegrationTests
         Assert.Equal(manager.EmployeeID, fetched!.ReportsTo);
     }
 
-    [PostgreSqlFact]
+    [SkippableFact]
     public async Task TerritoryByRegionSelectsOnlyMatchingRegion()
     {
-        await using var harness = await PostgreSqlTestHarness.CreateAsync("terrbyregion");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "terrbyregion");
         var regions = harness.GetRequiredService<RegionStore>();
         var territories = harness.GetRequiredService<TerritoryStore>();
 
