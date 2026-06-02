@@ -97,5 +97,21 @@ public sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                 parameter.DbType = System.Data.DbType.Int32;
             }
         }
+
+        // ReturnEntity = true ops are emitted (OracleSqlBuilder) as an anonymous PL/SQL block that runs the
+        // mutation and OPENs a ref cursor (:rc) over the affected row. ExecuteReader on such a block returns
+        // that cursor's reader, so the shared reader pipeline materializes it unchanged — but the OUT ref
+        // cursor must be bound here, since the dialect-agnostic binder cannot create an OracleDbType.RefCursor.
+        if (command is OracleCommand oracleCommand && IsReturningBlock(oracleCommand.CommandText))
+        {
+            oracleCommand.Parameters.Add(new OracleParameter("rc", OracleDbType.RefCursor) { Direction = System.Data.ParameterDirection.Output });
+        }
     }
+
+    // A returning op is the only SQL Inquiry emits as an anonymous PL/SQL block; normal CRUD never starts
+    // with these tokens. Must stay in sync with the leading token of OracleSqlBuilder's returning builders
+    // (DECLARE for a generated-key insert, BEGIN otherwise).
+    private static bool IsReturningBlock(string commandText)
+        => commandText.StartsWith("DECLARE", System.StringComparison.Ordinal)
+           || commandText.StartsWith("BEGIN", System.StringComparison.Ordinal);
 }

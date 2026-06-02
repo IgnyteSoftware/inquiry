@@ -18,9 +18,11 @@ namespace Inquiry.Oracle.Analyzer;
 /// exact-case names that the unquoted DDL would not resolve. The lone exception is an identifier that is
 /// not legal unquoted (e.g. the embedded space in <c>Order Details</c>), which <see cref="QuoteIdentifier"/>
 /// double-quotes.</description></item>
-/// <item><description><c>RETURNING … INTO</c> binds OUT parameters rather than producing a result
-/// set, so it is incompatible with the reader-based returning pipeline. v1 does not support
-/// <c>ReturnEntity = true</c> insert/update/upsert (see the returning builders below).</description></item>
+/// <item><description><c>RETURNING … INTO</c> binds OUT parameters rather than producing a result set,
+/// so <c>ReturnEntity = true</c> ops are emitted as an anonymous PL/SQL block that mutates and OPENs a ref
+/// cursor over the affected row; <c>ExecuteReader</c> on the block returns that cursor, which the reader
+/// pipeline materializes unchanged (the OUT cursor is bound by <c>OracleInquiryConnectionFactory</c>). See
+/// the returning builders below.</description></item>
 /// </list>
 /// <para>
 /// KNOWN v1 LIMITATIONS (documented; tracked as follow-ups):
@@ -137,31 +139,52 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             "WHEN NOT MATCHED THEN INSERT (" + insertColumns + ") VALUES (" + insertParameters + ")";
     }
 
-    // --- Returning DML: unsupported in v1 (Oracle RETURNING … INTO is not result-set-based). ---
-    // These builders are only reached when a store declares an [InquiryInsert/Update/Upsert]
-    // (ReturnEntity = true) method against the Oracle dialect. Rather than emit SQL the reader
-    // pipeline cannot consume (silent runtime failure), fail the build with a clear message so the
-    // user switches to the non-returning variant.
-    private const string ReturningUnsupportedMessage =
-        "Inquiry Oracle provider (v1) does not support ReturnEntity = true. Oracle RETURNING … INTO " +
-        "binds OUT parameters instead of producing a result set the reader pipeline can consume. Use " +
-        "the non-returning Insert/Update/Upsert and re-select by key, or target a provider that " +
-        "supports result-set RETURNING (PostgreSql/SqlServer).";
-
     private const string GeneratedKeyUpsertUnsupportedMessage =
         "Inquiry Oracle provider (v1) does not support upsert on a database-generated key. An Oracle " +
         "MERGE joins on the key, which is NULL for a generated key, so it would never match (insert-" +
         "only) and could not round-trip the generated value. Use a client-supplied key for upsert, or " +
         "split into explicit insert/update.";
 
+    // --- Returning DML (ReturnEntity = true) ----------------------------------------------------
+    // Oracle's RETURNING … INTO binds OUT parameters, not a result set, so it cannot feed the reader
+    // pipeline directly. Instead each returning op is emitted as an anonymous PL/SQL block that performs
+    // the mutation and OPENs a ref cursor (:rc) over the affected row. ExecuteReader on such a block
+    // returns that cursor's reader, so the shared QuerySingleOrDefault path materializes it unchanged. The
+    // OUT ref-cursor parameter is bound by OracleInquiryConnectionFactory.FinalizeCommand (which detects
+    // the PL/SQL block). A database-generated key is captured into a %TYPE-anchored local and re-selected.
+    private const string RefCursorBind = ":rc";
+
     public override string BuildInsertReturningSql(SqlBuildContext context)
-        => throw new NotSupportedException(ReturningUnsupportedMessage);
+    {
+        var insert = BuildInsertSql(context);
+        if (DatabaseMaySupplyKey(context))
+        {
+            var keyColumn = context.QuotedKeyColumns[0];
+            return
+                "DECLARE v_key " + context.Table + "." + keyColumn + "%TYPE; BEGIN " +
+                insert + " RETURNING " + keyColumn + " INTO v_key; " +
+                "OPEN " + RefCursorBind + " FOR SELECT " + context.SelectColumns + " FROM " + context.Table +
+                " WHERE " + keyColumn + " = v_key; END;";
+        }
+
+        return
+            "BEGIN " + insert + "; OPEN " + RefCursorBind + " FOR SELECT " + context.SelectColumns +
+            " FROM " + context.Table + " WHERE " + context.KeyWhereClause + "; END;";
+    }
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
-        => throw new NotSupportedException(ReturningUnsupportedMessage);
+        // SQL%ROWCOUNT = 0 (no row matched the key + concurrency predicate) opens an empty cursor, so the
+        // pipeline returns null — matching result-set RETURNING and letting the W6 concurrency guard fire.
+        => "BEGIN " + BuildUpdateSql(context) + "; IF SQL%ROWCOUNT = 0 THEN OPEN " + RefCursorBind +
+            " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE 1 = 0; ELSE OPEN " +
+            RefCursorBind + " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " +
+            context.KeyWhereClause + "; END IF; END;";
 
     public override string BuildUpsertReturningSql(SqlBuildContext context)
-        => throw new NotSupportedException(ReturningUnsupportedMessage);
+        // Reuses the MERGE, which throws for a database-generated key — that case stays unsupported (the
+        // MERGE cannot match it). A client-supplied-key upsert always affects its row, so re-select by key.
+        => "BEGIN " + BuildUpsertSql(context) + "; OPEN " + RefCursorBind + " FOR SELECT " +
+            context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause + "; END;";
 
     /// <summary>
     /// Oracle 12c+ offset pagination uses the ANSI <c>OFFSET … ROWS FETCH NEXT … ROWS ONLY</c> form

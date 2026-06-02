@@ -60,7 +60,7 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 | `Inquiry.PostgreSql.Tests` | 38 | yes |
 | `Inquiry.SqlServer.Tests` | 36 | yes |
 | `Inquiry.MySql.Tests` | 36 (+1 documented skip) | yes |
-| `Inquiry.Oracle.Tests` | 27 (no skips) | yes |
+| `Inquiry.Oracle.Tests` | 32 (no skips) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
@@ -168,8 +168,16 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
    `SqlBuilder` and passes the matching name. (`UpdateAll` was never affected — it uses per-row `@u{r}_n`
    params, not `@keys`.) Verified live by `Oracle.Tests/BatchDeleteIntegrationTests` (2) + generator test
    `OracleDeleteAllUsesColonKeysSentinelAndExpansion`.
-8. **Oracle RETURNING / `ReturnEntity=true`** — unsupported via the reader pipeline; currently degrades
-   to an `INQ039` throwing stub (graceful, but a functional limitation to document or solve).
+8. **✅ Resolved (this session) — Oracle RETURNING / `ReturnEntity=true`.** Oracle's `RETURNING … INTO`
+   binds OUT params, not a result set, so each returning op is now emitted as an anonymous PL/SQL block
+   that mutates and `OPEN`s a ref cursor (`:rc`) over the affected row; `ExecuteReader` on the block returns
+   that cursor's reader, which the existing reader pipeline materializes unchanged (no pipeline/interface
+   changes). A database-generated key is captured into a `%TYPE` local via `RETURNING … INTO` and
+   re-selected; update uses a `SQL%ROWCOUNT` guard so a missing/stale row → empty cursor → null (W6 guard
+   fires). The OUT ref cursor is bound by `OracleInquiryConnectionFactory.FinalizeCommand`. **Verified live:**
+   `Oracle.Tests/ReturningIntegrationTests` (5: insert gen/client key, update, update-missing→null, client
+   upsert). *Remaining narrow limitation:* generated-key upsert-returning stays unsupported (an Oracle MERGE
+   cannot match a NULL generated key) — INQ039 stub, by design.
 
 ### D. Deferred plan item & cleanup
 9. **Live-environment benchmark (Phase 8/9 of the live-runtime plan)** — dialect-parameterize
