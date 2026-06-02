@@ -6,9 +6,11 @@ namespace Inquiry.Northwind.Models;
 public sealed class OrderDetail
 {
     [InquiryKey("OrderID")]
+    [InquiryForeignKey("OrderID", "Orders", "OrderID")]
     public int OrderID { get; set; }
 
     [InquiryKey("ProductID")]
+    [InquiryForeignKey("ProductID", "Products", "ProductID")]
     public int ProductID { get; set; }
 
     [InquiryColumn(Precision = 19, Scale = 4)]
