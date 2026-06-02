@@ -26,4 +26,7 @@ public partial class RegionStore : InquiryStore<Region>
 
     [InquiryDeleteOneByKey]
     public partial Task<bool> DeleteByKeyAsync(int regionID, CancellationToken cancellationToken = default);
+
+    [InquiryDeleteAll]
+    public partial Task<int> DeleteAllAsync(IEnumerable<int> regionIDs, CancellationToken cancellationToken = default);
 }

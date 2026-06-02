@@ -54,13 +54,13 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 
 | Suite | Tests | Needs Docker? |
 |---|---|---|
-| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 159 | no |
+| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 160 | no |
 | `Inquiry.Tests` (runtime pipeline, binding, transactions) | 92 | no |
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
 | `Inquiry.PostgreSql.Tests` | 38 | yes |
 | `Inquiry.SqlServer.Tests` | 36 | yes |
 | `Inquiry.MySql.Tests` | 36 (+1 documented skip) | yes |
-| `Inquiry.Oracle.Tests` | 25 (no skips) | yes |
+| `Inquiry.Oracle.Tests` | 27 (no skips) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
@@ -161,7 +161,13 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
    on Oracle, `@name` elsewhere); the per-element expansion params are reconciled by `FinalizeCommand`
    under `BindByName`. **Verified live:** the 3 `Oracle.Tests/PredicateSelectIntegrationTests` IN cases
    pass; new generator regression test `OracleDialectEmitsInSentinelWithColonParameterAndExpansion`.
-7. **Oracle `@keys` batch-delete sentinel** — `DeleteAll`/`UpdateAll` hardcode `@keys` (pre-existing).
+7. **✅ Resolved (this session) — Oracle `@keys` batch-delete sentinel.** `BuildDeleteAllByKeysSql`/
+   `BuildSoftDeleteAllByKeysSql` baked `IN (@keys)` and the emitter passed `@keys` to `InquiryInExpansion`,
+   which Oracle rejected (same root as the predicate `IN`). Both now take the dialect sigil via
+   `SqlBuilder.ParameterName("keys")` (`:keys` on Oracle, `@keys` elsewhere); the emitter receives the
+   `SqlBuilder` and passes the matching name. (`UpdateAll` was never affected — it uses per-row `@u{r}_n`
+   params, not `@keys`.) Verified live by `Oracle.Tests/BatchDeleteIntegrationTests` (2) + generator test
+   `OracleDeleteAllUsesColonKeysSentinelAndExpansion`.
 8. **Oracle RETURNING / `ReturnEntity=true`** — unsupported via the reader pipeline; currently degrades
    to an `INQ039` throwing stub (graceful, but a functional limitation to document or solve).
 

@@ -911,12 +911,12 @@ internal static class StoreProcessor
             {
                 // Project: select the projection's columns and materialize the projection type.
                 StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities,
-                    "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
+                    sqlBuilder, "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
             }
             else
             {
                 baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
-                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, baseSelectField);
+                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, sqlBuilder, baseSelectField);
             }
         }
 
