@@ -5,7 +5,7 @@
 > pipeline) read [`../README.md`](../README.md). For behavioral coding guidelines read
 > [`../CLAUDE.md`](../CLAUDE.md). For the design/dependency record of past work see [`plans/README.md`](plans/README.md).
 
-- **Last reconciled:** 2026-06-01, at commit `fcfaa3e` (`main`).
+- **Last reconciled:** 2026-06-02, on branch `feature/test-coverage-and-bench-expansion` (pending merge to `main`).
 - **One-line:** Inquiry is a compile-time-SQL micro-ORM — a Roslyn incremental source generator that
   bakes every SQL statement as a `const string` at build time. The runtime ships zero SQL.
 
@@ -54,16 +54,25 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 
 | Suite | Tests | Needs Docker? |
 |---|---|---|
-| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 160 | no |
+| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 161 | no |
 | `Inquiry.Tests` (runtime pipeline, binding, transactions) | 92 | no |
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
-| `Inquiry.PostgreSql.Tests` | 38 | yes |
-| `Inquiry.SqlServer.Tests` | 36 | yes |
-| `Inquiry.MySql.Tests` | 36 (+1 documented skip) | yes |
-| `Inquiry.Oracle.Tests` | 32 (no skips) | yes |
+| `Inquiry.PostgreSql.Tests` | 73 | yes |
+| `Inquiry.SqlServer.Tests` | 68 (+3 FTS skips, see below) | yes |
+| `Inquiry.MySql.Tests` | 57 | yes |
+| `Inquiry.Oracle.Tests` | 45 (+2 documented skips, see below) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
+
+**Live feature-matrix parity (added 2026-06-02).** Every live dialect now exercises the full supported
+feature set via a shared, linked **feature catalog** (`tests/Inquiry.FeatureCatalog`: `VersionedItem` W6,
+`SoftItem` W8, `JsonDoc` W10, `Article` W9) plus W5 aggregate/projection and W3 batch methods on the
+Northwind stores. PostgreSQL & SQL Server gained live W1 predicate / W2 pagination / W3 batch suites
+(previously MySQL+Oracle only); all four gained live W5/W6/W8/W10; PostgreSQL/MySQL gained the first live
+W9 full-text execution. **Skips:** SQL Server FTS (3) skips when the container lacks the full-text
+component; Oracle FTS is unsupported (INQ035) so it is excluded; two Oracle coverage-gap tests skip on the
+DateTime limitation below.
 
 ---
 
@@ -193,6 +202,34 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
     `RequiresBoundedStringKeys`); both per-dialect copies are gone, and Oracle now shares the behavior. Done
     as part of item #2.
 
+### E. Coverage-expansion findings — 2026-06-02 (live feature-matrix parity)
+
+11. **✅ Resolved (this session) — keyset pagination on PostgreSQL.** A null first-page keyset cursor was
+    bound without a `DbType`, so PostgreSQL could not infer the type of the null parameter in the
+    `(@cursor IS NULL OR col > @cursor)` guard (`42P08`). Surfaced by the new PostgreSQL keyset suite (the
+    path was never tested live on PG before). `StoreOperationEmitter.EmitKeysetPage` now sets the cursor
+    parameter's `DbType` from the keyset column (like every other binder). Generator test
+    `KeysetCursorParameterCarriesDbType`; verified live by `PostgreSql.Tests/PaginationIntegrationTests`.
+12. **⏳ Open (documented; follow-up tracked) — Oracle cannot bind `DbType.DateTime2`.** The generator emits
+    `DbType.DateTime2` for `System.DateTime` (deliberate, for SqlClient legacy-datetime precision), but
+    ODP.NET's `OracleParameter` rejects it, so inserting/binding any DateTime-bearing entity (Employee,
+    Order) throws on Oracle. Latent — no prior Oracle test inserted a date column. Fix: make the DateTime
+    `DbType` dialect-aware (Oracle → `DbType.DateTime`). The two Oracle coverage-gap tests
+    (`OracleCoverageGapIntegrationTests`: multi-field WHERE, self-ref FK) are **Skip**-marked and ready to
+    un-skip once fixed.
+13. **⏳ Open (documented; follow-up tracked) — Oracle batch insert/update.** `[InquiryInsertAll]` /
+    `[InquiryUpdateAll]` emit multi-row `VALUES` / per-row UPDATE templates that Oracle rejects
+    (`ORA-00936`); `OracleSqlBuilder` has no batch override (Oracle needs `INSERT ALL … SELECT FROM dual`).
+    Oracle batch **delete** works (`BatchDeleteIntegrationTests`); insert/update are not added for Oracle.
+    Fix: implement Oracle batch SQL or emit a compile-time diagnostic like the INQ039 upsert stub.
+14. **✅ Expanded (this session) — benchmark suite.** Dataset is now `[Params(1000, 100000)]` across the
+    CRUD + read benchmarks (100k seeded once per tier in `[GlobalSetup]`), and five feature benchmark
+    classes were added (pagination offset/keyset, projection/COUNT/SUM, predicate AND/IN, batch insert,
+    eager loading) — Inquiry vs Dapper vs raw ADO.NET, in-process SQLite. See
+    [`../benchmarks/Inquiry.Benchmarks/README.md`](../benchmarks/Inquiry.Benchmarks/README.md). The keyset
+    benchmark surfaced a real perf issue: keyset paging is ~10× slower than hand-written keyset SQL at 100k
+    rows (the `(@cursor IS NULL OR …)` guard appears to defeat the index seek) — flagged for follow-up.
+
 ---
 
 ## 4. Doc map
@@ -206,4 +243,6 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
 | [`plans/*.md`](plans) | One self-contained design spec per workstream (engine-*, feature-*). |
 | [`plans/adding-a-provider.md`](plans/adding-a-provider.md) | Append-point checklist for a new dialect. |
 | [`superpowers/specs/2026-06-01-live-runtime-testing-design.md`](superpowers/specs/2026-06-01-live-runtime-testing-design.md) | Approved design for live-runtime testing. |
+| [`superpowers/specs/2026-06-02-test-coverage-and-benchmark-expansion-design.md`](superpowers/specs/2026-06-02-test-coverage-and-benchmark-expansion-design.md) | Design for the live feature-matrix parity + benchmark expansion. |
+| [`superpowers/plans/2026-06-02-test-coverage-and-benchmark-expansion.md`](superpowers/plans/2026-06-02-test-coverage-and-benchmark-expansion.md) | Task-by-task plan for the coverage + benchmark expansion. |
 | [`superpowers/plans/2026-06-01-live-runtime-testing.md`](superpowers/plans/2026-06-01-live-runtime-testing.md) | Task-by-task plan (Phases 0–7 done; Phase 8 deferred). |
