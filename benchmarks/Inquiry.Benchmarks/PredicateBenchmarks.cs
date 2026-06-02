@@ -4,6 +4,7 @@ using BenchmarkDotNet.Configs;
 using Dapper;
 using Inquiry.Northwind.Models;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace Inquiry.Benchmarks;
 
@@ -15,8 +16,9 @@ namespace Inquiry.Benchmarks;
 ///   <item><b>InList</b> — <c>CategoryID IN (...)</c> (Inquiry <c>[InquiryWhere(In)]</c>). Dapper
 ///   expands the list automatically; the ADO baseline expands positional parameters by hand.</item>
 /// </list>
-/// ADO/Dapper read the same Product column list the Inquiry materializer reads. EF Core is omitted:
-/// the predicate translation is a separate comparison and EF is already pitted in the CRUD classes.
+/// ADO/Dapper read the same Product column list the Inquiry materializer reads. EF Core is included
+/// as a natural one-liner for both predicates, using a non-pooled context factory (same lifecycle as
+/// the CRUD benchmarks).
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -94,6 +96,16 @@ public class PredicateBenchmarks
     }
 
     [BenchmarkCategory("Search"), Benchmark]
+    public async Task<int> Search_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        var list = await ctx.Products.AsNoTracking()
+            .Where(p => p.UnitPrice >= MinPrice && EF.Functions.Like(p.ProductName, NamePattern))
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("Search"), Benchmark]
     public async Task<int> Search_Inquiry()
     {
         var list = await _db.Products.SearchAsync(MinPrice, NamePattern);
@@ -132,6 +144,19 @@ public class PredicateBenchmarks
         var list = (await connection.QueryAsync<Product>(
             $"SELECT {SelectColumns} FROM Products WHERE CategoryID IN @ids;",
             new { ids = CategoryIds })).AsList();
+        return list.Count;
+    }
+
+    // EF maps CategoryID as int?, so the Contains collection must be int? too.
+    private static readonly int?[] CategoryIdsNullable = CategoryIds.Select(x => (int?)x).ToArray();
+
+    [BenchmarkCategory("InList"), Benchmark]
+    public async Task<int> InList_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        var list = await ctx.Products.AsNoTracking()
+            .Where(p => CategoryIdsNullable.Contains(p.CategoryID))
+            .ToListAsync();
         return list.Count;
     }
 

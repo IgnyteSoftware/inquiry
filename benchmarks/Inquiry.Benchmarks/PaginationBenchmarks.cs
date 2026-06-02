@@ -4,6 +4,7 @@ using BenchmarkDotNet.Configs;
 using Dapper;
 using Inquiry.Northwind.Models;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace Inquiry.Benchmarks;
 
@@ -17,8 +18,9 @@ namespace Inquiry.Benchmarks;
 ///   <c>[InquiryKeysetPage]</c>, which fetches <c>pageSize + 1</c> to compute the cursor).</item>
 /// </list>
 /// ADO/Dapper read the same Product column list the Inquiry materializer reads, so per-row work
-/// is equal. EF Core is omitted: it has no first-class keyset helper, so a LINQ <c>Skip/Take</c>
-/// would only mirror the offset path and not the keyset one.
+/// is equal. EF Core is included for <b>OffsetPage</b> only (<c>OrderBy / Skip / Take</c> is a
+/// natural one-liner); it is excluded from <b>KeysetPage</b> because EF has no first-class keyset
+/// helper and a fake <c>Skip/Take</c> would compare a different strategy, not the same work.
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -94,6 +96,18 @@ public class PaginationBenchmarks
         await connection.OpenAsync();
         var list = (await connection.QueryAsync<Product>(
             OffsetSqlAt, new { limit = PageSize, off = _offset })).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("OffsetPage"), Benchmark]
+    public async Task<int> OffsetPage_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        var list = await ctx.Products.AsNoTracking()
+            .OrderBy(p => p.ProductID)
+            .Skip(_offset)
+            .Take(PageSize)
+            .ToListAsync();
         return list.Count;
     }
 

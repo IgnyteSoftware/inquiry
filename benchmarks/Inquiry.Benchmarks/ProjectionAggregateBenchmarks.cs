@@ -4,6 +4,7 @@ using BenchmarkDotNet.Configs;
 using Dapper;
 using Inquiry.Northwind.Models;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace Inquiry.Benchmarks;
 
@@ -16,8 +17,12 @@ namespace Inquiry.Benchmarks;
 ///   <item><b>Count</b> — <c>COUNT(*)</c> (Inquiry <c>[InquiryCount]</c>).</item>
 ///   <item><b>Sum</b> — <c>SUM(UnitPrice)</c> (Inquiry <c>[InquiryAggregate(Sum)]</c>).</item>
 /// </list>
-/// EF Core is omitted — its scalar aggregate / projection paths are a separate comparison and the
-/// in-process SQLite suite already pits EF in the CRUD classes.
+///   <item><b>Avg / Min / Max</b> — <c>AVG / MIN / MAX(UnitPrice)</c>. ADO/Dapper/EF all have
+///   natural one-liners. Inquiry has generated methods for Max and Sum; no generated Avg or Min
+///   method exists on ProductStore (noted inline).</item>
+/// </list>
+/// EF Core is included for all aggregate and projection categories where it is a natural one-liner
+/// (non-pooled context factory, same lifecycle as the CRUD benchmarks).
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -76,6 +81,16 @@ public class ProjectionAggregateBenchmarks
     }
 
     [BenchmarkCategory("Projection"), Benchmark]
+    public async Task<int> Projection_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        var list = await ctx.Products.AsNoTracking()
+            .Select(p => new ProductSummaryRow(p.ProductID, p.ProductName, p.UnitPrice))
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("Projection"), Benchmark]
     public async Task<int> Projection_Inquiry()
     {
         var list = await _db.Products.SummariesAsync();
@@ -102,6 +117,13 @@ public class ProjectionAggregateBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         return await connection.ExecuteScalarAsync<long>(CountSql);
+    }
+
+    [BenchmarkCategory("Count"), Benchmark]
+    public async Task<long> Count_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        return await ctx.Products.AsNoTracking().CountAsync();
     }
 
     [BenchmarkCategory("Count"), Benchmark]
@@ -132,5 +154,109 @@ public class ProjectionAggregateBenchmarks
     }
 
     [BenchmarkCategory("Sum"), Benchmark]
+    public async Task<decimal?> Sum_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        return await ctx.Products.AsNoTracking().SumAsync(p => p.UnitPrice);
+    }
+
+    [BenchmarkCategory("Sum"), Benchmark]
     public async Task<decimal?> Sum_Inquiry() => await _db.Products.SumUnitPriceAsync();
+
+    // ---- Avg (AVG(UnitPrice)) -----------------------------------------------------------
+
+    private const string AvgSql = "SELECT AVG(UnitPrice) FROM Products;";
+
+    [BenchmarkCategory("Avg"), Benchmark(Baseline = true)]
+    public async Task<decimal?> Avg_AdoNet()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = AvgSql;
+        var scalar = await command.ExecuteScalarAsync();
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+    }
+
+    [BenchmarkCategory("Avg"), Benchmark]
+    public async Task<double?> Avg_Dapper()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await connection.ExecuteScalarAsync<double?>(AvgSql);
+    }
+
+    [BenchmarkCategory("Avg"), Benchmark]
+    public async Task<decimal?> Avg_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        return await ctx.Products.AsNoTracking().AverageAsync(p => p.UnitPrice);
+    }
+
+    // note: ProductStore has no generated [InquiryAggregate(Avg)] method; Inquiry leg omitted.
+
+    // ---- Min (MIN(UnitPrice)) -----------------------------------------------------------
+
+    private const string MinSql = "SELECT MIN(UnitPrice) FROM Products;";
+
+    [BenchmarkCategory("Min"), Benchmark(Baseline = true)]
+    public async Task<decimal?> Min_AdoNet()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = MinSql;
+        var scalar = await command.ExecuteScalarAsync();
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+    }
+
+    [BenchmarkCategory("Min"), Benchmark]
+    public async Task<decimal?> Min_Dapper()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await connection.ExecuteScalarAsync<decimal?>(MinSql);
+    }
+
+    [BenchmarkCategory("Min"), Benchmark]
+    public async Task<decimal?> Min_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        return await ctx.Products.AsNoTracking().MinAsync(p => p.UnitPrice);
+    }
+
+    // note: ProductStore has no generated [InquiryAggregate(Min)] method; Inquiry leg omitted.
+
+    // ---- Max (MAX(UnitPrice)) -----------------------------------------------------------
+
+    private const string MaxSql = "SELECT MAX(UnitPrice) FROM Products;";
+
+    [BenchmarkCategory("Max"), Benchmark(Baseline = true)]
+    public async Task<decimal?> Max_AdoNet()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = MaxSql;
+        var scalar = await command.ExecuteScalarAsync();
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+    }
+
+    [BenchmarkCategory("Max"), Benchmark]
+    public async Task<decimal?> Max_Dapper()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await connection.ExecuteScalarAsync<decimal?>(MaxSql);
+    }
+
+    [BenchmarkCategory("Max"), Benchmark]
+    public async Task<decimal?> Max_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        return await ctx.Products.AsNoTracking().MaxAsync(p => p.UnitPrice);
+    }
+
+    [BenchmarkCategory("Max"), Benchmark]
+    public async Task<decimal?> Max_Inquiry() => await _db.Products.MaxUnitPriceAsync();
 }
