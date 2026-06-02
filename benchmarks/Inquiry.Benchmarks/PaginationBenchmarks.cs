@@ -1,3 +1,4 @@
+using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
@@ -81,7 +82,7 @@ public class PaginationBenchmarks
         command.Parameters.Add("$limit", SqliteType.Integer).Value = PageSize;
         command.Parameters.Add("$off",   SqliteType.Integer).Value = _offset;
         var list = new List<Product>(PageSize);
-        await using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
         while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
         return list.Count;
     }
@@ -122,7 +123,7 @@ public class PaginationBenchmarks
         command.Parameters.Add("$after", SqliteType.Integer).Value = _after;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = PageSize + 1;
         var list = new List<Product>(PageSize + 1);
-        await using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
         while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
         return list.Count;
     }

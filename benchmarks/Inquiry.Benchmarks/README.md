@@ -18,9 +18,36 @@ raw ADO.NET. Two suites:
   folding/casing rules — which is what lets EF Core join the cross-dialect comparison. Requires Docker.
 
 ```powershell
-# Cross-dialect read suite (PostgreSQL + MySQL + SQL Server, needs Docker)
+# Cross-dialect read suite (PostgreSQL + MySQL + SQL Server, needs Docker).
+# NOTE: --job short is a fast wiring/smoke run with wide error bars. Use the default job for
+# any numbers you intend to publish or compare — short-job noise can invert sub-microsecond
+# orderings (and is what made wrappers appear to "beat" the ADO.NET baseline in an earlier run).
 dotnet run -c Release --project benchmarks\Inquiry.Benchmarks -- --filter "*CrossDialect*" --job short
 ```
+
+## Fairness (apples-to-apples)
+
+Inquiry, Dapper, and EF Core are all built **on top of** ADO.NET, so the raw-ADO.NET
+`[Baseline = true]` must be a **true floor**: it has to perform the *identical* ADO.NET work
+each library does internally. Otherwise a wrapper can print a sub-1.00× `Ratio` — appearing
+faster than the ADO.NET it is layered on, which is impossible for honest overhead and means
+the **baseline** is wrong, not the wrapper.
+
+Two invariants keep the comparison honest:
+
+- **Matching `CommandBehavior`.** Inquiry's pipeline opens readers with
+  `CommandBehavior.SingleResult` for list reads and `SingleResult | SingleRow` for single-row
+  reads (Dapper passes equivalent flags). Every ADO.NET baseline reader passes the **same**
+  behavior, so it is never handicapped relative to the wrappers it floors.
+- **Matching connection lifecycle.** ADO.NET, Dapper, and Inquiry each open a fresh connection
+  per call (pooled underneath by the provider). EF Core therefore uses a **non-pooled**
+  `DbContextFactory` (`AddDbContextFactory`, *not* `AddPooledDbContextFactory`) so it pays
+  per-operation context construction instead of reusing warm context state the other three legs
+  never get.
+
+**Gate:** in the in-process SQLite suite, no non-baseline leg should print a `Ratio` below
+~1.00 (modulo noise). A wrapper under 1.00 means the baseline has drifted out of parity — fix
+the baseline, not the wrapper.
 
 ## What it measures
 
