@@ -743,8 +743,15 @@ internal static class StoreOperationEmitter
             var valueExpr = single
                 ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
                 : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
+            // Bind the cursor column's DbType so a null first-page cursor still carries a typed parameter.
+            // Without it, PostgreSQL cannot infer the type of a null parameter (42P08) in the IS NULL guard.
+            var cursorDbType = ResolveDbType(plan.KeysetColumns[i]);
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"@__cursor{i}\";");
+            if (cursorDbType is not null)
+            {
+                source.AppendLine($"                _p{pi}.DbType = {cursorDbType};");
+            }
             source.AppendLine($"                _p{pi}.Value = {valueExpr};");
             source.AppendLine($"                _c.Parameters.Add(_p{pi});");
             pi++;
