@@ -60,7 +60,7 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 | `Inquiry.PostgreSql.Tests` | 73 | yes |
 | `Inquiry.SqlServer.Tests` | 68 (+3 FTS skips, see below) | yes |
 | `Inquiry.MySql.Tests` | 57 | yes |
-| `Inquiry.Oracle.Tests` | 49 (no skips) | yes |
+| `Inquiry.Oracle.Tests` | 51 (no skips) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
@@ -226,16 +226,20 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
     Other dialects emit byte-identically (`DateTime2`). Generator tests `OracleDialectBindsDateTimeColumnAsDbTypeDateTime`
     / `NonOracleDialectBindsDateTimeColumnAsDbTypeDateTime2`; the two Oracle coverage-gap tests are **un-skipped**
     and a `DateTimeColumnsRoundTripThroughOracle` live test added (**Oracle 49, no skips**).
-13. **✅ Resolved (2026-06-02) — Oracle batch insert/update fail at compile time, not runtime.**
-    `[InquiryInsertAll]` / `[InquiryUpdateAll]` emit multi-row `VALUES` / per-row UPDATE templates that Oracle
-    rejects (`ORA-00936`). Rather than rework the shared batch emitter for Oracle's `INSERT ALL … SELECT FROM
-    dual` / PL/SQL forms (deferred — niche feature, risky change to a hot-spine path shared by all dialects),
-    the generator degrades them to a throwing stub + **INQ039** — the same graceful-degradation path as the
-    generated-key MERGE upsert — gated by the new `SqlBuilder.SupportsMultiRowBatch` flag (`OracleSqlBuilder`
-    → false). Batch **delete** (IN-expansion) is unaffected and still works. Generator tests
-    `OracleDialectRejectsBatchInsertAndUpdateButKeepsBatchDelete` / `NonOracleDialectEmitsBatchInsertAndUpdate`;
-    live `Oracle.Tests/BatchDeleteIntegrationTests.InsertAllAndUpdateAllAreUnsupportedOnOracle`. Implementing
-    real Oracle batch SQL remains a possible future enhancement.
+13. **✅ Resolved (2026-06-02) — Oracle batch `InsertAll` is real (INSERT ALL); `UpdateAll` degrades.**
+    Oracle rejects the shared emitter's multi-row `VALUES` and per-row UPDATE-batch forms (`ORA-00936`).
+    **Batch insert is now implemented** for Oracle: the batch-INSERT shape is delegated to four `SqlBuilder`
+    hooks (`BuildBatchInsertHeader`/`BuildBatchInsertRowOpen`/`BatchInsertRowSeparator`/`BatchInsertFooter`),
+    which `OracleSqlBuilder` overrides to emit `INSERT ALL INTO t (cols) VALUES (…) … SELECT 1 FROM dual` — a
+    single INSERT statement, so `ExecuteNonQuery` still returns the row count. The row params take the `:`
+    sigil (`ParameterName`); `OracleInquiryConnectionFactory.FinalizeCommand` reconciles the binder's `@`
+    names by `BindByName`. Non-Oracle emission is byte-identical (multi-row VALUES). **`UpdateAll` stays
+    unsupported** — Oracle has no portable multi-row UPDATE (a PL/SQL block loses the rows-affected count) —
+    so it degrades to a throwing stub + **INQ039**, now gated by the narrowed `SqlBuilder.SupportsMultiRowUpdate`
+    flag (`OracleSqlBuilder → false`). Batch **delete** (IN-expansion) was always supported. Generator tests
+    `OracleDialectEmitsInsertAllAndDegradesUpdateAll` / `NonOracleDialectEmitsMultiRowValuesBatchInsertAndUpdate`;
+    live `Oracle.Tests/BatchDeleteIntegrationTests` (`InsertAllInsertsEveryRow` + `UpdateAllIsUnsupportedOnOracle`,
+    **Oracle 51**).
 14. **✅ Expanded (this session) — benchmark suite.** Dataset is now `[Params(1000, 100000)]` across the
     CRUD + read benchmarks (100k seeded once per tier in `[GlobalSetup]`), and five feature benchmark
     classes were added (pagination offset/keyset, projection/COUNT/SUM, predicate AND/IN, batch insert,

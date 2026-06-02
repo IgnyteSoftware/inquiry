@@ -57,15 +57,37 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime2";
 
+    // ---- Batch insert / update (W3) ---------------------------------------------------------
+
     /// <summary>
-    /// Whether the dialect supports the multi-row batch DML the shared emitter builds at runtime: the
-    /// multi-row <c>INSERT … VALUES (…),(…)</c> form (<c>InsertAll</c>) and the multi-statement per-row
-    /// <c>UPDATE …; UPDATE …;</c> form (<c>UpdateAll</c>). Default <c>true</c> (SQLite/SqlServer/
-    /// PostgreSQL/MySQL). Oracle overrides with <c>false</c> — it rejects both forms (ORA-00936) — so the
-    /// generator degrades those operations to a throwing stub + INQ039 instead of emitting invalid SQL.
-    /// Batch <c>DeleteAll</c> uses a separate IN-expansion path and is unaffected by this flag.
+    /// Header of a multi-row batch <c>INSERT</c> — the <c>_sqlInsertAllPrefix</c> const emitted before the
+    /// per-row value tuples. Default is the standard multi-row form <c>INSERT INTO t (cols) VALUES </c>.
+    /// Oracle overrides with <c>INSERT ALL </c> (its multi-row insert repeats <c>INTO t (cols) VALUES (…)</c>
+    /// per row and ends with a <c>SELECT … FROM dual</c>).
     /// </summary>
-    public virtual bool SupportsMultiRowBatch => true;
+    public virtual string BuildBatchInsertHeader(SqlBuildContext context)
+        => "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") VALUES ";
+
+    /// <summary>
+    /// Text opening one row's value tuple, before its bound parameters. Default <c>(</c>; Oracle repeats
+    /// <c>INTO t (cols) VALUES (</c> per row.
+    /// </summary>
+    public virtual string BuildBatchInsertRowOpen(SqlBuildContext context) => "(";
+
+    /// <summary>Separator placed between row tuples. Default <c>,</c> (multi-row VALUES); Oracle uses a space.</summary>
+    public virtual string BatchInsertRowSeparator => ",";
+
+    /// <summary>Trailing text after all row tuples. Default empty; Oracle appends <c> SELECT 1 FROM dual</c>.</summary>
+    public virtual string BatchInsertFooter => "";
+
+    /// <summary>
+    /// Whether the dialect supports the shared emitter's multi-statement per-row batch <c>UpdateAll</c>
+    /// (<c>UPDATE …; UPDATE …;</c>). Default <c>true</c>. Oracle overrides with <c>false</c> — it has no
+    /// portable multi-row UPDATE (a PL/SQL block would not return a reliable row count), so <c>UpdateAll</c>
+    /// degrades to a throwing stub + INQ039. Batch <c>InsertAll</c> is supported on every dialect via the
+    /// shape hooks above; batch <c>DeleteAll</c> uses IN-expansion.
+    /// </summary>
+    public virtual bool SupportsMultiRowUpdate => true;
 
     public string QuoteTable(string? schema, string tableName)
     {
