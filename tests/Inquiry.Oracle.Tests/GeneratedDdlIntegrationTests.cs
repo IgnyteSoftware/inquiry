@@ -23,19 +23,24 @@ public sealed class GeneratedDdlIntegrationTests
     public async Task InquiryGeneratedSchemaStandsUpAndRoundTripsCrud()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        // KNOWN Oracle W7 bug (tracked follow-up): the generated Oracle DDL emits the "Order Details"
-        // table name unquoted (Oracle's unquoted-identifier policy), so its embedded space yields
-        // ORA-00903 "invalid table name". The hand-written OracleDdl quotes it and passes the strict
-        // fidelity check; only the generated-DDL path is affected. Un-skip once the emitter quotes
-        // identifiers that require it under Oracle.
-        Skip.If(true, "Oracle W7 generated DDL does not quote 'Order Details' (ORA-00903); tracked as a follow-up.");
+        // Oracle generated-DDL identifier quoting is now fixed (the "Order Details" space no longer raises
+        // ORA-00903). The generated DDL still does not fully stand up, though: ~11 Northwind columns are
+        // indexed strings with no Length, which map to CLOB, and Oracle rejects a b-tree index on a LOB
+        // (ORA-02327). The hand-written OracleDdl bounds those strings (VARCHAR2); the fix is to bound
+        // unannotated string lengths (tracked with the A2 string-length work in docs/STATUS.md). Un-skip
+        // once indexed strings are bounded. The body below is the Oracle-correct CRUD/fidelity check (no
+        // InsertReturning — Oracle has no result-set RETURNING), ready to run once the DDL stands up.
+        Skip.If(true, "Oracle generated DDL indexes unbounded (CLOB) string columns -> ORA-02327; tracked with the A2 string-length work.");
         await using var harness = await OracleTestHarness.CreateFromDdlAsync(
             _fixture.AdminConnectionString, InquiryGeneratedSchema.Ddl, "gends");
 
+        // Oracle does not support result-set RETURNING (ReturnEntity = true degrades to an INQ039 stub),
+        // so the generated key is read back via SelectAll rather than InsertReturning.
         var categories = harness.GetRequiredService<CategoryStore>();
-        var inserted = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
-        Assert.NotNull(inserted);
-        Assert.True(inserted!.CategoryID > 0);
+        await categories.InsertAsync(new Category { CategoryName = "Beverages" });
+        var inserted = (await categories.SelectAllAsync().ToListAsync())
+            .Single(c => c.CategoryName == "Beverages");
+        Assert.True(inserted.CategoryID!.Value > 0);
         Assert.NotNull(await categories.SelectByKeyAsync(inserted.CategoryID));
 
         await using var conn = new OracleConnection(harness.ConnectionString);

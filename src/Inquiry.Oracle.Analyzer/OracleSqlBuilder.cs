@@ -15,7 +15,9 @@ namespace Inquiry.Oracle.Analyzer;
 /// <c>OracleInquiryConnectionFactory.InitializeCommand</c> — matches the two by name.</description></item>
 /// <item><description>Identifiers are left <b>unquoted</b>. Oracle folds unquoted identifiers to
 /// uppercase, so the Northwind DDL is created unquoted to match; blanket double-quoting would force
-/// exact-case names that the unquoted DDL would not resolve.</description></item>
+/// exact-case names that the unquoted DDL would not resolve. The lone exception is an identifier that is
+/// not legal unquoted (e.g. the embedded space in <c>Order Details</c>), which <see cref="QuoteIdentifier"/>
+/// double-quotes.</description></item>
 /// <item><description><c>RETURNING … INTO</c> binds OUT parameters rather than producing a result
 /// set, so it is incompatible with the reader-based returning pipeline. v1 does not support
 /// <c>ReturnEntity = true</c> insert/update/upsert (see the returning builders below).</description></item>
@@ -45,10 +47,40 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     /// <summary>
     /// Unquoted, uppercase-folding identifier policy. Oracle uppercases unquoted identifiers, and the
-    /// provider's DDL is written unquoted to match, so emitting names verbatim (no quoting) keeps the
-    /// generated SQL aligned with the schema.
+    /// provider's DDL is written unquoted to match, so valid identifiers are emitted verbatim (no quoting)
+    /// to keep the generated SQL aligned with the schema. The exception is an identifier that is not a
+    /// legal <i>unquoted</i> Oracle identifier — e.g. one with an embedded space such as <c>Order Details</c>,
+    /// which raises ORA-00903 if emitted bare; those are double-quoted (preserving their exact case). This
+    /// is the single chokepoint for both DDL and DML, so a quoted name in CREATE TABLE matches every
+    /// reference. Reserved words are out of scope (no current identifier collides).
     /// </summary>
-    public override string QuoteIdentifier(string identifier) => identifier;
+    public override string QuoteIdentifier(string identifier)
+        => RequiresQuoting(identifier) ? "\"" + identifier.Replace("\"", "\"\"") + "\"" : identifier;
+
+    /// <summary>
+    /// True when <paramref name="identifier"/> is not a legal unquoted Oracle identifier and must be
+    /// double-quoted: empty, not starting with an ASCII letter, or containing a character outside
+    /// <c>[A-Za-z0-9_$#]</c> (most commonly an embedded space).
+    /// </summary>
+    private static bool RequiresQuoting(string identifier)
+    {
+        if (string.IsNullOrEmpty(identifier) || !IsLetter(identifier[0]))
+        {
+            return true;
+        }
+
+        foreach (var c in identifier)
+        {
+            if (!IsLetter(c) && (c < '0' || c > '9') && c != '_' && c != '$' && c != '#')
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsLetter(char c) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 
     public override string BuildSelectAllSql(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
