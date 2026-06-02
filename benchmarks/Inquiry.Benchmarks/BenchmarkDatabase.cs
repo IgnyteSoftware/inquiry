@@ -13,7 +13,7 @@ namespace Inquiry.Benchmarks;
 
 /// <summary>
 /// Per-benchmark-class scaffolding: creates a fresh SQLite file, runs the Northwind DDL,
-/// seeds <see cref="SeedRows"/> Customer / Product / Shipper rows, and exposes a configured
+/// seeds <see cref="RowCount"/> Customer / Product / Shipper rows, and exposes a configured
 /// service provider for the Inquiry stores, a pooled <see cref="NorthwindDbContext"/>
 /// factory for EF Core, and connection strings the Dapper / ADO.NET benchmarks own
 /// their own connections against.
@@ -21,24 +21,29 @@ namespace Inquiry.Benchmarks;
 /// <remarks>
 /// Each benchmark class creates one of these in <c>[GlobalSetup]</c> and disposes it in
 /// <c>[GlobalCleanup]</c>; the database file is deleted on cleanup so re-runs do not
-/// accumulate rows from earlier inserts.
+/// accumulate rows from earlier inserts. The seeded row count is parameterized so a class
+/// can drive both the 1 000-row and 100 000-row tiers via a <c>[Params]</c> field.
 /// </remarks>
 public sealed class BenchmarkDatabase : IAsyncDisposable
 {
-    public const int SeedRows = 1000;
+    public const int DefaultSeedRows = 1000;
 
     private readonly string _databasePath;
     private readonly ServiceProvider _services;
 
-    private BenchmarkDatabase(string databasePath, string connectionString, ServiceProvider services, IDbContextFactory<NorthwindDbContext> dbContextFactory)
+    private BenchmarkDatabase(string databasePath, string connectionString, ServiceProvider services, IDbContextFactory<NorthwindDbContext> dbContextFactory, int seedRows)
     {
         _databasePath = databasePath;
         ConnectionString = connectionString;
         _services = services;
         DbContextFactory = dbContextFactory;
+        RowCount = seedRows;
     }
 
     public string ConnectionString { get; }
+
+    /// <summary>Number of Customer / Product / Shipper rows seeded into this database.</summary>
+    public int RowCount { get; }
 
     public IDbContextFactory<NorthwindDbContext> DbContextFactory { get; }
 
@@ -46,12 +51,13 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     public CustomerStore Customers => _services.GetRequiredService<CustomerStore>();
     public ProductStore  Products  => _services.GetRequiredService<ProductStore>();
     public ShipperStore  Shippers  => _services.GetRequiredService<ShipperStore>();
+    public RegionStore   Regions   => _services.GetRequiredService<RegionStore>();
 
     /// <summary>
-    /// Seeds <see cref="SeedRows"/> rows of each benchmarked entity. Returns the freshly
+    /// Seeds <paramref name="seedRows"/> rows of each benchmarked entity. Returns the freshly
     /// created harness; callers must dispose it.
     /// </summary>
-    public static async Task<BenchmarkDatabase> CreateAsync()
+    public static async Task<BenchmarkDatabase> CreateAsync(int seedRows = DefaultSeedRows)
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"inquiry_bench_{Guid.NewGuid():N}.db");
         var connectionString = $"Data Source={databasePath}";
@@ -72,7 +78,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             .BuildServiceProvider();
 
         var dbContextFactory = services.GetRequiredService<IDbContextFactory<NorthwindDbContext>>();
-        var harness = new BenchmarkDatabase(databasePath, connectionString, services, dbContextFactory);
+        var harness = new BenchmarkDatabase(databasePath, connectionString, services, dbContextFactory, seedRows);
 
         await harness.SeedAsync().ConfigureAwait(false);
         return harness;
@@ -99,7 +105,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             var pCountry  = insert.Parameters.Add("$country", SqliteType.Text);
             var pCity     = insert.Parameters.Add("$city",    SqliteType.Text);
             await insert.PrepareAsync().ConfigureAwait(false);
-            for (int i = 0; i < SeedRows; i++)
+            for (int i = 0; i < RowCount; i++)
             {
                 pId.Value      = SeedCustomerId(i);
                 pCompany.Value = $"Company {i}";
@@ -118,7 +124,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             var pCompany = insert.Parameters.Add("$company", SqliteType.Text);
             var pPhone   = insert.Parameters.Add("$phone",   SqliteType.Text);
             await insert.PrepareAsync().ConfigureAwait(false);
-            for (int i = 0; i < SeedRows; i++)
+            for (int i = 0; i < RowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
                 pPhone.Value   = $"555-{i:0000}";
@@ -153,7 +159,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             var pPrice    = insert.Parameters.Add("$price",    SqliteType.Real);
             var pStock    = insert.Parameters.Add("$stock",    SqliteType.Integer);
             await insert.PrepareAsync().ConfigureAwait(false);
-            for (int i = 0; i < SeedRows; i++)
+            for (int i = 0; i < RowCount; i++)
             {
                 pName.Value     = $"Product {i}";
                 pCategory.Value = categoryIds[i % categoryIds.Count];

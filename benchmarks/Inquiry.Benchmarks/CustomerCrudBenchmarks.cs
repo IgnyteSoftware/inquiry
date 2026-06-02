@@ -20,6 +20,9 @@ public class CustomerCrudBenchmarks
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
 
+    /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
+    [Params(1000, 100000)] public int Rows;
+
     // Fixed targets used by SelectByKey / Update / Upsert. "00000" is the first seeded row.
     private const string TargetCustomerId = "00000";
     private const string TargetCountry    = "USA";
@@ -30,7 +33,7 @@ public class CustomerCrudBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
-        _db = BenchmarkDatabase.CreateAsync().GetAwaiter().GetResult();
+        _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
     }
 
@@ -66,7 +69,7 @@ public class CustomerCrudBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = $"SELECT {SelectColumns} FROM Customers;";
-        var list = new List<Customer>(BenchmarkDatabase.SeedRows);
+        var list = new List<Customer>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync()) list.Add(ReadCustomer(reader));
         return list.Count;
@@ -177,7 +180,7 @@ public class CustomerCrudBenchmarks
     // ---- Insert -------------------------------------------------------------------------
 
     private string NextInsertId() => BenchmarkDatabase.SeedCustomerId(
-        BenchmarkDatabase.SeedRows + Interlocked.Increment(ref _insertCounter));
+        _db.RowCount + Interlocked.Increment(ref _insertCounter));
 
     [BenchmarkCategory("Insert"), Benchmark(Baseline = true)]
     public async Task<int> Insert_AdoNet()

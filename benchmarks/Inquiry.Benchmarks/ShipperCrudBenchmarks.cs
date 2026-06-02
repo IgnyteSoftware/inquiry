@@ -21,13 +21,16 @@ public class ShipperCrudBenchmarks
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
 
+    /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
+    [Params(1000, 100000)] public int Rows;
+
     private const int TargetShipperId = 1;
     private const string TargetCompanyName = "Shipper 0";
 
     [GlobalSetup]
     public void GlobalSetup()
     {
-        _db = BenchmarkDatabase.CreateAsync().GetAwaiter().GetResult();
+        _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
     }
 
@@ -50,7 +53,7 @@ public class ShipperCrudBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT ShipperID, CompanyName, Phone FROM Shippers;";
-        var list = new List<Shipper>(BenchmarkDatabase.SeedRows);
+        var list = new List<Shipper>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
         return list.Count;

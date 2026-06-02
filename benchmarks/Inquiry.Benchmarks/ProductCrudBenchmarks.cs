@@ -20,6 +20,9 @@ public class ProductCrudBenchmarks
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
 
+    /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
+    [Params(1000, 100000)] public int Rows;
+
     // Fixed targets — ProductID 1 is the first IDENTITY-seeded row; CategoryID 1 is the
     // first seeded category (Products are evenly distributed across 8 categories).
     private const int TargetProductId = 1;
@@ -28,7 +31,7 @@ public class ProductCrudBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
-        _db = BenchmarkDatabase.CreateAsync().GetAwaiter().GetResult();
+        _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
     }
 
@@ -63,7 +66,7 @@ public class ProductCrudBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = $"SELECT {SelectColumns} FROM Products;";
-        var list = new List<Product>(BenchmarkDatabase.SeedRows);
+        var list = new List<Product>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
         return list.Count;
