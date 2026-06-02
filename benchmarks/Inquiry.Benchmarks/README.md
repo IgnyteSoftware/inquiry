@@ -23,6 +23,8 @@ dotnet run -c Release --project benchmarks\Inquiry.Benchmarks -- --filter "*Cros
 
 ## What it measures
 
+### CRUD (`CustomerCrudBenchmarks` / `ProductCrudBenchmarks` / `ShipperCrudBenchmarks`)
+
 For each of three entity shapes — `Customer` (string PK), `Product` (IDENTITY int? PK with
 nullable columns), and `Shipper` (minimal IDENTITY) — the benchmark exercises six
 operations:
@@ -40,12 +42,42 @@ EF Core, Dapper, and ADO.NET have no first-class upsert; the benchmark uses a ha
 `INSERT … ON CONFLICT DO UPDATE` for each so the comparison is on wire SQL, not on
 re-implementing the feature in client code.
 
+### Feature benchmarks (Inquiry vs Dapper vs ADO.NET)
+
+Beyond CRUD, these classes cover the higher-level store features. Each follows the same
+conventions (`[MemoryDiagnoser]`, grouped by category, ADO.NET as the `[Baseline = true]`,
+equal-column reads). EF Core is included only where it is a natural one-liner; where it is not
+a like-for-like comparison it is omitted (noted in each class's doc comment).
+
+| Class                            | Categories                | Measures                                                                                                   |
+| -------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `PaginationBenchmarks`           | OffsetPage, KeysetPage    | `LIMIT/OFFSET` vs keyset seek (`ProductID > @after`) at a deep page (offset ≈ `Rows / 2`).                 |
+| `ProjectionAggregateBenchmarks`  | Projection, Count, Sum    | 3-column `ProductSummary` projection, `COUNT(*)`, and `SUM(UnitPrice)`.                                     |
+| `PredicateBenchmarks`            | Search, InList            | Two-clause AND predicate (`UnitPrice >=` + `ProductName LIKE`) and `CategoryID IN (...)`.                   |
+| `BatchBenchmarks`                | BatchInsert               | One batched multi-row INSERT (`[InquiryInsertAll]`) vs an N-row INSERT loop in a transaction.               |
+| `EagerLoadingBenchmarks`         | EagerAll                  | Separate-query eager load of `Product.Category` vs a Dapper/ADO two-query-then-stitch of the same shape.    |
+
+`ParameterBindingBenchmarks` (Inquiry's parameter-binding path in isolation, no SQL execution)
+rounds out the suite.
+
+## Dataset size (`[Params(1000, 100000)]`)
+
+The read-oriented classes — both CRUD classes and `PaginationBenchmarks`,
+`ProjectionAggregateBenchmarks`, `PredicateBenchmarks`, `EagerLoadingBenchmarks` — carry a
+`[Params(1000, 100000)] public int Rows;` field, so BenchmarkDotNet runs every benchmark at
+**two dataset tiers**: a small **1 000-row** set and a large **100 000-row** set. This shows
+how each library's overhead scales: per-call fixed cost dominates at 1 000 rows, while
+materialization / streaming cost dominates at 100 000. `BatchBenchmarks` is intentionally
+**not** parameterized — it is a fixed-size (500-row) write benchmark, not a read over the
+seeded data.
+
 ## Setup
 
 Each benchmark class creates a fresh SQLite database in `%TEMP%`, applies the shared
-`NorthwindSchema.SqliteDdl`, and seeds **1000** rows of each benchmarked entity (plus a
-handful of categories so `Products.CategoryID` has valid FKs). The file is deleted on
-`[GlobalCleanup]`.
+`NorthwindSchema.SqliteDdl`, and seeds `Rows` rows of each benchmarked entity (plus a handful
+of categories so `Products.CategoryID` has valid FKs). Seeding happens **once per parameter
+value in `[GlobalSetup]`** — so the 100 000-row insert is paid a single time per class/tier,
+outside the measured region, not on every invocation. The file is deleted on `[GlobalCleanup]`.
 
 ## Running
 
