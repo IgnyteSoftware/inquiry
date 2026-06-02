@@ -327,21 +327,21 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void OracleDialectRejectsBatchInsertAndUpdateButKeepsBatchDelete()
+    public void OracleDialectEmitsInsertAllAndDegradesUpdateAll()
     {
-        // KNOWN v1 LIMITATION: Oracle rejects the multi-row VALUES (InsertAll) and the multi-statement
-        // per-row UPDATE (UpdateAll) forms the shared emitter builds (ORA-00936). Rather than emit
-        // runtime-invalid SQL, the generator degrades each to a throwing stub + INQ039 — the same
-        // graceful-degradation path as the generated-key MERGE upsert. Batch DELETE uses a different
-        // IN-expansion path and stays supported. Verified live by Inquiry.Oracle.Tests.BatchIntegrationTests.
+        // Oracle batch InsertAll is real: Oracle has no multi-row VALUES, so the generator emits the
+        // set-based `INSERT ALL INTO t (cols) VALUES (...) ... SELECT 1 FROM dual` form (a single INSERT
+        // statement, so ExecuteNonQuery returns the inserted-row count) with ':'-sigil parameters. UpdateAll
+        // has no portable Oracle multi-row form, so it stays a throwing stub + INQ039; batch DELETE
+        // (IN-expansion) works. Verified live by Inquiry.Oracle.Tests.BatchIntegrationTests.
         var result = RunGenerator(BatchStoreSource, dialect: "Oracle");
 
         var inq039 = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics)
             .Where(static d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning)
             .ToArray();
-        // Both InsertAll and UpdateAll degrade to INQ039 (the message names the offending store method).
-        Assert.Contains(inq039, static d => d.GetMessage().Contains("InsertAllAsync", StringComparison.Ordinal));
+        // Only UpdateAll degrades; InsertAll is supported (no INQ039 naming it).
         Assert.Contains(inq039, static d => d.GetMessage().Contains("UpdateAllAsync", StringComparison.Ordinal));
+        Assert.DoesNotContain(inq039, static d => d.GetMessage().Contains("InsertAllAsync", StringComparison.Ordinal));
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
 
         var tree = Assert.Single(
@@ -349,19 +349,24 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("RegionStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // InsertAll/UpdateAll degrade to throwing stubs; their SQL consts are skipped.
+        // INSERT ALL shape: `INSERT ALL ` header, per-row `INTO t (cols) VALUES (`, ':' sigil params, and a
+        // trailing dual select.
+        Assert.Contains("private const string _sqlInsertAllPrefix = \"INSERT ALL \";", text);
+        Assert.Contains("private const string _sqlInsertAllRowOpen = \"INTO TRegion (RegionId, Name) VALUES (\";", text);
+        Assert.Contains("_sb.Append(\":p\").Append(_r).Append(\"_0\");", text);
+        Assert.Contains("_sb.Append(\" SELECT 1 FROM dual\");", text);
+        // UpdateAll degrades to a throwing stub; its template const is skipped. DeleteAll still emitted.
         Assert.Contains("throw new global::System.NotSupportedException(", text);
-        Assert.DoesNotContain("_sqlInsertAllPrefix", text);
         Assert.DoesNotContain("_sqlUpdateAllRow", text);
-        // Batch DELETE is still emitted (IN-expansion path, unaffected).
         Assert.Contains("_sqlDeleteAll", text);
     }
 
     [Fact]
-    public void NonOracleDialectEmitsBatchInsertAndUpdate()
+    public void NonOracleDialectEmitsMultiRowValuesBatchInsertAndUpdate()
     {
-        // Preservation guard: only Oracle degrades batch insert/update. SqlServer (and the others) emit the
-        // real multi-row INSERT prefix and per-row UPDATE template with no throwing stub.
+        // Preservation guard: non-Oracle dialects keep the multi-row VALUES InsertAll and the per-row
+        // UPDATE-batch UpdateAll, with no throwing stub (the shape hooks default for all of them). SqlServer
+        // shown here.
         var result = RunGenerator(BatchStoreSource, dialect: "SqlServer");
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
 
@@ -370,7 +375,11 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("RegionStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("_sqlInsertAllPrefix", text);
+        // Multi-row VALUES shape: "(" row-open, "@" sigil, no INSERT ALL / dual-select footer.
+        Assert.Contains("private const string _sqlInsertAllRowOpen = \"(\";", text);
+        Assert.Contains("_sb.Append(\"@p\").Append(_r).Append(\"_0\");", text);
+        Assert.DoesNotContain("INSERT ALL", text);
+        Assert.DoesNotContain("SELECT 1 FROM dual", text);
         Assert.Contains("_sqlUpdateAllRow", text);
         Assert.DoesNotContain("throw new global::System.NotSupportedException(", text);
     }

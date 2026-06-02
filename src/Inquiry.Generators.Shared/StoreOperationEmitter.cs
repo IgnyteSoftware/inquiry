@@ -285,17 +285,29 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: true);
                 source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}> ?? global::System.Linq.Enumerable.ToList({itemsParam});");
                 source.AppendLine("        if (_list.Count == 0) return 0;");
+                // Dialect-aware multi-row INSERT shape: header + per-row (rowOpen + bound params) joined by a
+                // separator + footer. Base => `INSERT INTO t (cols) VALUES (…),(…)`; Oracle => `INSERT ALL
+                // INTO t (cols) VALUES (…) INTO … SELECT 1 FROM dual`. The row-param sigil follows the dialect
+                // (':' on Oracle); the binder below keeps '@', reconciled by the connection factory.
+                var _pSigil = sqlBuilder.ParameterName("p");
+                var _rowSeparator = sqlBuilder.BatchInsertRowSeparator;
+                var _insertFooter = sqlBuilder.BatchInsertFooter;
                 source.AppendLine("        var _sb = new global::System.Text.StringBuilder(_sqlInsertAllPrefix);");
                 source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
                 source.AppendLine("        {");
-                source.AppendLine("            if (_r > 0) _sb.Append(',');");
+                source.AppendLine($"            if (_r > 0) _sb.Append(\"{GeneratorHelpers.Escape(_rowSeparator)}\");");
+                source.AppendLine("            _sb.Append(_sqlInsertAllRowOpen);");
                 for (var _c = 0; _c < insertable.Length; _c++)
                 {
-                    var seg = _c == 0 ? "(@p" : ", @p";
-                    source.AppendLine($"            _sb.Append(\"{seg}\").Append(_r).Append(\"_{_c}\");");
+                    var seg = _c == 0 ? _pSigil : ", " + _pSigil;
+                    source.AppendLine($"            _sb.Append(\"{GeneratorHelpers.Escape(seg)}\").Append(_r).Append(\"_{_c}\");");
                 }
                 source.AppendLine("            _sb.Append(')');");
                 source.AppendLine("        }");
+                if (_insertFooter.Length > 0)
+                {
+                    source.AppendLine($"        _sb.Append(\"{GeneratorHelpers.Escape(_insertFooter)}\");");
+                }
                 source.AppendLine($"        return await Inquiry.ExecuteAsync<global::System.Collections.Generic.IReadOnlyList<{entityType}>>(");
                 source.AppendLine("            _sb.ToString(),");
                 source.AppendLine("            _list,");

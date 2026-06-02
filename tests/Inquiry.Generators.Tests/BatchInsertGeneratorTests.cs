@@ -44,9 +44,11 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("private const string _sqlInsertAllPrefix = \"INSERT INTO \\\"TThing\\\" (\\\"Id\\\", \\\"Name\\\") VALUES \";", text);
+        // Per-row open is a separate const ("(" for multi-row VALUES; Oracle overrides it for INSERT ALL).
+        Assert.Contains("private const string _sqlInsertAllRowOpen = \"(\";", text);
         Assert.Contains("Inquiry.ExecuteAsync<global::System.Collections.Generic.IReadOnlyList<global::Demo.Thing>>(", text);
         // Per-row placeholders and matching bound parameter names.
-        Assert.Contains("_sb.Append(\"(@p\").Append(_r).Append(\"_0\");", text);
+        Assert.Contains("_sb.Append(\"@p\").Append(_r).Append(\"_0\");", text);
         Assert.Contains("_p.ParameterName = \"@p\" + _r + \"_1\";", text);
         Assert.Contains("if (_list.Count == 0) return 0;", text);
     }

@@ -251,14 +251,28 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle cannot key on CLOB (the unbounded-text fallback); a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
 
+    // ---- Batch insert (INSERT ALL) -----------------------------------------------------------
+    // Oracle has no multi-row VALUES; its set-based multi-row insert is
+    //   INSERT ALL INTO t (cols) VALUES (...) INTO t (cols) VALUES (...) SELECT 1 FROM dual
+    // — a single INSERT statement, so ExecuteNonQuery still returns the total inserted-row count. The row
+    // parameters take the ':' sigil via ParameterName; OracleInquiryConnectionFactory.FinalizeCommand
+    // reconciles the binder's '@p{r}_{c}' names by BindByName.
+    public override string BuildBatchInsertHeader(SqlBuildContext context) => "INSERT ALL ";
+
+    public override string BuildBatchInsertRowOpen(SqlBuildContext context)
+        => "INTO " + context.Table + " (" + context.InsertColumns + ") VALUES (";
+
+    public override string BatchInsertRowSeparator => " ";
+
+    public override string BatchInsertFooter => " SELECT 1 FROM dual";
+
     /// <summary>
-    /// Oracle rejects both multi-row batch forms the shared emitter builds: the multi-row
-    /// <c>INSERT … VALUES (…),(…)</c> (InsertAll) and the semicolon-separated per-row UPDATE batch
-    /// (UpdateAll) both raise ORA-00936. (Oracle would need <c>INSERT ALL … SELECT 1 FROM dual</c> and a
-    /// PL/SQL block respectively — deferred.) Returning false degrades InsertAll/UpdateAll to a throwing
-    /// stub + INQ039 at compile time. Batch DeleteAll (IN-expansion) is unaffected and stays supported.
+    /// Oracle has no portable multi-row UPDATE: the shared emitter's <c>UPDATE …; UPDATE …;</c> batch is
+    /// rejected (ORA-00936), and wrapping it in a PL/SQL <c>BEGIN … END;</c> block would not return a
+    /// reliable rows-affected count. So <c>UpdateAll</c> stays unsupported (INQ039 stub). Batch
+    /// <c>InsertAll</c> (INSERT ALL, above) and <c>DeleteAll</c> (IN-expansion) work.
     /// </summary>
-    public override bool SupportsMultiRowBatch => false;
+    public override bool SupportsMultiRowUpdate => false;
 
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
