@@ -114,6 +114,24 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void KeysetCursorParameterCarriesDbType()
+    {
+        // A null first-page cursor must still bind a typed parameter, else PostgreSQL cannot infer the
+        // null parameter's type (42P08). The cursor column 'Id' is long -> DbType.Int64.
+        var source = PagingStore("""
+            [InquiryKeysetPage("Id")]
+            public partial Task<InquiryPage<User, long>> KeysetAsync(long? afterId, int pageSize, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var text = GetStore(result);
+
+        Assert.Contains("_p0.ParameterName = \"@__cursor0\";", text);
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.Int64;", text);
+    }
+
+    [Fact]
     public void KeysetMultiColumnUsesRowValueByDefault()
     {
         var source = PagingStore("""
