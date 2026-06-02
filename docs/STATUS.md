@@ -54,7 +54,7 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 
 | Suite | Tests | Needs Docker? |
 |---|---|---|
-| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 153 | no |
+| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 154 | no |
 | `Inquiry.Tests` (runtime pipeline, binding, transactions) | 92 | no |
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
 | `Inquiry.PostgreSql.Tests` | 38 | yes |
@@ -103,9 +103,14 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
 (`TaskList`). Ordered by value.
 
 ### A. Schema-fidelity / generated-DDL (highest value — tied to "never cause production downtime")
-1. **Oracle generated DDL doesn't quote identifiers that need it** — `"Order Details"` → ORA-00903.
-   The only force-skipped test: `tests/Inquiry.Oracle.Tests/GeneratedDdlIntegrationTests.cs` (line ~31).
-   Fix the Oracle emitter to quote identifiers requiring it.
+1. **✅ Quoting resolved (this session) — generated DDL now blocked by a *distinct* index-on-CLOB bug.**
+   `"Order Details"` (embedded space) was emitted unquoted → ORA-00903. `OracleSqlBuilder.QuoteIdentifier`
+   now double-quotes identifiers that aren't legal unquoted (single chokepoint → DDL + DML stay in lockstep);
+   regression test `OracleSchemaQuotesOnlyIdentifiersThatRequireIt`. Un-skipping `GeneratedDdlIntegrationTests`
+   then surfaced a *separate* blocker: ~11 Northwind indexed string columns have no `Length`, map to `CLOB`,
+   and Oracle rejects a b-tree index on a LOB (**ORA-02327**). The test stays skipped with that reason; the
+   fix belongs with **item #2** — bounding unannotated string lengths to `VARCHAR2` makes the indexes valid
+   (or, alternatively, skip `CREATE INDEX` on LOB columns).
 2. **FK length not auto-derived from the referenced PK** — on bounded-key dialects (MySQL/SQL
    Server/Oracle), a string FK only emits a valid bounded `VARCHAR` because every FK is *manually*
    annotated with `Length`. A forgotten annotation regresses to invalid/mismatched DDL. **Tracked as

@@ -320,6 +320,50 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void OracleSchemaQuotesOnlyIdentifiersThatRequireIt()
+    {
+        // Oracle leaves identifiers unquoted (it folds them to uppercase; the fidelity check matches
+        // case-insensitively). The one exception is an identifier that is not a valid *unquoted* Oracle
+        // identifier — e.g. "Order Details", whose embedded space yields ORA-00903 "invalid table name"
+        // if emitted bare. QuoteIdentifier is the single chokepoint for DDL and DML, so quoting it here
+        // keeps the CREATE TABLE and every reference in lockstep.
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Order Details")]
+            public sealed class OrderDetail
+            {
+                [InquiryKey("OrderId")]
+                public long OrderId { get; set; }
+
+                [InquiryKey("ProductId")]
+                public long ProductId { get; set; }
+
+                [InquiryColumn("Unit Price")]
+                public decimal UnitPrice { get; set; }
+
+                [InquiryColumn("Quantity")]
+                public int Quantity { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        // The spaced table AND column names are double-quoted (per-char check); clean identifiers
+        // (Quantity, composite PK) stay unquoted.
+        Assert.Contains("CREATE TABLE \"Order Details\" (", ddl);
+        Assert.Contains("\"Unit Price\" NUMBER", ddl);
+        Assert.Contains("Quantity NUMBER(10)", ddl);
+        Assert.Contains("PRIMARY KEY (OrderId, ProductId)", ddl);
+        Assert.DoesNotContain("\"OrderId\"", ddl);
+        Assert.DoesNotContain("\"Quantity\"", ddl);
+    }
+
+    [Fact]
     public void PostgreSqlSchemaUsesSerialAndQuotedIdentifiers()
     {
         const string source = """
