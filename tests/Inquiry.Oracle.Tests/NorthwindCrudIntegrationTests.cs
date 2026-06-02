@@ -72,6 +72,28 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.Null(await store.SelectByKeyAsync(all[0].CategoryID));
     }
 
+    /// <summary>
+    /// Oracle has no BOOLEAN SQL type; Inquiry maps a bool column to <c>NUMBER(1)</c>. Binding a CLR
+    /// bool parameter fails with ORA-00932 unless normalized to 0/1, which
+    /// <c>OracleInquiryConnectionFactory.FinalizeCommand</c> does. This round-trips both values through
+    /// <c>Product.Discontinued</c> to lock that in.
+    /// </summary>
+    [SkippableFact]
+    public async Task BooleanColumnRoundTripsThroughNumber()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "boolcol");
+        var products = harness.GetRequiredService<ProductStore>();
+
+        await products.InsertAsync(new Product { ProductName = "Active",  Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Retired", Discontinued = true });
+
+        var all = await products.SelectAllAsync();
+        Assert.Equal(2, all.Count);
+        Assert.False(all.Single(p => p.ProductName == "Active").Discontinued);
+        Assert.True(all.Single(p => p.ProductName == "Retired").Discontinued);
+    }
+
     [SkippableFact]
     public async Task UpsertInsertsThenUpdatesAcrossInvocations()
     {

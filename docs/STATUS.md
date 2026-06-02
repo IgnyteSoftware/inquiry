@@ -59,8 +59,8 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
 | `Inquiry.PostgreSql.Tests` | 38 | yes |
 | `Inquiry.SqlServer.Tests` | 36 | yes |
-| `Inquiry.MySql.Tests` | 9 | yes |
-| `Inquiry.Oracle.Tests` | 8 (+1 documented skip) | yes |
+| `Inquiry.MySql.Tests` | 36 (+1 documented skip) | yes |
+| `Inquiry.Oracle.Tests` | 12 (+13 documented skips) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
@@ -115,19 +115,33 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
    relaxed to tables+PK only because the entity model omits bridge-table FKs (`CustomerCustomerDemo`,
    `EmployeeTerritories`).
 
-### B. Live test coverage gaps (these block verification of C)
-4. **Oracle & MySQL live coverage is CRUD-only.** The broad `NorthwindCoverageIntegrationTests`
-   (pagination / predicates / aggregates / soft-delete / concurrency / full-text against a real engine)
-   exists only for PostgreSQL and SQL Server. Add it for MySQL and Oracle — it's what verifies items 6–7.
+### B. Live test coverage — ADDED 2026-06-01
+4. **MySQL & Oracle live coverage added** — table-breadth + pagination + predicate suites
+   (`NorthwindCoverageIntegrationTests` / `PaginationIntegrationTests` / `PredicateSelectIntegrationTests`).
+   MySQL is fully green (37 tests). Oracle's pagination/predicate paths are broken (see #6), so those
+   facts are documented as ready-to-un-skip tests; the returning-heavy table-breadth suite is N/A on
+   Oracle (#8). **This coverage fixed the Oracle bool-binding bug and confirmed #5 and #6.**
+
+   **✅ Resolved this session — Oracle boolean binding.** Inserting any entity with a `bool` column
+   failed with ORA-00932 (Oracle has no BOOLEAN type; `bool` maps to `NUMBER(1)`, and ODP.NET would not
+   coerce a CLR bool). Fixed in `OracleInquiryConnectionFactory.FinalizeCommand` (bool → 0/1 +
+   `DbType.Int32`); regression test `Oracle.Tests/NorthwindCrudIntegrationTests.BooleanColumnRoundTripsThroughNumber`.
 
 ### C. Provider runtime limitations surfaced by live testing
-5. **MySQL upsert-returning `LAST_INSERT_ID()`** on the `ON DUPLICATE KEY UPDATE` branch returns the
-   wrong/empty row — `src/Inquiry.MySql.Analyzer/MySqlSqlBuilder.cs` (~line 85). Needs the
-   `LAST_INSERT_ID(id)` trick or a key predicate; verify under #4's MySQL coverage.
-6. **Oracle keyset/offset pagination sigil** — synthetic `@__offset` params may be invalid on Oracle
-   (needs `:`); `src/Inquiry.Oracle.Analyzer/OracleSqlBuilder.cs` (~line 24). **May already be fixed**
-   by the `FinalizeCommand` sigil-strip that resolved CRUD (ORA-50028); unverifiable until #4 adds an
-   Oracle pagination test. Confirm before changing code — the comment may be stale.
+5. **MySQL upsert-returning `LAST_INSERT_ID()`** — **CONFIRMED real** by live test: generated-key
+   `UpsertReturningAsync` over the `ON DUPLICATE KEY UPDATE` branch returns `null` (LAST_INSERT_ID() is
+   not set on the update path). Fix in `MySqlSqlBuilder.BuildUpsertReturningSql` (the `LAST_INSERT_ID(id)`
+   trick or a key predicate). Ready-to-un-skip regression test:
+   `MySql.Tests/NorthwindCoverageIntegrationTests.ProductUpsertReturningUpdateBranchIsKnownLimitation`.
+6. **Oracle `@` parameter sigil baked into const SQL — CONFIRMED real and broader than documented.**
+   Both **predicate (W1)** value parameters *and* **pagination (W2)** synthetic params (`@__offset`,
+   `@__limit`, `@__cursorN`) are baked into the const SQL with `@` by the shared `StoreProcessor`; Oracle
+   rejects them with ORA-00936 ("missing expression"). `FinalizeCommand` normalizes parameter *names* but
+   cannot rewrite the baked SQL text, so it does **not** fix this (only CRUD / `[InquirySelectAllByField]`
+   work, because the Oracle builder emits `:` there). **Fix:** make the predicate/synthetic parameter
+   prefix dialect-aware in the shared generator (use `SqlBuilder.ParameterName`). One fix unblocks W1 + W2
+   on Oracle. Ready-to-un-skip tests: `Oracle.Tests/PaginationIntegrationTests` (7) +
+   `PredicateSelectIntegrationTests` (5).
 7. **Oracle `@keys` batch-delete sentinel** — `DeleteAll`/`UpdateAll` hardcode `@keys` (pre-existing).
 8. **Oracle RETURNING / `ReturnEntity=true`** — unsupported via the reader pipeline; currently degrades
    to an `INQ039` throwing stub (graceful, but a functional limitation to document or solve).

@@ -56,11 +56,20 @@ public sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     }
 
     /// <summary>
-    /// Strips the dialect-agnostic <c>@</c> (or <c>:</c>) sigil the shared parameter binder prepends to
-    /// every parameter name. Oracle's SQL references bind variables as <c>:name</c>, and ODP.NET with
-    /// <see cref="OracleCommand.BindByName"/> matches a parameter to a placeholder by its bare name — it
-    /// does not reconcile a leading <c>@</c>, so without this fixup every bound query fails with ORA-50028
-    /// ("invalid parameter binding"). Runs after the pipeline binds parameters, before execution.
+    /// Normalizes bound parameters for Oracle before execution. Two fixups, both because the shared,
+    /// dialect-agnostic binder cannot know it is targeting Oracle:
+    /// <list type="bullet">
+    /// <item><description>Strips the <c>@</c> (or <c>:</c>) sigil the binder prepends to every parameter
+    /// name. Oracle's SQL references bind variables as <c>:name</c>, and ODP.NET with
+    /// <see cref="OracleCommand.BindByName"/> matches by bare name — it does not reconcile a leading
+    /// <c>@</c>, so without this every bound query fails with ORA-50028 ("invalid parameter
+    /// binding").</description></item>
+    /// <item><description>Converts <see cref="bool"/> values to their <c>0</c>/<c>1</c> numeric form.
+    /// Oracle has no BOOLEAN SQL type; Inquiry maps bool columns to <c>NUMBER(1)</c>, and ODP.NET does
+    /// not coerce a CLR bool parameter to NUMBER, so binding one fails with ORA-00932 ("inconsistent
+    /// datatypes: expected NUMBER got BOOLEAN").</description></item>
+    /// </list>
+    /// Runs after the pipeline binds parameters, before execution.
     /// </summary>
     public void FinalizeCommand(DbCommand command)
     {
@@ -70,6 +79,14 @@ public sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             if (!string.IsNullOrEmpty(name) && (name[0] == '@' || name[0] == ':'))
             {
                 parameter.ParameterName = name.Substring(1);
+            }
+
+            if (parameter.Value is bool boolValue)
+            {
+                // Also reset DbType: the shared binder stamps DbType.Boolean (W4 DbType metadata), and
+                // ODP.NET honors that over the value, so converting the value alone still binds a BOOLEAN.
+                parameter.Value = boolValue ? 1 : 0;
+                parameter.DbType = System.Data.DbType.Int32;
             }
         }
     }
