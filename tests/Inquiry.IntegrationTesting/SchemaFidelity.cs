@@ -34,15 +34,7 @@ public static class SchemaFidelity
             if (!SameColumns(et.PrimaryKey, at.PrimaryKey))
                 problems.Add($"{et.Name}: PK expected ({Join(et.PrimaryKey)}), found ({Join(at.PrimaryKey)}).");
 
-            foreach (var efk in et.ForeignKeys)
-            {
-                var ok = at.ForeignKeys.Any(afk =>
-                    SameColumns(afk.Columns, efk.Columns) &&
-                    Id.Equals(afk.ReferencedTable, efk.ReferencedTable) &&
-                    SameColumns(afk.ReferencedColumns, efk.ReferencedColumns));
-                if (!ok)
-                    problems.Add($"{et.Name}: missing FK ({Join(efk.Columns)}) -> {efk.ReferencedTable}({Join(efk.ReferencedColumns)}).");
-            }
+            CheckForeignKeys(et, at, problems);
 
             foreach (var eix in et.Indexes)
             {
@@ -58,14 +50,14 @@ public static class SchemaFidelity
                 string.Join(Environment.NewLine, problems.Select(p => "  - " + p)));
     }
 
-    /// <summary>Structural-only check: every expected table is present with the correct primary key.
-    /// Use for schemas stood up from Inquiry's own generated DDL, whose faithfulness is bounded by the
-    /// entity model — the entity surface may omit columns (e.g. BLOB columns), secondary-index emission
-    /// is annotation-bounded, and foreign keys are only emitted where a column is modelled with
-    /// <c>[InquiryForeignKey]</c> (composite-key bridge tables model their columns as keys only, so the
-    /// generated DDL has no FK for them). The authoritative full-contract check — all columns, FKs, and
-    /// indexes — runs via <see cref="AssertMatches"/> against the hand-written DDL actually built into
-    /// the container. CRUD round-trips in the same test exercise the relationships directly.</summary>
+    /// <summary>Structural check: every expected table is present with the correct primary key and foreign
+    /// keys. Use for schemas stood up from Inquiry's own generated DDL, whose faithfulness is bounded by the
+    /// entity model — the entity surface may omit columns (e.g. BLOB columns) and secondary-index emission is
+    /// annotation-bounded, so columns and indexes are not checked here. (Composite-key bridge tables now
+    /// model their key columns as foreign keys too, so FK coverage is complete for the modeled surface.) The authoritative
+    /// full-contract check — all columns, FKs, and indexes — runs via <see cref="AssertMatches"/> against the
+    /// hand-written DDL actually built into the container. CRUD round-trips in the same test exercise the
+    /// relationships directly.</summary>
     public static void AssertStructure(SchemaSnapshot expected, SchemaSnapshot actual)
     {
         var problems = new List<string>();
@@ -76,12 +68,28 @@ public static class SchemaFidelity
 
             if (!SameColumns(et.PrimaryKey, at.PrimaryKey))
                 problems.Add($"{et.Name}: PK expected ({Join(et.PrimaryKey)}), found ({Join(at.PrimaryKey)}).");
+
+            CheckForeignKeys(et, at, problems);
         }
 
         if (problems.Count > 0)
             throw new SchemaFidelityException(
                 "Schema structure check failed:" + Environment.NewLine +
                 string.Join(Environment.NewLine, problems.Select(p => "  - " + p)));
+    }
+
+    /// <summary>Appends a problem for every expected foreign key not present in <paramref name="actual"/>.</summary>
+    private static void CheckForeignKeys(TableSnapshot expected, TableSnapshot actual, List<string> problems)
+    {
+        foreach (var efk in expected.ForeignKeys)
+        {
+            var ok = actual.ForeignKeys.Any(afk =>
+                SameColumns(afk.Columns, efk.Columns) &&
+                Id.Equals(afk.ReferencedTable, efk.ReferencedTable) &&
+                SameColumns(afk.ReferencedColumns, efk.ReferencedColumns));
+            if (!ok)
+                problems.Add($"{expected.Name}: missing FK ({Join(efk.Columns)}) -> {efk.ReferencedTable}({Join(efk.ReferencedColumns)}).");
+        }
     }
 
     private static bool SameColumns(IReadOnlyList<string> a, IReadOnlyList<string> b)

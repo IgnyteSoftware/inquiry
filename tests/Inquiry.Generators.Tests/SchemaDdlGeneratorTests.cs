@@ -104,6 +104,52 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void CompositeKeyColumnsCanAlsoBeForeignKeys()
+    {
+        // A bridge table's composite-key columns are also foreign keys: [InquiryKey] + [InquiryForeignKey]
+        // on the same property. The generated DDL emits BOTH the composite PK and a FOREIGN KEY per column.
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Employee")]
+            public sealed class Employee
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+            }
+
+            [InquiryTable("Territory")]
+            public sealed class Territory
+            {
+                [InquiryKey("Code", Length = 8)]
+                public string Code { get; set; } = string.Empty;
+            }
+
+            [InquiryTable("EmployeeTerritory")]
+            public sealed class EmployeeTerritory
+            {
+                [InquiryKey("EmpId")]
+                [InquiryForeignKey("EmpId", "Employee", "Id")]
+                public long EmpId { get; set; }
+
+                [InquiryKey("TerrCode", Length = 8)]
+                [InquiryForeignKey("TerrCode", "Territory", "Code")]
+                public string TerrCode { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("PRIMARY KEY (\"EmpId\", \"TerrCode\")", ddl);
+        Assert.Contains("FOREIGN KEY (\"EmpId\") REFERENCES \"Employee\"(\"Id\")", ddl);
+        Assert.Contains("FOREIGN KEY (\"TerrCode\") REFERENCES \"Territory\"(\"Code\")", ddl);
+    }
+
+    [Fact]
     public void SelfReferencingForeignKeyDoesNotDeadlockAndEmits()
     {
         const string source = """

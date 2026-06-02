@@ -54,7 +54,7 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 
 | Suite | Tests | Needs Docker? |
 |---|---|---|
-| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 158 | no |
+| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 159 | no |
 | `Inquiry.Tests` (runtime pipeline, binding, transactions) | 92 | no |
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
 | `Inquiry.PostgreSql.Tests` | 38 | yes |
@@ -118,9 +118,14 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
    hand-written DDL), so the sample's indexes are real and emit no warnings. Tests:
    `ForeignKeyStringColumnInheritsReferencedKeyLength`, `IndexedUnboundedStringReportsInq032OnBoundedDialectOnly`,
    `OracleSchemaSkipsIndexOnUnboundedStringButKeepsBoundedOne`.
-3. **Generated DDL omits FKs on composite-key bridge tables** — the generated-DDL structural check is
-   relaxed to tables+PK only because the entity model omits bridge-table FKs (`CustomerCustomerDemo`,
-   `EmployeeTerritories`).
+3. **✅ Resolved (this session) — generated DDL now emits FKs on composite-key bridge tables.**
+   `CustomerCustomerDemo`, `EmployeeTerritories`, and `Order Details` modeled their FK columns as
+   `[InquiryKey]` only, so the generated DDL had no `FOREIGN KEY` for them. The generator already reads
+   key/FK independently, so the 6 composite-key columns now also carry `[InquiryForeignKey]` (a column can
+   be both). `SchemaFidelity.AssertStructure` was tightened from tables+PK to **tables+PK+FKs** (sharing a
+   `CheckForeignKeys` helper with `AssertMatches`); the generated-DDL suites now verify the full FK set
+   round-trips on every live dialect. Generator test `CompositeKeyColumnsCanAlsoBeForeignKeys`. (Columns
+   and secondary indexes stay model-bounded, so `AssertStructure` still skips those.)
 
 ### B. Live test coverage — ADDED 2026-06-01
 4. **MySQL & Oracle live coverage added** — table-breadth + pagination + predicate suites
