@@ -290,6 +290,17 @@ public abstract class SqlBuilder
                 continue;
             }
 
+            // A bounded-key dialect (Oracle / SQL Server / MySQL) cannot index an unbounded string: it
+            // maps to a LOB/MAX text type (CLOB / NVARCHAR(MAX) / LONGTEXT) the engine rejects as an index
+            // key. Skip the index rather than emit invalid DDL — bound the column with
+            // [InquiryColumn(Length = …)] to have it indexed (the generator also reports INQ032).
+            // SQLite/PostgreSQL index unbounded TEXT fine (RequiresBoundedStringKeys is false), so they
+            // keep the index.
+            if (RequiresBoundedStringKeys && IsUnboundedString(column))
+            {
+                continue;
+            }
+
             var indexName = string.IsNullOrEmpty(column.IndexName)
                 ? (column.IsUnique ? "UX_" : "IX_") + context.RawTableName + "_" + column.ColumnName
                 : column.IndexName!;
@@ -309,6 +320,16 @@ public abstract class SqlBuilder
     /// matching Oracle's already non-idempotent <c>CREATE TABLE</c>. Documented on <c>[InquiryColumn]</c>.
     /// </summary>
     protected virtual bool SupportsCreateIndexIfNotExists => false;
+
+    /// <summary>
+    /// True for a string column that maps to the dialect's unbounded text type — no explicit
+    /// <see cref="IColumn.Length"/> and no <see cref="IColumn.SqlType"/> override (TEXT / CLOB /
+    /// NVARCHAR(MAX) / LONGTEXT). On a bounded-key dialect such a column cannot be a key or index target.
+    /// </summary>
+    protected static bool IsUnboundedString(IColumn column)
+        => column.TypeClass == DbTypeClass.String
+           && column.Length == 0
+           && string.IsNullOrEmpty(column.SqlType);
 
     /// <summary>The physical column type: the explicit <see cref="IColumn.SqlType"/> override if set, else <see cref="MapColumnType"/>.</summary>
     protected string ColumnType(IColumn column)

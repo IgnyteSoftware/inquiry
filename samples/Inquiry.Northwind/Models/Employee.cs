@@ -8,7 +8,7 @@ public sealed class Employee
     [InquiryKey("EmployeeID", IsGenerated = true)]
     public int? EmployeeID { get; set; }
 
-    [InquiryColumn(IsIndexed = true)]
+    [InquiryColumn(IsIndexed = true, Length = 40)]
     public string LastName { get; set; } = string.Empty;
 
     [InquiryColumn]
@@ -35,7 +35,7 @@ public sealed class Employee
     [InquiryColumn]
     public string? Region { get; set; }
 
-    [InquiryColumn(IsIndexed = true)]
+    [InquiryColumn(IsIndexed = true, Length = 20)]
     public string? PostalCode { get; set; }
 
     [InquiryColumn]

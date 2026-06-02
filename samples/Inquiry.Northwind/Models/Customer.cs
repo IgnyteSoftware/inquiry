@@ -8,7 +8,7 @@ public sealed class Customer
     [InquiryKey("CustomerID", Length = 5)]
     public string CustomerID { get; set; } = string.Empty;
 
-    [InquiryColumn(IsIndexed = true)]
+    [InquiryColumn(IsIndexed = true, Length = 40)]
     public string CompanyName { get; set; } = string.Empty;
 
     [InquiryColumn]
@@ -20,13 +20,13 @@ public sealed class Customer
     [InquiryColumn]
     public string? Address { get; set; }
 
-    [InquiryColumn(IsIndexed = true)]
+    [InquiryColumn(IsIndexed = true, Length = 60)]
     public string? City { get; set; }
 
-    [InquiryColumn(IsIndexed = true)]
+    [InquiryColumn(IsIndexed = true, Length = 60)]
     public string? Region { get; set; }
 
-    [InquiryColumn(IsIndexed = true)]
+    [InquiryColumn(IsIndexed = true, Length = 20)]
     public string? PostalCode { get; set; }
 
     [InquiryColumn]

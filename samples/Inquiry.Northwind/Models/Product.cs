@@ -8,7 +8,7 @@ public sealed class Product
     [InquiryKey("ProductID", IsGenerated = true)]
     public int? ProductID { get; set; }
 
-    [InquiryColumn(IsIndexed = true)]
+    [InquiryColumn(IsIndexed = true, Length = 40)]
     public string ProductName { get; set; } = string.Empty;
 
     [InquiryForeignKey("SupplierID", "Suppliers", "SupplierID", IsIndexed = true)]

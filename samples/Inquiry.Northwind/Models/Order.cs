@@ -41,7 +41,7 @@ public sealed class Order
     [InquiryColumn]
     public string? ShipRegion { get; set; }
 
-    [InquiryColumn(IsIndexed = true)]
+    [InquiryColumn(IsIndexed = true, Length = 20)]
     public string? ShipPostalCode { get; set; }
 
     [InquiryColumn]
