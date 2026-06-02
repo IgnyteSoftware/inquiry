@@ -230,19 +230,14 @@ public sealed class NorthwindCoverageIntegrationTests
     }
 
     /// <summary>
-    /// KNOWN LIMITATION (tracked follow-up): generated-key upsert-returning over the
-    /// <c>ON DUPLICATE KEY UPDATE</c> (update) branch returns <see langword="null"/>. MySQL's emulated
-    /// returning <c>SELECT</c> keys off <c>LAST_INSERT_ID()</c>, which is not set to the row's id when
-    /// the statement updates rather than inserts, so the row is not read back. Confirmed against live
-    /// MySQL (this is the body that fails). Fix in <c>MySqlSqlBuilder.BuildUpsertReturningSql</c> (e.g.
-    /// the <c>LAST_INSERT_ID(id)</c> trick or a key-based predicate), then remove the
-    /// <see cref="Skip"/>. The non-returning <c>UpsertAsync</c> and the string-key upsert-returning path
-    /// (see <see cref="MutationReturningSurfacesUpdatedAndUpsertedRows"/>) are unaffected.
+    /// Generated-key upsert-returning over the <c>ON DUPLICATE KEY UPDATE</c> (update) branch surfaces the
+    /// updated row. The upsert adds <c>key = LAST_INSERT_ID(key)</c> to the update set, so the emulated
+    /// returning <c>SELECT</c> (keyed on <c>LAST_INSERT_ID()</c>) reads the existing row back even when the
+    /// statement updates rather than inserts.
     /// </summary>
     [SkippableFact]
-    public async Task ProductUpsertReturningUpdateBranchIsKnownLimitation()
+    public async Task ProductUpsertReturningUpdateBranchSurfacesUpdatedRow()
     {
-        Skip.If(true, "MySQL upsert-returning on the ON DUPLICATE KEY UPDATE branch returns null via LAST_INSERT_ID(); tracked follow-up in MySqlSqlBuilder.BuildUpsertReturningSql.");
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "upsertgenupd");
         var categories = harness.GetRequiredService<CategoryStore>();

@@ -82,28 +82,33 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     {
         if (DatabaseMaySupplyKey(context))
         {
-            // KNOWN LIMITATION (follow-up: live MySQL integration): the trailing returning SELECT
-            // keys off LAST_INSERT_ID(). On the INSERT branch that is the freshly generated key, but
-            // on the ON DUPLICATE KEY UPDATE branch no auto-increment is generated, so
-            // LAST_INSERT_ID() reflects the session's prior insert rather than the updated row — the
-            // returned entity may be wrong or empty. Verify and fix (e.g. LAST_INSERT_ID(id) trick or
-            // a key-based predicate) before relying on generated-key upsert-returning against a live
-            // server. The non-generated-key path below is correct (keyed by @Key).
-            return BuildGeneratedKeyUpsertSql(context) + "; " + BuildReturningSelect(context);
+            // The trailing returning SELECT reads the row back via LAST_INSERT_ID(). On the INSERT branch
+            // that is the freshly generated key; on the ON DUPLICATE KEY UPDATE branch no auto-increment
+            // fires, so the upsert sets it explicitly with `key = LAST_INSERT_ID(key)` (the standard MySQL
+            // trick) — LAST_INSERT_ID() then returns the existing row's key, so the SELECT finds it.
+            return BuildGeneratedKeyUpsertSql(context, echoKeyForReturning: true) + "; " + BuildReturningSelect(context);
         }
 
         return BuildUpsertSql(context) + "; SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
     }
 
-    private string BuildGeneratedKeyUpsertSql(SqlBuildContext context)
+    private string BuildGeneratedKeyUpsertSql(SqlBuildContext context, bool echoKeyForReturning = false)
     {
         var keyColumn = context.QuotedKeyColumns[0];
         var keyParameter = context.KeyParameters[0];
         var explicitInsertColumns = JoinSql(keyColumn, context.InsertColumns);
         var explicitInsertParameters = JoinSql(keyParameter, context.InsertParameters);
 
+        var assignments = OnDuplicateKeyAssignments(context);
+        if (echoKeyForReturning)
+        {
+            // Set LAST_INSERT_ID() to this row's existing key on the UPDATE branch so the returning SELECT
+            // (keyed on LAST_INSERT_ID()) reads the updated row back rather than a stale/empty result.
+            assignments = JoinSql(keyColumn + " = LAST_INSERT_ID(" + keyColumn + ")", assignments);
+        }
+
         return "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") VALUES (" + explicitInsertParameters + ") " +
-            "ON DUPLICATE KEY UPDATE " + OnDuplicateKeyAssignments(context);
+            "ON DUPLICATE KEY UPDATE " + assignments;
     }
 
     /// <summary>
