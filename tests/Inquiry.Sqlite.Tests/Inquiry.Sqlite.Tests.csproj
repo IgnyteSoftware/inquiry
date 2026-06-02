@@ -15,6 +15,9 @@
     <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
     <ProjectReference Include="..\..\samples\Inquiry.Northwind\Inquiry.Northwind.csproj" />
     <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
+
+    <!-- Shared feature catalog (W6/W8/W10). FullText (W9) is excluded: SQLite rejects FTS (INQ035). -->
+    <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
   </ItemGroup>
 
   <ItemGroup>

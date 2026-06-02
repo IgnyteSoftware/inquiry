@@ -76,4 +76,17 @@ public partial class ProductStore : InquiryStore<Product>
 
     [InquiryDeleteOneByKey]
     public partial Task<bool> DeleteByKeyAsync(int? productID, CancellationToken cancellationToken = default);
+
+    // W5 aggregations + projection over the live Northwind data.
+    [InquiryCount]
+    public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
+
+    [InquiryAggregate(InquiryAggregateFunction.Max, "UnitPrice")]
+    public partial Task<decimal?> MaxUnitPriceAsync(CancellationToken cancellationToken = default);
+
+    [InquiryAggregate(InquiryAggregateFunction.Sum, "UnitPrice")]
+    public partial Task<decimal?> SumUnitPriceAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAll]
+    public partial Task<IReadOnlyList<ProductSummary>> SummariesAsync(CancellationToken cancellationToken = default);
 }
