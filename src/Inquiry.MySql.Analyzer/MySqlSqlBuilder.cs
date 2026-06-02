@@ -160,40 +160,4 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
 
     protected override string GeneratedKeyClause(IColumn column)
         => MapColumnType(column) + " AUTO_INCREMENT PRIMARY KEY";
-
-    // MySQL cannot index a LONGTEXT column without a prefix length. A string column flagged
-    // [InquiryColumn(IsIndexed)] without a Length (or explicit SqlType) maps to LONGTEXT, so its
-    // CREATE INDEX would be rejected ("used in key specification without a key length"). Skip those
-    // indexes rather than emit invalid DDL — the authoritative secondary-index contract is verified
-    // against the hand-written schema, which bounds (or prefix-indexes) such columns.
-    public override IReadOnlyList<string> BuildCreateIndexSql(SqlBuildContext context)
-    {
-        var statements = new List<string>();
-        foreach (var column in context.Columns)
-        {
-            if (!column.IsIndexed && !column.IsUnique)
-            {
-                continue;
-            }
-
-            if (IsUnboundedString(column))
-            {
-                continue;
-            }
-
-            var indexName = string.IsNullOrEmpty(column.IndexName)
-                ? (column.IsUnique ? "UX_" : "IX_") + context.RawTableName + "_" + column.ColumnName
-                : column.IndexName!;
-            var unique = column.IsUnique ? "UNIQUE " : string.Empty;
-            statements.Add("CREATE " + unique + "INDEX " + QuoteIdentifier(indexName)
-                + " ON " + context.Table + " (" + QuoteIdentifier(column.ColumnName) + ")");
-        }
-
-        return statements;
-    }
-
-    private static bool IsUnboundedString(IColumn column)
-        => column.TypeClass == DbTypeClass.String
-           && column.Length == 0
-           && string.IsNullOrEmpty(column.SqlType);
 }

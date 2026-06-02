@@ -54,13 +54,13 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 
 | Suite | Tests | Needs Docker? |
 |---|---|---|
-| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 154 | no |
+| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 158 | no |
 | `Inquiry.Tests` (runtime pipeline, binding, transactions) | 92 | no |
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
 | `Inquiry.PostgreSql.Tests` | 38 | yes |
 | `Inquiry.SqlServer.Tests` | 36 | yes |
 | `Inquiry.MySql.Tests` | 36 (+1 documented skip) | yes |
-| `Inquiry.Oracle.Tests` | 24 (+1 documented skip) | yes |
+| `Inquiry.Oracle.Tests` | 25 (no skips) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
@@ -103,19 +103,21 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
 (`TaskList`). Ordered by value.
 
 ### A. Schema-fidelity / generated-DDL (highest value — tied to "never cause production downtime")
-1. **✅ Quoting resolved (this session) — generated DDL now blocked by a *distinct* index-on-CLOB bug.**
-   `"Order Details"` (embedded space) was emitted unquoted → ORA-00903. `OracleSqlBuilder.QuoteIdentifier`
-   now double-quotes identifiers that aren't legal unquoted (single chokepoint → DDL + DML stay in lockstep);
-   regression test `OracleSchemaQuotesOnlyIdentifiersThatRequireIt`. Un-skipping `GeneratedDdlIntegrationTests`
-   then surfaced a *separate* blocker: ~11 Northwind indexed string columns have no `Length`, map to `CLOB`,
-   and Oracle rejects a b-tree index on a LOB (**ORA-02327**). The test stays skipped with that reason; the
-   fix belongs with **item #2** — bounding unannotated string lengths to `VARCHAR2` makes the indexes valid
-   (or, alternatively, skip `CREATE INDEX` on LOB columns).
-2. **FK length not auto-derived from the referenced PK** — on bounded-key dialects (MySQL/SQL
-   Server/Oracle), a string FK only emits a valid bounded `VARCHAR` because every FK is *manually*
-   annotated with `Length`. A forgotten annotation regresses to invalid/mismatched DDL. **Tracked as
-   task #1.** Two approaches: auto-propagate the referenced PK's length in `SchemaEmitter`, or emit a
-   compile-time diagnostic when a string FK lacks `Length` on a bounded-key dialect.
+1. **✅ Resolved (this session) — Oracle generated DDL now fully stands up; test un-skipped.**
+   Quoting: `"Order Details"` (embedded space) was emitted unquoted → ORA-00903; `OracleSqlBuilder.QuoteIdentifier`
+   now double-quotes identifiers that aren't legal unquoted (single chokepoint → DDL + DML in lockstep; test
+   `OracleSchemaQuotesOnlyIdentifiersThatRequireIt`). The index-on-CLOB blocker that surfaced next (**ORA-02327**)
+   was fixed under **item #2**. `Oracle.Tests/GeneratedDdlIntegrationTests` is now un-skipped and green (**Oracle 25, no skips**).
+2. **✅ Resolved (this session) — unannotated string lengths on bounded-key dialects.**
+   (a) A string FK with no `Length` now inherits its referenced PK's `Length` (`SchemaEmitter.DeriveForeignKeyLength`),
+   so a bounded dialect emits a valid bounded `VARCHAR` instead of an unindexable/unkeyable LOB.
+   (b) New **INQ032** (Warning) when a bounded dialect skips an index on an unbounded string, so the dropped
+   index is not silent. (c) The index-skip itself was hoisted into the base `BuildCreateIndexSql` (gated by
+   `RequiresBoundedStringKeys`) — giving Oracle the behavior MySQL/SQL Server already had (fixing ORA-02327)
+   **and resolving the #10 dedup**. Northwind's ~11 indexed strings were annotated with `Length` (matching the
+   hand-written DDL), so the sample's indexes are real and emit no warnings. Tests:
+   `ForeignKeyStringColumnInheritsReferencedKeyLength`, `IndexedUnboundedStringReportsInq032OnBoundedDialectOnly`,
+   `OracleSchemaSkipsIndexOnUnboundedStringButKeepsBoundedOne`.
 3. **Generated DDL omits FKs on composite-key bridge tables** — the generated-DDL structural check is
    relaxed to tables+PK only because the entity model omits bridge-table FKs (`CustomerCustomerDemo`,
    `EmployeeTerritories`).
@@ -162,8 +164,10 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
 9. **Live-environment benchmark (Phase 8/9 of the live-runtime plan)** — dialect-parameterize
    `benchmarks/Inquiry.Benchmarks` (`InquiryBenchProvider` MSBuild property + `AssemblyDialect.*.cs`)
    and add a PostgreSQL benchmark provisioning via Testcontainers. Infra exists; explicitly deferred.
-10. **Dedup `BuildCreateIndexSql` / `IsUnboundedString`** — duplicated across the SQL Server and MySQL
-    builders.
+10. **✅ Resolved (this session) — dedup `BuildCreateIndexSql` / `IsUnboundedString`.** The identical SQL
+    Server and MySQL index-skip overrides were hoisted into the base `SqlBuilder` (gated by
+    `RequiresBoundedStringKeys`); both per-dialect copies are gone, and Oracle now shares the behavior. Done
+    as part of item #2.
 
 ---
 

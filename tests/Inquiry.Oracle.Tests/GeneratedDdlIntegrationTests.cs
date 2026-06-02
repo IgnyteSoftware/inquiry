@@ -23,14 +23,6 @@ public sealed class GeneratedDdlIntegrationTests
     public async Task InquiryGeneratedSchemaStandsUpAndRoundTripsCrud()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        // Oracle generated-DDL identifier quoting is now fixed (the "Order Details" space no longer raises
-        // ORA-00903). The generated DDL still does not fully stand up, though: ~11 Northwind columns are
-        // indexed strings with no Length, which map to CLOB, and Oracle rejects a b-tree index on a LOB
-        // (ORA-02327). The hand-written OracleDdl bounds those strings (VARCHAR2); the fix is to bound
-        // unannotated string lengths (tracked with the A2 string-length work in docs/STATUS.md). Un-skip
-        // once indexed strings are bounded. The body below is the Oracle-correct CRUD/fidelity check (no
-        // InsertReturning — Oracle has no result-set RETURNING), ready to run once the DDL stands up.
-        Skip.If(true, "Oracle generated DDL indexes unbounded (CLOB) string columns -> ORA-02327; tracked with the A2 string-length work.");
         await using var harness = await OracleTestHarness.CreateFromDdlAsync(
             _fixture.AdminConnectionString, InquiryGeneratedSchema.Ddl, "gends");
 

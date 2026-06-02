@@ -19,7 +19,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ024–INQ027  W5  Projections + aggregations    (INQ024 no columns, INQ025 not mapped, INQ026 entity mismatch, INQ027 soft-delete) [IN USE]
     //   INQ028–INQ029  W6  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
     //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per W8 convention)
-    //   INQ030–INQ032  W7  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length) [IN USE]
+    //   INQ030–INQ032  W7  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length, INQ032 indexed string needs Length) [IN USE]
     //   INQ033–INQ034  W8  Soft deletes
     //   INQ035         W9  Full-text search              (unsupported by dialect)
     //   INQ036–INQ038  W10 JSON/array/value-converter column types
@@ -257,6 +257,14 @@ internal static class InquiryDiagnosticDescriptors
         "Entity '{0}' has string key column '{1}' with no [InquiryColumn(Length = …)]. The '{2}' dialect cannot create a primary key over an unbounded text column, so generated DDL would fail. Set an explicit Length.",
         "Inquiry",
         DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor IndexedStringRequiresLength = new(
+        "INQ032",
+        "Indexed string column requires an explicit Length for this dialect",
+        "Entity '{0}' has indexed string column '{1}' with no [InquiryColumn(Length = …)]. The '{2}' dialect maps an unbounded string to a LOB/MAX text type it cannot index, so the generated index is skipped. Set an explicit Length to have the index created (or a foreign key inherits its referenced key's Length).",
+        "Inquiry",
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor ConverterInvalid = new(

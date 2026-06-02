@@ -33,7 +33,12 @@ internal static class SchemaEmitter
             return;
         }
 
-        ReportKeyDiagnostics(context, entities, builder);
+        // A string foreign-key column with no declared Length inherits its referenced column's declared
+        // Length, so on a bounded dialect it emits a valid bounded VARCHAR instead of an unindexable/
+        // unkeyable LOB. Indexed by (table, column) across every entity (the referenced table may be any).
+        var declaredLengths = BuildColumnLengthIndex(entities);
+
+        ReportKeyDiagnostics(context, entities, builder, declaredLengths);
 
         var ordered = OrderByForeignKeyDependencies(entities);
 
@@ -49,7 +54,7 @@ internal static class SchemaEmitter
             }
 
             var entity = ordered[i];
-            var columns = ToColumnList(entity.Columns);
+            var columns = ResolveColumns(entity, declaredLengths);
             var ctx = new SqlBuildContext(
                 builder,
                 entity.Schema,
@@ -89,7 +94,7 @@ internal static class SchemaEmitter
     /// database-generated key that is not an integer (INQ030), and an unbounded string key on a dialect
     /// that cannot key on unbounded text (INQ031). Location-less (the cached model carries no symbol).
     /// </summary>
-    private static void ReportKeyDiagnostics(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
+    private static void ReportKeyDiagnostics(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder, Dictionary<string, int> declaredLengths)
     {
         foreach (var entity in entities)
         {
@@ -104,6 +109,24 @@ internal static class SchemaEmitter
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         InquiryDiagnosticDescriptors.StringKeyRequiresLength, location: null, entity.TableName, key.PropertyName, builder.DialectName));
+                }
+            }
+
+            // INQ032: a bounded dialect cannot index an unbounded string (it maps to CLOB / NVARCHAR(MAX)
+            // / LONGTEXT), so the generator skips that index (see SqlBuilder.BuildCreateIndexSql). Warn so
+            // the dropped index is not silent — an explicit Length has it created. Non-key only: a string
+            // key is the INQ031 error, and a foreign key inherits its referenced key's Length below.
+            if (!builder.RequiresBoundedStringKeys)
+            {
+                continue;
+            }
+
+            foreach (var column in entity.Columns.AsImmutableArray())
+            {
+                if ((column.IsIndexed || column.IsUnique) && !column.IsKey && IsUnboundedAfterDerivation(column, declaredLengths))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.IndexedStringRequiresLength, location: null, entity.TableName, column.PropertyName, builder.DialectName));
                 }
             }
         }
@@ -186,14 +209,64 @@ internal static class SchemaEmitter
         return ordered;
     }
 
-    private static List<IColumn> ToColumnList(EquatableArray<ColumnData> columns)
+    /// <summary>Indexes every declared (non-zero) column Length by (table, column) for FK derivation.</summary>
+    private static Dictionary<string, int> BuildColumnLengthIndex(IReadOnlyList<EntityData> entities)
     {
-        var list = new List<IColumn>(columns.Count);
-        foreach (var column in columns.AsImmutableArray())
+        var map = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+        foreach (var entity in entities)
         {
-            list.Add(column);
+            foreach (var column in entity.Columns.AsImmutableArray())
+            {
+                if (column.Length > 0)
+                {
+                    map[ColumnKey(entity.TableName, column.ColumnName)] = column.Length;
+                }
+            }
+        }
+
+        return map;
+    }
+
+    // '\0' cannot appear in a SQL identifier, so it is a collision-proof composite-key separator
+    // (identifiers may contain spaces, e.g. "Order Details").
+    private static string ColumnKey(string table, string column) => table + "\0" + column;
+
+    /// <summary>
+    /// A non-key string foreign-key column with no declared <see cref="ColumnData.Length"/> (and no
+    /// <see cref="ColumnData.SqlType"/>) inherits its referenced column's declared Length; everything else
+    /// is returned unchanged. Keys are exempt — an unbounded string key is an explicit-Length error
+    /// (INQ031), not silently derived.
+    /// </summary>
+    private static ColumnData DeriveForeignKeyLength(ColumnData column, Dictionary<string, int> declaredLengths)
+    {
+        if (column.Length == 0
+            && !column.IsKey
+            && column.TypeClass == DbTypeClass.String
+            && string.IsNullOrEmpty(column.SqlType)
+            && !string.IsNullOrEmpty(column.ForeignKeyTable)
+            && !string.IsNullOrEmpty(column.ForeignKeyColumn)
+            && declaredLengths.TryGetValue(ColumnKey(column.ForeignKeyTable!, column.ForeignKeyColumn!), out var referencedLength))
+        {
+            return column with { Length = referencedLength };
+        }
+
+        return column;
+    }
+
+    private static List<IColumn> ResolveColumns(EntityData entity, Dictionary<string, int> declaredLengths)
+    {
+        var list = new List<IColumn>(entity.Columns.Count);
+        foreach (var column in entity.Columns.AsImmutableArray())
+        {
+            list.Add(DeriveForeignKeyLength(column, declaredLengths));
         }
 
         return list;
     }
+
+    /// <summary>True for a string column that is still unbounded (TEXT/LOB/MAX) after FK-length derivation.</summary>
+    private static bool IsUnboundedAfterDerivation(ColumnData column, Dictionary<string, int> declaredLengths)
+        => column.TypeClass == DbTypeClass.String
+           && string.IsNullOrEmpty(column.SqlType)
+           && DeriveForeignKeyLength(column, declaredLengths).Length == 0;
 }

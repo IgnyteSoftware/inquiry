@@ -1,4 +1,5 @@
 using System;
+using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
 
@@ -361,6 +362,148 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("PRIMARY KEY (OrderId, ProductId)", ddl);
         Assert.DoesNotContain("\"OrderId\"", ddl);
         Assert.DoesNotContain("\"Quantity\"", ddl);
+    }
+
+    [Fact]
+    public void OracleSchemaSkipsIndexOnUnboundedStringButKeepsBoundedOne()
+    {
+        // A bounded-key dialect cannot index an unbounded string (Oracle CLOB → ORA-02327). The skip now
+        // lives in the base BuildCreateIndexSql (gated by RequiresBoundedStringKeys), so Oracle inherits
+        // the same behavior MySQL/SQL Server already had — the index on the unbounded column is skipped,
+        // the bounded one is kept.
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Doc")]
+            public sealed class Doc
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Body", IsIndexed = true)]
+                public string Body { get; set; } = string.Empty;
+
+                [InquiryColumn("Code", Length = 16, IsIndexed = true)]
+                public string Code { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("CREATE INDEX IX_Doc_Code ON Doc (Code)", ddl);
+        Assert.DoesNotContain("IX_Doc_Body", ddl); // unbounded CLOB column: index skipped, not emitted
+        // The skip is surfaced, not silent: INQ032 warns for the unbounded indexed column.
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ032");
+    }
+
+    [Fact]
+    public void ForeignKeyStringColumnInheritsReferencedKeyLength()
+    {
+        // A string FK with no declared Length inherits the referenced PK's Length, so a bounded dialect
+        // emits a valid bounded VARCHAR instead of an unindexable/unkeyable LOB. Resolved across entities
+        // in SchemaEmitter (the referenced table is a different entity).
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Customer")]
+            public sealed class Customer
+            {
+                [InquiryKey("Code", Length = 5)]
+                public string Code { get; set; } = string.Empty;
+            }
+
+            [InquiryTable("Ord")]
+            public sealed class Ord
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryForeignKey("CustomerCode", "Customer", "Code")]
+                public string CustomerCode { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        // CustomerCode declared no Length but inherits Customer.Code's 5 → NVARCHAR(5), not NVARCHAR(MAX).
+        Assert.Contains("[CustomerCode] NVARCHAR(5)", ddl);
+        Assert.DoesNotContain("NVARCHAR(MAX)", ddl);
+    }
+
+    [Fact]
+    public void IndexedForeignKeyStringInheritsLengthAndKeepsIndexWithoutWarning()
+    {
+        // The three A2 changes intersect on a string FK that is also indexed with no Length: derivation
+        // bounds it (NVARCHAR(5)), so its index is kept (not skipped) and it does NOT warn (INQ032).
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Customer")]
+            public sealed class Customer
+            {
+                [InquiryKey("Code", Length = 5)]
+                public string Code { get; set; } = string.Empty;
+            }
+
+            [InquiryTable("Ord")]
+            public sealed class Ord
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryForeignKey("CustomerCode", "Customer", "Code", IsIndexed = true)]
+                public string CustomerCode { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ032");
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("[CustomerCode] NVARCHAR(5)", ddl);            // derived from Customer.Code
+        Assert.Contains("CREATE INDEX [IX_Ord_CustomerCode] ON [Ord] ([CustomerCode])", ddl); // index kept
+    }
+
+    [Fact]
+    public void IndexedUnboundedStringReportsInq032OnBoundedDialectOnly()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Doc")]
+            public sealed class Doc
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Title", IsIndexed = true)]
+                public string Title { get; set; } = string.Empty;
+            }
+            """;
+
+        // Bounded dialect: an indexed unbounded string warns (INQ032) because its index is skipped.
+        var sqlServer = RunGenerator(source, dialect: "SqlServer");
+        Assert.Contains(sqlServer.RunResult.Diagnostics, d => d.Id == "INQ032" && d.Severity == DiagnosticSeverity.Warning);
+
+        // SQLite indexes unbounded TEXT fine → no warning.
+        var sqlite = RunGenerator(source);
+        Assert.DoesNotContain(sqlite.RunResult.Diagnostics, d => d.Id == "INQ032");
+
+        // A bounded indexed string does not warn (the index is created).
+        var bounded = RunGenerator(source.Replace("IsIndexed = true", "IsIndexed = true, Length = 64"), dialect: "SqlServer");
+        Assert.DoesNotContain(bounded.RunResult.Diagnostics, d => d.Id == "INQ032");
     }
 
     [Fact]
