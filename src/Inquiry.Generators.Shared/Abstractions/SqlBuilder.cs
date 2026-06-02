@@ -412,18 +412,20 @@ public abstract class SqlBuilder
         var column = QuoteIdentifier(predicate.Column.ColumnName);
         switch (predicate.Op)
         {
-            case SqlCompareOp.Equal: return column + " = " + predicate.ParameterName;
-            case SqlCompareOp.NotEqual: return column + " <> " + predicate.ParameterName;
-            case SqlCompareOp.GreaterThan: return column + " > " + predicate.ParameterName;
-            case SqlCompareOp.GreaterThanOrEqual: return column + " >= " + predicate.ParameterName;
-            case SqlCompareOp.LessThan: return column + " < " + predicate.ParameterName;
-            case SqlCompareOp.LessThanOrEqual: return column + " <= " + predicate.ParameterName;
-            case SqlCompareOp.Between: return column + " BETWEEN " + predicate.ParameterName + " AND " + predicate.ParameterNameHi;
+            // SqlPredicate carries the bare logical parameter name; apply the dialect sigil here
+            // (':' on Oracle, '@' elsewhere) so predicate SQL matches the dialect like every other clause.
+            case SqlCompareOp.Equal: return column + " = " + ParameterName(predicate.ParameterName!);
+            case SqlCompareOp.NotEqual: return column + " <> " + ParameterName(predicate.ParameterName!);
+            case SqlCompareOp.GreaterThan: return column + " > " + ParameterName(predicate.ParameterName!);
+            case SqlCompareOp.GreaterThanOrEqual: return column + " >= " + ParameterName(predicate.ParameterName!);
+            case SqlCompareOp.LessThan: return column + " < " + ParameterName(predicate.ParameterName!);
+            case SqlCompareOp.LessThanOrEqual: return column + " <= " + ParameterName(predicate.ParameterName!);
+            case SqlCompareOp.Between: return column + " BETWEEN " + ParameterName(predicate.ParameterName!) + " AND " + ParameterName(predicate.ParameterNameHi!);
             case SqlCompareOp.IsNull: return column + " IS NULL";
             case SqlCompareOp.IsNotNull: return column + " IS NOT NULL";
-            case SqlCompareOp.Like: return RenderLike(column, predicate.ParameterName!);
-            case SqlCompareOp.In: return RenderIn(column, predicate.ParameterName!);
-            default: return column + " = " + predicate.ParameterName;
+            case SqlCompareOp.Like: return RenderLike(column, ParameterName(predicate.ParameterName!));
+            case SqlCompareOp.In: return RenderIn(column, ParameterName(predicate.ParameterName!));
+            default: return column + " = " + ParameterName(predicate.ParameterName!);
         }
     }
 

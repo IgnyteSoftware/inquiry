@@ -60,7 +60,7 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 | `Inquiry.PostgreSql.Tests` | 38 | yes |
 | `Inquiry.SqlServer.Tests` | 36 | yes |
 | `Inquiry.MySql.Tests` | 36 (+1 documented skip) | yes |
-| `Inquiry.Oracle.Tests` | 12 (+13 documented skips) | yes |
+| `Inquiry.Oracle.Tests` | 21 (+4 documented skips) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
@@ -133,15 +133,18 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
    not set on the update path). Fix in `MySqlSqlBuilder.BuildUpsertReturningSql` (the `LAST_INSERT_ID(id)`
    trick or a key predicate). Ready-to-un-skip regression test:
    `MySql.Tests/NorthwindCoverageIntegrationTests.ProductUpsertReturningUpdateBranchIsKnownLimitation`.
-6. **Oracle `@` parameter sigil baked into const SQL — CONFIRMED real and broader than documented.**
-   Both **predicate (W1)** value parameters *and* **pagination (W2)** synthetic params (`@__offset`,
-   `@__limit`, `@__cursorN`) are baked into the const SQL with `@` by the shared `StoreProcessor`; Oracle
-   rejects them with ORA-00936 ("missing expression"). `FinalizeCommand` normalizes parameter *names* but
-   cannot rewrite the baked SQL text, so it does **not** fix this (only CRUD / `[InquirySelectAllByField]`
-   work, because the Oracle builder emits `:` there). **Fix:** make the predicate/synthetic parameter
-   prefix dialect-aware in the shared generator (use `SqlBuilder.ParameterName`). One fix unblocks W1 + W2
-   on Oracle. Ready-to-un-skip tests: `Oracle.Tests/PaginationIntegrationTests` (7) +
-   `PredicateSelectIntegrationTests` (5).
+6. **✅ Resolved this session — Oracle `@` parameter sigil.** Predicate (W1) and pagination (W2)
+   parameters were baked into the const SQL with `@`, which Oracle rejected (ORA-00936). Fixed by making
+   the prefix dialect-aware in the shared generator: `SqlPredicate` now carries the bare logical name and
+   `SqlBuilder.RenderPredicate` applies the sigil; `BuildSelectPlanSql` builds synthetic paging params via
+   `SqlBuilder.ParameterName`. Oracle bind names also cannot begin with `_`, so `OracleSqlBuilder.ParameterName`
+   and `FinalizeCommand` both trim the leading underscores of the synthetic names. **Verified live:**
+   `Oracle.Tests/PaginationIntegrationTests` (8) + comparison/LIKE/BETWEEN/OR/IS-NULL predicates pass. Non-Oracle
+   emission is byte-identical (Generators 152, SQLite 104, MySQL 36 all green).
+
+   **Remaining (narrower) — Oracle `IN` predicate.** The runtime IN-expansion (`InquiryInExpansion`)
+   rewrites the placeholder into `@`-prefixed element params, which Oracle still rejects. 3 ready-to-un-skip
+   tests (`Oracle.Tests/PredicateSelectIntegrationTests` IN cases). Fix = make IN-expansion dialect-aware.
 7. **Oracle `@keys` batch-delete sentinel** — `DeleteAll`/`UpdateAll` hardcode `@keys` (pre-existing).
 8. **Oracle RETURNING / `ReturnEntity=true`** — unsupported via the reader pipeline; currently degrades
    to an `INQ039` throwing stub (graceful, but a functional limitation to document or solve).
