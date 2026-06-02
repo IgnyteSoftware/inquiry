@@ -977,7 +977,7 @@ internal static class StoreProcessor
 
         if (method.Operation == StoreOperation.SelectAllByPredicate)
         {
-            if (!TryResolvePredicates(context, method, entity, out predicatePlan))
+            if (!TryResolvePredicates(context, method, entity, sqlBuilder, out predicatePlan))
             {
                 return false;
             }
@@ -1171,7 +1171,7 @@ internal static class StoreProcessor
     /// positionally to the method parameters. Reports INQ007 for an unknown field, INQ018 for a bad
     /// <c>In</c> collection, and INQ019 for any arity / parameter-order / Like-on-non-string mismatch.
     /// </summary>
-    private static bool TryResolvePredicates(SourceProductionContext context, StoreMethodData method, EntityData entity, out ResolvedPredicatePlan? plan)
+    private static bool TryResolvePredicates(SourceProductionContext context, StoreMethodData method, EntityData entity, SqlBuilder sqlBuilder, out ResolvedPredicatePlan? plan)
     {
         plan = null;
         var nonCancellationCount = method.Parameters.Count - 1;
@@ -1239,7 +1239,13 @@ internal static class StoreProcessor
 
                     var name = UniqueName(usedNames, column.PropertyName);
                     predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr));
-                    bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: true));
+                    // Unlike scalar bindings (which keep the runtime binder's '@' form and let Oracle's
+                    // FinalizeCommand reconcile the sigil), IN routes through InquiryInExpansion, which
+                    // rewrites the command TEXT by locating the baked sentinel. That sentinel takes the
+                    // dialect sigil (RenderIn → ParameterName), so the Expand name must match it exactly —
+                    // ':name' on Oracle, '@name' elsewhere. FinalizeCommand only renames parameters, not
+                    // the text, so it cannot bridge a mismatch here.
+                    bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column, isCollection: true));
                     paramIndex += 1;
                     hasIn = true;
                     break;

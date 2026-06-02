@@ -208,6 +208,32 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void OracleDialectEmitsInSentinelWithColonParameterAndExpansion()
+    {
+        // The IN sentinel takes Oracle's ':' sigil (via SqlBuilder.ParameterName), and the emitted
+        // InquiryInExpansion.Expand call must pass the SAME ':'-prefixed name so its runtime command-text
+        // rewrite finds the baked sentinel. (A hardcoded '@CategoryId' would never match the ':CategoryId'
+        // sentinel on Oracle, leaving the placeholder unbound — ORA-00936.) The per-element parameters the
+        // expansion creates (:CategoryId0, …) are reconciled to bare names by
+        // OracleInquiryConnectionFactory.FinalizeCommand under BindByName. Verified live by
+        // Inquiry.Oracle.Tests.PredicateSelectIntegrationTests.
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> InCategoriesAsync(IReadOnlyList<int> categoryIds, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        // Unquoted identifiers (Oracle uppercase-folds) and the ':' bind sigil on the IN sentinel.
+        Assert.Contains("WHERE CategoryId IN (:CategoryId)\";", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \":CategoryId\", categoryIds);", generatedText);
+    }
+
+    [Fact]
     public void OracleInsertReturningDegradesToThrowingStubWithWarning()
     {
         // Oracle cannot emit INSERT … RETURNING as a result set (v1 limitation). Rather than the builder's
