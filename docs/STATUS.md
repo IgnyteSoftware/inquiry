@@ -54,13 +54,13 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 
 | Suite | Tests | Needs Docker? |
 |---|---|---|
-| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 152 | no |
+| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 153 | no |
 | `Inquiry.Tests` (runtime pipeline, binding, transactions) | 92 | no |
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
 | `Inquiry.PostgreSql.Tests` | 38 | yes |
 | `Inquiry.SqlServer.Tests` | 36 | yes |
 | `Inquiry.MySql.Tests` | 36 (+1 documented skip) | yes |
-| `Inquiry.Oracle.Tests` | 21 (+4 documented skips) | yes |
+| `Inquiry.Oracle.Tests` | 24 (+1 documented skip) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
@@ -140,11 +140,15 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
    `SqlBuilder.ParameterName`. Oracle bind names also cannot begin with `_`, so `OracleSqlBuilder.ParameterName`
    and `FinalizeCommand` both trim the leading underscores of the synthetic names. **Verified live:**
    `Oracle.Tests/PaginationIntegrationTests` (8) + comparison/LIKE/BETWEEN/OR/IS-NULL predicates pass. Non-Oracle
-   emission is byte-identical (Generators 152, SQLite 104, MySQL 36 all green).
+   emission is byte-identical; full suites green (Generators 153, SQLite 104, MySQL 36).
 
-   **Remaining (narrower) — Oracle `IN` predicate.** The runtime IN-expansion (`InquiryInExpansion`)
-   rewrites the placeholder into `@`-prefixed element params, which Oracle still rejects. 3 ready-to-un-skip
-   tests (`Oracle.Tests/PredicateSelectIntegrationTests` IN cases). Fix = make IN-expansion dialect-aware.
+   **✅ Resolved this session — Oracle `IN` predicate.** The runtime IN-expansion (`InquiryInExpansion`)
+   rewrites the command text by locating the baked sentinel, so the `Expand` call must pass the *dialect*
+   sigil form (the scalar `@`/`:` reconciliation in `FinalizeCommand` can't bridge a text mismatch).
+   `StoreProcessor.TryResolvePredicates` now builds the IN binding via `SqlBuilder.ParameterName` (`:name`
+   on Oracle, `@name` elsewhere); the per-element expansion params are reconciled by `FinalizeCommand`
+   under `BindByName`. **Verified live:** the 3 `Oracle.Tests/PredicateSelectIntegrationTests` IN cases
+   pass; new generator regression test `OracleDialectEmitsInSentinelWithColonParameterAndExpansion`.
 7. **Oracle `@keys` batch-delete sentinel** — `DeleteAll`/`UpdateAll` hardcode `@keys` (pre-existing).
 8. **Oracle RETURNING / `ReturnEntity=true`** — unsupported via the reader pipeline; currently degrades
    to an `INQ039` throwing stub (graceful, but a functional limitation to document or solve).

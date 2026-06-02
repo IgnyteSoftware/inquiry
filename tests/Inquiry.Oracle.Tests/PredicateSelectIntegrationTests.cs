@@ -6,22 +6,14 @@ namespace Inquiry.Oracle.Tests;
 
 /// <summary>
 /// <c>[InquirySelectAllByPredicate]</c> over the Northwind <c>Product</c> entity against real Oracle.
-/// Comparison / LIKE / BETWEEN / OR / IS NULL predicates work (the predicate sigil is dialect-aware).
-/// <c>IN</c> is a KNOWN LIMITATION (see <see cref="InSkip"/>) and those facts are skipped — their bodies
-/// are retained so they become live regression tests once IN-expansion becomes dialect-aware.
+/// Comparison / LIKE / BETWEEN / OR / IS NULL / IN predicates all work. Every predicate parameter — the
+/// scalar binds and the <c>IN</c>-expansion sentinel — takes Oracle's <c>:name</c> sigil, and
+/// <c>OracleInquiryConnectionFactory.FinalizeCommand</c> reconciles the per-element expansion parameters
+/// with the runtime binder under <c>BindByName</c>.
 /// </summary>
 [Collection(OracleCollection.Name)]
 public sealed class PredicateSelectIntegrationTests
 {
-    // KNOWN LIMITATION (tracked follow-up): Oracle IN predicates are not yet valid against a live engine.
-    // The runtime IN-expansion (InquiryInExpansion) rewrites the single baked placeholder into '@'-
-    // prefixed element parameters, which Oracle rejects. The general predicate parameter sigil is now
-    // dialect-aware (comparison/LIKE/BETWEEN/OR pass against live Oracle); only IN-expansion remains '@'-
-    // hardcoded. Fix = make IN-expansion dialect-aware; then remove these Skip calls.
-    private const string InSkip =
-        "Oracle IN predicate not yet valid live: the runtime IN-expansion rewrites the placeholder into " +
-        "'@'-prefixed element parameters, which Oracle rejects. Fix = dialect-aware IN-expansion.";
-
     private readonly OracleContainerFixture _fixture;
     public PredicateSelectIntegrationTests(OracleContainerFixture fixture) => _fixture = fixture;
 
@@ -82,7 +74,6 @@ public sealed class PredicateSelectIntegrationTests
     [SkippableFact]
     public async Task InFilterMatchesAnyListedValue()
     {
-        Skip.If(true, InSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "predin");
         var (_, c2) = await SeedAsync(harness);
@@ -97,7 +88,6 @@ public sealed class PredicateSelectIntegrationTests
     [SkippableFact]
     public async Task InFilterWithMultipleValuesMatchesUnion()
     {
-        Skip.If(true, InSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "predinmulti");
         var (c1, c2) = await SeedAsync(harness);
@@ -111,7 +101,6 @@ public sealed class PredicateSelectIntegrationTests
     [SkippableFact]
     public async Task EmptyInFilterMatchesNoRows()
     {
-        Skip.If(true, InSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "predinempty");
         await SeedAsync(harness);

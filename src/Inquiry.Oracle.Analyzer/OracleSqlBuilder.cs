@@ -24,11 +24,6 @@ namespace Inquiry.Oracle.Analyzer;
 /// KNOWN v1 LIMITATIONS (documented; tracked as follow-ups):
 /// </para>
 /// <list type="number">
-/// <item><description><b>The <c>IN</c> predicate is not yet valid against a live Oracle.</b> The runtime
-/// IN-expansion (<c>InquiryInExpansion</c>) rewrites the single baked placeholder into <c>@</c>-prefixed
-/// element parameters, which Oracle rejects. (Offset/keyset pagination and the other predicate operators
-/// now work: synthetic and predicate parameters take the dialect sigil via <see cref="ParameterName"/>,
-/// verified by Inquiry.Oracle.Tests.) The fix is making IN-expansion dialect-aware.</description></item>
 /// <item><description><b>Upsert on a database-generated key is unsupported</b> — see
 /// <see cref="BuildUpsertSql"/>. An Oracle MERGE joins on the key, which is NULL for a DB-generated
 /// key, so it would never match and behave as insert-only. Rather than emit silently-wrong SQL, the
