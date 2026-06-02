@@ -2,12 +2,14 @@ using System.Data.Common;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
+using Inquiry.Benchmarks.Ef;
 using Inquiry.DependencyInjection;
 using Inquiry.MySql.DependencyInjection;
 using Inquiry.Northwind.Models;
 using Inquiry.PostgreSql.DependencyInjection;
 using Inquiry.SqlServer.DependencyInjection;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MySqlConnector;
 using Npgsql;
@@ -18,18 +20,18 @@ using Testcontainers.PostgreSql;
 namespace Inquiry.Benchmarks;
 
 /// <summary>
-/// Cross-dialect read comparison of Inquiry vs Dapper against the networked engines (PostgreSQL, MySQL,
-/// SQL Server) provisioned via Testcontainers. Read hot-paths (SelectAll + SelectByKey) on the minimal
-/// <c>Shippers</c> table.
+/// Cross-dialect read comparison of all four libraries — raw ADO.NET (baseline), Dapper, EF Core, and
+/// Inquiry — against the networked engines (PostgreSQL, MySQL, SQL Server) provisioned via Testcontainers.
+/// Read hot-paths (SelectAll + SelectByKey) on the minimal <c>shippers</c> table (3 columns).
 /// </summary>
 /// <remarks>
-/// Inquiry is exercised through its ad-hoc <c>IInquiry.Query…</c> path so all dialects share one assembly
-/// (the generated store fast-path is compile-time-per-dialect). On a networked engine the round-trip
-/// dominates, so the ad-hoc-vs-generated overhead difference (a few µs, visible only in the in-process
-/// SQLite suite) is negligible — making this a fair library comparison on real databases. EF Core is
-/// compared in the in-process SQLite suite (the definitive library-overhead measurement); it is omitted
-/// here because its quoted-identifier convention conflicts with the portable unquoted SQL on PostgreSQL.
-/// Requires Docker.
+/// Identifiers are all-lowercase so a single physical table is addressable identically by EF Core (quotes
+/// identifiers), the others (portable unquoted SQL), and each engine's folding/casing rules — this is what
+/// lets EF Core join the cross-dialect comparison. Inquiry runs through its ad-hoc <c>IInquiry.Query…</c>
+/// path so all dialects share one assembly (its generated store fast-path is compile-time-per-dialect); on a
+/// networked engine the round-trip dominates, so the few-µs ad-hoc-vs-generated difference (visible only in
+/// the in-process SQLite suite) is negligible. ADO.NET is the <c>[Baseline]</c>, so the Ratio / Alloc Ratio
+/// columns read as each library's overhead over hand-written ADO.NET. Requires Docker.
 /// </remarks>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -38,8 +40,8 @@ public class CrossDialectReadBenchmarks
 {
     private const int SeedRows = 1000;
     private const int TargetShipperId = 1;
-    private const string SelectAllSql = "SELECT ShipperID, CompanyName, Phone FROM Shippers";
-    private const string SelectByKeySql = SelectAllSql + " WHERE ShipperID = @id";
+    private const string SelectAllSql = "SELECT shipperid, companyname, phone FROM shippers";
+    private const string SelectByKeySql = SelectAllSql + " WHERE shipperid = @id";
 
     [Params("PostgreSql", "MySql", "SqlServer")]
     public string Dialect { get; set; } = null!;
@@ -49,6 +51,7 @@ public class CrossDialectReadBenchmarks
     private ServiceProvider _services = null!;
     private IInquiry _inquiry = null!;
     private Func<DbConnection> _open = null!;
+    private DbContextOptions<CrossDialectShipperContext> _efOptions = null!;
 
     [GlobalSetup]
     public void Setup() => SetupAsync().GetAwaiter().GetResult();
@@ -61,6 +64,7 @@ public class CrossDialectReadBenchmarks
 
         string ddl;
         IServiceCollection services = new ServiceCollection().AddInquiry();
+        var efBuilder = new DbContextOptionsBuilder<CrossDialectShipperContext>();
 
         switch (Dialect)
         {
@@ -70,9 +74,10 @@ public class CrossDialectReadBenchmarks
                 await c.StartAsync();
                 _container = c;
                 _connectionString = c.GetConnectionString();
-                ddl = "CREATE TABLE Shippers (ShipperID SERIAL PRIMARY KEY, CompanyName VARCHAR(40) NOT NULL, Phone VARCHAR(40));";
+                ddl = "CREATE TABLE shippers (shipperid SERIAL PRIMARY KEY, companyname VARCHAR(40) NOT NULL, phone VARCHAR(40));";
                 _open = () => new NpgsqlConnection(_connectionString);
                 services.AddInquiryPostgreSql(_connectionString);
+                efBuilder.UseNpgsql(_connectionString);
                 break;
             }
 
@@ -82,9 +87,10 @@ public class CrossDialectReadBenchmarks
                 await c.StartAsync();
                 _container = c;
                 _connectionString = c.GetConnectionString();
-                ddl = "CREATE TABLE Shippers (ShipperID INT AUTO_INCREMENT PRIMARY KEY, CompanyName VARCHAR(40) NOT NULL, Phone VARCHAR(40));";
+                ddl = "CREATE TABLE shippers (shipperid INT AUTO_INCREMENT PRIMARY KEY, companyname VARCHAR(40) NOT NULL, phone VARCHAR(40));";
                 _open = () => new MySqlConnection(_connectionString);
                 services.AddInquiryMySql(_connectionString);
+                efBuilder.UseMySql(_connectionString, new MySqlServerVersion(new Version(8, 0, 0)));
                 break;
             }
 
@@ -94,9 +100,10 @@ public class CrossDialectReadBenchmarks
                 await c.StartAsync();
                 _container = c;
                 _connectionString = c.GetConnectionString();
-                ddl = "CREATE TABLE Shippers (ShipperID INT IDENTITY PRIMARY KEY, CompanyName NVARCHAR(40) NOT NULL, Phone NVARCHAR(40));";
+                ddl = "CREATE TABLE shippers (shipperid INT IDENTITY PRIMARY KEY, companyname NVARCHAR(40) NOT NULL, phone NVARCHAR(40));";
                 _open = () => new SqlConnection(_connectionString);
                 services.AddInquirySqlServer(_connectionString);
+                efBuilder.UseSqlServer(_connectionString);
                 break;
             }
 
@@ -106,13 +113,14 @@ public class CrossDialectReadBenchmarks
 
         _services = services.BuildServiceProvider();
         _inquiry = _services.GetRequiredService<IInquiry>();
+        _efOptions = efBuilder.Options;
 
         await using var connection = _open();
         await connection.OpenAsync();
         await using (var create = connection.CreateCommand()) { create.CommandText = ddl; await create.ExecuteNonQueryAsync(); }
         await using (var insert = connection.CreateCommand())
         {
-            insert.CommandText = "INSERT INTO Shippers (CompanyName, Phone) VALUES (@c, @p)";
+            insert.CommandText = "INSERT INTO shippers (companyname, phone) VALUES (@c, @p)";
             var pc = insert.CreateParameter(); pc.ParameterName = "@c"; insert.Parameters.Add(pc);
             var pp = insert.CreateParameter(); pp.ParameterName = "@p"; insert.Parameters.Add(pp);
             for (var i = 0; i < SeedRows; i++)
@@ -131,7 +139,29 @@ public class CrossDialectReadBenchmarks
         _container?.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 
+    private static Shipper ReadShipper(DbDataReader reader) => new Shipper
+    {
+        ShipperID   = reader.GetInt32(0),
+        CompanyName = reader.GetString(1),
+        Phone       = reader.IsDBNull(2) ? null : reader.GetString(2),
+    };
+
+    // ---- SelectAll ----------------------------------------------------------------------
+
     [BenchmarkCategory("SelectAll"), Benchmark(Baseline = true)]
+    public async Task<int> SelectAll_AdoNet()
+    {
+        await using var connection = _open();
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = SelectAllSql;
+        var list = new List<Shipper>(SeedRows);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Dapper()
     {
         await using var connection = _open();
@@ -140,15 +170,43 @@ public class CrossDialectReadBenchmarks
     }
 
     [BenchmarkCategory("SelectAll"), Benchmark]
+    public async Task<int> SelectAll_EfCore()
+    {
+        await using var ctx = new CrossDialectShipperContext(_efOptions);
+        return (await ctx.Shippers.AsNoTracking().ToListAsync()).Count;
+    }
+
+    [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Inquiry()
         => (await _inquiry.QueryListAsync<Shipper>(SelectAllSql)).Count;
 
+    // ---- SelectByKey --------------------------------------------------------------------
+
     [BenchmarkCategory("SelectByKey"), Benchmark(Baseline = true)]
+    public async Task<Shipper?> SelectByKey_AdoNet()
+    {
+        await using var connection = _open();
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = SelectByKeySql;
+        var p = command.CreateParameter(); p.ParameterName = "@id"; p.Value = TargetShipperId; command.Parameters.Add(p);
+        await using var reader = await command.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? ReadShipper(reader) : null;
+    }
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
     public async Task<Shipper?> SelectByKey_Dapper()
     {
         await using var connection = _open();
         await connection.OpenAsync();
         return await connection.QuerySingleOrDefaultAsync<Shipper>(SelectByKeySql, new { id = TargetShipperId });
+    }
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
+    public async Task<EfShipper?> SelectByKey_EfCore()
+    {
+        await using var ctx = new CrossDialectShipperContext(_efOptions);
+        return await ctx.Shippers.AsNoTracking().FirstOrDefaultAsync(s => s.ShipperID == TargetShipperId);
     }
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
