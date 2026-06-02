@@ -26,13 +26,10 @@ public sealed class GeneratedDdlIntegrationTests
         await using var harness = await OracleTestHarness.CreateFromDdlAsync(
             _fixture.AdminConnectionString, InquiryGeneratedSchema.Ddl, "gends");
 
-        // Oracle does not support result-set RETURNING (ReturnEntity = true degrades to an INQ039 stub),
-        // so the generated key is read back via SelectAll rather than InsertReturning.
         var categories = harness.GetRequiredService<CategoryStore>();
-        await categories.InsertAsync(new Category { CategoryName = "Beverages" });
-        var inserted = (await categories.SelectAllAsync().ToListAsync())
-            .Single(c => c.CategoryName == "Beverages");
-        Assert.True(inserted.CategoryID!.Value > 0);
+        var inserted = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
+        Assert.NotNull(inserted);
+        Assert.True(inserted!.CategoryID > 0);
         Assert.NotNull(await categories.SelectByKeyAsync(inserted.CategoryID));
 
         await using var conn = new OracleConnection(harness.ConnectionString);

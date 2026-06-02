@@ -234,11 +234,12 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void OracleInsertReturningDegradesToThrowingStubWithWarning()
+    public void OracleInsertReturningEmitsPlSqlRefCursorBlock()
     {
-        // Oracle cannot emit INSERT … RETURNING as a result set (v1 limitation). Rather than the builder's
-        // NotSupportedException aborting the whole compilation, the generator must report INQ039 (Warning)
-        // and emit a throwing stub for the offending method while still emitting the rest of the store.
+        // Oracle has no result-set RETURNING, so a ReturnEntity insert is emitted as an anonymous PL/SQL
+        // block: INSERT, capture the database-generated key into a %TYPE local via RETURNING … INTO, then
+        // OPEN a ref cursor (:rc) over the row. No INQ039, no throwing stub — ExecuteReader on the block
+        // returns the cursor's reader (the OUT cursor is bound by OracleInquiryConnectionFactory).
         const string source = """
             using System;
             using System.Threading;
@@ -264,9 +265,6 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryInsert(ReturnEntity = true)]
                 public partial Task<Widget?> InsertReturningAsync(Widget widget, CancellationToken cancellationToken = default);
 
-                [InquiryInsert]
-                public partial Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
-
                 [InquirySelectOneByKey]
                 public partial Task<Widget?> SelectByKeyAsync(int? id, CancellationToken cancellationToken = default);
             }
@@ -274,9 +272,8 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "Oracle");
 
-        // No generator crash, and the compilation has no errors (the stub satisfies the partial decl).
         var allDiagnostics = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics).ToArray();
-        Assert.Contains(allDiagnostics, d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning);
+        Assert.DoesNotContain(allDiagnostics, d => d.Id == "INQ039");
         Assert.DoesNotContain(allDiagnostics, d => d.Severity == DiagnosticSeverity.Error);
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
 
@@ -285,11 +282,10 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = generatedStore.GetText().ToString();
 
-        // The insert-returning method is a throwing stub; the other methods still emit normally.
-        Assert.Contains("InsertReturningAsync", text);
-        Assert.Contains("throw new global::System.NotSupportedException(", text);
-        Assert.Contains("_sqlInsert ", text);          // plain insert const still emitted
-        Assert.Contains("_sqlSelectByKey ", text);     // select-by-key still emitted
-        Assert.DoesNotContain("_sqlInsertReturning", text); // the unsupported const was skipped
+        // PL/SQL block: generated key captured into a %TYPE local, then OPEN :rc over the re-selected row.
+        Assert.Contains(
+            "private const string _sqlInsertReturning = \"DECLARE v_key TWidget.Id%TYPE; BEGIN INSERT INTO TWidget (Name) VALUES (:Name) RETURNING Id INTO v_key; OPEN :rc FOR SELECT Id, Name FROM TWidget WHERE Id = v_key; END;\";",
+            text);
+        Assert.DoesNotContain("throw new global::System.NotSupportedException(", text); // no stub
     }
 }
