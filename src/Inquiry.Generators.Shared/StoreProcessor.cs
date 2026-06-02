@@ -802,6 +802,14 @@ internal static class StoreProcessor
                     ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns))
                     : CtxFor(method);
                 AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan));
+
+                // Keyset paging emits a second const: the first-page (null-cursor) query has no cursor
+                // predicate, so the seek query above can use the plain sargable `key > @cursor` (index seek)
+                // instead of a non-sargable (@cursor IS NULL OR …) guard. The emitter picks between them.
+                if (selectPlan.Pagination == Pagination.Keyset)
+                {
+                    AppendConstSql(source, selectPlan.SqlFieldName + "_first", BuildKeysetFirstPageSql(sqlBuilder, planCtx, selectPlan));
+                }
             }
         }
 
@@ -1561,6 +1569,37 @@ internal static class StoreProcessor
         }
 
         return sql;
+    }
+
+    /// <summary>
+    /// The keyset <b>first-page</b> query (null cursor): the same ordered, page-sized SELECT as the seek
+    /// query built by <see cref="BuildSelectPlanSql"/> but with no cursor predicate, so it returns from the
+    /// start. Split out from the seek query because folding both into one <c>(@cursor IS NULL OR …)</c>
+    /// predicate is non-sargable and defeats the index seek (see <see cref="SqlBuilder.BuildKeysetPredicate"/>),
+    /// while binding <c>key &gt; NULL</c> on the seek query would match no rows.
+    /// </summary>
+    private static string BuildKeysetFirstPageSql(SqlBuilder sqlBuilder, SqlBuildContext ctx, ResolvedSelectPlan plan)
+    {
+        var orderTerms = new List<OrderByTerm>(plan.OrderColumns.Count);
+        foreach (var (column, descending) in plan.OrderColumns)
+        {
+            orderTerms.Add(new OrderByTerm(sqlBuilder.QuoteIdentifier(column.ColumnName), descending));
+        }
+
+        // Same offset("0")/limit(@__pageSize) as the keyset seek query so the pagination tail matches.
+        var options = new SqlSelectOptions(
+            orderTerms,
+            offsetParameter: "0",
+            limitParameter: sqlBuilder.ParameterName(PageSizeLogicalName));
+
+        // W8: a soft-delete entity still filters deleted rows on the first page (no cursor predicate to AND with).
+        var where = ctx.SoftDeleteActivePredicate;
+        var baseSql = "SELECT " + ctx.SelectColumns + " FROM " + ctx.Table
+            + (where.Length > 0 ? " WHERE " + where : string.Empty);
+
+        var orderByClause = sqlBuilder.BuildOrderByClause(options);
+        var sql = orderByClause.Length > 0 ? baseSql + " " + orderByClause : baseSql;
+        return sql + " " + sqlBuilder.BuildPaginationClause(options);
     }
 
     private static string StripGlobalPrefix(string fullyQualifiedName)

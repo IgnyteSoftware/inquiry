@@ -215,10 +215,11 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             return base.BuildKeysetPredicate(options);
         }
 
+        // Bare lexicographic OR-form seek predicate (no IS NULL guard — see SqlBuilder.BuildKeysetPredicate
+        // remarks); one outer paren wraps the OR-chain so it AND-composes correctly with a soft-delete filter.
         var op = options.KeysetDescending ? " < " : " > ";
-        var firstCursor = options.KeysetCursorParameters[0];
         var sb = new System.Text.StringBuilder();
-        sb.Append('(').Append(firstCursor).Append(" IS NULL OR (");
+        sb.Append('(');
         for (var i = 0; i < options.KeysetColumns.Count; i++)
         {
             if (i > 0)
@@ -235,7 +236,7 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             sb.Append(options.KeysetColumns[i]).Append(op).Append(options.KeysetCursorParameters[i]).Append(')');
         }
 
-        sb.Append("))");
+        sb.Append(')');
         return sb.ToString();
     }
 

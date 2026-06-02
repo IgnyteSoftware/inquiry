@@ -230,25 +230,30 @@ public abstract class SqlBuilder
         => "LIMIT " + options.LimitParameter + " OFFSET " + options.OffsetParameter;
 
     /// <summary>
-    /// Builds the keyset comparison predicate body (no leading <c>WHERE</c>) for the cursor, wrapped in a
-    /// <c>(@cursor IS NULL OR …)</c> guard so a null cursor selects from the start of the (first) page.
-    /// The portable default uses a row-value comparison <c>(a, b) &gt; (@c0, @c1)</c>; SQL Server, which
-    /// lacks row-value <c>&gt;</c>, overrides with the lexicographic OR-form. Single-column keysets use a
-    /// plain scalar comparison in both.
+    /// Builds the keyset <b>seek</b> comparison predicate body (no leading <c>WHERE</c>) for a non-null
+    /// cursor — a plain, sargable <c>key &gt; @cursor</c> the engine can satisfy with an index seek. The
+    /// portable default uses a row-value comparison <c>(a, b) &gt; (@c0, @c1)</c>; SQL Server, which lacks
+    /// row-value <c>&gt;</c>, overrides with the lexicographic OR-form. Single-column keysets use a plain
+    /// scalar comparison in both.
     /// </summary>
+    /// <remarks>
+    /// There is deliberately no <c>(@cursor IS NULL OR …)</c> guard here: that disjunction is non-sargable
+    /// (the planner cannot prove a range when the cursor might be null), so it forces a full table scan
+    /// instead of an index seek — keyset paging then degrades to O(table size). The null-cursor (first
+    /// page) case is served by a separate predicate-free query the generator emits alongside this one.
+    /// </remarks>
     public virtual string BuildKeysetPredicate(SqlSelectOptions options)
     {
         var op = options.KeysetDescending ? " < " : " > ";
-        var firstCursor = options.KeysetCursorParameters[0];
 
         if (options.KeysetColumns.Count == 1)
         {
-            return "(" + firstCursor + " IS NULL OR " + options.KeysetColumns[0] + op + firstCursor + ")";
+            return options.KeysetColumns[0] + op + options.KeysetCursorParameters[0];
         }
 
         var columns = "(" + string.Join(", ", options.KeysetColumns) + ")";
         var cursors = "(" + string.Join(", ", options.KeysetCursorParameters) + ")";
-        return "(" + firstCursor + " IS NULL OR " + columns + op + cursors + ")";
+        return columns + op + cursors;
     }
 
     // ---- W7 schema DDL generation -----------------------------------------------------------
