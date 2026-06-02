@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
@@ -156,7 +157,7 @@ public class CrossDialectReadBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = SelectAllSql;
         var list = new List<Shipper>(SeedRows);
-        await using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
         while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
         return list.Count;
     }
@@ -190,7 +191,8 @@ public class CrossDialectReadBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = SelectByKeySql;
         var p = command.CreateParameter(); p.ParameterName = "@id"; p.Value = TargetShipperId; command.Parameters.Add(p);
-        await using var reader = await command.ExecuteReaderAsync();
+        // Fair floor: SingleRow|SingleResult — the same CommandBehavior Inquiry's pipeline and Dapper request for a point read.
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow);
         return await reader.ReadAsync() ? ReadShipper(reader) : null;
     }
 

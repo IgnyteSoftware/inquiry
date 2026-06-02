@@ -1,3 +1,4 @@
+using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
@@ -81,7 +82,7 @@ public class EagerLoadingBenchmarks
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = CategoriesSql;
-            await using var reader = await command.ExecuteReaderAsync();
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
             while (await reader.ReadAsync())
             {
                 var category = ReadCategory(reader);
@@ -94,7 +95,7 @@ public class EagerLoadingBenchmarks
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = ProductsSql;
-            await using var reader = await command.ExecuteReaderAsync();
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
             while (await reader.ReadAsync())
             {
                 var product = ReadProduct(reader);

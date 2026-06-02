@@ -1,3 +1,4 @@
+using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
@@ -77,7 +78,7 @@ public class PredicateBenchmarks
         command.Parameters.Add("$min",     SqliteType.Real).Value = (double)MinPrice;
         command.Parameters.Add("$pattern", SqliteType.Text).Value = NamePattern;
         var list = new List<Product>();
-        await using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
         while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
         return list.Count;
     }
@@ -117,7 +118,7 @@ public class PredicateBenchmarks
         command.CommandText =
             $"SELECT {SelectColumns} FROM Products WHERE CategoryID IN ({string.Join(", ", names)});";
         var list = new List<Product>();
-        await using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
         while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
         return list.Count;
     }

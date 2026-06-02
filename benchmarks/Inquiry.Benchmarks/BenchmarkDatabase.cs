@@ -14,7 +14,7 @@ namespace Inquiry.Benchmarks;
 /// <summary>
 /// Per-benchmark-class scaffolding: creates a fresh SQLite file, runs the Northwind DDL,
 /// seeds <see cref="RowCount"/> Customer / Product / Shipper rows, and exposes a configured
-/// service provider for the Inquiry stores, a pooled <see cref="NorthwindDbContext"/>
+/// service provider for the Inquiry stores, a per-call (non-pooled) <see cref="NorthwindDbContext"/>
 /// factory for EF Core, and connection strings the Dapper / ADO.NET benchmarks own
 /// their own connections against.
 /// </summary>
@@ -74,7 +74,11 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
         var services = new ServiceCollection()
             .AddInquiry()
             .AddInquirySqlite(connectionString)
-            .AddPooledDbContextFactory<NorthwindDbContext>(options => options.UseSqlite(connectionString))
+            // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
+            // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call. A pooled
+            // factory would let EF reuse warm context state the other three legs never get — an
+            // unfair advantage that breaks the apples-to-apples comparison.
+            .AddDbContextFactory<NorthwindDbContext>(options => options.UseSqlite(connectionString))
             .BuildServiceProvider();
 
         var dbContextFactory = services.GetRequiredService<IDbContextFactory<NorthwindDbContext>>();
