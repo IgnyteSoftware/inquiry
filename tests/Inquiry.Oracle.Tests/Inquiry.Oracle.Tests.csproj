@@ -20,6 +20,10 @@
     <Compile Include="..\..\samples\Inquiry.Northwind\Models\**\*.cs" LinkBase="Northwind\Models" />
     <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
+
+    <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
+    <!-- W9 full-text search is NOT supported on Oracle (generator emits INQ035); FullText is excluded. -->
+    <!-- <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" /> -->
   </ItemGroup>
 
   <ItemGroup>
