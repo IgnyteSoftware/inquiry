@@ -94,7 +94,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void KeysetSingleColumnEmitsCursorGuardAndPageSizePlusOne()
+    public void KeysetSingleColumnEmitsSeekAndFirstPageQueries()
     {
         var source = PagingStore("""
             [InquiryKeysetPage("Id")]
@@ -105,9 +105,20 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetStore(result);
 
+        // Two queries, not one (@cursor IS NULL OR ...) guard. The guard is non-sargable: it forces a full
+        // table SCAN instead of an index SEARCH, so keyset paging degraded ~10x at scale (O(table) not
+        // O(pageSize)). The seek query uses a plain, sargable `key > @cursor`; the first-page query (null
+        // cursor) drops the cursor predicate entirely. The method picks between them at runtime.
         Assert.Contains(
-            "private const string _sql_KeysetAsync = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"CreatedAt\\\" FROM \\\"TUser\\\" WHERE (@__cursor0 IS NULL OR \\\"Id\\\" > @__cursor0) ORDER BY \\\"Id\\\" ASC LIMIT @__pageSize OFFSET 0\";",
+            "private const string _sql_KeysetAsync = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"CreatedAt\\\" FROM \\\"TUser\\\" WHERE \\\"Id\\\" > @__cursor0 ORDER BY \\\"Id\\\" ASC LIMIT @__pageSize OFFSET 0\";",
             text);
+        Assert.Contains(
+            "private const string _sql_KeysetAsync_first = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"CreatedAt\\\" FROM \\\"TUser\\\" ORDER BY \\\"Id\\\" ASC LIMIT @__pageSize OFFSET 0\";",
+            text);
+        // Null cursor -> first-page const; the cursor parameter binds only on the seek path.
+        Assert.Contains("var _first = afterId is null;", text);
+        Assert.Contains("_first ? _sql_KeysetAsync_first : _sql_KeysetAsync", text);
+        Assert.Contains("if (!_first)", text);
         Assert.Contains("_p1.Value = pageSize + 1;", text);
         Assert.Contains("var _hasMore = _rows.Count > pageSize;", text);
         Assert.Contains("new global::Inquiry.Paging.InquiryPage<global::Demo.User, long>(_items, _next, _hasMore);", text);
@@ -143,8 +154,9 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetStore(result);
 
+        // Bare row-value seek predicate (no IS NULL guard); the null-cursor case is the separate _first const.
         Assert.Contains(
-            "WHERE (@__cursor0 IS NULL OR (\\\"CreatedAt\\\", \\\"Id\\\") > (@__cursor0, @__cursor1))",
+            "WHERE (\\\"CreatedAt\\\", \\\"Id\\\") > (@__cursor0, @__cursor1) ORDER BY",
             text);
     }
 
@@ -161,8 +173,9 @@ public sealed partial class InquiryGeneratorTests
         var text = GetStore(result);
 
         // Lexicographic OR-form: (a > @c0) OR (a = @c0 AND b > @c1), bracketed and quoted with [].
+        // No IS NULL guard — the bare seek predicate keeps the index usable; first page is the _first const.
         Assert.Contains(
-            "WHERE (@__cursor0 IS NULL OR (([CreatedAt] > @__cursor0) OR ([CreatedAt] = @__cursor0 AND [Id] > @__cursor1)))",
+            "WHERE (([CreatedAt] > @__cursor0) OR ([CreatedAt] = @__cursor0 AND [Id] > @__cursor1)) ORDER BY",
             text);
     }
 
@@ -178,7 +191,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetStore(result);
 
-        Assert.Contains("WHERE (@__cursor0 IS NULL OR \\\"Id\\\" < @__cursor0) ORDER BY \\\"Id\\\" DESC", text);
+        Assert.Contains("WHERE \\\"Id\\\" < @__cursor0 ORDER BY \\\"Id\\\" DESC", text);
     }
 
     [Fact]

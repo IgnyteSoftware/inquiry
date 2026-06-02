@@ -155,7 +155,10 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetWidgetStore(result);
 
-        Assert.Contains("> @__cursor0) AND \\\"IsDeleted\\\" = 0 ORDER BY", text);
+        // Seek query: the bare sargable cursor predicate AND-composed with the soft-delete filter.
+        Assert.Contains("WHERE \\\"Id\\\" > @__cursor0 AND \\\"IsDeleted\\\" = 0 ORDER BY", text);
+        // First-page query (null cursor): the soft-delete filter only, no cursor predicate.
+        Assert.Contains("FROM \\\"TWidget\\\" WHERE \\\"IsDeleted\\\" = 0 ORDER BY \\\"Id\\\" ASC LIMIT @__pageSize OFFSET 0\";", text);
     }
 
     [Fact]

@@ -736,31 +736,41 @@ internal static class StoreOperationEmitter
         var cursorType = method.Parameters[0].TypeDisplay;
         var single = plan.KeysetColumns.Count == 1;
 
+        // A null cursor runs the predicate-free first-page query; a non-null cursor runs the seek query
+        // (plain sargable `key > @cursor` -> index seek) and binds the cursor. Splitting the two -- rather
+        // than one non-sargable (@cursor IS NULL OR ...) form -- is what keeps keyset paging O(pageSize):
+        // the disjunction defeats the index seek and forces a full table scan (O(table size)).
+        source.AppendLine($"        var _first = {cursorParam} is null;");
         source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
-        source.AppendLine($"            {plan.SqlFieldName},");
+        source.AppendLine($"            _first ? {plan.SqlFieldName}_first : {plan.SqlFieldName},");
         source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
         source.AppendLine("            {");
 
         var pi = 0;
-        for (var i = 0; i < plan.KeysetColumns.Count; i++)
+        if (plan.KeysetColumns.Count > 0)
         {
-            // Each cursor column gets its own parameter; a null cursor binds DBNull (the SQL guard makes
-            // the comparison a no-op on the first/null page).
-            var valueExpr = single
-                ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
-                : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
-            // Bind the cursor column's DbType so a null first-page cursor still carries a typed parameter.
-            // Without it, PostgreSQL cannot infer the type of a null parameter (42P08) in the IS NULL guard.
-            var cursorDbType = ResolveDbType(plan.KeysetColumns[i], sqlBuilder);
-            source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
-            source.AppendLine($"                _p{pi}.ParameterName = \"@__cursor{i}\";");
-            if (cursorDbType is not null)
+            // The @__cursor parameters appear only in the seek query, so bind them only on that path
+            // (binding a parameter the first-page SQL never references errors on strict providers).
+            source.AppendLine("                if (!_first)");
+            source.AppendLine("                {");
+            for (var i = 0; i < plan.KeysetColumns.Count; i++)
             {
-                source.AppendLine($"                _p{pi}.DbType = {cursorDbType};");
+                // On the seek path the cursor is non-null; for a multi-column cursor read its tuple element.
+                var valueExpr = single
+                    ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
+                    : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
+                var cursorDbType = ResolveDbType(plan.KeysetColumns[i], sqlBuilder);
+                source.AppendLine($"                    var _p{pi} = _c.CreateParameter();");
+                source.AppendLine($"                    _p{pi}.ParameterName = \"@__cursor{i}\";");
+                if (cursorDbType is not null)
+                {
+                    source.AppendLine($"                    _p{pi}.DbType = {cursorDbType};");
+                }
+                source.AppendLine($"                    _p{pi}.Value = {valueExpr};");
+                source.AppendLine($"                    _c.Parameters.Add(_p{pi});");
+                pi++;
             }
-            source.AppendLine($"                _p{pi}.Value = {valueExpr};");
-            source.AppendLine($"                _c.Parameters.Add(_p{pi});");
-            pi++;
+            source.AppendLine("                }");
         }
 
         AppendScalarIntParameter(source, ref pi, "@__pageSize", pageSizeParam + " + 1");

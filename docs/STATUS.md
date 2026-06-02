@@ -236,8 +236,20 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
     classes were added (pagination offset/keyset, projection/COUNT/SUM, predicate AND/IN, batch insert,
     eager loading) — Inquiry vs Dapper vs raw ADO.NET, in-process SQLite. See
     [`../benchmarks/Inquiry.Benchmarks/README.md`](../benchmarks/Inquiry.Benchmarks/README.md). The keyset
-    benchmark surfaced a real perf issue: keyset paging is ~10× slower than hand-written keyset SQL at 100k
-    rows (the `(@cursor IS NULL OR …)` guard appears to defeat the index seek) — flagged for follow-up.
+    benchmark surfaced a real perf regression — now **resolved** (item 15).
+15. **✅ Resolved (this session) — keyset pagination did a full scan instead of an index seek.** The keyset
+    SQL wrapped the cursor predicate in a `(@cursor IS NULL OR key > @cursor)` guard so one query could also
+    serve the null-cursor first page. That disjunction is **non-sargable**: `EXPLAIN QUERY PLAN` showed
+    `SCAN Products` instead of `SEARCH … USING INTEGER PRIMARY KEY (rowid>?)`, so the engine scanned from the
+    start to the cursor position — O(table size), ~10× slower at 100k (979 µs vs 83 µs hand-written; offset
+    paging was unaffected). Fixed by emitting the textbook **two queries**: a *seek* query with a plain,
+    sargable `key > @cursor` (`_sql_<m>`, index seek) and a predicate-free *first-page* query (`_sql_<m>_first`);
+    the generated method null-checks the cursor to pick between them and binds the cursor only on the seek path
+    (a single query can't work — `key > NULL` matches no rows). `SqlBuilder.BuildKeysetPredicate` (and the
+    SqlServer/Oracle OR-form overrides) now return the bare seek predicate. Generator tests updated
+    (`KeysetSingleColumnEmitsSeekAndFirstPageQueries` et al., 165 green); verified live on all four engines
+    (`PaginationIntegrationTests` ×4, 8 each) and by the benchmark — Inquiry keyset is now flat (~150 µs at
+    both 1k and 100k, ratio 1.00 vs raw ADO.NET).
 
 ---
 
