@@ -253,6 +253,9 @@ public class ShipperBenchmarks
     // ---- Upsert -------------------------------------------------------------------------
     // SQL Server has no ON CONFLICT; use MERGE INTO ... WHEN MATCHED / WHEN NOT MATCHED.
     // HOLDLOCK prevents a race between the existence check and the insert in concurrent scenarios.
+    // The INSERT branch omits the IDENTITY [ShipperID] — SQL Server rejects an explicit value for an
+    // identity column even in a not-taken MERGE branch. The benchmark always upserts a seeded key, so
+    // it hits the matched UPDATE path (mirrors what Inquiry's generated SQL Server upsert emits).
 
     [BenchmarkCategory("Upsert"), Benchmark(Baseline = true)]
     public async Task<int> Upsert_AdoNet()
@@ -267,8 +270,8 @@ public class ShipperBenchmarks
             "WHEN MATCHED THEN " +
             "    UPDATE SET target.[CompanyName] = source.[CompanyName], target.[Phone] = source.[Phone] " +
             "WHEN NOT MATCHED THEN " +
-            "    INSERT ([ShipperID], [CompanyName], [Phone]) " +
-            "    VALUES (source.[ShipperID], source.[CompanyName], source.[Phone]);";
+            "    INSERT ([CompanyName], [Phone]) " +
+            "    VALUES (source.[CompanyName], source.[Phone]);";
         command.Parameters.AddWithValue("@id",      TargetShipperId);
         command.Parameters.AddWithValue("@company", "Upserted Shipper");
         command.Parameters.AddWithValue("@phone",   "555-1234");
@@ -287,8 +290,8 @@ public class ShipperBenchmarks
             "WHEN MATCHED THEN " +
             "    UPDATE SET target.[CompanyName] = source.[CompanyName], target.[Phone] = source.[Phone] " +
             "WHEN NOT MATCHED THEN " +
-            "    INSERT ([ShipperID], [CompanyName], [Phone]) " +
-            "    VALUES (source.[ShipperID], source.[CompanyName], source.[Phone]);",
+            "    INSERT ([CompanyName], [Phone]) " +
+            "    VALUES (source.[CompanyName], source.[Phone]);",
             new { id = TargetShipperId, company = "Upserted Shipper", phone = "555-1234" });
     }
 
@@ -303,8 +306,8 @@ public class ShipperBenchmarks
             "WHEN MATCHED THEN " +
             "    UPDATE SET target.[CompanyName] = source.[CompanyName], target.[Phone] = source.[Phone] " +
             "WHEN NOT MATCHED THEN " +
-            "    INSERT ([ShipperID], [CompanyName], [Phone]) " +
-            "    VALUES (source.[ShipperID], source.[CompanyName], source.[Phone]);",
+            "    INSERT ([CompanyName], [Phone]) " +
+            "    VALUES (source.[CompanyName], source.[Phone]);",
             TargetShipperId, "Upserted Shipper", "555-1234");
     }
 
