@@ -746,9 +746,20 @@ internal static class StoreProcessor
         if (needsHardDeleteByKey) AppendConstSql(source, "_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
         if (needsCount) AppendConstSql(source, "_sqlCount", sqlBuilder.BuildCountSql(ctx));
-        if (needsInsertAll) AppendConstSql(source, "_sqlInsertAllPrefix", "INSERT INTO " + ctx.Table + " (" + ctx.InsertColumns + ") VALUES ");
+        // InsertAll (multi-row VALUES) and UpdateAll (multi-statement per-row UPDATE) are unsupported on a
+        // dialect that rejects those forms (Oracle: ORA-00936). Build their consts degradably so such a
+        // dialect skips the const and the affected methods become throwing stubs (INQ039) — the same path
+        // as the generated-key MERGE upsert — rather than emitting runtime-invalid SQL. DeleteAll uses the
+        // IN-expansion path (BuildDeleteAllByKeysSql), which every dialect supports.
+        var insertAllError = TryBuildDegradableConst(source, "_sqlInsertAllPrefix", needsInsertAll,
+            () => sqlBuilder.SupportsMultiRowBatch
+                ? "INSERT INTO " + ctx.Table + " (" + ctx.InsertColumns + ") VALUES "
+                : throw new System.NotSupportedException(MultiRowBatchUnsupportedMessage(sqlBuilder, "InsertAll")));
         if (needsDeleteAll) AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
-        if (needsUpdateAll) AppendConstSql(source, "_sqlUpdateAllRow", BuildUpdateAllRowTemplate(sqlBuilder, ctx, entity));
+        var updateAllError = TryBuildDegradableConst(source, "_sqlUpdateAllRow", needsUpdateAll,
+            () => sqlBuilder.SupportsMultiRowBatch
+                ? BuildUpdateAllRowTemplate(sqlBuilder, ctx, entity)
+                : throw new System.NotSupportedException(MultiRowBatchUnsupportedMessage(sqlBuilder, "UpdateAll")));
 
         foreach (var fieldColumns in byFieldOps)
         {
@@ -895,6 +906,9 @@ internal static class StoreProcessor
                 StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ?? insertReturningError,
                 // Non-returning upsert uses _sqlUpsert (throws for a generated-key MERGE on Oracle).
                 StoreOperation.Upsert => upsertError,
+                // InsertAll/UpdateAll multi-row batch forms are unsupported on Oracle (ORA-00936).
+                StoreOperation.InsertAll => insertAllError,
+                StoreOperation.UpdateAll => updateAllError,
                 _ => null,
             };
             if (unsupportedReason is not null)
@@ -1421,6 +1435,16 @@ internal static class StoreProcessor
         var whereList = string.Join(" AND ", keyColumns.Select((k, i) => sqlBuilder.QuoteIdentifier(k.ColumnName) + " = @u{r}_k" + i));
         return "UPDATE " + ctx.Table + " SET " + setList + " WHERE " + whereList + ";";
     }
+
+    /// <summary>
+    /// The <see cref="System.NotSupportedException"/> message for a dialect that cannot emit multi-row
+    /// batch <paramref name="operation"/> (<c>InsertAll</c>/<c>UpdateAll</c>) — surfaced as INQ039 on a
+    /// throwing stub. Points users at the supported alternatives.
+    /// </summary>
+    private static string MultiRowBatchUnsupportedMessage(SqlBuilder sqlBuilder, string operation)
+        => "Inquiry " + sqlBuilder.DialectName + " provider (v1) does not support batch " + operation +
+            ": the multi-row VALUES / multi-statement UPDATE forms are not valid " + sqlBuilder.DialectName +
+            " SQL. Use single-row Insert/Update in a loop; batch DeleteAll is supported (IN-expansion).";
 
     private static List<IColumn> ToColumnList(IReadOnlyList<ColumnData> columns)
     {

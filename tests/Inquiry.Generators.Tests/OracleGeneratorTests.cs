@@ -288,4 +288,154 @@ public sealed partial class InquiryGeneratorTests
             text);
         Assert.DoesNotContain("throw new global::System.NotSupportedException(", text); // no stub
     }
+
+    [Fact]
+    public void OracleDialectBindsDateTimeColumnAsDbTypeDateTime()
+    {
+        // ODP.NET's OracleParameter.set_DbType rejects DbType.DateTime2 ("Value does not fall within the
+        // expected range"), so inserting any entity with a System.DateTime column failed on Oracle. The
+        // Oracle SqlBuilder maps System.DateTime to DbType.DateTime (which ODP.NET accepts), while every
+        // other dialect keeps DbType.DateTime2 (SqlClient legacy-datetime precision). Verified live by
+        // Inquiry.Oracle.Tests.OracleCoverageGapIntegrationTests (Employee/Order carry DateTime columns).
+        var result = RunGenerator(DateTimeColumnSource, dialect: "Oracle");
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var tree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("ReminderStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // The DueAt parameter binds DbType.DateTime (not DateTime2) under the Oracle dialect.
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.DateTime;", text);
+        Assert.DoesNotContain("DbType.DateTime2", text);
+    }
+
+    [Fact]
+    public void NonOracleDialectBindsDateTimeColumnAsDbTypeDateTime2()
+    {
+        // Preservation guard: the DateTime -> DbType.DateTime substitution is Oracle-only. SqlServer (and
+        // every other dialect) keeps DbType.DateTime2, so the dialect-aware override cannot regress them.
+        var result = RunGenerator(DateTimeColumnSource, dialect: "SqlServer");
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var tree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("ReminderStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.DateTime2;", text);
+    }
+
+    [Fact]
+    public void OracleDialectRejectsBatchInsertAndUpdateButKeepsBatchDelete()
+    {
+        // KNOWN v1 LIMITATION: Oracle rejects the multi-row VALUES (InsertAll) and the multi-statement
+        // per-row UPDATE (UpdateAll) forms the shared emitter builds (ORA-00936). Rather than emit
+        // runtime-invalid SQL, the generator degrades each to a throwing stub + INQ039 — the same
+        // graceful-degradation path as the generated-key MERGE upsert. Batch DELETE uses a different
+        // IN-expansion path and stays supported. Verified live by Inquiry.Oracle.Tests.BatchIntegrationTests.
+        var result = RunGenerator(BatchStoreSource, dialect: "Oracle");
+
+        var inq039 = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics)
+            .Where(static d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning)
+            .ToArray();
+        // Both InsertAll and UpdateAll degrade to INQ039 (the message names the offending store method).
+        Assert.Contains(inq039, static d => d.GetMessage().Contains("InsertAllAsync", StringComparison.Ordinal));
+        Assert.Contains(inq039, static d => d.GetMessage().Contains("UpdateAllAsync", StringComparison.Ordinal));
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var tree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("RegionStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // InsertAll/UpdateAll degrade to throwing stubs; their SQL consts are skipped.
+        Assert.Contains("throw new global::System.NotSupportedException(", text);
+        Assert.DoesNotContain("_sqlInsertAllPrefix", text);
+        Assert.DoesNotContain("_sqlUpdateAllRow", text);
+        // Batch DELETE is still emitted (IN-expansion path, unaffected).
+        Assert.Contains("_sqlDeleteAll", text);
+    }
+
+    [Fact]
+    public void NonOracleDialectEmitsBatchInsertAndUpdate()
+    {
+        // Preservation guard: only Oracle degrades batch insert/update. SqlServer (and the others) emit the
+        // real multi-row INSERT prefix and per-row UPDATE template with no throwing stub.
+        var result = RunGenerator(BatchStoreSource, dialect: "SqlServer");
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var tree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("RegionStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("_sqlInsertAllPrefix", text);
+        Assert.Contains("_sqlUpdateAllRow", text);
+        Assert.DoesNotContain("throw new global::System.NotSupportedException(", text);
+    }
+
+    // A client-keyed entity with all three batch operations (InsertAll/UpdateAll/DeleteAll).
+    private const string BatchStoreSource = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("TRegion")]
+        public sealed class Region
+        {
+            [InquiryKey]
+            public int RegionId { get; set; }
+
+            [InquiryColumn("Name")]
+            public string Name { get; set; } = string.Empty;
+        }
+
+        public partial class RegionStore : InquiryStore<Region>
+        {
+            [InquiryInsertAll]
+            public partial Task<int> InsertAllAsync(IEnumerable<Region> regions, CancellationToken cancellationToken = default);
+
+            [InquiryUpdateAll]
+            public partial Task<int> UpdateAllAsync(IEnumerable<Region> regions, CancellationToken cancellationToken = default);
+
+            [InquiryDeleteAll]
+            public partial Task<int> DeleteAllAsync(IEnumerable<int> regionIds, CancellationToken cancellationToken = default);
+        }
+        """;
+
+    // A generated-key entity carrying a single System.DateTime column, plus a store that inserts it.
+    // The insert binder excludes the generated key, so the DueAt parameter is _p0.
+    private const string DateTimeColumnSource = """
+        using System;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("TReminder")]
+        public sealed class Reminder
+        {
+            [InquiryKey(IsGenerated = true)]
+            public int? Id { get; set; }
+
+            [InquiryColumn("DueAt")]
+            public DateTime DueAt { get; set; }
+        }
+
+        public partial class ReminderStore : InquiryStore<Reminder>
+        {
+            [InquiryInsert]
+            public partial Task<int> InsertAsync(Reminder reminder, CancellationToken cancellationToken = default);
+        }
+        """;
 }

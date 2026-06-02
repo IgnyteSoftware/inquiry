@@ -20,11 +20,6 @@ public sealed class OracleCoverageGapIntegrationTests
     public async Task MultiFieldSelectFiltersByBothColumns()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        // Known Oracle limitation (ready to un-skip once fixed): inserting an entity with a System.DateTime
-        // column throws because the generator emits DbType.DateTime2 and ODP.NET's OracleParameter rejects
-        // it ("Value does not fall within the expected range"). Employee/Order carry DateTime columns, so
-        // these gap-fill tests cannot seed without it. See docs/STATUS.md.
-        Skip.If(true, "Oracle insert of DateTime columns blocked by ODP.NET DbType.DateTime2 rejection (see STATUS.md).");
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "multifield");
         var customers = harness.GetRequiredService<CustomerStore>();
         var employees = harness.GetRequiredService<EmployeeStore>();
@@ -48,11 +43,6 @@ public sealed class OracleCoverageGapIntegrationTests
     public async Task EmployeeReportsToSelfReferenceRoundTrips()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        // Known Oracle limitation (ready to un-skip once fixed): inserting an entity with a System.DateTime
-        // column throws because the generator emits DbType.DateTime2 and ODP.NET's OracleParameter rejects
-        // it ("Value does not fall within the expected range"). Employee/Order carry DateTime columns, so
-        // these gap-fill tests cannot seed without it. See docs/STATUS.md.
-        Skip.If(true, "Oracle insert of DateTime columns blocked by ODP.NET DbType.DateTime2 rejection (see STATUS.md).");
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "emp");
         var employees = harness.GetRequiredService<EmployeeStore>();
 
@@ -62,5 +52,30 @@ public sealed class OracleCoverageGapIntegrationTests
         var fetched = await employees.SelectByKeyAsync(report!.EmployeeID);
         Assert.NotNull(fetched);
         Assert.Equal(manager.EmployeeID, fetched!.ReportsTo);
+    }
+
+    [SkippableFact]
+    public async Task DateTimeColumnsRoundTripThroughOracle()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        // Regression for the ODP.NET DbType.DateTime2 rejection: a non-null System.DateTime binds (Oracle
+        // maps it to DbType.DateTime -> TIMESTAMP) and round-trips through INSERT RETURNING + SELECT.
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "datetime");
+        var employees = harness.GetRequiredService<EmployeeStore>();
+
+        var birth = new DateTime(1980, 5, 15);
+        var hire = new DateTime(2010, 3, 1);
+        var inserted = await employees.InsertReturningAsync(new Employee
+        {
+            FirstName = "Nancy",
+            LastName = "Davolio",
+            BirthDate = birth,
+            HireDate = hire,
+        });
+
+        var fetched = await employees.SelectByKeyAsync(inserted!.EmployeeID);
+        Assert.NotNull(fetched);
+        Assert.Equal(birth, fetched!.BirthDate);
+        Assert.Equal(hire, fetched.HireDate);
     }
 }

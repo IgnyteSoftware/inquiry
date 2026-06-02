@@ -54,7 +54,7 @@ internal static class StoreOperationEmitter
         {
             case StoreOperation.KeysetPage:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitKeysetPage(source, method, selectPlan!, entityType, structMat, cancellation);
+                EmitKeysetPage(source, sqlBuilder, method, selectPlan!, entityType, structMat, cancellation);
                 source.AppendLine("    }");
                 break;
 
@@ -75,7 +75,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectOneByKey:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastQuerySingleByKeys(source, entityType, structMat, baseSelectField ?? "_sqlSelectByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
+                EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, baseSelectField ?? "_sqlSelectByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
                 source.AppendLine("    }");
                 break;
 
@@ -88,7 +88,7 @@ internal static class StoreOperationEmitter
                 if (method.ReturnsList)
                 {
                     // Buffered: allocation-free fast path (static binder, no InquiryParameter[]).
-                    EmitFastQueryListByFields(source, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ", sqlField: baseSelectField);
+                    EmitFastQueryListByFields(source, sqlBuilder, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ", sqlField: baseSelectField);
                 }
                 else
                 {
@@ -96,7 +96,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
                     source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
                     source.AppendLine($"                {baseSelectField ?? "_sqlSelectBy_" + BuildFieldSuffix(fieldColumns)},");
-                    AppendPositionalParameters(source, fieldColumns, method.Parameters, indent: "                ");
+                    AppendPositionalParameters(source, sqlBuilder, fieldColumns, method.Parameters, indent: "                ");
                     source.AppendLine("            default,");
                     source.AppendLine($"            {cancellation});");
                 }
@@ -113,11 +113,11 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: false);
                 if (method.ReturnsEntity)
                 {
-                    EmitFastQuerySingleFromEntity(source, "_sqlInsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: false, isAwait: false);
+                    EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlInsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: false, isAwait: false);
                 }
                 else
                 {
-                    EmitFastExecuteFromEntity(source, "_sqlInsert", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: false, returnRowsAffectedAsBool: false);
+                    EmitFastExecuteFromEntity(source, sqlBuilder, "_sqlInsert", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: false, returnRowsAffectedAsBool: false);
                 }
                 source.AppendLine("    }");
                 break;
@@ -126,11 +126,11 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: true);
                 if (method.ReturnsEntity)
                 {
-                    EmitFastQuerySingleFromEntity(source, "_sqlUpdateReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: true, emitConcurrencyGuard: true);
+                    EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlUpdateReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: true, emitConcurrencyGuard: true);
                 }
                 else
                 {
-                    EmitFastExecuteFromEntity(source, "_sqlUpdate", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: true);
+                    EmitFastExecuteFromEntity(source, sqlBuilder, "_sqlUpdate", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: true);
                 }
                 source.AppendLine("    }");
                 break;
@@ -143,12 +143,12 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"        if ({firstParameter}.{entity.Keys[0].PropertyName} is null)");
                         source.AppendLine("        {");
-                        EmitFastQuerySingleFromEntity(source, "_sqlInsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "            ", includeKey: false, isAwait: false);
+                        EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlInsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "            ", includeKey: false, isAwait: false);
                         source.AppendLine("        }");
                         source.AppendLine();
                     }
 
-                    EmitFastQuerySingleFromEntity(source, "_sqlUpsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: false);
+                    EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlUpsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: false);
                 }
                 else
                 {
@@ -156,12 +156,12 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"        if ({firstParameter}.{entity.Keys[0].PropertyName} is null)");
                         source.AppendLine("        {");
-                        EmitFastExecuteFromEntity(source, "_sqlInsert", entity, firstParameter, entityType, cancellation, indent: "            ", includeKey: false, returnRowsAffectedAsBool: false);
+                        EmitFastExecuteFromEntity(source, sqlBuilder, "_sqlInsert", entity, firstParameter, entityType, cancellation, indent: "            ", includeKey: false, returnRowsAffectedAsBool: false);
                         source.AppendLine("        }");
                         source.AppendLine();
                     }
 
-                    EmitFastExecuteFromEntity(source, "_sqlUpsert", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: false);
+                    EmitFastExecuteFromEntity(source, sqlBuilder, "_sqlUpsert", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: false);
                 }
                 source.AppendLine("    }");
                 break;
@@ -184,14 +184,14 @@ internal static class StoreOperationEmitter
                     source.AppendLine("        var _rows = await Inquiry.ExecuteAsync(");
                     source.AppendLine($"            {deleteField},");
                     source.AppendLine($"            {firstParameter},");
-                    AppendBinderLambda(source, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "            ");
+                    AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "            ");
                     source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                     AppendConcurrencyConflictGuard(source, "        ");
                     source.AppendLine("        return _rows > 0;");
                 }
                 else
                 {
-                    EmitFastExecuteFromKeys(source, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ");
+                    EmitFastExecuteFromKeys(source, sqlBuilder, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ");
                 }
                 source.AppendLine("    }");
                 break;
@@ -199,7 +199,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.RestoreOneByKey:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastExecuteFromKeys(source, "_sqlRestoreByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
+                EmitFastExecuteFromKeys(source, sqlBuilder, "_sqlRestoreByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
                 source.AppendLine("    }");
                 break;
 
@@ -307,7 +307,7 @@ internal static class StoreOperationEmitter
                 for (var _c = 0; _c < insertable.Length; _c++)
                 {
                     var col = insertable[_c];
-                    var dbType = ResolveDbType(col);
+                    var dbType = ResolveDbType(col, sqlBuilder);
                     source.AppendLine("                    {");
                     source.AppendLine("                        var _p = _cmd.CreateParameter();");
                     source.AppendLine($"                        _p.ParameterName = \"@p\" + _r + \"_{_c}\";");
@@ -352,11 +352,11 @@ internal static class StoreOperationEmitter
                 source.AppendLine("                    var _it = _items[_r];");
                 for (var _c = 0; _c < setColumns.Length; _c++)
                 {
-                    AppendUpdateAllParam(source, setColumns[_c], "\"@u\" + _r + \"_" + _c + "\"");
+                    AppendUpdateAllParam(source, sqlBuilder, setColumns[_c], "\"@u\" + _r + \"_" + _c + "\"");
                 }
                 for (var _k = 0; _k < keyColumns.Count; _k++)
                 {
-                    AppendUpdateAllParam(source, keyColumns[_k], "\"@u\" + _r + \"_k" + _k + "\"");
+                    AppendUpdateAllParam(source, sqlBuilder, keyColumns[_k], "\"@u\" + _r + \"_k" + _k + "\"");
                 }
                 source.AppendLine("                }");
                 source.AppendLine("            },");
@@ -375,6 +375,7 @@ internal static class StoreOperationEmitter
 
     private static void EmitFastExecuteFromEntity(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         string sqlField,
         EntityData entity,
         string entityParameter,
@@ -393,7 +394,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}var _rows = await Inquiry.ExecuteAsync(");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {entityParameter},");
-            AppendBinderLambda(source, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
             AppendConcurrencyConflictGuard(source, indent);
             source.AppendLine($"{indent}return _rows > 0;");
@@ -406,7 +407,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}return {awaitPrefix}Inquiry.ExecuteAsync(");
         source.AppendLine($"{indent}    {sqlField},");
         source.AppendLine($"{indent}    {entityParameter},");
-        AppendBinderLambda(source, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
+        AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
     }
 
@@ -428,11 +429,11 @@ internal static class StoreOperationEmitter
     /// column uses its provider type (W10b), an enum-as-string column binds a string (W10), otherwise
     /// the column's own mapping.
     /// </summary>
-    private static string? ResolveDbType(ColumnData column)
+    private static string? ResolveDbType(ColumnData column, SqlBuilder sqlBuilder)
     {
         if (column.Converter is { } converter)
         {
-            return DbTypeMapper.TryGetDbTypeForSpecialType(converter.ProviderSpecialType);
+            return sqlBuilder.MapDbTypeExpressionForSpecialType(converter.ProviderSpecialType);
         }
 
         if (column.EnumAsString)
@@ -440,7 +441,7 @@ internal static class StoreOperationEmitter
             return "global::System.Data.DbType.String";
         }
 
-        return DbTypeMapper.TryGetDbTypeExpression(column.Type);
+        return sqlBuilder.MapDbTypeExpression(column.Type);
     }
 
     private static string BuildParameterValueExpression(ColumnData column, string accessor)
@@ -487,6 +488,7 @@ internal static class StoreOperationEmitter
 
     private static void EmitFastExecuteFromKeys(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         string sqlField,
         EquatableArray<ColumnData> keyColumns,
         EquatableArray<ParameterData> methodParameters,
@@ -505,7 +507,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}{capture}");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {keyParamName},");
-            AppendBinderLambda(source, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ");
             source.AppendLine($"{indent}    {cancellation}{tail}");
         }
         else
@@ -514,7 +516,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}{capture}");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    ({tupleArgs}),");
-            AppendBinderLambda(source, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ");
             source.AppendLine($"{indent}    {cancellation}{tail}");
         }
 
@@ -532,6 +534,7 @@ internal static class StoreOperationEmitter
     /// </summary>
     private static void AppendBinderLambda(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         string lambdaParam,
         IReadOnlyList<ColumnData> columns,
         Func<int, string> accessor,
@@ -544,7 +547,7 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
-            var dbType = ResolveDbType(column);
+            var dbType = ResolveDbType(column, sqlBuilder);
             if (dbType is not null)
             {
                 source.AppendLine($"{indent}    _p{i}.DbType = {dbType};");
@@ -557,6 +560,7 @@ internal static class StoreOperationEmitter
 
     private static void EmitFastQuerySingleByKeys(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         string entityType,
         string structMat,
         string sqlField,
@@ -571,7 +575,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {keyParam.TypeDisplay}, {structMat}>(");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {keyParam.Name},");
-            AppendBinderLambda(source, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ");
             source.AppendLine($"{indent}    default,");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
             return;
@@ -582,13 +586,14 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {tupleType}, {structMat}>(");
         source.AppendLine($"{indent}    {sqlField},");
         source.AppendLine($"{indent}    ({tupleArgs}),");
-        AppendBinderLambda(source, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ");
+        AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ");
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
     }
 
     private static void EmitFastQueryListByFields(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         EquatableArray<ParameterData> methodParameters,
         IReadOnlyList<ColumnData> fieldColumns,
         string entityType,
@@ -604,7 +609,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}return Inquiry.QueryListAsync<{entityType}, {fieldParam.TypeDisplay}, {structMat}>(");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {fieldParam.Name},");
-            AppendBinderLambda(source, "_arg", fieldColumns, _ => "_arg", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_arg", fieldColumns, _ => "_arg", indent + "    ");
             source.AppendLine($"{indent}    default,");
             source.AppendLine($"{indent}    {cancellation});");
             return;
@@ -615,7 +620,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}return Inquiry.QueryListAsync<{entityType}, {tupleType}, {structMat}>(");
         source.AppendLine($"{indent}    {sqlField},");
         source.AppendLine($"{indent}    ({tupleArgs}),");
-        AppendBinderLambda(source, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "    ");
+        AppendBinderLambda(source, sqlBuilder, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "    ");
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation});");
     }
@@ -719,6 +724,7 @@ internal static class StoreOperationEmitter
     /// </summary>
     private static void EmitKeysetPage(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         StoreMethodData method,
         ResolvedSelectPlan plan,
         string entityType,
@@ -745,7 +751,7 @@ internal static class StoreOperationEmitter
                 : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
             // Bind the cursor column's DbType so a null first-page cursor still carries a typed parameter.
             // Without it, PostgreSQL cannot infer the type of a null parameter (42P08) in the IS NULL guard.
-            var cursorDbType = ResolveDbType(plan.KeysetColumns[i]);
+            var cursorDbType = ResolveDbType(plan.KeysetColumns[i], sqlBuilder);
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"@__cursor{i}\";");
             if (cursorDbType is not null)
@@ -812,6 +818,7 @@ internal static class StoreOperationEmitter
 
     private static void EmitFastQuerySingleFromEntity(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         string sqlField,
         EntityData entity,
         string entityParameter,
@@ -832,7 +839,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}var _result = await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {entityParameter},");
-            AppendBinderLambda(source, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
             source.AppendLine($"{indent}    default,");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
             source.AppendLine($"{indent}if (_result is null && Inquiry.ThrowOnConcurrencyConflict) throw new global::Inquiry.InquiryConcurrencyException();");
@@ -846,7 +853,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}return {awaitPrefix}Inquiry.QuerySingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
         source.AppendLine($"{indent}    {sqlField},");
         source.AppendLine($"{indent}    {entityParameter},");
-        AppendBinderLambda(source, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
+        AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "    ");
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
     }
@@ -897,6 +904,7 @@ internal static class StoreOperationEmitter
 
     private static void AppendPositionalParameters(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         IReadOnlyList<ColumnData> columns,
         EquatableArray<ParameterData> methodParameters,
         string indent)
@@ -922,7 +930,7 @@ internal static class StoreOperationEmitter
             else
             {
                 valueArg = paramName;
-                var dbType = DbTypeMapper.TryGetDbTypeExpression(column.Type);
+                var dbType = sqlBuilder.MapDbTypeExpression(column.Type);
                 dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
             }
             source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(column.PropertyName)}\", {valueArg}{dbTypeArg}),");
@@ -1160,9 +1168,9 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>W3b: emits one bound DbParameter for a batch-update column (name expression + DbType + value).</summary>
-    private static void AppendUpdateAllParam(StringBuilder source, ColumnData column, string nameExpression)
+    private static void AppendUpdateAllParam(StringBuilder source, SqlBuilder sqlBuilder, ColumnData column, string nameExpression)
     {
-        var dbType = ResolveDbType(column);
+        var dbType = ResolveDbType(column, sqlBuilder);
         source.AppendLine("                    {");
         source.AppendLine("                        var _p = _cmd.CreateParameter();");
         source.AppendLine($"                        _p.ParameterName = {nameExpression};");
