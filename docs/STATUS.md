@@ -149,11 +149,16 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
    `DbType.Int32`); regression test `Oracle.Tests/NorthwindCrudIntegrationTests.BooleanColumnRoundTripsThroughNumber`.
 
 ### C. Provider runtime limitations surfaced by live testing
-5. **MySQL upsert-returning `LAST_INSERT_ID()`** — **CONFIRMED real** by live test: generated-key
-   `UpsertReturningAsync` over the `ON DUPLICATE KEY UPDATE` branch returns `null` (LAST_INSERT_ID() is
-   not set on the update path). Fix in `MySqlSqlBuilder.BuildUpsertReturningSql` (the `LAST_INSERT_ID(id)`
-   trick or a key predicate). Ready-to-un-skip regression test:
-   `MySql.Tests/NorthwindCoverageIntegrationTests.ProductUpsertReturningUpdateBranchIsKnownLimitation`.
+5. **✅ Resolved (`dc1edcc`, 2026-06-02) — MySQL upsert-returning over the update branch.** Generated-key
+   `UpsertReturningAsync` returned `null` on the `ON DUPLICATE KEY UPDATE` branch: no auto-increment fires
+   there, so the session `LAST_INSERT_ID()` the emulated returning `SELECT` keys on was unset. Fixed in
+   `MySqlSqlBuilder` — the generated-key upsert now adds `key = LAST_INSERT_ID(key)` to the update
+   assignments (`BuildGeneratedKeyUpsertSql(echoKeyForReturning: true)`), so `LAST_INSERT_ID()` returns the
+   existing row's key and the trailing `SELECT … WHERE key = LAST_INSERT_ID()` reads the updated row back.
+   Emission test `MySqlDialectEmitsBacktickIdentifiersAndOnDuplicateKeyUpsertWithEmulatedReturning`; live
+   `MySql.Tests/NorthwindCoverageIntegrationTests.ProductUpsertReturningUpdateBranchSurfacesUpdatedRow` (+
+   its INSERT-branch counterpart), both green. **This closes §C** — every provider runtime limitation
+   surfaced by live testing is now resolved.
 6. **✅ Resolved this session — Oracle `@` parameter sigil.** Predicate (W1) and pagination (W2)
    parameters were baked into the const SQL with `@`, which Oracle rejected (ORA-00936). Fixed by making
    the prefix dialect-aware in the shared generator: `SqlPredicate` now carries the bare logical name and
