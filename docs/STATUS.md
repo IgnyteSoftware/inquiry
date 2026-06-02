@@ -54,13 +54,13 @@ and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentio
 
 | Suite | Tests | Needs Docker? |
 |---|---|---|
-| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 161 | no |
+| `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 165 | no |
 | `Inquiry.Tests` (runtime pipeline, binding, transactions) | 92 | no |
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
 | `Inquiry.PostgreSql.Tests` | 73 | yes |
 | `Inquiry.SqlServer.Tests` | 68 (+3 FTS skips, see below) | yes |
 | `Inquiry.MySql.Tests` | 57 | yes |
-| `Inquiry.Oracle.Tests` | 45 (+2 documented skips, see below) | yes |
+| `Inquiry.Oracle.Tests` | 49 (no skips) | yes |
 
 All green. Docker-gated suites **skip** (not fail) when Docker is unavailable. Regenerate counts with
 `dotnet test` (whole solution) or per project, e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`.
@@ -71,8 +71,8 @@ feature set via a shared, linked **feature catalog** (`tests/Inquiry.FeatureCata
 Northwind stores. PostgreSQL & SQL Server gained live W1 predicate / W2 pagination / W3 batch suites
 (previously MySQL+Oracle only); all four gained live W5/W6/W8/W10; PostgreSQL/MySQL gained the first live
 W9 full-text execution. **Skips:** SQL Server FTS (3) skips when the container lacks the full-text
-component; Oracle FTS is unsupported (INQ035) so it is excluded; two Oracle coverage-gap tests skip on the
-DateTime limitation below.
+component; Oracle FTS is unsupported (INQ035) so it is excluded. (The Oracle DateTime and batch
+insert/update limitations noted previously are now resolved — see §3.E items 12–13.)
 
 ---
 
@@ -210,18 +210,27 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
     path was never tested live on PG before). `StoreOperationEmitter.EmitKeysetPage` now sets the cursor
     parameter's `DbType` from the keyset column (like every other binder). Generator test
     `KeysetCursorParameterCarriesDbType`; verified live by `PostgreSql.Tests/PaginationIntegrationTests`.
-12. **⏳ Open (documented; follow-up tracked) — Oracle cannot bind `DbType.DateTime2`.** The generator emits
-    `DbType.DateTime2` for `System.DateTime` (deliberate, for SqlClient legacy-datetime precision), but
-    ODP.NET's `OracleParameter` rejects it, so inserting/binding any DateTime-bearing entity (Employee,
-    Order) throws on Oracle. Latent — no prior Oracle test inserted a date column. Fix: make the DateTime
-    `DbType` dialect-aware (Oracle → `DbType.DateTime`). The two Oracle coverage-gap tests
-    (`OracleCoverageGapIntegrationTests`: multi-field WHERE, self-ref FK) are **Skip**-marked and ready to
-    un-skip once fixed.
-13. **⏳ Open (documented; follow-up tracked) — Oracle batch insert/update.** `[InquiryInsertAll]` /
-    `[InquiryUpdateAll]` emit multi-row `VALUES` / per-row UPDATE templates that Oracle rejects
-    (`ORA-00936`); `OracleSqlBuilder` has no batch override (Oracle needs `INSERT ALL … SELECT FROM dual`).
-    Oracle batch **delete** works (`BatchDeleteIntegrationTests`); insert/update are not added for Oracle.
-    Fix: implement Oracle batch SQL or emit a compile-time diagnostic like the INQ039 upsert stub.
+12. **✅ Resolved (2026-06-02) — Oracle binds `System.DateTime` as `DbType.DateTime`.** The generator emitted
+    `DbType.DateTime2` for `System.DateTime` (deliberate, for SqlClient legacy-datetime precision), which
+    ODP.NET's `OracleParameter` rejects ("Value does not fall within the expected range"), so inserting/binding
+    any DateTime-bearing entity (Employee, Order) threw on Oracle (latent — no prior Oracle test inserted a date
+    column). Fixed by making the DateTime `DbType` dialect-aware: the new virtual
+    `SqlBuilder.DateTimeDbTypeExpression` (base `DbType.DateTime2`) is overridden to `DbType.DateTime` in
+    `OracleSqlBuilder`, and every `StoreOperationEmitter` binder site now resolves its DbType through
+    `SqlBuilder.MapDbTypeExpression` (the `sqlBuilder` is threaded into `ResolveDbType` and the binder helpers).
+    Other dialects emit byte-identically (`DateTime2`). Generator tests `OracleDialectBindsDateTimeColumnAsDbTypeDateTime`
+    / `NonOracleDialectBindsDateTimeColumnAsDbTypeDateTime2`; the two Oracle coverage-gap tests are **un-skipped**
+    and a `DateTimeColumnsRoundTripThroughOracle` live test added (**Oracle 49, no skips**).
+13. **✅ Resolved (2026-06-02) — Oracle batch insert/update fail at compile time, not runtime.**
+    `[InquiryInsertAll]` / `[InquiryUpdateAll]` emit multi-row `VALUES` / per-row UPDATE templates that Oracle
+    rejects (`ORA-00936`). Rather than rework the shared batch emitter for Oracle's `INSERT ALL … SELECT FROM
+    dual` / PL/SQL forms (deferred — niche feature, risky change to a hot-spine path shared by all dialects),
+    the generator degrades them to a throwing stub + **INQ039** — the same graceful-degradation path as the
+    generated-key MERGE upsert — gated by the new `SqlBuilder.SupportsMultiRowBatch` flag (`OracleSqlBuilder`
+    → false). Batch **delete** (IN-expansion) is unaffected and still works. Generator tests
+    `OracleDialectRejectsBatchInsertAndUpdateButKeepsBatchDelete` / `NonOracleDialectEmitsBatchInsertAndUpdate`;
+    live `Oracle.Tests/BatchDeleteIntegrationTests.InsertAllAndUpdateAllAreUnsupportedOnOracle`. Implementing
+    real Oracle batch SQL remains a possible future enhancement.
 14. **✅ Expanded (this session) — benchmark suite.** Dataset is now `[Params(1000, 100000)]` across the
     CRUD + read benchmarks (100k seeded once per tier in `[GlobalSetup]`), and five feature benchmark
     classes were added (pagination offset/keyset, projection/COUNT/SUM, predicate AND/IN, batch insert,

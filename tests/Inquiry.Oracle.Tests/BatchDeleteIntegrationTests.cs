@@ -6,10 +6,13 @@ using Inquiry.Oracle.Tests.Fixtures;
 namespace Inquiry.Oracle.Tests;
 
 /// <summary>
-/// W3b batch delete over a key collection against real Oracle. The <c>(keys)</c> IN-expansion sentinel is
-/// dialect-aware (Oracle's <c>:</c> sigil), so <c>DELETE … WHERE RegionID IN (…)</c> removes exactly the
-/// listed rows; an empty collection rewrites to <c>IN (NULL)</c> and is a no-op. This exercises the same
-/// runtime <c>InquiryInExpansion</c> path as the predicate <c>IN</c>, via the <c>DeleteAll</c> batch site.
+/// W3 batch operations over the Northwind <c>Region</c> entity against real Oracle. Batch <c>DeleteAll</c>
+/// works: the <c>(keys)</c> IN-expansion sentinel is dialect-aware (Oracle's <c>:</c> sigil), so
+/// <c>DELETE … WHERE RegionID IN (…)</c> removes exactly the listed rows and an empty collection rewrites to
+/// <c>IN (NULL)</c> (a no-op) — the same runtime <c>InquiryInExpansion</c> path as the predicate <c>IN</c>.
+/// Batch <c>InsertAll</c>/<c>UpdateAll</c>, by contrast, are unsupported on Oracle: their multi-row VALUES /
+/// multi-statement UPDATE forms raise ORA-00936, so the generator degrades them to throwing stubs (INQ039)
+/// at compile time rather than emit invalid SQL.
 /// </summary>
 [Collection(OracleCollection.Name)]
 public sealed class BatchDeleteIntegrationTests
@@ -47,5 +50,19 @@ public sealed class BatchDeleteIntegrationTests
 
         Assert.Equal(0, await regions.DeleteAllAsync(System.Array.Empty<int>()));
         Assert.Single(await regions.SelectAllAsync().ToListAsync());
+    }
+
+    [SkippableFact]
+    public async Task InsertAllAndUpdateAllAreUnsupportedOnOracle()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        // InsertAll/UpdateAll degrade to throwing stubs on Oracle (the generated body throws synchronously),
+        // documenting the limitation at runtime to match the compile-time INQ039 + generator-emission test.
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "batchunsup");
+        var regions = harness.GetRequiredService<RegionStore>();
+        var rows = new[] { new Region { RegionID = 1, RegionDescription = "Eastern" } };
+
+        Assert.Throws<System.NotSupportedException>(() => { _ = regions.InsertAllAsync(rows); });
+        Assert.Throws<System.NotSupportedException>(() => { _ = regions.UpdateAllAsync(rows); });
     }
 }

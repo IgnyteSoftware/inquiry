@@ -48,6 +48,16 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     public override string ParameterName(string logicalName) => ":" + logicalName.TrimStart('_');
 
     /// <summary>
+    /// ODP.NET's <c>OracleParameter.set_DbType</c> rejects <c>DbType.DateTime2</c> ("Value does not fall
+    /// within the expected range"), so a <see cref="System.DateTime"/> parameter binds
+    /// <c>DbType.DateTime</c> — which Oracle accepts and binds to its DATE/TIMESTAMP types — instead of
+    /// the <c>DbType.DateTime2</c> the base emits for SqlClient precision. Without this, inserting or
+    /// binding any entity with a DateTime column (e.g. Northwind <c>Employee.BirthDate</c>,
+    /// <c>Order.OrderDate</c>) throws.
+    /// </summary>
+    public override string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime";
+
+    /// <summary>
     /// Unquoted, uppercase-folding identifier policy. Oracle uppercases unquoted identifiers, and the
     /// provider's DDL is written unquoted to match, so valid identifiers are emitted verbatim (no quoting)
     /// to keep the generated SQL aligned with the schema. The exception is an identifier that is not a
@@ -239,6 +249,15 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     // Oracle cannot key on CLOB (the unbounded-text fallback); a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
+
+    /// <summary>
+    /// Oracle rejects both multi-row batch forms the shared emitter builds: the multi-row
+    /// <c>INSERT … VALUES (…),(…)</c> (InsertAll) and the semicolon-separated per-row UPDATE batch
+    /// (UpdateAll) both raise ORA-00936. (Oracle would need <c>INSERT ALL … SELECT 1 FROM dual</c> and a
+    /// PL/SQL block respectively — deferred.) Returning false degrades InsertAll/UpdateAll to a throwing
+    /// stub + INQ039 at compile time. Batch DeleteAll (IN-expansion) is unaffected and stays supported.
+    /// </summary>
+    public override bool SupportsMultiRowBatch => false;
 
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {

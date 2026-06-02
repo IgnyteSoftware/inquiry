@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using Inquiry.Generators.Infrastructure;
+using Inquiry.Generators.Models;
+using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Abstractions;
 
@@ -21,6 +24,48 @@ public abstract class SqlBuilder
     public abstract string DialectName { get; }
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
+
+    /// <summary>
+    /// The fully-qualified <c>System.Data.DbType</c> expression bound onto a generated parameter for a
+    /// column of the given <paramref name="type"/>, or <c>null</c> when no portable DbType applies (the
+    /// provider then infers it). Routes <see cref="System.DateTime"/> through
+    /// <see cref="DateTimeDbTypeExpression"/> — the one mapping that varies by dialect — and delegates
+    /// everything else to the portable <see cref="DbTypeMapper"/>.
+    /// </summary>
+    internal string? MapDbTypeExpression(TypeData type)
+        => type.SpecialType == SpecialType.System_DateTime
+            ? DateTimeDbTypeExpression
+            : DbTypeMapper.TryGetDbTypeExpression(type);
+
+    /// <summary>
+    /// As <see cref="MapDbTypeExpression(TypeData)"/> but for a value converter's provider
+    /// <see cref="SpecialType"/> (W10b); the same dialect substitution for <see cref="System.DateTime"/>
+    /// applies.
+    /// </summary>
+    internal string? MapDbTypeExpressionForSpecialType(SpecialType specialType)
+        => specialType == SpecialType.System_DateTime
+            ? DateTimeDbTypeExpression
+            : DbTypeMapper.TryGetDbTypeForSpecialType(specialType);
+
+    /// <summary>
+    /// The DbType expression emitted for a <see cref="System.DateTime"/> parameter. Default
+    /// <c>DbType.DateTime2</c> (SqlClient maps <c>DbType.DateTime</c> to the legacy <c>datetime</c> type,
+    /// which can truncate against <c>datetime2</c> columns; Npgsql/SQLite/MySQL treat the two
+    /// equivalently). Oracle overrides this with <c>DbType.DateTime</c> because ODP.NET's
+    /// <c>OracleParameter</c> rejects <c>DbType.DateTime2</c> ("Value does not fall within the expected
+    /// range").
+    /// </summary>
+    public virtual string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime2";
+
+    /// <summary>
+    /// Whether the dialect supports the multi-row batch DML the shared emitter builds at runtime: the
+    /// multi-row <c>INSERT … VALUES (…),(…)</c> form (<c>InsertAll</c>) and the multi-statement per-row
+    /// <c>UPDATE …; UPDATE …;</c> form (<c>UpdateAll</c>). Default <c>true</c> (SQLite/SqlServer/
+    /// PostgreSQL/MySQL). Oracle overrides with <c>false</c> — it rejects both forms (ORA-00936) — so the
+    /// generator degrades those operations to a throwing stub + INQ039 instead of emitting invalid SQL.
+    /// Batch <c>DeleteAll</c> uses a separate IN-expansion path and is unaffected by this flag.
+    /// </summary>
+    public virtual bool SupportsMultiRowBatch => true;
 
     public string QuoteTable(string? schema, string tableName)
     {
