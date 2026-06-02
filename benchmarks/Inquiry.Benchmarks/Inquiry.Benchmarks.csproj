@@ -20,11 +20,22 @@
          central package version (6.0.1, picked for the library's netstandard2.0 surface)
          locally so NuGet does not flag a downgrade. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="8.0.1" />
+    <!-- Cross-dialect benchmark (CrossDialectReadBenchmarks): ADO drivers + Testcontainers for the
+         networked dialects. EF Core is compared in the in-process SQLite suite only. -->
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.MySql" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.MySql\Inquiry.MySql.csproj" />
     <ProjectReference Include="..\..\samples\Inquiry.Northwind\Inquiry.Northwind.csproj" />
   </ItemGroup>
 </Project>
