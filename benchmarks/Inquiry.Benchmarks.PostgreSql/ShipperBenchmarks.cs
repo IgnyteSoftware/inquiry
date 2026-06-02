@@ -1,6 +1,7 @@
 using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Order;
 using Dapper;
 using Inquiry.Benchmarks.PostgreSql.Ef;
 using Inquiry.Northwind.Models;
@@ -22,6 +23,9 @@ namespace Inquiry.Benchmarks.PostgreSql;
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
+// Run in declared order so the (non-mutating) read benchmarks all execute before Insert grows the
+// shared table; Update/Upsert target a stable key and run last. Lets the container be shared.
+[Orderer(SummaryOrderPolicy.Declared, MethodOrderPolicy.Declared)]
 public class ShipperBenchmarks
 {
     private PostgreSqlBenchmarkDatabase _db = null!;
