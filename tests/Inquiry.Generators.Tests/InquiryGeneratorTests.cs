@@ -1496,7 +1496,7 @@ public sealed partial class InquiryGeneratorTests
         // Generated key omitted from the INSERT column list; returning SELECT keyed on LAST_INSERT_ID().
         Assert.Contains("private const string _sqlInsertReturning = \"INSERT INTO `Categories` (`Name`) VALUES (@Name); SELECT `CategoryID`, `Name` FROM `Categories` WHERE `CategoryID` = LAST_INSERT_ID()\";", generatedText);
         // Generated-key upsert-returning: native ON DUPLICATE KEY UPDATE, returning via LAST_INSERT_ID().
-        Assert.Contains("private const string _sqlUpsertReturning = \"INSERT INTO `Categories` (`CategoryID`, `Name`) VALUES (@CategoryID, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `CategoryID`, `Name` FROM `Categories` WHERE `CategoryID` = LAST_INSERT_ID()\";", generatedText);
+        Assert.Contains("private const string _sqlUpsertReturning = \"INSERT INTO `Categories` (`CategoryID`, `Name`) VALUES (@CategoryID, @Name) ON DUPLICATE KEY UPDATE `CategoryID` = LAST_INSERT_ID(`CategoryID`), `Name` = VALUES(`Name`); SELECT `CategoryID`, `Name` FROM `Categories` WHERE `CategoryID` = LAST_INSERT_ID()\";", generatedText);
     }
 
     [Fact]
