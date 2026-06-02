@@ -180,9 +180,14 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
    cannot match a NULL generated key) — INQ039 stub, by design.
 
 ### D. Deferred plan item & cleanup
-9. **Live-environment benchmark (Phase 8/9 of the live-runtime plan)** — dialect-parameterize
-   `benchmarks/Inquiry.Benchmarks` (`InquiryBenchProvider` MSBuild property + `AssemblyDialect.*.cs`)
-   and add a PostgreSQL benchmark provisioning via Testcontainers. Infra exists; explicitly deferred.
+9. **✅ Resolved (this session) — live-environment benchmark.** Two BenchmarkDotNet suites in
+   `benchmarks/Inquiry.Benchmarks`: (a) the in-process **SQLite** suite (Inquiry vs Dapper vs EF Core vs raw
+   ADO.NET — the definitive library-overhead comparison; allocations + per-call time, query start → return),
+   and (b) a new **cross-dialect** suite `CrossDialectReadBenchmarks` (Inquiry vs Dapper read hot-paths over
+   PostgreSQL / MySQL / SQL Server, provisioned via Testcontainers, `[Params]`-selected at runtime through
+   Inquiry's ad-hoc query path). Headline: Inquiry allocates at raw-ADO levels (≈1.0–1.2× on reads) — far
+   below EF Core (2–12×) and at/under Dapper — and is fastest or tied on point reads in-process; on networked
+   engines Inquiry ≈ Dapper (round-trip-bound). See the run output in the final report / artifacts.
 10. **✅ Resolved (this session) — dedup `BuildCreateIndexSql` / `IsUnboundedString`.** The identical SQL
     Server and MySQL index-skip overrides were hoisted into the base `SqlBuilder` (gated by
     `RequiresBoundedStringKeys`); both per-dialect copies are gone, and Oracle now shares the behavior. Done

@@ -1,7 +1,25 @@
 # Inquiry.Benchmarks
 
 BenchmarkDotNet harness comparing basic CRUD performance of Inquiry, EF Core, Dapper, and
-raw ADO.NET against SQLite.
+raw ADO.NET. Two suites:
+
+- **In-process (SQLite)** — `CustomerCrudBenchmarks` / `ProductCrudBenchmarks` / `ShipperCrudBenchmarks`.
+  The definitive *library-overhead* comparison: with the database in-process, the per-call time and
+  allocations reflect each library's binding/materialization cost (query start → return), not network or
+  engine noise.
+- **Cross-dialect (networked, Testcontainers)** — `CrossDialectReadBenchmarks`. **Inquiry vs Dapper** read
+  hot-paths (SelectAll / SelectByKey) against PostgreSQL, MySQL, and SQL Server, provisioned via
+  Testcontainers (`[Params]`-selected at runtime). Inquiry is exercised through its ad-hoc `IInquiry.Query…`
+  path so all dialects share one assembly (the generated store fast-path is compile-time-per-dialect). On a
+  networked engine the round-trip dominates, so the ad-hoc-vs-generated difference (a few µs) is negligible
+  — making this a fair library comparison on real databases. EF Core is compared in the in-process SQLite
+  suite (its quoted-identifier convention conflicts with the portable unquoted SQL on PostgreSQL). Requires
+  Docker.
+
+```powershell
+# Cross-dialect read suite (PostgreSQL + MySQL + SQL Server, needs Docker)
+dotnet run -c Release --project benchmarks\Inquiry.Benchmarks -- --filter "*CrossDialect*" --job short
+```
 
 ## What it measures
 
