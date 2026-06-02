@@ -11,87 +11,93 @@ using Testcontainers.PostgreSql;
 namespace Inquiry.Benchmarks.PostgreSql;
 
 /// <summary>
-/// Per-benchmark-class scaffolding: provisions a PostgreSQL Testcontainer, applies
-/// <see cref="NorthwindSchema.PostgreSqlDdl"/>, seeds <see cref="RowCount"/> Shipper rows,
-/// and exposes the generated <see cref="ShipperStore"/>, the connection string, and a
-/// non-pooled <see cref="IDbContextFactory{PgShipperContext}"/> for EF Core.
+/// Process-wide PostgreSQL Testcontainer + DI for the benchmark suite. The container is the
+/// expensive resource, so it is started <b>once per process</b> and reused by every benchmark
+/// method (BenchmarkDotNet must run <c>--inProcess</c> for that sharing to take effect); the seed
+/// runs once. Read benchmarks are non-mutating, and the write benchmarks run after them (declared
+/// order, see <c>[Orderer]</c> on the benchmark class) and target a stable key, so a per-method
+/// reseed is unnecessary. The container is torn down at process exit (and by the Testcontainers
+/// resource reaper as a backstop). EF uses a non-pooled factory so it pays per-operation context
+/// construction — the same lifecycle ADO, Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-/// <remarks>
-/// Each benchmark class creates one of these in <c>[GlobalSetup]</c> and disposes it in
-/// <c>[GlobalCleanup]</c>. The container is started once per parameter tier; EF uses a
-/// non-pooled factory so it pays per-operation context construction — the same lifecycle
-/// ADO, Dapper, and Inquiry each take (fresh connection per call).
-/// </remarks>
 public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
 {
-    private readonly PostgreSqlContainer _container;
-    private readonly ServiceProvider _services;
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static PostgreSqlContainer? _container;
+    private static ServiceProvider? _services;
+    private static string? _connectionString;
+    private static IDbContextFactory<PgShipperContext>? _dbContextFactory;
 
-    private PostgreSqlBenchmarkDatabase(
-        PostgreSqlContainer container,
-        string connectionString,
-        ServiceProvider services,
-        IDbContextFactory<PgShipperContext> dbContextFactory,
-        int rowCount)
-    {
-        _container        = container;
-        _services         = services;
-        ConnectionString  = connectionString;
-        DbContextFactory  = dbContextFactory;
-        RowCount          = rowCount;
-    }
+    private PostgreSqlBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
-    public string ConnectionString { get; }
+    public string ConnectionString => _connectionString!;
 
-    /// <summary>Number of Shipper rows seeded into this database.</summary>
+    /// <summary>Number of Shipper rows seeded into the shared database.</summary>
     public int RowCount { get; }
 
-    public IDbContextFactory<PgShipperContext> DbContextFactory { get; }
+    public IDbContextFactory<PgShipperContext> DbContextFactory => _dbContextFactory!;
 
-    public ShipperStore Shippers => _services.GetRequiredService<ShipperStore>();
+    public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
 
     /// <summary>
-    /// Seeds <paramref name="seedRows"/> Shipper rows. Returns the freshly created harness;
-    /// callers must dispose it.
+    /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
     /// </summary>
     public static async Task<PostgreSqlBenchmarkDatabase> CreateAsync(int seedRows)
     {
-        var container = new PostgreSqlBuilder()
-            .WithImage("postgres:16-alpine")
-            .Build();
-        await container.StartAsync().ConfigureAwait(false);
-
-        var connectionString = container.GetConnectionString();
-
-        // Apply the Northwind DDL (full schema; idempotent).
-        await using (var connection = new NpgsqlConnection(connectionString))
+        await Gate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            await connection.OpenAsync().ConfigureAwait(false);
-            await using var command = connection.CreateCommand();
-            command.CommandText = NorthwindSchema.PostgreSqlDdl;
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            if (_container is null)
+            {
+                var container = new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
+                await container.StartAsync().ConfigureAwait(false);
+                var connectionString = container.GetConnectionString();
+
+                await using (var connection = new NpgsqlConnection(connectionString))
+                {
+                    await connection.OpenAsync().ConfigureAwait(false);
+                    await using var command = connection.CreateCommand();
+                    command.CommandText = NorthwindSchema.PostgreSqlDdl;
+                    await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+                }
+
+                var services = new ServiceCollection()
+                    .AddInquiry()
+                    .AddInquiryPostgreSql(connectionString)
+                    // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
+                    // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
+                    .AddDbContextFactory<PgShipperContext>(options => options.UseNpgsql(connectionString))
+                    .BuildServiceProvider();
+
+                await SeedAsync(connectionString, seedRows).ConfigureAwait(false);
+
+                _connectionString = connectionString;
+                _services = services;
+                _dbContextFactory = services.GetRequiredService<IDbContextFactory<PgShipperContext>>();
+                _container = container;
+
+                AppDomain.CurrentDomain.ProcessExit += static (_, _) =>
+                {
+                    try
+                    {
+                        _services?.Dispose();
+                        _container?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    }
+                    catch { /* best-effort; the Testcontainers reaper cleans up the container too */ }
+                };
+            }
+        }
+        finally
+        {
+            Gate.Release();
         }
 
-        var services = new ServiceCollection()
-            .AddInquiry()
-            .AddInquiryPostgreSql(connectionString)
-            // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
-            // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
-            .AddDbContextFactory<PgShipperContext>(options => options.UseNpgsql(connectionString))
-            .BuildServiceProvider();
-
-        var dbContextFactory = services.GetRequiredService<IDbContextFactory<PgShipperContext>>();
-        var harness = new PostgreSqlBenchmarkDatabase(container, connectionString, services, dbContextFactory, seedRows);
-
-        await harness.SeedAsync().ConfigureAwait(false);
-        return harness;
+        return new PostgreSqlBenchmarkDatabase(seedRows);
     }
 
-    private async Task SeedAsync()
+    private static async Task SeedAsync(string connectionString, int rowCount)
     {
-        // Seed via raw SQL inside a single transaction — Inquiry / EF / Dapper inserts are
-        // the subjects of the benchmark; we don't want their per-row cost to slow setup.
-        await using var connection = new NpgsqlConnection(ConnectionString);
+        await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
         await using var tx = await connection.BeginTransactionAsync().ConfigureAwait(false);
 
@@ -103,7 +109,7 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
             var pCompany = insert.Parameters.Add("company", NpgsqlTypes.NpgsqlDbType.Text);
             var pPhone   = insert.Parameters.Add("phone",   NpgsqlTypes.NpgsqlDbType.Text);
             await insert.PrepareAsync().ConfigureAwait(false);
-            for (int i = 0; i < RowCount; i++)
+            for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
                 pPhone.Value   = $"555-{i:0000}";
@@ -114,9 +120,6 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
         await tx.CommitAsync().ConfigureAwait(false);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _services.DisposeAsync().ConfigureAwait(false);
-        await _container.DisposeAsync().ConfigureAwait(false);
-    }
+    /// <summary>No-op: the shared container outlives individual benchmark methods (see class remarks).</summary>
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

@@ -11,97 +11,102 @@ using Testcontainers.MySql;
 namespace Inquiry.Benchmarks.MySql;
 
 /// <summary>
-/// Per-benchmark-class scaffolding: provisions a MySQL Testcontainer, applies
-/// <see cref="NorthwindSchema.MySqlDdl"/>, seeds <see cref="RowCount"/> Shipper rows,
-/// and exposes the generated <see cref="ShipperStore"/>, the connection string, and a
-/// non-pooled <see cref="IDbContextFactory{MySqlShipperContext}"/> for EF Core.
+/// Process-wide MySQL Testcontainer + DI for the benchmark suite. The container is the expensive
+/// resource, so it is started <b>once per process</b> and reused by every benchmark method
+/// (BenchmarkDotNet must run <c>--inProcess</c>); the seed runs once. Read benchmarks are
+/// non-mutating, and the write benchmarks run after them (declared order, see <c>[Orderer]</c> on
+/// the benchmark class) and target a stable key, so a per-method reseed is unnecessary. The
+/// container is torn down at process exit (and by the Testcontainers reaper as a backstop). EF uses
+/// a non-pooled factory so it pays per-operation context construction — the same lifecycle ADO,
+/// Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-/// <remarks>
-/// Each benchmark class creates one of these in <c>[GlobalSetup]</c> and disposes it in
-/// <c>[GlobalCleanup]</c>. The container is started once per parameter tier; EF uses a
-/// non-pooled factory so it pays per-operation context construction — the same lifecycle
-/// ADO, Dapper, and Inquiry each take (fresh connection per call).
-/// </remarks>
 public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
 {
-    private readonly MySqlContainer _container;
-    private readonly ServiceProvider _services;
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static MySqlContainer? _container;
+    private static ServiceProvider? _services;
+    private static string? _connectionString;
+    private static IDbContextFactory<MySqlShipperContext>? _dbContextFactory;
 
-    private MySqlBenchmarkDatabase(
-        MySqlContainer container,
-        string connectionString,
-        ServiceProvider services,
-        IDbContextFactory<MySqlShipperContext> dbContextFactory,
-        int rowCount)
-    {
-        _container        = container;
-        _services         = services;
-        ConnectionString  = connectionString;
-        DbContextFactory  = dbContextFactory;
-        RowCount          = rowCount;
-    }
+    private MySqlBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
-    public string ConnectionString { get; }
+    public string ConnectionString => _connectionString!;
 
-    /// <summary>Number of Shipper rows seeded into this database.</summary>
+    /// <summary>Number of Shipper rows seeded into the shared database.</summary>
     public int RowCount { get; }
 
-    public IDbContextFactory<MySqlShipperContext> DbContextFactory { get; }
+    public IDbContextFactory<MySqlShipperContext> DbContextFactory => _dbContextFactory!;
 
-    public ShipperStore Shippers => _services.GetRequiredService<ShipperStore>();
+    public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
 
     /// <summary>
-    /// Seeds <paramref name="seedRows"/> Shipper rows. Returns the freshly created harness;
-    /// callers must dispose it.
+    /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
     /// </summary>
     public static async Task<MySqlBenchmarkDatabase> CreateAsync(int seedRows)
     {
-        var container = new MySqlBuilder()
-            .WithImage("mysql:8.0")
-            .Build();
-        await container.StartAsync().ConfigureAwait(false);
-
-        var connectionString = container.GetConnectionString();
-
-        // Apply the Northwind DDL (full schema; idempotent).
-        // MySqlDdl contains multiple statements; execute them one at a time.
-        await using (var connection = new MySqlConnection(connectionString))
+        await Gate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            await connection.OpenAsync().ConfigureAwait(false);
-            // Split on semicolons at end-of-line so each statement is sent individually.
-            var statements = NorthwindSchema.MySqlDdl
-                .Split(';')
-                .Select(s => s.Trim())
-                .Where(s => s.Length > 0);
-            foreach (var stmt in statements)
+            if (_container is null)
             {
-                await using var command = connection.CreateCommand();
-                command.CommandText = stmt;
-                await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+                var container = new MySqlBuilder().WithImage("mysql:8.0").Build();
+                await container.StartAsync().ConfigureAwait(false);
+                var connectionString = container.GetConnectionString();
+
+                // MySqlDdl contains multiple statements; execute them one at a time.
+                await using (var connection = new MySqlConnection(connectionString))
+                {
+                    await connection.OpenAsync().ConfigureAwait(false);
+                    var statements = NorthwindSchema.MySqlDdl
+                        .Split(';')
+                        .Select(s => s.Trim())
+                        .Where(s => s.Length > 0);
+                    foreach (var stmt in statements)
+                    {
+                        await using var command = connection.CreateCommand();
+                        command.CommandText = stmt;
+                        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+                    }
+                }
+
+                var services = new ServiceCollection()
+                    .AddInquiry()
+                    .AddInquiryMySql(connectionString)
+                    // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
+                    // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
+                    .AddDbContextFactory<MySqlShipperContext>(options =>
+                        options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 0))))
+                    .BuildServiceProvider();
+
+                await SeedAsync(connectionString, seedRows).ConfigureAwait(false);
+
+                _connectionString = connectionString;
+                _services = services;
+                _dbContextFactory = services.GetRequiredService<IDbContextFactory<MySqlShipperContext>>();
+                _container = container;
+
+                AppDomain.CurrentDomain.ProcessExit += static (_, _) =>
+                {
+                    try
+                    {
+                        _services?.Dispose();
+                        _container?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    }
+                    catch { /* best-effort; the Testcontainers reaper cleans up the container too */ }
+                };
             }
         }
+        finally
+        {
+            Gate.Release();
+        }
 
-        var services = new ServiceCollection()
-            .AddInquiry()
-            .AddInquiryMySql(connectionString)
-            // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
-            // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
-            .AddDbContextFactory<MySqlShipperContext>(options =>
-                options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 0))))
-            .BuildServiceProvider();
-
-        var dbContextFactory = services.GetRequiredService<IDbContextFactory<MySqlShipperContext>>();
-        var harness = new MySqlBenchmarkDatabase(container, connectionString, services, dbContextFactory, seedRows);
-
-        await harness.SeedAsync().ConfigureAwait(false);
-        return harness;
+        return new MySqlBenchmarkDatabase(seedRows);
     }
 
-    private async Task SeedAsync()
+    private static async Task SeedAsync(string connectionString, int rowCount)
     {
-        // Seed via raw SQL inside a single transaction — Inquiry / EF / Dapper inserts are
-        // the subjects of the benchmark; we don't want their per-row cost to slow setup.
-        await using var connection = new MySqlConnection(ConnectionString);
+        await using var connection = new MySqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
         await using var tx = await connection.BeginTransactionAsync().ConfigureAwait(false);
 
@@ -113,7 +118,7 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
             var pCompany = insert.Parameters.AddWithValue("company", "");
             var pPhone   = insert.Parameters.AddWithValue("phone",   "");
             await insert.PrepareAsync().ConfigureAwait(false);
-            for (int i = 0; i < RowCount; i++)
+            for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
                 pPhone.Value   = $"555-{i:0000}";
@@ -124,9 +129,6 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
         await tx.CommitAsync().ConfigureAwait(false);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _services.DisposeAsync().ConfigureAwait(false);
-        await _container.DisposeAsync().ConfigureAwait(false);
-    }
+    /// <summary>No-op: the shared container outlives individual benchmark methods (see class remarks).</summary>
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
