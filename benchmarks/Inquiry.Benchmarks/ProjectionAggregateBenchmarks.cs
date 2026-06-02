@@ -16,13 +16,13 @@ namespace Inquiry.Benchmarks;
 ///   record; ADO/Dapper select the same three columns into a small record.</item>
 ///   <item><b>Count</b> — <c>COUNT(*)</c> (Inquiry <c>[InquiryCount]</c>).</item>
 ///   <item><b>Sum</b> — <c>SUM(UnitPrice)</c> (Inquiry <c>[InquiryAggregate(Sum)]</c>).</item>
+///   <item><b>Avg / Min / Max</b> — <c>AVG / MIN / MAX(UnitPrice)</c>. Inquiry has a generated
+///   method for Max only; no generated Avg/Min method exists on ProductStore.</item>
 /// </list>
-///   <item><b>Avg / Min / Max</b> — <c>AVG / MIN / MAX(UnitPrice)</c>. ADO/Dapper/EF all have
-///   natural one-liners. Inquiry has generated methods for Max and Sum; no generated Avg or Min
-///   method exists on ProductStore (noted inline).</item>
-/// </list>
-/// EF Core is included for all aggregate and projection categories where it is a natural one-liner
-/// (non-pooled context factory, same lifecycle as the CRUD benchmarks).
+/// EF Core covers Projection and Count here. It is omitted from the decimal aggregates (Sum / Avg /
+/// Min / Max) on SQLite because EF Core's SQLite provider cannot translate a decimal aggregate (it
+/// throws); those EF arms are included on the networked dialects, which have real decimal types.
+/// EF uses a non-pooled context factory, the same lifecycle as the CRUD benchmarks.
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -153,13 +153,9 @@ public class ProjectionAggregateBenchmarks
         return await connection.ExecuteScalarAsync<decimal?>(SumSql);
     }
 
-    [BenchmarkCategory("Sum"), Benchmark]
-    public async Task<decimal?> Sum_EfCore()
-    {
-        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
-        return await ctx.Products.AsNoTracking().SumAsync(p => p.UnitPrice);
-    }
-
+    // note: EF Core's SQLite provider cannot translate a decimal aggregate (UnitPrice is decimal;
+    // SqliteQueryableAggregateMethodTranslator throws). The EF Sum arm is omitted on SQLite — it is
+    // included on the networked dialects (PostgreSQL/MySQL/SQL Server have real decimal types).
     [BenchmarkCategory("Sum"), Benchmark]
     public async Task<decimal?> Sum_Inquiry() => await _db.Products.SumUnitPriceAsync();
 
@@ -186,14 +182,9 @@ public class ProjectionAggregateBenchmarks
         return await connection.ExecuteScalarAsync<double?>(AvgSql);
     }
 
-    [BenchmarkCategory("Avg"), Benchmark]
-    public async Task<decimal?> Avg_EfCore()
-    {
-        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
-        return await ctx.Products.AsNoTracking().AverageAsync(p => p.UnitPrice);
-    }
-
-    // note: ProductStore has no generated [InquiryAggregate(Avg)] method; Inquiry leg omitted.
+    // note: EF Core SQLite cannot translate a decimal aggregate, so the EF Avg arm is omitted on
+    // SQLite (included on the networked dialects). ProductStore also has no generated
+    // [InquiryAggregate(Avg)] method — so on SQLite this category is ADO + Dapper only.
 
     // ---- Min (MIN(UnitPrice)) -----------------------------------------------------------
 
@@ -218,14 +209,9 @@ public class ProjectionAggregateBenchmarks
         return await connection.ExecuteScalarAsync<decimal?>(MinSql);
     }
 
-    [BenchmarkCategory("Min"), Benchmark]
-    public async Task<decimal?> Min_EfCore()
-    {
-        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
-        return await ctx.Products.AsNoTracking().MinAsync(p => p.UnitPrice);
-    }
-
-    // note: ProductStore has no generated [InquiryAggregate(Min)] method; Inquiry leg omitted.
+    // note: EF Core SQLite cannot translate a decimal aggregate, so the EF Min arm is omitted on
+    // SQLite (included on the networked dialects). ProductStore also has no generated
+    // [InquiryAggregate(Min)] method — so on SQLite this category is ADO + Dapper only.
 
     // ---- Max (MAX(UnitPrice)) -----------------------------------------------------------
 
@@ -250,13 +236,8 @@ public class ProjectionAggregateBenchmarks
         return await connection.ExecuteScalarAsync<decimal?>(MaxSql);
     }
 
-    [BenchmarkCategory("Max"), Benchmark]
-    public async Task<decimal?> Max_EfCore()
-    {
-        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
-        return await ctx.Products.AsNoTracking().MaxAsync(p => p.UnitPrice);
-    }
-
+    // note: EF Core SQLite cannot translate a decimal aggregate, so the EF Max arm is omitted on
+    // SQLite (included on the networked dialects).
     [BenchmarkCategory("Max"), Benchmark]
     public async Task<decimal?> Max_Inquiry() => await _db.Products.MaxUnitPriceAsync();
 }
