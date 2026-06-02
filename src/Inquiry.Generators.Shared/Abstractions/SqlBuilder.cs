@@ -99,19 +99,20 @@ public abstract class SqlBuilder
 
     /// <summary>
     /// W3b: builds a batch delete over a collection of single-column keys —
-    /// <c>DELETE FROM t WHERE "Key" IN (@keys)</c>. The <c>(@keys)</c> sentinel is expanded at runtime by
-    /// <c>InquiryInExpansion</c> into one placeholder per element. Dialect-uniform (single key guaranteed
-    /// by validation), so concrete and inherited by every provider.
+    /// <c>DELETE FROM t WHERE "Key" IN (:keys)</c>. The <c>(keys)</c> sentinel takes the dialect sigil via
+    /// <see cref="ParameterName"/> (<c>:keys</c> on Oracle, <c>@keys</c> elsewhere) and is expanded at runtime
+    /// by <c>InquiryInExpansion</c> into one placeholder per element; the emitter passes the same dialect name.
+    /// Dialect-uniform (single key guaranteed by validation), so concrete and inherited by every provider.
     /// </summary>
     public virtual string BuildDeleteAllByKeysSql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + context.QuotedKeyColumns[0] + " IN (@keys)";
+        => "DELETE FROM " + context.Table + " WHERE " + context.QuotedKeyColumns[0] + " IN (" + ParameterName("keys") + ")";
 
     /// <summary>
     /// W3b: the soft-delete form of <see cref="BuildDeleteAllByKeysSql"/> — sets the soft-delete indicator
     /// on every row whose key is in the collection instead of physically removing it.
     /// </summary>
     public virtual string BuildSoftDeleteAllByKeysSql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + context.QuotedKeyColumns[0] + " IN (@keys)";
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + context.QuotedKeyColumns[0] + " IN (" + ParameterName("keys") + ")";
 
     public abstract string BuildUpsertSql(SqlBuildContext context);
 

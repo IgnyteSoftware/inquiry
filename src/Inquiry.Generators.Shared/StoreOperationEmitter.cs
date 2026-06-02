@@ -1,3 +1,4 @@
+using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
@@ -23,6 +24,7 @@ internal static class StoreOperationEmitter
         ResolvedSelectPlan? selectPlan,
         EntityData entity,
         Dictionary<string, EntityData> relationChildEntities,
+        SqlBuilder sqlBuilder,
         string? baseSelectField = null,
         string? resultTypeOverride = null,
         string? structMatOverride = null)
@@ -203,16 +205,17 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.DeleteAll:
             {
-                // W3b: batch delete over a key collection. The (@keys) sentinel in _sqlDeleteAll is
-                // expanded at runtime into one placeholder per key by InquiryInExpansion. Returns rows
-                // affected; for a soft-delete entity _sqlDeleteAll is the soft UPDATE form.
+                // W3b: batch delete over a key collection. The (keys) sentinel in _sqlDeleteAll is expanded
+                // at runtime into one placeholder per key by InquiryInExpansion; the Expand name takes the
+                // dialect sigil (':keys' on Oracle, '@keys' elsewhere) to match the baked sentinel. Returns
+                // rows affected; for a soft-delete entity _sqlDeleteAll is the soft UPDATE form.
                 var keysParam = method.Parameters[0].Name;
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine("            _sqlDeleteAll,");
                 source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
                 source.AppendLine("            {");
-                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@keys\", {keysParam});");
+                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam});");
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 source.AppendLine("    }");
