@@ -1215,7 +1215,11 @@ internal static class StoreProcessor
 
                     var lo = UniqueName(usedNames, column.PropertyName + "_lo");
                     var hi = UniqueName(usedNames, column.PropertyName + "_hi");
-                    predicates.Add(new SqlPredicate(column, predicate.Op, "@" + lo, "@" + hi, predicate.IsOr));
+                    // SqlPredicate carries the bare logical name; SqlBuilder.RenderPredicate applies the
+                    // dialect sigil (':' on Oracle, '@' elsewhere) when emitting the SQL. The runtime
+                    // PredicateBinding keeps '@' — the binder is dialect-agnostic and FinalizeCommand
+                    // reconciles the sigil on Oracle.
+                    predicates.Add(new SqlPredicate(column, predicate.Op, lo, hi, predicate.IsOr));
                     bindings.Add(new PredicateBinding("@" + lo, paramIndex, column, isCollection: false));
                     bindings.Add(new PredicateBinding("@" + hi, paramIndex + 1, column, isCollection: false));
                     paramIndex += 2;
@@ -1234,7 +1238,7 @@ internal static class StoreProcessor
                     }
 
                     var name = UniqueName(usedNames, column.PropertyName);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, "@" + name, null, predicate.IsOr));
+                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr));
                     bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: true));
                     paramIndex += 1;
                     hasIn = true;
@@ -1251,7 +1255,7 @@ internal static class StoreProcessor
                     }
 
                     var name = UniqueName(usedNames, column.PropertyName);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, "@" + name, null, predicate.IsOr));
+                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr));
                     bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
                     paramIndex += 1;
                     break;
@@ -1266,7 +1270,7 @@ internal static class StoreProcessor
                     }
 
                     var name = UniqueName(usedNames, column.PropertyName);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, "@" + name, null, predicate.IsOr));
+                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr));
                     bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
                     paramIndex += 1;
                     break;
@@ -1452,12 +1456,14 @@ internal static class StoreProcessor
         }
     }
 
-    // Synthetic paging parameter names (not entity columns). Bound by the generated paging binder.
-    internal const string OffsetParameterName = "@__offset";
-    internal const string LimitParameterName = "@__limit";
-    internal const string PageSizeParameterName = "@__pageSize";
+    // Synthetic paging parameter LOGICAL names (no sigil). The SQL text takes the dialect sigil via
+    // SqlBuilder.ParameterName (':' on Oracle, '@' elsewhere); the generated paging binder emits the
+    // matching '@__…' runtime parameter, which FinalizeCommand reconciles on Oracle.
+    private const string OffsetLogicalName = "__offset";
+    private const string LimitLogicalName = "__limit";
+    private const string PageSizeLogicalName = "__pageSize";
 
-    internal static string KeysetCursorParameterName(int index) => "@__cursor" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private static string KeysetCursorLogicalName(int index) => "__cursor" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Composes the per-method SQL for an ordered / offset-paged / keyset-paged select: the dialect's
@@ -1481,7 +1487,7 @@ internal static class StoreProcessor
             var cursorParams = new List<string>(keysetColumns.Count);
             for (var i = 0; i < keysetColumns.Count; i++)
             {
-                cursorParams.Add(KeysetCursorParameterName(i));
+                cursorParams.Add(sqlBuilder.ParameterName(KeysetCursorLogicalName(i)));
             }
 
             // Keyset requests pageSize+1 rows via FETCH/LIMIT. SqlServer FETCH needs an OFFSET, which is
@@ -1490,7 +1496,7 @@ internal static class StoreProcessor
             options = new SqlSelectOptions(
                 orderTerms,
                 offsetParameter: "0",
-                limitParameter: PageSizeParameterName,
+                limitParameter: sqlBuilder.ParameterName(PageSizeLogicalName),
                 keysetColumns: keysetColumns,
                 keysetCursorParameters: cursorParams,
                 keysetDescending: plan.OrderColumns.Count > 0 && plan.OrderColumns[0].Descending);
@@ -1508,7 +1514,7 @@ internal static class StoreProcessor
         else
         {
             options = plan.Pagination == Pagination.Offset
-                ? new SqlSelectOptions(orderTerms, offsetParameter: OffsetParameterName, limitParameter: LimitParameterName)
+                ? new SqlSelectOptions(orderTerms, offsetParameter: sqlBuilder.ParameterName(OffsetLogicalName), limitParameter: sqlBuilder.ParameterName(LimitLogicalName))
                 : new SqlSelectOptions(orderTerms);
 
             baseSql = fieldColumns.Count > 0

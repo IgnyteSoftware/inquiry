@@ -76,9 +76,17 @@ public sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         foreach (DbParameter parameter in command.Parameters)
         {
             var name = parameter.ParameterName;
-            if (!string.IsNullOrEmpty(name) && (name[0] == '@' || name[0] == ':'))
+            if (!string.IsNullOrEmpty(name))
             {
-                parameter.ParameterName = name.Substring(1);
+                if (name[0] == '@' || name[0] == ':')
+                {
+                    name = name.Substring(1);
+                }
+
+                // Oracle bind names cannot begin with '_'. OracleSqlBuilder.ParameterName drops the
+                // leading underscores the shared generator uses for synthetic paging params, so apply the
+                // same trim here to keep the bound name matching the ':name' placeholder under BindByName.
+                parameter.ParameterName = name.TrimStart('_');
             }
 
             if (parameter.Value is bool boolValue)

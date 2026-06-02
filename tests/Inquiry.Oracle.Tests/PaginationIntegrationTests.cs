@@ -5,26 +5,16 @@ using Inquiry.Oracle.Tests.Fixtures;
 namespace Inquiry.Oracle.Tests;
 
 /// <summary>
-/// W2 ORDER BY + pagination over the Northwind <c>Product</c> entity against real Oracle. Plain ORDER BY
-/// works; offset/keyset pagination is a KNOWN LIMITATION (see <see cref="PagingSkip"/>) and those facts
-/// are skipped — their bodies are retained so they become live regression tests once the limitation is
-/// fixed. Products are seeded with a null CategoryID so no foreign-key parent rows are required.
+/// W2 ORDER BY + pagination over the Northwind <c>Product</c> entity against real Oracle: ordered
+/// results, offset page boundaries, keyset forward paging round-tripping <c>NextCursor</c>, and a
+/// multi-column keyset tie-break. The synthetic <c>__offset</c>/<c>__limit</c>/cursor parameters take
+/// Oracle's <c>:</c> sigil in the SQL (the shared generator applies <c>SqlBuilder.ParameterName</c>),
+/// while the paging binder emits <c>@</c> at runtime, reconciled by <c>FinalizeCommand</c>. Products are
+/// seeded with a null CategoryID so no foreign-key parent rows are required.
 /// </summary>
 [Collection(OracleCollection.Name)]
 public sealed class PaginationIntegrationTests
 {
-    // KNOWN LIMITATION (tracked follow-up): Oracle offset/keyset pagination is not yet valid against a
-    // live engine. The synthetic @__offset / @__limit / @__cursorN parameters are baked into the const
-    // SQL with the '@' sigil by the shared StoreProcessor; Oracle's parser rejects '@' as a bind
-    // placeholder, so the query fails with ORA-00936 ("missing expression"). FinalizeCommand normalizes
-    // parameter *names* at runtime but cannot rewrite the baked SQL text. The fix is a dialect-aware
-    // synthetic-parameter prefix in the shared generator (use SqlBuilder.ParameterName for synthetic
-    // params, as regular params already do); then remove these Skip calls.
-    private const string PagingSkip =
-        "Oracle offset/keyset pagination not yet valid live: synthetic @__offset/@__limit/@__cursor params " +
-        "are baked into the const SQL with the '@' sigil (ORA-00936). Fix = dialect-aware synthetic-parameter " +
-        "prefix in the shared StoreProcessor.";
-
     private readonly OracleContainerFixture _fixture;
     public PaginationIntegrationTests(OracleContainerFixture fixture) => _fixture = fixture;
 
@@ -59,7 +49,6 @@ public sealed class PaginationIntegrationTests
     [SkippableFact]
     public async Task OffsetPagingWalksPageBoundaries()
     {
-        Skip.If(true, PagingSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "pageoffset");
         await SeedAsync(harness);
@@ -76,7 +65,6 @@ public sealed class PaginationIntegrationTests
     [SkippableFact]
     public async Task OffsetPagingLastPageIsPartial()
     {
-        Skip.If(true, PagingSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "pagelast");
         await SeedAsync(harness);
@@ -91,7 +79,6 @@ public sealed class PaginationIntegrationTests
     [SkippableFact]
     public async Task OffsetPagingPastEndIsEmpty()
     {
-        Skip.If(true, PagingSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "pagepast");
         await SeedAsync(harness);
@@ -105,7 +92,6 @@ public sealed class PaginationIntegrationTests
     [SkippableFact]
     public async Task KeysetForwardPagingRoundTripsCursor()
     {
-        Skip.If(true, PagingSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "keyset");
         await SeedAsync(harness);
@@ -131,7 +117,6 @@ public sealed class PaginationIntegrationTests
     [SkippableFact]
     public async Task KeysetHasMoreIsFalseWhenPageSizeMatchesRemaining()
     {
-        Skip.If(true, PagingSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "keysetexact");
         await SeedAsync(harness);
@@ -146,7 +131,6 @@ public sealed class PaginationIntegrationTests
     [SkippableFact]
     public async Task MultiColumnKeysetBreaksTiesAndRoundTrips()
     {
-        Skip.If(true, PagingSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "keysetmulti");
         await SeedAsync(harness);
@@ -166,7 +150,6 @@ public sealed class PaginationIntegrationTests
     [SkippableFact]
     public async Task KeysetEmptyTableYieldsNullCursorAndNoMore()
     {
-        Skip.If(true, PagingSkip);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "keysetempty");
         var products = harness.GetRequiredService<ProductStore>();

@@ -21,15 +21,14 @@ namespace Inquiry.Oracle.Analyzer;
 /// <c>ReturnEntity = true</c> insert/update/upsert (see the returning builders below).</description></item>
 /// </list>
 /// <para>
-/// KNOWN v1 LIMITATIONS (documented; tracked as follow-ups, currently behind unrunnable live tests):
+/// KNOWN v1 LIMITATIONS (documented; tracked as follow-ups):
 /// </para>
 /// <list type="number">
-/// <item><description><b>Paged / keyset selects are not yet valid against a live Oracle.</b> The
-/// synthetic pagination parameters (<c>@__offset</c>, <c>@__limit</c>, <c>@__cursorN</c>) are baked
-/// with the <c>@</c> sigil by the shared <c>StoreProcessor</c>, which Oracle's SQL parser does not
-/// recognize as a bind placeholder (BindByName reconciles parameter <i>names</i>, not the SQL sigil).
-/// The proper fix is making the synthetic-parameter prefix dialect-aware in the shared generator — a
-/// cross-cutting change deferred so it does not collide with in-flight workstreams.</description></item>
+/// <item><description><b>The <c>IN</c> predicate is not yet valid against a live Oracle.</b> The runtime
+/// IN-expansion (<c>InquiryInExpansion</c>) rewrites the single baked placeholder into <c>@</c>-prefixed
+/// element parameters, which Oracle rejects. (Offset/keyset pagination and the other predicate operators
+/// now work: synthetic and predicate parameters take the dialect sigil via <see cref="ParameterName"/>,
+/// verified by Inquiry.Oracle.Tests.) The fix is making IN-expansion dialect-aware.</description></item>
 /// <item><description><b>Upsert on a database-generated key is unsupported</b> — see
 /// <see cref="BuildUpsertSql"/>. An Oracle MERGE joins on the key, which is NULL for a DB-generated
 /// key, so it would never match and behave as insert-only. Rather than emit silently-wrong SQL, the
@@ -40,8 +39,14 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 {
     public override string DialectName => "Oracle";
 
-    /// <summary>Oracle bind variables use the <c>:name</c> prefix.</summary>
-    public override string ParameterName(string logicalName) => ":" + logicalName;
+    /// <summary>
+    /// Oracle bind variables use the <c>:name</c> prefix. Oracle identifiers (and so bind names) cannot
+    /// begin with <c>_</c>, but the shared generator names synthetic paging parameters <c>__offset</c>
+    /// etc.; drop the leading underscores so the emitted placeholder is a valid Oracle bind. The runtime
+    /// <c>OracleInquiryConnectionFactory.FinalizeCommand</c> applies the same trim to the bound parameter
+    /// name so the two still match under <see cref="OracleCommand.BindByName"/>.
+    /// </summary>
+    public override string ParameterName(string logicalName) => ":" + logicalName.TrimStart('_');
 
     /// <summary>
     /// Unquoted, uppercase-folding identifier policy. Oracle uppercases unquoted identifiers, and the

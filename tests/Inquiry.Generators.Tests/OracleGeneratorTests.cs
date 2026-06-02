@@ -198,13 +198,11 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetStore(result);
 
-        // KNOWN v1 LIMITATION (see OracleSqlBuilder remarks): the synthetic paging parameters keep
-        // the shared '@__offset'/'@__limit' names baked by StoreProcessor. Oracle's SQL parser does
-        // NOT treat '@__offset' as a bind placeholder (Oracle uses ':'), so a paged/keyset query does
-        // not run against a live Oracle yet — the proper fix is a dialect-aware synthetic-parameter
-        // prefix in the shared generator, deferred to avoid colliding with in-flight workstreams.
-        // This test pins the CURRENT emitted text, not a working live contract.
-        Assert.Contains("ORDER BY Id ASC OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY", text);
+        // The SQL text takes Oracle's ':' sigil for the synthetic paging parameters (the shared generator
+        // applies SqlBuilder.ParameterName); the generated paging binder still emits the '@__offset'/
+        // '@__limit' runtime parameters, which OracleInquiryConnectionFactory.FinalizeCommand reconciles.
+        // Verified live by Inquiry.Oracle.Tests.PaginationIntegrationTests.
+        Assert.Contains("ORDER BY Id ASC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY", text);
         Assert.Contains("_p0.ParameterName = \"@__offset\";", text);
         Assert.Contains("_p1.ParameterName = \"@__limit\";", text);
     }
