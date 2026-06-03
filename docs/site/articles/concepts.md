@@ -84,7 +84,7 @@ For a `SELECT` (list read), the request pipeline is dramatically shorter than an
 
 There is no SQL building, no expression-tree compilation, no per-call reflection. The only allocations on the read path are the entities themselves and the `List<T>` (when buffered).
 
-For a single-row read, the pipeline additionally passes `CommandBehavior.SingleRow`.
+Single-row reads pass `CommandBehavior.SingleResult` (and `SequentialAccess` for generated-store reads). They deliberately omit `CommandBehavior.SingleRow` — the `QuerySingleOrDefaultAsync` contract throws when a query returns more than one row, and that detection needs a second `ReadAsync` to observe the extra row. `SingleRow` would let providers stop after the first row and silently suppress the throw.
 
 For inserts / updates / deletes (`ExecuteNonQuery`), the pipeline skips the reader entirely.
 

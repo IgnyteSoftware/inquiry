@@ -7,7 +7,8 @@ internal static class InquiryDiagnosticDescriptors
     // ---------------------------------------------------------------------------------------------
     // DIAGNOSTIC-ID REGISTRY
     //
-    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ021.
+    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ021,
+    //                  INQ022–INQ027 (subset), INQ028–INQ032, INQ035–INQ041, INQ042.
     // Historically skipped (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015.
     //
     // RESERVED RANGES for in-flight feature workstreams so parallel branches do not collide on the
@@ -307,6 +308,17 @@ internal static class InquiryDiagnosticDescriptors
         "INQ041",
         "InquiryRelation child entity has a composite primary key, which is not supported",
         "Eager-loading method '{0}': relation '{1}.{2}' targets child entity '{3}', which has a composite primary key ({4} key columns). Eager-loading via InquiryRelation only supports single-key children in v1.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ042: an OrderBy term contains an unrecognised direction token (anything other than ASC/DESC,
+    // case-insensitive) or trailing tokens (e.g. NULLS FIRST). The parser previously fell back to ASC
+    // silently for any non-DESC token, silently changing query semantics on typos. Reject up front.
+    public static readonly DiagnosticDescriptor InvalidOrderByDirection = new(
+        "INQ042",
+        "OrderBy term has an invalid direction token",
+        "Store method '{0}': OrderBy term '{1}' is invalid. Each term must be 'field' or 'field ASC' / 'field DESC' (case-insensitive); '{2}' is not a recognised direction token.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

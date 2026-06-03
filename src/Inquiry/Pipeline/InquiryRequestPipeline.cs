@@ -35,7 +35,12 @@ namespace Inquiry.Pipeline;
 public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 {
     private const CommandBehavior ReadBehavior = CommandBehavior.SingleResult;
-    private const CommandBehavior SingleRowBehavior = CommandBehavior.SingleResult | CommandBehavior.SingleRow;
+
+    // Single-row reads deliberately omit CommandBehavior.SingleRow. The QuerySingleOrDefaultAsync
+    // contract throws if the query returns more than one row, and that detection requires a second
+    // ReadAsync call to observe the extra row. SingleRow gives providers permission to stop after the
+    // first row, silently suppressing the detection on providers that honour the hint (audit P2 #5).
+    private const CommandBehavior SingleRowBehavior = CommandBehavior.SingleResult;
 
     // The struct-materializer (generated-store) overloads add SequentialAccess: generated materializers
     // read every column exactly once in ascending ordinal order, so the provider can stream the row
@@ -43,7 +48,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     // (matching Dapper). The class-materializer overloads above keep the buffered behaviours, because a
     // caller-supplied IInquiryEntityMaterializer<T> may read columns out of order, which SequentialAccess forbids.
     private const CommandBehavior SequentialReadBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
-    private const CommandBehavior SequentialSingleRowBehavior = CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess;
+    private const CommandBehavior SequentialSingleRowBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
 
     private readonly IInquiryConnectionFactory _connectionFactory;
     private readonly IInquiryCommandInterceptor[] _interceptors;

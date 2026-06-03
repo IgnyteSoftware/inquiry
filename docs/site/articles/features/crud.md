@@ -209,7 +209,7 @@ partial class ShipperStore
 - **No string formatting at run time.** Parameter binding is `_p0.Value = _e.CompanyName` — a plain field write, no interpolation.
 - **Binders are `static` lambdas.** The compiler emits a single cached delegate per method; no per-call closure allocation.
 - **`DbType` is pre-computed.** The generator looks up the right `DbType` from your column's CLR type, so the binder doesn't pay reflection costs.
-- **Single-row reads add `CommandBehavior.SingleRow`** at the pipeline level; list reads add `SequentialAccess`. Both are wired in `InquiryRequestPipeline`, not visible at the call site.
+- **Reads pass `CommandBehavior.SingleResult`** at the pipeline level; generated-store reads (struct materializers) additionally pass `SequentialAccess` so the row streams forward-only. Both are wired in `InquiryRequestPipeline`, not visible at the call site. (`CommandBehavior.SingleRow` is deliberately omitted from single-row reads — it would let providers stop after the first row, suppressing the `QuerySingleOrDefaultAsync` multi-row throw.)
 
 ## Cross-dialect SQL differences
 

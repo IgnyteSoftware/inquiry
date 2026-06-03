@@ -149,4 +149,80 @@ public sealed class PaginationIntegrationTests
         Assert.False(page.HasMore);
         Assert.Null(page.NextCursor);
     }
+
+    // ---- Pagination argument validation (audit P2 #12) ----------------------------------
+    //
+    // Pre-fix the generated methods bound offset/limit/pageSize straight into the SQL with no
+    // validation. Negative offsets fall through to the provider (provider-specific error or
+    // silent wrong results); a non-positive limit/pageSize wastes a round trip (or, in the
+    // keyset case, errors arithmetically since the SQL uses `pageSize + 1`); pageSize ==
+    // int.MaxValue overflows that `+ 1`. The generator now emits explicit guards.
+
+    [Fact]
+    public async Task OffsetPagingRejectsNegativeOffset()
+    {
+        await using var harness = await SeedAsync();
+        var products = harness.GetRequiredService<ProductStore>();
+
+        var ex = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => products.PageByIdAsync(offset: -1, limit: 2));
+        Assert.Equal("offset", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task OffsetPagingRejectsZeroLimit()
+    {
+        await using var harness = await SeedAsync();
+        var products = harness.GetRequiredService<ProductStore>();
+
+        var ex = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => products.PageByIdAsync(offset: 0, limit: 0));
+        Assert.Equal("limit", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task OffsetPagingRejectsNegativeLimit()
+    {
+        await using var harness = await SeedAsync();
+        var products = harness.GetRequiredService<ProductStore>();
+
+        var ex = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => products.PageByIdAsync(offset: 0, limit: -5));
+        Assert.Equal("limit", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task KeysetPagingRejectsZeroPageSize()
+    {
+        await using var harness = await SeedAsync();
+        var products = harness.GetRequiredService<ProductStore>();
+
+        var ex = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => products.KeysetByIdAsync(afterProductID: null, pageSize: 0));
+        Assert.Equal("pageSize", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task KeysetPagingRejectsNegativePageSize()
+    {
+        await using var harness = await SeedAsync();
+        var products = harness.GetRequiredService<ProductStore>();
+
+        var ex = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => products.KeysetByIdAsync(afterProductID: null, pageSize: -1));
+        Assert.Equal("pageSize", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task KeysetPagingRejectsIntMaxPageSizeToAvoidOverflow()
+    {
+        await using var harness = await SeedAsync();
+        var products = harness.GetRequiredService<ProductStore>();
+
+        // The keyset SQL over-fetches `pageSize + 1` to detect a next page. int.MaxValue would
+        // overflow that arithmetic; the generated guard rejects it up front.
+        var ex = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => products.KeysetByIdAsync(afterProductID: null, pageSize: int.MaxValue));
+        Assert.Equal("pageSize", ex.ParamName);
+    }
 }
