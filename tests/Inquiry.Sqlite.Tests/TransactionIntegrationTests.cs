@@ -111,7 +111,13 @@ public sealed class TransactionIntegrationTests
     }
 
     // ---- Nested transactions / savepoints --------------------------------------------
+    // Gated on NET8_0_OR_GREATER: Microsoft.Data.Sqlite's netstandard2.0 build (used on net6 / net7)
+    // can't override DbTransaction.Save because the API didn't exist in netstandard2.0, so
+    // SavepointInquiryTransaction throws NotSupportedException at runtime on those TFMs.
+    // DefaultInquiry.BeginSavepointAsync gates the entry point and throws
+    // PlatformNotSupportedException with a clear message on net6 / net7.
 
+#if NET8_0_OR_GREATER
     [Fact]
     public async Task NestedTransactionCommitReleasesSavepointAndOuterCommitPersistsBoth()
     {
@@ -243,6 +249,7 @@ public sealed class TransactionIntegrationTests
         Assert.Null(await store.SelectByKeyAsync("INNX"));
         Assert.Null(await store.SelectByKeyAsync("AFTR"));
     }
+#endif
 
     // ---- IsolationLevel passthrough --------------------------------------------------
 
@@ -269,6 +276,8 @@ public sealed class TransactionIntegrationTests
         Assert.True(tx.IsolationLevel != System.Data.IsolationLevel.Unspecified);
     }
 
+#if NET8_0_OR_GREATER
+    // Savepoint-dependent (uses tx.BeginTransactionAsync). See top-of-file gate rationale.
     [Fact]
     public async Task NestedTransactionInheritsIsolationLevelFromOuter()
     {
@@ -279,6 +288,7 @@ public sealed class TransactionIntegrationTests
         await using var inner = await outer.BeginTransactionAsync();
         Assert.Equal(outer.IsolationLevel, inner.IsolationLevel);
     }
+#endif
 
     // ---- tx.* query/execute methods (the entire transactional surface) ---------------
 
@@ -371,6 +381,8 @@ public sealed class TransactionIntegrationTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.BeginTransactionAsync());
     }
 
+#if NET8_0_OR_GREATER
+    // Savepoint-dependent (uses tx.BeginTransactionAsync). See top-of-file gate rationale.
     [Fact]
     public async Task SavepointExecuteAsyncAfterCommitThrowsObjectDisposed()
     {
@@ -402,6 +414,7 @@ public sealed class TransactionIntegrationTests
 
         await outer.CommitAsync();
     }
+#endif
 
     [Fact]
     public async Task RootInquiryStillUsableAfterTransactionCloses()

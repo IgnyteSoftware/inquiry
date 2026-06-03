@@ -293,7 +293,25 @@ public sealed class DefaultInquiry : IInquiry
         CancellationToken cancellationToken)
     {
         var name = "inquiry_sp_" + System.Threading.Interlocked.Increment(ref _savepointCounter).ToString(System.Globalization.CultureInfo.InvariantCulture);
-        await outer.SaveSavepointAsync(name, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await outer.SaveSavepointAsync(name, cancellationToken).ConfigureAwait(false);
+        }
+        catch (NotSupportedException inner)
+        {
+            // The provider's DbTransaction does not implement savepoints. Wrap with a clearer,
+            // actionable message — the most common cause is Microsoft.Data.Sqlite on net6.0 /
+            // net7.0: the netstandard2.0 build can't override DbTransaction.Save (the API didn't
+            // exist in netstandard2.0). Other providers (SqlClient, Npgsql, MySqlConnector) ship
+            // native net6.0+ builds with the override, so this path doesn't fire there.
+            throw new NotSupportedException(
+                "The current ADO.NET provider does not implement savepoints on this target framework. " +
+                "If you are using Microsoft.Data.Sqlite on net6.0 or net7.0, the netstandard2.0 build of " +
+                "that provider cannot override DbTransaction.Save because the API did not exist in " +
+                "netstandard2.0 — savepoint support requires .NET 8 or later. Use top-level transactions " +
+                "only on net6.0 / net7.0, or target net8.0+.",
+                inner);
+        }
         return new SavepointInquiryTransaction(this, outer, name, inheritedIsolation);
     }
 
