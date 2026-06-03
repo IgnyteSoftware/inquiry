@@ -96,7 +96,47 @@ await store.InsertAsync(new Shipper { CompanyName = "Speedy Express", Phone = "(
 var all = await store.SelectAllAsync();
 ```
 
-## 7. (Optional) Get the schema DDL
+## 7. Wrap multiple calls in a transaction
+
+`IInquiry.BeginTransactionAsync()` returns an `IInquiryTransaction` that owns a connection and a `DbTransaction`. Every operation in the `using` scope — generated store methods *and* any ad-hoc SQL called directly on the handle — shares them. Disposing without committing rolls back.
+
+```csharp
+var inquiry = provider.GetRequiredService<IInquiry>();
+var shippers = provider.GetRequiredService<ShipperStore>();
+
+await using var tx = await inquiry.BeginTransactionAsync();
+
+await shippers.InsertAsync(new Shipper { CompanyName = "Speedy Express" });    // joins the tx
+await tx.ExecuteAsync(                                                          // ad-hoc, joins the tx
+    "UPDATE Shippers SET Phone = @p WHERE CompanyName = @c",
+    new { p = "555-1212", c = "Speedy Express" });
+
+await tx.CommitAsync();
+```
+
+Key points:
+
+- **Stores join automatically.** No `WithTransaction` builder, no per-call parameter. The transaction is *ambient* — once open, every Inquiry call on the same async flow uses it.
+- **Two call styles, same outcome.** `tx.ExecuteAsync(...)` for ad-hoc SQL; `store.X(...)` for typed generated methods. Both run on the same connection in the same transaction.
+- **Use-after-close on `tx` throws.** Calling `tx.X(...)` after `Commit` / `Rollback` / `Dispose` throws `ObjectDisposedException`. (Store calls fall back to non-transactional behavior after close — see [the transactions feature page](features/transactions.md) for why.)
+- **Nested calls become savepoints.** `await using var sp = await tx.BeginTransactionAsync()` emits `SAVEPOINT`. Inner commit releases it; inner rollback reverts just that scope; the outer transaction continues.
+
+```csharp
+await using var outer = await inquiry.BeginTransactionAsync();
+await outer.ExecuteAsync("INSERT INTO Audit (Event) VALUES ('start')");
+
+await using (var inner = await outer.BeginTransactionAsync())   // SAVEPOINT
+{
+    try { await DoRiskyAsync(inner); await inner.CommitAsync(); }
+    catch { await inner.RollbackAsync(); }   // outer still has the audit row
+}
+
+await outer.CommitAsync();
+```
+
+The [transactions feature page](features/transactions.md) covers isolation levels, nested savepoints, the in-flight concurrency guard, and what's not supported (e.g. `TransactionScope`).
+
+## 8. (Optional) Get the schema DDL
 
 The generator also emits `InquiryGeneratedSchema.Ddl` — the CREATE TABLE statements for every Inquiry entity in your assembly, ordered so referenced tables precede their dependents. Useful for test bootstrapping and first-run setup.
 
