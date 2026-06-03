@@ -232,6 +232,11 @@ public sealed class TransactionStateMachineTests
 
     // ---- Medium-priority defensive edges (audit items #5, #6, #7, #8, #10) -----------
 
+#if NET8_0_OR_GREATER
+    // Savepoint-dependent (uses tx.BeginTransactionAsync for the inner). Microsoft.Data.Sqlite's
+    // netstandard2.0 build (used on net6 / net7) can't override DbTransaction.Save, so savepoint
+    // operations are gated to net8.0+ via DefaultInquiry.BeginSavepointAsync's
+    // #if !NET8_0_OR_GREATER throw PlatformNotSupportedException.
     [Fact]
     public async Task SavepointCreationCancelledLeavesOuterTransactionUsable()
     {
@@ -259,6 +264,7 @@ public sealed class TransactionStateMachineTests
         Assert.NotNull(await store.SelectByKeyAsync("OUT01"));
         Assert.NotNull(await store.SelectByKeyAsync("AFT01"));
     }
+#endif
 
     [Fact]
     public async Task ConcurrentOperationsOnOneTransactionEitherSerializeOrFailFastWithoutCorruption()
