@@ -60,7 +60,7 @@ public class ProjectionAggregateBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = ProjectionSql;
         var list = new List<ProductSummaryRow>(_db.RowCount);
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync())
         {
             list.Add(new ProductSummaryRow(

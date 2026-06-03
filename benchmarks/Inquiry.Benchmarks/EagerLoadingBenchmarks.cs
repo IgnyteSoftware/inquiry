@@ -82,7 +82,7 @@ public class EagerLoadingBenchmarks
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = CategoriesSql;
-            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
             while (await reader.ReadAsync())
             {
                 var category = ReadCategory(reader);
@@ -95,7 +95,7 @@ public class EagerLoadingBenchmarks
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = ProductsSql;
-            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
             while (await reader.ReadAsync())
             {
                 var product = ReadProduct(reader);

@@ -55,7 +55,7 @@ public class ShipperCrudBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT ShipperID, CompanyName, Phone FROM Shippers;";
         var list = new List<Shipper>(_db.RowCount);
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
         return list.Count;
     }
@@ -95,7 +95,7 @@ public class ShipperCrudBenchmarks
         command.CommandText = "SELECT ShipperID, CompanyName, Phone FROM Shippers WHERE ShipperID = $id;";
         command.Parameters.Add("$id", SqliteType.Integer).Value = TargetShipperId;
         // Fair floor: SingleRow|SingleResult — the same CommandBehavior Inquiry's pipeline and Dapper request for a point read.
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess);
         return await reader.ReadAsync() ? ReadShipper(reader) : null;
     }
 
@@ -131,7 +131,7 @@ public class ShipperCrudBenchmarks
         command.CommandText = "SELECT ShipperID, CompanyName, Phone FROM Shippers WHERE CompanyName = $c;";
         command.Parameters.Add("$c", SqliteType.Text).Value = TargetCompanyName;
         var list = new List<Shipper>();
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
         return list.Count;
     }

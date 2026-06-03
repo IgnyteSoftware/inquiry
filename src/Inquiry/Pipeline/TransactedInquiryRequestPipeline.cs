@@ -23,6 +23,14 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     private const CommandBehavior ReadBehavior = CommandBehavior.SingleResult;
     private const CommandBehavior SingleRowBehavior = CommandBehavior.SingleResult | CommandBehavior.SingleRow;
 
+    // The struct-materializer (generated-store) overloads add SequentialAccess so the provider streams
+    // each row forward-only instead of buffering it — generated materializers read every column once in
+    // ascending ordinal order, so this is safe and roughly halves large-result allocation. The
+    // class-materializer overloads keep the buffered behaviours, since a caller-supplied materializer may
+    // read columns out of order, which SequentialAccess forbids.
+    private const CommandBehavior SequentialReadBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
+    private const CommandBehavior SequentialSingleRowBehavior = CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess;
+
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
     private readonly IInquiryCommandInterceptor[] _interceptors;
@@ -275,7 +283,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             try
             {
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -348,7 +356,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                await using var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -396,7 +404,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                await using var reader = await dbCommand.ExecuteReaderAsync(SequentialSingleRowBehavior, cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
@@ -456,7 +464,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                await using var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -510,7 +518,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                await using var reader = await dbCommand.ExecuteReaderAsync(SequentialSingleRowBehavior, cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, null, cancellationToken).ConfigureAwait(false);

@@ -74,7 +74,7 @@ public class ShipperBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = SelectAllSql;
         var list = new List<Shipper>(_db.RowCount);
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
         return list.Count;
     }
@@ -113,7 +113,7 @@ public class ShipperBenchmarks
         command.CommandText = SelectByKeySql;
         command.Parameters.Add("id", OracleDbType.Int32).Value = TargetShipperId;
         // Fair floor: SingleRow|SingleResult — the same CommandBehavior Inquiry's pipeline and Dapper request for a point read.
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess);
         return await reader.ReadAsync() ? ReadShipper(reader) : null;
     }
 
@@ -148,7 +148,7 @@ public class ShipperBenchmarks
         command.CommandText = SelectByFieldSql;
         command.Parameters.Add("c", OracleDbType.Varchar2).Value = TargetCompanyName;
         var list = new List<Shipper>();
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
         return list.Count;
     }

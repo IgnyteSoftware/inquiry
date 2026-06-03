@@ -35,10 +35,15 @@ the **baseline** is wrong, not the wrapper.
 
 Two invariants keep the comparison honest:
 
-- **Matching `CommandBehavior`.** Inquiry's pipeline opens readers with
-  `CommandBehavior.SingleResult` for list reads and `SingleResult | SingleRow` for single-row
-  reads (Dapper passes equivalent flags). Every ADO.NET baseline reader passes the **same**
-  behavior, so it is never handicapped relative to the wrappers it floors.
+- **Matching `CommandBehavior`.** Inquiry's generated stores open readers with
+  `CommandBehavior.SingleResult | SequentialAccess` for list reads and
+  `SingleResult | SingleRow | SequentialAccess` for single-row reads. `SequentialAccess` lets the
+  provider stream each row forward-only instead of buffering it (Dapper passes equivalent flags) —
+  this roughly halves allocation on large/wide reads, so without it the baseline would buffer while
+  the wrappers stream and a wrapper would print a sub-1.00× allocation ratio (as SQL Server
+  `SelectAll` did before this floor was applied). Every ADO.NET baseline reader passes the **same**
+  flags and reads columns in ascending ordinal order, so it is never handicapped relative to the
+  wrappers it floors.
 - **Matching connection lifecycle.** ADO.NET, Dapper, and Inquiry each open a fresh connection
   per call (pooled underneath by the provider). EF Core therefore uses a **non-pooled**
   `DbContextFactory` (`AddDbContextFactory`, *not* `AddPooledDbContextFactory`) so it pays
