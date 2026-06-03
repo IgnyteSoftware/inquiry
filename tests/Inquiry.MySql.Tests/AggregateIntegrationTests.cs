@@ -5,7 +5,7 @@ using Inquiry.MySql.Tests.Fixtures;
 namespace Inquiry.MySql.Tests;
 
 /// <summary>
-/// W5 aggregations over the Northwind <c>Product</c> entity against real MySQL: COUNT, MAX, and SUM
+/// Aggregations over the Northwind <c>Product</c> entity against real MySQL: COUNT, MAX, and SUM
 /// over the scalar pipeline, plus a NULL SUM over an empty table.
 /// </summary>
 [Collection(MySqlCollection.Name)]

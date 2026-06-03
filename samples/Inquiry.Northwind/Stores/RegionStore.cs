@@ -30,7 +30,7 @@ public partial class RegionStore : InquiryStore<Region>
     [InquiryDeleteAll]
     public partial Task<int> DeleteAllAsync(IEnumerable<int> regionIDs, CancellationToken cancellationToken = default);
 
-    // W3 batch insert/update over a region collection.
+    // Batch insert/update over a region collection.
     [InquiryInsertAll]
     public partial Task<int> InsertAllAsync(IEnumerable<Region> regions, CancellationToken cancellationToken = default);
 

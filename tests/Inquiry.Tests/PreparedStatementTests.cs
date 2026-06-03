@@ -9,10 +9,10 @@ using System.Data.Common;
 namespace Inquiry.Tests;
 
 /// <summary>
-/// W4: asserts <c>PrepareAsync</c> is called exactly when
+/// Asserts <c>PrepareAsync</c> is called exactly when
 /// (mode == Auto) AND (factory capability) AND (CommandType != StoredProcedure), via a fake
 /// <see cref="DbCommand"/> that records preparation, plus that the factory <c>InitializeCommand</c>
-/// hook (F4) fires for every created command.
+/// hook fires for every created command.
 /// </summary>
 public sealed class PreparedStatementTests
 {

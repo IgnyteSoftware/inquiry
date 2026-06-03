@@ -49,7 +49,7 @@ public partial class PersonStore : InquiryStore<Person>
     public partial Task<IReadOnlyList<PersonName>> NamesByAgeAsync(int age, CancellationToken cancellationToken = default);
 }
 
-/// <summary>W5b projection end-to-end against SQLite: a projection-returning SelectAll selects only the
+/// <summary>Projection end-to-end against SQLite: a projection-returning SelectAll selects only the
 /// declared columns and materializes the DTO; the full-entity select still works alongside it.</summary>
 public sealed class ProjectionIntegrationTests
 {

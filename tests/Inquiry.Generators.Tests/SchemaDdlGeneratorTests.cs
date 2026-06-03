@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W7 Phase A: <c>InquiryGeneratedSchema.Ddl</c> emission — CREATE TABLE per entity with inferred
+/// <c>InquiryGeneratedSchema.Ddl</c> emission — CREATE TABLE per entity with inferred
 /// types, identity keys, NOT NULL inference, DEFAULT, foreign keys, and topological (referenced-first)
 /// ordering, across dialects.
 /// </summary>

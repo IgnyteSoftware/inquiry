@@ -3,7 +3,7 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W3b batch-delete emission: <c>[InquiryDeleteAll]</c> emits a <c>DELETE … WHERE key IN (@keys)</c>
+/// Batch-delete emission: <c>[InquiryDeleteAll]</c> emits a <c>DELETE … WHERE key IN (@keys)</c>
 /// const plus a binder that expands the key collection via <c>InquiryInExpansion</c>; a soft-delete
 /// entity instead emits the soft-delete UPDATE form.
 /// </summary>

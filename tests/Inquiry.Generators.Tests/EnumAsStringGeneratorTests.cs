@@ -4,7 +4,7 @@ using System.Linq;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W10 enum-as-string emission: <c>[InquiryEnumAsString]</c> makes the materializer read the column
+/// Enum-as-string emission: <c>[InquiryEnumAsString]</c> makes the materializer read the column
 /// with <c>Enum.Parse</c> and inserts bind the enum's member name with <c>DbType.String</c>.
 /// </summary>
 public sealed partial class InquiryGeneratorTests

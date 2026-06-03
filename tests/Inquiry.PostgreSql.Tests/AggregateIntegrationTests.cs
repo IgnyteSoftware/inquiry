@@ -5,7 +5,7 @@ using Inquiry.PostgreSql.Tests.Fixtures;
 namespace Inquiry.PostgreSql.Tests;
 
 /// <summary>
-/// W5 aggregations over the Northwind <c>Product</c> entity against real PostgreSQL: COUNT, MAX, and SUM
+/// Aggregations over the Northwind <c>Product</c> entity against real PostgreSQL: COUNT, MAX, and SUM
 /// over the scalar pipeline, plus a NULL SUM over an empty table.
 /// </summary>
 [Collection(PostgreSqlCollection.Name)]

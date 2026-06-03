@@ -5,7 +5,7 @@ using Inquiry.SqlServer.Tests.Fixtures;
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// End-to-end coverage of W2 ORDER BY + pagination over the Northwind <c>Product</c> entity against
+/// End-to-end coverage of ORDER BY + pagination over the Northwind <c>Product</c> entity against
 /// real SQL Server: ordered results, offset page boundaries, keyset forward paging round-tripping
 /// <c>NextCursor</c>, the null first page, <c>HasMore</c> at the end, and a multi-column keyset tie-break.
 /// </summary>

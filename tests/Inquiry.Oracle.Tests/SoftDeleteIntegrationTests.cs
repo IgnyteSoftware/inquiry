@@ -4,7 +4,7 @@ using Inquiry.Oracle.Tests.Fixtures;
 namespace Inquiry.Oracle.Tests;
 
 /// <summary>
-/// W8 soft delete against real Oracle via the shared <see cref="SoftItem"/> catalog entity: a soft
+/// Soft delete against real Oracle via the shared <see cref="SoftItem"/> catalog entity: a soft
 /// delete hides the row from normal selects but keeps it visible via <c>IncludeDeleted</c>, restore brings
 /// it back, a hard delete physically removes it, and COUNT respects the active filter.
 /// </summary>

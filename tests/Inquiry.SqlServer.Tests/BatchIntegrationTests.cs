@@ -6,7 +6,7 @@ using Inquiry.SqlServer.Tests.Fixtures;
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// W3 batch operations over the Northwind <c>Region</c> entity (client-supplied int key) against real
+/// Batch operations over the Northwind <c>Region</c> entity (client-supplied int key) against real
 /// SQL Server: <c>InsertAll</c> inserts a collection in one statement, <c>UpdateAll</c> updates each row
 /// by key, <c>DeleteAll</c> removes a key set via IN-expansion, and each empty collection is a no-op.
 /// </summary>

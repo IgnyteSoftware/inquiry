@@ -43,7 +43,7 @@ public partial class WalletStore : InquiryStore<Wallet>
     public partial Task<Wallet?> GetAsync(long id, CancellationToken cancellationToken = default);
 }
 
-/// <summary>W10b end-to-end against SQLite: a custom value converter (Money↔decimal) and a JSON column
+/// <summary>End-to-end against SQLite: a custom value converter (Money↔decimal) and a JSON column
 /// (List&lt;string&gt; as text) round-trip through insert and select; a null JSON value maps to NULL.</summary>
 public sealed class ConverterIntegrationTests
 {

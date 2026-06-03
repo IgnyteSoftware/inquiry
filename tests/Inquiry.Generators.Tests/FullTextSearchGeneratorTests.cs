@@ -4,7 +4,7 @@ using System.Linq;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W9 full-text search emission tests: per-dialect FTS predicates (PostgreSQL to_tsvector/@@,
+/// Full-text search emission tests: per-dialect FTS predicates (PostgreSQL to_tsvector/@@,
 /// SQL Server FREETEXT, MySQL MATCH…AGAINST) bound to a single @searchTerm, and the INQ035 rejection
 /// on dialects that don't support it (SQLite). Live execution is gated/documented (requires a
 /// full-text index), so these verify the emitted SQL.

@@ -6,7 +6,7 @@ using Inquiry.Oracle.Tests.Fixtures;
 namespace Inquiry.Oracle.Tests;
 
 /// <summary>
-/// W3 batch operations over the Northwind <c>Region</c> entity against real Oracle. Batch <c>InsertAll</c>
+/// Batch operations over the Northwind <c>Region</c> entity against real Oracle. Batch <c>InsertAll</c>
 /// works via Oracle's set-based <c>INSERT ALL … SELECT 1 FROM dual</c> (a single statement, so the affected
 /// row count round-trips), and <c>DeleteAll</c> works via the dialect-aware <c>:keys</c> IN-expansion sentinel
 /// (an empty collection rewrites to <c>IN (NULL)</c> — a no-op). Only <c>UpdateAll</c> stays unsupported:

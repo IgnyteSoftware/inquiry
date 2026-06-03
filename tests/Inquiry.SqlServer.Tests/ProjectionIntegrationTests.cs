@@ -6,7 +6,7 @@ using Inquiry.SqlServer.Tests.Fixtures;
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// W5b projection over the Northwind <c>Product</c> entity against real SQL Server: a projection-returning
+/// Projection over the Northwind <c>Product</c> entity against real SQL Server: a projection-returning
 /// SelectAll materializes only the declared columns (ProductID, ProductName, UnitPrice) into
 /// <see cref="ProductSummary"/>.
 /// </summary>

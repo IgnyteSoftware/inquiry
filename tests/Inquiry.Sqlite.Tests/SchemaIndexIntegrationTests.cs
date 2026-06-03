@@ -24,7 +24,7 @@ public partial class MemberStore : InquiryStore<Member>
     public partial Task<int> InsertAsync(Member member, CancellationToken cancellationToken = default);
 }
 
-/// <summary>W7b: the generated schema's UNIQUE index is created and enforced when the full
+/// <summary>The generated schema's UNIQUE index is created and enforced when the full
 /// <see cref="InquiryGeneratedSchema.Ddl"/> is executed against SQLite.</summary>
 public sealed class SchemaIndexIntegrationTests
 {

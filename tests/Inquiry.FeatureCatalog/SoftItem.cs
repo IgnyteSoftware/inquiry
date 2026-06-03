@@ -7,7 +7,7 @@ using Inquiry.Stores;
 namespace Inquiry.FeatureCatalog;
 
 /// <summary>
-/// W8 soft-delete fixture shared by every dialect test project. <see cref="IsDeleted"/> is the
+/// Soft-delete fixture shared by every dialect test project. <see cref="IsDeleted"/> is the
 /// soft-delete flag: normal selects filter it out, <c>IncludeDeleted</c> opts back in, a delete flips it
 /// (unless <c>HardDelete</c>), and restore clears it.
 /// </summary>

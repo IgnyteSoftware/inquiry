@@ -5,7 +5,7 @@ using Inquiry.Oracle.Tests.Fixtures;
 namespace Inquiry.Oracle.Tests;
 
 /// <summary>
-/// W5 aggregations over the Northwind <c>Product</c> entity against real Oracle: COUNT, MAX, and SUM
+/// Aggregations over the Northwind <c>Product</c> entity against real Oracle: COUNT, MAX, and SUM
 /// over the scalar pipeline, plus a NULL SUM over an empty table.
 /// </summary>
 [Collection(OracleCollection.Name)]

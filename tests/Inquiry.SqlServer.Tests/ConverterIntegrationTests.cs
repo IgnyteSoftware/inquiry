@@ -5,7 +5,7 @@ using Inquiry.SqlServer.Tests.Fixtures;
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// W10 against real SQL Server via the shared <see cref="JsonDoc"/> catalog entity: a custom value
+/// Value converters against real SQL Server via the shared <see cref="JsonDoc"/> catalog entity: a custom value
 /// converter (Money↔decimal) and a JSON column (List&lt;string&gt; serialized to text) round-trip through
 /// insert and select; a null JSON value round-trips as null.
 /// </summary>

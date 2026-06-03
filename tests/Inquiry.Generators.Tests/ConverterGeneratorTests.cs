@@ -3,7 +3,7 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W10b value converters: <c>[InquiryColumn(Converter = typeof(X))]</c> and <c>[InquiryJson]</c> map a
+/// Value converters: <c>[InquiryColumn(Converter = typeof(X))]</c> and <c>[InquiryJson]</c> map a
 /// non-primitive property to/from a provider primitive — read via <c>FromProvider</c>, written via
 /// <c>ToProvider</c>, with the provider's DbType on the bound parameter.
 /// </summary>

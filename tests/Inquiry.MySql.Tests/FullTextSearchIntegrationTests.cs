@@ -5,7 +5,7 @@ using Inquiry.MySql.Tests.Fixtures;
 namespace Inquiry.MySql.Tests;
 
 /// <summary>
-/// W9 full-text search against real MySQL via the shared <see cref="Article"/> catalog entity. The
+/// Full-text search against real MySQL via the shared <see cref="Article"/> catalog entity. The
 /// generated predicate is <c>MATCH(`Title`, `Body`) AGAINST (@searchTerm IN NATURAL LANGUAGE MODE)</c>,
 /// backed by the <c>FULLTEXT</c> index in <see cref="FullTextSchema.MySqlDdl"/>.
 /// </summary>

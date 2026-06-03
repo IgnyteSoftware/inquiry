@@ -11,7 +11,7 @@ using System.Data.Common;
 namespace Inquiry.Sqlite.Tests;
 
 /// <summary>
-/// W4 integration: running the full CRUD suite with <see cref="PreparedStatementMode.Auto"/> (over a
+/// Integration: running the full CRUD suite with <see cref="PreparedStatementMode.Auto"/> (over a
 /// SQLite factory that opts into the persistent-prepared capability so <c>PrepareAsync</c> actually
 /// fires) produces identical results to the default <see cref="PreparedStatementMode.None"/> path,
 /// including correctness after a parameter value changes between calls.

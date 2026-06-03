@@ -5,11 +5,11 @@ using Microsoft.CodeAnalysis;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W8 soft-delete emission tests: every SELECT AND-composes the active-row filter (via the Phase 0
+/// Soft-delete emission tests: every SELECT AND-composes the active-row filter (via the
 /// <c>AppendWhere</c> primitive), <c>[InquiryDeleteOneByKey]</c> becomes a soft UPDATE,
 /// <c>HardDelete = true</c> keeps a literal DELETE, <c>IncludeDeleted = true</c> opts out, and
 /// <c>[InquiryRestoreOneByKey]</c> clears the indicator. Also verifies the filter composes with the
-/// W1 predicate path and the W2 paged path, the per-dialect literals (PG TRUE/FALSE, SqlServer
+/// predicate path and the paged path, the per-dialect literals (PG TRUE/FALSE, SqlServer
 /// GETUTCDATE), the timestamp form, and the duplicate-column diagnostic.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
@@ -117,7 +117,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void SoftDeleteFilterComposesWithPredicate_Sqlite()
     {
-        // W1 composition: a predicate select also AND-composes the soft-delete filter.
+        // Composition: a predicate select also AND-composes the soft-delete filter.
         var result = RunGenerator(WidgetStore("""
             [InquirySelectAllByPredicate]
             [InquiryWhere("Name", Compare.Like)]
@@ -132,7 +132,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void SoftDeleteFilterComposesWithPaging_Sqlite()
     {
-        // W2 composition: an offset-paged select keeps the filter before ORDER BY / LIMIT.
+        // Composition: an offset-paged select keeps the filter before ORDER BY / LIMIT.
         var result = RunGenerator(WidgetStore("""
             [InquirySelectAll(OrderBy = "Id ASC", Paged = true)]
             public partial Task<IReadOnlyList<Widget>> PageAsync(int offset, int limit, CancellationToken cancellationToken = default);
@@ -146,7 +146,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void SoftDeleteFilterComposesWithKeyset_Sqlite()
     {
-        // W2 keyset composition: the soft-delete filter is AND-appended after the cursor predicate
+        // Keyset composition: the soft-delete filter is AND-appended after the cursor predicate
         // (this path composes inline in StoreProcessor, not via the SqlBuilder AppendWhere helper).
         var result = RunGenerator(WidgetStore("""
             [InquiryKeysetPage("Id")]
@@ -164,7 +164,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void IncludeDeletedPagedSelectIsUnfiltered_Sqlite()
     {
-        // Combined W2 paging + W8 IncludeDeleted: ORDER BY/LIMIT present, soft-delete filter suppressed.
+        // Combined paging + IncludeDeleted: ORDER BY/LIMIT present, soft-delete filter suppressed.
         var result = RunGenerator(WidgetStore("""
             [InquirySelectAll(OrderBy = "Id ASC", Paged = true, IncludeDeleted = true)]
             public partial Task<IReadOnlyList<Widget>> PageAllAsync(int offset, int limit, CancellationToken cancellationToken = default);

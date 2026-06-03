@@ -5,7 +5,7 @@ using Inquiry.MySql.Tests.Fixtures;
 namespace Inquiry.MySql.Tests;
 
 /// <summary>
-/// W10 against real MySQL via the shared <see cref="JsonDoc"/> catalog entity: a custom value
+/// Value converters against real MySQL via the shared <see cref="JsonDoc"/> catalog entity: a custom value
 /// converter (Money↔decimal) and a JSON column (List&lt;string&gt; serialized to text) round-trip through
 /// insert and select; a null JSON value round-trips as null.
 /// </summary>

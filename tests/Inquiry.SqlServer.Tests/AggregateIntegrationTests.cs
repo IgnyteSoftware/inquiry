@@ -5,7 +5,7 @@ using Inquiry.SqlServer.Tests.Fixtures;
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// W5 aggregations over the Northwind <c>Product</c> entity against real SQL Server: COUNT, MAX, and SUM
+/// Aggregations over the Northwind <c>Product</c> entity against real SQL Server: COUNT, MAX, and SUM
 /// over the scalar pipeline, plus a NULL SUM over an empty table.
 /// </summary>
 [Collection(SqlServerCollection.Name)]

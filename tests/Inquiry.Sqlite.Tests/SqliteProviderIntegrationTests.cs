@@ -27,7 +27,7 @@ public sealed class SqliteProviderIntegrationTests
     [Fact]
     public void SqliteFactoryDoesNotAdvertisePersistentPreparedStatements()
     {
-        // W4: SQLite's per-operation new connection negates a persistent prepared cache, so the
+        // SQLite's per-operation new connection negates a persistent prepared cache, so the
         // capability gate is false by default and Auto mode is a no-op for the shipped factory.
         var factory = new SqliteInquiryConnectionFactory("Data Source=:memory:");
         Assert.False(((IInquiryConnectionFactory)factory).SupportsPersistentPreparedStatements);

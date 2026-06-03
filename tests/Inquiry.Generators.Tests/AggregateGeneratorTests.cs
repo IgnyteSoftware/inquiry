@@ -3,7 +3,7 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W5 aggregate emission tests: <c>[InquiryCount]</c> emits a <c>SELECT COUNT(*)</c> routed through
+/// Aggregate emission tests: <c>[InquiryCount]</c> emits a <c>SELECT COUNT(*)</c> routed through
 /// the runtime scalar path, and respects the soft-delete active filter when one is declared.
 /// </summary>
 public sealed partial class InquiryGeneratorTests

@@ -5,7 +5,7 @@ using Inquiry.Oracle.Tests.Fixtures;
 namespace Inquiry.Oracle.Tests;
 
 /// <summary>
-/// W2 ORDER BY + pagination over the Northwind <c>Product</c> entity against real Oracle: ordered
+/// ORDER BY + pagination over the Northwind <c>Product</c> entity against real Oracle: ordered
 /// results, offset page boundaries, keyset forward paging round-tripping <c>NextCursor</c>, and a
 /// multi-column keyset tie-break. The synthetic <c>__offset</c>/<c>__limit</c>/cursor parameters take
 /// Oracle's <c>:</c> sigil in the SQL (the shared generator applies <c>SqlBuilder.ParameterName</c>),

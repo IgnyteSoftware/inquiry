@@ -6,7 +6,7 @@ using Inquiry.Stores;
 namespace Inquiry.FeatureCatalog;
 
 /// <summary>
-/// W6 optimistic-concurrency fixture shared by every dialect test project. The
+/// Optimistic-concurrency fixture shared by every dialect test project. The
 /// <see cref="Version"/> column is an ORM-managed concurrency token: the generator bumps it on update
 /// and folds the prior value into the WHERE so a stale write is a no-op.
 /// </summary>

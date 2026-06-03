@@ -29,7 +29,7 @@ public partial class GadgetStore : InquiryStore<Gadget>
     public partial Task<int> DeleteAllAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
 }
 
-/// <summary>W3b batch delete end-to-end against SQLite: DELETE … WHERE Id IN (…) removes exactly the
+/// <summary>Batch delete end-to-end against SQLite: DELETE … WHERE Id IN (…) removes exactly the
 /// listed rows; an empty collection is a no-op.</summary>
 public sealed class BatchDeleteIntegrationTests
 {

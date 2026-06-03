@@ -3,7 +3,7 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W5b projections: <c>[InquiryProjection(typeof(Entity))]</c> emits a materializer reading the
+/// Projections: <c>[InquiryProjection(typeof(Entity))]</c> emits a materializer reading the
 /// declared columns by ordinal, and a SelectAll method returning the projection selects only those
 /// columns and materializes the projection type.
 /// </summary>

@@ -34,7 +34,7 @@ public partial class SchemaWidgetStore : InquiryStore<SchemaWidget>
 }
 
 /// <summary>
-/// W7 round-trip: the W7-generated <see cref="InquiryGeneratedSchema.Ddl"/> for this assembly executes
+/// Round-trip: the generated <see cref="InquiryGeneratedSchema.Ddl"/> for this assembly executes
 /// against a fresh SQLite database (proving every generated CREATE TABLE is valid SQLite), then a store
 /// performs a real insert/select round-trip against the generated table.
 /// </summary>
