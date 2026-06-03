@@ -68,7 +68,7 @@ public class ProductCrudBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = $"SELECT {SelectColumns} FROM Products;";
         var list = new List<Product>(_db.RowCount);
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
         return list.Count;
     }
@@ -108,7 +108,7 @@ public class ProductCrudBenchmarks
         command.CommandText = $"SELECT {SelectColumns} FROM Products WHERE ProductID = $id;";
         command.Parameters.Add("$id", SqliteType.Integer).Value = TargetProductId;
         // Fair floor: SingleRow|SingleResult — the same CommandBehavior Inquiry's pipeline and Dapper request for a point read.
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess);
         return await reader.ReadAsync() ? ReadProduct(reader) : null;
     }
 
@@ -144,7 +144,7 @@ public class ProductCrudBenchmarks
         command.CommandText = $"SELECT {SelectColumns} FROM Products WHERE CategoryID = $c;";
         command.Parameters.Add("$c", SqliteType.Integer).Value = TargetCategoryId;
         var list = new List<Product>();
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
         return list.Count;
     }
