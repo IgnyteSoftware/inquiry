@@ -7,7 +7,7 @@ namespace Inquiry.Transactions;
 /// Default implementation of <see cref="IInquiryTransaction"/>.
 /// Rolls back automatically on disposal unless <see cref="CommitAsync"/> has been called.
 /// </summary>
-internal sealed class InquiryTransaction : IInquiryTransaction
+internal sealed class InquiryTransaction : InquiryTransactionBase
 {
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
@@ -17,25 +17,18 @@ internal sealed class InquiryTransaction : IInquiryTransaction
     private bool _disposed;
 
     internal InquiryTransaction(DbConnection connection, DbTransaction transaction, IInquiry inquiry, Action onClose)
+        : base(inquiry)
     {
         _connection = connection;
         _transaction = transaction;
         _onClose = onClose;
-        // Wrap the root inquiry in a scoped handle that fails-fast on use-after-close. This is
-        // why tx.Inquiry is NOT the same object as the root IInquiry — the wrapper exists so
-        // tx.Inquiry.X(...) calls after CommitAsync/RollbackAsync/DisposeAsync throw instead
-        // of silently routing to the non-transactional default pipeline.
-        Inquiry = new TransactionScopedInquiry(inquiry, () => _closed || _disposed, nameof(InquiryTransaction));
     }
 
     /// <inheritdoc />
-    public IInquiry Inquiry { get; }
+    public override IsolationLevel IsolationLevel => _transaction.IsolationLevel;
 
     /// <inheritdoc />
-    public IsolationLevel IsolationLevel => _transaction.IsolationLevel;
-
-    /// <inheritdoc />
-    public void ThrowIfClosed()
+    public override void ThrowIfClosed()
     {
         // _closed is set on the first of Commit/Rollback/Dispose; _disposed is set by
         // DisposeAsync. The union covers every terminal state of this transaction handle.
@@ -49,7 +42,7 @@ internal sealed class InquiryTransaction : IInquiryTransaction
     }
 
     /// <inheritdoc />
-    public async Task CommitAsync(CancellationToken cancellationToken = default)
+    public override async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));
         await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -58,7 +51,7 @@ internal sealed class InquiryTransaction : IInquiryTransaction
     }
 
     /// <inheritdoc />
-    public async Task RollbackAsync(CancellationToken cancellationToken = default)
+    public override async Task RollbackAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));
         await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
@@ -66,7 +59,7 @@ internal sealed class InquiryTransaction : IInquiryTransaction
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         if (_disposed)
         {

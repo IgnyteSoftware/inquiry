@@ -26,14 +26,12 @@ namespace Inquiry.Transactions;
 /// dispose can't mask a real exception from the user's code.
 /// </para>
 /// <para>
-/// The savepoint transaction's <see cref="Inquiry"/> property is the same singleton
-/// <see cref="DefaultInquiry"/> as the outer transaction. All operations route through the
-/// same ambient pipeline → the same connection → so a generated store call inside the
-/// savepoint is enlisted just like one outside it, but its effects can be selectively
-/// reverted by <see cref="RollbackAsync"/>.
+/// Operations on this handle route through the same ambient pipeline as the outer
+/// transaction — same connection, same transaction — but the closed-state check on the
+/// savepoint handle prevents calls after the savepoint has been released or rolled back.
 /// </para>
 /// </remarks>
-internal sealed class SavepointInquiryTransaction : IInquiryTransaction
+internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
 {
     private readonly TransactedInquiryRequestPipeline _outerPipeline;
     private readonly string _savepointName;
@@ -47,25 +45,18 @@ internal sealed class SavepointInquiryTransaction : IInquiryTransaction
         TransactedInquiryRequestPipeline outerPipeline,
         string savepointName,
         IsolationLevel isolationLevel)
+        : base(inquiry)
     {
-        // Same scoped-wrapper pattern as InquiryTransaction: tx.Inquiry throws on use after
-        // CommitAsync (savepoint released), RollbackAsync (savepoint reverted), or DisposeAsync
-        // instead of silently routing through the outer transaction's pipeline (or the
-        // non-transactional default if the outer has also closed).
-        Inquiry = new TransactionScopedInquiry(inquiry, () => _closed || _committed || _disposed, nameof(SavepointInquiryTransaction));
         _outerPipeline = outerPipeline;
         _savepointName = savepointName;
         _isolationLevel = isolationLevel;
     }
 
     /// <inheritdoc />
-    public IInquiry Inquiry { get; }
+    public override IsolationLevel IsolationLevel => _isolationLevel;
 
     /// <inheritdoc />
-    public IsolationLevel IsolationLevel => _isolationLevel;
-
-    /// <inheritdoc />
-    public void ThrowIfClosed()
+    public override void ThrowIfClosed()
     {
         // _closed is set after a successful Commit or Rollback; _committed implies _closed
         // (kept separately so Dispose can distinguish "released" from "rolled back at exit").
@@ -80,7 +71,7 @@ internal sealed class SavepointInquiryTransaction : IInquiryTransaction
     }
 
     /// <inheritdoc />
-    public async Task CommitAsync(CancellationToken cancellationToken = default)
+    public override async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(SavepointInquiryTransaction));
         if (_closed) return;
@@ -100,7 +91,7 @@ internal sealed class SavepointInquiryTransaction : IInquiryTransaction
     }
 
     /// <inheritdoc />
-    public async Task RollbackAsync(CancellationToken cancellationToken = default)
+    public override async Task RollbackAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(SavepointInquiryTransaction));
         if (_closed) return;
@@ -110,7 +101,7 @@ internal sealed class SavepointInquiryTransaction : IInquiryTransaction
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         if (_disposed) return;
         _disposed = true;
