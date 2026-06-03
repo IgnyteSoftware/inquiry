@@ -200,12 +200,101 @@ public sealed class AmbientTransactionIntegrationTests
     }
 
     [Fact]
-    public async Task TxInquiryPropertyReturnsTheSameInstance()
+    public async Task TxInquiryRoutesThroughTheAmbientTransactionalPipeline()
+    {
+        // Previously this test asserted Assert.Same(inquiry, tx.Inquiry) — but that
+        // implementation detail was the root cause of the silent-autocommit-after-close
+        // bug (tx.Inquiry held the root singleton, which had no idea the tx had closed).
+        // tx.Inquiry is now a transaction-scoped wrapper. The CONTRACT it preserves is
+        // behavioral: operations through tx.Inquiry run inside this transaction. Verify
+        // that contract directly — an insert via tx.Inquiry inside the tx must be
+        // visible to a subsequent select via tx.Inquiry inside the same tx, and must be
+        // rolled back when the tx disposes without committing.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Ambient");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await using (var tx = await inquiry.BeginTransactionAsync())
+        {
+            await tx.Inquiry.ExecuteAsync(
+                "INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES (@CustomerID, @CompanyName, @Country)",
+                new { CustomerID = "SCOPED", CompanyName = "Via tx.Inquiry", Country = "USA" });
+
+            // Inside the tx, the same handle observes the insert.
+            var inTx = await tx.Inquiry.QuerySingleOrDefaultAsync<Customer>(
+                "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers WHERE CustomerID = 'SCOPED'");
+            Assert.NotNull(inTx);
+
+            // dispose without commit → rollback
+        }
+
+        // Outside the tx, the insert is gone — proving tx.Inquiry routed through the tx.
+        Assert.Null(await store.SelectByKeyAsync("SCOPED"));
+    }
+
+    [Fact]
+    public async Task TxInquiryAfterCommitThrowsObjectDisposed()
+    {
+        // The core P1 fix: tx.Inquiry.X(...) after tx closes must fail-fast rather than
+        // silently routing through the non-transactional default pipeline.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Ambient");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.CommitAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => tx.Inquiry.ExecuteAsync(
+                "INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES (@CustomerID, @CompanyName, @Country)",
+                new { CustomerID = "AFTC2", CompanyName = "AfterCommit", Country = "USA" }));
+    }
+
+    [Fact]
+    public async Task TxInquiryAfterRollbackThrowsObjectDisposed()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Ambient");
         var inquiry = harness.GetRequiredService<IInquiry>();
 
-        await using var tx = await inquiry.BeginTransactionAsync();
-        Assert.Same(inquiry, tx.Inquiry);
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.RollbackAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => tx.Inquiry.QueryListAsync<Customer>(
+                "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers"));
+    }
+
+    [Fact]
+    public async Task TxInquiryAfterDisposeThrowsObjectDisposed()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Ambient");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => tx.Inquiry.ExecuteAsync(
+                "INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES (@CustomerID, @CompanyName, @Country)",
+                new { CustomerID = "AFTD2", CompanyName = "AfterDispose", Country = "USA" }));
+    }
+
+    [Fact]
+    public async Task SavepointTxInquiryAfterCommitThrowsObjectDisposed()
+    {
+        // Same fail-fast contract for the savepoint case — savepointTx.Inquiry.X(...)
+        // after the savepoint is released must throw.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Ambient");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await using var outer = await inquiry.BeginTransactionAsync();
+        var inner = await outer.BeginTransactionAsync();
+        await inner.CommitAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => inner.Inquiry.ExecuteAsync(
+                "INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES (@CustomerID, @CompanyName, @Country)",
+                new { CustomerID = "SPINQ", CompanyName = "SavepointInquiryAfterCommit", Country = "USA" }));
+
+        await outer.CommitAsync();
     }
 }

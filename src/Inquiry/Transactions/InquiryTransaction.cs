@@ -21,7 +21,11 @@ internal sealed class InquiryTransaction : IInquiryTransaction
         _connection = connection;
         _transaction = transaction;
         _onClose = onClose;
-        Inquiry = inquiry;
+        // Wrap the root inquiry in a scoped handle that fails-fast on use-after-close. This is
+        // why tx.Inquiry is NOT the same object as the root IInquiry — the wrapper exists so
+        // tx.Inquiry.X(...) calls after CommitAsync/RollbackAsync/DisposeAsync throw instead
+        // of silently routing to the non-transactional default pipeline.
+        Inquiry = new TransactionScopedInquiry(inquiry, () => _closed || _disposed, nameof(InquiryTransaction));
     }
 
     /// <inheritdoc />

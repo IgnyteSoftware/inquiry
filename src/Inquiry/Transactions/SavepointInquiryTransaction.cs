@@ -48,7 +48,11 @@ internal sealed class SavepointInquiryTransaction : IInquiryTransaction
         string savepointName,
         IsolationLevel isolationLevel)
     {
-        Inquiry = inquiry;
+        // Same scoped-wrapper pattern as InquiryTransaction: tx.Inquiry throws on use after
+        // CommitAsync (savepoint released), RollbackAsync (savepoint reverted), or DisposeAsync
+        // instead of silently routing through the outer transaction's pipeline (or the
+        // non-transactional default if the outer has also closed).
+        Inquiry = new TransactionScopedInquiry(inquiry, () => _closed || _committed || _disposed, nameof(SavepointInquiryTransaction));
         _outerPipeline = outerPipeline;
         _savepointName = savepointName;
         _isolationLevel = isolationLevel;
