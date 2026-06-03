@@ -28,10 +28,15 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
+    # Oracle's container warmup is ~3 minutes; 40 mins is the existing budget that was
+    # previously used by the nightly Oracle-only workflow. The other three providers each
+    # finish in 1-2 minutes — matrix legs run in parallel, so the wall-clock cost of adding
+    # Oracle here is just its own slot, not slower CI overall.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        provider: [PostgreSql, MySql, SqlServer]
+        provider: [PostgreSql, MySql, SqlServer, Oracle]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
