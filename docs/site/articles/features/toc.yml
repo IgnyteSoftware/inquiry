@@ -1,0 +1,30 @@
+- name: CRUD
+  href: crud.md
+- name: Pagination
+  href: pagination.md
+- name: Soft delete
+  href: soft-delete.md
+- name: Projections
+  href: projections.md
+- name: Aggregates
+  href: aggregates.md
+- name: Optimistic concurrency
+  href: concurrency.md
+- name: Batch operations
+  href: batch-operations.md
+- name: Full-text search
+  href: full-text-search.md
+- name: Prepared statements
+  href: prepared-statements.md
+- name: Value converters
+  href: value-converters.md
+- name: JSON columns
+  href: json-columns.md
+- name: Eager loading
+  href: eager-loading.md
+- name: Transactions
+  href: transactions.md
+- name: Stored procedures
+  href: stored-procedures.md
+- name: Schema DDL
+  href: schema-ddl.md
