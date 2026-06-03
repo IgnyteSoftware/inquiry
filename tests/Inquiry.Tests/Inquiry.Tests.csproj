@@ -2,6 +2,15 @@
   <PropertyGroup>
     <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
+    <!--
+      Test doubles in this project (FakeDbCommand, RecordingDbConnection, etc.) override
+      System.Data.Common.* members. The base setters carry [AllowNull] for ADO.NET back-compat;
+      auto-property overrides in the test doubles can't easily replicate that, and rewriting them
+      as explicit get/set with [AllowNull] would be pure noise in throwaway fakes. Suppress
+      CS8765 (nullability mismatch on override) at test-project scope; production code is
+      unaffected. Audit P2 #11.
+    -->
+    <NoWarn>$(NoWarn);CS8765</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

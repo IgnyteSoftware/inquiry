@@ -20,11 +20,19 @@ jobs:
             10.0.x
       - run: dotnet restore
       - run: dotnet build --no-restore -c Release
+      # Emit TRX so failures land in artifacts even when the build host has no other inspection
+      # surface; the per-project --results-directory keeps file paths from colliding across TFMs.
       - name: Generator, unit & SQLite tests
         run: |
-          dotnet test tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj -c Release --no-build
-          dotnet test tests/Inquiry.Tests/Inquiry.Tests.csproj -c Release --no-build
-          dotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build
+          dotnet test tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj -c Release --no-build --logger "trx;LogFileName=generators.trx" --results-directory test-results
+          dotnet test tests/Inquiry.Tests/Inquiry.Tests.csproj -c Release --no-build --logger "trx;LogFileName=unit.trx" --results-directory test-results
+          dotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build --logger "trx;LogFileName=sqlite.trx" --results-directory test-results
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: test-results/
 
   integration:
     runs-on: ubuntu-latest
@@ -37,10 +45,22 @@ jobs:
       fail-fast: false
       matrix:
         provider: [PostgreSql, MySql, SqlServer, Oracle]
+        # net8.0 is the LTS baseline every provider supports; net9.0 catches regressions on the
+        # current STS. Older TFMs (net6/net7) are covered by the unit-test build matrix above —
+        # no point spinning a Testcontainer per provider × per legacy TFM (audit P2 #10).
+        tfm: [net8.0, net9.0]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
-      - name: Integration tests (${{ matrix.provider }})
-        run: dotnet test tests/Inquiry.${{ matrix.provider }}.Tests/Inquiry.${{ matrix.provider }}.Tests.csproj -c Release -f net8.0
+          dotnet-version: |
+            8.0.x
+            9.0.x
+      - name: Integration tests (${{ matrix.provider }} on ${{ matrix.tfm }})
+        run: dotnet test tests/Inquiry.${{ matrix.provider }}.Tests/Inquiry.${{ matrix.provider }}.Tests.csproj -c Release -f ${{ matrix.tfm }} --logger "trx;LogFileName=${{ matrix.provider }}-${{ matrix.tfm }}.trx" --results-directory test-results
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results-${{ matrix.provider }}-${{ matrix.tfm }}
+          path: test-results/
