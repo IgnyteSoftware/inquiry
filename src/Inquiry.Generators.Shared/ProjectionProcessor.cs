@@ -11,7 +11,7 @@ using System.Text;
 namespace Inquiry.Generators;
 
 /// <summary>
-/// W5b: discovers <c>[InquiryProjection(typeof(Entity))]</c> result types and emits a materializer per
+/// Discovers <c>[InquiryProjection(typeof(Entity))]</c> result types and emits a materializer per
 /// projection. A projection is a flat, read-only subset of an entity's columns (no key/relations); its
 /// materializer reads each column by its position in the projected SELECT list, so it reuses the same
 /// <see cref="MaterializerEmitter"/> as entities.

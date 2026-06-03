@@ -7,7 +7,7 @@ namespace Inquiry.Generators.Models;
 /// so it feeds <c>SqlBuildContext</c> / <c>SqlBuilder</c> unchanged at emit time.
 /// </summary>
 /// <remarks>
-/// FOUNDATION CONVENTION (Phase 0 / F1): additive column metadata MUST be added as init-only
+/// FOUNDATION CONVENTION: additive column metadata MUST be added as init-only
 /// properties with sensible defaults in this record body — never as new positional constructor
 /// parameters. There is a single construction site (<c>EntityProcessor.DiscoverColumns</c>) using an
 /// object initializer, so optional additions (e.g. concurrency-token, soft-delete, converter, DDL
@@ -26,7 +26,7 @@ internal sealed record ColumnData : IColumn
     public bool IsDatabaseGeneratedToken { get; init; }
     public bool EnumAsString { get; init; }
 
-    // W7 DDL generation metadata.
+    // DDL generation metadata.
     public DbTypeClass TypeClass { get; init; }
     public bool IsNullable { get; init; }
     public string? SqlType { get; init; }
@@ -40,6 +40,6 @@ internal sealed record ColumnData : IColumn
     public bool IsUnique { get; init; }
     public string? IndexName { get; init; }
 
-    /// <summary>W10b: the value converter applied to this column, or null for a directly-mapped type.</summary>
+    /// <summary>The value converter applied to this column, or null for a directly-mapped type.</summary>
     public ConverterData? Converter { get; init; }
 }

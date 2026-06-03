@@ -39,7 +39,7 @@ public sealed class InquiryTableAttribute : Attribute
     public string? Schema { get; init; }
 
     /// <summary>
-    /// W7 (DDL generation): whether generated <c>CREATE TABLE</c> DDL emits <c>FOREIGN KEY</c>
+    /// DDL generation: whether generated <c>CREATE TABLE</c> DDL emits <c>FOREIGN KEY</c>
     /// constraints for columns mapped with <see cref="InquiryForeignKeyAttribute"/>. Default true.
     /// </summary>
     public bool GenerateForeignKeys { get; set; } = true;

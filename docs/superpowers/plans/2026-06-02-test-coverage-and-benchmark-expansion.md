@@ -1,5 +1,11 @@
 # Test Coverage & Benchmark Expansion — Implementation Plan
 
+> **✅ COMPLETE & MERGED TO `main` (2026-06-02).** All tasks below were implemented and merged; the
+> resulting coverage and benchmark state is reconciled in [`docs/STATUS.md`](../../STATUS.md) §1 and §3.
+> A follow-up — replicating the *full* Northwind surface across all four stacks in tests and benchmarks —
+> is tracked in STATUS.md §3.G #18. The unchecked `- [ ]` boxes below are retained as the historical
+> implementation record; treat STATUS.md as the live progress source.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Bring all four live dialects (PostgreSQL, SQL Server, MySQL, Oracle) to a uniform feature-test matrix and expand the benchmarks to a 100k-row tier covering Inquiry's important added features.

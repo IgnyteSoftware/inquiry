@@ -51,7 +51,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .WithTrackingName(EntitiesTrackingName)
             .Collect();
 
-        // W5b projections: each [InquiryProjection] class is projected into an equatable ProjectionData
+        // projections: each [InquiryProjection] class is projected into an equatable ProjectionData
         // (a keyless column subset) so its materializer caches like an entity's.
         var projections = context.SyntaxProvider
             .ForAttributeWithMetadataName(
@@ -190,7 +190,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity));
         }
 
-        // W5b: projection materializers register and emit exactly like entity materializers (same
+        // projection materializers register and emit exactly like entity materializers (same
         // IInquiryEntityMaterializer<T> contract), so they share the registration set.
         foreach (var projection in mappedProjections.Values)
         {
@@ -225,7 +225,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 }
             }
 
-            // W7: emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
+            // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
             // entity array (source order) filtered to mapped entities so emission is deterministic.
             var schemaEntities = entities.Where(e => e.IsMapped).ToList();
             SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);

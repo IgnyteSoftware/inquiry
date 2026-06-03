@@ -20,7 +20,7 @@ internal sealed record TypeData(
     bool IsGuid,
     bool IsEnum)
 {
-    /// <summary>W7: true when the type is <c>byte[]</c> (or nullable <c>byte[]</c>), mapped to a binary/BLOB column.</summary>
+    /// <summary>True when the type is <c>byte[]</c> (or nullable <c>byte[]</c>), mapped to a binary/BLOB column.</summary>
     public bool IsByteArray { get; init; }
 
     /// <summary>Builds a <see cref="TypeData"/> from a type symbol. Called only during discovery —

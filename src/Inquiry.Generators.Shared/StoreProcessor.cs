@@ -166,7 +166,7 @@ internal static class StoreProcessor
                 : null;
         }
 
-        // W5b: SelectAll uses the shape (buffered IReadOnlyList vs streaming) and records its element
+        // SelectAll uses the shape (buffered IReadOnlyList vs streaming) and records its element
         // type for projection resolution at emit; other select ops stay entity-typed.
         string? resultElementTypeFqn = null;
         bool returnsList;
@@ -187,7 +187,7 @@ internal static class StoreProcessor
             ? ClassifyProcedureReturn(method.ReturnType, entityType)
             : ProcedureReturnKind.None;
 
-        // ORDER BY / pagination (W2). Parsed here; order fields are resolved against the entity columns
+        // ORDER BY / pagination. Parsed here; order fields are resolved against the entity columns
         // (and validated) in the combined emit stage, mirroring SelectAllByField field resolution.
         var orderBy = ImmutableArray<OrderItem>.Empty;
         var pagination = Pagination.None;
@@ -220,7 +220,7 @@ internal static class StoreProcessor
 
         var parameters = method.Parameters.Select(ToParameterData).ToImmutableArray();
 
-        // W8: IncludeDeleted opts a SELECT out of the soft-delete filter; HardDelete keeps a literal
+        // IncludeDeleted opts a SELECT out of the soft-delete filter; HardDelete keeps a literal
         // DELETE on a soft-delete entity. Both are read regardless of operation (no-ops where the named
         // argument is absent) — routing decides where they matter.
         var includeDeleted = operation is StoreOperation.SelectAll or StoreOperation.SelectAllEager
@@ -399,7 +399,7 @@ internal static class StoreProcessor
     {
         return operation switch
         {
-            // W5b/W5c: SelectAll and SelectAllByField element types may be the entity OR an
+            // SelectAll and SelectAllByField element types may be the entity OR an
             // [InquiryProjection] of it, so they are accepted by shape here (any named element) and
             // resolved against the projection registry at emit.
             StoreOperation.SelectAll or StoreOperation.SelectAllByField =>
@@ -455,7 +455,7 @@ internal static class StoreProcessor
             && task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Threading.Tasks.Task<TResult>";
 
     /// <summary>
-    /// W5b: extracts the element type of a select-list return — the <c>T</c> in
+    /// Extracts the element type of a select-list return — the <c>T</c> in
     /// <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> (<paramref name="isList"/> true) or
     /// <c>IAsyncEnumerable&lt;T&gt;</c> (false), where <c>T</c> is a named type. Returns false for any
     /// other shape. The element may be the store's entity or an <c>[InquiryProjection]</c> of it.
@@ -601,7 +601,7 @@ internal static class StoreProcessor
             }
         }
 
-        // W5b: resolve projection-returning SelectAll methods. A select whose element type is not the
+        // resolve projection-returning SelectAll methods. A select whose element type is not the
         // store's entity must be a known [InquiryProjection] of it (and the entity must not be soft-delete,
         // since projections do not apply the soft-delete filter in v1). Invalid ones are diagnosed and dropped.
         var projectionMethods = new Dictionary<string, ProjectionData>(StringComparer.Ordinal);
@@ -646,9 +646,9 @@ internal static class StoreProcessor
             return null;
         }
 
-        // W6: a database-managed concurrency token (e.g. rowversion) is only supported on dialects with a
+        // a database-managed concurrency token (e.g. rowversion) is only supported on dialects with a
         // native row-version type — currently SQL Server. On any other dialect it has no portable
-        // semantics, so reject it at emit (reusing INQ006; the W6 reserved block is fully claimed by the
+        // semantics, so reject it at emit (reusing INQ006; the reserved block is fully claimed by the
         // entity-level INQ028/INQ029). Upsert on a token entity has unclear conflict semantics in v1, so
         // it is likewise rejected.
         if (entity.ConcurrencyToken is { IsDatabaseGeneratedToken: true } && sqlBuilder.DialectName != "SqlServer")
@@ -669,7 +669,7 @@ internal static class StoreProcessor
         var entityColumns = ToColumnList(entity.Columns);
         var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns);
 
-        // W8: when the entity has a soft-delete column, an IncludeDeleted select is built from a context
+        // when the entity has a soft-delete column, an IncludeDeleted select is built from a context
         // with the soft-delete filter suppressed (keeps the SqlBuilder select signatures stable). When
         // there is no soft-delete column this is identical to ctx and is never used.
         var hasSoftDelete = entity.SoftDeleteColumn is not null;
@@ -684,7 +684,7 @@ internal static class StoreProcessor
             valid.Any(static m => m.Method.Operation == StoreOperation.Upsert);
 
         // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so
-        // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. W8: a method that
+        // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. A method that
         // opts into IncludeDeleted gets its own unfiltered per-method const instead of the shared one.
         bool UsesSharedSelect((StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan) m)
             => !(hasSoftDelete && m.Method.IncludeDeleted);
@@ -702,7 +702,7 @@ internal static class StoreProcessor
         var needsUpdateReturning = valid.Any(static m => m.Method.Operation == StoreOperation.Update && m.Method.ReturnsEntity);
         var needsUpsertReturning = valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && m.Method.ReturnsEntity);
 
-        // W8 delete routing. The shared _sqlDeleteByKey is the "default" delete statement: a literal
+        // delete routing. The shared _sqlDeleteByKey is the "default" delete statement: a literal
         // DELETE for an ordinary entity, or the soft UPDATE for a soft-delete entity. A HardDelete method
         // on a soft-delete entity additionally needs a separate literal-DELETE const so both can coexist.
         var needsDeleteByKey = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && !(m.Method.HardDelete && hasSoftDelete));
@@ -719,7 +719,7 @@ internal static class StoreProcessor
             .Select(static g => g.First().FieldColumns)
             .ToArray();
 
-        // W8: per-method base SELECT const name for each non-plan select. Defaults to the shared const;
+        // per-method base SELECT const name for each non-plan select. Defaults to the shared const;
         // an IncludeDeleted select on a soft-delete entity gets its own unfiltered per-method const.
         var baseSelectFields = new Dictionary<string, string>(System.StringComparer.Ordinal);
 
@@ -799,7 +799,7 @@ internal static class StoreProcessor
         {
             if (selectPlan is not null)
             {
-                // W5c: an ordered/paged projection method builds its plan SQL over the projection's columns.
+                // an ordered/paged projection method builds its plan SQL over the projection's columns.
                 var planCtx = projectionMethods.TryGetValue(method.Name, out var projForPlan)
                     ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns))
                     : CtxFor(method);
@@ -815,7 +815,7 @@ internal static class StoreProcessor
             }
         }
 
-        // W8: emit an unfiltered per-method base SELECT const for each non-plan IncludeDeleted select on
+        // emit an unfiltered per-method base SELECT const for each non-plan IncludeDeleted select on
         // a soft-delete entity, and record the field name the emitter should use for that method.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
@@ -879,7 +879,7 @@ internal static class StoreProcessor
             }
         }
 
-        // W5b/W5c: one SELECT-over-projection-columns const per non-plan projection-returning method
+        // one SELECT-over-projection-columns const per non-plan projection-returning method
         // (SelectAll → SELECT all projection cols; SelectAllByField → … WHERE field = @x). Ordered/paged
         // projection methods get their const from the plan loop above (also over the projection ctx).
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
@@ -956,9 +956,9 @@ internal static class StoreProcessor
         predicatePlan = null;
         selectPlan = null;
 
-        // W8: restore only makes sense on a soft-delete entity. Without the indicator column the restore
+        // restore only makes sense on a soft-delete entity. Without the indicator column the restore
         // UPDATE has nothing to clear, so reject the method (reusing the invalid-parameters diagnostic —
-        // the W8 ID block, INQ033/INQ034, is fully claimed by the column-level diagnostics).
+        // the ID block, INQ033/INQ034, is fully claimed by the column-level diagnostics).
         if (method.Operation == StoreOperation.RestoreOneByKey && entity.SoftDeleteColumn is null)
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
@@ -1022,7 +1022,7 @@ internal static class StoreProcessor
             return false;
         }
 
-        // ORDER BY / offset pagination (W2) for SelectAll / SelectAllByField. Resolve order fields and,
+        // ORDER BY / offset pagination for SelectAll / SelectAllByField. Resolve order fields and,
         // when paging, validate the trailing (offset, limit) int parameters; emit a per-method const.
         if (method.Operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField &&
             (method.OrderBy.Count > 0 || method.Pagination != Pagination.None))
@@ -1356,7 +1356,7 @@ internal static class StoreProcessor
             StoreOperation.DeleteAll => entity.Keys.Count == 1 && parameters.Count == 2 && IsEnumerableOfType(parameters[0], entity.Keys[0].Type.DisplayName),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>
                 MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
-            // W6: a concurrency-checked DELETE takes the whole entity (so the expected token value
+            // a concurrency-checked DELETE takes the whole entity (so the expected token value
             // binds, symmetric with UPDATE); a plain DELETE on a non-token entity stays key-positional.
             StoreOperation.DeleteOneByKey =>
                 entity.ConcurrencyToken is not null
@@ -1431,7 +1431,7 @@ internal static class StoreProcessor
     }
 
     /// <summary>
-    /// W3b: per-row UPDATE template for batch update, with a <c>{r}</c> token the emitter replaces with
+    /// Per-row UPDATE template for batch update, with a <c>{r}</c> token the emitter replaces with
     /// each row index — e.g. <c>UPDATE "T" SET "A" = @u{r}_0 WHERE "Id" = @u{r}_k0;</c>. The <c>@</c>
     /// sigil is literal (consistent with the parameterized-predicate convention; shares the documented
     /// Oracle limitation).
@@ -1541,7 +1541,7 @@ internal static class StoreProcessor
                 keysetDescending: plan.OrderColumns.Count > 0 && plan.OrderColumns[0].Descending);
 
             var keysetWhere = sqlBuilder.BuildKeysetPredicate(options);
-            // W8: keyset selects compose the soft-delete active filter onto the cursor predicate (the
+            // keyset selects compose the soft-delete active filter onto the cursor predicate (the
             // keyset op has no IncludeDeleted opt-out). AppendWhere is internal to SqlBuilder, so the same
             // AND-composition is applied inline here against the precomputed fragment.
             if (ctx.SoftDeleteActivePredicate.Length > 0)
@@ -1593,7 +1593,7 @@ internal static class StoreProcessor
             offsetParameter: "0",
             limitParameter: sqlBuilder.ParameterName(PageSizeLogicalName));
 
-        // W8: a soft-delete entity still filters deleted rows on the first page (no cursor predicate to AND with).
+        // a soft-delete entity still filters deleted rows on the first page (no cursor predicate to AND with).
         var where = ctx.SoftDeleteActivePredicate;
         var baseSql = "SELECT " + ctx.SelectColumns + " FROM " + ctx.Table
             + (where.Length > 0 ? " WHERE " + where : string.Empty);

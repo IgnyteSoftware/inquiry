@@ -38,37 +38,37 @@ public class InquiryColumnAttribute : Attribute
     public bool UseDatabaseDefault { get; set; }
 
     /// <summary>
-    /// W7 (DDL generation): explicit physical SQL type for this column (e.g. <c>"NVARCHAR(64)"</c>).
+    /// DDL generation: explicit physical SQL type for this column (e.g. <c>"NVARCHAR(64)"</c>).
     /// Used verbatim, overriding the inferred type. Dialect-specific — only set it when targeting a
     /// single provider; otherwise rely on <see cref="Length"/>/<see cref="Precision"/>/inference.
     /// </summary>
     public string? SqlType { get; set; }
 
-    /// <summary>W7 (DDL generation): declared length for string/binary columns; 0 uses the dialect default.</summary>
+    /// <summary>DDL generation: declared length for string/binary columns; 0 uses the dialect default.</summary>
     public int Length { get; set; }
 
-    /// <summary>W7 (DDL generation): declared numeric precision for decimal columns; 0 uses the dialect default.</summary>
+    /// <summary>DDL generation: declared numeric precision for decimal columns; 0 uses the dialect default.</summary>
     public int Precision { get; set; }
 
-    /// <summary>W7 (DDL generation): declared numeric scale for decimal columns; 0 uses the dialect default.</summary>
+    /// <summary>DDL generation: declared numeric scale for decimal columns; 0 uses the dialect default.</summary>
     public int Scale { get; set; }
 
-    /// <summary>W7 (DDL generation): raw SQL <c>DEFAULT</c> expression for the column (e.g. <c>"0"</c>), or null.</summary>
+    /// <summary>DDL generation: raw SQL <c>DEFAULT</c> expression for the column (e.g. <c>"0"</c>), or null.</summary>
     public string? DefaultExpression { get; set; }
 
     /// <summary>
-    /// W7b (DDL generation): emit a single-column index on this column. Each flagged column produces its
+    /// DDL generation: emit a single-column index on this column. Each flagged column produces its
     /// own index (there is no composite/multi-column index in v1). Redundant on a primary-key column
     /// (the PK already indexes it). Index DDL is idempotent (<c>IF NOT EXISTS</c>) only on SQLite and
     /// PostgreSQL; on SQL Server/MySQL/Oracle the generated <c>CREATE INDEX</c> is run-once.
     /// </summary>
     public bool IsIndexed { get; set; }
 
-    /// <summary>W7b (DDL generation): emit a single-column UNIQUE index on this column. See <see cref="IsIndexed"/> for caveats.</summary>
+    /// <summary>DDL generation: emit a single-column UNIQUE index on this column. See <see cref="IsIndexed"/> for caveats.</summary>
     public bool IsUnique { get; set; }
 
     /// <summary>
-    /// W7b (DDL generation): explicit index name; defaults to <c>IX_&lt;table&gt;_&lt;column&gt;</c>
+    /// DDL generation: explicit index name; defaults to <c>IX_&lt;table&gt;_&lt;column&gt;</c>
     /// (<c>UX_</c> when unique). The default omits the schema, so set an explicit name to avoid a clash
     /// when the same table name exists in multiple schemas, or to stay within an engine's identifier
     /// length limit (e.g. Oracle's).
@@ -76,7 +76,7 @@ public class InquiryColumnAttribute : Attribute
     public string? IndexName { get; set; }
 
     /// <summary>
-    /// W10b: a value-converter type implementing <see cref="IInquiryValueConverter{TModel,TProvider}"/>
+    /// A value-converter type implementing <see cref="IInquiryValueConverter{TModel,TProvider}"/>
     /// that maps this property's CLR type to/from a provider primitive. Must be stateless with a public
     /// parameterless constructor.
     /// </summary>

@@ -51,32 +51,32 @@ internal sealed record StoreMethodData(
     public bool KeysetDescending { get; init; }
 
     /// <summary>
-    /// W8: for a select operation, whether <c>IncludeDeleted = true</c> was set so the soft-delete
+    /// For a select operation, whether <c>IncludeDeleted = true</c> was set so the soft-delete
     /// active filter is suppressed. Ignored for entities without a soft-delete column.
     /// </summary>
     public bool IncludeDeleted { get; init; }
 
     /// <summary>
-    /// W8: for <see cref="StoreOperation.DeleteOneByKey"/>, whether <c>HardDelete = true</c> was set so
+    /// For <see cref="StoreOperation.DeleteOneByKey"/>, whether <c>HardDelete = true</c> was set so
     /// a literal <c>DELETE</c> is emitted even when the entity declares a soft-delete column.
     /// </summary>
     public bool HardDelete { get; init; }
 
-    /// <summary>W5: for <see cref="StoreOperation.Aggregate"/>, the SQL function (SUM/AVG/MIN/MAX).</summary>
+    /// <summary>For <see cref="StoreOperation.Aggregate"/>, the SQL function (SUM/AVG/MIN/MAX).</summary>
     public string? AggregateFunction { get; init; }
 
-    /// <summary>W5: for <see cref="StoreOperation.Aggregate"/>, the raw column name (resolved at emit).</summary>
+    /// <summary>For <see cref="StoreOperation.Aggregate"/>, the raw column name (resolved at emit).</summary>
     public string? AggregateColumn { get; init; }
 
     /// <summary>
-    /// W5: for <see cref="StoreOperation.Aggregate"/>/<see cref="StoreOperation.Count"/>, the scalar
+    /// For <see cref="StoreOperation.Aggregate"/>/<see cref="StoreOperation.Count"/>, the scalar
     /// result type the method returns (the <c>T</c> in <c>Task&lt;T&gt;</c>), passed to
     /// <c>ExecuteScalarAsync&lt;T&gt;</c>.
     /// </summary>
     public string? ScalarResultType { get; init; }
 
     /// <summary>
-    /// W5b: for a select-list operation, the fully-qualified element type the method returns (the
+    /// For a select-list operation, the fully-qualified element type the method returns (the
     /// <c>T</c> in <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> / <c>IAsyncEnumerable&lt;T&gt;</c>). Equal to
     /// the store's entity for an ordinary select; a different type is resolved against the projection
     /// registry at emit. Null for non-select operations.

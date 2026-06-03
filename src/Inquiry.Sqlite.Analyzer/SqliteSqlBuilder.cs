@@ -87,7 +87,7 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;
 
-    // ---- W7 DDL --------------------------------------------------------------------------------
+    // ---- DDL --------------------------------------------------------------------------------
     // SQLite has dynamic typing; these affinities match the conventional Northwind mapping.
 
     protected override string MapColumnType(IColumn column) => column.TypeClass switch

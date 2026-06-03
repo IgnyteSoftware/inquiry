@@ -29,7 +29,7 @@ internal static class StoreOperationEmitter
         string? resultTypeOverride = null,
         string? structMatOverride = null)
     {
-        // W5b: a projection-returning select overrides the materialized result type and its struct
+        // a projection-returning select overrides the materialized result type and its struct
         // materializer; all other operations use the store's entity.
         var entityType = resultTypeOverride ?? entity.FullyQualifiedName;
         var structMat = structMatOverride ?? entity.StructMaterializerFullName;
@@ -168,7 +168,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.DeleteOneByKey:
             {
-                // W8: the shared _sqlDeleteByKey is the soft UPDATE for a soft-delete entity (or the literal
+                // the shared _sqlDeleteByKey is the soft UPDATE for a soft-delete entity (or the literal
                 // DELETE otherwise). A HardDelete method on a soft-delete entity uses the separate literal
                 // const. Either way it is a rows-affected ExecuteAsync, so binder/return are unchanged.
                 var deleteField = method.HardDelete && entity.SoftDeleteColumn is not null
@@ -177,7 +177,7 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: true);
                 if (entity.ConcurrencyToken is not null)
                 {
-                    // W6: a concurrency-checked DELETE takes the entity and binds the key + token (the
+                    // a concurrency-checked DELETE takes the entity and binds the key + token (the
                     // DELETE WHERE references both); a 0-row result is a conflict and throws when the
                     // runtime option is set.
                     var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
@@ -205,7 +205,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.DeleteAll:
             {
-                // W3b: batch delete over a key collection. The (keys) sentinel in _sqlDeleteAll is expanded
+                // batch delete over a key collection. The (keys) sentinel in _sqlDeleteAll is expanded
                 // at runtime into one placeholder per key by InquiryInExpansion; the Expand name takes the
                 // dialect sigil (':keys' on Oracle, '@keys' elsewhere) to match the baked sentinel. Returns
                 // rows affected; for a soft-delete entity _sqlDeleteAll is the soft UPDATE form.
@@ -223,7 +223,7 @@ internal static class StoreOperationEmitter
             }
 
             case StoreOperation.Count:
-                // W5: COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
+                // COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
                 // so the Task is returned directly (no async state machine).
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long>(new global::Inquiry.Commands.InquiryCommand(_sqlCount), {cancellation});");
@@ -231,7 +231,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.Aggregate:
-                // W5: SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
+                // SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}>(new global::Inquiry.Commands.InquiryCommand(_sqlAgg_{method.Name}), {cancellation});");
                 source.AppendLine("    }");
@@ -239,7 +239,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.FullTextSearch:
             {
-                // W9: one string search-term parameter bound to @searchTerm; the SQL is the dialect's
+                // one string search-term parameter bound to @searchTerm; the SQL is the dialect's
                 // full-text predicate over the searched columns.
                 var searchArg = method.Parameters[0].Name;
                 AppendHeader(source, method, parameters, isAsync: false);
@@ -274,7 +274,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.InsertAll:
             {
-                // W3: batch insert — one multi-row INSERT built at runtime for the whole collection,
+                // batch insert — one multi-row INSERT built at runtime for the whole collection,
                 // bound via the existing ExecuteAsync<TArgs> fast path (one statement, not N round-trips).
                 // Reuse SelectMutationColumns so the bound columns stay in lockstep with the prefix const
                 // (_sqlInsertAllPrefix from ctx.InsertColumns) — both exclude generated, db-default, and
@@ -340,7 +340,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.UpdateAll:
             {
-                // W3b: batch update — one UPDATE statement per row in a single multi-statement command.
+                // batch update — one UPDATE statement per row in a single multi-statement command.
                 // The _sqlUpdateAllRow template carries a {r} token replaced with each row index; the
                 // binder writes @u{r}_<n> for SET columns and @u{r}_k<n> for key columns to match.
                 var itemsParam = method.Parameters[0].Name;
@@ -399,7 +399,7 @@ internal static class StoreOperationEmitter
     {
         var columns = SelectMutationColumns(entity, includeKey);
 
-        // W6: a bool-returning mutation on a token entity captures the row count so a 0-row conflict can
+        // a bool-returning mutation on a token entity captures the row count so a 0-row conflict can
         // (when the runtime option is set) throw instead of silently returning false.
         if (returnRowsAffectedAsBool && entity.ConcurrencyToken is not null)
         {
@@ -424,7 +424,7 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>
-    /// W6: emits the optimistic-concurrency conflict guard for a captured <c>_rows</c> count — a 0-row
+    /// Emits the optimistic-concurrency conflict guard for a captured <c>_rows</c> count — a 0-row
     /// mutation on a token entity throws <see cref="global::Inquiry.InquiryConcurrencyException"/> only
     /// when the runtime option is enabled (gated at the call site so non-token entities are unaffected).
     /// </summary>
@@ -438,7 +438,7 @@ internal static class StoreOperationEmitter
     /// </summary>
     /// <summary>
     /// The DbType expression to assign on a bound parameter, or null when none applies: a converter
-    /// column uses its provider type (W10b), an enum-as-string column binds a string (W10), otherwise
+    /// column uses its provider type, an enum-as-string column binds a string, otherwise
     /// the column's own mapping.
     /// </summary>
     private static string? ResolveDbType(ColumnData column, SqlBuilder sqlBuilder)
@@ -458,7 +458,7 @@ internal static class StoreOperationEmitter
 
     private static string BuildParameterValueExpression(ColumnData column, string accessor)
     {
-        // W10b: a converter column binds ToProvider(value); a null nullable model → NULL (converter not called).
+        // a converter column binds ToProvider(value); a null nullable model → NULL (converter not called).
         if (column.Converter is { } converter)
         {
             var toProvider = $"new {converter.ConverterTypeDisplay}().ToProvider({NonNullableValueExpression(column.Type, accessor)})";
@@ -467,7 +467,7 @@ internal static class StoreOperationEmitter
                 : $"(object){toProvider}";
         }
 
-        // W10: enum-as-string binds the enum's member name (a string). A null nullable-enum → NULL.
+        // enum-as-string binds the enum's member name (a string). A null nullable-enum → NULL.
         if (column.EnumAsString)
         {
             return column.Type.IsNullable
@@ -508,7 +508,7 @@ internal static class StoreOperationEmitter
         string indent,
         bool emitConcurrencyGuard = false)
     {
-        // W6: when the entity has a concurrency token, capture the row count and gate a conflict throw on
+        // when the entity has a concurrency token, capture the row count and gate a conflict throw on
         // the runtime option; otherwise emit the original inline `… > 0` tail (byte-identical to before).
         var capture = emitConcurrencyGuard ? "var _rows = await Inquiry.ExecuteAsync(" : "return await Inquiry.ExecuteAsync(";
         var tail = emitConcurrencyGuard ? ").ConfigureAwait(false);" : ").ConfigureAwait(false) > 0;";
@@ -854,7 +854,7 @@ internal static class StoreOperationEmitter
     {
         var columns = SelectMutationColumns(entity, includeKey);
 
-        // W6: a ReturnEntity update on a token entity captures the (nullable) result so a null — which
+        // a ReturnEntity update on a token entity captures the (nullable) result so a null — which
         // otherwise conflates "stale token" with "row deleted" — can throw when the runtime option is set.
         if (emitConcurrencyGuard && entity.ConcurrencyToken is not null)
         {
@@ -938,7 +938,7 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             var paramName = methodParameters[i].Name;
             // '@'-prefix lets the binder skip its NormalizeName string concat.
-            // W10: enum-as-string filters bind the member name; the runtime's CoerceValue would
+            // enum-as-string filters bind the member name; the runtime's CoerceValue would
             // otherwise integerize the enum, mismatching the text column.
             string valueArg;
             string dbTypeArg;
@@ -1189,7 +1189,7 @@ internal static class StoreOperationEmitter
         return string.Join(", ", parts);
     }
 
-    /// <summary>W3b: emits one bound DbParameter for a batch-update column (name expression + DbType + value).</summary>
+    /// <summary>Emits one bound DbParameter for a batch-update column (name expression + DbType + value).</summary>
     private static void AppendUpdateAllParam(StringBuilder source, SqlBuilder sqlBuilder, ColumnData column, string nameExpression)
     {
         var dbType = ResolveDbType(column, sqlBuilder);
@@ -1206,7 +1206,7 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>
-    /// W3b: the columns a batch UPDATE assigns — non-key, non-generated, non-concurrency-token — matching
+    /// The columns a batch UPDATE assigns — non-key, non-generated, non-concurrency-token — matching
     /// the single-row update's SET composition (the key columns go in the WHERE, the token is untouched).
     /// </summary>
     internal static ColumnData[] SelectUpdateSetColumns(EntityData entity)
@@ -1216,7 +1216,7 @@ internal static class StoreOperationEmitter
 
     private static ColumnData[] SelectMutationColumns(EntityData entity, bool includeKey)
         => entity.Columns.AsImmutableArray()
-            // W6: a database-managed token (rowversion) is supplied by the database, so it is never bound
+            // a database-managed token (rowversion) is supplied by the database, so it is never bound
             // for INSERT (includeKey == false). For UPDATE (includeKey == true) it stays bound — the
             // WHERE composes @token from its original value, the SET never touches it.
             .Where(c => includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken)

@@ -8,7 +8,7 @@ namespace Inquiry.Generators;
 /// <summary>
 /// Emits the body of an <c>IInquiryEntityMaterializer.Materialize</c> method: a <c>new T { ... }</c>
 /// object initializer that reads each column from the <see cref="System.Data.Common.DbDataReader"/>
-/// by ordinal. Extracted from <see cref="EntityProcessor"/> (Phase 0 / F5) into a shared home so both
+/// by ordinal. Extracted from <see cref="EntityProcessor"/> into a shared home so both
 /// entity materializers and future projection materializers (which read a column subset into a DTO)
 /// share one read-expression path. Reads by the column's position in the supplied list, so callers
 /// must pass columns in the same order as the emitted <c>SELECT</c> list.
@@ -30,7 +30,7 @@ internal static class MaterializerEmitter
     public static string ReadExpression(TypeData type, int index, bool enumAsString = false, ConverterData? converter = null)
     {
         var nonNullable = type.NonNullableDisplayName;
-        // W10b: a converter reads the provider primitive and maps it back via FromProvider.
+        // a converter reads the provider primitive and maps it back via FromProvider.
         var read = converter is not null
             ? $"new {converter.ConverterTypeDisplay}().FromProvider({ReadCallForSpecialType(converter.ProviderSpecialType, index, converter.ProviderTypeDisplay)})"
             : enumAsString

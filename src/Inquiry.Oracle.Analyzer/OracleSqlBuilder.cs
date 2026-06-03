@@ -184,7 +184,7 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
         // SQL%ROWCOUNT = 0 (no row matched the key + concurrency predicate) opens an empty cursor, so the
-        // pipeline returns null — matching result-set RETURNING and letting the W6 concurrency guard fire.
+        // pipeline returns null — matching result-set RETURNING and letting the concurrency guard fire.
         => "BEGIN " + BuildUpdateSql(context) + "; IF SQL%ROWCOUNT = 0 THEN OPEN " + RefCursorBind +
             " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE 1 = 0; ELSE OPEN " +
             RefCursorBind + " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " +
@@ -246,7 +246,7 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     private static string BuildSourceJoin(SqlBuildContext context)
         => string.Join(" AND ", context.QuotedKeyColumns.Select((q, i) => "target." + q + " = source.k" + i));
 
-    // ---- W7 DDL --------------------------------------------------------------------------------
+    // ---- DDL --------------------------------------------------------------------------------
 
     // Oracle cannot key on CLOB (the unbounded-text fallback); a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;

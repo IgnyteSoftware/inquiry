@@ -1,7 +1,7 @@
 namespace Inquiry.Entities;
 
 /// <summary>
-/// Marks a mapped column as the entity's optimistic-concurrency token (W6). Generated UPDATE and
+/// Marks a mapped column as the entity's optimistic-concurrency token. Generated UPDATE and
 /// DELETE statements append <c>AND &lt;token&gt; = @&lt;token&gt;</c> so a mutation only affects the
 /// row whose token still matches the value last read; a 0-row result means a concurrent writer won.
 /// </summary>
