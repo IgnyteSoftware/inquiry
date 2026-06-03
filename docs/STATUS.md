@@ -2,10 +2,11 @@
 
 > **Start here.** This is the single source of truth for *where the project is*, *how we develop it*,
 > and *what's left to do*. For the user-facing docs site (getting started, features, per-dialect notes,
-> API reference) see [**`site/`**](site/) — built with DocFX, published to GitHub Pages at
-> <https://jakeoverstreet.github.io/inquiry/>. For the architecture deep-dive (compile-time SQL
-> generation, the runtime pipeline) read [`../README.md`](../README.md). For behavioral coding
-> guidelines read [`../CLAUDE.md`](../CLAUDE.md). For the design/dependency record of past work see
+> API reference) see [**`site/`**](site/) — built with DocFX, local-preview only while the repo is
+> private (run `docfx docs/site/docfx.json --serve` from the repo root; see
+> [`site/README.md`](site/README.md)). For the architecture deep-dive (compile-time SQL generation,
+> the runtime pipeline) read [`../README.md`](../README.md). For behavioral coding guidelines read
+> [`../CLAUDE.md`](../CLAUDE.md). For the design/dependency record of past work see
 > [`plans/README.md`](plans/README.md).
 
 - **Last reconciled:** 2026-06-02, on `main`. Latest work merged: the cross-provider apples-to-apples
