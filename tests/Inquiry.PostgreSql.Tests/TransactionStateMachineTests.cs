@@ -155,6 +155,23 @@ public sealed class TransactionStateMachineTests
         Assert.Null(await customers.SelectByKeyAsync("RBK01"));
         Assert.Null(await customers.SelectByKeyAsync("RBK02"));
     }
+
+    // ---- IsolationLevel round-trip on the real provider (item #9) --------------------
+
+    [SkippableFact]
+    public async Task IsolationLevelRoundTripsToHandleProperty()
+    {
+        // Verifies the requested IsolationLevel flows through DbConnection.BeginTransactionAsync
+        // and is observable on tx.IsolationLevel after the live provider has set it. SQLite's
+        // equivalent assertion is in TransactionIntegrationTests; this is its networked-engine
+        // companion. PostgreSQL's Npgsql preserves Serializable exactly.
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "tx_iso");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await using var tx = await inquiry.BeginTransactionAsync(IsolationLevel.Serializable);
+        Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
+    }
 }
 
 /// <summary>
