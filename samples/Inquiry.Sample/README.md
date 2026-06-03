@@ -28,11 +28,15 @@ provider reads its own connection string under `ConnectionStrings`:
 | SQL Server | `SqlServer`  | `InquirySample.SqlServer`  | LocalDB pointing at `InquirySample` |
 | PostgreSQL | `PostgreSql` | `InquirySample.PostgreSql` | `localhost` / `inquirysample` / `postgres` superuser |
 
-To switch providers, either edit `appsettings.json` or override via environment variables:
+The connection strings in `appsettings.json` are **local-development defaults only** — they
+are not real credentials. To point the sample at a real database, set the **`INQUIRY_SAMPLE_DB`**
+environment variable: it overrides the active provider's connection string (taking precedence
+over `appsettings.json`), so you never have to commit credentials. Pick the provider with
+`Inquiry__Provider`:
 
 ```powershell
 $env:Inquiry__Provider = "PostgreSql"
-$env:ConnectionStrings__InquirySample__PostgreSql = "Host=localhost;Database=inquirysample;Username=postgres;Password=secret"
+$env:INQUIRY_SAMPLE_DB  = 'Host=db.internal;Database=inquirysample;Username=app;Password=<your-password>'
 dotnet run --project samples\Inquiry.Sample\Inquiry.Sample.csproj
 ```
 
