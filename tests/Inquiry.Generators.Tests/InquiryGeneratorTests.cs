@@ -1632,6 +1632,184 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void TwoEagerRelationsToTheSameChildTypeEmitDistinctSqlConsts()
+    {
+        // An entity with two navigation properties pointing to the same child type (a common
+        // audit-trail pattern: CreatedBy/UpdatedBy both → User) must emit a distinct
+        // _sql_<PropertyName> const per relation. The generator previously deduplicated by
+        // child entity type (childEntity.FullyQualifiedName), so only the FIRST relation's
+        // consts were emitted; the second relation's generated eager loader still referenced
+        // its own _sql_<PropertyName> const → uncompilable generated code with no diagnostic.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("User")]
+            public sealed class User
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = "";
+            }
+
+            [InquiryTable("Order")]
+            public sealed class Order
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public int? CreatedByID { get; set; }
+
+                [InquiryColumn]
+                public int? UpdatedByID { get; set; }
+
+                [InquiryRelation(nameof(CreatedByID))]
+                public User? CreatedBy { get; set; }
+
+                [InquiryRelation(nameof(UpdatedByID))]
+                public User? UpdatedBy { get; set; }
+            }
+
+            public partial class OrderStore : InquiryStore<Order>
+            {
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Order> SelectAllWithUsersAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrderStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Both per-relation SQL consts must be emitted — one per navigation property name.
+        Assert.Contains("_sql_CreatedBy ", generatedText);
+        Assert.Contains("_sql_UpdatedBy ", generatedText);
+    }
+
+    [Fact]
+    public void EagerRelationWithMistypedForeignKeyEmitsDiagnostic()
+    {
+        // A typo in [InquiryRelation(ForeignKey = "...")] (column name not found on the child
+        // entity) previously surfaced as a NullReferenceException at generator-time via a
+        // null-forgive on FindColumn(...). The generator must emit a clear INQ diagnostic with
+        // a source location instead, like every other Inquiry attribute does on bad input.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Customer")]
+            public sealed class Customer
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = "";
+            }
+
+            [InquiryTable("Order")]
+            public sealed class Order
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public int? CustomerId { get; set; }
+
+                // Typo: "CustmrId" instead of "CustomerId". Should produce a clean diagnostic.
+                [InquiryRelation("CustmrId")]
+                public Customer? Customer { get; set; }
+            }
+
+            public partial class OrderStore : InquiryStore<Order>
+            {
+                [InquirySelectOneByKeyEager]
+                public partial System.Threading.Tasks.Task<Order?> SelectWithCustomerAsync(int id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        // The generator must not crash. Diagnostic INQ040 (UnknownRelationForeignKey) is reported.
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ040");
+    }
+
+    [Fact]
+    public void EagerRelationWhoseChildHasCompositeKeyEmitsDiagnostic()
+    {
+        // The relation emitter uses childEntity.Keys[0] as the join target — implicitly assuming
+        // the child has exactly one primary-key column. A child with a composite key (e.g.
+        // (OrderId, ProductId)) silently joins on only Keys[0], producing wrong rows. Diagnose
+        // it explicitly so the user knows it's unsupported.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("OrderLine")]
+            public sealed class OrderLine
+            {
+                [InquiryKey]
+                public int OrderId { get; set; }
+
+                [InquiryKey]
+                public int ProductId { get; set; }
+
+                [InquiryColumn]
+                public int Qty { get; set; }
+            }
+
+            [InquiryTable("Order")]
+            public sealed class Order
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public int? PrimaryLineId { get; set; }
+
+                [InquiryRelation(nameof(PrimaryLineId))]
+                public OrderLine? PrimaryLine { get; set; }
+            }
+
+            public partial class OrderStore : InquiryStore<Order>
+            {
+                [InquirySelectOneByKeyEager]
+                public partial System.Threading.Tasks.Task<Order?> SelectWithLineAsync(int id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ041");
+    }
+
+    [Fact]
     public void IncrementalPipelineCachesWhenUnrelatedSourceChanges()
     {
         // Proves the incremental rewrite delivers real caching: editing an unrelated file must not
