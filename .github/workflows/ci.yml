@@ -29,7 +29,7 @@ jobs:
           dotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build --logger "trx;LogFileName=sqlite.trx" --results-directory test-results
       - name: Upload unit test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: unit-test-results
           path: test-results/
@@ -60,7 +60,7 @@ jobs:
         run: dotnet test tests/Inquiry.${{ matrix.provider }}.Tests/Inquiry.${{ matrix.provider }}.Tests.csproj -c Release -f ${{ matrix.tfm }} --logger "trx;LogFileName=${{ matrix.provider }}-${{ matrix.tfm }}.trx" --results-directory test-results
       - name: Upload integration test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: integration-test-results-${{ matrix.provider }}-${{ matrix.tfm }}
           path: test-results/
