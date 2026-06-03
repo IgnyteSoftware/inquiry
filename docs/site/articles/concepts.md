@@ -93,7 +93,7 @@ For inserts / updates / deletes (`ExecuteNonQuery`), the pipeline skips the read
 The pipeline supports the usual cross-cutting features without forfeiting compile-time SQL:
 
 - **Interceptors** (`IInquiryCommandInterceptor`) — observe / mutate the command before and after execution.
-- **Transactions** — `IInquiry.BeginTransactionAsync()` switches to a transacted pipeline that reuses the same connection.
+- **Transactions** — `IInquiry.BeginTransactionAsync()` installs an `AsyncLocal` slot pointing at a transacted pipeline that reuses one connection and one `DbTransaction`. Generated stores resolved from DI automatically join the open transaction via that slot; ad-hoc SQL goes through the `IInquiryTransaction` handle's own forwarding methods (`tx.ExecuteAsync(...)`, etc.). Nested `BeginTransactionAsync` creates savepoints (unbounded depth). The handle's forwarding methods throw `ObjectDisposedException` after the transaction closes. Full writeup: [Transactions](features/transactions.md).
 - **Prepared statements** — opt-in via `InquiryOptions.PrepareStatements = PreparedStatementMode.Auto`. The pipeline calls `PrepareAsync` once per command, after which the database keeps the parsed plan for the lifetime of the connection.
 - **Retry on transient cloud errors** — provider factories wrap connection opens with an exponential-backoff retry policy for known transient codes (Azure SQL, CockroachDB, Aurora, etc.).
 

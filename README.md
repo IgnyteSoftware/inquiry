@@ -307,7 +307,13 @@ The relevant files:
 
 ### Transactions
 
-[`IInquiry.BeginTransactionAsync`](src/Inquiry/IInquiry.cs) opens a connection, begins a `DbTransaction`, and returns an [`IInquiryTransaction`](src/Inquiry/Transactions/IInquiryTransaction.cs) whose `Inquiry` property is a `TransactedInquiry`. Generated store methods invoked through that `tx.Inquiry` use a `TransactedInquiryRequestPipeline` that reuses the open connection + transaction for every command until `CommitAsync` / `RollbackAsync` (or `DisposeAsync`).
+[`IInquiry.BeginTransactionAsync`](src/Inquiry/IInquiry.cs) opens a connection, begins a `DbTransaction`, and returns an [`IInquiryTransaction`](src/Inquiry/Transactions/IInquiryTransaction.cs). The handle has the full query / execute surface on it directly — `tx.ExecuteAsync`, `tx.QueryListAsync<T>`, etc. — backed by the [`InquiryTransactionBase`](src/Inquiry/Transactions/InquiryTransactionBase.cs) shared implementation. Each forwarding method calls `ThrowIfClosed()` first, so any use of the handle after `CommitAsync` / `RollbackAsync` / `DisposeAsync` throws `ObjectDisposedException`.
+
+Generated stores resolved from DI **automatically join** the open transaction. `DefaultInquiry` holds an `AsyncLocal<AmbientTransactionSlot>` field; `BeginTransactionAsync` installs the slot synchronously (before any await), then fills in a [`TransactedInquiryRequestPipeline`](src/Inquiry/Pipeline/TransactedInquiryRequestPipeline.cs) on it once the connection + transaction are open. Every subsequent call routes through `ActivePipeline = ambientSlot?.Pipeline ?? defaultPipeline`, so stores need no per-call wiring. The slot is nulled on close so straggler async work falls back to the default pipeline cleanly.
+
+Calling `BeginTransactionAsync` again while an ambient transaction exists creates a **savepoint** (via `DbTransaction.SaveAsync` / `RollbackAsync(name)` / `ReleaseAsync(name)`) instead of a second physical transaction; the returned [`SavepointInquiryTransaction`](src/Inquiry/Transactions/SavepointInquiryTransaction.cs) follows the same Commit/Rollback/Dispose semantics on the savepoint. Nesting is unbounded.
+
+The pipeline serializes operations on the transaction's connection with an `Interlocked`-based in-flight guard — concurrent calls throw a clear `InvalidOperationException` rather than corrupting the shared `DbConnection`. Full conceptual writeup with code samples lives at [`docs/site/articles/features/transactions.md`](docs/site/articles/features/transactions.md).
 
 ---
 
