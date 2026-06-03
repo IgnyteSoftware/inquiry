@@ -589,13 +589,20 @@ internal static class StoreProcessor
             return null;
         }
 
+        // Resolve the parent's relation → child-entity map up-front so per-method validation can
+        // diagnose relation-shape errors (missing foreign-key column, composite-key child) before
+        // the emitter runs. Previously this was built later (just before emission), causing
+        // bad relations to surface as null-forgive NREs at generator time or invalid generated
+        // C# with no clear diagnostic.
+        var relationChildEntities = BuildRelationChildEntities(entity, entities);
+
         // Per-method combined validation. Successful methods carry their resolved field columns and,
         // for SelectAllByPredicate, the resolved predicate plan; ordered/paged/keyset selects also carry
         // a resolved select plan (ORDER BY columns + pagination).
         var valid = new List<(StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan)>();
         foreach (var method in store.Methods)
         {
-            if (TryValidateForEmit(context, method, entity, sqlBuilder, out var fieldColumns, out var predicatePlan, out var selectPlan))
+            if (TryValidateForEmit(context, method, entity, relationChildEntities, sqlBuilder, out var fieldColumns, out var predicatePlan, out var selectPlan))
             {
                 valid.Add((method, fieldColumns, predicatePlan, selectPlan));
             }
@@ -665,7 +672,6 @@ internal static class StoreProcessor
             return null;
         }
 
-        var relationChildEntities = BuildRelationChildEntities(entity, entities);
         var entityColumns = ToColumnList(entity.Columns);
         var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns);
 
@@ -864,7 +870,12 @@ internal static class StoreProcessor
                     continue;
                 }
 
-                if (!emittedRelations.Add(childEntity.FullyQualifiedName))
+                // Dedup by relation property name, not child entity type. A parent with two
+                // navigations to the same child (CreatedBy / UpdatedBy → User) needs distinct
+                // _sql_<PropertyName> consts: each generated eager loader references its own
+                // relation's const by property name (line 877-878). Deduping by child type
+                // would skip the second relation's consts and leave a dangling reference.
+                if (!emittedRelations.Add(relation.PropertyName))
                 {
                     continue;
                 }
@@ -950,7 +961,7 @@ internal static class StoreProcessor
         return new StoreRegistration(store.FullyQualifiedName);
     }
 
-    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
+    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, IReadOnlyDictionary<string, EntityData> relationChildEntities, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
     {
         fieldColumns = Array.Empty<ColumnData>();
         predicatePlan = null;
@@ -1020,6 +1031,54 @@ internal static class StoreProcessor
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.EagerLoadingOnCompositeKeyParent, method.Location?.ToLocation(), method.Name, entity.Name));
             return false;
+        }
+
+        // For each relation the eager-loading method will traverse, validate the relation's shape
+        // matches what the emitter can handle. The two unsupported shapes — a typo'd ForeignKey
+        // (no matching mapped column on the child) and a child with a composite primary key —
+        // previously surfaced as a null-forgive NRE at generator time or as invalid generated C#.
+        // Diagnosing them here gives the user a clean INQ error with a source location.
+        if (method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager)
+        {
+            foreach (var relation in entity.Relations)
+            {
+                if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity))
+                {
+                    // The relation points at a type that's not [InquiryTable]-mapped; the emitter
+                    // already handles this gracefully (existing test
+                    // EagerRelationToUnmappedChildDoesNotCrashGenerator). Nothing to validate here.
+                    continue;
+                }
+
+                if (relation.IsCollection && FindColumn(childEntity, relation.ForeignKeyProperty) is null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.UnknownRelationForeignKey,
+                        method.Location?.ToLocation(),
+                        method.Name, entity.Name, relation.PropertyName, relation.ForeignKeyProperty, childEntity.Name));
+                    return false;
+                }
+
+                if (!relation.IsCollection && FindColumn(entity, relation.ForeignKeyProperty) is null)
+                {
+                    // The to-one case: the FK lives on the PARENT entity (the parent's FK column
+                    // points at the child's key). A typo here means the parent has no such column.
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.UnknownRelationForeignKey,
+                        method.Location?.ToLocation(),
+                        method.Name, entity.Name, relation.PropertyName, relation.ForeignKeyProperty, entity.Name));
+                    return false;
+                }
+
+                if (childEntity.Keys.Count > 1)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.RelationCompositeChildKey,
+                        method.Location?.ToLocation(),
+                        method.Name, entity.Name, relation.PropertyName, childEntity.Name, childEntity.Keys.Count));
+                    return false;
+                }
+            }
         }
 
         // ORDER BY / offset pagination for SelectAll / SelectAllByField. Resolve order fields and,

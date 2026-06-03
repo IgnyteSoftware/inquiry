@@ -129,13 +129,22 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     // branch updates with the same data the insert branch would have written. VALUES(col) is
     // deprecated in MySQL 8.0.20+ but still functional and is the only form MariaDB / MySQL 5.7
     // understand, so it is chosen deliberately for cross-engine compatibility.
+    //
+    // Exception: UseDatabaseDefault columns are omitted from the INSERT list so the database
+    // default applies on the insert branch. VALUES(col) for those columns therefore resolves
+    // to the column's default, NOT the entity's intended update value — silently reverting an
+    // upsert UPDATE branch to the default. Bind the entity's parameter directly for those columns
+    // instead; SelectMutationColumns(includeKey: true) — which drives the upsert binder — already
+    // includes UseDatabaseDefault columns, so the parameter is available at the call site.
     private string OnDuplicateKeyAssignments(SqlBuildContext context)
         => string.Join(", ", context.Columns
             .Where(c => !c.IsKey && !c.IsGenerated)
             .Select(c =>
             {
                 var quoted = QuoteIdentifier(c.ColumnName);
-                return quoted + " = VALUES(" + quoted + ")";
+                return c.UseDatabaseDefault
+                    ? quoted + " = " + ParameterName(c.PropertyName)
+                    : quoted + " = VALUES(" + quoted + ")";
             }));
 
     private static string JoinSql(string first, string rest)

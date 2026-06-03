@@ -294,4 +294,20 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnknownRelationForeignKey = new(
+        "INQ040",
+        "InquiryRelation references an unmapped foreign-key property",
+        "Eager-loading method '{0}': relation '{1}.{2}' references foreign-key property '{3}', which is not a mapped column on child entity '{4}'. Check the InquiryRelation attribute's foreign-key argument for typos.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RelationCompositeChildKey = new(
+        "INQ041",
+        "InquiryRelation child entity has a composite primary key, which is not supported",
+        "Eager-loading method '{0}': relation '{1}.{2}' targets child entity '{3}', which has a composite primary key ({4} key columns). Eager-loading via InquiryRelation only supports single-key children in v1.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
