@@ -6,7 +6,7 @@ using Inquiry.Sqlite.Tests.Fixtures;
 namespace Inquiry.Sqlite.Tests;
 
 /// <summary>
-/// End-to-end coverage of W2 ORDER BY + pagination over the Northwind <c>Product</c> entity against
+/// End-to-end coverage of ORDER BY + pagination over the Northwind <c>Product</c> entity against
 /// real SQLite: ordered results, offset page boundaries (including the last partial page and an empty
 /// page past the end), keyset forward paging round-tripping <c>NextCursor</c>, the null first page,
 /// <c>HasMore</c> at the end, and a multi-column keyset tie-break.

@@ -3,7 +3,7 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W3 batch-insert emission: <c>[InquiryInsertAll]</c> emits a prefix const plus a runtime-built
+/// Batch-insert emission: <c>[InquiryInsertAll]</c> emits a prefix const plus a runtime-built
 /// multi-row VALUES clause, bound through the existing ExecuteAsync&lt;TArgs&gt; fast path.
 /// </summary>
 public sealed partial class InquiryGeneratorTests

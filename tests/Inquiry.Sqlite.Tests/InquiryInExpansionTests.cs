@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 namespace Inquiry.Sqlite.Tests;
 
 /// <summary>
-/// Unit tests for the <c>Compare.In</c> runtime expansion. The enum-coercion case guards the W1
+/// Unit tests for the <c>Compare.In</c> runtime expansion. The enum-coercion case guards the
 /// review finding: enum elements must be bound as their underlying integral value (matching the
 /// scalar binder), not as a boxed enum, so enum-strict providers (e.g. Npgsql) accept them.
 /// </summary>

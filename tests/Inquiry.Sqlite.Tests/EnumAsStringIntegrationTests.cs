@@ -40,7 +40,7 @@ public partial class TicketStore : InquiryStore<Ticket>
     public partial System.Collections.Generic.IAsyncEnumerable<Ticket> StreamByStatusAsync(TicketStatus status, CancellationToken cancellationToken = default);
 }
 
-/// <summary>W10 enum-as-string end-to-end against SQLite: the column stores the member name as text,
+/// <summary>Enum-as-string end-to-end against SQLite: the column stores the member name as text,
 /// round-trips through materialization, filters by enum value, and a null nullable-enum maps to NULL.</summary>
 public sealed class EnumAsStringIntegrationTests
 {

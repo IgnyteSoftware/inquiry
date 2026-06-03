@@ -34,7 +34,7 @@ public partial class SaleStore : InquiryStore<Sale>
     public partial Task<decimal?> MaxAmountAsync(CancellationToken cancellationToken = default);
 }
 
-/// <summary>W5 aggregates end-to-end against SQLite: COUNT, SUM, MAX, and a null aggregate over no rows.</summary>
+/// <summary>Aggregates end-to-end against SQLite: COUNT, SUM, MAX, and a null aggregate over no rows.</summary>
 public sealed class AggregateIntegrationTests
 {
     private const string Ddl = "CREATE TABLE Sale (Id INTEGER PRIMARY KEY AUTOINCREMENT, Amount NUMERIC NOT NULL);";

@@ -6,7 +6,7 @@ using Inquiry.Sqlite.Tests.Fixtures;
 namespace Inquiry.Sqlite.Tests;
 
 /// <summary>
-/// W5 runtime scalar path (<c>IInquiry.ExecuteScalarAsync&lt;T&gt;</c>): COUNT returns the value
+/// Runtime scalar path (<c>IInquiry.ExecuteScalarAsync&lt;T&gt;</c>): COUNT returns the value
 /// (coerced from SQLite's long), and an aggregate over no rows (NULL) maps to <c>default(T)</c>.
 /// </summary>
 public sealed class ScalarExecutionTests

@@ -77,7 +77,7 @@ public partial class ProductStore : InquiryStore<Product>
     [InquiryDeleteOneByKey]
     public partial Task<bool> DeleteByKeyAsync(int? productID, CancellationToken cancellationToken = default);
 
-    // W5 aggregations + projection over the live Northwind data.
+    // Aggregations + projection over the live Northwind data.
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
 

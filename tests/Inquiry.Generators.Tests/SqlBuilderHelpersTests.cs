@@ -4,7 +4,7 @@ using Inquiry.Generators.Abstractions;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// Foundation (Phase 0 / F3): the shared <c>AppendWhere</c> primitive that every WHERE-shaping
+/// Foundation: the shared <c>AppendWhere</c> primitive that every WHERE-shaping
 /// workstream (richer predicates, soft deletes, optimistic concurrency, keyset pagination) composes
 /// through, so AND-joining is implemented once rather than per provider.
 /// </summary>

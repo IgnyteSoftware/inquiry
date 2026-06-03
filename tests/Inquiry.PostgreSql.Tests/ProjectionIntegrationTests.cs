@@ -6,7 +6,7 @@ using Inquiry.PostgreSql.Tests.Fixtures;
 namespace Inquiry.PostgreSql.Tests;
 
 /// <summary>
-/// W5b projection over the Northwind <c>Product</c> entity against real PostgreSQL: a projection-returning
+/// Projection over the Northwind <c>Product</c> entity against real PostgreSQL: a projection-returning
 /// SelectAll materializes only the declared columns (ProductID, ProductName, UnitPrice) into
 /// <see cref="ProductSummary"/>.
 /// </summary>

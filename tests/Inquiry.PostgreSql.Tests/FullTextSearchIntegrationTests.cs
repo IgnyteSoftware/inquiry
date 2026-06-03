@@ -5,7 +5,7 @@ using Inquiry.PostgreSql.Tests.Fixtures;
 namespace Inquiry.PostgreSql.Tests;
 
 /// <summary>
-/// W9 full-text search against real PostgreSQL via the shared <see cref="Article"/> catalog entity. The
+/// Full-text search against real PostgreSQL via the shared <see cref="Article"/> catalog entity. The
 /// generated predicate is <c>to_tsvector('simple', …) @@ plainto_tsquery('simple', @searchTerm)</c>, so
 /// matching is exact-lexeme (the 'simple' config does not stem). This is the first live execution of
 /// Inquiry's FTS path.

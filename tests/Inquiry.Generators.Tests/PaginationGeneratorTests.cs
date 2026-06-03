@@ -3,9 +3,9 @@ using Microsoft.CodeAnalysis;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W2 ORDER BY + pagination emission tests: exact const SQL for ORDER BY, offset paging
+/// ORDER BY + pagination emission tests: exact const SQL for ORDER BY, offset paging
 /// (SQLite/PostgreSql/MySql LIMIT…OFFSET vs SqlServer OFFSET…FETCH), and keyset paging
-/// (row-value default vs SqlServer lexicographic OR-form), plus the W2 diagnostics.
+/// (row-value default vs SqlServer lexicographic OR-form), plus the pagination diagnostics.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {

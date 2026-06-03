@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W6 optimistic-concurrency emission tests: an ORM-managed numeric token makes generated UPDATE
+/// Optimistic-concurrency emission tests: an ORM-managed numeric token makes generated UPDATE
 /// add <c>SET …, "Version" = "Version" + 1</c> and AND-compose <c>"Version" = @Version</c> onto the
 /// key WHERE, DELETE AND-composes the same predicate, RETURNING/OUTPUT keeps projecting the token, a
 /// database-managed token (SqlServer rowversion) is absent from INSERT but present in the UPDATE

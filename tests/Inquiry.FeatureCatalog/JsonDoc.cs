@@ -19,7 +19,7 @@ public sealed class MoneyConverter : IInquiryValueConverter<Money, decimal>
 }
 
 /// <summary>
-/// W10 fixture shared by every dialect test project: a value-converter column (<see cref="Balance"/>) and a
+/// Fixture shared by every dialect test project: a value-converter column (<see cref="Balance"/>) and a
 /// JSON column (<see cref="Tags"/>, serialized to text). Columns are kept text/numeric-compatible across
 /// dialects so the test exercises Inquiry's converter/JSON serialization, not provider jsonb binding.
 /// </summary>

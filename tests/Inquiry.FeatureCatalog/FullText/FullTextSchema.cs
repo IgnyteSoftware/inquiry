@@ -1,7 +1,7 @@
 namespace Inquiry.FeatureCatalog.FullText;
 
 /// <summary>
-/// Per-dialect DDL for the W9 full-text <c>Article</c> table, including the engine-specific full-text
+/// Per-dialect DDL for the full-text <c>Article</c> table, including the engine-specific full-text
 /// index. PostgreSQL needs no index (a sequential <c>to_tsvector</c> scan is correct for small test data);
 /// MySQL requires a <c>FULLTEXT</c> index for <c>MATCH…AGAINST</c>; SQL Server requires a full-text catalog
 /// + index AND the optional full-text engine component, so its setup is applied separately and gated.

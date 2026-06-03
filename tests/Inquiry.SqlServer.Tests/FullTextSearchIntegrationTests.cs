@@ -6,7 +6,7 @@ using Inquiry.SqlServer.Tests.Fixtures;
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// W9 full-text search against real SQL Server via the shared <see cref="Article"/> catalog entity. The
+/// Full-text search against real SQL Server via the shared <see cref="Article"/> catalog entity. The
 /// generated predicate is <c>FREETEXT(([Title],[Body]), @searchTerm)</c>. SQL Server full-text search
 /// requires the optional full-text engine component plus a full-text catalog/index with ASYNC population;
 /// the default test container usually lacks the engine, so each test SKIPS cleanly (never fails) when FTS

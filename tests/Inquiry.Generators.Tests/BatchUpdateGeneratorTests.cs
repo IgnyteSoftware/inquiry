@@ -3,7 +3,7 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// W3b batch-update emission: <c>[InquiryUpdateAll]</c> emits a per-row UPDATE template (with a
+/// Batch-update emission: <c>[InquiryUpdateAll]</c> emits a per-row UPDATE template (with a
 /// <c>{r}</c> row token) and a binder writing <c>@u{r}_&lt;n&gt;</c> / <c>@u{r}_k&lt;n&gt;</c> params.
 /// </summary>
 public sealed partial class InquiryGeneratorTests

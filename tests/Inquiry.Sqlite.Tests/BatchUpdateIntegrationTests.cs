@@ -32,7 +32,7 @@ public partial class SkuStore : InquiryStore<Sku>
     public partial Task<int> UpdateAllAsync(IEnumerable<Sku> products, CancellationToken cancellationToken = default);
 }
 
-/// <summary>W3b batch update end-to-end against SQLite: one UPDATE per row in a single command updates
+/// <summary>Batch update end-to-end against SQLite: one UPDATE per row in a single command updates
 /// each row by key; an empty collection is a no-op.</summary>
 public sealed class BatchUpdateIntegrationTests
 {

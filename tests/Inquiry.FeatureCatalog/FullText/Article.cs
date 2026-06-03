@@ -7,7 +7,7 @@ using Inquiry.Stores;
 namespace Inquiry.FeatureCatalog.FullText;
 
 /// <summary>
-/// W9 full-text-search fixture. Linked ONLY into the FTS-capable dialect test projects (PostgreSQL,
+/// Full-text-search fixture. Linked ONLY into the FTS-capable dialect test projects (PostgreSQL,
 /// SQL Server, MySQL, and provisionally Oracle) — never into a SQLite-compiled project, which rejects
 /// <c>[InquiryFullTextSearch]</c> with INQ035.
 /// </summary>

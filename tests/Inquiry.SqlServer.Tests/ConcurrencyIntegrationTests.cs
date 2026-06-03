@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// W6 optimistic concurrency against real SQL Server via the shared <see cref="VersionedItem"/> catalog
+/// Optimistic concurrency against real SQL Server via the shared <see cref="VersionedItem"/> catalog
 /// entity: an ORM-managed version is bumped on a successful update, a stale version makes update/delete a
 /// no-op (false by default, throwing when <c>ThrowOnConcurrencyConflict</c> is enabled).
 /// </summary>
