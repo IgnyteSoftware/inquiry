@@ -700,6 +700,17 @@ internal static class StoreOperationEmitter
     {
         var paged = plan.Pagination == Pagination.Offset;
 
+        // Audit P2 #12: guard offset/limit at the call site before they reach the SQL. Negative offsets
+        // / non-positive limits previously fell through to the provider (provider-specific error or
+        // silent empty result). nameof() in the throw preserves the caller-visible argument name.
+        if (paged)
+        {
+            var offsetArg = method.Parameters[fieldColumns.Count].Name;
+            var limitArg = method.Parameters[fieldColumns.Count + 1].Name;
+            source.AppendLine($"        if ({offsetArg} < 0) throw new global::System.ArgumentOutOfRangeException(nameof({offsetArg}), {offsetArg}, \"Pagination offset must be >= 0.\");");
+            source.AppendLine($"        if ({limitArg} <= 0) throw new global::System.ArgumentOutOfRangeException(nameof({limitArg}), {limitArg}, \"Pagination limit must be > 0.\");");
+        }
+
         source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
         source.AppendLine($"            {plan.SqlFieldName},");
         source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
@@ -747,6 +758,12 @@ internal static class StoreOperationEmitter
         var pageSizeParam = method.Parameters[1].Name;
         var cursorType = method.Parameters[0].TypeDisplay;
         var single = plan.KeysetColumns.Count == 1;
+
+        // Audit P2 #12: guard pageSize. Non-positive pageSize wastes a round trip (or returns an
+        // empty page after fetching one extra row). pageSize == int.MaxValue overflows the
+        // `pageSize + 1` over-fetch arithmetic below.
+        source.AppendLine($"        if ({pageSizeParam} <= 0) throw new global::System.ArgumentOutOfRangeException(nameof({pageSizeParam}), {pageSizeParam}, \"Page size must be > 0.\");");
+        source.AppendLine($"        if ({pageSizeParam} == int.MaxValue) throw new global::System.ArgumentOutOfRangeException(nameof({pageSizeParam}), {pageSizeParam}, \"Page size must be less than int.MaxValue.\");");
 
         // A null cursor runs the predicate-free first-page query; a non-null cursor runs the seek query
         // (plain sargable `key > @cursor` -> index seek) and binds the cursor. Splitting the two -- rather

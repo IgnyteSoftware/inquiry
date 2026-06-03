@@ -217,4 +217,105 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ021");
     }
+
+    // ---- OrderBy direction-token validation (audit P2 #13) ------------------------------
+    //
+    // The parser previously did a permissive `parts[1] == "DESC"` check — anything else (typo,
+    // extra tokens, garbage) silently fell back to ASC, changing query semantics without warning.
+    // INQ042 now flags any token after the field that isn't exactly ASC or DESC (case-insensitive),
+    // and any term with more than two whitespace-separated tokens.
+
+    [Fact]
+    public void OrderByWithTypoDirectionTokenReportsInq042()
+    {
+        var source = PagingStore("""
+            [InquirySelectAll(OrderBy = "Name DESCS")]
+            public partial Task<IReadOnlyList<User>> SelectOrderedAsync(CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ042");
+    }
+
+    [Fact]
+    public void OrderByWithUnknownDirectionTokenReportsInq042()
+    {
+        var source = PagingStore("""
+            [InquirySelectAll(OrderBy = "Name DEC")]
+            public partial Task<IReadOnlyList<User>> SelectOrderedAsync(CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ042");
+    }
+
+    [Fact]
+    public void OrderByWithExtraTokensReportsInq042()
+    {
+        var source = PagingStore("""
+            [InquirySelectAll(OrderBy = "Name ASC NULLS FIRST")]
+            public partial Task<IReadOnlyList<User>> SelectOrderedAsync(CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ042");
+    }
+
+    [Fact]
+    public void OrderByWithExplicitAscAcceptsTheTerm()
+    {
+        var source = PagingStore("""
+            [InquirySelectAll(OrderBy = "Name ASC, Id DESC")]
+            public partial Task<IReadOnlyList<User>> SelectOrderedAsync(CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+    }
+
+    // ---- Pagination argument guards (audit P2 #12) -------------------------------------
+    //
+    // The emitted method bodies must validate offset/limit/pageSize up front so a misuse fails
+    // with a clear ArgumentOutOfRangeException at the call site, not with a provider-specific
+    // error (or, worst case, an integer overflow on the keyset `pageSize + 1` over-fetch).
+
+    [Fact]
+    public void OffsetPagingEmitsOffsetAndLimitGuards()
+    {
+        var source = PagingStore("""
+            [InquirySelectAll(OrderBy = "Id ASC", Paged = true)]
+            public partial Task<IReadOnlyList<User>> PageAsync(int offset, int limit, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var text = GetStore(result);
+
+        Assert.Contains(
+            "if (offset < 0) throw new global::System.ArgumentOutOfRangeException(nameof(offset), offset, \"Pagination offset must be >= 0.\");",
+            text);
+        Assert.Contains(
+            "if (limit <= 0) throw new global::System.ArgumentOutOfRangeException(nameof(limit), limit, \"Pagination limit must be > 0.\");",
+            text);
+    }
+
+    [Fact]
+    public void KeysetPagingEmitsPageSizeGuards()
+    {
+        var source = PagingStore("""
+            [InquiryKeysetPage("Id")]
+            public partial Task<InquiryPage<User, long>> KeysetAsync(long? afterId, int pageSize, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var text = GetStore(result);
+
+        Assert.Contains(
+            "if (pageSize <= 0) throw new global::System.ArgumentOutOfRangeException(nameof(pageSize), pageSize, \"Page size must be > 0.\");",
+            text);
+        Assert.Contains(
+            "if (pageSize == int.MaxValue) throw new global::System.ArgumentOutOfRangeException(nameof(pageSize), pageSize, \"Page size must be less than int.MaxValue.\");",
+            text);
+    }
 }

@@ -196,7 +196,7 @@ internal static class StoreProcessor
 
         if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
         {
-            orderBy = ParseOrderBy(GeneratorHelpers.GetNamedString(attribute, "OrderBy"));
+            orderBy = ParseOrderBy(GeneratorHelpers.GetNamedString(attribute, "OrderBy"), method.Name, location, diagnostics);
             if (GeneratorHelpers.GetNamedBool(attribute, "Paged"))
             {
                 pagination = Pagination.Offset;
@@ -326,10 +326,16 @@ internal static class StoreProcessor
 
     /// <summary>
     /// Parses an <c>OrderBy</c> attribute string (<c>"field [ASC|DESC], field2 [ASC|DESC]"</c>) into
-    /// ordered terms. Direction defaults to ASC. Fields are kept raw (resolved + quoted at emit). v1
-    /// supports only <c>field [ASC|DESC]</c> — collation/NULLS ordering is out of scope.
+    /// ordered terms. Fields are kept raw (resolved + quoted at emit). v1 supports only
+    /// <c>field [ASC|DESC]</c> — collation/NULLS ordering is out of scope. A direction token that
+    /// is not ASC or DESC (case-insensitive), or any trailing tokens beyond the direction, reports
+    /// INQ042 — the pre-INQ042 parser silently fell back to ASC on typos like "DESCS" or "DEC".
     /// </summary>
-    private static ImmutableArray<OrderItem> ParseOrderBy(string? spec)
+    private static ImmutableArray<OrderItem> ParseOrderBy(
+        string? spec,
+        string methodName,
+        Location? location,
+        ImmutableArray<DiagnosticData>.Builder diagnostics)
     {
         if (string.IsNullOrWhiteSpace(spec))
         {
@@ -347,7 +353,27 @@ internal static class StoreProcessor
 
             var parts = term.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
             var field = parts[0];
-            var descending = parts.Length > 1 && string.Equals(parts[1], "DESC", StringComparison.OrdinalIgnoreCase);
+            var descending = false;
+
+            if (parts.Length == 2)
+            {
+                if (string.Equals(parts[1], "DESC", StringComparison.OrdinalIgnoreCase))
+                {
+                    descending = true;
+                }
+                else if (!string.Equals(parts[1], "ASC", StringComparison.OrdinalIgnoreCase))
+                {
+                    diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.InvalidOrderByDirection, location, methodName, term, parts[1]));
+                    continue;
+                }
+            }
+            else if (parts.Length > 2)
+            {
+                // Trailing garbage (e.g. "Name ASC NULLS FIRST") — name the first unrecognised token.
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.InvalidOrderByDirection, location, methodName, term, parts[2]));
+                continue;
+            }
+
             builder.Add(new OrderItem(field, descending));
         }
 

@@ -35,8 +35,13 @@ public sealed class SequentialAccessReadBehaviorTests
     }
 
     [Fact]
-    public async Task StructMaterializerSingleRowReadUsesSequentialAccess()
+    public async Task StructMaterializerSingleRowReadUsesSequentialAccessWithoutSingleRow()
     {
+        // Pre-fix this path passed `SingleResult | SingleRow | SequentialAccess`. SingleRow gives
+        // providers permission to stop after the first row, which silently suppresses the
+        // QuerySingleOrDefaultAsync "expected zero or one row, but the query returned multiple rows"
+        // throw on providers that honour the hint (audit P2 #5). The constant now omits SingleRow so
+        // the duplicate-detecting second ReadAsync reliably observes the extra row.
         var recorded = new List<CommandBehavior>();
         var (pipeline, keeper) = await CreateSeededPipelineAsync(recorded);
         await using var _ = keeper;
@@ -47,9 +52,27 @@ public sealed class SequentialAccessReadBehaviorTests
 
         Assert.NotNull(single);
         var behavior = Assert.Single(recorded);
-        Assert.Equal(
-            CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess,
-            behavior);
+        Assert.Equal(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess, behavior);
+        Assert.False(behavior.HasFlag(CommandBehavior.SingleRow));
+    }
+
+    [Fact]
+    public async Task ClassMaterializerSingleRowReadDoesNotUseSingleRow()
+    {
+        // Same contract as the struct-materializer path (see preceding test) — the class-materializer
+        // single-row path also drops SingleRow so the multi-row throw observes the extra row.
+        var recorded = new List<CommandBehavior>();
+        var (pipeline, keeper) = await CreateSeededPipelineAsync(recorded);
+        await using var _ = keeper;
+
+        var single = await pipeline.QuerySingleOrDefaultAsync<TestItem>(
+            new InquiryCommand("SELECT Id, Name, Flag FROM T WHERE Id = 1"),
+            new TestItemClassMaterializer());
+
+        Assert.NotNull(single);
+        var behavior = Assert.Single(recorded);
+        Assert.Equal(CommandBehavior.SingleResult, behavior);
+        Assert.False(behavior.HasFlag(CommandBehavior.SingleRow));
     }
 
     [Fact]
