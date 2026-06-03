@@ -110,8 +110,13 @@ public sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 
     // A returning op is the only SQL Inquiry emits as an anonymous PL/SQL block; normal CRUD never starts
     // with these tokens. Must stay in sync with the leading token of OracleSqlBuilder's returning builders
-    // (DECLARE for a generated-key insert, BEGIN otherwise).
+    // (DECLARE for a generated-key insert, BEGIN otherwise) AND with the synthetic `:rc` OUT ref-cursor
+    // bind name. Requiring both gates the auto-bind to generator-emitted SQL: user-authored ad-hoc PL/SQL
+    // that happens to start with DECLARE/BEGIN (a `SELECT INTO`, a local-only block, a hand-written
+    // procedure call) does not reference `:rc`, so it does not gain a stray OUT parameter that would
+    // change its shape (audit P2 #7).
     private static bool IsReturningBlock(string commandText)
-        => commandText.StartsWith("DECLARE", System.StringComparison.Ordinal)
-           || commandText.StartsWith("BEGIN", System.StringComparison.Ordinal);
+        => (commandText.StartsWith("DECLARE", System.StringComparison.Ordinal)
+            || commandText.StartsWith("BEGIN", System.StringComparison.Ordinal))
+           && commandText.IndexOf(":rc", System.StringComparison.Ordinal) >= 0;
 }

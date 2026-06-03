@@ -1,4 +1,5 @@
 using Inquiry.Connections;
+using Inquiry.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.SqlServer.DependencyInjection;
@@ -18,6 +19,7 @@ public static class SqlServerInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "SqlServer");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(connectionString));
         return services;
     }
@@ -41,6 +43,7 @@ public static class SqlServerInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(configure));
         }
 
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "SqlServer");
         var options = new SqlServerInquiryOptions();
         configure(options);
 

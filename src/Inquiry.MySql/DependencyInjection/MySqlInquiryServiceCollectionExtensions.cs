@@ -1,4 +1,5 @@
 using Inquiry.Connections;
+using Inquiry.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.MySql.DependencyInjection;
@@ -18,6 +19,7 @@ public static class MySqlInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MySql");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MySqlInquiryConnectionFactory(connectionString));
         return services;
     }

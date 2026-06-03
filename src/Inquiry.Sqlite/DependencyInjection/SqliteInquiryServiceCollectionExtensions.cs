@@ -1,4 +1,5 @@
 using Inquiry.Connections;
+using Inquiry.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Sqlite.DependencyInjection;
@@ -18,6 +19,7 @@ public static class SqliteInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqliteInquiryConnectionFactory(connectionString));
         return services;
     }
