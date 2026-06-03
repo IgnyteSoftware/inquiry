@@ -28,9 +28,8 @@ public sealed class AddInquiryAssemblyOverloadTests
         // The registration ran (its AddServices side-effect counter incremented).
         Assert.True(SentinelRegistration.AddServicesInvocations > 0);
 
-        // And core service descriptors landed (IInquiry resolves to a concrete factory; we don't
-        // resolve it here because that needs an IInquiryConnectionFactory from a provider package).
-        var provider = services.BuildServiceProvider();
+        // And core service descriptors landed (IInquiry isn't resolved here because that needs an
+        // IInquiryConnectionFactory from a provider package).
         Assert.Contains(services, sd => sd.ServiceType == typeof(IInquiry));
         Assert.Contains(services, sd => sd.ServiceType == typeof(IInquiryRequestPipeline));
     }

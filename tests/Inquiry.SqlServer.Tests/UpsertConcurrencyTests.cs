@@ -1,6 +1,7 @@
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.Tests.Fixtures;
+using System.Data.Common;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -38,7 +39,7 @@ public sealed class UpsertConcurrencyTests
         var results = await Task.WhenAll(inputs.Select(async c =>
         {
             try { await store.UpsertAsync(c); return true; }
-            catch { return false; }
+            catch (DbException) { return false; }
         }));
         Assert.Contains(true, results);
 
