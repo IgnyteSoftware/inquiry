@@ -230,6 +230,204 @@ public sealed class TransactionStateMachineTests
         foreach (var id in ids) Assert.Null(await items.SelectByKeyAsync(id));
     }
 
+    // ---- Medium-priority defensive edges (audit items #5, #6, #7, #8, #10) -----------
+
+    [Fact]
+    public async Task SavepointCreationCancelledLeavesOuterTransactionUsable()
+    {
+        // Item #5. A cancelled BeginTransactionAsync on the inner (savepoint) path must
+        // leave the outer transaction in a consistent state: the in-flight guard released,
+        // the slot's Pipeline still pointing at the outer pipeline, and subsequent ops on
+        // the outer still working.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "sp_cancel");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await using var outer = await inquiry.BeginTransactionAsync();
+        await outer.ExecuteAsync(InsertCustomerSql, new { CustomerID = "OUT01", CompanyName = "Outer", Country = "USA" });
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => outer.BeginTransactionAsync(cts.Token));
+
+        // Outer must remain usable. The savepoint creation failed (cancelled before the
+        // SAVEPOINT statement ran), so the outer transaction's state is unchanged.
+        await outer.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFT01", CompanyName = "After Cancel", Country = "USA" });
+        await outer.CommitAsync();
+
+        Assert.NotNull(await store.SelectByKeyAsync("OUT01"));
+        Assert.NotNull(await store.SelectByKeyAsync("AFT01"));
+    }
+
+    [Fact]
+    public async Task ConcurrentOperationsOnOneTransactionEitherSerializeOrFailFastWithoutCorruption()
+    {
+        // Item #6. Fire many concurrent ops on a single transaction via Task.Run (so each
+        // launch actually goes to the worker thread pool, not just iterates synchronously
+        // through Microsoft.Data.Sqlite which executes in-memory ops too fast to race).
+        //
+        // The contract we're asserting is provider-portable — no exact ratio of successes
+        // vs failures, since that depends on scheduling. What MUST hold:
+        //   - Every op either succeeds or fails with the in-flight guard's specific message
+        //     (no corruption, no other exception type).
+        //   - The committed row count equals the success count (no phantom rows, no losses).
+        // On in-memory SQLite, ops may serialize so fast that no op ever hits the guard —
+        // that's a property of the provider, not a bug; the test passes either way.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "concurrent_one_tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+        await using var tx = await inquiry.BeginTransactionAsync();
+
+        const int N = 10;
+        var tasks = Enumerable.Range(0, N).Select(i => Task.Run(async () =>
+        {
+            try
+            {
+                await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "X" + i.ToString("D4"), CompanyName = "X " + i, Country = "USA" });
+                return (Success: true, Exception: (Exception?)null);
+            }
+            catch (Exception ex)
+            {
+                return (Success: false, Exception: ex);
+            }
+        })).ToList();
+
+        var results = await Task.WhenAll(tasks);
+        var successes = results.Count(r => r.Success);
+        var failures = results.Where(r => !r.Success).ToList();
+
+        // No losses: every op either succeeded or faulted with an observable exception.
+        Assert.Equal(N, successes + failures.Count);
+
+        // Any failure must be the in-flight guard — not a corruption or a generic provider error.
+        Assert.All(failures, f =>
+        {
+            Assert.IsType<InvalidOperationException>(f.Exception);
+            Assert.Contains("in flight", f.Exception!.Message, StringComparison.OrdinalIgnoreCase);
+        });
+
+        await tx.CommitAsync();
+
+        // Committed row count must match the successful-op count.
+        var all = await store.SelectAllAsync();
+        Assert.Equal(successes, all.Count);
+    }
+
+    [Fact]
+    public async Task DisposeWhileStreamingReaderIsInFlightCleansUpWithoutCorruption()
+    {
+        // Item #7. If the user disposes a transaction while a streaming reader is mid-stream
+        // (the in-flight guard is set, but no error has occurred yet), DisposeAsync must
+        // tear down the connection cleanly. The held enumerator becomes unusable, but the
+        // disposal must not throw and the next inquiry call must work normally.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "dispose_in_flight");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        // Seed a few rows outside the tx so the in-tx streaming SELECT has rows to stream.
+        await store.InsertAsync(new Customer { CustomerID = "SEED1", CompanyName = "Seed 1" });
+        await store.InsertAsync(new Customer { CustomerID = "SEED2", CompanyName = "Seed 2" });
+
+        var tx = await inquiry.BeginTransactionAsync();
+        var streaming = tx.QueryAsync<Customer>(
+            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+        var enumerator = streaming.GetAsyncEnumerator();
+
+        try
+        {
+            Assert.True(await enumerator.MoveNextAsync()); // pulls the first row; in-flight is set
+
+            // Dispose while the reader is still open. Must not throw.
+            await tx.DisposeAsync();
+        }
+        finally
+        {
+            // Best-effort dispose of the orphaned enumerator. The connection underneath is
+            // already gone — the provider may throw, may not; either way the test framework
+            // doesn't care.
+            try { await enumerator.DisposeAsync(); } catch { }
+        }
+
+        // After the dispose, the root inquiry must remain fully functional.
+        await store.InsertAsync(new Customer { CustomerID = "AFTR1", CompanyName = "After dispose" });
+        Assert.NotNull(await store.SelectByKeyAsync("AFTR1"));
+    }
+
+    [Fact]
+    public async Task AlreadyCancelledTokenInBeginTransactionFailsCleanlyAndLeavesSlotRecoverable()
+    {
+        // Item #8. A cancelled BeginTransactionAsync must throw OperationCanceledException
+        // and clean up the ambient slot so a subsequent BeginTransactionAsync on the same
+        // async flow opens a fresh transaction (not a half-poisoned savepoint).
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "cancelled_token");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => inquiry.BeginTransactionAsync(cancellationToken: cts.Token));
+
+        // The next BeginTransactionAsync (without a cancelled token) must work cleanly.
+        await using var tx = await inquiry.BeginTransactionAsync();
+        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "RECV1", CompanyName = "Recovered", Country = "USA" });
+        await tx.CommitAsync();
+
+        Assert.NotNull(await store.SelectByKeyAsync("RECV1"));
+    }
+
+    [Fact]
+    public async Task PreparedStatementsInsideTransactionDoNotCrashTheTransactedPipeline()
+    {
+        // Item #10. When PreparedStatementMode.Auto is on, the transacted pipeline calls
+        // DbCommand.PrepareAsync before each non-StoredProcedure command. SQLite's
+        // PrepareAsync is a no-op (no persistent plan cache), so this is purely a
+        // "doesn't crash" verification on SQLite. Provider-specific behavior (Npgsql's
+        // server-side prepared-statement cache) is exercised by the networked dialect
+        // test projects' own prepared-statement coverage.
+        var connStringBuilder = new SqliteConnectionStringBuilder
+        {
+            DataSource = "Inquiry_prep_" + Guid.NewGuid().ToString("N"),
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Shared,
+        };
+        var connectionString = connStringBuilder.ToString();
+
+        // Keep the in-memory database alive for the duration of the test.
+        await using var keeper = new SqliteConnection(connectionString);
+        await keeper.OpenAsync();
+        await using (var schemaCmd = keeper.CreateCommand())
+        {
+            schemaCmd.CommandText = NorthwindSchema.SqliteDdl;
+            await schemaCmd.ExecuteNonQueryAsync();
+        }
+
+        // Bespoke service-collection wiring so we can pass InquiryOptions.
+        var services = new ServiceCollection()
+            .AddInquiry(opt => opt.PrepareStatements = PreparedStatementMode.Auto)
+            .AddInquirySqlite(connectionString)
+            .BuildServiceProvider();
+
+        var inquiry = services.GetRequiredService<IInquiry>();
+
+        await using (var tx = await inquiry.BeginTransactionAsync())
+        {
+            // Multiple prepared statements inside one transaction — exercises the
+            // MaybePrepareAsync code path for each.
+            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "PRE01", CompanyName = "Prepared 1", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "PRE02", CompanyName = "Prepared 2", Country = "USA" });
+            var single = await tx.QuerySingleOrDefaultAsync<Customer>(
+                "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers WHERE CustomerID = 'PRE01'");
+            Assert.NotNull(single);
+
+            await tx.CommitAsync();
+        }
+
+        await services.DisposeAsync();
+    }
+
     // ---- Helpers --------------------------------------------------------------------
 
     /// <summary>
