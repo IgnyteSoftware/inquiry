@@ -61,6 +61,21 @@ internal sealed class SavepointInquiryTransaction : IInquiryTransaction
     public IsolationLevel IsolationLevel => _isolationLevel;
 
     /// <inheritdoc />
+    public void ThrowIfClosed()
+    {
+        // _closed is set after a successful Commit or Rollback; _committed implies _closed
+        // (kept separately so Dispose can distinguish "released" from "rolled back at exit").
+        // _disposed is set by DisposeAsync. Any of these terminal states blocks further forwarding.
+        if (_closed || _committed || _disposed)
+        {
+            throw new ObjectDisposedException(
+                nameof(SavepointInquiryTransaction),
+                "This Inquiry savepoint has already been committed, rolled back, or disposed. " +
+                "Calls routed through the savepoint handle (tx.X) after close are not allowed.");
+        }
+    }
+
+    /// <inheritdoc />
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(SavepointInquiryTransaction));
