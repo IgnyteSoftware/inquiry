@@ -1,6 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <!--
+      net6.0 / net7.0 are EOL (May 2024 and Nov 2024) and Microsoft.Data.Sqlite 10.0.x ships only
+      a net8.0 build plus a netstandard2.0 fallback. The savepoint API DbTransaction.Save(string)
+      was added in netstandard2.1 / .NET 5, so SqliteTransaction's netstandard2.0 build can't
+      override it; at runtime on net6/net7 the base class default throws NotSupportedException,
+      and the eight nested-transaction integration tests in this project fail. The Inquiry.Sqlite
+      runtime library still targets net6.0+ for non-savepoint consumers; only this integration-
+      test project drops the EOL TFMs so the savepoint feature isn't tested where the provider
+      can't implement it.
+    -->
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <!-- See Inquiry.Tests.csproj for the CS8765 rationale (test doubles + ADO.NET base nullability). Audit P2 #11. -->
     <NoWarn>$(NoWarn);CS8765</NoWarn>
