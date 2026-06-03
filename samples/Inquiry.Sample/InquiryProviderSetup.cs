@@ -25,6 +25,16 @@ internal static class InquiryProviderSetup
             ?? throw new InvalidOperationException(
                 $"Missing connection string '{ConnectionStringKey(provider)}' for Inquiry:Provider '{providerName}'. Add it to ConnectionStrings in appsettings.json.");
 
+        // Local-dev convenience and credential hygiene: a single INQUIRY_SAMPLE_DB environment
+        // variable overrides the active provider's connection string, so the committed
+        // appsettings.json can carry harmless local defaults while real credentials stay out of
+        // source control (and out of secret scanners). See README.md.
+        var connectionStringOverride = Environment.GetEnvironmentVariable("INQUIRY_SAMPLE_DB");
+        if (!string.IsNullOrWhiteSpace(connectionStringOverride))
+        {
+            connectionString = connectionStringOverride;
+        }
+
         switch (provider)
         {
             case Provider.Sqlite:
