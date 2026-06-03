@@ -17,7 +17,7 @@ public sealed class TransactionIntegrationTests
         var store = harness.GetRequiredService<CustomerStore>();
 
         await using var tx = await inquiry.BeginTransactionAsync();
-        await tx.Inquiry.ExecuteAsync(InsertCustomerSql, new { CustomerID = "TX001", CompanyName = "Widget", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "TX001", CompanyName = "Widget", Country = "USA" });
         await tx.CommitAsync();
 
         var loaded = await store.SelectByKeyAsync("TX001");
@@ -34,7 +34,7 @@ public sealed class TransactionIntegrationTests
 
         await using (var tx = await inquiry.BeginTransactionAsync())
         {
-            await tx.Inquiry.ExecuteAsync(InsertCustomerSql, new { CustomerID = "GHOST", CompanyName = "Ghost", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "GHOST", CompanyName = "Ghost", Country = "USA" });
             // No commit — dispose rolls back
         }
 
@@ -50,7 +50,7 @@ public sealed class TransactionIntegrationTests
         var store = harness.GetRequiredService<CustomerStore>();
 
         await using var tx = await inquiry.BeginTransactionAsync();
-        await tx.Inquiry.ExecuteAsync(InsertCustomerSql, new { CustomerID = "REV01", CompanyName = "Reverted", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "REV01", CompanyName = "Reverted", Country = "USA" });
         await tx.RollbackAsync();
 
         var loaded = await store.SelectByKeyAsync("REV01");
@@ -67,7 +67,7 @@ public sealed class TransactionIntegrationTests
         await using var tx = await inquiry.BeginTransactionAsync();
         for (var i = 1; i <= 5; i++)
         {
-            await tx.Inquiry.ExecuteAsync(InsertCustomerSql, new { CustomerID = $"M{i:D4}", CompanyName = $"Customer {i}", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = $"M{i:D4}", CompanyName = $"Customer {i}", Country = "USA" });
         }
         await tx.CommitAsync();
 
@@ -280,7 +280,7 @@ public sealed class TransactionIntegrationTests
         Assert.Equal(outer.IsolationLevel, inner.IsolationLevel);
     }
 
-    // ---- tx.* forwarding overloads (ergonomic delegation to tx.Inquiry.*) ------------
+    // ---- tx.* query/execute methods (the entire transactional surface) ---------------
 
     [Fact]
     public async Task TxExecuteAsyncForwardsToInquiry()
@@ -291,7 +291,7 @@ public sealed class TransactionIntegrationTests
 
         await using (var tx = await inquiry.BeginTransactionAsync())
         {
-            // tx.ExecuteAsync (forwarding) instead of tx.Inquiry.ExecuteAsync.
+            // Every transactional call is a direct method on the transaction handle.
             await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "FWD01", CompanyName = "Forwarded", Country = "USA" });
             await tx.CommitAsync();
         }

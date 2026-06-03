@@ -235,8 +235,9 @@ public interface IInquiry
     // ---- Transactions -----------------------------------------------------------------
 
     /// <summary>
-    /// Opens a new database connection and begins a transaction. All operations performed via
-    /// <see cref="IInquiryTransaction.Inquiry"/> share that connection and transaction. The
+    /// Opens a new database connection and begins a transaction. All operations performed via the
+    /// returned <see cref="IInquiryTransaction"/>'s query / execute methods, or via generated
+    /// stores resolved from DI on the same async flow, share that connection and transaction. The
     /// transaction rolls back automatically if disposed without committing.
     /// </summary>
     Task<IInquiryTransaction> BeginTransactionAsync(
