@@ -211,4 +211,21 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.NotNull(await store.SelectByKeyAsync("OUTER"));
         Assert.Null(await store.SelectByKeyAsync("INNER"));
     }
+
+    [SkippableFact]
+    public async Task UseAfterCloseOnRealProviderThrowsObjectDisposed()
+    {
+        // Verifies the closed-handle safety against the real Oracle.ManagedDataAccess provider.
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "use_after_close");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.CommitAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.ExecuteAsync("SELECT 1 FROM dual"));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.QueryListAsync<Customer>(
+            "SELECT \"CUSTOMERID\", \"COMPANYNAME\", \"CONTACTNAME\", \"CONTACTTITLE\", \"ADDRESS\", \"CITY\", \"REGION\", \"POSTALCODE\", \"COUNTRY\", \"PHONE\", \"FAX\" FROM \"CUSTOMERS\""));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.BeginTransactionAsync());
+    }
 }
