@@ -2,7 +2,7 @@
 
 Inquiry is an experimental .NET 6+ source-generated micro-ORM. You write attributed entity classes and `partial` store classes with `partial` method declarations; a Roslyn source generator emits the matching partial with method bodies, materializers, and dependency-injection wiring. Every SQL string is built at compile time by a provider-specific `SqlBuilder` and baked into the generated source as `const string` fields, so each database can be tuned independently and the runtime carries no SQL.
 
-> **New here?** Start with **[docs/STATUS.md](docs/STATUS.md)** — current state, development process, and what's left to do. This README is the architecture deep-dive.
+> **New here?** Start with the **[docs site](https://jakeoverstreet.github.io/inquiry/)** — getting-started, features, per-dialect notes, and the auto-generated API reference. Source is under [`docs/site/`](docs/site/). For project state and the development process see **[docs/STATUS.md](docs/STATUS.md)**. This README is the architecture deep-dive.
 
 ## Repository Layout
 

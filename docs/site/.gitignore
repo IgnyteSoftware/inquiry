@@ -1,0 +1,9 @@
+# DocFX build outputs
+_site/
+obj/
+
+# DocFX-generated API reference metadata (regenerated each build from XML doc comments)
+api/*.yml
+api/.manifest
+
+# Note: api/index.md is hand-written and IS tracked
