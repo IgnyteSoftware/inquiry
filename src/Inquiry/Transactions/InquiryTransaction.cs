@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 
 namespace Inquiry.Transactions;
@@ -25,6 +26,9 @@ internal sealed class InquiryTransaction : IInquiryTransaction
 
     /// <inheritdoc />
     public IInquiry Inquiry { get; }
+
+    /// <inheritdoc />
+    public IsolationLevel IsolationLevel => _transaction.IsolationLevel;
 
     /// <inheritdoc />
     public async Task CommitAsync(CancellationToken cancellationToken = default)

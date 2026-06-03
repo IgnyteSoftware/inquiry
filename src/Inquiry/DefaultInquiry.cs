@@ -44,9 +44,15 @@ public sealed class DefaultInquiry : IInquiry
     // visible across the await boundary.
     private readonly AsyncLocal<AmbientTransactionSlot?> _ambientSlot = new();
 
+    // Monotonic counter for unique savepoint names. The savepoint name is only seen by the
+    // database (and by debugging traces); a simple incrementing integer is sufficient and
+    // ensures uniqueness even if multiple savepoints are nested or created back-to-back.
+    private long _savepointCounter;
+
     private sealed class AmbientTransactionSlot
     {
         public TransactedInquiryRequestPipeline? Pipeline;
+        public IsolationLevel IsolationLevel;
     }
 
     /// <summary>
@@ -234,16 +240,21 @@ public sealed class DefaultInquiry : IInquiry
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)
     {
-        if (_ambientSlot.Value?.Pipeline is not null)
+        // Nested call: an ambient transaction already exists on this async flow. Don't open a
+        // second physical transaction; create a savepoint on the existing one. The supplied
+        // isolation level is ignored — a savepoint inherits its outer transaction's isolation
+        // (you can't change isolation mid-transaction in any provider we support).
+        var ambient = _ambientSlot.Value?.Pipeline;
+        if (ambient is not null)
         {
-            throw new InvalidOperationException("Nested transactions are not supported by Inquiry.");
+            return BeginSavepointAsync(ambient, _ambientSlot.Value!.IsolationLevel, cancellationToken);
         }
 
         // Install the slot *synchronously* (before any await) so the caller's async
         // control flow sees it. The Pipeline field is mutated later, after the
         // connection + transaction are open — the caller observes that mutation via
         // the shared slot reference.
-        var slot = new AmbientTransactionSlot();
+        var slot = new AmbientTransactionSlot { IsolationLevel = isolationLevel };
         _ambientSlot.Value = slot;
 
         return BeginTransactionCoreAsync(slot, isolationLevel, cancellationToken);
@@ -274,6 +285,16 @@ public sealed class DefaultInquiry : IInquiry
             }
             throw;
         }
+    }
+
+    private async Task<IInquiryTransaction> BeginSavepointAsync(
+        TransactedInquiryRequestPipeline outer,
+        IsolationLevel inheritedIsolation,
+        CancellationToken cancellationToken)
+    {
+        var name = "inquiry_sp_" + System.Threading.Interlocked.Increment(ref _savepointCounter).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await outer.SaveSavepointAsync(name, cancellationToken).ConfigureAwait(false);
+        return new SavepointInquiryTransaction(this, outer, name, inheritedIsolation);
     }
 
     private IInquiryEntityMaterializer<TEntity> GetMaterializer<TEntity>()
