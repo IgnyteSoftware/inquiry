@@ -45,7 +45,7 @@ public sealed class SingleProviderDIContractTests
     }
 
     [Fact]
-    public void EnsureNoExistingConnectionFactoryPassesOnEmptyCollection()
+    public void EnsureNoExistingConnectionFactoryPassesOnCollectionWithoutConnectionFactory()
     {
         var services = new ServiceCollection();
         services.AddInquiry();
