@@ -1,8 +1,9 @@
 # Live-runtime provider testing & benchmarking — Implementation Plan
 
-> **STATUS (2026-06-01):** Phases 0–7 are **COMPLETE** and merged to `main` (`fcfaa3e`). Only **Phase 8/9
-> (live-environment benchmark)** remains — intentionally deferred. The `- [ ]` checkboxes below were **not**
-> maintained during execution; treat [`../../STATUS.md`](../../STATUS.md) as the authoritative status.
+> **STATUS (2026-06-02):** Phases 0–8 are **COMPLETE** and merged to `main`. The **Phase 8/9
+> live-environment benchmark** is now delivered too — the cross-provider apples-to-apples benchmark
+> buildout across all five engines (see [`../../STATUS.md`](../../STATUS.md) §3.F). The `- [ ]` checkboxes
+> below were **not** maintained during execution; treat STATUS.md as the authoritative status.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

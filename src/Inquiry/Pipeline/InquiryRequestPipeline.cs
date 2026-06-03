@@ -80,7 +80,7 @@ public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
     /// <summary>
     /// Creates a command on <paramref name="connection"/> and runs the factory's
-    /// <see cref="IInquiryConnectionFactory.InitializeCommand"/> hook (F4).
+    /// <see cref="IInquiryConnectionFactory.InitializeCommand"/> hook.
     /// </summary>
     private DbCommand CreateCommand(DbConnection connection)
     {

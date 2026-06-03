@@ -12,7 +12,7 @@ namespace Inquiry.Generators.Abstractions;
 /// statement is produced here and emitted as a <c>const string</c> field at compile time.
 /// </summary>
 /// <remarks>
-/// FOUNDATION CONVENTION (Phase 0 / F3): when a feature workstream adds a new capability, prefer a
+/// FOUNDATION CONVENTION: when a feature workstream adds a new capability, prefer a
 /// <c>virtual</c> method with a base-class default implementation wherever the SQL is dialect-uniform,
 /// so adding the capability does not force an edit in every provider subclass. Use <c>abstract</c>
 /// only when the SQL genuinely has no portable default. All WHERE-clause shaping (key, filter,
@@ -39,7 +39,7 @@ public abstract class SqlBuilder
 
     /// <summary>
     /// As <see cref="MapDbTypeExpression(TypeData)"/> but for a value converter's provider
-    /// <see cref="SpecialType"/> (W10b); the same dialect substitution for <see cref="System.DateTime"/>
+    /// <see cref="SpecialType"/>; the same dialect substitution for <see cref="System.DateTime"/>
     /// applies.
     /// </summary>
     internal string? MapDbTypeExpressionForSpecialType(SpecialType specialType)
@@ -57,7 +57,7 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime2";
 
-    // ---- Batch insert / update (W3) ---------------------------------------------------------
+    // ---- Batch insert / update ---------------------------------------------------------
 
     /// <summary>
     /// Header of a multi-row batch <c>INSERT</c> — the <c>_sqlInsertAllPrefix</c> const emitted before the
@@ -125,7 +125,7 @@ public abstract class SqlBuilder
 
     public abstract string BuildDeleteByKeySql(SqlBuildContext context);
 
-    // ---- Soft delete (W8) -------------------------------------------------------------------
+    // ---- Soft delete -------------------------------------------------------------------
 
     /// <summary>
     /// SQL literal for an active (not-deleted) boolean soft-delete flag. Default <c>0</c> (SQLite/
@@ -162,10 +162,10 @@ public abstract class SqlBuilder
     public virtual string BuildRestoreByKeySql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SoftDeleteRestoreSetClause + " WHERE " + context.KeyWhereClause;
 
-    // ---- Batch delete by key collection (W3b) -----------------------------------------------
+    // ---- Batch delete by key collection -----------------------------------------------
 
     /// <summary>
-    /// W3b: builds a batch delete over a collection of single-column keys —
+    /// Builds a batch delete over a collection of single-column keys —
     /// <c>DELETE FROM t WHERE "Key" IN (:keys)</c>. The <c>(keys)</c> sentinel takes the dialect sigil via
     /// <see cref="ParameterName"/> (<c>:keys</c> on Oracle, <c>@keys</c> elsewhere) and is expanded at runtime
     /// by <c>InquiryInExpansion</c> into one placeholder per element; the emitter passes the same dialect name.
@@ -175,7 +175,7 @@ public abstract class SqlBuilder
         => "DELETE FROM " + context.Table + " WHERE " + context.QuotedKeyColumns[0] + " IN (" + ParameterName("keys") + ")";
 
     /// <summary>
-    /// W3b: the soft-delete form of <see cref="BuildDeleteAllByKeysSql"/> — sets the soft-delete indicator
+    /// The soft-delete form of <see cref="BuildDeleteAllByKeysSql"/> — sets the soft-delete indicator
     /// on every row whose key is in the collection instead of physically removing it.
     /// </summary>
     public virtual string BuildSoftDeleteAllByKeysSql(SqlBuildContext context)
@@ -186,7 +186,7 @@ public abstract class SqlBuilder
     public abstract string BuildUpsertReturningSql(SqlBuildContext context);
 
     /// <summary>
-    /// W5: builds a <c>SELECT COUNT(*)</c> over the entity's table. Dialect-uniform (ANSI), so this is
+    /// Builds a <c>SELECT COUNT(*)</c> over the entity's table. Dialect-uniform (ANSI), so this is
     /// concrete and inherited by every provider; it composes the soft-delete active filter via
     /// <see cref="WhereSuffix"/> so a count excludes soft-deleted rows when applicable.
     /// </summary>
@@ -194,7 +194,7 @@ public abstract class SqlBuilder
         => "SELECT COUNT(*) FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
 
     /// <summary>
-    /// W5: builds a scalar aggregate (<c>SELECT SUM("col") FROM …</c>). <paramref name="function"/> is the
+    /// Builds a scalar aggregate (<c>SELECT SUM("col") FROM …</c>). <paramref name="function"/> is the
     /// ANSI function name (SUM/AVG/MIN/MAX) and <paramref name="quotedColumn"/> is already dialect-quoted.
     /// Dialect-uniform, so concrete and inherited; composes the soft-delete active filter.
     /// </summary>
@@ -202,13 +202,13 @@ public abstract class SqlBuilder
         => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
 
     /// <summary>
-    /// W9: whether this dialect supports <c>[InquiryFullTextSearch]</c>. Default <see langword="false"/>
+    /// Whether this dialect supports <c>[InquiryFullTextSearch]</c>. Default <see langword="false"/>
     /// (SQLite/Oracle in v1); PostgreSQL, SQL Server, and MySQL override to <see langword="true"/>.
     /// </summary>
     public virtual bool SupportsFullTextSearch => false;
 
     /// <summary>
-    /// W9: builds a full-text search SELECT over <paramref name="searchColumns"/>, bound to a single
+    /// Builds a full-text search SELECT over <paramref name="searchColumns"/>, bound to a single
     /// <c>@searchTerm</c> parameter. Composes the soft-delete active filter. Supporting dialects
     /// override this; the base throws so an unsupported dialect is caught at generation time.
     /// </summary>
@@ -278,10 +278,10 @@ public abstract class SqlBuilder
         return columns + op + cursors;
     }
 
-    // ---- W7 schema DDL generation -----------------------------------------------------------
+    // ---- schema DDL generation -----------------------------------------------------------
 
     /// <summary>
-    /// W7: builds the <c>CREATE TABLE</c> DDL for the entity described by <paramref name="context"/>.
+    /// Builds the <c>CREATE TABLE</c> DDL for the entity described by <paramref name="context"/>.
     /// Dialect-uniform skeleton (column list, primary key, foreign keys) composed from the per-dialect
     /// hooks <see cref="MapColumnType"/>, <see cref="GeneratedKeyClause"/>, and <see cref="WrapCreateTable"/>:
     /// <list type="bullet">
@@ -348,7 +348,7 @@ public abstract class SqlBuilder
     }
 
     /// <summary>
-    /// W7b: builds the <c>CREATE INDEX</c> statements for the entity — one per column flagged
+    /// Builds the <c>CREATE INDEX</c> statements for the entity — one per column flagged
     /// <see cref="IColumn.IsIndexed"/> or <see cref="IColumn.IsUnique"/>. The index name defaults to
     /// <c>IX_&lt;table&gt;_&lt;column&gt;</c> (<c>UX_</c> for unique). Dialect-uniform apart from the
     /// idempotency guard, which is gated by <see cref="SupportsCreateIndexIfNotExists"/>.
@@ -387,7 +387,7 @@ public abstract class SqlBuilder
     }
 
     /// <summary>
-    /// W7b: whether <c>CREATE INDEX IF NOT EXISTS</c> is supported (SQLite/PostgreSQL). False for SQL
+    /// Whether <c>CREATE INDEX IF NOT EXISTS</c> is supported (SQLite/PostgreSQL). False for SQL
     /// Server, MySQL, and Oracle, whose <c>CREATE INDEX</c> has no portable existence guard — on those
     /// dialects the emitted index DDL is therefore run-once (re-running the schema fails on the index),
     /// matching Oracle's already non-idempotent <c>CREATE TABLE</c>. Documented on <c>[InquiryColumn]</c>.
@@ -418,27 +418,27 @@ public abstract class SqlBuilder
             : defaultPrecision + ", " + defaultScale;
 
     /// <summary>
-    /// W7: whether this dialect rejects a primary key over an unbounded text column (so a string key
+    /// Whether this dialect rejects a primary key over an unbounded text column (so a string key
     /// needs an explicit <see cref="IColumn.Length"/>). False for SQLite/PostgreSQL (unbounded TEXT keys
     /// are allowed); SQL Server, MySQL, and Oracle override to true.
     /// </summary>
     public virtual bool RequiresBoundedStringKeys => false;
 
     /// <summary>
-    /// W7: maps a column's dialect-neutral <see cref="IColumn.TypeClass"/> (plus length/precision/scale)
+    /// Maps a column's dialect-neutral <see cref="IColumn.TypeClass"/> (plus length/precision/scale)
     /// to a physical column type for this dialect. No leading column name. Abstract so every provider
     /// supplies its own type table — adding a dialect forces an explicit mapping rather than a silent default.
     /// </summary>
     protected abstract string MapColumnType(IColumn column);
 
     /// <summary>
-    /// W7: the full column definition (after the quoted name) for a single database-generated primary key,
+    /// The full column definition (after the quoted name) for a single database-generated primary key,
     /// e.g. <c>INTEGER PRIMARY KEY AUTOINCREMENT</c> / <c>INT IDENTITY(1,1) PRIMARY KEY</c> / <c>SERIAL PRIMARY KEY</c>.
     /// </summary>
     protected abstract string GeneratedKeyClause(IColumn column);
 
     /// <summary>
-    /// W7: wraps the comma-separated column/constraint <paramref name="body"/> in the dialect's
+    /// Wraps the comma-separated column/constraint <paramref name="body"/> in the dialect's
     /// <c>CREATE TABLE</c> statement. Default is the idempotent <c>CREATE TABLE IF NOT EXISTS</c> form
     /// (SQLite/PostgreSQL/MySQL); SQL Server wraps in an <c>OBJECT_ID</c> guard and Oracle omits the guard.
     /// </summary>
@@ -482,7 +482,7 @@ public abstract class SqlBuilder
     /// <summary>
     /// Renders the predicate body (no leading <c>WHERE</c>) by joining each criterion with AND, or OR
     /// when <see cref="SqlPredicate.IsOr"/> is set. Composition is left-to-right with no parentheses
-    /// (single flat OR level, per W1's YAGNI boundary).
+    /// (single flat OR level, per the YAGNI boundary).
     /// </summary>
     protected string RenderPredicates(IReadOnlyList<SqlPredicate> predicates)
     {

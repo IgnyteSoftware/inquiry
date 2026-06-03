@@ -57,7 +57,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     /// <summary>
     /// Creates a transaction-enlisted command and runs the factory's
-    /// <see cref="IInquiryConnectionFactory.InitializeCommand"/> hook (F4).
+    /// <see cref="IInquiryConnectionFactory.InitializeCommand"/> hook.
     /// </summary>
     private DbCommand CreateCommand()
     {

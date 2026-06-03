@@ -29,7 +29,7 @@ internal static class EntityProcessor
         var tableAttribute = GeneratorHelpers.GetEntityAttribute(entitySymbol, "InquiryTableAttribute");
         var tableName = (tableAttribute is not null ? GeneratorHelpers.GetConstructorString(tableAttribute) : null) ?? entitySymbol.Name;
         var schema = tableAttribute is not null ? GeneratorHelpers.GetNamedString(tableAttribute, "Schema") : null;
-        // W7: GenerateForeignKeys defaults to true; only an explicit `= false` named arg disables FK DDL.
+        // GenerateForeignKeys defaults to true; only an explicit `= false` named arg disables FK DDL.
         var generateForeignKeys = tableAttribute is null ||
             GeneratorHelpers.GetNamedBool(tableAttribute, "GenerateForeignKeys", defaultValue: true);
 
@@ -59,7 +59,7 @@ internal static class EntityProcessor
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.DuplicateColumn, location, entitySymbol.Name, duplicate.Key));
         }
 
-        // W8: at most one [InquirySoftDelete] column. Columns whose type was unsupported carry
+        // at most one [InquirySoftDelete] column. Columns whose type was unsupported carry
         // SoftDeleteKind.None (already reported), so they are excluded from this count.
         var softDeleteColumns = columns.Where(static c => c.SoftDelete != SoftDeleteKind.None).ToImmutableArray();
         if (softDeleteColumns.Length > 1)
@@ -67,7 +67,7 @@ internal static class EntityProcessor
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MultipleSoftDeleteColumns, location, entitySymbol.Name, softDeleteColumns[1].PropertyName));
         }
 
-        // W6: at most one [InquiryConcurrencyToken] (INQ028), and it must not be the key (INQ029).
+        // at most one [InquiryConcurrencyToken] (INQ028), and it must not be the key (INQ029).
         var concurrencyTokens = columns.Where(static c => c.IsConcurrencyToken).ToImmutableArray();
         if (concurrencyTokens.Length > 1)
         {
@@ -149,7 +149,7 @@ internal static class EntityProcessor
         foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
         {
             var keyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryKeyAttribute");
-            // W6: [InquiryConcurrencyToken] derives InquiryColumnAttribute, so it is discovered as a
+            // [InquiryConcurrencyToken] derives InquiryColumnAttribute, so it is discovered as a
             // column (like [InquiryKey]). Probed after the key but before the plain column probe.
             var concurrencyTokenAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryConcurrencyTokenAttribute");
             var columnAttribute = keyAttribute ?? concurrencyTokenAttribute ?? GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
@@ -184,7 +184,7 @@ internal static class EntityProcessor
             var isDatabaseGeneratedToken = isConcurrencyToken &&
                 GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute!, "DatabaseGenerated");
 
-            // W10: [InquiryEnumAsString] stores an enum column as its member name. Only valid on an
+            // [InquiryEnumAsString] stores an enum column as its member name. Only valid on an
             // enum (or nullable enum) property; otherwise report INQ036 and leave the flag clear.
             var enumAsString = false;
             if (GeneratorHelpers.GetEntityAttribute(property, "InquiryEnumAsStringAttribute") is not null)
@@ -203,7 +203,7 @@ internal static class EntityProcessor
                 }
             }
 
-            // W7 DDL metadata. Named args (Length/SqlType/Precision/Scale/DefaultExpression/index flags)
+            // DDL metadata. Named args (Length/SqlType/Precision/Scale/DefaultExpression/index flags)
             // live on InquiryColumnAttribute, which InquiryForeignKeyAttribute also inherits. When a
             // property is mapped solely by [InquiryForeignKey] (no separate [InquiryColumn]/[InquiryKey]),
             // read those named args off the FK attribute so e.g. Length is honored on the FK column.
@@ -218,7 +218,7 @@ internal static class EntityProcessor
             var defaultExpression = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "DefaultExpression") : null;
             var (foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
 
-            // W10b: a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
+            // a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
             // converter) maps a non-primitive property to/from a provider primitive.
             var converter = ResolveConverter(property, columnAttribute, typeData, entitySymbol, diagnostics);
 
@@ -234,7 +234,7 @@ internal static class EntityProcessor
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 EnumAsString = enumAsString,
-                // W10b: a converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
+                // a converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
                 TypeClass = converter is not null ? MapSpecialType(converter.ProviderSpecialType) : MapTypeClass(typeData),
                 IsNullable = !isKey && typeData.IsNullable,
                 SqlType = sqlType,
@@ -264,7 +264,7 @@ internal static class EntityProcessor
     }
 
     /// <summary>
-    /// W7: collapses a CLR type into the dialect-neutral <see cref="DbTypeClass"/> the DDL builder maps
+    /// Collapses a CLR type into the dialect-neutral <see cref="DbTypeClass"/> the DDL builder maps
     /// to a physical type. Enums collapse to their underlying integer class so DDL never special-cases them.
     /// </summary>
     private static DbTypeClass MapTypeClass(TypeData type)
@@ -293,7 +293,7 @@ internal static class EntityProcessor
     };
 
     /// <summary>
-    /// W10b: resolves the value converter for a column — an explicit <c>Converter = typeof(X)</c> (its
+    /// Resolves the value converter for a column — an explicit <c>Converter = typeof(X)</c> (its
     /// <c>IInquiryValueConverter&lt;,&gt;</c> provider type drives the read/write primitive), or
     /// <c>[InquiryJson]</c> (the built-in <c>InquiryJsonConverter&lt;T&gt;</c> over <c>string</c>).
     /// Returns null when neither applies; reports INQ037 when an explicit converter type does not
@@ -354,7 +354,7 @@ internal static class EntityProcessor
     }
 
     /// <summary>
-    /// W7: extracts the referenced (table, column) from an <c>[InquiryForeignKey]</c>. The 2-arg form is
+    /// Extracts the referenced (table, column) from an <c>[InquiryForeignKey]</c>. The 2-arg form is
     /// <c>(referencedTable, referencedColumn)</c>; the 3-arg form is <c>(localColumn, referencedTable,
     /// referencedColumn)</c>. Returns (null, null) when the property has no foreign-key attribute.
     /// </summary>

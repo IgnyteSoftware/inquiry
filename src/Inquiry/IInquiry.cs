@@ -12,7 +12,7 @@ namespace Inquiry;
 public interface IInquiry
 {
     /// <summary>
-    /// Gets whether a 0-row UPDATE/DELETE on an optimistic-concurrency token entity (W6) should throw
+    /// Gets whether a 0-row UPDATE/DELETE on an optimistic-concurrency token entity should throw
     /// <see cref="InquiryConcurrencyException"/> rather than report <see langword="false"/>. Generated
     /// stores for token entities read this at the mutation call site; non-token entities never reference
     /// it. Defaults to <see langword="false"/> so existing <see cref="IInquiry"/> implementations stay
@@ -161,7 +161,7 @@ public interface IInquiry
     }
 
     /// <summary>
-    /// W5: executes a command returning a single scalar value (COUNT/SUM/MIN/MAX/AVG). A null/DBNull
+    /// Executes a command returning a single scalar value (COUNT/SUM/MIN/MAX/AVG). A null/DBNull
     /// result maps to <c>default(T)</c> (e.g. <see langword="null"/> for a nullable T).
     /// </summary>
     /// <remarks>The default throws; <see cref="DefaultInquiry"/> implements it over the pipeline, so
@@ -171,7 +171,7 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Scalar execution requires the built-in DefaultInquiry.");
 
-    /// <summary>W5: scalar query binding parameters via a caller-supplied static delegate (fast path).</summary>
+    /// <summary>Scalar query binding parameters via a caller-supplied static delegate (fast path).</summary>
     Task<T> ExecuteScalarAsync<T, TArgs>(
         string commandText,
         TArgs args,

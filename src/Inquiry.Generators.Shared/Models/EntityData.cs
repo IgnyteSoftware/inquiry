@@ -27,19 +27,19 @@ internal sealed record EntityData(
     EquatableArray<DiagnosticData> Diagnostics)
 {
     /// <summary>
-    /// W8: the entity's single <c>[InquirySoftDelete]</c> column, or null when none is declared. Cached
+    /// The entity's single <c>[InquirySoftDelete]</c> column, or null when none is declared. Cached
     /// here so the store emitter can decide delete→update routing and SELECT filtering without rescanning.
     /// </summary>
     public ColumnData? SoftDeleteColumn { get; init; }
 
     /// <summary>
-    /// W6: the entity's single <c>[InquiryConcurrencyToken]</c> column, or null when none is declared.
+    /// The entity's single <c>[InquiryConcurrencyToken]</c> column, or null when none is declared.
     /// Cached so the store emitter can emit the conflict-throw branch only for token entities.
     /// </summary>
     public ColumnData? ConcurrencyToken { get; init; }
 
     /// <summary>
-    /// W7: whether generated <c>CREATE TABLE</c> DDL emits <c>FOREIGN KEY</c> constraints for this
+    /// Whether generated <c>CREATE TABLE</c> DDL emits <c>FOREIGN KEY</c> constraints for this
     /// entity's foreign-key columns (<see cref="InquiryTableAttribute.GenerateForeignKeys"/>). Default true.
     /// </summary>
     public bool GenerateForeignKeys { get; init; } = true;

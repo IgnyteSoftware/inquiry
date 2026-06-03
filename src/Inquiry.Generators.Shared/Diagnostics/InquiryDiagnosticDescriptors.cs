@@ -5,7 +5,7 @@ namespace Inquiry.Generators.Diagnostics;
 internal static class InquiryDiagnosticDescriptors
 {
     // ---------------------------------------------------------------------------------------------
-    // DIAGNOSTIC-ID REGISTRY (Phase 0 / F7)
+    // DIAGNOSTIC-ID REGISTRY
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ021.
     // Historically skipped (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015.
@@ -13,16 +13,16 @@ internal static class InquiryDiagnosticDescriptors
     // RESERVED RANGES for in-flight feature workstreams so parallel branches do not collide on the
     // next free ID. Claim from your reserved block; if you need more, extend past INQ040 and update
     // this table in the same commit.
-    //   INQ018–INQ019  W1  Richer WHERE predicates      (e.g. bad IN collection, op/type mismatch)  [IN USE]
-    //   INQ020–INQ021  W2  ORDER BY + pagination         (paging requires ORDER BY, unknown order field) [IN USE]
-    //   INQ022–INQ023  W3  Batch & bulk operations
-    //   INQ024–INQ027  W5  Projections + aggregations    (INQ024 no columns, INQ025 not mapped, INQ026 entity mismatch, INQ027 soft-delete) [IN USE]
-    //   INQ028–INQ029  W6  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
-    //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per W8 convention)
-    //   INQ030–INQ032  W7  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length, INQ032 indexed string needs Length) [IN USE]
-    //   INQ033–INQ034  W8  Soft deletes
-    //   INQ035         W9  Full-text search              (unsupported by dialect)
-    //   INQ036–INQ038  W10 JSON/array/value-converter column types
+    //   INQ018–INQ019  Richer WHERE predicates      (e.g. bad IN collection, op/type mismatch)  [IN USE]
+    //   INQ020–INQ021  ORDER BY + pagination         (paging requires ORDER BY, unknown order field) [IN USE]
+    //   INQ022–INQ023  Batch & bulk operations
+    //   INQ024–INQ027  Projections + aggregations    (INQ024 no columns, INQ025 not mapped, INQ026 entity mismatch, INQ027 soft-delete) [IN USE]
+    //   INQ028–INQ029  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
+    //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per convention)
+    //   INQ030–INQ032  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length, INQ032 indexed string needs Length) [IN USE]
+    //   INQ033–INQ034  Soft deletes
+    //   INQ035         Full-text search              (unsupported by dialect)
+    //   INQ036–INQ038  JSON/array/value-converter column types
     //   INQ039         Graceful degradation: operation unsupported by the active dialect (stub + warning) [IN USE]
     // ---------------------------------------------------------------------------------------------
 

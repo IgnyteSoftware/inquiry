@@ -91,7 +91,7 @@ public sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 
             if (parameter.Value is bool boolValue)
             {
-                // Also reset DbType: the shared binder stamps DbType.Boolean (W4 DbType metadata), and
+                // Also reset DbType: the shared binder stamps DbType.Boolean (DbType metadata), and
                 // ODP.NET honors that over the value, so converting the value alone still binds a BOOLEAN.
                 parameter.Value = boolValue ? 1 : 0;
                 parameter.DbType = System.Data.DbType.Int32;

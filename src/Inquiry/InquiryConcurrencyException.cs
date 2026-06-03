@@ -1,7 +1,7 @@
 namespace Inquiry;
 
 /// <summary>
-/// Thrown when an optimistic-concurrency conflict is detected on a token entity (W6): a generated
+/// Thrown when an optimistic-concurrency conflict is detected on a token entity: a generated
 /// UPDATE or DELETE affected 0 rows because the row's concurrency token no longer matched the value
 /// last read. Only raised when <see cref="InquiryOptions.ThrowOnConcurrencyConflict"/> is enabled;
 /// otherwise the mutation simply reports <c>false</c>.

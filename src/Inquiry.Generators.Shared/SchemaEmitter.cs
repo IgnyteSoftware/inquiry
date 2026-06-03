@@ -11,13 +11,13 @@ using System.Text;
 namespace Inquiry.Generators;
 
 /// <summary>
-/// W7: emits a per-assembly <c>InquiryGeneratedSchema.g.cs</c> exposing the full <c>CREATE TABLE</c>
+/// Emits a per-assembly <c>InquiryGeneratedSchema.g.cs</c> exposing the full <c>CREATE TABLE</c>
 /// DDL for every mapped entity as a single <c>const string</c>. Tables are ordered so a referenced
 /// table is created before the table that references it (topological sort over foreign keys; self
 /// references and cross-assembly references do not constrain ordering).
 /// </summary>
 /// <remarks>
-/// Phase A (DDL generation) only. ALTER/diff, versioning, a history table, and an apply runner are out
+/// DDL generation only. ALTER/diff, versioning, a history table, and an apply runner are out
 /// of scope — feed <see cref="Ddl"/> into a migration runner (e.g. DbUp) as the initial script, or use
 /// it for first-run/dev table creation.
 /// </remarks>
@@ -77,7 +77,7 @@ internal static class SchemaEmitter
         source.AppendLine("#nullable enable");
         source.AppendLine($"namespace {GeneratedNamespace};");
         source.AppendLine();
-        source.AppendLine("/// <summary>Generated CREATE TABLE DDL for every Inquiry entity in this assembly (W7 Phase A).</summary>");
+        source.AppendLine("/// <summary>Generated CREATE TABLE DDL for every Inquiry entity in this assembly.</summary>");
         // internal (not public): each assembly emits its own copy, so a referencing assembly that also
         // uses Inquiry does not collide on a single public Inquiry.Generated.InquiryGeneratedSchema type.
         source.AppendLine($"internal static class {GeneratedClassName}");
@@ -90,7 +90,7 @@ internal static class SchemaEmitter
     }
 
     /// <summary>
-    /// W7: reports generation-time errors for key columns that would produce invalid DDL — a
+    /// Reports generation-time errors for key columns that would produce invalid DDL — a
     /// database-generated key that is not an integer (INQ030), and an unbounded string key on a dialect
     /// that cannot key on unbounded text (INQ031). Location-less (the cached model carries no symbol).
     /// </summary>

@@ -7,7 +7,7 @@ namespace Inquiry.Generators.Infrastructure;
 /// Pure, symbol-free mapping from a <see cref="TypeData"/> to the fully-qualified
 /// <c>System.Data.DbType</c> enum-member expression emitted onto generated parameters.
 /// Threading the compile-time DbType into binders gives <c>DbCommand.Prepare()</c> the fixed
-/// parameter types it needs (W4); without it providers re-infer the type on every call.
+/// parameter types it needs; without it providers re-infer the type on every call.
 /// </summary>
 /// <remarks>
 /// <see cref="TypeData.SpecialType"/> and <see cref="TypeData.EnumUnderlyingSpecialType"/> are
@@ -29,7 +29,7 @@ internal static class DbTypeMapper
         return Map(special);
     }
 
-    /// <summary>W10b: DbType expression for a converter's provider <see cref="SpecialType"/>, or null.</summary>
+    /// <summary>DbType expression for a converter's provider <see cref="SpecialType"/>, or null.</summary>
     public static string? TryGetDbTypeForSpecialType(SpecialType specialType) => Map(specialType);
 
     private static string? Map(SpecialType specialType) => specialType switch

@@ -5,7 +5,9 @@
 > pipeline) read [`../README.md`](../README.md). For behavioral coding guidelines read
 > [`../CLAUDE.md`](../CLAUDE.md). For the design/dependency record of past work see [`plans/README.md`](plans/README.md).
 
-- **Last reconciled:** 2026-06-02, on branch `feature/test-coverage-and-bench-expansion` (pending merge to `main`).
+- **Last reconciled:** 2026-06-02, on `main`. Latest work merged: the cross-provider apples-to-apples
+  benchmark buildout (per-dialect generated-store benchmarks for all 5 engines) and the
+  `SequentialAccess` read-streaming optimization (see §3.F).
 - **One-line:** Inquiry is a compile-time-SQL micro-ORM — a Roslyn incremental source generator that
   bakes every SQL statement as a `const string` at build time. The runtime ships zero SQL.
 
@@ -41,21 +43,22 @@ Every workstream in [`plans/README.md`](plans/README.md) is implemented and merg
 | W3 | Batch & bulk operations ✅ | W10 | JSON / array / value-converter columns ✅ |
 | W4 | Automatic prepared-statement reuse ✅ | | |
 
-### Live-runtime testing — Phases 0–7 **DONE**, Phase 8 deferred
+### Live-runtime testing — Phases 0–8 **DONE**
 
 The [live-runtime testing plan](superpowers/plans/2026-06-01-live-runtime-testing.md) delivered:
 per-dialect compilation of the shared Northwind source, one Testcontainers container per provider test
 assembly (graceful skip when Docker is absent), a faithful fully-indexed Northwind schema, a
 catalog-introspection **fidelity guardrail** ([`tests/Inquiry.IntegrationTesting`](../tests/Inquiry.IntegrationTesting)),
 verification of Inquiry's *own* generated DDL (`InquiryGeneratedSchema.Ddl`) against each live engine,
-and CI. Only the **live-environment benchmark (Phase 8/9)** remains — intentionally deferred (see §3).
+and CI. The **live-environment benchmark (Phase 8)** is now delivered as well — see §3.D #9 and the
+cross-provider apples-to-apples buildout in §3.F.
 
 ### Test status (snapshot as of `fcfaa3e`, net8.0)
 
 | Suite | Tests | Needs Docker? |
 |---|---|---|
 | `Inquiry.Generators.Tests` (emission + per-dialect SQL) | 165 | no |
-| `Inquiry.Tests` (runtime pipeline, binding, transactions) | 92 | no |
+| `Inquiry.Tests` (runtime pipeline, binding, transactions) | 95 | no |
 | `Inquiry.Sqlite.Tests` (in-process e2e + fidelity) | 104 | no |
 | `Inquiry.PostgreSql.Tests` | 73 | yes |
 | `Inquiry.SqlServer.Tests` | 68 (+3 FTS skips, see below) | yes |
@@ -259,6 +262,37 @@ Nothing blocks `main`; everything below is follow-up. Tracked items use the in-s
     (`KeysetSingleColumnEmitsSeekAndFirstPageQueries` et al., 165 green); verified live on all four engines
     (`PaginationIntegrationTests` ×4, 8 each) and by the benchmark — Inquiry keyset is now flat (~150 µs at
     both 1k and 100k, ratio 1.00 vs raw ADO.NET).
+
+### F. Cross-provider apples-to-apples benchmarks + read streaming — 2026-06-02
+
+16. **✅ Resolved (this session) — per-dialect generated-store benchmarks for all 5 engines.** The benchmark
+    suite now compares ADO.NET / Inquiry / Dapper / EF Core on the *same* operations across **SQLite,
+    PostgreSQL, MySQL, SQL Server, and Oracle** (Oracle was previously missing). Each networked dialect has
+    its own benchmark project (`benchmarks/Inquiry.Benchmarks.{PostgreSql,MySql,SqlServer,Oracle}`) that
+    references exactly one dialect runtime and link-compiles the Northwind source, so it measures the real
+    **compile-time generated store** (`_db.Shippers.SelectByKeyAsync`, etc.) rather than the ad-hoc path.
+    The harness was optimized to one process-wide Testcontainer per dialect (was ~24), seeded once.
+    **Fairness floor:** the ADO.NET `[Baseline]` performs the identical ADO.NET work the wrappers do
+    internally (matching `CommandBehavior` and a non-pooled EF `DbContextFactory`); the regression gate is
+    that no wrapper prints a sub-~1.0× ratio. Headline: Inquiry allocates at raw-ADO levels (≈1.0–1.5×
+    across all engines, lowest of any wrapper), EF Core 1.6–22×.
+17. **✅ Resolved (this session) — generated-store reads stream with `SequentialAccess`.** The struct-materializer
+    (generated-store) read overloads in both pipelines now pass `CommandBehavior.SequentialAccess` so the
+    provider streams each row forward-only instead of buffering it (generated materializers read every column
+    once in ascending ordinal order, so it is safe); the class-materializer (ad-hoc) overloads stay buffered
+    because a caller-supplied `IInquiryEntityMaterializer<T>` may read out of order. This roughly halves
+    large-read allocation: SQL Server `SelectAll` (1000 rows) dropped 5241 → 2959 KB (now 1.01× vs ADO, beating
+    Dapper). All benchmark ADO baselines pass the same flags so the floor stays honest. Verified against a
+    strict real provider (Npgsql, 73 integration tests) + 104 SQLite + 95 unit tests; new spy test
+    `SequentialAccessReadBehaviorTests` pins the struct-vs-class boundary.
+
+### G. Upcoming — full-Northwind test & benchmark coverage
+
+18. **Not started — expand the test and benchmark suites to cover *all* of Northwind.** The current suites
+    exercise a representative subset of entities/operations across the five engines. The follow-up is to
+    replicate the full Northwind entity/relationship surface (all tables, all CRUD + read shapes) across
+    ADO.NET / Inquiry / Dapper / EF Core in both tests and benchmarks, so every feature is compared
+    apples-to-apples on every entity. Deferred; nothing blocks `main`.
 
 ---
 

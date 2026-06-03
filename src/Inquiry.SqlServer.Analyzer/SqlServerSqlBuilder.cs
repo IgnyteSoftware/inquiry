@@ -185,7 +185,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;
 
-    // ---- W7 DDL --------------------------------------------------------------------------------
+    // ---- DDL --------------------------------------------------------------------------------
 
     // SQL Server cannot key on NVARCHAR(MAX); a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
