@@ -14,7 +14,7 @@ public static class InquiryServiceCollectionExtensions
     /// Registers Inquiry runtime services and generated stores/materializers.
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services)
-        => AddInquiryCore(services, configureOptions: null);
+        => AddInquiryCore(services, configureOptions: null, additionalAssemblies: null);
 
     /// <summary>
     /// Registers Inquiry runtime services and generated stores/materializers, applying the supplied
@@ -27,10 +27,51 @@ public static class InquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(configureOptions));
         }
 
-        return AddInquiryCore(services, configureOptions);
+        return AddInquiryCore(services, configureOptions, additionalAssemblies: null);
     }
 
-    private static IServiceCollection AddInquiryCore(IServiceCollection services, Action<InquiryOptions>? configureOptions)
+    /// <summary>
+    /// Registers Inquiry runtime services and scans the supplied assemblies (in addition to
+    /// <see cref="AppDomain.CurrentDomain"/>) for generated <see cref="IInquiryServiceRegistration"/>
+    /// implementations. Use this overload when stores live in a referenced assembly that is not
+    /// guaranteed to be loaded by the time AddInquiry runs — passing it explicitly forces the scan.
+    /// Assemblies passed explicitly are deduped against the AppDomain scan, so passing one that is
+    /// already loaded is a no-op (its registration still runs exactly once).
+    /// </summary>
+    public static IServiceCollection AddInquiry(this IServiceCollection services, params Assembly[] additionalAssemblies)
+    {
+        if (additionalAssemblies is null)
+        {
+            throw new ArgumentNullException(nameof(additionalAssemblies));
+        }
+
+        return AddInquiryCore(services, configureOptions: null, additionalAssemblies);
+    }
+
+    /// <summary>
+    /// Registers Inquiry runtime services with the supplied <see cref="InquiryOptions"/> configuration
+    /// and scans the supplied assemblies (in addition to <see cref="AppDomain.CurrentDomain"/>) for
+    /// generated <see cref="IInquiryServiceRegistration"/> implementations. See the <see cref="Assembly"/>-
+    /// only overload for the dedupe semantics.
+    /// </summary>
+    public static IServiceCollection AddInquiry(this IServiceCollection services, Action<InquiryOptions> configureOptions, params Assembly[] additionalAssemblies)
+    {
+        if (configureOptions is null)
+        {
+            throw new ArgumentNullException(nameof(configureOptions));
+        }
+        if (additionalAssemblies is null)
+        {
+            throw new ArgumentNullException(nameof(additionalAssemblies));
+        }
+
+        return AddInquiryCore(services, configureOptions, additionalAssemblies);
+    }
+
+    private static IServiceCollection AddInquiryCore(
+        IServiceCollection services,
+        Action<InquiryOptions>? configureOptions,
+        Assembly[]? additionalAssemblies)
     {
         if (services is null)
         {
@@ -43,15 +84,39 @@ public static class InquiryServiceCollectionExtensions
 
         services.TryAddScoped<IInquiry, DefaultInquiry>();
         services.TryAddScoped<IInquiryRequestPipeline, InquiryRequestPipeline>();
-        AddGeneratedServices(services);
+        AddGeneratedServices(services, additionalAssemblies);
         return services;
     }
 
-    private static void AddGeneratedServices(IServiceCollection services)
+    private static void AddGeneratedServices(IServiceCollection services, Assembly[]? additionalAssemblies)
     {
+        // Dedupe by Assembly identity: a caller may pass an Assembly the AppDomain scan already
+        // visits, and we must not invoke its registration twice (downstream service registrations
+        // typically use TryAdd, which would silently swallow the duplicate, but generated stores
+        // include collection-aware Add calls in some shapes — better not to rely on that).
+        var seen = new HashSet<Assembly>();
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
-            if (assembly.IsDynamic)
+            if (assembly.IsDynamic || !seen.Add(assembly))
+            {
+                continue;
+            }
+
+            foreach (var registrationType in GetRegistrationTypes(assembly))
+            {
+                var registration = (IInquiryServiceRegistration?)Activator.CreateInstance(registrationType, nonPublic: true);
+                registration?.AddServices(services);
+            }
+        }
+
+        if (additionalAssemblies is null)
+        {
+            return;
+        }
+
+        foreach (var assembly in additionalAssemblies)
+        {
+            if (assembly is null || assembly.IsDynamic || !seen.Add(assembly))
             {
                 continue;
             }

@@ -1,4 +1,5 @@
 using Inquiry.Connections;
+using Inquiry.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Oracle.DependencyInjection;
@@ -18,6 +19,7 @@ public static class OracleInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Oracle");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new OracleInquiryConnectionFactory(connectionString));
         return services;
     }

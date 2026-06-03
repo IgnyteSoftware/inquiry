@@ -1,4 +1,5 @@
 using Inquiry.Connections;
+using Inquiry.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.PostgreSql.DependencyInjection;
@@ -18,6 +19,7 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(connectionString));
         return services;
     }
@@ -41,6 +43,7 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(configure));
         }
 
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
         var options = new PostgreSqlInquiryOptions();
         configure(options);
 
