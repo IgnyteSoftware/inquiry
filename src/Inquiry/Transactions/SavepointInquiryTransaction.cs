@@ -78,16 +78,27 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
 
         try
         {
-            await _outerPipeline.ReleaseSavepointAsync(_savepointName, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _outerPipeline.ReleaseSavepointAsync(_savepointName, cancellationToken).ConfigureAwait(false);
+                _committed = true;
+            }
+            catch (NotSupportedException)
+            {
+                // Oracle: savepoints cannot be explicitly released. They are released implicitly
+                // when the outer transaction commits / rolls back. Treat as committed locally so
+                // Dispose doesn't attempt a rollback.
+                _committed = true;
+            }
         }
-        catch (NotSupportedException)
+        finally
         {
-            // Oracle: savepoints cannot be explicitly released. They are released implicitly
-            // when the outer transaction commits / rolls back. Treat as committed locally so
-            // Dispose doesn't attempt a rollback.
+            // Even if ReleaseSavepointAsync threw something other than NotSupportedException
+            // (e.g. the outer transaction was rolled back externally, or the savepoint name is
+            // gone), the handle is finished. Marking _closed fails-fast subsequent forwarding
+            // calls and stops DisposeAsync from attempting another rollback-to-savepoint.
+            _closed = true;
         }
-        _committed = true;
-        _closed = true;
     }
 
     /// <inheritdoc />
@@ -96,8 +107,15 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
         if (_disposed) throw new ObjectDisposedException(nameof(SavepointInquiryTransaction));
         if (_closed) return;
 
-        await _outerPipeline.RollbackToSavepointAsync(_savepointName, cancellationToken).ConfigureAwait(false);
-        _closed = true;
+        try
+        {
+            await _outerPipeline.RollbackToSavepointAsync(_savepointName, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Same finally-Close pattern as CommitAsync: even on failure the handle is done.
+            _closed = true;
+        }
     }
 
     /// <inheritdoc />

@@ -192,4 +192,21 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.NotNull(await store.SelectByKeyAsync("OUTER"));
         Assert.Null(await store.SelectByKeyAsync("INNER"));
     }
+
+    [SkippableFact]
+    public async Task UseAfterCloseOnRealProviderThrowsObjectDisposed()
+    {
+        // Verifies the closed-handle safety against the real SqlClient provider.
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "UseAfterClose");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.CommitAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.ExecuteAsync("SELECT 1"));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.QueryListAsync<Customer>(
+            "SELECT [CustomerID], [CompanyName], [ContactName], [ContactTitle], [Address], [City], [Region], [PostalCode], [Country], [Phone], [Fax] FROM [Customers]"));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.BeginTransactionAsync());
+    }
 }

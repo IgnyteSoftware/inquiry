@@ -45,17 +45,36 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     public override async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));
-        await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        _committed = true;
-        Close();
+        try
+        {
+            await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _committed = true;
+        }
+        finally
+        {
+            // Whether the underlying CommitAsync succeeded or threw, this handle is now finished:
+            // the slot's Pipeline must be nulled (so subsequent ambient store calls fall through
+            // to the default pipeline instead of routing to a doomed transactional one), and
+            // _closed must be set (so direct tx.X(...) calls trip ThrowIfClosed instead of
+            // silently operating on a corrupted transaction). If commit threw, _committed stays
+            // false and DisposeAsync will attempt a best-effort Rollback (already try/catch-wrapped).
+            Close();
+        }
     }
 
     /// <inheritdoc />
     public override async Task RollbackAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));
-        await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-        Close();
+        try
+        {
+            await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Same as CommitAsync: even if the underlying RollbackAsync threw, the handle is done.
+            Close();
+        }
     }
 
     /// <inheritdoc />
