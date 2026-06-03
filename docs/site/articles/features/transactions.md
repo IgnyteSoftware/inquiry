@@ -45,25 +45,29 @@ All three styles produce identical SQL on the identical connection in the identi
 
 ### Use-after-close behavior
 
-The three styles diverge in one important way — what happens if you call them *after* `CommitAsync` / `RollbackAsync` / `DisposeAsync`:
+What happens if you call any of these styles *after* `CommitAsync` / `RollbackAsync` / `DisposeAsync`:
 
 | Style | After close |
 |---|---|
-| **A. `tx.X(...)`** | ✅ Throws `ObjectDisposedException` — fails fast. |
-| **B. `tx.Inquiry.X(...)`** | ⚠️ Does NOT throw — `tx.Inquiry` is the root singleton; the ambient slot has been cleared, so the call silently routes to the non-transactional default pipeline (auto-commits). |
-| **C. `store.X(...)`** (generated store from DI) | ⚠️ Same as B — stores hold the root singleton; calls after the tx closes silently auto-commit. |
+| **A. `tx.X(...)`** | ✅ Throws `ObjectDisposedException`. |
+| **B. `tx.Inquiry.X(...)`** | ✅ Throws `ObjectDisposedException`. `tx.Inquiry` is a transaction-scoped wrapper — not the root singleton — precisely so that this case fails fast. |
+| **C. `store.X(...)`** (generated store from DI) | ⚠️ Does NOT throw — stores hold the root `IInquiry` singleton from DI, which is intentionally usable after the tx closes (it has no knowledge of the tx). Calls after the tx closes silently route to the non-transactional default pipeline. |
 
-**Prefer Style A when you want use-after-close protection.** Styles B and C are intentionally permissive so that legitimate post-tx work in the same async scope keeps working (you can do `await using (var tx = ...) { ... }` and then call stores normally — those calls are non-transactional, as expected).
+**Styles A and B both fail fast** — any call you make through the transaction handle (including via its `Inquiry` property) after close throws cleanly. This is the safe surface.
 
-If you do need fail-fast protection on store calls, scope the store call to a transaction-bounded block and end the scope at `CommitAsync`:
+**Style C is intentionally permissive.** A store resolved from DI doesn't know about any individual transaction — it's a singleton that ambient-routes through whatever's in the AsyncLocal slot when called. After the tx closes, the slot is cleared, and the store falls through to the default pipeline. This is what makes the natural pattern work:
 
 ```csharp
-await using var tx = await inquiry.BeginTransactionAsync();
-await customers.InsertAsync(customer);   // in tx
-await orders.InsertAsync(order);         // in tx
-await tx.CommitAsync();
-// don't make further store calls in this scope — let the using-block exit
+await using (var tx = await inquiry.BeginTransactionAsync())
+{
+    await customers.InsertAsync(c1);    // in tx
+    await tx.CommitAsync();
+}
+// after the using-block exits, the slot is cleared
+await customers.InsertAsync(c2);         // non-transactional, as expected
 ```
+
+The unfortunate consequence: a store call *between* `tx.CommitAsync()` and the using-block exit will silently auto-commit. If you need to enforce "no more work after commit," structure your code so the commit is the last statement before the using-block exits — or use Styles A / B for any post-commit calls and let them throw.
 
 ## How it works (the ambient mechanism)
 
