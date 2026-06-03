@@ -53,6 +53,59 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             && _connectionFactory.SupportsPersistentPreparedStatements;
     }
 
+    /// <summary>
+    /// The underlying database transaction. Internal-only because savepoint creation is the
+    /// only legitimate consumer (<see cref="Inquiry.Transactions.SavepointInquiryTransaction"/>);
+    /// regular query/execute paths go through the pipeline methods that enlist commands automatically.
+    /// </summary>
+    internal DbTransaction Transaction => _transaction;
+
+    // ---- Savepoint primitives ------------------------------------------------------------
+    //
+    // Wrap DbTransaction.SaveAsync / RollbackAsync(name) / ReleaseAsync(name) with the same
+    // _inFlight guard as data operations: a savepoint is a SQL statement on the connection, so it
+    // would corrupt an in-flight reader / writer if two ops touched the connection at once. The
+    // try/finally ensures _inFlight is always released even if the provider throws.
+
+    internal async Task SaveSavepointAsync(string savepointName, CancellationToken cancellationToken)
+    {
+        EnterInFlight();
+        try
+        {
+            await _transaction.SaveAsync(savepointName, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
+    internal async Task ReleaseSavepointAsync(string savepointName, CancellationToken cancellationToken)
+    {
+        EnterInFlight();
+        try
+        {
+            await _transaction.ReleaseAsync(savepointName, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
+    internal async Task RollbackToSavepointAsync(string savepointName, CancellationToken cancellationToken)
+    {
+        EnterInFlight();
+        try
+        {
+            await _transaction.RollbackAsync(savepointName, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
     private bool HasInterceptors => _interceptors.Length > 0;
 
     /// <summary>

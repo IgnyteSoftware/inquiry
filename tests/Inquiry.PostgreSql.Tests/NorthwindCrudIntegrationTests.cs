@@ -164,4 +164,31 @@ public sealed class NorthwindCrudIntegrationTests
         Assert.NotNull(await store.SelectByKeyAsync("COMM1"));
         Assert.Null(await store.SelectByKeyAsync("ROLL1"));
     }
+
+    [SkippableFact]
+    public async Task NestedSavepointRollbackPreservesOuterChanges()
+    {
+        // Proves savepoint nesting works against the real Npgsql provider: outer insert
+        // commits, inner savepoint rollback (ROLLBACK TO SAVEPOINT) reverts only the inner row.
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "tx_nested");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await using (var outer = await inquiry.BeginTransactionAsync())
+        {
+            await store.InsertAsync(new Customer { CustomerID = "OUTER", CompanyName = "Outer" });
+
+            await using (var inner = await outer.BeginTransactionAsync())
+            {
+                await store.InsertAsync(new Customer { CustomerID = "INNER", CompanyName = "Inner" });
+                await inner.RollbackAsync();
+            }
+
+            await outer.CommitAsync();
+        }
+
+        Assert.NotNull(await store.SelectByKeyAsync("OUTER"));
+        Assert.Null(await store.SelectByKeyAsync("INNER"));
+    }
 }
