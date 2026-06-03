@@ -43,6 +43,28 @@ await customerStore.UpdateAsync(customer);   // routes through the ambient pipel
 
 All three styles produce identical SQL on the identical connection in the identical transaction. Style A is ergonomic for ad-hoc SQL; Style C is what you'll use most. Style B is the escape hatch for the few advanced overloads that aren't surfaced on `IInquiryTransaction` directly (the struct-materializer / TArgs binder paths generated stores use internally).
 
+### Use-after-close behavior
+
+The three styles diverge in one important way — what happens if you call them *after* `CommitAsync` / `RollbackAsync` / `DisposeAsync`:
+
+| Style | After close |
+|---|---|
+| **A. `tx.X(...)`** | ✅ Throws `ObjectDisposedException` — fails fast. |
+| **B. `tx.Inquiry.X(...)`** | ⚠️ Does NOT throw — `tx.Inquiry` is the root singleton; the ambient slot has been cleared, so the call silently routes to the non-transactional default pipeline (auto-commits). |
+| **C. `store.X(...)`** (generated store from DI) | ⚠️ Same as B — stores hold the root singleton; calls after the tx closes silently auto-commit. |
+
+**Prefer Style A when you want use-after-close protection.** Styles B and C are intentionally permissive so that legitimate post-tx work in the same async scope keeps working (you can do `await using (var tx = ...) { ... }` and then call stores normally — those calls are non-transactional, as expected).
+
+If you do need fail-fast protection on store calls, scope the store call to a transaction-bounded block and end the scope at `CommitAsync`:
+
+```csharp
+await using var tx = await inquiry.BeginTransactionAsync();
+await customers.InsertAsync(customer);   // in tx
+await orders.InsertAsync(order);         // in tx
+await tx.CommitAsync();
+// don't make further store calls in this scope — let the using-block exit
+```
+
 ## How it works (the ambient mechanism)
 
 `DefaultInquiry` holds an `AsyncLocal<AmbientTransactionSlot>` — a *holder reference*, not the pipeline directly. `BeginTransactionAsync`:

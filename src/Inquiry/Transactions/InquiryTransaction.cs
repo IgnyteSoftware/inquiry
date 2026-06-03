@@ -31,6 +31,20 @@ internal sealed class InquiryTransaction : IInquiryTransaction
     public IsolationLevel IsolationLevel => _transaction.IsolationLevel;
 
     /// <inheritdoc />
+    public void ThrowIfClosed()
+    {
+        // _closed is set on the first of Commit/Rollback/Dispose; _disposed is set by
+        // DisposeAsync. The union covers every terminal state of this transaction handle.
+        if (_closed || _disposed)
+        {
+            throw new ObjectDisposedException(
+                nameof(InquiryTransaction),
+                "This Inquiry transaction has already been committed, rolled back, or disposed. " +
+                "Calls routed through the transaction handle (tx.X) after close are not allowed.");
+        }
+    }
+
+    /// <inheritdoc />
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));

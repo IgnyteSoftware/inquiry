@@ -299,6 +299,133 @@ public sealed class TransactionIntegrationTests
         Assert.NotNull(await store.SelectByKeyAsync("FWD01"));
     }
 
+    // ---- tx.* fails fast on use-after-close (P1) -------------------------------------
+
+    [Fact]
+    public async Task TxExecuteAsyncAfterCommitThrowsObjectDisposed()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "CLS01", CompanyName = "Closed", Country = "USA" });
+        await tx.CommitAsync();
+
+        // Subsequent forwarding call must fail-fast rather than silently routing through the
+        // default (non-transactional) pipeline and auto-committing a write.
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTC1", CompanyName = "AfterCommit", Country = "USA" }));
+    }
+
+    [Fact]
+    public async Task TxExecuteAsyncAfterRollbackThrowsObjectDisposed()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.RollbackAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTR1", CompanyName = "AfterRollback", Country = "USA" }));
+    }
+
+    [Fact]
+    public async Task TxExecuteAsyncAfterDisposeThrowsObjectDisposed()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTD1", CompanyName = "AfterDispose", Country = "USA" }));
+    }
+
+    [Fact]
+    public async Task TxQueryAsyncAfterCloseThrowsObjectDisposed()
+    {
+        // Covers the read-path forwarding too (not just Execute).
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.CommitAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => tx.QueryListAsync<Inquiry.Northwind.Models.Customer>(
+                "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers"));
+    }
+
+    [Fact]
+    public async Task TxBeginTransactionAsyncAfterCloseThrowsObjectDisposed()
+    {
+        // Nested savepoint via the forwarding tx.BeginTransactionAsync must also fail-fast.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.CommitAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.BeginTransactionAsync());
+    }
+
+    [Fact]
+    public async Task SavepointExecuteAsyncAfterCommitThrowsObjectDisposed()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await using var outer = await inquiry.BeginTransactionAsync();
+        var inner = await outer.BeginTransactionAsync();
+        await inner.CommitAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => inner.ExecuteAsync(InsertCustomerSql, new { CustomerID = "SPCOM", CompanyName = "SavepointAfterCommit", Country = "USA" }));
+
+        await outer.CommitAsync();
+    }
+
+    [Fact]
+    public async Task SavepointExecuteAsyncAfterRollbackThrowsObjectDisposed()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await using var outer = await inquiry.BeginTransactionAsync();
+        var inner = await outer.BeginTransactionAsync();
+        await inner.RollbackAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => inner.ExecuteAsync(InsertCustomerSql, new { CustomerID = "SPROL", CompanyName = "SavepointAfterRollback", Country = "USA" }));
+
+        await outer.CommitAsync();
+    }
+
+    [Fact]
+    public async Task RootInquiryStillUsableAfterTransactionCloses()
+    {
+        // Regression guard: the fix protects tx.X (the per-tx-scoped forwarding methods).
+        // It MUST NOT make the root inquiry / DI-resolved stores throw after the tx closes
+        // — those legitimately fall through to the default non-transactional pipeline so
+        // post-tx code in the same scope can keep working.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await using (var tx = await inquiry.BeginTransactionAsync())
+        {
+            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "INTX1", CompanyName = "InTx", Country = "USA" });
+            await tx.CommitAsync();
+        }
+
+        // After the using-block exits, the slot's Pipeline is null. Calls on the root
+        // inquiry / on a DI-resolved store route through the default pipeline normally.
+        await store.InsertAsync(new Inquiry.Northwind.Models.Customer { CustomerID = "POST1", CompanyName = "PostTx" });
+        Assert.NotNull(await store.SelectByKeyAsync("POST1"));
+    }
+
     [Fact]
     public async Task TxQuerySingleOrDefaultAsyncForwardsToInquiry()
     {
