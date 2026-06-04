@@ -1186,7 +1186,12 @@ internal static class StoreOperationEmitter
     }
 
     private static bool ShouldUseInsertWhenKeyIsNull(EntityData entity)
-        => entity.Keys[0].Type.IsNullable && (entity.Keys[0].IsGenerated || entity.Keys[0].UseDatabaseDefault);
+        // GUID keys with UseDatabaseDefault are handled end-to-end by BuildGuidKeyUpsertReturningSql via
+        // @_inquiry_genkey. Diverting null-key calls to _sqlInsertReturning would use `WHERE Id = @Id`
+        // with @Id = NULL, which finds no row and returns null. Exclude GUID key entities so they always
+        // use the upsert path, which handles both null (COALESCE → UUID()) and non-null keys correctly.
+        => entity.Keys[0].Type.IsNullable && (entity.Keys[0].IsGenerated || entity.Keys[0].UseDatabaseDefault)
+           && entity.Keys[0].TypeClass != DbTypeClass.Guid;
 
     private static string GetParameterDeclaration(EquatableArray<ParameterData> parameters, bool enumeratorCancellation = false)
     {
