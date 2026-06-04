@@ -231,14 +231,14 @@ Upsert atomicity differs per dialect; the table below pins what each provider do
 | Dialect | Client-supplied key | Database-generated key |
 |---|---|---|
 | SQLite | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` (the key is included in the INSERT) — single statement, atomic |
-| PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | CTE with UPDATE, then conditional INSERT — multi-statement, but executed in one round trip; the `ON CONFLICT + RETURNING` form was avoided because it burns a sequence value on every UPDATE |
+| PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` on the explicit-key branch — atomic (the explicit key is supplied, so no sequence value is consumed) |
 | MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic |
-| SQL Server | `MERGE` (`WHEN MATCHED THEN UPDATE` / `WHEN NOT MATCHED THEN INSERT`) — atomic on the engine, but the well-known `MERGE`-without-`HOLDLOCK` race can produce a primary-key violation if two `MERGE`s land in the `WHEN NOT MATCHED` branch concurrently | IF/EXISTS check then UPDATE or INSERT — multi-statement, race window between the EXISTS and the INSERT |
+| SQL Server | `MERGE ... WITH (HOLDLOCK)` (`WHEN MATCHED THEN UPDATE` / `WHEN NOT MATCHED THEN INSERT`) — the `HOLDLOCK` hint serializes concurrent same-key upserts, so the statement is atomic with no duplicate-key race | `MERGE ... WITH (HOLDLOCK)` on the explicit-key branch — single atomic statement (the null/generate branch is a plain INSERT) |
 | Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ039` warning + throwing stub): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead |
 
 What the contract guarantees, on every dialect: **N concurrent upserts of the same key always end with exactly one row whose state matches one of the inputs**. The integration test `UpsertConcurrencyTests.ConcurrentUpsertsOfSameKeyEndInOneRowMatchingOneInput` pins this against each live provider.
 
-What it does **not** guarantee: that every parallel upsert succeeds. On SQL Server and Oracle, a duplicate-key failure on one parallel call is a known engine-level race and surfaces as an exception. If your app must serialize, wrap the upsert in an explicit transaction with an appropriate isolation level (`SERIALIZABLE`, or `READ COMMITTED` plus an advisory lock).
+What it does **not** guarantee on every dialect: that every parallel upsert succeeds. On Oracle, a duplicate-key failure on one parallel call is a known engine-level race and surfaces as an exception (SQL Server is now hardened with `HOLDLOCK`, so all parallel upserts succeed). If your app must serialize on Oracle, wrap the upsert in an explicit transaction with an appropriate isolation level (`SERIALIZABLE`, or `READ COMMITTED` plus an advisory lock).
 
 ## See also
 
