@@ -1,19 +1,17 @@
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.Tests.Fixtures;
-using System.Data.Common;
 
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
 /// Pins the concurrent-upsert contract on SQL Server (audit P2 #6). The client-supplied-key path
-/// uses <c>MERGE … WHEN MATCHED THEN UPDATE / WHEN NOT MATCHED THEN INSERT</c>. MERGE without
-/// <c>HOLDLOCK</c> has known race-condition concerns under concurrent writes (two MERGEs can both
-/// land in the WHEN NOT MATCHED branch and one fails on primary-key violation), but for the
-/// API-level contract — N concurrent upserts of the same key end with one row whose state matches
-/// one of the inputs — the invariant holds: any duplicate-key failure surfaces as an exception
-/// from one of the parallel calls, and the surviving row's content matches some input. This test
-/// asserts that contract.
+/// uses <c>MERGE … WHEN MATCHED THEN UPDATE / WHEN NOT MATCHED THEN INSERT</c> with <c>HOLDLOCK</c>.
+/// The <c>HOLDLOCK</c> hint takes a serializable range lock on the key for the duration of the
+/// MERGE, so concurrent same-key MERGEs are serialized: only the first reaches WHEN NOT MATCHED
+/// (insert) and the rest see the row and take WHEN MATCHED (update). No call races into a
+/// duplicate-key violation, so every concurrent upsert succeeds and the surviving row's content
+/// matches some input. This test asserts that contract.
 /// </summary>
 [Collection(SqlServerCollection.Name)]
 public sealed class UpsertConcurrencyTests
@@ -33,15 +31,9 @@ public sealed class UpsertConcurrencyTests
             .Select(i => new Customer { CustomerID = "CONC1", CompanyName = "Co_" + i, Country = "USA" })
             .ToArray();
 
-        // Tolerate the MERGE-without-HOLDLOCK race: a duplicate-key failure on one parallel call is
-        // a known SQL Server limitation, not a bug in the upsert path. The post-condition still
-        // requires that the surviving row matches some input.
-        var results = await Task.WhenAll(inputs.Select(async c =>
-        {
-            try { await store.UpsertAsync(c); return true; }
-            catch (DbException) { return false; }
-        }));
-        Assert.Contains(true, results);
+        // With MERGE + HOLDLOCK, every concurrent same-key upsert succeeds (the range lock serializes
+        // the WHEN NOT MATCHED inserts), so none should throw.
+        await Task.WhenAll(inputs.Select(c => store.UpsertAsync(c)));
 
         var loaded = await store.SelectByKeyAsync("CONC1");
         Assert.NotNull(loaded);
