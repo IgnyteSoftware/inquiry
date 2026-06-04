@@ -50,10 +50,10 @@
   over loaded assemblies; an `AddInquiry(params Assembly[])` overload already covers the
   not-yet-loaded-assembly case. A source-generated registration manifest would remove the runtime
   reflection and make the path trimming/AOT-safe.
-- **CI hardening.** Add skip-count gating (parse the emitted TRX and fail on unexpected provider-suite
-  skips, so a silently-skipped Docker suite can't stay green) and a scheduled full provider × TFM matrix
-  (provider integration currently runs on net8.0/net9.0 only). Consider a repo-wide warning-count
-  threshold now that the known warning sources are scoped-suppressed.
+- **CI: repo-wide warning gate.** Production projects are warnings-as-errors and the known warning
+  sources are scoped-suppressed; a repo-wide build-warning gate (extending coverage to the test projects)
+  would catch new warnings. *(Skip-gating and the scheduled full-TFM matrix are done — see
+  [Recently resolved](#recently-resolved).)*
 - **Optional Roslyn bump.** `Microsoft.CodeAnalysis.CSharp` is intentionally held at 4.8.0 to keep the
   analyzer's minimum-SDK floor low; revisit only if a newer Roslyn API is needed.
 - **Broaden relation-shape diagnostics.** `INQ040` (unknown relation foreign key) and `INQ041`
@@ -95,6 +95,9 @@ open:
 - **Hardening:** sample DB credentials are labeled local-dev-only with an `INQUIRY_SAMPLE_DB` override;
   the known build-warning sources are scoped-suppressed (production projects are warnings-as-errors).
 - **CI:** Oracle moved into the per-PR integration matrix (net8.0/net9.0); CI emits TRX artifacts.
+- **CI hardening:** a provider suite that can't start its Docker container now FAILS CI (via the
+  `INQUIRY_REQUIRE_DOCKER` guard) instead of silently skipping; a new scheduled weekly workflow runs the
+  full provider × net8.0/net9.0/net10.0 matrix (PR CI stays net8.0/net9.0).
 - **Generator robustness:** a mistyped collection-relation foreign key on a store with no eager method no
   longer crashes the generator (`NullReferenceException`) — relation SELECT consts are emitted only when a
   valid eager method consumes them; a bad relation that *is* eager-loaded still reports `INQ040`/`INQ041`.
