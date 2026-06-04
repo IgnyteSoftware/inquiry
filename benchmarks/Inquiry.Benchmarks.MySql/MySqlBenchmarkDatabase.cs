@@ -49,7 +49,7 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
         {
             if (_container is null)
             {
-                var container = new MySqlBuilder().WithImage("mysql:8.0").Build();
+                var container = new MySqlBuilder("mysql:8.0").Build();
                 await container.StartAsync().ConfigureAwait(false);
                 var connectionString = container.GetConnectionString();
 

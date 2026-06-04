@@ -49,8 +49,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
         {
             if (_container is null)
             {
-                var container = new MsSqlBuilder()
-                    .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+                var container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest")
                     .Build();
                 await container.StartAsync().ConfigureAwait(false);
                 var connectionString = container.GetConnectionString();

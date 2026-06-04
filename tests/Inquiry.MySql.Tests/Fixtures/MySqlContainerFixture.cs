@@ -20,7 +20,7 @@ public sealed class MySqlContainerFixture : IAsyncLifetime
     {
         try
         {
-            _container = new MySqlBuilder().WithImage("mysql:8.4").Build();
+            _container = new MySqlBuilder("mysql:8.4").Build();
             await _container.StartAsync();
             // The container's default user is a limited app account that cannot CREATE/USE the
             // throwaway databases each harness provisions. Connect as root (Testcontainers sets the

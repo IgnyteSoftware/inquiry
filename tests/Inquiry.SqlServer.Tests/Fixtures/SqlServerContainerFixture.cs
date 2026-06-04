@@ -19,7 +19,9 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
     {
         try
         {
-            _container = new MsSqlBuilder().Build();
+            // Testcontainers.MsSql 4.x obsoleted the parameterless builder ctor; pass the image
+            // explicitly. This is 4.12's own default tag (SQL Server 2022), pinned for determinism.
+            _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04").Build();
             await _container.StartAsync();
             AdminConnectionString = _container.GetConnectionString();
             IsAvailable = true;
