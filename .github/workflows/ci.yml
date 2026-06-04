@@ -44,8 +44,8 @@ jobs:
       matrix:
         provider: [PostgreSql, MySql, SqlServer, Oracle]
         # net8.0 is the LTS baseline every provider supports; net9.0 catches regressions on the
-        # current STS. Older TFMs (net6/net7) are covered by the unit-test build matrix above —
-        # no point spinning a Testcontainer per provider × per legacy TFM (audit P2 #10).
+        # current STS. net10.0 builds in the unit job; no point spinning a Testcontainer per
+        # provider × per extra TFM (audit P2 #10).
         tfm: [net8.0, net9.0]
     steps:
       - uses: actions/checkout@v5
