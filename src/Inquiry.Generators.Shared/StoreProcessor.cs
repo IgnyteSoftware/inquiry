@@ -883,7 +883,16 @@ internal static class StoreProcessor
             }
         }
 
-        if (relationChildEntities.Count > 0)
+        // Relation SELECT consts (_sql_<PropertyName>) are consumed only by the eager loaders
+        // (EmitSelectAllEager / EmitSelectOneByKeyEager). Emit them only when a valid eager method
+        // survives. This avoids dead consts and, crucially, avoids running the relation-const
+        // emission for a malformed relation (e.g. a typo'd collection foreign key) on a store with
+        // no eager method, which would otherwise null-forgive FindColumn(...) into an NRE. A bad
+        // relation that IS eager-loaded is reported as INQ040/INQ041 by TryValidateForEmit, which
+        // drops the eager method — so no valid eager method remains and this block is skipped.
+        var hasEagerMethod = valid.Any(static m =>
+            m.Method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager);
+        if (relationChildEntities.Count > 0 && hasEagerMethod)
         {
             var emittedRelations = new HashSet<string>();
             foreach (var relation in entity.Relations)

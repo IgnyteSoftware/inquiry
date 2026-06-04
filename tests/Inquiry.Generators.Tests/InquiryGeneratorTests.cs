@@ -1810,6 +1810,123 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void CollectionRelationWithMistypedForeignKeyButNoEagerMethodDoesNotCrashGenerator()
+    {
+        // Regression: a collection [InquiryRelation] with a typo'd foreign key, on a store that has
+        // NO eager method, previously crashed the generator with a NullReferenceException. The
+        // relation-const emission ran whenever the entity had relations (regardless of any eager
+        // consumer) and null-forgave FindColumn(child, "CustmrId") -> null at generator time.
+        // Relation consts are only consumed by eager loaders, so with no eager method none should be
+        // emitted and the generator must not crash.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Order")]
+            public sealed class Order
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public int? CustomerId { get; set; }
+            }
+
+            [InquiryTable("Customer")]
+            public sealed class Customer
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = "";
+
+                // Typo: the column on Order is "CustomerId", not "CustmrId". No eager method uses this.
+                [InquiryRelation("CustmrId")]
+                public List<Order> Orders { get; set; } = new();
+            }
+
+            public partial class CustomerStore : InquiryStore<Customer>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Customer> SelectAllAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        // No generator threw (previously an NRE).
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+
+        // The store still generates its non-eager method, and emits no relation const (nothing
+        // eager-loads the relation).
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("CustomerStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        Assert.DoesNotContain("_sql_Orders", generatedStore.GetText().ToString());
+    }
+
+    [Fact]
+    public void MistypedCollectionRelationWithSurvivingNonEagerMethodReportsDiagnosticWithoutCrashing()
+    {
+        // Same bad collection relation, but now the store ALSO declares an eager method. The eager
+        // method is dropped with INQ040 during validation; previously the relation-const emission
+        // still ran (because the surviving non-eager method kept the store alive) and crashed with
+        // an NRE. INQ040 must be reported AND the generator must not crash.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Order")]
+            public sealed class Order
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public int? CustomerId { get; set; }
+            }
+
+            [InquiryTable("Customer")]
+            public sealed class Customer
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = "";
+
+                [InquiryRelation("CustmrId")]
+                public List<Order> Orders { get; set; } = new();
+            }
+
+            public partial class CustomerStore : InquiryStore<Customer>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Customer> SelectAllAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Customer> SelectAllEagerAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ040");
+    }
+
+    [Fact]
     public void IncrementalPipelineCachesWhenUnrelatedSourceChanges()
     {
         // Proves the incremental rewrite delivers real caching: editing an unrelated file must not
