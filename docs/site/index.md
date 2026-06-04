@@ -61,3 +61,4 @@ partial class ShipperStore
 - **[Features](articles/features/crud.md)** — CRUD, pagination, soft delete, FTS, batch, and more.
 - **[Providers](articles/providers/sqlite.md)** — per-dialect notes for the 5 supported engines.
 - **[API reference](api/index.md)** — auto-generated from XML doc comments.
+- **[Develop](develop/index.md)** — project status, roadmap, and contributor docs.

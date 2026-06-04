@@ -4,3 +4,6 @@
 - name: API
   href: api/
   homepage: api/index.md
+- name: Develop
+  href: develop/
+  homepage: develop/index.md
