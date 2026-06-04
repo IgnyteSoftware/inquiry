@@ -79,11 +79,14 @@ open:
   (`offset >= 0`, `limit`/`pageSize > 0`, `pageSize < int.MaxValue`); malformed `OrderBy` directions are
   diagnosed (`INQ042`); projections are allowed on soft-delete entities and compose the active-row filter
   (`INQ027` retired).
-- **Upsert atomicity (SQL Server + PostgreSQL):** generated-key upserts are now atomic — SQL Server uses
-  `MERGE … WITH (HOLDLOCK)` (client and generated key), PostgreSQL uses `INSERT … ON CONFLICT` — so
-  concurrent same-key upserts no longer throw a spurious duplicate-key error; covered by live concurrency
-  + `uniqueidentifier`/`gen_random_uuid()` key tests. (SQLite/MySQL already atomic; Oracle generated-key
-  upsert remains unsupported, tracked separately.)
+- **Upsert atomicity & generated-key parity (all relational engines except Oracle):** generated-key upserts
+  are atomic — SQL Server uses `MERGE … WITH (HOLDLOCK)` (client and generated key), PostgreSQL uses
+  `INSERT … ON CONFLICT` — so concurrent same-key upserts no longer throw a spurious duplicate-key error;
+  covered by live concurrency + `uniqueidentifier`/`gen_random_uuid()` key tests. SQLite + MySQL parity is
+  now **test-proven** (live generate + concurrency tests). MySQL additionally supports a **database-generated
+  GUID key**: a `Guid?` `UseDatabaseDefault` key is generated server-side via `UUID()` (captured in a
+  `@_inquiry_genkey` user variable for the emulated returning), so Inquiry enables `AllowUserVariables=true`
+  on MySQL connections by default. (Oracle generated-key upsert remains unsupported, tracked separately.)
 - **Providers:** Oracle ref-cursor detection requires the generated `:rc` bind, so it no longer
   misclassifies ad-hoc PL/SQL.
 - **Dependency injection:** `AddInquiry(params Assembly[])` overloads added for stores in
