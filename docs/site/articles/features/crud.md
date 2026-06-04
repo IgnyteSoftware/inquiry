@@ -230,7 +230,7 @@ Upsert atomicity differs per dialect; the table below pins what each provider do
 
 | Dialect | Client-supplied key | Database-generated key |
 |---|---|---|
-| SQLite | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | Orchestrated UPDATE then conditional INSERT — multi-statement, race window between the two |
+| SQLite | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` (the key is included in the INSERT) — single statement, atomic |
 | PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | CTE with UPDATE, then conditional INSERT — multi-statement, but executed in one round trip; the `ON CONFLICT + RETURNING` form was avoided because it burns a sequence value on every UPDATE |
 | MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic |
 | SQL Server | `MERGE` (`WHEN MATCHED THEN UPDATE` / `WHEN NOT MATCHED THEN INSERT`) — atomic on the engine, but the well-known `MERGE`-without-`HOLDLOCK` race can produce a primary-key violation if two `MERGE`s land in the `WHEN NOT MATCHED` branch concurrently | IF/EXISTS check then UPDATE or INSERT — multi-statement, race window between the EXISTS and the INSERT |
