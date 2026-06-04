@@ -10,4 +10,7 @@ public partial class GeneratedItemStore : InquiryStore<GeneratedItem>
 
     [InquiryUpsert(ReturnEntity = true)]
     public partial Task<GeneratedItem?> UpsertReturningAsync(GeneratedItem item, CancellationToken cancellationToken = default);
+
+    [InquirySelectAll]
+    public partial Task<IReadOnlyList<GeneratedItem>> SelectAllAsync(CancellationToken cancellationToken = default);
 }
