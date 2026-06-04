@@ -1,7 +1,7 @@
 using Inquiry.DependencyInjection;
 using Inquiry.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
-using System.Reflection;
+using System.Linq;
 
 namespace Inquiry.Tests;
 
@@ -15,18 +15,28 @@ namespace Inquiry.Tests;
 /// overload's contract: an explicit assembly is scanned, its registrations run, and
 /// nothing in the core wiring (pipeline / IInquiry) regresses.
 /// </summary>
+/// <remarks>
+/// Assertions count <see cref="SentinelMarker"/> descriptors on each test's OWN
+/// <see cref="ServiceCollection"/> — never a process-global counter. <see cref="SentinelRegistration"/>
+/// is an <see cref="IInquiryServiceRegistration"/> in this assembly, so the AppDomain scan that runs on
+/// every AddInquiry call (from any test class) invokes it; a shared static counter would be mutated by
+/// tests running in parallel and flake. The per-test ServiceCollection is local, so the marker count is
+/// race-free.
+/// </remarks>
 public sealed class AddInquiryAssemblyOverloadTests
 {
+    private static int SentinelMarkerCount(IServiceCollection services)
+        => services.Count(sd => sd.ServiceType == typeof(SentinelMarker));
+
     [Fact]
     public void AddInquiryWithExplicitAssemblyRunsThatAssemblysRegistration()
     {
-        SentinelRegistration.AddServicesInvocations = 0;
         var services = new ServiceCollection();
 
         services.AddInquiry(typeof(SentinelRegistration).Assembly);
 
-        // The registration ran (its AddServices side-effect counter incremented).
-        Assert.True(SentinelRegistration.AddServicesInvocations > 0);
+        // The registration ran (it added its marker to this collection).
+        Assert.True(SentinelMarkerCount(services) >= 1);
 
         // And core service descriptors landed (IInquiry isn't resolved here because that needs an
         // IInquiryConnectionFactory from a provider package).
@@ -37,14 +47,13 @@ public sealed class AddInquiryAssemblyOverloadTests
     [Fact]
     public void AddInquiryWithExplicitAssemblyAndOptionsRunsThatAssemblysRegistration()
     {
-        SentinelRegistration.AddServicesInvocations = 0;
         var services = new ServiceCollection();
 
         var prepareCalled = false;
         services.AddInquiry(o => { o.PrepareStatements = PreparedStatementMode.Auto; prepareCalled = true; }, typeof(SentinelRegistration).Assembly);
 
         Assert.True(prepareCalled);
-        Assert.True(SentinelRegistration.AddServicesInvocations > 0);
+        Assert.True(SentinelMarkerCount(services) >= 1);
         var provider = services.BuildServiceProvider();
         Assert.Equal(PreparedStatementMode.Auto, provider.GetRequiredService<InquiryOptions>().PrepareStatements);
     }
@@ -52,27 +61,29 @@ public sealed class AddInquiryAssemblyOverloadTests
     [Fact]
     public void AddInquiryWithExplicitAssemblyDoesNotDoubleRegisterWhenAssemblyIsAlsoInAppDomain()
     {
-        // The test assembly is loaded into AppDomain, so the implicit AppDomain scan
-        // already discovers SentinelRegistration. Passing it explicitly too must not
-        // run AddServices twice (dedupe by Assembly identity).
-        SentinelRegistration.AddServicesInvocations = 0;
+        // The test assembly is loaded into AppDomain, so the implicit AppDomain scan already
+        // discovers SentinelRegistration. Passing it explicitly too must not run AddServices twice
+        // (dedupe by Assembly identity) — so exactly one marker lands in this collection.
         var services = new ServiceCollection();
 
         services.AddInquiry(typeof(SentinelRegistration).Assembly);
 
-        Assert.Equal(1, SentinelRegistration.AddServicesInvocations);
+        Assert.Equal(1, SentinelMarkerCount(services));
+    }
+
+    // Marker service the sentinel registration adds. Counting its descriptors on a per-test
+    // ServiceCollection measures how many times the registration ran against THAT collection.
+    private sealed class SentinelMarker
+    {
     }
 
     // Sentinel registration discovered via AppDomain scan and via explicit-Assembly overload alike.
     // Lives in this test assembly so we don't need a separate fixture project to exercise the API.
     private sealed class SentinelRegistration : IInquiryServiceRegistration
     {
-        // Per-test reset; the harness is single-threaded inside a fact.
-        internal static int AddServicesInvocations;
-
         public void AddServices(IServiceCollection services)
         {
-            AddServicesInvocations++;
+            services.AddSingleton<SentinelMarker>();
         }
     }
 }
