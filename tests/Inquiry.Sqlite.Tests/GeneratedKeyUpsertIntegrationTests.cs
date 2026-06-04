@@ -44,4 +44,18 @@ public sealed class GeneratedKeyUpsertIntegrationTests
         Assert.Equal(7, returned.Id);
         Assert.Equal("Updated", returned.Name);
     }
+
+    [Fact]
+    public async Task ExplicitKeyUpsertInsertsThenUpdatesLeavingOneRow()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Schemas.GeneratedItem, "GeneratedKeyUpsert");
+        var store = harness.GetRequiredService<GeneratedItemStore>();
+
+        await store.UpsertReturningAsync(new GeneratedItem { Id = 5, Name = "A" });
+        await store.UpsertReturningAsync(new GeneratedItem { Id = 5, Name = "B" });
+
+        var all = await store.SelectAllAsync();
+        Assert.Single(all);
+        Assert.Equal("B", all[0].Name);
+    }
 }
