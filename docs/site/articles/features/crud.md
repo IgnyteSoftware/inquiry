@@ -234,7 +234,7 @@ Upsert atomicity differs per dialect; the table below pins what each provider do
 | PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | CTE with UPDATE, then conditional INSERT — multi-statement, but executed in one round trip; the `ON CONFLICT + RETURNING` form was avoided because it burns a sequence value on every UPDATE |
 | MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic |
 | SQL Server | `MERGE` (`WHEN MATCHED THEN UPDATE` / `WHEN NOT MATCHED THEN INSERT`) — atomic on the engine, but the well-known `MERGE`-without-`HOLDLOCK` race can produce a primary-key violation if two `MERGE`s land in the `WHEN NOT MATCHED` branch concurrently | IF/EXISTS check then UPDATE or INSERT — multi-statement, race window between the EXISTS and the INSERT |
-| Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ006` at compile time): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead |
+| Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ039` warning + throwing stub): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead |
 
 What the contract guarantees, on every dialect: **N concurrent upserts of the same key always end with exactly one row whose state matches one of the inputs**. The integration test `UpsertConcurrencyTests.ConcurrentUpsertsOfSameKeyEndInOneRowMatchingOneInput` pins this against each live provider.
 
