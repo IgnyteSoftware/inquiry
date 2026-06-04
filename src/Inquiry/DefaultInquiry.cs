@@ -299,17 +299,15 @@ public sealed class DefaultInquiry : IInquiry
         }
         catch (NotSupportedException inner)
         {
-            // The provider's DbTransaction does not implement savepoints. Wrap with a clearer,
-            // actionable message — the most common cause is Microsoft.Data.Sqlite on net6.0 /
-            // net7.0: the netstandard2.0 build can't override DbTransaction.Save (the API didn't
-            // exist in netstandard2.0). Other providers (SqlClient, Npgsql, MySqlConnector) ship
-            // native net6.0+ builds with the override, so this path doesn't fire there.
+            // The provider's DbTransaction does not implement savepoints (DbTransaction.Save). Wrap
+            // with a clearer, actionable message rather than letting the bare provider exception
+            // surface. Use top-level transactions instead, or switch to a provider/version that
+            // supports savepoints.
             throw new NotSupportedException(
-                "The current ADO.NET provider does not implement savepoints on this target framework. " +
-                "If you are using Microsoft.Data.Sqlite on net6.0 or net7.0, the netstandard2.0 build of " +
-                "that provider cannot override DbTransaction.Save because the API did not exist in " +
-                "netstandard2.0 — savepoint support requires .NET 8 or later. Use top-level transactions " +
-                "only on net6.0 / net7.0, or target net8.0+.",
+                "The current ADO.NET provider does not implement savepoints (DbTransaction.Save), " +
+                "so Inquiry cannot create a nested transaction here. Use a top-level transaction " +
+                "(IInquiry.BeginTransactionAsync without an ambient one), or use a provider/version " +
+                "that supports savepoints.",
                 inner);
         }
         return new SavepointInquiryTransaction(this, outer, name, inheritedIsolation);
