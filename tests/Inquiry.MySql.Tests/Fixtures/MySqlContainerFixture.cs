@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Inquiry.IntegrationTesting;
 using MySqlConnector;
 using Testcontainers.MySql;
 using Xunit;
@@ -36,6 +37,8 @@ public sealed class MySqlContainerFixture : IAsyncLifetime
             IsAvailable = false;
             SkipReason = "MySQL container unavailable (is Docker running?): " + ex.Message;
         }
+
+        DockerRequirement.ThrowIfRequiredButUnavailable(IsAvailable, SkipReason);
     }
 
     public async Task DisposeAsync()
