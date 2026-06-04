@@ -22,14 +22,6 @@
 
 ## Performance & optimization
 
-- **Harden generated-key upsert atomicity.** On SQL Server and PostgreSQL the generated-key upsert is
-  not single-statement — SQL Server uses an `IF EXISTS` branch and PostgreSQL an `UPDATE`/`INSERT` CTE —
-  so concurrent same-key generated-key upserts can race there. (SQLite and MySQL use a single atomic
-  `ON CONFLICT` / `ON DUPLICATE KEY` statement.) The per-provider contract is already documented (see
-  [CRUD § Upsert concurrency](../articles/features/crud.md#upsert-concurrency-semantics)) and the
-  client-supplied-key path is concurrency-tested on all four networked engines; the remaining work is to
-  *harden* the SQL Server and PostgreSQL generated-key paths — e.g. `HOLDLOCK` or atomic conflict
-  primitives where they preserve returning behavior.
 - **Prepared-statement benchmark (W4 follow-up).** Quantify `PreparedStatementMode.None` vs `Auto` on
   Npgsql (simple + multi-join) with BenchmarkDotNet; the win depends on connection lifecycle (see
   [Prepared statements](../articles/features/prepared-statements.md)).
@@ -87,6 +79,11 @@ open:
   (`offset >= 0`, `limit`/`pageSize > 0`, `pageSize < int.MaxValue`); malformed `OrderBy` directions are
   diagnosed (`INQ042`); projections are allowed on soft-delete entities and compose the active-row filter
   (`INQ027` retired).
+- **Upsert atomicity (SQL Server + PostgreSQL):** generated-key upserts are now atomic — SQL Server uses
+  `MERGE … WITH (HOLDLOCK)` (client and generated key), PostgreSQL uses `INSERT … ON CONFLICT` — so
+  concurrent same-key upserts no longer throw a spurious duplicate-key error; covered by live concurrency
+  + `uniqueidentifier`/`gen_random_uuid()` key tests. (SQLite/MySQL already atomic; Oracle generated-key
+  upsert remains unsupported, tracked separately.)
 - **Providers:** Oracle ref-cursor detection requires the generated `:rc` bind, so it no longer
   misclassifies ad-hoc PL/SQL.
 - **Dependency injection:** `AddInquiry(params Assembly[])` overloads added for stores in
