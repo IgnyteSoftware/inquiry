@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Inquiry.IntegrationTesting;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -29,6 +30,8 @@ public sealed class PostgreSqlContainerFixture : IAsyncLifetime
             IsAvailable = false;
             SkipReason = "PostgreSQL container unavailable (is Docker running?): " + ex.Message;
         }
+
+        DockerRequirement.ThrowIfRequiredButUnavailable(IsAvailable, SkipReason);
     }
 
     public async Task DisposeAsync()

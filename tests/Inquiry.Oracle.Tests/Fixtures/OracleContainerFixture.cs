@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Inquiry.IntegrationTesting;
 using Oracle.ManagedDataAccess.Client;
 using Testcontainers.Oracle;
 using Xunit;
@@ -48,6 +49,8 @@ public sealed class OracleContainerFixture : IAsyncLifetime
             IsAvailable = false;
             SkipReason = "Oracle container unavailable (is Docker running?): " + ex.Message;
         }
+
+        DockerRequirement.ThrowIfRequiredButUnavailable(IsAvailable, SkipReason);
     }
 
     private static async Task WaitForServiceAsync(string connectionString)

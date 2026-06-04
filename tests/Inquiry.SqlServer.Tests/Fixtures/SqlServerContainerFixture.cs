@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Inquiry.IntegrationTesting;
 using Testcontainers.MsSql;
 using Xunit;
 
@@ -31,6 +32,8 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
             IsAvailable = false;
             SkipReason = "SQL Server container unavailable (is Docker running?): " + ex.Message;
         }
+
+        DockerRequirement.ThrowIfRequiredButUnavailable(IsAvailable, SkipReason);
     }
 
     public async Task DisposeAsync()
