@@ -23,9 +23,11 @@ to *"one row survives **and** no caller gets a spurious error."* It applies unif
   all SQL Server upserts race-safe and consistent).
 - **GUID/DB-default keys** are first-class: add coverage for a `uniqueidentifier DEFAULT NEWSEQUENTIALID()`
   (PostgreSQL: `DEFAULT gen_random_uuid()`) key — there is **no test for this today**.
-- Out of scope: SQLite/MySQL (already atomic via `ON CONFLICT` / `ON DUPLICATE KEY`), Oracle generated-key
-  upsert (unsupported by design, `INQ039`), and emitting DDL default expressions (the column DEFAULT is
-  schema-owned; Inquiry only omits the key from the INSERT so the default fires).
+- This spec is **Phase 1: PostgreSQL + SQL Server**. The other engines are covered by the phased
+  parity plan in §7 — SQLite/MySQL are already atomic (Phase 2 proves it with tests); Oracle generated-key
+  upsert is currently unsupported and gets its own later spec (Phase 3). Out of scope *here*: emitting DDL
+  default expressions (the column DEFAULT is schema-owned; Inquiry only omits the key from the INSERT so
+  the default fires).
 
 ## 3. Current state
 
@@ -130,3 +132,32 @@ to *"one row survives **and** no caller gets a spurious error."* It applies unif
    explicit upsert, and concurrency — all green.
 5. SQLite/MySQL/Oracle emission byte-identical; all non-Docker suites green.
 6. `crud.md` upsert-concurrency table and the Roadmap reflect the new guarantees.
+
+## 7. Path to full-engine parity (phased)
+
+The north star is: **all five engines support generated-key upsert with the same semantics.**
+
+| Engine | Generated-key upsert today | Plan |
+|---|---|---|
+| SQLite | ✅ supported, atomic (`INSERT … ON CONFLICT`) | no SQL change; Phase 2 adds matching concurrency/GUID tests for parity |
+| MySQL | ✅ supported, atomic (`INSERT … ON DUPLICATE KEY UPDATE` + `LAST_INSERT_ID` echo) | no SQL change; Phase 2 adds matching tests |
+| PostgreSQL | ✅ supported, **not atomic** (check-then-act) | **Phase 1 (this spec)** |
+| SQL Server | ✅ supported, **not atomic** (check-then-act; client-key MERGE lacks HOLDLOCK) | **Phase 1 (this spec)** |
+| Oracle | ❌ **unsupported** (`INQ039` — a MERGE can't match a NULL generated key) | **Phase 3 (own spec)** |
+
+- **Phase 1 (now):** PostgreSQL + SQL Server (this spec).
+- **Phase 2 (after Phase 1 confirmed green):** verify SQLite + MySQL are atomic and add the same
+  generated-key concurrency + GUID-default-key tests, so parity is *proven*, not assumed. Tests only;
+  likely no SQL change.
+- **Phase 3 (separate spec):** implement Oracle generated-key upsert, removing the `INQ039` stub.
+
+**Oracle feasibility (Phase 3 preview).** Yes, the approach applies — Oracle already emits anonymous
+PL/SQL blocks with a `:rc` ref cursor for RETURNING and already does generated-key insert-returning
+(`RETURNING key INTO v_key`). A generated-key upsert maps to a PL/SQL block:
+`BEGIN IF :Id IS NULL THEN <insert; IDENTITY/sequence generates> ELSE MERGE INTO t USING (SELECT :Id FROM
+dual) ON (…) WHEN MATCHED UPDATE WHEN NOT MATCHED INSERT; END IF; END;` (wrapped with `OPEN :rc FOR
+SELECT …` for returning). Two caveats: (a) notably more involved (PL/SQL + ref cursor + binding); (b)
+Oracle has **no `HOLDLOCK` equivalent** for MERGE, so a concurrent first-insert of the *same explicit*
+key can still raise `ORA-00001` (matching Oracle's existing client-key MERGE; the "one row survives"
+guarantee holds; full race-elimination would need `SERIALIZABLE` or app-level locking). The common
+DB-generates-the-key (`null`) pattern has no race. Hence its own spec.
