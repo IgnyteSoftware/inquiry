@@ -2,7 +2,7 @@
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-> **Project state:** For where the codebase is, how we develop it, and what's left to do, see **[docs/STATUS.md](docs/STATUS.md)** — the onboarding source of truth.
+> **Project state:** For where the codebase is, how we develop it, and what's left to do, see the docs site's **Develop** area — [Project status](docs/site/develop/project-status.md), [Roadmap](docs/site/develop/roadmap.md), and [Contributing](docs/site/develop/contributing.md). Build the site with `docfx docs/site/docfx.json --serve`.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
