@@ -25,12 +25,14 @@
 
 ## Performance & optimization
 
-- **Document and harden generated-key upsert atomicity.** Generated-key upserts are not single-statement
-  on every provider — SQL Server uses an `IF EXISTS` branch and PostgreSQL an `UPDATE`/`INSERT` CTE
-  rather than `ON CONFLICT` — so concurrent same-key generated-key upserts can race. The
-  *client-supplied-key* path is concurrency-tested on all four networked engines; the generated-key
-  path's per-provider guarantees are not yet written down. Consider `HOLDLOCK` / atomic conflict
-  primitives where they preserve returning behavior, and document the contract per provider.
+- **Harden generated-key upsert atomicity.** Generated-key upserts are not single-statement on every
+  provider — SQL Server uses an `IF EXISTS` branch, PostgreSQL an `UPDATE`/`INSERT` CTE, and SQLite an
+  orchestrated UPDATE-then-INSERT — so concurrent same-key generated-key upserts can race. The
+  per-provider contract is already documented (see
+  [CRUD § Upsert concurrency](../articles/features/crud.md#upsert-concurrency-semantics)) and the
+  client-supplied-key path is concurrency-tested on all four networked engines; the remaining work is to
+  *harden* the generated-key path — e.g. `HOLDLOCK` or atomic conflict primitives where they preserve
+  returning behavior.
 - **Prepared-statement benchmark (W4 follow-up).** Quantify `PreparedStatementMode.None` vs `Auto` on
   Npgsql (simple + multi-join) with BenchmarkDotNet; the win depends on connection lifecycle (see
   [Prepared statements](../articles/features/prepared-statements.md)).

@@ -53,11 +53,13 @@ public partial Task<IReadOnlyList<Product>> SelectPagedAsync(int offset, int lim
 | SQL Server | `OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY` |
 | Oracle | `OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY` (12c+) |
 
+Generated offset methods validate their arguments before touching the database: `offset` must be `>= 0` and `limit` must be `> 0`, otherwise the method throws `ArgumentOutOfRangeException`.
+
 ## Keyset pagination
 
 Offset paging gets slower as you scroll deeper — the database has to skip `N` rows. Keyset paging is `O(log n)` regardless of page depth: you remember the last row's sort key(s) and ask for *what's after them*.
 
-Use `[InquiryKeysetPage("KeyColumn1", "KeyColumn2", …)]`. The method picks up one parameter per key column (the **cursor** values from the previous page's last row) plus `int limit`.
+Use `[InquiryKeysetPage("KeyColumn1", "KeyColumn2", …)]`. The method takes a single **nullable cursor** parameter — the previous page's last key, a value for one key column or a tuple for several — plus `int pageSize`, and returns `InquiryPage<TEntity, TCursor>` (the page items, the next cursor, and `HasMore`). Pass `null` for the first page.
 
 ### You write
 
@@ -65,10 +67,9 @@ Use `[InquiryKeysetPage("KeyColumn1", "KeyColumn2", …)]`. The method picks up 
 public partial class OrderStore : InquiryStore<Order>
 {
     [InquiryKeysetPage("OrderDate", "OrderID")]
-    public partial Task<IReadOnlyList<Order>> NextPageAsync(
-        DateTime cursorOrderDate,
-        int cursorOrderID,
-        int limit,
+    public partial Task<InquiryPage<Order, (DateTime, int)>> NextPageAsync(
+        (DateTime, int)? after,
+        int pageSize,
         CancellationToken cancellationToken = default);
 }
 ```
@@ -77,26 +78,33 @@ The keyset is `(OrderDate, OrderID)` in significance order — `OrderID` is the 
 
 ### The generator emits
 
-```csharp
-private const string _sqlNextPage =
-    "SELECT \"OrderID\", \"CustomerID\", \"EmployeeID\", \"OrderDate\", ... " +
-    "FROM \"Orders\" " +
-    "WHERE (\"OrderDate\" > @__cursorOrderDate) " +
-    "   OR (\"OrderDate\" = @__cursorOrderDate AND \"OrderID\" > @__cursorOrderID) " +
-    "ORDER BY \"OrderDate\" ASC, \"OrderID\" ASC " +
-    "LIMIT @__limit";
+Keyset paging is emitted as **two** baked queries on purpose — a predicate-free first-page query and a sargable *seek* query:
 
-public partial Task<IReadOnlyList<Order>> NextPageAsync(
-    DateTime cursorOrderDate, int cursorOrderID, int limit, CancellationToken cancellationToken)
-    => Inquiry.QueryListAsync<Order, (DateTime, int, int), OrderInquiryEntityStructMaterializer>(
-        _sqlNextPage,
-        (cursorOrderDate, cursorOrderID, limit),
-        static (_cmd, _args) => { /* bind three params */ },
-        default,
-        cancellationToken);
+```csharp
+// First page (cursor is null): no WHERE, just ORDER BY + limit.
+private const string _sqlNextPage_first =
+    "SELECT \"OrderID\", \"CustomerID\", \"OrderDate\", ... FROM \"Orders\" " +
+    "ORDER BY \"OrderDate\" ASC, \"OrderID\" ASC LIMIT @__pageSize";
+
+// Seek (cursor supplied): a plain, sargable comparison so the engine does an index seek.
+private const string _sqlNextPage =
+    "SELECT \"OrderID\", \"CustomerID\", \"OrderDate\", ... FROM \"Orders\" " +
+    "WHERE (\"OrderDate\" > @__cursor0) " +
+    "   OR (\"OrderDate\" = @__cursor0 AND \"OrderID\" > @__cursor1) " +
+    "ORDER BY \"OrderDate\" ASC, \"OrderID\" ASC LIMIT @__pageSize";
+
+public partial async Task<InquiryPage<Order, (DateTime, int)>> NextPageAsync(
+    (DateTime, int)? after, int pageSize, CancellationToken cancellationToken)
+{
+    if (pageSize <= 0) throw new ArgumentOutOfRangeException(nameof(pageSize), pageSize, "Page size must be > 0.");
+    if (pageSize == int.MaxValue) throw new ArgumentOutOfRangeException(nameof(pageSize), pageSize, "Page size must be less than int.MaxValue.");
+    // Runs the first-page query when `after` is null, the seek query otherwise (binding the cursor
+    // only on the seek path). Over-fetches pageSize + 1 rows to compute HasMore and the next cursor.
+    // ...
+}
 ```
 
-The generator emits the cascading `(a > @a) OR (a = @a AND b > @b)` predicate — correct keyset paging across multiple sort columns.
+The two-query split matters for performance: the seek query uses a plain `key > @cursor` predicate so the engine can use an index seek, whereas a single `(@cursor IS NULL OR key > @cursor)` form is non-sargable and forces a full scan. For a multi-column keyset the seek predicate is the cascading `(a > @a) OR (a = @a AND b > @b)` comparison.
 
 ### Walking backward
 
@@ -104,8 +112,8 @@ Use `Direction = KeysetDirection.Backward` to walk in descending order:
 
 ```csharp
 [InquiryKeysetPage("OrderDate", "OrderID", Direction = KeysetDirection.Backward)]
-public partial Task<IReadOnlyList<Order>> PreviousPageAsync(
-    DateTime cursorOrderDate, int cursorOrderID, int limit, CancellationToken cancellationToken = default);
+public partial Task<InquiryPage<Order, (DateTime, int)>> PreviousPageAsync(
+    (DateTime, int)? after, int pageSize, CancellationToken cancellationToken = default);
 ```
 
 The generator flips the comparator and the ORDER BY: `WHERE … < … ORDER BY … DESC`. The result is naturally in descending order — reverse it client-side if you want oldest-first display.

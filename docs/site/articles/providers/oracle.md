@@ -43,4 +43,4 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 
 ## Testing
 
-`tests/Inquiry.Oracle.Tests` runs against a Testcontainers-managed `gvenzl/oracle-xe:21-slim-faststart` image (nightly CI; ~3 min container warm-up).
+`tests/Inquiry.Oracle.Tests` runs against a Testcontainers-managed `gvenzl/oracle-xe:21-slim-faststart` image, in the per-PR CI integration matrix alongside the other engines (~3 min container warm-up).
