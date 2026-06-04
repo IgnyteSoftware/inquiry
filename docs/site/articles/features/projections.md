@@ -34,6 +34,17 @@ private const string _sqlSelectSummaries =
     "SELECT \"ProductID\", \"ProductName\", \"UnitPrice\" FROM \"Products\"";
 ```
 
+## Soft-delete entities
+
+A projection over a [soft-delete](soft-delete.md) entity composes the active-row filter into the projected `SELECT`, even though the projected column subset doesn't include the soft-delete indicator:
+
+```csharp
+private const string _sqlProj_SelectSummaries =
+    "SELECT \"ProductID\", \"ProductName\", \"UnitPrice\" FROM \"Products\" WHERE \"IsDeleted\" = 0";
+```
+
+So a projection hides soft-deleted rows exactly like a full-entity select. Add `IncludeDeleted = true` to the query method to opt out and project deleted rows too.
+
 ## See also
 
 - [CRUD](crud.md) — full-entity selects.

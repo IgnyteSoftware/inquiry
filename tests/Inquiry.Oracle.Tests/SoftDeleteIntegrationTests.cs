@@ -79,4 +79,25 @@ public sealed class SoftDeleteIntegrationTests
 
         Assert.Empty(await store.AllIncludingDeletedAsync());
     }
+
+    [SkippableFact]
+    public async Task ProjectionExcludesSoftDeletedRowsButIncludeDeletedSeesThem()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var (harness, store, id) = await SeedOneAsync();
+        await using var _ = harness;
+        await store.InsertAsync(new SoftItem { Name = "Beta" });
+
+        // Both rows visible through the projection before any delete.
+        Assert.Equal(2, (await store.NamesAsync()).Count);
+
+        await store.SoftDeleteAsync(id);
+
+        // The soft-deleted row is hidden from the projection — the soft-delete filter is composed.
+        var onlyActive = Assert.Single(await store.NamesAsync());
+        Assert.Equal("Beta", onlyActive.Name);
+
+        // IncludeDeleted projection sees both rows again.
+        Assert.Equal(2, (await store.NamesIncludingDeletedAsync()).Count);
+    }
 }

@@ -635,8 +635,9 @@ internal static class StoreProcessor
         }
 
         // resolve projection-returning SelectAll methods. A select whose element type is not the
-        // store's entity must be a known [InquiryProjection] of it (and the entity must not be soft-delete,
-        // since projections do not apply the soft-delete filter in v1). Invalid ones are diagnosed and dropped.
+        // store's entity must be a known [InquiryProjection] of it. Soft-delete entities are supported:
+        // the projection SELECT AND-composes the entity's soft-delete filter (the projection context is
+        // built with the entity's soft-delete column, below). Invalid ones are diagnosed and dropped.
         var projectionMethods = new Dictionary<string, ProjectionData>(StringComparer.Ordinal);
         for (var i = valid.Count - 1; i >= 0; i--)
         {
@@ -659,14 +660,6 @@ internal static class StoreProcessor
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ProjectionEntityMismatch,
                     m.Location?.ToLocation(), m.Name, StripGlobalPrefix(m.ResultElementTypeFqn),
                     StripGlobalPrefix(projection.EntityFullyQualifiedName), StripGlobalPrefix(store.EntityFullyQualifiedName)));
-                valid.RemoveAt(i);
-                continue;
-            }
-
-            if (entity.SoftDeleteColumn is not null)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ProjectionOnSoftDeleteEntity,
-                    m.Location?.ToLocation(), m.Name, StripGlobalPrefix(m.ResultElementTypeFqn), StripGlobalPrefix(store.EntityFullyQualifiedName)));
                 valid.RemoveAt(i);
                 continue;
             }
@@ -831,9 +824,13 @@ internal static class StoreProcessor
         {
             if (selectPlan is not null)
             {
-                // an ordered/paged projection method builds its plan SQL over the projection's columns.
+                // an ordered/paged projection method builds its plan SQL over the projection's columns,
+                // composing the entity's soft-delete filter (suppressed for IncludeDeleted) just like a
+                // non-projection select — the projection columns don't carry the indicator, so pass it.
                 var planCtx = projectionMethods.TryGetValue(method.Name, out var projForPlan)
-                    ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns))
+                    ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns),
+                        suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
+                        softDeletePredicateColumn: entity.SoftDeleteColumn)
                     : CtxFor(method);
                 AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan));
 
@@ -919,6 +916,9 @@ internal static class StoreProcessor
         // one SELECT-over-projection-columns const per non-plan projection-returning method
         // (SelectAll → SELECT all projection cols; SelectAllByField → … WHERE field = @x). Ordered/paged
         // projection methods get their const from the plan loop above (also over the projection ctx).
+        // On a soft-delete entity the projection AND-composes the active-row filter (suppressed for
+        // IncludeDeleted): the projection columns don't carry the indicator, so the entity's soft-delete
+        // column is passed in for predicate computation only — it never joins the projection SELECT list.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
             if (selectPlan is not null || !projectionMethods.TryGetValue(method.Name, out var proj))
@@ -926,7 +926,9 @@ internal static class StoreProcessor
                 continue;
             }
 
-            var projCtx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(proj.Columns));
+            var projCtx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(proj.Columns),
+                suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
+                softDeletePredicateColumn: entity.SoftDeleteColumn);
             var projSql = method.Operation == StoreOperation.SelectAllByField
                 ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns))
                 : sqlBuilder.BuildSelectAllSql(projCtx);

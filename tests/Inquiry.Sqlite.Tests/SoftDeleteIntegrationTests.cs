@@ -20,6 +20,16 @@ public sealed class SoftDeleteWidget
     public bool IsDeleted { get; set; }
 }
 
+[InquiryProjection(typeof(SoftDeleteWidget))]
+public sealed record SoftDeleteWidgetName
+{
+    [InquiryColumn("Id")]
+    public long Id { get; init; }
+
+    [InquiryColumn("Name")]
+    public string Name { get; init; } = string.Empty;
+}
+
 public partial class SoftDeleteWidgetStore : InquiryStore<SoftDeleteWidget>
 {
     [InquiryInsert(ReturnEntity = true)]
@@ -30,6 +40,13 @@ public partial class SoftDeleteWidgetStore : InquiryStore<SoftDeleteWidget>
 
     [InquirySelectAll(IncludeDeleted = true)]
     public partial Task<IReadOnlyList<SoftDeleteWidget>> AllIncludingDeletedAsync(CancellationToken cancellationToken = default);
+
+    // Projection over a soft-delete entity (audit P3 #14): must AND-compose the soft-delete filter.
+    [InquirySelectAll]
+    public partial Task<IReadOnlyList<SoftDeleteWidgetName>> NamesAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAll(IncludeDeleted = true)]
+    public partial Task<IReadOnlyList<SoftDeleteWidgetName>> NamesIncludingDeletedAsync(CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
     public partial Task<SoftDeleteWidget?> ByIdAsync(long id, CancellationToken cancellationToken = default);
@@ -117,5 +134,26 @@ public sealed class SoftDeleteIntegrationTests
         Assert.True(await store.PurgeAsync(id));
 
         Assert.Empty(await store.AllIncludingDeletedAsync());
+    }
+
+    [Fact]
+    public async Task ProjectionExcludesSoftDeletedRowsButIncludeDeletedSeesThem()
+    {
+        var (harness, store, id) = await SeedOneAsync();
+        await using var _ = harness;
+        await store.InsertAsync(new SoftDeleteWidget { Name = "Beta" });
+
+        // Both rows visible through the projection before any delete.
+        Assert.Equal(new[] { "Alpha", "Beta" }, (await store.NamesAsync()).Select(n => n.Name).OrderBy(n => n).ToArray());
+
+        await store.SoftDeleteAsync(id);
+
+        // The soft-deleted row is hidden from the projection — exactly like the entity select.
+        var active = await store.NamesAsync();
+        var onlyActive = Assert.Single(active);
+        Assert.Equal("Beta", onlyActive.Name);
+
+        // IncludeDeleted projection sees both rows again.
+        Assert.Equal(2, (await store.NamesIncludingDeletedAsync()).Count);
     }
 }

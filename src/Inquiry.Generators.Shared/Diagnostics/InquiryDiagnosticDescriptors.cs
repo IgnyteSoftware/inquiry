@@ -8,8 +8,9 @@ internal static class InquiryDiagnosticDescriptors
     // DIAGNOSTIC-ID REGISTRY
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ021,
-    //                  INQ022–INQ027 (subset), INQ028–INQ032, INQ035–INQ041, INQ042.
-    // Historically skipped (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015.
+    //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042.
+    // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
+    //   on soft-delete, removed in P3 #14 — now supported).
     //
     // RESERVED RANGES for in-flight feature workstreams so parallel branches do not collide on the
     // next free ID. Claim from your reserved block; if you need more, extend past INQ040 and update
@@ -17,7 +18,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ018–INQ019  Richer WHERE predicates      (e.g. bad IN collection, op/type mismatch)  [IN USE]
     //   INQ020–INQ021  ORDER BY + pagination         (paging requires ORDER BY, unknown order field) [IN USE]
     //   INQ022–INQ023  Batch & bulk operations
-    //   INQ024–INQ027  Projections + aggregations    (INQ024 no columns, INQ025 not mapped, INQ026 entity mismatch, INQ027 soft-delete) [IN USE]
+    //   INQ024–INQ027  Projections + aggregations    (INQ024 no columns, INQ025 not mapped, INQ026 entity mismatch; INQ027 retired in P3 #14) [IN USE]
     //   INQ028–INQ029  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
     //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per convention)
     //   INQ030–INQ032  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length, INQ032 indexed string needs Length) [IN USE]
@@ -236,13 +237,9 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor ProjectionOnSoftDeleteEntity = new(
-        "INQ027",
-        "Projection on a soft-delete entity is not supported",
-        "Query method '{0}' returns projection '{1}' of soft-delete entity '{2}'. Projections do not apply the soft-delete filter in v1; query the entity directly instead.",
-        "Inquiry",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    // INQ027 (ProjectionOnSoftDeleteEntity) was retired in P3 #14: projections on soft-delete entities
+    // are now supported — the projection SELECT AND-composes the entity's soft-delete filter. The ID is
+    // not reused (registry convention) so existing .editorconfig / suppression references stay stable.
 
     public static readonly DiagnosticDescriptor GeneratedKeyNotInteger = new(
         "INQ030",

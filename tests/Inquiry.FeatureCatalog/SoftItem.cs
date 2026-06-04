@@ -24,6 +24,21 @@ public sealed class SoftItem
     public bool IsDeleted { get; set; }
 }
 
+/// <summary>
+/// A projection over the soft-delete <see cref="SoftItem"/>. Projections select a subset of columns
+/// and don't carry the soft-delete indicator, but the generated SELECT still AND-composes the entity's
+/// soft-delete filter (audit P3 #14) so a projection hides soft-deleted rows just like the entity select.
+/// </summary>
+[InquiryProjection(typeof(SoftItem))]
+public sealed record SoftItemName
+{
+    [InquiryColumn("Id")]
+    public long Id { get; init; }
+
+    [InquiryColumn("Name")]
+    public string Name { get; init; } = string.Empty;
+}
+
 public partial class SoftItemStore : InquiryStore<SoftItem>
 {
     [InquiryInsert(ReturnEntity = true)]
@@ -34,6 +49,13 @@ public partial class SoftItemStore : InquiryStore<SoftItem>
 
     [InquirySelectAll(IncludeDeleted = true)]
     public partial Task<IReadOnlyList<SoftItem>> AllIncludingDeletedAsync(CancellationToken cancellationToken = default);
+
+    // Projection variants (audit P3 #14): NamesAsync hides soft-deleted rows; the IncludeDeleted form sees them.
+    [InquirySelectAll]
+    public partial Task<IReadOnlyList<SoftItemName>> NamesAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAll(IncludeDeleted = true)]
+    public partial Task<IReadOnlyList<SoftItemName>> NamesIncludingDeletedAsync(CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
     public partial Task<SoftItem?> ByIdAsync(long id, CancellationToken cancellationToken = default);
