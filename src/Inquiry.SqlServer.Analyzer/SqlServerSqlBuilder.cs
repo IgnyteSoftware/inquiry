@@ -82,7 +82,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         }
 
         return
-            "MERGE INTO " + context.Table + " AS target " +
+            "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
             "USING (" + BuildSourceSelect(context) + ") AS source ON " + BuildSourceJoin(context) + " " +
             "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " " +
             "WHEN NOT MATCHED THEN INSERT (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ");";
@@ -96,7 +96,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         }
 
         return
-            "MERGE INTO " + context.Table + " AS target " +
+            "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
             "USING (" + BuildSourceSelect(context) + ") AS source ON " + BuildSourceJoin(context) + " " +
             "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " " +
             "WHEN NOT MATCHED THEN INSERT (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ") " +
@@ -166,13 +166,12 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             "BEGIN " +
             generatedInsert +
             "END " +
-            "ELSE IF EXISTS (SELECT 1 FROM " + context.Table + " WHERE " + keyColumn + " = " + keyParameter + ") " +
-            "BEGIN " +
-            "UPDATE " + context.Table + " SET " + context.SetClauses + output + " WHERE " + keyColumn + " = " + keyParameter + "; " +
-            "END " +
             "ELSE " +
             "BEGIN " +
-            "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ")" + output + " VALUES (" + explicitInsertParameters + "); " +
+            "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
+            "USING (SELECT " + keyParameter + " AS k0) AS source ON target." + keyColumn + " = source.k0 " +
+            "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " " +
+            "WHEN NOT MATCHED THEN INSERT (" + explicitInsertColumns + ") VALUES (" + explicitInsertParameters + ")" + output + "; " +
             "END";
     }
 

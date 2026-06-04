@@ -1101,8 +1101,60 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("private const string _sqlSelectAll = \"SELECT [Key], [Name] FROM [TOrganization]\";", generatedText);
         Assert.Contains("[Key], [Name]) OUTPUT INSERTED.[Key], INSERTED.[Name] VALUES (@Key, @Name)", generatedText);
         Assert.Contains("OUTPUT INSERTED.[Key], INSERTED.[Name] WHERE [Key] = @Key", generatedText);
-        Assert.Contains("MERGE INTO [TOrganization] AS target", generatedText);
+        Assert.Contains("MERGE INTO [TOrganization] WITH (HOLDLOCK) AS target", generatedText);
         Assert.Contains("WHEN MATCHED THEN UPDATE SET [Name] = @Name", generatedText);
+    }
+
+    [Fact]
+    public void SqlServerGeneratedKeyUpsertUsesAtomicMergeWithHoldlock()
+    {
+        // A generated (IDENTITY) key upsert must NOT do a racy check-then-act; when the caller
+        // supplies a key it goes through an atomic MERGE ... WITH (HOLDLOCK), with the NULL-key
+        // branch still emitting a plain INSERT to let the database assign the identity.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey("Id", IsGenerated = true)]
+                public int? Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquiryUpsert(ReturnEntity = true)]
+                public partial Task<Widget?> UpsertReturningAsync(Widget w, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Atomic MERGE for the supplied-key branch; the legacy check-then-act EXISTS probe is gone.
+        Assert.Contains("MERGE INTO [TWidget] WITH (HOLDLOCK) AS target", generatedText);
+        Assert.DoesNotContain("ELSE IF EXISTS", generatedText);
+        Assert.Contains("IF @Id IS NULL", generatedText);
     }
 
     [Fact]
