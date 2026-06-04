@@ -39,6 +39,10 @@ jobs:
     # finish in 1-2 minutes — matrix legs run in parallel, so the wall-clock cost of adding
     # Oracle here is just its own slot, not slower CI overall.
     timeout-minutes: 40
+    env:
+      # A provider suite that can't start its container must FAIL here, not silently skip and leave CI
+      # green (GitHub runners have Docker). See tests/Inquiry.IntegrationTesting/DockerRequirement.cs.
+      INQUIRY_REQUIRE_DOCKER: "1"
     strategy:
       fail-fast: false
       matrix:
