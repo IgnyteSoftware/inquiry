@@ -8,13 +8,10 @@
 
 ## Known issues & correctness
 
-- **Relation-shape diagnostics have a coverage gap.** Bad relation metadata is reported as a clean
-  build diagnostic — `INQ040` (unknown relation foreign key) and `INQ041` (composite-key child
-  relation) — **only when an eager-loading method** (`[InquirySelectAllEager]` /
-  `[InquirySelectOneByKeyEager]`) is present on the store. A mistyped collection-relation foreign key on
-  a store with *no* eager method can still fail generation with a `NullReferenceException` instead of a
-  diagnostic, and a relation pointing to the wrong side has no dedicated diagnostic. *Impact: a confusing
-  build failure for a narrow misconfiguration.*
+- *No open correctness bugs are currently known.* (The relation-const generator crash previously listed
+  here is fixed — see [Recently resolved](#recently-resolved). A residual *diagnostics* gap — relation
+  typos are only reported when the relation is eager-loaded — is tracked under
+  [Planned features](#planned-features--enhancements).)
 
 ## Security
 
@@ -59,6 +56,11 @@
   threshold now that the known warning sources are scoped-suppressed.
 - **Optional Roslyn bump.** `Microsoft.CodeAnalysis.CSharp` is intentionally held at 4.8.0 to keep the
   analyzer's minimum-SDK floor low; revisit only if a newer Roslyn API is needed.
+- **Broaden relation-shape diagnostics.** `INQ040` (unknown relation foreign key) and `INQ041`
+  (composite-key child) fire only when an eager-loading method traverses the relation. A relation that is
+  mistyped but never eager-loaded is silently skipped (it no longer crashes the generator), and a foreign
+  key pointing at the wrong side has no dedicated diagnostic. Report these at declaration time regardless
+  of eager usage. *Low severity — no crash, and no wrong results unless the relation is eager-loaded.*
 
 ### Explicitly not planned
 
@@ -93,3 +95,6 @@ open:
 - **Hardening:** sample DB credentials are labeled local-dev-only with an `INQUIRY_SAMPLE_DB` override;
   the known build-warning sources are scoped-suppressed (production projects are warnings-as-errors).
 - **CI:** Oracle moved into the per-PR integration matrix (net8.0/net9.0); CI emits TRX artifacts.
+- **Generator robustness:** a mistyped collection-relation foreign key on a store with no eager method no
+  longer crashes the generator (`NullReferenceException`) — relation SELECT consts are emitted only when a
+  valid eager method consumes them; a bad relation that *is* eager-loaded still reports `INQ040`/`INQ041`.
