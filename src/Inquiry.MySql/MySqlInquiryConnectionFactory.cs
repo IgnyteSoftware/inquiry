@@ -21,7 +21,14 @@ public sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
         }
 
-        _connectionString = connectionString;
+        // Inquiry's emulated RETURNING for a database-generated GUID key captures the value in a
+        // @_inquiry_genkey user variable; MySqlConnector only treats an unmatched @name as a user
+        // variable when AllowUserVariables is enabled (otherwise it throws). All Inquiry SQL is
+        // compile-time-constant text with bound parameters, so enabling this is safe.
+        _connectionString = new MySqlConnectionStringBuilder(connectionString)
+        {
+            AllowUserVariables = true,
+        }.ConnectionString;
     }
 
     /// <inheritdoc />
