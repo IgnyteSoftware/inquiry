@@ -80,6 +80,7 @@ Soft delete composes correctly with everything else the generator emits:
 - **Pagination.** The filter is AND-composed *before* `ORDER BY` / `LIMIT`: `WHERE <predicate> AND IsDeleted = 0 ORDER BY … LIMIT …`.
 - **Keyset paging.** The filter is appended after the keyset cursor predicate.
 - **Aggregates.** `SELECT COUNT(*) FROM … WHERE IsDeleted = 0`.
+- **Projections.** A [projection](projections.md) over a soft-delete entity composes the filter too — `SELECT <subset> FROM … WHERE IsDeleted = 0` — even though the projected column subset doesn't include the indicator. `IncludeDeleted = true` opts out, exactly like a full-entity select.
 - **Optimistic concurrency.** Update / delete still check the row-version column in addition to the soft-delete filter.
 
 ## Per-dialect literal

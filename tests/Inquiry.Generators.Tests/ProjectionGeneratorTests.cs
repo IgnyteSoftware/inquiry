@@ -329,10 +329,88 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ026");
     }
 
+    // A projection over a soft-delete entity now AND-composes the entity's soft-delete filter into the
+    // projection SELECT (audit P3 #14). Previously this was blocked with INQ027 because the projection
+    // SqlBuildContext was built from the projection's columns — which don't carry the soft-delete flag —
+    // so the filter was silently dropped. The generator now passes the entity's soft-delete column to the
+    // projection context for predicate computation, while the SELECT list stays projection-only.
+    private const string SoftDeleteDocSource = """
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("Doc")]
+        public sealed class Doc
+        {
+            [InquiryKey]
+            public long Id { get; set; }
+
+            [InquiryColumn("Title")]
+            public string Title { get; set; } = string.Empty;
+
+            [InquiryColumn("IsDeleted"), InquirySoftDelete]
+            public bool IsDeleted { get; set; }
+        }
+
+        [InquiryProjection(typeof(Doc))]
+        public sealed record DocTitle
+        {
+            [InquiryColumn("Id")]
+            public long Id { get; init; }
+
+            [InquiryColumn("Title")]
+            public string Title { get; init; } = string.Empty;
+        }
+
+        public partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>
+        {
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<DocTitle>> ListAsync(CancellationToken cancellationToken = default);
+
+            [InquirySelectAll(IncludeDeleted = true)]
+            public partial Task<IReadOnlyList<DocTitle>> ListAllAsync(CancellationToken cancellationToken = default);
+        }
+        """;
+
     [Fact]
-    public void ProjectionOnSoftDeleteEntityReportsDiagnostic()
+    public void ProjectionOnSoftDeleteEntityComposesSoftDeleteFilter()
     {
+        var result = RunGenerator(SoftDeleteDocSource);
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ027");
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // SELECT lists the projection columns; the entity's soft-delete filter is AND-composed.
+        Assert.Contains("private const string _sqlProj_ListAsync = \"SELECT \\\"Id\\\", \\\"Title\\\" FROM \\\"Doc\\\" WHERE \\\"IsDeleted\\\" = 0\";", text);
+    }
+
+    [Fact]
+    public void ProjectionOnSoftDeleteEntityWithIncludeDeletedOmitsFilter()
+    {
+        var result = RunGenerator(SoftDeleteDocSource);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // IncludeDeleted = true suppresses the soft-delete filter, exactly like a non-projection select.
+        Assert.Contains("private const string _sqlProj_ListAllAsync = \"SELECT \\\"Id\\\", \\\"Title\\\" FROM \\\"Doc\\\"\";", text);
+    }
+
+    [Fact]
+    public void ProjectionOnTimestampSoftDeleteEntityComposesIsNullFilter()
+    {
+        // The timestamp soft-delete kind composes "DeletedAt" IS NULL rather than "= 0"; the projection
+        // path reads the indicator kind from the entity's soft-delete column, so both kinds are covered.
         const string source = """
+            using System;
             using System.Collections.Generic;
             using System.Threading;
             using System.Threading.Tasks;
@@ -351,8 +429,8 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryColumn("Title")]
                 public string Title { get; set; } = string.Empty;
 
-                [InquiryColumn("IsDeleted"), InquirySoftDelete]
-                public bool IsDeleted { get; set; }
+                [InquiryColumn("DeletedAt"), InquirySoftDelete]
+                public DateTime? DeletedAt { get; set; }
             }
 
             [InquiryProjection(typeof(Doc))]
@@ -373,6 +451,11 @@ public sealed partial class InquiryGeneratorTests
             """;
 
         var result = RunGenerator(source);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ027");
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("private const string _sqlProj_ListAsync = \"SELECT \\\"Id\\\", \\\"Title\\\" FROM \\\"Doc\\\" WHERE \\\"DeletedAt\\\" IS NULL\";", text);
     }
 }

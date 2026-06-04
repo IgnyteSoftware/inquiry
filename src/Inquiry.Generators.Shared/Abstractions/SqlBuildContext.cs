@@ -20,13 +20,23 @@ public sealed class SqlBuildContext
     /// store emitter builds for an <c>IncludeDeleted = true</c> select; the SET clauses are still
     /// computed (they are never suppressed — delete/restore always touch the indicator).
     /// </param>
+    /// <param name="softDeletePredicateColumn">
+    /// The entity's soft-delete column, supplied only when <paramref name="columns"/> does not itself
+    /// carry one. This is the projection case: a projection's column list is a subset of the entity's
+    /// columns and never includes the soft-delete indicator, so the active-row filter would be silently
+    /// dropped. Passing the entity's soft-delete column here composes the filter into the projection
+    /// SELECT (the column does not join the SELECT list — <see cref="SelectColumns"/> is built from
+    /// <paramref name="columns"/> only). Null (the default) for entity contexts, which already detect
+    /// their soft-delete column from <paramref name="columns"/>.
+    /// </param>
     public SqlBuildContext(
         SqlBuilder builder,
         string? schema,
         string tableName,
         IReadOnlyList<IColumn> columns,
         bool suppressSoftDelete = false,
-        bool generateForeignKeys = true)
+        bool generateForeignKeys = true,
+        IColumn? softDeletePredicateColumn = null)
     {
         Columns = columns;
         RawSchema = schema;
@@ -53,7 +63,10 @@ public sealed class SqlBuildContext
         // the active-row filter every SELECT AND-composes (suppressed for IncludeDeleted), and the SET
         // clauses for the soft-delete and restore UPDATEs — so providers consume strings and never
         // reimplement the dialect literals.
-        var softDeleteColumn = columns.FirstOrDefault(c => c.SoftDelete != SoftDeleteKind.None);
+        // Entity contexts find their soft-delete column in `columns`. Projection contexts don't carry it
+        // (the projection selects a subset that omits the indicator), so fall back to the explicitly
+        // supplied entity soft-delete column — used only for the predicate, never added to SelectColumns.
+        var softDeleteColumn = columns.FirstOrDefault(c => c.SoftDelete != SoftDeleteKind.None) ?? softDeletePredicateColumn;
         if (softDeleteColumn is not null)
         {
             var quoted = builder.QuoteIdentifier(softDeleteColumn.ColumnName);
