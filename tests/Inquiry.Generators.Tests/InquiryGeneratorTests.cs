@@ -1212,6 +1212,58 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("ON CONFLICT (\\\"Key\\\") DO UPDATE SET \\\"Name\\\" = @Name", generatedText);
     }
 
+    [Fact]
+    public void PostgreSqlGeneratedKeyUpsertUsesOnConflict()
+    {
+        // A generated (SERIAL) key upsert must NOT do a racy check-then-act; when the caller supplies
+        // a key the explicit arm goes through an atomic INSERT ... ON CONFLICT DO UPDATE (no sequence
+        // value is consumed), with the NULL-key branch still emitting a plain INSERT.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey("Id", IsGenerated = true)]
+                public int? Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquiryUpsert(ReturnEntity = true)]
+                public partial Task<Widget?> UpsertReturningAsync(Widget w, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "PostgreSql");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Atomic ON CONFLICT for the supplied-key arm; the legacy check-then-act NOT EXISTS probe is gone.
+        Assert.Contains("ON CONFLICT", generatedText);
+        Assert.Contains("ins_upsert AS", generatedText);
+        Assert.DoesNotContain("NOT EXISTS", generatedText);
+    }
+
     private const string PredicateEntitySource = """
         using System;
         using System.Collections.Generic;

@@ -99,30 +99,22 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         if (!returning)
         {
             return
-                "UPDATE " + context.Table + " SET " + context.SetClauses + " " +
-                "WHERE " + keyParameter + " IS NOT NULL AND " + keyColumn + " = " + keyParameter + "; " +
                 "INSERT INTO " + context.Table + generatedInsertColumns + "; " +
                 "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") " +
                 "SELECT " + explicitInsertParameters + " WHERE " + keyParameter + " IS NOT NULL " +
-                "AND NOT EXISTS (SELECT 1 FROM " + context.Table + " WHERE " + keyColumn + " = " + keyParameter + ");";
+                "ON CONFLICT (" + keyColumn + ") DO UPDATE SET " + context.SetClauses + ";";
         }
 
-        var generatedReturningInsert =
-            "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") " +
-            "SELECT " + context.InsertParameters + " WHERE " + keyParameter + " IS NULL " +
-            "RETURNING " + context.SelectColumns;
-
         return
-            "WITH updated AS (UPDATE " + context.Table + " SET " + context.SetClauses + " " +
-            "WHERE " + keyParameter + " IS NOT NULL AND " + keyColumn + " = " + keyParameter + " " +
+            "WITH ins_gen AS (INSERT INTO " + context.Table + " (" + context.InsertColumns + ") " +
+            "SELECT " + context.InsertParameters + " WHERE " + keyParameter + " IS NULL " +
             "RETURNING " + context.SelectColumns + "), " +
-            "inserted_generated AS (" + generatedReturningInsert + "), " +
-            "inserted_explicit AS (INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") " +
-            "SELECT " + explicitInsertParameters + " WHERE " + keyParameter + " IS NOT NULL AND NOT EXISTS (SELECT 1 FROM updated) " +
+            "ins_upsert AS (INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") " +
+            "SELECT " + explicitInsertParameters + " WHERE " + keyParameter + " IS NOT NULL " +
+            "ON CONFLICT (" + keyColumn + ") DO UPDATE SET " + context.SetClauses + " " +
             "RETURNING " + context.SelectColumns + ") " +
-            "SELECT " + context.SelectColumns + " FROM updated UNION ALL " +
-            "SELECT " + context.SelectColumns + " FROM inserted_generated UNION ALL " +
-            "SELECT " + context.SelectColumns + " FROM inserted_explicit";
+            "SELECT " + context.SelectColumns + " FROM ins_gen UNION ALL " +
+            "SELECT " + context.SelectColumns + " FROM ins_upsert";
     }
 
     private static string JoinKeyColumns(SqlBuildContext context)
