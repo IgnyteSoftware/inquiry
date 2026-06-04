@@ -52,8 +52,7 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
                 // Use the XE image whose service name (XEPDB1) matches what Testcontainers.Oracle bakes
                 // into its connection string. The oracle-free image serves FREEPDB1 instead, so its
                 // generated connection string fails with ORA-12514 (service not known).
-                var container = new OracleBuilder()
-                    .WithImage("gvenzl/oracle-xe:21-slim-faststart")
+                var container = new OracleBuilder("gvenzl/oracle-xe:21-slim-faststart")
                     .Build();
                 await container.StartAsync().ConfigureAwait(false);
 

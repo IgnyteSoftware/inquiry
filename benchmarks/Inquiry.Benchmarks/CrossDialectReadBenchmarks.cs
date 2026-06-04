@@ -71,7 +71,7 @@ public class CrossDialectReadBenchmarks
         {
             case "PostgreSql":
             {
-                var c = new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
+                var c = new PostgreSqlBuilder("postgres:16-alpine").Build();
                 await c.StartAsync();
                 _container = c;
                 _connectionString = c.GetConnectionString();
@@ -84,7 +84,7 @@ public class CrossDialectReadBenchmarks
 
             case "MySql":
             {
-                var c = new MySqlBuilder().WithImage("mysql:8.0").Build();
+                var c = new MySqlBuilder("mysql:8.0").Build();
                 await c.StartAsync();
                 _container = c;
                 _connectionString = c.GetConnectionString();
@@ -97,7 +97,7 @@ public class CrossDialectReadBenchmarks
 
             case "SqlServer":
             {
-                var c = new MsSqlBuilder().WithImage("mcr.microsoft.com/mssql/server:2022-latest").Build();
+                var c = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
                 await c.StartAsync();
                 _container = c;
                 _connectionString = c.GetConnectionString();

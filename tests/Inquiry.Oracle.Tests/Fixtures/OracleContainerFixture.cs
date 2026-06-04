@@ -30,7 +30,7 @@ public sealed class OracleContainerFixture : IAsyncLifetime
             // Use the XE image whose service name (XEPDB1) matches what Testcontainers.Oracle bakes into
             // its connection string. The oracle-free image serves FREEPDB1 instead, so its generated
             // connection string fails with ORA-12514 (service not known).
-            _container = new OracleBuilder().WithImage("gvenzl/oracle-xe:21-slim-faststart").Build();
+            _container = new OracleBuilder("gvenzl/oracle-xe:21-slim-faststart").Build();
             await _container.StartAsync();
             AdminConnectionString = new OracleConnectionStringBuilder(_container.GetConnectionString())
             {

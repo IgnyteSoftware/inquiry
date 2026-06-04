@@ -49,7 +49,7 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
         {
             if (_container is null)
             {
-                var container = new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
+                var container = new PostgreSqlBuilder("postgres:16-alpine").Build();
                 await container.StartAsync().ConfigureAwait(false);
                 var connectionString = container.GetConnectionString();
 
