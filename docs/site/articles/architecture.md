@@ -2,9 +2,7 @@
 
 This page is the long-form complement to [How it works](concepts.md). It documents the *implementation* — how the generator framework is laid out, how the request pipeline is structured, and the design constraints that shaped both.
 
-For the canonical architecture write-up — including the full project layout, the SqlBuilder hierarchy, and the rationale for compile-time `const string` SQL — see the repository's [`README.md`](https://github.com/JakeOverstreet/inquiry/blob/main/README.md).
-
-For project status, supported dialect matrix, and the workstream roadmap, see [`docs/STATUS.md`](https://github.com/JakeOverstreet/inquiry/blob/main/docs/STATUS.md).
+For the conceptual pipeline with diagrams, start at [How it works](concepts.md); this page goes deeper into the generator framework, SQL building, and the runtime. For project status, the supported-dialect matrix, and the roadmap, see [Project status](../develop/project-status.md) and the [Roadmap](../develop/roadmap.md).
 
 ## Quick reference
 
@@ -33,6 +31,65 @@ For project status, supported dialect matrix, and the workstream roadmap, see [`
 4. **Materializers are struct-specialized.** Generated stores call the struct-materializer overloads on the pipeline; the JIT emits a separate body per concrete struct so the per-row `materializer.Materialize(reader)` call inlines (no interface dispatch).
 5. **Read streaming.** Generated stores pass `CommandBehavior.SequentialAccess`. Generated materializers read every column exactly once in ascending ordinal order, so this is safe and roughly halves allocation on large/wide reads.
 6. **Diagnostics at compile time.** Any condition the generator can detect (unknown column, missing key, unsupported return shape, conflicting attributes) produces an `INQxxx` diagnostic at the source location.
+
+## SQL building
+
+All SQL is produced at compile time by an internal `SqlBuilder` hierarchy in `Inquiry.Generators.Shared`. The runtime ships **zero SQL** — no abstract dialect, no per-call build, no statement cache. Each generated store carries the SQL it needs as `private const string` fields.
+
+```csharp
+// src/Inquiry.Generators.Shared/Abstractions/SqlBuilder.cs
+public abstract class SqlBuilder
+{
+    public abstract string DialectName { get; }
+    public abstract string QuoteIdentifier(string identifier);
+    public virtual  string ParameterName(string logical);   // default: "@" + logical
+    public          string QuoteTable(string? schema, string table);
+
+    public abstract string BuildSelectAllSql       (SqlBuildContext ctx);
+    public abstract string BuildSelectByKeySql     (SqlBuildContext ctx);
+    public abstract string BuildSelectByFieldSql   (SqlBuildContext ctx, IReadOnlyList<IColumn> filterColumns);
+    public abstract string BuildInsertSql          (SqlBuildContext ctx);
+    public abstract string BuildInsertReturningSql (SqlBuildContext ctx);
+    public abstract string BuildUpdateSql          (SqlBuildContext ctx);
+    public abstract string BuildUpdateReturningSql (SqlBuildContext ctx);
+    public abstract string BuildDeleteByKeySql     (SqlBuildContext ctx);
+    public abstract string BuildUpsertSql          (SqlBuildContext ctx);
+    public abstract string BuildUpsertReturningSql (SqlBuildContext ctx);
+}
+```
+
+`StoreProcessor` builds a `SqlBuildContext` once per (entity, builder) pair — precomputing the quoted table, the select/insert column lists and matching parameters, the SET clauses, and the key WHERE clause — then calls whichever `Build…Sql` methods the store actually needs. Feature capabilities (predicates, pagination, batch, soft-delete, concurrency, …) are added as `virtual`-with-base-default members where the SQL is dialect-uniform, so a new provider inherits them and overrides only what genuinely differs.
+
+| Dialect builder | Identifier quoting | Upsert strategy |
+|---|---|---|
+| `SqliteSqlBuilder` | `"name"` (double quotes) | `INSERT … ON CONFLICT DO UPDATE` |
+| `SqlServerSqlBuilder` | `[name]` (brackets) | `MERGE` (existence branch for generated keys) |
+| `PostgreSqlSqlBuilder` | `"name"` (double quotes) | `INSERT … ON CONFLICT … DO UPDATE` (client key); `UPDATE`/`INSERT` CTE (generated key) |
+| `MySqlSqlBuilder` | `` `name` `` (backticks) | `INSERT … ON DUPLICATE KEY UPDATE` |
+| `OracleSqlBuilder` | `"name"` (double quotes) | `MERGE` |
+
+To change how a statement is emitted for one database without affecting the others, override the matching `Build…Sql` in that provider's builder.
+
+### Dialect selection
+
+Each provider analyzer hardcodes its own dialect name. When Roslyn loads it (because the consumer referenced the matching provider package), it inspects the compilation for `[assembly: InquiryDialect("…")]` — first on the consuming assembly (an explicit override), then on referenced assemblies (provider runtime DLLs ship the attribute pre-applied). If the resolved name matches, the generator emits; otherwise it stays silent so a coexisting provider can claim the build. No dialect attribute at all → the loaded generator treats it as implicit opt-in to its own dialect. Multiple matching dialects surface as `INQ014`.
+
+## Store attributes
+
+All store attributes live in `Inquiry.Stores`. The method must be a `partial` declaration on a `partial class : InquiryStore<TEntity>`, and the last parameter must be `CancellationToken`. The generator emits the constructor and the method bodies into a second partial of the same class — no derived class, no user-written constructor.
+
+| Attribute | Maps to |
+|---|---|
+| `[InquirySelectAll]` / `[InquirySelectAllEager]` | `BuildSelectAllSql` (+ per-relation child queries for eager) |
+| `[InquirySelectOneByKey]` / `[InquirySelectOneByKeyEager]` | `BuildSelectByKeySql` (+ per-relation child queries for eager) |
+| `[InquirySelectAllByField("Field")]` | `BuildSelectByFieldSql` |
+| `[InquiryInsert]` / `[InquiryInsert(ReturnEntity = true)]` | `BuildInsertSql` / `BuildInsertReturningSql` |
+| `[InquiryUpdate]` / `[InquiryUpdate(ReturnEntity = true)]` | `BuildUpdateSql` / `BuildUpdateReturningSql` |
+| `[InquiryUpsert]` / `[InquiryUpsert(ReturnEntity = true)]` | `BuildUpsertSql` / `BuildUpsertReturningSql` |
+| `[InquiryDeleteOneByKey]` | `BuildDeleteByKeySql` |
+| `[InquiryStoredProcedure("Proc")]` | raw `InquiryCommand` with `CommandType.StoredProcedure` |
+
+Entity-mapping attributes live in `Inquiry.Entities`: `[InquiryTable]`, `[InquiryColumn]`, `[InquiryKey]`, `[InquiryForeignKey]`, `[InquiryRelation]`. Beyond this core surface Inquiry also supports richer WHERE predicates, ORDER BY + pagination, batch operations, projections + aggregations, optimistic concurrency, soft deletes, full-text search, and value-converter columns — see [Features](features/crud.md).
 
 ## Transactions
 
