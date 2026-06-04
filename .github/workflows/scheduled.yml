@@ -1,0 +1,37 @@
+name: Scheduled (full TFM matrix)
+on:
+  schedule:
+    # Weekly, Mondays 06:00 UTC. Adds the net10.0 provider coverage the PR matrix omits, and
+    # re-verifies every provider against current container images.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  integration-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # Docker is available on GitHub runners; a silently-skipped suite must not pass a scheduled
+      # verification run. See tests/Inquiry.IntegrationTesting/DockerRequirement.cs.
+      INQUIRY_REQUIRE_DOCKER: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [PostgreSql, MySql, SqlServer, Oracle]
+        tfm: [net8.0, net9.0, net10.0]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+      - name: Integration tests (${{ matrix.provider }} on ${{ matrix.tfm }})
+        run: dotnet test tests/Inquiry.${{ matrix.provider }}.Tests/Inquiry.${{ matrix.provider }}.Tests.csproj -c Release -f ${{ matrix.tfm }} --logger "trx;LogFileName=${{ matrix.provider }}-${{ matrix.tfm }}.trx" --results-directory test-results
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: scheduled-integration-${{ matrix.provider }}-${{ matrix.tfm }}
+          path: test-results/
