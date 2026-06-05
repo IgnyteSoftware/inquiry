@@ -7,6 +7,7 @@ using Inquiry.Benchmarks.SqlServer.Ef;
 using Inquiry.Northwind.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using DlgLib = global::Inquiry.Benchmarks.DLG;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
@@ -95,6 +96,13 @@ public class ShipperBenchmarks
         return list.Count;
     }
 
+    [BenchmarkCategory("SelectAll"), Benchmark]
+    public async Task<int> SelectAll_Dlg()
+    {
+        var list = await DlgLib.Shipper.SelectAllAsync();
+        return list.Count;
+    }
+
     // ---- SelectByKey --------------------------------------------------------------------
 
     [BenchmarkCategory("SelectByKey"), Benchmark(Baseline = true)]
@@ -128,6 +136,10 @@ public class ShipperBenchmarks
     [BenchmarkCategory("SelectByKey"), Benchmark]
     public async Task<Shipper?> SelectByKey_Inquiry()
         => await _db.Shippers.SelectByKeyAsync(TargetShipperId);
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
+    public async Task<DlgLib.Shipper?> SelectByKey_Dlg()
+        => await DlgLib.Shipper.SelectOneAsync(TargetShipperId);
 
     // ---- SelectByField (CompanyName) ----------------------------------------------------
 
@@ -169,6 +181,13 @@ public class ShipperBenchmarks
         return list.Count;
     }
 
+    [BenchmarkCategory("SelectByField"), Benchmark]
+    public async Task<int> SelectByField_Dlg()
+    {
+        var list = await DlgLib.Shipper.SelectByFieldAsync(DlgLib.ShipperFields.CompanyName, TargetCompanyName);
+        return list.Count;
+    }
+
     // ---- Insert -------------------------------------------------------------------------
 
     [BenchmarkCategory("Insert"), Benchmark(Baseline = true)]
@@ -205,6 +224,10 @@ public class ShipperBenchmarks
     [BenchmarkCategory("Insert"), Benchmark]
     public async Task<int> Insert_Inquiry()
         => await _db.Shippers.InsertAsync(new Shipper { CompanyName = "Bench Shipper", Phone = "555-0000" });
+
+    [BenchmarkCategory("Insert"), Benchmark]
+    public async Task<bool> Insert_Dlg()
+        => await new DlgLib.Shipper { CompanyName = "Bench Shipper", Phone = "555-0000" }.InsertAsync();
 
     // ---- Update -------------------------------------------------------------------------
 
@@ -249,6 +272,20 @@ public class ShipperBenchmarks
             CompanyName = "Updated Shipper",
             Phone       = "555-9999",
         });
+
+    [BenchmarkCategory("Update"), Benchmark]
+    public async Task<bool> Update_Dlg()
+    {
+        // DLG dirty-tracking: set the identity key, TakeSnapshot() to baseline it, THEN mutate the
+        // updatable fields — so ShipperID is not in the changed set (the Update proc cannot SET an
+        // identity column). This is the validated pattern from the DLG smoke tests.
+        var shipper = new DlgLib.Shipper();
+        shipper.ShipperID = TargetShipperId;
+        shipper.TakeSnapshot();
+        shipper.CompanyName = "Updated Shipper";
+        shipper.Phone = "555-9999";
+        return await shipper.UpdateAsync();
+    }
 
     // ---- Upsert -------------------------------------------------------------------------
     // SQL Server has no ON CONFLICT; use MERGE INTO ... WHEN MATCHED / WHEN NOT MATCHED.
@@ -319,4 +356,15 @@ public class ShipperBenchmarks
             CompanyName = "Upserted Shipper",
             Phone       = "555-1234",
         });
+
+    [BenchmarkCategory("Upsert"), Benchmark]
+    public async Task<bool> Upsert_Dlg()
+    {
+        var shipper = new DlgLib.Shipper();
+        shipper.ShipperID = TargetShipperId;
+        shipper.TakeSnapshot();
+        shipper.CompanyName = "Upserted Shipper";
+        shipper.Phone = "555-1234";
+        return await shipper.UpsertAsync();
+    }
 }
