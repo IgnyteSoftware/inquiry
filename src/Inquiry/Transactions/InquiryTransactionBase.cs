@@ -35,22 +35,12 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
     // ---- Class-materializer overloads -------------------------------------------------
 
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
         ThrowIfClosed();
         return _inner.QueryAsync<TEntity>(commandText, cancellationToken);
-    }
-
-    public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-    {
-        ThrowIfClosed();
-        return _inner.QueryAsync<TEntity>(commandText, parameters, cancellationToken);
     }
 
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -63,22 +53,12 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
     }
 
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
         ThrowIfClosed();
         return _inner.QueryListAsync<TEntity>(commandText, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-    {
-        ThrowIfClosed();
-        return _inner.QueryListAsync<TEntity>(commandText, parameters, cancellationToken);
     }
 
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
@@ -91,22 +71,12 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
     }
 
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
         ThrowIfClosed();
         return _inner.QuerySingleOrDefaultAsync<TEntity>(commandText, cancellationToken);
-    }
-
-    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-    {
-        ThrowIfClosed();
-        return _inner.QuerySingleOrDefaultAsync<TEntity>(commandText, parameters, cancellationToken);
     }
 
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -121,20 +91,11 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
     // ---- Execute / scalar -------------------------------------------------------------
 
     public Task<int> ExecuteAsync(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
     {
         ThrowIfClosed();
         return _inner.ExecuteAsync(commandText, cancellationToken);
-    }
-
-    public Task<int> ExecuteAsync(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-    {
-        ThrowIfClosed();
-        return _inner.ExecuteAsync(commandText, parameters, cancellationToken);
     }
 
     public Task<int> ExecuteAsync(
@@ -143,6 +104,14 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
     {
         ThrowIfClosed();
         return _inner.ExecuteAsync(command, cancellationToken);
+    }
+
+    public Task<T> ExecuteScalarAsync<T>(
+        FormattableString commandText,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfClosed();
+        return _inner.ExecuteScalarAsync<T>(commandText, cancellationToken);
     }
 
     public Task<T> ExecuteScalarAsync<T>(

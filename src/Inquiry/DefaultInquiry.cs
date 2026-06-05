@@ -2,7 +2,6 @@ using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
-using Inquiry.Parameters;
 using Inquiry.Pipeline;
 using Inquiry.Transactions;
 using Microsoft.Extensions.DependencyInjection;
@@ -116,18 +115,10 @@ public sealed class DefaultInquiry : IInquiry
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class
-        => QueryAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
-
-    /// <inheritdoc />
-    public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => QueryAsync<TEntity>(new InquiryCommand(commandText, InquiryParameterReader.Read(parameters)), cancellationToken);
+        => QueryAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -138,18 +129,10 @@ public sealed class DefaultInquiry : IInquiry
 
     /// <inheritdoc />
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class
-        => QueryListAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
-
-    /// <inheritdoc />
-    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => QueryListAsync<TEntity>(new InquiryCommand(commandText, InquiryParameterReader.Read(parameters)), cancellationToken);
+        => QueryListAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
 
     /// <inheritdoc />
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
@@ -160,18 +143,10 @@ public sealed class DefaultInquiry : IInquiry
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class
-        => QuerySingleOrDefaultAsync<TEntity>(new InquiryCommand(commandText), cancellationToken);
-
-    /// <inheritdoc />
-    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => QuerySingleOrDefaultAsync<TEntity>(new InquiryCommand(commandText, InquiryParameterReader.Read(parameters)), cancellationToken);
+        => QuerySingleOrDefaultAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -233,16 +208,9 @@ public sealed class DefaultInquiry : IInquiry
 
     /// <inheritdoc />
     public Task<int> ExecuteAsync(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
-        => ExecuteAsync(new InquiryCommand(commandText), cancellationToken);
-
-    /// <inheritdoc />
-    public Task<int> ExecuteAsync(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        => ExecuteAsync(new InquiryCommand(commandText, InquiryParameterReader.Read(parameters)), cancellationToken);
+        => ExecuteAsync(InquirySql.Sql(commandText), cancellationToken);
 
     /// <inheritdoc />
     public Task<int> ExecuteAsync(
@@ -257,6 +225,12 @@ public sealed class DefaultInquiry : IInquiry
         Action<DbCommand, TArgs> bindParameters,
         CancellationToken cancellationToken = default)
         => ActivePipeline.ExecuteAsync(commandText, args, bindParameters, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<T> ExecuteScalarAsync<T>(
+        FormattableString commandText,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteScalarAsync<T>(InquirySql.Sql(commandText), cancellationToken);
 
     /// <inheritdoc />
     public Task<T> ExecuteScalarAsync<T>(

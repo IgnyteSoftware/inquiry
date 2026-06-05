@@ -69,8 +69,8 @@ internal static class InquiryParameterBinder
         }
 
         // Generated stores emit names already prefixed with '@' so we take this fast path on
-        // every hot-path bind. The branch stays for hand-crafted callers (e.g. anonymous-object
-        // parameters via InquiryParameterReader) whose property names lack the prefix.
+        // every hot-path bind. The branch stays for hand-crafted InquiryParameter callers whose
+        // names lack the prefix.
         return name[0] is '@' or ':' or '$' or '?'
             ? name
             : "@" + name;

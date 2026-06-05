@@ -26,20 +26,17 @@ public interface IInquiry
     /// </summary>
     int MaxParametersPerCommand => InquiryOptions.DefaultMaxParametersPerCommand;
 
-    // ---- Ad-hoc string overloads (DI-resolved class materializer) ----------------------
+    // ---- Ad-hoc command overloads (DI-resolved class materializer) --------------------
 
     /// <summary>Executes a SQL query and streams mapped entities.</summary>
     IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
-        where TEntity : class;
-
-    /// <summary>Executes a SQL query with parameters and streams mapped entities.</summary>
-    IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class;
+        where TEntity : class
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        return QueryAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
+    }
 
     /// <summary>Executes a SQL query and streams mapped entities.</summary>
     IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -49,16 +46,13 @@ public interface IInquiry
 
     /// <summary>Executes a SQL query and returns the buffered set of mapped entities.</summary>
     Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
-        where TEntity : class;
-
-    /// <summary>Executes a SQL query with parameters and returns the buffered set of mapped entities.</summary>
-    Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class;
+        where TEntity : class
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        return QueryListAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
+    }
 
     /// <summary>Executes a SQL query and returns the buffered set of mapped entities.</summary>
     Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
@@ -68,16 +62,13 @@ public interface IInquiry
 
     /// <summary>Executes a SQL query and returns the first mapped entity, or <see langword="null"/> when no row is returned.</summary>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        string commandText,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
-        where TEntity : class;
-
-    /// <summary>Executes a SQL query with parameters and returns the first mapped entity, or <see langword="null"/> when no row is returned.</summary>
-    Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default)
-        where TEntity : class;
+        where TEntity : class
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        return QuerySingleOrDefaultAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
+    }
 
     /// <summary>Executes a SQL query and returns the first mapped entity, or <see langword="null"/> when no row is returned.</summary>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -123,14 +114,12 @@ public interface IInquiry
 
     /// <summary>Executes a SQL command and returns the affected row count.</summary>
     Task<int> ExecuteAsync(
-        string commandText,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>Executes a SQL command with parameters and returns the affected row count.</summary>
-    Task<int> ExecuteAsync(
-        string commandText,
-        object? parameters,
-        CancellationToken cancellationToken = default);
+        FormattableString commandText,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        return ExecuteAsync(InquirySql.Sql(commandText), cancellationToken);
+    }
 
     /// <summary>Executes a SQL command and returns the affected row count.</summary>
     Task<int> ExecuteAsync(
@@ -164,6 +153,20 @@ public interface IInquiry
         return ExecuteAsync(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a command returning a single scalar value (COUNT/SUM/MIN/MAX/AVG). A null/DBNull
+    /// result maps to <c>default(T)</c> (e.g. <see langword="null"/> for a nullable T).
+    /// </summary>
+    /// <remarks>The default throws; <see cref="DefaultInquiry"/> implements it over the pipeline, so
+    /// existing <see cref="IInquiry"/> implementations stay source-compatible.</remarks>
+    Task<T> ExecuteScalarAsync<T>(
+        FormattableString commandText,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        return ExecuteScalarAsync<T>(InquirySql.Sql(commandText), cancellationToken);
     }
 
     /// <summary>

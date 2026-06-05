@@ -22,8 +22,8 @@ namespace Inquiry.Sqlite.Tests;
 /// </summary>
 public sealed class TransactionStateMachineTests
 {
-    private const string InsertCustomerSql =
-        "INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES (@CustomerID, @CompanyName, @Country)";
+    private static FormattableString InsertCustomer(string customerId, string companyName, string country)
+        => $"INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES ({customerId}, {companyName}, {country})";
 
     // ---- Concurrent transactions on the SAME DI scope (item 1) -----------------------
     //
@@ -43,13 +43,13 @@ public sealed class TransactionStateMachineTests
         var t1 = Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "PAR01", CompanyName = "Parallel 1", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("PAR01", "Parallel 1", "USA"));
             await tx.CommitAsync();
         });
         var t2 = Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "PAR02", CompanyName = "Parallel 2", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("PAR02", "Parallel 2", "USA"));
             await tx.CommitAsync();
         });
 
@@ -69,13 +69,13 @@ public sealed class TransactionStateMachineTests
         var committed = Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "KEEP1", CompanyName = "Keep", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("KEEP1", "Keep", "USA"));
             await tx.CommitAsync();
         });
         var rolled = Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "GONE1", CompanyName = "Gone", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("GONE1", "Gone", "USA"));
             await tx.RollbackAsync();
         });
 
@@ -101,8 +101,7 @@ public sealed class TransactionStateMachineTests
         var tasks = Enumerable.Range(0, N).Select(i => Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await tx.ExecuteAsync(InsertCustomerSql,
-                new { CustomerID = "C" + i.ToString("D4"), CompanyName = "Concurrent " + i, Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("C" + i.ToString("D4"), "Concurrent " + i, "USA"));
             await tx.CommitAsync();
         }));
 
@@ -130,14 +129,14 @@ public sealed class TransactionStateMachineTests
         var inquiry = BuildInquiry(harness.ConnectionString, FailureMode.OnCommit);
 
         var tx = await inquiry.BeginTransactionAsync();
-        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "FAIL1", CompanyName = "Failing", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomer("FAIL1", "Failing", "USA"));
 
         // The provider commit throws — but the state machine should close the handle anyway.
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CommitAsync());
 
         // Subsequent tx.X(...) must fail-fast (the bug: previously silently auto-committed via default pipeline).
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTR1", CompanyName = "After", Country = "USA" }));
+            () => tx.ExecuteAsync(InsertCustomer("AFTR1", "After", "USA")));
 
         // Dispose must not throw — best-effort cleanup of an already-failed transaction.
         await tx.DisposeAsync();
@@ -150,12 +149,12 @@ public sealed class TransactionStateMachineTests
         var inquiry = BuildInquiry(harness.ConnectionString, FailureMode.OnRollback);
 
         var tx = await inquiry.BeginTransactionAsync();
-        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "FAIL2", CompanyName = "Failing", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomer("FAIL2", "Failing", "USA"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tx.RollbackAsync());
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTR2", CompanyName = "After", Country = "USA" }));
+            () => tx.ExecuteAsync(InsertCustomer("AFTR2", "After", "USA")));
 
         await tx.DisposeAsync();
     }
@@ -244,7 +243,7 @@ public sealed class TransactionStateMachineTests
         var store = harness.GetRequiredService<CustomerStore>();
 
         await using var outer = await inquiry.BeginTransactionAsync();
-        await outer.ExecuteAsync(InsertCustomerSql, new { CustomerID = "OUT01", CompanyName = "Outer", Country = "USA" });
+        await outer.ExecuteAsync(InsertCustomer("OUT01", "Outer", "USA"));
 
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -253,7 +252,7 @@ public sealed class TransactionStateMachineTests
 
         // Outer must remain usable. The savepoint creation failed (cancelled before the
         // SAVEPOINT statement ran), so the outer transaction's state is unchanged.
-        await outer.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFT01", CompanyName = "After Cancel", Country = "USA" });
+        await outer.ExecuteAsync(InsertCustomer("AFT01", "After Cancel", "USA"));
         await outer.CommitAsync();
 
         Assert.NotNull(await store.SelectByKeyAsync("OUT01"));
@@ -284,7 +283,7 @@ public sealed class TransactionStateMachineTests
         {
             try
             {
-                await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "X" + i.ToString("D4"), CompanyName = "X " + i, Country = "USA" });
+                await tx.ExecuteAsync(InsertCustomer("X" + i.ToString("D4"), "X " + i, "USA"));
                 return (Success: true, Exception: (Exception?)null);
             }
             catch (Exception ex)
@@ -331,7 +330,7 @@ public sealed class TransactionStateMachineTests
 
         var tx = await inquiry.BeginTransactionAsync();
         var streaming = tx.QueryAsync<Customer>(
-            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+            $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
         var enumerator = streaming.GetAsyncEnumerator();
 
         try
@@ -366,7 +365,7 @@ public sealed class TransactionStateMachineTests
 
         await using var tx = await inquiry.BeginTransactionAsync();
         var streaming = tx.QueryAsync<Customer>(
-            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+            $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
         var enumerator = streaming.GetAsyncEnumerator();
 
         try
@@ -381,7 +380,7 @@ public sealed class TransactionStateMachineTests
             await enumerator.DisposeAsync();
         }
 
-        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "CMT01", CompanyName = "Committed", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomer("CMT01", "Committed", "USA"));
         await tx.CommitAsync();
 
         Assert.NotNull(await store.SelectByKeyAsync("CMT01"));
@@ -398,9 +397,9 @@ public sealed class TransactionStateMachineTests
         await store.InsertAsync(new Customer { CustomerID = "SEED2", CompanyName = "Seed 2" });
 
         await using var tx = await inquiry.BeginTransactionAsync();
-        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "RBK01", CompanyName = "Rollback", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomer("RBK01", "Rollback", "USA"));
         var streaming = tx.QueryAsync<Customer>(
-            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+            $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
         var enumerator = streaming.GetAsyncEnumerator();
 
         try
@@ -461,7 +460,7 @@ public sealed class TransactionStateMachineTests
 
         // The next BeginTransactionAsync (without a cancelled token) must work cleanly.
         await using var tx = await inquiry.BeginTransactionAsync();
-        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "RECV1", CompanyName = "Recovered", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomer("RECV1", "Recovered", "USA"));
         await tx.CommitAsync();
 
         Assert.NotNull(await store.SelectByKeyAsync("RECV1"));
@@ -505,10 +504,10 @@ public sealed class TransactionStateMachineTests
         {
             // Multiple prepared statements inside one transaction — exercises the
             // MaybePrepareAsync code path for each.
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "PRE01", CompanyName = "Prepared 1", Country = "USA" });
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "PRE02", CompanyName = "Prepared 2", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("PRE01", "Prepared 1", "USA"));
+            await tx.ExecuteAsync(InsertCustomer("PRE02", "Prepared 2", "USA"));
             var single = await tx.QuerySingleOrDefaultAsync<Customer>(
-                "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers WHERE CustomerID = 'PRE01'");
+                $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers WHERE CustomerID = 'PRE01'");
             Assert.NotNull(single);
 
             await tx.CommitAsync();
