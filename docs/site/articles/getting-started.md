@@ -99,24 +99,23 @@ var all = await store.SelectAllAsync();
 
 ## 7. Wrap multiple calls in a transaction
 
-`IInquiry.BeginTransactionAsync()` returns an `IInquiryTransaction` that owns a connection and a `DbTransaction`. Every operation in the `using` scope — generated store methods *and* any ad-hoc SQL called directly on the handle — shares them. Disposing without committing rolls back.
+`IInquiry.ExecuteInTransactionAsync()` opens an `IInquiryTransaction` that owns a connection and a `DbTransaction`, runs your delegate, and commits only when the delegate completes successfully. Every operation in the delegate — generated store methods *and* any ad-hoc SQL called directly on the handle — shares that transaction.
 
 ```csharp
 var inquiry = provider.GetRequiredService<IInquiry>();
 var shippers = provider.GetRequiredService<ShipperStore>();
 
-await using var tx = await inquiry.BeginTransactionAsync();
-
-await shippers.InsertAsync(new Shipper { CompanyName = "Speedy Express" });    // joins the tx
-await tx.ExecuteAsync(                                                          // ad-hoc, joins the tx
-    "UPDATE Shippers SET Phone = @p WHERE CompanyName = @c",
-    new { p = "555-1212", c = "Speedy Express" });
-
-await tx.CommitAsync();
+await inquiry.ExecuteInTransactionAsync(async tx =>
+{
+    await shippers.InsertAsync(new Shipper { CompanyName = "Speedy Express" });    // joins the tx
+    await tx.ExecuteAsync(                                                          // ad-hoc, joins the tx
+        $"UPDATE Shippers SET Phone = {"555-1212"} WHERE CompanyName = {"Speedy Express"}");
+});
 ```
 
 Key points:
 
+- **The helper owns commit/rollback.** `ExecuteInTransactionAsync` commits on success. If the delegate throws, dispose rolls back.
 - **Stores join automatically.** No `WithTransaction` builder, no per-call parameter. The transaction is *ambient* — once open, every Inquiry call on the same async flow uses it.
 - **Two call styles, same outcome.** `tx.ExecuteAsync(...)` for ad-hoc SQL; `store.X(...)` for typed generated methods. Both run on the same connection in the same transaction.
 - **Use-after-close fails fast.** Calling `tx.X(...)` after `Commit` / `Rollback` / `Dispose` throws `ObjectDisposedException`. Store calls from async work that captured the transaction also throw after close; fresh store calls after the transaction scope use the default non-transactional pipeline.
@@ -124,7 +123,8 @@ Key points:
 
 ```csharp
 await using var outer = await inquiry.BeginTransactionAsync();
-await outer.ExecuteAsync("INSERT INTO Audit (Event) VALUES ('start')");
+var startEvent = "start";
+await outer.ExecuteAsync($"INSERT INTO Audit (Event) VALUES ({startEvent})");
 
 await using (var inner = await outer.BeginTransactionAsync())   // SAVEPOINT
 {

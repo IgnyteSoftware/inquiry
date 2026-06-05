@@ -252,4 +252,67 @@ public interface IInquiry
     Task<IInquiryTransaction> BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Opens a transaction, runs <paramref name="operation"/>, and commits when the operation
+    /// completes successfully. If the operation throws, the transaction is disposed without
+    /// committing and rolls back automatically.
+    /// </summary>
+    Task ExecuteInTransactionAsync(
+        Func<IInquiryTransaction, Task> operation,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default)
+    {
+        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        return ExecuteInTransactionAsync((transaction, _) => operation(transaction), isolationLevel, cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens a transaction, runs <paramref name="operation"/>, and commits when the operation
+    /// completes successfully. If the operation throws, the transaction is disposed without
+    /// committing and rolls back automatically.
+    /// </summary>
+    async Task ExecuteInTransactionAsync(
+        Func<IInquiryTransaction, CancellationToken, Task> operation,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default)
+    {
+        if (operation is null) throw new ArgumentNullException(nameof(operation));
+
+        await using var transaction = await BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
+        await operation(transaction, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Opens a transaction, runs <paramref name="operation"/>, commits when the operation
+    /// completes successfully, and returns the operation result. If the operation throws, the
+    /// transaction is disposed without committing and rolls back automatically.
+    /// </summary>
+    Task<TResult> ExecuteInTransactionAsync<TResult>(
+        Func<IInquiryTransaction, Task<TResult>> operation,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default)
+    {
+        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        return ExecuteInTransactionAsync((transaction, _) => operation(transaction), isolationLevel, cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens a transaction, runs <paramref name="operation"/>, commits when the operation
+    /// completes successfully, and returns the operation result. If the operation throws, the
+    /// transaction is disposed without committing and rolls back automatically.
+    /// </summary>
+    async Task<TResult> ExecuteInTransactionAsync<TResult>(
+        Func<IInquiryTransaction, CancellationToken, Task<TResult>> operation,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default)
+    {
+        if (operation is null) throw new ArgumentNullException(nameof(operation));
+
+        await using var transaction = await BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
+        var result = await operation(transaction, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
 }

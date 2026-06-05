@@ -59,10 +59,10 @@ Inquiry is built on one core idea: **SQL is data that should be computed at buil
 
 | Project | Role |
 |---|---|
-| `Inquiry` | Public runtime: `IInquiry` facade, request pipeline, attributes, command/parameter types, transactions, DI extension. **Ships zero SQL.** |
+| `Inquiry` | Public runtime: `IInquiry` facade, attributes, command/parameter types, transactions, options, and DI extension. The request pipeline is internal. **Ships zero SQL.** |
 | `Inquiry.Generators.Shared` | The shared incremental generator framework — entity/store discovery, the per-dialect `SqlBuilder` hierarchy, the emitters. Bundled privately into each provider analyzer. |
 | `Inquiry.<Dialect>.Analyzer` | The dialect's Roslyn analyzer. Wraps the shared framework with a `[Generator]` attribute that fires only when its dialect matches `[assembly: InquiryDialect]`. |
-| `Inquiry.<Dialect>` | The runtime provider package: connection factory, DI extension (`AddInquirySqlite`, `AddInquirySqlServer`, …), the `[assembly: InquiryDialect]` marker. |
+| `Inquiry.<Dialect>` | The runtime provider package: DI extension (`AddInquirySqlite`, `AddInquirySqlServer`, ...), provider options, internal connection factory, and the `[assembly: InquiryDialect]` marker. |
 
 ## Why one dialect per assembly
 
@@ -93,7 +93,7 @@ For inserts / updates / deletes (`ExecuteNonQuery`), the pipeline skips the read
 The pipeline supports the usual cross-cutting features without forfeiting compile-time SQL:
 
 - **Interceptors** (`IInquiryCommandInterceptor`) — observe / mutate the command before and after execution.
-- **Transactions** — `IInquiry.BeginTransactionAsync()` installs an `AsyncLocal` slot pointing at a transacted pipeline that reuses one connection and one `DbTransaction`. Generated stores resolved from DI automatically join the open transaction via that slot; ad-hoc SQL goes through the `IInquiryTransaction` handle's own forwarding methods (`tx.ExecuteAsync(...)`, etc.). Nested `BeginTransactionAsync` creates savepoints (unbounded depth). The handle's forwarding methods throw `ObjectDisposedException` after the transaction closes. Full writeup: [Transactions](features/transactions.md).
+- **Transactions** — `IInquiry.ExecuteInTransactionAsync(...)` owns the common begin/commit/rollback flow. `IInquiry.BeginTransactionAsync()` remains available when callers need manual rollback or savepoints; it installs an `AsyncLocal` slot pointing at a transacted pipeline that reuses one connection and one `DbTransaction`. Generated stores resolved from DI automatically join the open transaction via that slot; ad-hoc SQL goes through the `IInquiryTransaction` handle's own forwarding methods (`tx.ExecuteAsync(...)`, etc.). Nested `BeginTransactionAsync` creates savepoints (unbounded depth). The handle's forwarding methods throw `ObjectDisposedException` after the transaction closes. Full writeup: [Transactions](features/transactions.md).
 - **Prepared statements** — opt-in via `InquiryOptions.PrepareStatements = PreparedStatementMode.Auto`. The pipeline calls `PrepareAsync` once per command, after which the database keeps the parsed plan for the lifetime of the connection.
 - **Retry on transient cloud errors** — provider factories wrap connection opens with an exponential-backoff retry policy for known transient codes (Azure SQL, CockroachDB, Aurora, etc.).
 

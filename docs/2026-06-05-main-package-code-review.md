@@ -16,14 +16,15 @@ Started on the P1/P2 release blockers in branch `codex-main-package-findings`.
 - Fixed repeated `AddInquiry(...)` option configuration so later calls compose into the single registered `InquiryOptions` instance instead of being silently ignored.
 - Added safe ad-hoc SQL APIs: `InquirySql.Sql(FormattableString)` and high-level `IInquiry` / `IInquiryTransaction` `FormattableString` overloads parameterize interpolation holes into an `InquiryCommand`.
 - Replaced default AppDomain-wide generated-service discovery with explicit generated registration: `AddInquiry()` is core-only, the generator emits `AddInquiryGeneratedStores()`, and the assembly overload scans only assemblies the caller supplies.
+- Added `IInquiry.ExecuteInTransactionAsync(...)` overloads so callers can let Inquiry own begin/commit/rollback for critical units of work.
 - Updated transaction docs to describe the new captured-slot behavior.
 - Updated security and batch-operation docs for safe ad-hoc SQL and `InquiryOptions.MaxParametersPerCommand`.
 
 Verification run:
 
-- `dotnet test tests\Inquiry.Generators.Tests\Inquiry.Generators.Tests.csproj` - passed: 184 tests on net8.0, net9.0, and net10.0.
-- `dotnet test tests\Inquiry.Sqlite.Tests\Inquiry.Sqlite.Tests.csproj` - passed: 156 tests on net8.0, net9.0, and net10.0.
-- `dotnet test tests\Inquiry.Tests\Inquiry.Tests.csproj` - passed: 102 tests on net8.0, net9.0, and net10.0.
+- `dotnet test tests\Inquiry.Generators.Tests\Inquiry.Generators.Tests.csproj` - passed: 185 tests on net8.0, net9.0, and net10.0.
+- `dotnet test tests\Inquiry.Sqlite.Tests\Inquiry.Sqlite.Tests.csproj` - passed: 160 tests on net8.0, net9.0, and net10.0.
+- `dotnet test tests\Inquiry.Tests\Inquiry.Tests.csproj` - passed: 91 tests on net8.0, net9.0, and net10.0.
 - `dotnet build samples\Inquiry.Sample\Inquiry.Sample.csproj` - passed.
 - `dotnet build tests\Inquiry.SqlServer.Tests\Inquiry.SqlServer.Tests.csproj` - passed with existing benchmark nullability warnings.
 - `dotnet build tests\Inquiry.PostgreSql.Tests\Inquiry.PostgreSql.Tests.csproj` - passed.
@@ -181,7 +182,7 @@ Proposed fix: add generator diagnostics for null, empty, and unknown dialect nam
 
 ## Missing features and API improvements
 
-1. Add a typed transaction API. The ambient model is elegant, but users need a safer option for critical workflows: `ExecuteInTransactionAsync`, store methods that accept `IInquiryTransaction`, or generated transaction-bound store wrappers.
+1. Typed transaction API: fixed with `IInquiry.ExecuteInTransactionAsync(...)` overloads that open a transaction, run a caller delegate, commit on success, and roll back on exceptions. Generated transaction-bound store wrappers remain a possible future ergonomics improvement, but the critical owned-lifetime API now exists.
 2. Support multiple named database contexts. The single global `IInquiryConnectionFactory` intentionally blocks multiple providers in one service provider, but many apps need read/write split, tenant databases, or two stores against different engines. A pre-release breaking change could introduce `IInquiry<TContext>` and provider registrations keyed by context.
 3. Expand stored procedure support. Docs already list missing OUT/INOUT parameters, scalar returns, multiple result sets, table-valued parameters, and Oracle ref cursors.
 4. Make JSON conversion configurable and AOT-friendly. `InquiryJsonConverter<T>` uses default `JsonSerializer` options and no context. Add attribute or options support for a `JsonSerializerOptions`/`JsonTypeInfo` provider.

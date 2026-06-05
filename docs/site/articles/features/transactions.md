@@ -1,26 +1,44 @@
 # Transactions
 
-Open a transaction on the `IInquiry` facade. Every operation inside the `using` scope — a query / execute method called directly on the transaction handle, or a method on a generated store resolved from DI — shares the same connection and the same `DbTransaction`. Commit when done, or let dispose roll it back.
+Open a transaction on the `IInquiry` facade. Every operation inside the transaction — a query / execute method called directly on the transaction handle, or a method on a generated store resolved from DI — shares the same connection and the same `DbTransaction`. Let `ExecuteInTransactionAsync` own the common commit/rollback flow, or use `BeginTransactionAsync` when you need manual rollback or savepoints.
 
 ## Usage
+
+For most application code, use the owned helper:
 
 ```csharp
 var inquiry = sp.GetRequiredService<IInquiry>();
 var customers = sp.GetRequiredService<CustomerStore>();
 var orders = sp.GetRequiredService<OrderStore>();
 
+await inquiry.ExecuteInTransactionAsync(async tx =>
+{
+    // Generated stores see the transaction automatically — they were resolved before the
+    // transaction existed, but they share the ambient pipeline that the transaction installed.
+    await customers.InsertAsync(new Customer { … });
+    await orders.InsertAsync(new Order { … });
+
+    // Ad-hoc SQL: call directly on the transaction handle.
+    await tx.ExecuteAsync($"UPDATE Inventory SET Qty = Qty - {quantity} WHERE SKU = {sku}");
+});
+```
+
+`ExecuteInTransactionAsync` commits when the delegate completes successfully. If the delegate throws, the transaction is disposed without committing and rolls back automatically. Use the generic overload when the unit of work should return a value:
+
+```csharp
+var customerId = await inquiry.ExecuteInTransactionAsync(async tx =>
+{
+    await customers.InsertAsync(customer);
+    return customer.CustomerID;
+});
+```
+
+When you need explicit rollback or a long-lived transaction handle, use `BeginTransactionAsync` directly:
+
+```csharp
 await using var tx = await inquiry.BeginTransactionAsync();
-
-// Generated stores see the transaction automatically — they were resolved before the
-// transaction existed, but they share the ambient pipeline that the transaction installed.
 await customers.InsertAsync(new Customer { … });
-await orders.InsertAsync(new Order { … });
-
-// Ad-hoc SQL: call directly on the transaction handle.
-await tx.ExecuteAsync(
-    "UPDATE Inventory SET Qty = Qty - @q WHERE SKU = @s",
-    new { q = 1, s = sku });
-
+await tx.ExecuteAsync($"UPDATE Inventory SET Qty = Qty - {quantity} WHERE SKU = {sku}");
 await tx.CommitAsync();   // dispose without committing → automatic rollback
 ```
 
@@ -32,8 +50,8 @@ Disposing the transaction without committing rolls back. This is intentional —
 
 ```csharp
 // Style A — call methods directly on the transaction handle:
-await tx.ExecuteAsync("UPDATE …");
-var loaded = await tx.QuerySingleOrDefaultAsync<Customer>("SELECT … WHERE id = @id", new { id });
+await tx.ExecuteAsync($"UPDATE Customers SET LastSeenUtc = {now} WHERE CustomerID = {id}");
+var loaded = await tx.QuerySingleOrDefaultAsync<Customer>($"SELECT * FROM Customers WHERE CustomerID = {id}");
 
 // Style B — call methods on a generated store resolved from DI:
 await customerStore.UpdateAsync(customer);   // routes through the ambient pipeline
@@ -94,7 +112,8 @@ Default level (when omitted): `ReadCommitted`.
 
 ```csharp
 await using var outer = await inquiry.BeginTransactionAsync();
-await outer.ExecuteAsync("INSERT INTO Audit (Event) VALUES ('start')");
+var startEvent = "start";
+await outer.ExecuteAsync($"INSERT INTO Audit (Event) VALUES ({startEvent})");
 
 await using (var inner = await outer.BeginTransactionAsync())   // SAVEPOINT inquiry_sp_1
 {
@@ -110,7 +129,8 @@ await using (var inner = await outer.BeginTransactionAsync())   // SAVEPOINT inq
     }
 }
 
-await outer.ExecuteAsync("INSERT INTO Audit (Event) VALUES ('end')");
+var endEvent = "end";
+await outer.ExecuteAsync($"INSERT INTO Audit (Event) VALUES ({endEvent})");
 await outer.CommitAsync();
 ```
 
