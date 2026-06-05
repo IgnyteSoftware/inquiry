@@ -83,7 +83,7 @@ public sealed class ConcurrencyIntegrationTests
         await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.PostgreSqlDdl, "concthrow");
 
         await using var throwing = new ServiceCollection()
-            .AddInquiry(o => o.ThrowOnConcurrencyConflict = true)
+            .AddInquiry(o => o.ThrowOnConcurrencyConflict = true, typeof(VersionedItemStore).Assembly)
             .AddInquiryPostgreSql(harness.ConnectionString)
             .BuildServiceProvider();
         var store = throwing.GetRequiredService<VersionedItemStore>();

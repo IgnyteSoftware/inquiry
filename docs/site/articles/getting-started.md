@@ -79,13 +79,14 @@ public partial class ShipperStore : InquiryStore<Shipper>
 using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection();
-services.AddInquirySqlite("Data Source=:memory:");   // — or AddInquirySqlServer / AddInquiryPostgreSql / etc.
-services.AddInquiryGeneratedStores();                 // registers every generated store in this assembly
+services.AddInquiry();                                // core runtime services
+services.AddInquiryGeneratedStores();                 // generated stores/materializers in this assembly
+services.AddInquirySqlite("Data Source=:memory:");    // or AddInquirySqlServer / AddInquiryPostgreSql / etc.
 
 var provider = services.BuildServiceProvider();
 ```
 
-`AddInquiryGeneratedStores()` calls the generator's `InquiryGeneratedServiceRegistration` — every store you declared is registered as a singleton.
+`AddInquiryGeneratedStores()` calls the generator's `InquiryGeneratedServiceRegistration` - every store you declared is registered as scoped, matching `IInquiry`'s DI lifetime.
 
 ## 6. Run a query
 
@@ -154,7 +155,7 @@ Behind the scenes, the source generator turned your `partial` declarations into:
 
 - A **materializer** (`ShipperInquiryEntityStructMaterializer`) — reads each column from a `DbDataReader` by ordinal into a new `Shipper`.
 - A **partial store class** — for each method, a private `const string _sql...` field with the baked SQL, plus a body that calls the request pipeline.
-- A **DI registration class** — `InquiryGeneratedServiceRegistration` — that wires up every store as a singleton.
+- A **DI registration class** - `InquiryGeneratedServiceRegistration` - that wires up every store and materializer.
 
 For the **full annotated generator output** of the example above, see the [CRUD feature page](features/crud.md).
 

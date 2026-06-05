@@ -11,13 +11,13 @@ namespace Inquiry.DependencyInjection;
 public static class InquiryServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers Inquiry runtime services and generated stores/materializers.
+    /// Registers core Inquiry runtime services.
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services)
         => AddInquiryCore(services, configureOptions: null, additionalAssemblies: null);
 
     /// <summary>
-    /// Registers Inquiry runtime services and generated stores/materializers, applying the supplied
+    /// Registers core Inquiry runtime services, applying the supplied
     /// <see cref="InquiryOptions"/> configuration (e.g. <c>o.PrepareStatements = PreparedStatementMode.Auto</c>).
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services, Action<InquiryOptions> configureOptions)
@@ -31,12 +31,10 @@ public static class InquiryServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers Inquiry runtime services and scans the supplied assemblies (in addition to
-    /// <see cref="AppDomain.CurrentDomain"/>) for generated <see cref="IInquiryServiceRegistration"/>
-    /// implementations. Use this overload when stores live in a referenced assembly that is not
-    /// guaranteed to be loaded by the time AddInquiry runs — passing it explicitly forces the scan.
-    /// Assemblies passed explicitly are deduped against the AppDomain scan, so passing one that is
-    /// already loaded is a no-op (its registration still runs exactly once).
+    /// Registers core Inquiry runtime services and scans the supplied assemblies for generated
+    /// <see cref="IInquiryServiceRegistration"/> implementations. Prefer the generated
+    /// <c>AddInquiryGeneratedStores()</c> extension when the stores live in the current assembly.
+    /// Assemblies passed explicitly are deduped by identity, so passing one twice is a no-op.
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services, params Assembly[] additionalAssemblies)
     {
@@ -49,10 +47,10 @@ public static class InquiryServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers Inquiry runtime services with the supplied <see cref="InquiryOptions"/> configuration
-    /// and scans the supplied assemblies (in addition to <see cref="AppDomain.CurrentDomain"/>) for
-    /// generated <see cref="IInquiryServiceRegistration"/> implementations. See the <see cref="Assembly"/>-
-    /// only overload for the dedupe semantics.
+    /// Registers core Inquiry runtime services with the supplied <see cref="InquiryOptions"/>
+    /// configuration and scans the supplied assemblies for generated
+    /// <see cref="IInquiryServiceRegistration"/> implementations. See the <see cref="Assembly"/>-only
+    /// overload for the dedupe semantics.
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services, Action<InquiryOptions> configureOptions, params Assembly[] additionalAssemblies)
     {
@@ -82,7 +80,12 @@ public static class InquiryServiceCollectionExtensions
 
         services.TryAddScoped<IInquiry, DefaultInquiry>();
         services.TryAddScoped<IInquiryRequestPipeline, InquiryRequestPipeline>();
-        AddGeneratedServices(services, additionalAssemblies);
+
+        if (additionalAssemblies is { Length: > 0 })
+        {
+            AddGeneratedServices(services, additionalAssemblies);
+        }
+
         return services;
     }
 
@@ -105,32 +108,13 @@ public static class InquiryServiceCollectionExtensions
         services.AddSingleton(options);
     }
 
-    private static void AddGeneratedServices(IServiceCollection services, Assembly[]? additionalAssemblies)
+    private static void AddGeneratedServices(IServiceCollection services, Assembly[] additionalAssemblies)
     {
-        // Dedupe by Assembly identity: a caller may pass an Assembly the AppDomain scan already
-        // visits, and we must not invoke its registration twice (downstream service registrations
-        // typically use TryAdd, which would silently swallow the duplicate, but generated stores
-        // include collection-aware Add calls in some shapes — better not to rely on that).
+        // Dedupe by Assembly identity: a caller may pass an Assembly twice, and we must not invoke
+        // its registration twice (downstream service registrations typically use TryAdd, which would
+        // silently swallow the duplicate, but generated stores include collection-aware Add calls in
+        // some shapes - better not to rely on that).
         var seen = new HashSet<Assembly>();
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            if (assembly.IsDynamic || !seen.Add(assembly))
-            {
-                continue;
-            }
-
-            foreach (var registrationType in GetRegistrationTypes(assembly))
-            {
-                var registration = (IInquiryServiceRegistration?)Activator.CreateInstance(registrationType, nonPublic: true);
-                registration?.AddServices(services);
-            }
-        }
-
-        if (additionalAssemblies is null)
-        {
-            return;
-        }
-
         foreach (var assembly in additionalAssemblies)
         {
             if (assembly is null || assembly.IsDynamic || !seen.Add(assembly))

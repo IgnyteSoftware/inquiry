@@ -147,6 +147,8 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("InquiryGeneratedServiceRegistration.g.cs", StringComparison.Ordinal));
         var generatedServicesText = generatedServices.GetText().ToString();
 
+        Assert.Contains("public static class InquiryGeneratedServiceCollectionExtensions", generatedServicesText);
+        Assert.Contains("AddInquiryGeneratedStores(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)", generatedServicesText);
         Assert.Contains("IInquiryServiceRegistration", generatedServicesText);
         Assert.Contains("void AddServices(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)", generatedServicesText);
         Assert.DoesNotContain("IInquiryEntityMetadata", generatedServicesText);

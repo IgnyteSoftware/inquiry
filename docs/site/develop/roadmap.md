@@ -38,10 +38,6 @@
 - **Multi-database in one container.** Inquiry binds a single global `IInquiryConnectionFactory` per
   service collection (now enforced — registering two providers throws a clear exception). True
   multi-provider support would require keyed/named factories or per-provider store scopes.
-- **Trimming / AOT-safe registration.** `AddInquiry()` discovers generated registrations by reflecting
-  over loaded assemblies; an `AddInquiry(params Assembly[])` overload already covers the
-  not-yet-loaded-assembly case. A source-generated registration manifest would remove the runtime
-  reflection and make the path trimming/AOT-safe.
 - **CI: repo-wide warning gate.** Production projects are warnings-as-errors and the known warning
   sources are scoped-suppressed; a repo-wide build-warning gate (extending coverage to the test projects)
   would catch new warnings. *(Skip-gating and the scheduled full-TFM matrix are done — see
@@ -89,9 +85,10 @@ open:
   on MySQL connections by default. (Oracle generated-key upsert remains unsupported, tracked separately.)
 - **Providers:** Oracle ref-cursor detection requires the generated `:rc` bind, so it no longer
   misclassifies ad-hoc PL/SQL.
-- **Dependency injection:** `AddInquiry(params Assembly[])` overloads added for stores in
-  not-yet-loaded assemblies; registering two providers in one container now fails fast with a clear
-  message.
+- **Dependency injection:** generated `AddInquiryGeneratedStores()` registration is explicit, so
+  `AddInquiry()` no longer scans loaded AppDomain assemblies by default. The
+  `AddInquiry(params Assembly[])` fallback remains for intentional assembly-based registration, and
+  registering two providers in one container now fails fast with a clear message.
 - **Hardening:** sample DB credentials are labeled local-dev-only with an `INQUIRY_SAMPLE_DB` override;
   the known build-warning sources are scoped-suppressed (production projects are warnings-as-errors).
 - **CI:** Oracle moved into the per-PR integration matrix (net8.0/net9.0); CI emits TRX artifacts.

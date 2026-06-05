@@ -472,7 +472,7 @@ public sealed class TransactionStateMachineTests
 
         // Bespoke service-collection wiring so we can pass InquiryOptions.
         var services = new ServiceCollection()
-            .AddInquiry(opt => opt.PrepareStatements = PreparedStatementMode.Auto)
+            .AddInquiry(opt => opt.PrepareStatements = PreparedStatementMode.Auto, typeof(CustomerStore).Assembly)
             .AddInquirySqlite(connectionString)
             .BuildServiceProvider();
 

@@ -83,7 +83,7 @@ public sealed class ConcurrencyIntegrationTests
         await using var harness = await OracleTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.OracleDdl, "concthrow");
 
         await using var throwing = new ServiceCollection()
-            .AddInquiry(o => o.ThrowOnConcurrencyConflict = true)
+            .AddInquiry(o => o.ThrowOnConcurrencyConflict = true, typeof(VersionedItemStore).Assembly)
             .AddInquiryOracle(harness.ConnectionString)
             .BuildServiceProvider();
         var store = throwing.GetRequiredService<VersionedItemStore>();

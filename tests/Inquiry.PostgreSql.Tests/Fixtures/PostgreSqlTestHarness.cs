@@ -1,5 +1,7 @@
 using Inquiry.DependencyInjection;
+using Inquiry.FeatureCatalog;
 using Inquiry.Northwind;
+using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -62,7 +64,7 @@ internal sealed class PostgreSqlTestHarness : IAsyncDisposable
         }
 
         var services = new ServiceCollection()
-            .AddInquiry()
+            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly)
             .AddInquiryPostgreSql(connectionString)
             .BuildServiceProvider();
 

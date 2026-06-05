@@ -1,5 +1,7 @@
 using Inquiry.DependencyInjection;
+using Inquiry.FeatureCatalog;
 using Inquiry.Northwind;
+using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Oracle.ManagedDataAccess.Client;
@@ -78,7 +80,7 @@ internal sealed class OracleTestHarness : IAsyncDisposable
         }
 
         var services = new ServiceCollection()
-            .AddInquiry()
+            .AddInquiry(typeof(CustomerStore).Assembly, typeof(VersionedItemStore).Assembly)
             .AddInquiryOracle(connectionString)
             .BuildServiceProvider();
 

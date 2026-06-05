@@ -54,16 +54,16 @@ public sealed class PreparedStatementIntegrationTests
         var services = new ServiceCollection();
         if (prepare)
         {
-            services.AddInquiry(o => o.PrepareStatements = PreparedStatementMode.Auto);
+            services.AddInquiry(o => o.PrepareStatements = PreparedStatementMode.Auto, typeof(CustomerStore).Assembly);
         }
         else
         {
-            services.AddInquiry();
+            services.AddInquiry(typeof(CustomerStore).Assembly);
         }
 
         // A SQLite factory that advertises the persistent-prepared capability so the Auto path
         // genuinely exercises DbCommand.PrepareAsync (the shipped SqliteInquiryConnectionFactory
-        // reports false by design). AddInquiry() registers the generated stores via assembly scan.
+        // reports false by design).
         services.AddSingleton<IInquiryConnectionFactory>(new PrepareCapableSqliteFactory(connectionString));
 
         await using var provider = services.BuildServiceProvider();

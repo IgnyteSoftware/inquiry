@@ -1,5 +1,7 @@
 using Inquiry.DependencyInjection;
+using Inquiry.FeatureCatalog;
 using Inquiry.Northwind;
+using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.DependencyInjection;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,7 +62,7 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
         }
 
         var services = new ServiceCollection()
-            .AddInquiry()
+            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly)
             .AddInquirySqlServer(connectionString)
             .BuildServiceProvider();
 

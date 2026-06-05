@@ -62,8 +62,8 @@ generated stores. Specifically:
   `[InquiryDeleteOneByKey]`
 - Eager loading on both Region↔Territory (non-nullable key) and Category↔Product
   (nullable IDENTITY key)
-- DI registration through `AddInquiry()` + `AddInquirySqlite(...)` /
-  `AddInquirySqlServer(...)` / `AddInquiryPostgreSql(...)`
+- DI registration through `AddInquiry()` + `AddInquiryGeneratedStores()` +
+  `AddInquirySqlite(...)` / `AddInquirySqlServer(...)` / `AddInquiryPostgreSql(...)`
 - Ambient transactions through `IInquiry.BeginTransactionAsync()`, combining an
   IDENTITY-keyed parent insert (`Orders` via `InsertReturning`) with composite-key child
   inserts (`Order Details`) inside one commit

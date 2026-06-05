@@ -18,13 +18,6 @@ public static class NorthwindSchema
     /// SQLite DDL for the full classic Northwind schema. Idempotent: every CREATE uses
     /// <c>IF NOT EXISTS</c> so re-running against the same database is safe.
     /// </summary>
-    /// <remarks>
-    /// Declared <c>static readonly</c> rather than <c>const</c> so that consuming assemblies
-    /// must perform a runtime field load to read it. That forces the runtime to load
-    /// <c>Inquiry.Northwind.dll</c> into the AppDomain, which is what makes
-    /// <c>AddInquiry()</c>'s assembly-scanning DI discovery see the generated store
-    /// registrations in this package.
-    /// </remarks>
     public static readonly string SqliteDdl = """
         CREATE TABLE IF NOT EXISTS Categories (
             CategoryID    INTEGER PRIMARY KEY AUTOINCREMENT,

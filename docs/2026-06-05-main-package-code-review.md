@@ -15,6 +15,7 @@ Started on the P1/P2 release blockers in branch `codex-main-package-findings`.
 - Added a configurable parameter cap (`InquiryOptions.MaxParametersPerCommand`, default 2000) and wired it through `Compare.In`, batch delete, batch insert, and batch update expansion.
 - Fixed repeated `AddInquiry(...)` option configuration so later calls compose into the single registered `InquiryOptions` instance instead of being silently ignored.
 - Added `InquirySql.Sql(FormattableString)` as an explicit safe ad-hoc SQL factory that parameterizes interpolation holes into an `InquiryCommand`.
+- Replaced default AppDomain-wide generated-service discovery with explicit generated registration: `AddInquiry()` is core-only, the generator emits `AddInquiryGeneratedStores()`, and the assembly overload scans only assemblies the caller supplies.
 - Updated transaction docs to describe the new captured-slot behavior.
 - Updated security and batch-operation docs for `InquirySql.Sql(...)` and `InquiryOptions.MaxParametersPerCommand`.
 
@@ -22,7 +23,12 @@ Verification run:
 
 - `dotnet test tests\Inquiry.Generators.Tests\Inquiry.Generators.Tests.csproj` - passed: 184 tests on net8.0, net9.0, and net10.0.
 - `dotnet test tests\Inquiry.Sqlite.Tests\Inquiry.Sqlite.Tests.csproj` - passed: 156 tests on net8.0, net9.0, and net10.0.
-- `dotnet test tests\Inquiry.Tests\Inquiry.Tests.csproj` - passed: 101 tests on net8.0, net9.0, and net10.0.
+- `dotnet test tests\Inquiry.Tests\Inquiry.Tests.csproj` - passed: 102 tests on net8.0, net9.0, and net10.0.
+- `dotnet build samples\Inquiry.Sample\Inquiry.Sample.csproj` - passed.
+- `dotnet build tests\Inquiry.SqlServer.Tests\Inquiry.SqlServer.Tests.csproj` - passed with existing benchmark nullability warnings.
+- `dotnet build tests\Inquiry.PostgreSql.Tests\Inquiry.PostgreSql.Tests.csproj` - passed.
+- `dotnet build tests\Inquiry.MySql.Tests\Inquiry.MySql.Tests.csproj` - passed.
+- `dotnet build tests\Inquiry.Oracle.Tests\Inquiry.Oracle.Tests.csproj` - passed.
 - `git diff --check` - passed with only existing line-ending normalization warnings from Git.
 - `dotnet test Inquiry.slnx` - previously attempted, but the command timed out after five minutes before returning output. The solution includes Docker-backed provider suites, so run those separately when Docker availability is known.
 
@@ -105,11 +111,13 @@ Proposed fix: add provider-aware maximum parameter/IN-list limits through `IInqu
 
 ### P2 - AddInquiry scans every loaded assembly and instantiates registrations reflectively
 
+Status: fixed in `src/Inquiry/DependencyInjection/InquiryServiceCollectionExtensions.cs` and `src/Inquiry.Generators.Shared/RegistrationEmitter.cs`. `AddInquiry()` now registers only core runtime services; the generator emits `AddInquiryGeneratedStores()` for explicit store/materializer registration, and the explicit assembly overload scans only caller-supplied assemblies.
+
 Evidence: `InquiryServiceCollectionExtensions.AddGeneratedServices` loops through `AppDomain.CurrentDomain.GetAssemblies()`, calls `GetTypes()`, and instantiates every concrete `IInquiryServiceRegistration` with `Activator.CreateInstance(..., nonPublic: true)`.
 
 Impact: this is convenient, but broad. It can register unexpected generated stores from any already-loaded assembly, invokes arbitrary registration constructors at startup, costs reflection over the whole AppDomain, and still misses referenced assemblies that are not loaded yet. Tests already added explicit assembly overloads because of the missed-assembly behavior.
 
-Proposed fix: make registration explicit before release. The generator should emit a public extension such as `services.AddInquiryGeneratedStores()` or `services.AddInquiryFromAssemblyContaining<TStore>()`, and `AddInquiry()` should register only core runtime services. This also reconciles the current docs that mention `AddInquiryGeneratedStores()` even though the generator currently emits only an internal registration class.
+Implemented fix: registration is explicit by default. The generator emits `AddInquiryGeneratedStores()`, `AddInquiry()` registers only core runtime services, and the remaining assembly overload is caller-directed rather than AppDomain-wide.
 
 ### P2 - Repeated AddInquiry calls can silently ignore later safety options
 
@@ -169,13 +177,12 @@ Proposed fix: add generator diagnostics for null, empty, and unknown dialect nam
 4. Expand stored procedure support. Docs already list missing OUT/INOUT parameters, scalar returns, multiple result sets, table-valued parameters, and Oracle ref cursors.
 5. Make JSON conversion configurable and AOT-friendly. `InquiryJsonConverter<T>` uses default `JsonSerializer` options and no context. Add attribute or options support for a `JsonSerializerOptions`/`JsonTypeInfo` provider.
 6. Make batch APIs first-class around limits and concurrency. Provide chunking helpers, provider caps, and concurrency-aware batch shapes instead of asking callers to remember all limits.
-7. Replace AppDomain scanning with generated explicit registration. This is both a startup optimization and an API clarity win.
+7. Improve multi-assembly generated-registration ergonomics. `AddInquiryGeneratedStores()` is explicit for one generated assembly, and `AddInquiry(params Assembly[])` remains as a fallback; multi-assembly apps may still want a more discoverable generated name or host-level helper.
 
 ## Optimizations
 
 1. Cache ad-hoc parameter object accessors. `InquiryParameterReader` reflects public properties and invokes getters on every ad-hoc call. Cache readable property metadata or compiled accessors per parameter type.
-2. Avoid whole-AppDomain reflection during startup. Explicit generated registration removes `GetAssemblies()/GetTypes()` scans from normal startup.
-3. Consider bounded list pre-sizing where counts are cheaply known. Buffered query paths currently allocate `new List<T>()`; generated methods with known page size could allocate capacity in keyset/offset cases.
+2. Consider bounded list pre-sizing where counts are cheaply known. Buffered query paths currently allocate `new List<T>()`; generated methods with known page size could allocate capacity in keyset/offset cases.
 
 ## Coverage notes
 
