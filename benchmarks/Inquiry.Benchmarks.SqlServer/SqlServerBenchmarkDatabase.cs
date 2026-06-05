@@ -1,6 +1,7 @@
 using Inquiry.Benchmarks.SqlServer.Ef;
 using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
+using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.DependencyInjection;
 using Microsoft.Data.SqlClient;
@@ -27,6 +28,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     private static ServiceProvider? _services;
     private static string? _connectionString;
     private static IDbContextFactory<SqlServerShipperContext>? _dbContextFactory;
+    private static IDbContextFactory<SqlServerProductContext>? _productContextFactory;
 
     private SqlServerBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
@@ -36,8 +38,11 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public int RowCount { get; }
 
     public IDbContextFactory<SqlServerShipperContext> DbContextFactory => _dbContextFactory!;
+    public IDbContextFactory<SqlServerProductContext> ProductContextFactory => _productContextFactory!;
 
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    public ProductStore Products => _services!.GetRequiredService<ProductStore>();
+    public CategoryStore Categories => _services!.GetRequiredService<CategoryStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
@@ -68,13 +73,19 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                     // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
                     // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
                     .AddDbContextFactory<SqlServerShipperContext>(options => options.UseSqlServer(connectionString))
+                    .AddDbContextFactory<SqlServerProductContext>(options => options.UseSqlServer(connectionString))
                     .BuildServiceProvider();
 
                 await SeedAsync(connectionString, seedRows).ConfigureAwait(false);
 
+                // DLG: create its stored procedures and write the .config it self-loads.
+                await Dlg.DlgSetup.ApplyStoredProceduresAsync(connectionString).ConfigureAwait(false);
+                Dlg.DlgSetup.PrimeConfig(connectionString);
+
                 _connectionString = connectionString;
                 _services = services;
                 _dbContextFactory = services.GetRequiredService<IDbContextFactory<SqlServerShipperContext>>();
+                _productContextFactory = services.GetRequiredService<IDbContextFactory<SqlServerProductContext>>();
                 _container = container;
 
                 AppDomain.CurrentDomain.ProcessExit += static (_, _) =>
@@ -102,7 +113,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
         await connection.OpenAsync().ConfigureAwait(false);
         await using var tx = await connection.BeginTransactionAsync().ConfigureAwait(false);
 
-        // Shippers — IDENTITY PK; SQL Server uses @name parameters. ShipperID is not supplied.
+        // Shippers — IDENTITY PK; ShipperID is not supplied.
         await using (var insert = connection.CreateCommand())
         {
             insert.Transaction = (SqlTransaction)tx;
@@ -113,6 +124,42 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
             {
                 pCompany.Value = $"Shipper {i}";
                 pPhone.Value   = $"555-{i:0000}";
+                await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        // Categories — 10 fixed categories; capture their IDENTITY ids for product FKs.
+        var categoryIds = new List<int>();
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = (SqlTransaction)tx;
+            insert.CommandText =
+                "INSERT INTO Categories (CategoryName, Description) OUTPUT inserted.CategoryID VALUES (@name, @desc);";
+            var pName = insert.Parameters.Add("@name", System.Data.SqlDbType.NVarChar, 15);
+            var pDesc = insert.Parameters.Add("@desc", System.Data.SqlDbType.NVarChar, -1);
+            for (int i = 0; i < 10; i++)
+            {
+                pName.Value = $"Category {i}";
+                pDesc.Value = $"Description {i}";
+                categoryIds.Add((int)(await insert.ExecuteScalarAsync().ConfigureAwait(false))!);
+            }
+        }
+
+        // Products — rowCount rows spread across the categories; distinct names for LIKE search.
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = (SqlTransaction)tx;
+            insert.CommandText =
+                "INSERT INTO Products (ProductName, CategoryID, UnitPrice, Discontinued) " +
+                "VALUES (@name, @cat, @price, 0);";
+            var pName  = insert.Parameters.Add("@name",  System.Data.SqlDbType.NVarChar, 40);
+            var pCat   = insert.Parameters.Add("@cat",   System.Data.SqlDbType.Int);
+            var pPrice = insert.Parameters.Add("@price", System.Data.SqlDbType.Decimal);
+            for (int i = 0; i < rowCount; i++)
+            {
+                pName.Value  = $"Product {i}";
+                pCat.Value   = categoryIds[i % categoryIds.Count];
+                pPrice.Value = 10m + (i % 100);
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

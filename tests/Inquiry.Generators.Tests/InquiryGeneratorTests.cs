@@ -1155,6 +1155,13 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("MERGE INTO [TWidget] WITH (HOLDLOCK) AS target", generatedText);
         Assert.DoesNotContain("ELSE IF EXISTS", generatedText);
         Assert.Contains("IF @Id IS NULL", generatedText);
+
+        // Regression (SQL Server error 544): the MERGE's NOT MATCHED INSERT must NOT list the
+        // IDENTITY key column — it inserts only the non-key columns and lets the database assign the
+        // key, exactly like the NULL-key branch. SQL Server rejects an explicit identity insert even
+        // on a MERGE branch that is never taken.
+        Assert.Contains("WHEN NOT MATCHED THEN INSERT ([Name]) VALUES (@Name)", generatedText);
+        Assert.DoesNotContain("INSERT ([Id], [Name]) VALUES (@Id, @Name)", generatedText);
     }
 
     [Fact]
