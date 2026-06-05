@@ -23,8 +23,11 @@ public sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
 
         // Inquiry's emulated RETURNING for a database-generated GUID key captures the value in a
         // @_inquiry_genkey user variable; MySqlConnector only treats an unmatched @name as a user
-        // variable when AllowUserVariables is enabled (otherwise it throws). All Inquiry SQL is
-        // compile-time-constant text with bound parameters, so enabling this is safe.
+        // variable when AllowUserVariables is enabled (otherwise it throws). Generator-emitted store SQL
+        // is compile-time-constant with bound parameters, so this is safe for generated stores. Caveat:
+        // for ad-hoc SQL (the IInquiry.Query*/Execute* string overloads), a missing or misspelled @param
+        // is now silently treated as a NULL user variable rather than throwing "parameter not found" —
+        // callers passing raw command text must name their parameters correctly.
         _connectionString = new MySqlConnectionStringBuilder(connectionString)
         {
             AllowUserVariables = true,

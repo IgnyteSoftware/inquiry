@@ -705,12 +705,7 @@ internal static class StoreProcessor
 
         var key = entity.Keys[0];
         var keyMayBeDatabaseSupplied = key.IsGenerated || key.UseDatabaseDefault;
-        // GUID database-supplied keys never use the null-key INSERT fallback (kept symmetric with
-        // StoreOperationEmitter.ShouldUseInsertWhenKeyIsNull): their upsert-returning path captures the
-        // server-generated UUID directly, so emitting the shared _sqlInsert/_sqlInsertReturning consts here
-        // would leave them unreferenced. Explicit [InquiryInsert] methods still emit them via their own gate.
         var nullableDatabaseSuppliedKeyUpsert = keyMayBeDatabaseSupplied && key.Type.IsNullable &&
-            key.TypeClass != DbTypeClass.Guid &&
             valid.Any(static m => m.Method.Operation == StoreOperation.Upsert);
 
         // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so

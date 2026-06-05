@@ -29,6 +29,19 @@ public sealed class GuidKeyUpsertTests
     }
 
     [SkippableFact]
+    public async Task NullKeyInsertReturningGeneratesTheGuid()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "guid_insert");
+        var store = harness.GetRequiredService<GuidItemStore>();
+
+        var saved = await store.InsertReturningAsync(new GuidItem { Id = null, Name = "A" });
+        Assert.NotNull(saved);
+        Assert.NotNull(saved!.Id);
+        Assert.NotEqual(Guid.Empty, saved.Id!.Value);
+    }
+
+    [SkippableFact]
     public async Task ConcurrentUpsertsOfSameExplicitKeyAllSucceed()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);

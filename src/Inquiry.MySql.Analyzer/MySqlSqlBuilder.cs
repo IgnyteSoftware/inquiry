@@ -55,7 +55,14 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     }
 
     public override string BuildInsertReturningSql(SqlBuildContext context)
-        => BuildInsertSql(context) + "; " + BuildReturningSelect(context);
+    {
+        if (DatabaseSuppliesGuidKey(context))
+        {
+            return BuildGuidKeyInsertReturningSql(context);
+        }
+
+        return BuildInsertSql(context) + "; " + BuildReturningSelect(context);
+    }
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
@@ -122,14 +129,14 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     }
 
     /// <summary>
-    /// Emulated-returning trailing <c>SELECT</c>. A single database-supplied integer key is read back via
-    /// session-scoped <c>LAST_INSERT_ID()</c>; a GUID key uses the user-variable path instead; otherwise
-    /// the row is selected by its key predicate.
+    /// Emulated-returning trailing <c>SELECT</c> for the integer/client-key paths. A single
+    /// database-supplied (AUTO_INCREMENT) key is read back via session-scoped <c>LAST_INSERT_ID()</c>;
+    /// otherwise the row is selected by its key predicate. GUID database-supplied keys never reach here —
+    /// they branch to the <c>@_inquiry_genkey</c> user-variable methods before this is called.
     /// </summary>
     private string BuildReturningSelect(SqlBuildContext context)
     {
-        // GUID keys use the @_inquiry_genkey user-variable path; LAST_INSERT_ID() only tracks AUTO_INCREMENT.
-        var keyPredicate = DatabaseMaySupplyKey(context) && !DatabaseSuppliesGuidKey(context)
+        var keyPredicate = DatabaseMaySupplyKey(context)
             ? context.QuotedKeyColumns[0] + " = LAST_INSERT_ID()"
             : context.KeyWhereClause;
 
@@ -170,6 +177,20 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
         return "SET " + GeneratedGuidKeyVariable + " = COALESCE(" + context.KeyParameters[0] + ", UUID()); " +
             "INSERT INTO " + context.Table + " (" + insertColumns + ") VALUES (" + insertValues + ") " +
             "ON DUPLICATE KEY UPDATE " + OnDuplicateKeyAssignments(context) + "; " +
+            "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + keyColumn + " = " + GeneratedGuidKeyVariable;
+    }
+
+    // Returning GUID-key INSERT: like the upsert form but without ON DUPLICATE KEY UPDATE — capture the
+    // (generated or explicit) key in a user variable so the trailing SELECT can read the inserted row back.
+    // Needed because MySQL has no RETURNING and LAST_INSERT_ID() cannot read back a server-generated UUID.
+    private string BuildGuidKeyInsertReturningSql(SqlBuildContext context)
+    {
+        var keyColumn = context.QuotedKeyColumns[0];
+        var insertColumns = JoinSql(keyColumn, context.InsertColumns);
+        var insertValues = JoinSql(GeneratedGuidKeyVariable, context.InsertParameters);
+
+        return "SET " + GeneratedGuidKeyVariable + " = COALESCE(" + context.KeyParameters[0] + ", UUID()); " +
+            "INSERT INTO " + context.Table + " (" + insertColumns + ") VALUES (" + insertValues + "); " +
             "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + keyColumn + " = " + GeneratedGuidKeyVariable;
     }
 
