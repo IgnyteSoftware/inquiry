@@ -13,7 +13,7 @@ namespace Inquiry.Connections;
 /// dependencies (delay and jitter) are injectable so the retry policy can be tested
 /// deterministically without sleeping or relying on a wall clock.
 /// </remarks>
-public sealed class RetryingConnectionOpener
+internal sealed class RetryingConnectionOpener
 {
     private readonly ITransientErrorDetector _detector;
     private readonly int _maxAttempts;

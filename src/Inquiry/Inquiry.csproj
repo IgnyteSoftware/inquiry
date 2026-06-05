@@ -12,5 +12,15 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Inquiry.Tests" />
+    <InternalsVisibleTo Include="Inquiry.Sqlite" />
+    <InternalsVisibleTo Include="Inquiry.Sqlite.Tests" />
+    <InternalsVisibleTo Include="Inquiry.SqlServer" />
+    <InternalsVisibleTo Include="Inquiry.SqlServer.Tests" />
+    <InternalsVisibleTo Include="Inquiry.PostgreSql" />
+    <InternalsVisibleTo Include="Inquiry.PostgreSql.Tests" />
+    <InternalsVisibleTo Include="Inquiry.MySql" />
+    <InternalsVisibleTo Include="Inquiry.MySql.Tests" />
+    <InternalsVisibleTo Include="Inquiry.Oracle" />
+    <InternalsVisibleTo Include="Inquiry.Oracle.Tests" />
   </ItemGroup>
 </Project>

@@ -14,7 +14,7 @@ namespace Inquiry.Pipeline;
 ///   <item>A <em>struct-materializer</em> overload constrained as <c>where TMaterializer : struct, IInquiryEntityMaterializer&lt;T&gt;</c> — used by generated stores. The struct constraint lets the JIT emit a specialization per concrete materializer type so the per-row <c>Materialize</c> call is inlined into the read loop, matching Dapper's monomorphic dispatch.</item>
 /// </list>
 /// </remarks>
-public interface IInquiryRequestPipeline
+internal interface IInquiryRequestPipeline
 {
     /// <summary>Executes a query and streams materialized rows.</summary>
     IAsyncEnumerable<T> QueryAsync<T>(

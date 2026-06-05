@@ -5,7 +5,7 @@ namespace Inquiry.Connections;
 /// or terminal. Implementations are provider-specific: each cloud engine documents its own set of
 /// transient error codes / SQLSTATEs.
 /// </summary>
-public interface ITransientErrorDetector
+internal interface ITransientErrorDetector
 {
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="exception"/> represents a transient

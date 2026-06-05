@@ -8,7 +8,7 @@ namespace Inquiry.SqlServer;
 /// the connection opener retries throttling / failover faults but propagates terminal ones (login
 /// failures, bad object names, etc.).
 /// </summary>
-public sealed class SqlServerTransientErrorDetector : ITransientErrorDetector
+internal sealed class SqlServerTransientErrorDetector : ITransientErrorDetector
 {
     /// <summary>
     /// Azure SQL transient fault numbers (throttling, failover, connection-broker, and

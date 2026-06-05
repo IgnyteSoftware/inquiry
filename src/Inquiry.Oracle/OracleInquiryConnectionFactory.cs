@@ -7,7 +7,7 @@ namespace Inquiry.Oracle;
 /// <summary>
 /// Opens Oracle connections for the Inquiry request pipeline.
 /// </summary>
-public sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
+internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
 

@@ -205,9 +205,9 @@ public sealed class NorthwindCrudIntegrationTests
         var tx = await inquiry.BeginTransactionAsync();
         await tx.CommitAsync();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.ExecuteAsync("SELECT 1"));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.ExecuteAsync($"SELECT 1"));
         await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.QueryListAsync<Customer>(
-            "SELECT `CustomerID`, `CompanyName`, `ContactName`, `ContactTitle`, `Address`, `City`, `Region`, `PostalCode`, `Country`, `Phone`, `Fax` FROM `Customers`"));
+            $"SELECT `CustomerID`, `CompanyName`, `ContactName`, `ContactTitle`, `Address`, `City`, `Region`, `PostalCode`, `Country`, `Phone`, `Fax` FROM `Customers`"));
         await Assert.ThrowsAsync<ObjectDisposedException>(() => tx.BeginTransactionAsync());
     }
 }

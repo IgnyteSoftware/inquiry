@@ -7,7 +7,7 @@ namespace Inquiry.PostgreSql;
 /// <summary>
 /// Opens PostgreSQL connections for the Inquiry request pipeline.
 /// </summary>
-public sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFactory
+internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
     private readonly RetryingConnectionOpener? _retryingOpener;

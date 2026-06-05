@@ -8,7 +8,7 @@ namespace Inquiry.PostgreSql;
 /// (serialization failure / retryable transaction), <c>08006</c> (connection failure), and
 /// <c>57P01</c> (admin shutdown). Other faults propagate.
 /// </summary>
-public sealed class CockroachDbTransientErrorDetector : ITransientErrorDetector
+internal sealed class CockroachDbTransientErrorDetector : ITransientErrorDetector
 {
     private static readonly HashSet<string> TransientSqlStates = new(StringComparer.Ordinal)
     {

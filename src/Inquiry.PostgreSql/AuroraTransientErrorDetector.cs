@@ -9,7 +9,7 @@ namespace Inquiry.PostgreSql;
 /// (<c>57P01</c>), and transport-level <see cref="NpgsqlException"/>s flagged transient by Npgsql
 /// are retried; everything else propagates.
 /// </summary>
-public sealed class AuroraTransientErrorDetector : ITransientErrorDetector
+internal sealed class AuroraTransientErrorDetector : ITransientErrorDetector
 {
     private static readonly HashSet<string> TransientSqlStates = new(StringComparer.Ordinal)
     {
