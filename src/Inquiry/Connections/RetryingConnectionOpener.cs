@@ -18,6 +18,7 @@ public sealed class RetryingConnectionOpener
     private readonly ITransientErrorDetector _detector;
     private readonly int _maxAttempts;
     private readonly TimeSpan _baseDelay;
+    private readonly TimeSpan _maxDelay;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly Func<double> _jitter;
 
@@ -40,12 +41,16 @@ public sealed class RetryingConnectionOpener
     /// Optional source of a jitter fraction in <c>[0, 1)</c>. Defaults to a shared
     /// <see cref="Random"/>. Tests pass a deterministic value.
     /// </param>
+    /// <param name="maxDelay">
+    /// Optional maximum delay between attempts. Defaults to <c>30s</c>.
+    /// </param>
     public RetryingConnectionOpener(
         ITransientErrorDetector detector,
         int maxAttempts,
         TimeSpan baseDelay,
         Func<TimeSpan, CancellationToken, Task>? delay = null,
-        Func<double>? jitter = null)
+        Func<double>? jitter = null,
+        TimeSpan? maxDelay = null)
     {
         if (detector is null)
         {
@@ -62,9 +67,16 @@ public sealed class RetryingConnectionOpener
             throw new ArgumentOutOfRangeException(nameof(baseDelay), baseDelay, "Base delay cannot be negative.");
         }
 
+        var effectiveMaxDelay = maxDelay ?? TimeSpan.FromSeconds(30);
+        if (effectiveMaxDelay < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDelay), effectiveMaxDelay, "Max delay cannot be negative.");
+        }
+
         _detector = detector;
         _maxAttempts = maxAttempts;
         _baseDelay = baseDelay;
+        _maxDelay = effectiveMaxDelay;
         _delay = delay ?? ((d, ct) => Task.Delay(d, ct));
         _jitter = jitter ?? (() => Random.Shared.NextDouble());
     }
@@ -100,8 +112,24 @@ public sealed class RetryingConnectionOpener
     {
         // Exponential backoff with a jitter factor in [1, 2). Computed in ticks to keep the
         // arithmetic deterministic given a fixed jitter source.
-        var factor = Math.Pow(2, attempt - 1) * (1.0 + _jitter());
+        if (_baseDelay == TimeSpan.Zero || _maxDelay == TimeSpan.Zero)
+        {
+            return TimeSpan.Zero;
+        }
+
+        var jitter = _jitter();
+        if (double.IsNaN(jitter) || double.IsInfinity(jitter) || jitter < 0.0 || jitter >= 1.0)
+        {
+            throw new InvalidOperationException("Retry jitter must return a finite value in the range [0, 1).");
+        }
+
+        var factor = Math.Pow(2, attempt - 1) * (1.0 + jitter);
         var ticks = _baseDelay.Ticks * factor;
+        if (double.IsNaN(ticks) || double.IsInfinity(ticks) || ticks >= _maxDelay.Ticks)
+        {
+            return _maxDelay;
+        }
+
         return TimeSpan.FromTicks((long)ticks);
     }
 }

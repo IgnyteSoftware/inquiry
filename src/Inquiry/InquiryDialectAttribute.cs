@@ -19,8 +19,8 @@ public sealed class InquiryDialectAttribute : Attribute
     /// </summary>
     /// <param name="name">
     /// The dialect identifier. The shipped provider packages use <c>"Sqlite"</c>,
-    /// <c>"PostgreSql"</c>, and <c>"SqlServer"</c>. An unrecognised value (one that no installed
-    /// provider analyzer handles) leaves the partial store methods without implementations.
+    /// <c>"PostgreSql"</c>, <c>"SqlServer"</c>, <c>"MySql"</c>, and <c>"Oracle"</c>. An unrecognised
+    /// value (one that no installed provider advertises) reports generator diagnostic <c>INQ043</c>.
     /// </param>
     public InquiryDialectAttribute(string name)
     {

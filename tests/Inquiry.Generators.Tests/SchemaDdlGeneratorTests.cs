@@ -521,6 +521,40 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SchemaQualifiedForeignKeyReferencesSchemaAndDerivesLength()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Customer", Schema = "crm")]
+            public sealed class Customer
+            {
+                [InquiryKey("Code", Length = 5)]
+                public string Code { get; set; } = string.Empty;
+            }
+
+            [InquiryTable("Ord", Schema = "sales")]
+            public sealed class Ord
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryForeignKey("CustomerCode", "Customer", "Code", ReferencedSchema = "crm")]
+                public string CustomerCode { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("[CustomerCode] NVARCHAR(5)", ddl);
+        Assert.Contains("FOREIGN KEY ([CustomerCode]) REFERENCES [crm].[Customer]([Code])", ddl);
+    }
+
+    [Fact]
     public void IndexedUnboundedStringReportsInq032OnBoundedDialectOnly()
     {
         const string source = """

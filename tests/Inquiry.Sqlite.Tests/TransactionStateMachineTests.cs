@@ -421,6 +421,29 @@ public sealed class TransactionStateMachineTests
     }
 
     [Fact]
+    public async Task CommitAndRollbackAfterRootTransactionCloseThrowObjectDisposed()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "double_close");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await using (var committed = await inquiry.BeginTransactionAsync())
+        {
+            await committed.CommitAsync();
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => committed.CommitAsync());
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => committed.RollbackAsync());
+        }
+
+        await using (var rolledBack = await inquiry.BeginTransactionAsync())
+        {
+            await rolledBack.RollbackAsync();
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => rolledBack.CommitAsync());
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => rolledBack.RollbackAsync());
+        }
+    }
+
+    [Fact]
     public async Task AlreadyCancelledTokenInBeginTransactionFailsCleanlyAndLeavesSlotRecoverable()
     {
         // Item #8. A cancelled BeginTransactionAsync must throw OperationCanceledException

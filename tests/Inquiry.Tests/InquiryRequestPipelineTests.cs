@@ -158,6 +158,31 @@ public sealed class InquiryRequestPipelineTests
     }
 
     [Fact]
+    public async Task QueryAsyncReportsInterceptorSetupFailures()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        await CreateSchemaAsync(keeperConnection);
+
+        var interceptor = new ThrowingExecutingInterceptor();
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            new[] { interceptor });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in pipeline.QueryAsync(
+                new InquiryCommand("SELECT Id, Name, IsActive FROM Items"),
+                MaterializerInstance))
+            {
+            }
+        });
+
+        Assert.Same(exception, interceptor.Failures.Single());
+    }
+
+    [Fact]
     public async Task QuerySingleOrDefaultThrowsWhenMultipleRowsAreReturned()
     {
         var connectionString = CreateSharedInMemoryConnectionString();
@@ -623,6 +648,20 @@ public sealed class InquiryRequestPipelineTests
             ExecutedRecordsAffected.Add(context.RecordsAffected);
             return ValueTask.CompletedTask;
         }
+
+        public ValueTask CommandFailedAsync(InquiryCommandFailedContext context, CancellationToken cancellationToken = default)
+        {
+            Failures.Add(context.Exception);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingExecutingInterceptor : IInquiryCommandInterceptor
+    {
+        public List<Exception> Failures { get; } = new();
+
+        public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Interceptor setup failed.");
 
         public ValueTask CommandFailedAsync(InquiryCommandFailedContext context, CancellationToken cancellationToken = default)
         {

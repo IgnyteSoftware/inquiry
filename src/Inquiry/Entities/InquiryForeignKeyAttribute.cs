@@ -45,6 +45,25 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
     /// </summary>
     public string ReferencedColumn { get; }
 
+    /// <summary>
+    /// Gets or sets the schema that contains the referenced table.
+    /// </summary>
+    public string? ReferencedSchema
+    {
+        get => _referencedSchema;
+        set
+        {
+            if (value is not null && string.IsNullOrWhiteSpace(value))
+            {
+                throw new ArgumentException("Referenced schema cannot be empty.", nameof(ReferencedSchema));
+            }
+
+            _referencedSchema = value;
+        }
+    }
+
+    private string? _referencedSchema;
+
     private static void ValidateReference(string referencedTable, string referencedColumn)
     {
         if (string.IsNullOrWhiteSpace(referencedTable))

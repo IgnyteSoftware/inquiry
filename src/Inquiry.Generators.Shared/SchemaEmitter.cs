@@ -35,7 +35,7 @@ internal static class SchemaEmitter
 
         // A string foreign-key column with no declared Length inherits its referenced column's declared
         // Length, so on a bounded dialect it emits a valid bounded VARCHAR instead of an unindexable/
-        // unkeyable LOB. Indexed by (table, column) across every entity (the referenced table may be any).
+        // unkeyable LOB. Indexed by (schema, table, column) across every entity (the referenced table may be any).
         var declaredLengths = BuildColumnLengthIndex(entities);
 
         ReportKeyDiagnostics(context, entities, builder, declaredLengths);
@@ -136,7 +136,7 @@ internal static class SchemaEmitter
         => typeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64;
 
     /// <summary>
-    /// Kahn's topological sort keyed by table name (case-insensitive). Edges point from a referencing
+    /// Kahn's topological sort keyed by schema-qualified table name (case-insensitive). Edges point from a referencing
     /// table to the table it references; an edge whose target is not in this assembly's entity set, or
     /// a self reference, is ignored. Input order is the tiebreak, and any rows left over by a reference
     /// cycle are appended in input order so emission is always total and deterministic.
@@ -146,7 +146,7 @@ internal static class SchemaEmitter
         var byTable = new Dictionary<string, EntityData>(System.StringComparer.OrdinalIgnoreCase);
         foreach (var entity in entities)
         {
-            byTable[entity.TableName] = entity;
+            byTable[TableKey(entity.Schema, entity.TableName)] = entity;
         }
 
         // Dependencies: tables this entity references via a foreign key (within this assembly, excluding self).
@@ -154,6 +154,7 @@ internal static class SchemaEmitter
         foreach (var entity in entities)
         {
             var deps = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var selfKey = TableKey(entity.Schema, entity.TableName);
             foreach (var column in entity.Columns.AsImmutableArray())
             {
                 if (string.IsNullOrEmpty(column.ForeignKeyTable))
@@ -161,10 +162,11 @@ internal static class SchemaEmitter
                     continue;
                 }
 
-                if (!string.Equals(column.ForeignKeyTable, entity.TableName, System.StringComparison.OrdinalIgnoreCase)
-                    && byTable.ContainsKey(column.ForeignKeyTable!))
+                var referencedKey = TableKey(column.ForeignKeySchema, column.ForeignKeyTable!);
+                if (!string.Equals(referencedKey, selfKey, System.StringComparison.OrdinalIgnoreCase)
+                    && byTable.ContainsKey(referencedKey))
                 {
-                    deps.Add(column.ForeignKeyTable!);
+                    deps.Add(referencedKey);
                 }
             }
 
@@ -182,7 +184,8 @@ internal static class SchemaEmitter
             progress = false;
             foreach (var entity in entities)
             {
-                if (emitted.Contains(entity.TableName))
+                var entityKey = TableKey(entity.Schema, entity.TableName);
+                if (emitted.Contains(entityKey))
                 {
                     continue;
                 }
@@ -190,7 +193,7 @@ internal static class SchemaEmitter
                 if (dependencies[entity].All(emitted.Contains))
                 {
                     ordered.Add(entity);
-                    emitted.Add(entity.TableName);
+                    emitted.Add(entityKey);
                     progress = true;
                 }
             }
@@ -199,17 +202,18 @@ internal static class SchemaEmitter
         // Append anything left (reference cycle) in input order.
         foreach (var entity in entities)
         {
-            if (!emitted.Contains(entity.TableName))
+            var entityKey = TableKey(entity.Schema, entity.TableName);
+            if (!emitted.Contains(entityKey))
             {
                 ordered.Add(entity);
-                emitted.Add(entity.TableName);
+                emitted.Add(entityKey);
             }
         }
 
         return ordered;
     }
 
-    /// <summary>Indexes every declared (non-zero) column Length by (table, column) for FK derivation.</summary>
+    /// <summary>Indexes every declared (non-zero) column Length by (schema, table, column) for FK derivation.</summary>
     private static Dictionary<string, int> BuildColumnLengthIndex(IReadOnlyList<EntityData> entities)
     {
         var map = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
@@ -219,7 +223,7 @@ internal static class SchemaEmitter
             {
                 if (column.Length > 0)
                 {
-                    map[ColumnKey(entity.TableName, column.ColumnName)] = column.Length;
+                    map[ColumnKey(entity.Schema, entity.TableName, column.ColumnName)] = column.Length;
                 }
             }
         }
@@ -229,7 +233,9 @@ internal static class SchemaEmitter
 
     // '\0' cannot appear in a SQL identifier, so it is a collision-proof composite-key separator
     // (identifiers may contain spaces, e.g. "Order Details").
-    private static string ColumnKey(string table, string column) => table + "\0" + column;
+    private static string TableKey(string? schema, string table) => (schema ?? string.Empty) + "\0" + table;
+
+    private static string ColumnKey(string? schema, string table, string column) => TableKey(schema, table) + "\0" + column;
 
     /// <summary>
     /// A non-key string foreign-key column with no declared <see cref="ColumnData.Length"/> (and no
@@ -245,7 +251,7 @@ internal static class SchemaEmitter
             && string.IsNullOrEmpty(column.SqlType)
             && !string.IsNullOrEmpty(column.ForeignKeyTable)
             && !string.IsNullOrEmpty(column.ForeignKeyColumn)
-            && declaredLengths.TryGetValue(ColumnKey(column.ForeignKeyTable!, column.ForeignKeyColumn!), out var referencedLength))
+            && declaredLengths.TryGetValue(ColumnKey(column.ForeignKeySchema, column.ForeignKeyTable!, column.ForeignKeyColumn!), out var referencedLength))
         {
             return column with { Length = referencedLength };
         }

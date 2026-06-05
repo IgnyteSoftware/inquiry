@@ -35,6 +35,7 @@ internal sealed record ColumnData : IColumn
     public int Scale { get; init; }
     public string? DefaultExpression { get; init; }
     public string? ForeignKeyTable { get; init; }
+    public string? ForeignKeySchema { get; init; }
     public string? ForeignKeyColumn { get; init; }
     public bool IsIndexed { get; init; }
     public bool IsUnique { get; init; }

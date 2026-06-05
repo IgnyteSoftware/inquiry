@@ -216,7 +216,7 @@ internal static class EntityProcessor
             var precision = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Precision") : null) ?? 0;
             var scale = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Scale") : null) ?? 0;
             var defaultExpression = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "DefaultExpression") : null;
-            var (foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
+            var (foreignKeySchema, foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
 
             // a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
             // converter) maps a non-primitive property to/from a provider primitive.
@@ -243,6 +243,7 @@ internal static class EntityProcessor
                 Scale = scale,
                 DefaultExpression = defaultExpression,
                 ForeignKeyTable = foreignKeyTable,
+                ForeignKeySchema = foreignKeySchema,
                 ForeignKeyColumn = foreignKeyColumn,
                 IsIndexed = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsIndexed"),
                 IsUnique = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnique"),
@@ -354,29 +355,30 @@ internal static class EntityProcessor
     }
 
     /// <summary>
-    /// Extracts the referenced (table, column) from an <c>[InquiryForeignKey]</c>. The 2-arg form is
+    /// Extracts the referenced (schema, table, column) from an <c>[InquiryForeignKey]</c>. The 2-arg form is
     /// <c>(referencedTable, referencedColumn)</c>; the 3-arg form is <c>(localColumn, referencedTable,
-    /// referencedColumn)</c>. Returns (null, null) when the property has no foreign-key attribute.
+    /// referencedColumn)</c>. Returns (null, null, null) when the property has no foreign-key attribute.
     /// </summary>
-    private static (string?, string?) ReadForeignKeyReference(AttributeData? foreignKeyAttribute)
+    private static (string?, string?, string?) ReadForeignKeyReference(AttributeData? foreignKeyAttribute)
     {
         if (foreignKeyAttribute is null)
         {
-            return (null, null);
+            return (null, null, null);
         }
 
         var args = foreignKeyAttribute.ConstructorArguments;
+        var schema = GeneratorHelpers.GetNamedString(foreignKeyAttribute, "ReferencedSchema");
         if (args.Length == 3)
         {
-            return (args[1].Value as string, args[2].Value as string);
+            return (schema, args[1].Value as string, args[2].Value as string);
         }
 
         if (args.Length == 2)
         {
-            return (args[0].Value as string, args[1].Value as string);
+            return (schema, args[0].Value as string, args[1].Value as string);
         }
 
-        return (null, null);
+        return (null, null, null);
     }
 
     private static List<RelationData> DiscoverRelations(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)

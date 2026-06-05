@@ -179,8 +179,18 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             return;
         }
 
-        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower)
+        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower or DialectOwnershipKind.UnknownFollower)
         {
+            return;
+        }
+
+        if (ownership.Kind == DialectOwnershipKind.UnknownLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.DialectUnknown,
+                location: null,
+                FormatDialectForDiagnostic(ownership.UnknownDialect),
+                string.IsNullOrWhiteSpace(ownership.AmbiguousDialects) ? "<none>" : ownership.AmbiguousDialects));
             return;
         }
 
@@ -239,22 +249,31 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     private DialectOwnership ResolveOwnership(Compilation compilation)
     {
-        var ownNames = ReadDialectName(compilation.Assembly).Distinct().ToArray();
+        var referencedNames = compilation.SourceModule.ReferencedAssemblySymbols
+            .SelectMany(ReadDialectName)
+            .Where(static name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(System.StringComparer.Ordinal)
+            .ToArray();
+
+        var ownNames = ReadDialectName(compilation.Assembly)
+            .Distinct(System.StringComparer.Ordinal)
+            .ToArray();
         if (ownNames.Length > 1)
         {
             return ArbitrateAmbiguous(ownNames);
         }
+
         if (ownNames.Length == 1)
         {
-            return ownNames[0] == Dialect
-                ? new DialectOwnership(DialectOwnershipKind.Owned)
-                : new DialectOwnership(DialectOwnershipKind.NotMine);
-        }
+            if (ownNames[0] == Dialect)
+            {
+                return new DialectOwnership(DialectOwnershipKind.Owned);
+            }
 
-        var referencedNames = compilation.SourceModule.ReferencedAssemblySymbols
-            .SelectMany(ReadDialectName)
-            .Distinct()
-            .ToArray();
+            return referencedNames.Contains(ownNames[0], System.StringComparer.Ordinal)
+                ? new DialectOwnership(DialectOwnershipKind.NotMine)
+                : ArbitrateUnknown(ownNames[0], referencedNames);
+        }
 
         if (referencedNames.Length > 1)
         {
@@ -285,6 +304,18 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         return new DialectOwnership(kind, joined);
     }
 
+    private DialectOwnership ArbitrateUnknown(string unknownDialect, string[] availableDialects)
+    {
+        var ordered = availableDialects.Length == 0
+            ? new[] { Dialect }
+            : availableDialects.OrderBy(d => d, System.StringComparer.Ordinal).ToArray();
+        var joined = string.Join(", ", ordered);
+        var kind = Dialect == ordered[0]
+            ? DialectOwnershipKind.UnknownLeader
+            : DialectOwnershipKind.UnknownFollower;
+        return new DialectOwnership(kind, joined, unknownDialect);
+    }
+
     private static IEnumerable<string> ReadDialectName(IAssemblySymbol assembly)
     {
         foreach (var attribute in assembly.GetAttributes())
@@ -294,21 +325,27 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 continue;
             }
 
-            if (attribute.ConstructorArguments.Length > 0 &&
-                attribute.ConstructorArguments[0].Value is string name &&
-                !string.IsNullOrEmpty(name))
+            if (attribute.ConstructorArguments.Length > 0)
             {
-                yield return name;
+                yield return attribute.ConstructorArguments[0].Value as string ?? string.Empty;
             }
         }
     }
 
-    private enum DialectOwnershipKind { Owned, NotMine, AmbiguousLeader, AmbiguousFollower }
+    private static string FormatDialectForDiagnostic(string dialect)
+        => string.IsNullOrWhiteSpace(dialect) ? "<empty>" : dialect;
 
-    private readonly record struct DialectOwnership(DialectOwnershipKind Kind, string AmbiguousDialects)
+    private enum DialectOwnershipKind { Owned, NotMine, AmbiguousLeader, AmbiguousFollower, UnknownLeader, UnknownFollower }
+
+    private readonly record struct DialectOwnership(DialectOwnershipKind Kind, string AmbiguousDialects, string UnknownDialect)
     {
         public DialectOwnership(DialectOwnershipKind kind)
-            : this(kind, string.Empty)
+            : this(kind, string.Empty, string.Empty)
+        {
+        }
+
+        public DialectOwnership(DialectOwnershipKind kind, string ambiguousDialects)
+            : this(kind, ambiguousDialects, string.Empty)
         {
         }
     }
