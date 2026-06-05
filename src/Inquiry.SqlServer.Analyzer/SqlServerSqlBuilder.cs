@@ -155,11 +155,29 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         var keyColumn = context.QuotedKeyColumns[0];
         var keyParameter = context.KeyParameters[0];
         var output = returning ? " OUTPUT " + InsertedColumns(context) : string.Empty;
-        var explicitInsertColumns = JoinSql(keyColumn, context.InsertColumns);
-        var explicitInsertParameters = JoinSql(keyParameter, context.InsertParameters);
+
+        // The null-key fast path always omits the key and lets the database supply it (IDENTITY assigns;
+        // a GUID DEFAULT fires).
         var generatedInsert = context.InsertableColumns.Count == 0
             ? "INSERT INTO " + context.Table + output + " DEFAULT VALUES; "
             : "INSERT INTO " + context.Table + " (" + context.InsertColumns + ")" + output + " VALUES (" + context.InsertParameters + "); ";
+
+        // The MERGE's NOT MATCHED INSERT handles a supplied (non-null) key. A database-supplied GUID key
+        // (DEFAULT NEWSEQUENTIALID) accepts an explicit value, so the supplied key is written through. An
+        // IDENTITY (integer) key cannot — SQL Server rejects an explicit identity insert (error 544) even
+        // on a MERGE branch that is never taken — so it inserts only the non-key columns, like the
+        // null-key path, and lets the database assign the key.
+        string notMatchedInsert;
+        if (context.KeyColumns[0].TypeClass == DbTypeClass.Guid)
+        {
+            notMatchedInsert = "(" + JoinSql(keyColumn, context.InsertColumns) + ") VALUES (" + JoinSql(keyParameter, context.InsertParameters) + ")";
+        }
+        else
+        {
+            notMatchedInsert = context.InsertableColumns.Count == 0
+                ? "DEFAULT VALUES"
+                : "(" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ")";
+        }
 
         return
             "IF " + keyParameter + " IS NULL " +
@@ -171,7 +189,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
             "USING (SELECT " + keyParameter + " AS k0) AS source ON target." + keyColumn + " = source.k0 " +
             "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " " +
-            "WHEN NOT MATCHED THEN INSERT (" + explicitInsertColumns + ") VALUES (" + explicitInsertParameters + ")" + output + "; " +
+            "WHEN NOT MATCHED THEN INSERT " + notMatchedInsert + output + "; " +
             "END";
     }
 
