@@ -8,7 +8,7 @@ For the conceptual pipeline with diagrams, start at [How it works](concepts.md);
 
 | Concern | Where it lives |
 |---|---|
-| Public runtime API (`IInquiry`, attributes, pipeline) | `src/Inquiry/` |
+| Public runtime API (`IInquiry`, attributes, commands, transactions, options) | `src/Inquiry/` |
 | Per-dialect Roslyn generator | `src/Inquiry.<Dialect>.Analyzer/` |
 | Shared generator framework | `src/Inquiry.Generators.Shared/` |
 | Per-dialect runtime provider package | `src/Inquiry.<Dialect>/` |
@@ -93,7 +93,7 @@ Entity-mapping attributes live in `Inquiry.Entities`: `[InquiryTable]`, `[Inquir
 
 ## Transactions
 
-`IInquiry.BeginTransactionAsync` opens a fresh `DbConnection` + `DbTransaction` from the connection factory and returns an `IInquiryTransaction`. Two implementation classes back the interface:
+`IInquiry.ExecuteInTransactionAsync` is a public helper over the same primitive: it opens a transaction, awaits the caller's delegate, commits on success, and lets dispose roll back on exceptions. `IInquiry.BeginTransactionAsync` opens a fresh `DbConnection` + `DbTransaction` from the connection factory and returns an `IInquiryTransaction`. Two implementation classes back the interface:
 
 - **`InquiryTransaction`** — the top-level case. Owns the connection and the `DbTransaction`. `Commit` calls `DbTransaction.CommitAsync`, `Rollback` calls `RollbackAsync`, `Dispose` rolls back if neither has fired and then disposes the connection.
 - **`SavepointInquiryTransaction`** — the nested case. Holds a reference to the outer `TransactedInquiryRequestPipeline` plus a unique savepoint name. `Commit` calls `DbTransaction.ReleaseAsync(name)`; `Rollback` calls `RollbackAsync(name)`; `Dispose` best-effort rolls back to the savepoint if neither has fired. Oracle's lack of explicit savepoint release is handled by catching `NotSupportedException` in `Commit` — the savepoint will be released implicitly when the outer transaction closes.

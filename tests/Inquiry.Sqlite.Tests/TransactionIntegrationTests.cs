@@ -58,6 +58,59 @@ public sealed class TransactionIntegrationTests
     }
 
     [Fact]
+    public async Task ExecuteInTransactionAsyncCommitsWhenOperationCompletes()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await inquiry.ExecuteInTransactionAsync(async tx =>
+        {
+            await store.InsertAsync(new Inquiry.Northwind.Models.Customer { CustomerID = "HELP1", CompanyName = "Helper" });
+            await tx.ExecuteAsync($"UPDATE Customers SET Country = {"USA"} WHERE CustomerID = {"HELP1"}");
+        });
+
+        var loaded = await store.SelectByKeyAsync("HELP1");
+        Assert.NotNull(loaded);
+        Assert.Equal("USA", loaded!.Country);
+    }
+
+    [Fact]
+    public async Task ExecuteInTransactionAsyncRollsBackWhenOperationThrows()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            inquiry.ExecuteInTransactionAsync(async tx =>
+            {
+                await tx.ExecuteAsync(InsertCustomer("HELP2", "Rolled Back", "USA"));
+                throw new InvalidOperationException("boom");
+            }));
+
+        Assert.Equal("boom", thrown.Message);
+        Assert.Null(await store.SelectByKeyAsync("HELP2"));
+    }
+
+    [Fact]
+    public async Task ExecuteInTransactionAsyncReturnsOperationResultAfterCommit()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        var insertedCount = await inquiry.ExecuteInTransactionAsync(async tx =>
+        {
+            await tx.ExecuteAsync(InsertCustomer("HELP3", "Returned", "USA"));
+            return await tx.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Customers WHERE CustomerID = {"HELP3"}");
+        });
+
+        Assert.Equal(1L, insertedCount);
+        Assert.NotNull(await store.SelectByKeyAsync("HELP3"));
+    }
+
+    [Fact]
     public async Task TransactionInquirySupportsMultipleInsertsInOneCommit()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Tx");

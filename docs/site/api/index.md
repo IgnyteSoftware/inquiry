@@ -8,20 +8,20 @@ Auto-generated from the XML doc comments on the public Inquiry packages.
 |---|---|
 | `Inquiry` | The `IInquiry` facade, attributes (`InquiryTable`, `InquiryColumn`, etc.), `InquiryStore<T>` base class, options, dialect marker. |
 | `Inquiry.Commands` | `InquiryCommand`, `InquiryCommandContext`, executed/failed contexts. |
-| `Inquiry.Connections` | `IInquiryConnectionFactory`, `RetryingConnectionOpener`, transient-error detection. |
-| `Inquiry.Converters` | Built-in value converters (`InquiryJsonConverter<T>`, etc.). |
-| `Inquiry.DependencyInjection` | DI extension methods (`AddInquiryGeneratedStores`, etc.). |
+| `Inquiry.Connections` | `IInquiryConnectionFactory` for custom provider integration. Built-in retry helpers are internal. |
+| `Inquiry.Converters` | Generated-code support for built-in value converters. |
+| `Inquiry.DependencyInjection` | DI extension methods such as `AddInquiry`; generated stores emit their own `AddInquiryGeneratedStores`. |
 | `Inquiry.Entities` | Entity-shape attributes (`InquiryTable`, `InquiryKey`, `InquiryColumn`, navigations, indexes). |
 | `Inquiry.Interceptors` | `IInquiryCommandInterceptor` and the context types passed to it. |
-| `Inquiry.Materialization` | `IInquiryEntityMaterializer<T>` — the generator emits implementations. |
-| `Inquiry.Parameters` | `InquiryParameter`, parameter binder. |
-| `Inquiry.Pipeline` | `IInquiryRequestPipeline`, the default and transacted implementations. |
+| `Inquiry.Materialization` | Generated-code support for `IInquiryEntityMaterializer<T>`. Hidden from IntelliSense for application users. |
+| `Inquiry.Parameters` | `InquiryParameter` plus generated-code support for bounded `IN` expansion. |
 | `Inquiry.Stores` | Store-method operation attributes (`InquirySelectAll`, `InquiryInsert`, `InquiryStoredProcedure`, etc.) and the `InquiryStore<T>` base. |
-| `Inquiry.Sqlite` | SQLite provider: `SqliteInquiryConnectionFactory`, `AddInquirySqlite` extension. |
-| `Inquiry.SqlServer` | SQL Server provider equivalents. |
-| `Inquiry.PostgreSql` | PostgreSQL provider equivalents. |
-| `Inquiry.MySql` | MySQL / MariaDB provider equivalents. |
-| `Inquiry.Oracle` | Oracle provider equivalents. |
+| `Inquiry.Transactions` | `IInquiryTransaction` for explicit transaction handles and nested savepoints. |
+| `Inquiry.Sqlite` | SQLite provider package: public DI extension, internal connection factory. |
+| `Inquiry.SqlServer` | SQL Server provider package: public DI extension/options, internal connection factory. |
+| `Inquiry.PostgreSql` | PostgreSQL provider package: public DI extension/options, internal connection factory. |
+| `Inquiry.MySql` | MySQL / MariaDB provider package: public DI extension, internal connection factory. |
+| `Inquiry.Oracle` | Oracle provider package: public DI extension, internal connection factory. |
 
 ## Diagnostics
 

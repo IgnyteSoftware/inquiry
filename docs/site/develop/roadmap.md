@@ -4,7 +4,7 @@
 > enhancements. Resolved items are summarized at the [bottom](#recently-resolved). Nothing here blocks
 > `main`: the library builds and every test suite passes.
 >
-> **Last reconciled against the code:** 2026-06-04.
+> **Last reconciled against the code:** 2026-06-05.
 
 ## Known issues & correctness
 
@@ -15,9 +15,9 @@
 
 ## Security
 
-- **Run a formal security scan.** The code has had a manual, security-oriented review and the raw-SQL
-  trust boundary is documented (see [Security](../articles/security.md)). No automated multi-agent
-  security scan has been run; that remains a release-bar follow-up. *No vulnerability is currently known
+- **Run the formal fanout security scan.** The code has had a manual, Codex Security-oriented repository review and the raw-SQL
+  trust boundary is documented (see [Security](../articles/security.md)). The remaining release-bar follow-up is the delegated
+  repository-wide scan; it requires explicit sub-agent authorization in Codex. *No vulnerability is currently known
   — generated SQL is parameterized and identifiers come from compile-time metadata.*
 
 ## Performance & optimization
@@ -98,3 +98,9 @@ open:
 - **Generator robustness:** a mistyped collection-relation foreign key on a store with no eager method no
   longer crashes the generator (`NullReferenceException`) — relation SELECT consts are emitted only when a
   valid eager method consumes them; a bad relation that *is* eager-loaded still reports `INQ040`/`INQ041`.
+- **Pre-release API hardening:** high-level ad-hoc SQL APIs now use safe `FormattableString`
+  overloads instead of raw `string` command text, with `InquiryCommand` left as the explicit
+  advanced escape hatch. `IInquiry.ExecuteInTransactionAsync(...)` now owns the common
+  begin/commit/rollback transaction flow. Runtime implementation types, provider connection factories,
+  retry helpers, and request pipelines are internal, and generated-code-only support contracts are
+  hidden from IntelliSense where they must remain public for source generation.

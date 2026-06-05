@@ -12,10 +12,10 @@ Inquiry is an experimental **.NET 8+** source-generated micro-ORM. You write att
 
 | Project | Purpose |
 | --- | --- |
-| `src/Inquiry` | Public runtime: `IInquiry` facade, request pipeline, attributes, command/parameter types, transactions, and the DI extension `AddInquiry()`. Ships no SQL. |
+| `src/Inquiry` | Public runtime: `IInquiry` facade, attributes, command/parameter types, transactions, options, and the DI extension `AddInquiry()`. Ships no SQL; the request pipeline is internal. |
 | `src/Inquiry.Generators.Shared` | Roslyn incremental source-generator framework. Discovers entities and stores; emits materializers, generated stores, the DI registration class, and `InquiryGeneratedSchema.Ddl`. Owns the per-dialect `SqlBuilder` hierarchy. Bundled privately into each provider analyzer. |
 | `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,Oracle}.Analyzer` | Per-dialect Roslyn analyzers — each a `[Generator]` that bundles the shared framework and emits only when its dialect matches the resolved `[InquiryDialect]`. |
-| `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,Oracle}` | Per-dialect runtime providers: connection factory, `AddInquiry<Dialect>(…)` DI extension, and the `[assembly: InquiryDialect("…")]` marker. |
+| `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,Oracle}` | Per-dialect runtime providers: `AddInquiry<Dialect>(...)` DI extension, provider options, internal connection factory, and the `[assembly: InquiryDialect("...")]` marker. |
 | `tests/…` | Core runtime tests, source-generator tests, the shared `Inquiry.IntegrationTesting` support library, and per-dialect end-to-end suites (SQLite in-process; the rest via Testcontainers). |
 | `samples/Inquiry.Northwind` | Shared classic-Northwind entities, stores, and per-provider DDL consumed by the samples and integration tests. |
 | `samples/Inquiry.Sample` | Runnable ASP.NET Core sample exercising CRUD, upsert, transactions, and eager loading on SQLite. |
