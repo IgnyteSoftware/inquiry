@@ -28,6 +28,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     private static ServiceProvider? _services;
     private static string? _connectionString;
     private static IDbContextFactory<SqlServerShipperContext>? _dbContextFactory;
+    private static IDbContextFactory<SqlServerProductContext>? _productContextFactory;
 
     private SqlServerBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
@@ -37,6 +38,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public int RowCount { get; }
 
     public IDbContextFactory<SqlServerShipperContext> DbContextFactory => _dbContextFactory!;
+    public IDbContextFactory<SqlServerProductContext> ProductContextFactory => _productContextFactory!;
 
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
     public ProductStore Products => _services!.GetRequiredService<ProductStore>();
@@ -71,6 +73,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                     // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
                     // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
                     .AddDbContextFactory<SqlServerShipperContext>(options => options.UseSqlServer(connectionString))
+                    .AddDbContextFactory<SqlServerProductContext>(options => options.UseSqlServer(connectionString))
                     .BuildServiceProvider();
 
                 await SeedAsync(connectionString, seedRows).ConfigureAwait(false);
@@ -82,6 +85,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                 _connectionString = connectionString;
                 _services = services;
                 _dbContextFactory = services.GetRequiredService<IDbContextFactory<SqlServerShipperContext>>();
+                _productContextFactory = services.GetRequiredService<IDbContextFactory<SqlServerProductContext>>();
                 _container = container;
 
                 AppDomain.CurrentDomain.ProcessExit += static (_, _) =>
