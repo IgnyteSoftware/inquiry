@@ -26,7 +26,7 @@ namespace Inquiry;
 /// async work that captured the old transaction slot fails fast after the transaction closes.
 /// </para>
 /// </remarks>
-public sealed class DefaultInquiry : IInquiry
+internal sealed class DefaultInquiry : IInquiry
 {
     private readonly IInquiryRequestPipeline _defaultPipeline;
     private readonly IInquiryConnectionFactory _connectionFactory;

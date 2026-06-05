@@ -14,4 +14,8 @@
     <PackageReference Include="Oracle.ManagedDataAccess.Core" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Inquiry.Oracle.Tests" />
+  </ItemGroup>
 </Project>

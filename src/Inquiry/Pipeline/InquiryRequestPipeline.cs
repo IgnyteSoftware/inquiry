@@ -32,7 +32,7 @@ namespace Inquiry.Pipeline;
 /// awaits are eliminated entirely (matching Dapper's "nothing between reader and materializer"
 /// loop).
 /// </remarks>
-public sealed class InquiryRequestPipeline : IInquiryRequestPipeline
+internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 {
     private const CommandBehavior ReadBehavior = CommandBehavior.SingleResult;
 

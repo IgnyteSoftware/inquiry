@@ -7,7 +7,7 @@ namespace Inquiry.SqlServer;
 /// <summary>
 /// Opens SQL Server connections for generated Inquiry stores.
 /// </summary>
-public sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFactory
+internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
     private readonly SqlServerInquiryOptions _options;

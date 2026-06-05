@@ -10,7 +10,7 @@ namespace Inquiry.DependencyInjection;
 /// (last call wins) — sending every query to the wrong database with no error. The helper throws
 /// up front so the misuse fails at composition time, not at runtime against the wrong DB.
 /// </summary>
-public static class InquiryProviderRegistration
+internal static class InquiryProviderRegistration
 {
     /// <summary>
     /// Throws <see cref="InvalidOperationException"/> if a different provider's

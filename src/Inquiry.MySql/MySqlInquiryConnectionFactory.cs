@@ -7,7 +7,7 @@ namespace Inquiry.MySql;
 /// <summary>
 /// Opens MySQL/MariaDB connections for the Inquiry request pipeline.
 /// </summary>
-public sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
+internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
 

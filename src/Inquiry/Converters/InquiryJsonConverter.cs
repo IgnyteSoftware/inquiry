@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 using Inquiry.Entities;
 
@@ -9,6 +10,7 @@ namespace Inquiry.Converters;
 /// the generator can instantiate it.
 /// </summary>
 /// <typeparam name="T">The property type stored as JSON.</typeparam>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class InquiryJsonConverter<T> : IInquiryValueConverter<T, string>
 {
     /// <inheritdoc/>

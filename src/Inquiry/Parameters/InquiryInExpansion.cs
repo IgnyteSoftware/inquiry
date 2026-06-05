@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data.Common;
 using System.Text;
 
@@ -15,6 +16,7 @@ namespace Inquiry.Parameters;
 /// Inherently allocating (it builds a new command text and N parameters), so it is confined to the
 /// <c>IN</c> path; scalar predicates keep the allocation-free fast binder.
 /// </remarks>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static class InquiryInExpansion
 {
     /// <summary>

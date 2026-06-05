@@ -7,7 +7,7 @@ namespace Inquiry.Sqlite;
 /// <summary>
 /// Opens SQLite connections for generated Inquiry stores.
 /// </summary>
-public sealed class SqliteInquiryConnectionFactory : IInquiryConnectionFactory
+internal sealed class SqliteInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
 

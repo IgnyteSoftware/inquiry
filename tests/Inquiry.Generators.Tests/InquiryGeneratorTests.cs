@@ -2309,11 +2309,11 @@ public sealed partial class InquiryGeneratorTests
         // ends up in the synthetic compilation's referenced-assembly set. Without this the test
         // process loads only the analyzer DLLs (which carry no dialect attribute) and the
         // ambiguous-dialect scenario can't be exercised.
-        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.Sqlite.SqliteInquiryConnectionFactory).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.SqlServer.SqlServerInquiryConnectionFactory).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.PostgreSql.PostgreSqlInquiryConnectionFactory).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.MySql.MySqlInquiryConnectionFactory).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.Oracle.OracleInquiryConnectionFactory).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.Sqlite.DependencyInjection.SqliteInquiryServiceCollectionExtensions).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.SqlServer.DependencyInjection.SqlServerInquiryServiceCollectionExtensions).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.PostgreSql.DependencyInjection.PostgreSqlInquiryServiceCollectionExtensions).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.MySql.DependencyInjection.MySqlInquiryServiceCollectionExtensions).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.Oracle.DependencyInjection.OracleInquiryServiceCollectionExtensions).Assembly.Location));
 
         return references;
     }
