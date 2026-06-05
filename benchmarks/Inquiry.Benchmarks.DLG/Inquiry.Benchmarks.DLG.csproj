@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Multi-target so the net8 benchmark host can reference it while standalone net10 use is preserved. -->
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Generated DLG code is not warning-clean; do not let it fail the build. -->
+    <NoWarn>$(NoWarn);CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8625;CS0168;CS0219;CS0649</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
+    <PackageReference Include="System.Data.OleDb" />
+    <PackageReference Include="System.Data.Odbc" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Embedded so DlgSetup can read it from the assembly (resource: Inquiry.Benchmarks.DLG.SQLScript.sql). -->
+    <EmbeddedResource Include="SQLScript.sql" />
+    <!-- The .config is written at runtime by DlgSetup.PrimeConfig; don't copy the static one to output. -->
+    <None Update="Inquiry.Benchmarks.DLG.config" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+</Project>
