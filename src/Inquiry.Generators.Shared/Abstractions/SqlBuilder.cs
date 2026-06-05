@@ -468,8 +468,13 @@ public abstract class SqlBuilder
 
         return string.IsNullOrEmpty(whereClause)
             ? extraPredicate!
-            : whereClause + " AND " + extraPredicate;
+            : GroupForAndComposition(whereClause) + " AND " + extraPredicate;
     }
+
+    private static string GroupForAndComposition(string whereClause)
+        => whereClause.IndexOf(" OR ", System.StringComparison.OrdinalIgnoreCase) >= 0
+            ? "(" + whereClause + ")"
+            : whereClause;
 
     /// <summary>
     /// Renders a leading <c>" WHERE &lt;body&gt;"</c> suffix, or the empty string when

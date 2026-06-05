@@ -51,6 +51,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sb.Append(\"@p\").Append(_r).Append(\"_0\");", text);
         Assert.Contains("_p.ParameterName = \"@p\" + _r + \"_1\";", text);
         Assert.Contains("if (_list.Count == 0) return 0;", text);
+        Assert.Contains("if ((long)_list.Count * 2L > Inquiry.MaxParametersPerCommand)", text);
     }
 
     [Fact]

@@ -1018,6 +1018,16 @@ internal static class StoreProcessor
             return TryValidateKeysetPage(context, method, entity, out selectPlan);
         }
 
+        if (entity.ConcurrencyToken is not null && method.Operation is StoreOperation.UpdateAll or StoreOperation.DeleteAll)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.BatchMutationUnsupportedWithConcurrencyToken,
+                method.Location?.ToLocation(),
+                method.Name,
+                entity.Name));
+            return false;
+        }
+
         if (method.Operation == StoreOperation.FullTextSearch && !sqlBuilder.SupportsFullTextSearch)
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.FullTextSearchNotSupported, method.Location?.ToLocation(), method.Name));

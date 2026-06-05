@@ -23,8 +23,8 @@ namespace Inquiry;
 /// reference from DI — automatically participate in any transaction the caller opens.
 /// </para>
 /// <para>
-/// The slot is cleared on transaction commit, rollback, or dispose; straggler async work that
-/// fires after the transaction has been closed silently falls back to the default pipeline.
+/// The current async flow is detached on transaction commit, rollback, or dispose; straggler
+/// async work that captured the old transaction slot fails fast after the transaction closes.
 /// </para>
 /// </remarks>
 public sealed class DefaultInquiry : IInquiry
@@ -53,6 +53,15 @@ public sealed class DefaultInquiry : IInquiry
     {
         public TransactedInquiryRequestPipeline? Pipeline;
         public IsolationLevel IsolationLevel;
+        public AmbientTransactionSlotState State;
+    }
+
+    private enum AmbientTransactionSlotState
+    {
+        Pending,
+        Active,
+        Detached,
+        Closed,
     }
 
     /// <summary>
@@ -72,10 +81,38 @@ public sealed class DefaultInquiry : IInquiry
         _options = options;
     }
 
-    private IInquiryRequestPipeline ActivePipeline => _ambientSlot.Value?.Pipeline ?? _defaultPipeline;
+    private IInquiryRequestPipeline ActivePipeline
+    {
+        get
+        {
+            var slot = _ambientSlot.Value;
+            if (slot is null)
+            {
+                return _defaultPipeline;
+            }
+
+            if (slot.Pipeline is not null)
+            {
+                return slot.Pipeline;
+            }
+
+            if (slot.State == AmbientTransactionSlotState.Closed)
+            {
+                throw new ObjectDisposedException(
+                    "Inquiry ambient transaction",
+                    "This async flow captured an Inquiry transaction that has already been committed, rolled back, or disposed. " +
+                    "Start a new operation after the transaction scope, or await child work before closing the transaction.");
+            }
+
+            return _defaultPipeline;
+        }
+    }
 
     /// <inheritdoc />
     public bool ThrowOnConcurrencyConflict => _options?.ThrowOnConcurrencyConflict ?? false;
+
+    /// <inheritdoc />
+    public int MaxParametersPerCommand => _options?.MaxParametersPerCommand ?? InquiryOptions.DefaultMaxParametersPerCommand;
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -270,8 +307,26 @@ public sealed class DefaultInquiry : IInquiry
         {
             connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
             var transaction = await connection.BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
-            slot.Pipeline = new TransactedInquiryRequestPipeline(connection, transaction, _interceptors, _connectionFactory, _options);
-            return new InquiryTransaction(connection, transaction, this, onClose: () => slot.Pipeline = null);
+            var pipeline = new TransactedInquiryRequestPipeline(connection, transaction, _interceptors, _connectionFactory, _options);
+            slot.Pipeline = pipeline;
+            slot.State = AmbientTransactionSlotState.Active;
+            return new InquiryTransaction(
+                connection,
+                transaction,
+                pipeline,
+                this,
+                onDetach: () =>
+                {
+                    if (ReferenceEquals(_ambientSlot.Value, slot))
+                    {
+                        _ambientSlot.Value = null;
+                    }
+                },
+                onClose: () =>
+                {
+                    slot.Pipeline = null;
+                    slot.State = AmbientTransactionSlotState.Closed;
+                });
         }
         catch
         {
@@ -279,6 +334,7 @@ public sealed class DefaultInquiry : IInquiry
             // default pipeline and the user can begin a fresh transaction (a new slot will
             // replace this one synchronously next time).
             slot.Pipeline = null;
+            slot.State = AmbientTransactionSlotState.Detached;
             if (connection is not null)
             {
                 await connection.DisposeAsync().ConfigureAwait(false);

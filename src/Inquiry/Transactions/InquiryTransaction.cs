@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using Inquiry.Pipeline;
 
 namespace Inquiry.Transactions;
 
@@ -11,16 +12,26 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 {
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
+    private readonly TransactedInquiryRequestPipeline _pipeline;
+    private readonly Action _onDetach;
     private readonly Action _onClose;
     private bool _closed;
     private bool _committed;
     private bool _disposed;
 
-    internal InquiryTransaction(DbConnection connection, DbTransaction transaction, IInquiry inquiry, Action onClose)
+    internal InquiryTransaction(
+        DbConnection connection,
+        DbTransaction transaction,
+        TransactedInquiryRequestPipeline pipeline,
+        IInquiry inquiry,
+        Action onDetach,
+        Action onClose)
         : base(inquiry)
     {
         _connection = connection;
         _transaction = transaction;
+        _pipeline = pipeline;
+        _onDetach = onDetach;
         _onClose = onClose;
     }
 
@@ -42,52 +53,77 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     }
 
     /// <inheritdoc />
-    public override async Task CommitAsync(CancellationToken cancellationToken = default)
+    public override Task CommitAsync(CancellationToken cancellationToken = default)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));
-        try
-        {
-            await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            _committed = true;
-        }
-        finally
-        {
-            // Whether the underlying CommitAsync succeeded or threw, this handle is now finished:
-            // the slot's Pipeline must be nulled (so subsequent ambient store calls fall through
-            // to the default pipeline instead of routing to a doomed transactional one), and
-            // _closed must be set (so direct tx.X(...) calls trip ThrowIfClosed instead of
-            // silently operating on a corrupted transaction). If commit threw, _committed stays
-            // false and DisposeAsync will attempt a best-effort Rollback (already try/catch-wrapped).
-            Close();
-        }
+        ThrowIfClosed();
+        var lease = _pipeline.EnterExclusiveOperation();
+        _onDetach();
+        return CommitCoreAsync(lease, cancellationToken);
     }
 
     /// <inheritdoc />
-    public override async Task RollbackAsync(CancellationToken cancellationToken = default)
+    public override Task RollbackAsync(CancellationToken cancellationToken = default)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(InquiryTransaction));
-        try
-        {
-            await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            // Same as CommitAsync: even if the underlying RollbackAsync threw, the handle is done.
-            Close();
-        }
+        ThrowIfClosed();
+        var lease = _pipeline.EnterExclusiveOperation();
+        _onDetach();
+        return RollbackCoreAsync(lease, cancellationToken);
     }
 
     /// <inheritdoc />
-    public override async ValueTask DisposeAsync()
+    public override ValueTask DisposeAsync()
     {
         if (_disposed)
         {
-            return;
+            return default;
         }
 
         _disposed = true;
+        _onDetach();
         Close();
 
+        return DisposeCoreAsync();
+    }
+
+    private async Task CommitCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease, CancellationToken cancellationToken)
+    {
+        using (lease)
+        {
+            try
+            {
+                await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                _committed = true;
+            }
+            finally
+            {
+                // Whether the underlying CommitAsync succeeded or threw, this handle is now finished:
+                // the captured slot must be closed (so straggler ambient store calls fail fast), and
+                // _closed must be set (so direct tx.X(...) calls trip ThrowIfClosed instead of
+                // silently operating on a corrupted transaction). If commit threw, _committed stays
+                // false and DisposeAsync will attempt a best-effort Rollback (already try/catch-wrapped).
+                Close();
+            }
+        }
+    }
+
+    private async Task RollbackCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease, CancellationToken cancellationToken)
+    {
+        using (lease)
+        {
+            try
+            {
+                await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                // Same as CommitAsync: even if the underlying RollbackAsync threw, the handle is done.
+                Close();
+            }
+        }
+    }
+
+    private async ValueTask DisposeCoreAsync()
+    {
         if (!_committed)
         {
             try
@@ -105,9 +141,9 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     }
 
     /// <summary>
-    /// Clears the ambient transactional pipeline (idempotent). Called on the first of
+    /// Closes the captured ambient transactional slot (idempotent). Called on the first of
     /// Commit / Rollback / Dispose so that any straggler async work that runs after this
-    /// transaction is closed falls back to the default (non-transactional) pipeline.
+    /// transaction is closed fails fast instead of falling through to the default pipeline.
     /// </summary>
     private void Close()
     {

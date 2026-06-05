@@ -355,6 +355,72 @@ public sealed class TransactionStateMachineTests
     }
 
     [Fact]
+    public async Task CommitWhileStreamingReaderIsInFlightThrowsWithoutClosingTransaction()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "commit_in_flight");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await store.InsertAsync(new Customer { CustomerID = "SEED1", CompanyName = "Seed 1" });
+        await store.InsertAsync(new Customer { CustomerID = "SEED2", CompanyName = "Seed 2" });
+
+        await using var tx = await inquiry.BeginTransactionAsync();
+        var streaming = tx.QueryAsync<Customer>(
+            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+        var enumerator = streaming.GetAsyncEnumerator();
+
+        try
+        {
+            Assert.True(await enumerator.MoveNextAsync());
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CommitAsync());
+            Assert.Contains("in flight", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+
+        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "CMT01", CompanyName = "Committed", Country = "USA" });
+        await tx.CommitAsync();
+
+        Assert.NotNull(await store.SelectByKeyAsync("CMT01"));
+    }
+
+    [Fact]
+    public async Task RollbackWhileStreamingReaderIsInFlightThrowsWithoutClosingTransaction()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "rollback_in_flight");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await store.InsertAsync(new Customer { CustomerID = "SEED1", CompanyName = "Seed 1" });
+        await store.InsertAsync(new Customer { CustomerID = "SEED2", CompanyName = "Seed 2" });
+
+        await using var tx = await inquiry.BeginTransactionAsync();
+        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "RBK01", CompanyName = "Rollback", Country = "USA" });
+        var streaming = tx.QueryAsync<Customer>(
+            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+        var enumerator = streaming.GetAsyncEnumerator();
+
+        try
+        {
+            Assert.True(await enumerator.MoveNextAsync());
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tx.RollbackAsync());
+            Assert.Contains("in flight", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+
+        await tx.RollbackAsync();
+
+        Assert.Null(await store.SelectByKeyAsync("RBK01"));
+    }
+
+    [Fact]
     public async Task AlreadyCancelledTokenInBeginTransactionFailsCleanlyAndLeavesSlotRecoverable()
     {
         // Item #8. A cancelled BeginTransactionAsync must throw OperationCanceledException

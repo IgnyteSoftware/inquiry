@@ -65,6 +65,22 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     /// </summary>
     internal DbTransaction Transaction => _transaction;
 
+    internal InFlightLease EnterExclusiveOperation()
+    {
+        EnterInFlight();
+        return new InFlightLease(this);
+    }
+
+    internal readonly struct InFlightLease : IDisposable
+    {
+        private readonly TransactedInquiryRequestPipeline _pipeline;
+
+        internal InFlightLease(TransactedInquiryRequestPipeline pipeline)
+            => _pipeline = pipeline;
+
+        public void Dispose() => _pipeline.ExitInFlight();
+    }
+
     // ---- Savepoint primitives ------------------------------------------------------------
     //
     // Wrap DbTransaction.SaveAsync / RollbackAsync(name) / ReleaseAsync(name) with the same

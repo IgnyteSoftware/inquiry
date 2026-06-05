@@ -20,6 +20,12 @@ public interface IInquiry
     /// </summary>
     bool ThrowOnConcurrencyConflict => false;
 
+    /// <summary>
+    /// Gets the maximum number of parameters Inquiry should bind into one generated command.
+    /// Generated IN and batch helpers use this to fail early before provider parameter caps are hit.
+    /// </summary>
+    int MaxParametersPerCommand => InquiryOptions.DefaultMaxParametersPerCommand;
+
     // ---- Ad-hoc string overloads (DI-resolved class materializer) ----------------------
 
     /// <summary>Executes a SQL query and streams mapped entities.</summary>

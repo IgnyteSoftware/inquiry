@@ -29,6 +29,10 @@ The SQL is **assembled at run time** per batch (the row count is unknown at comp
 
 This is the one place Inquiry builds SQL at run time — necessarily, since the row count varies — but the column list and parameter shape come straight from the compile-time generator output.
 
+## Parameter limits
+
+Batch methods and generated `IN` predicates stop before a command grows past `InquiryOptions.MaxParametersPerCommand` (default: `2000`). Lower it for providers or deployments with stricter limits; raise it only when your database and driver can handle larger commands reliably.
+
 ## Provider differences
 
 - **PostgreSQL / SQLite** support multi-row `INSERT … VALUES (…), (…), …` directly.

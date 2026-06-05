@@ -130,6 +130,23 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SoftDeleteFilterParenthesizesOrPredicatesBeforeComposing_Sqlite()
+    {
+        var result = RunGenerator(WidgetStore("""
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Name")]
+            [InquiryWhere("IsDeleted", Or = true)]
+            public partial Task<IReadOnlyList<Widget>> SearchAsync(string name, bool deleted, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetWidgetStore(result);
+
+        Assert.Contains(
+            "WHERE (\\\"Name\\\" = @Name OR \\\"IsDeleted\\\" = @IsDeleted) AND \\\"IsDeleted\\\" = 0",
+            text);
+    }
+
+    [Fact]
     public void SoftDeleteFilterComposesWithPaging_Sqlite()
     {
         // Composition: an offset-paged select keeps the filter before ORDER BY / LIMIT.

@@ -107,9 +107,9 @@ Both inherit from **`InquiryTransactionBase`**, which holds the root `IInquiry` 
 1. **Install the slot synchronously**, before any `await`. Caller's async context now sees the holder.
 2. Await the connection open + `BeginTransactionAsync(level, ct)` call.
 3. Fill in `slot.Pipeline = new TransactedInquiryRequestPipeline(connection, tx, …)`. The caller's reference to the holder sees the mutation.
-4. Return an `InquiryTransaction` whose `onClose` callback nulls out `slot.Pipeline` on the first of Commit / Rollback / Dispose.
+4. Return an `InquiryTransaction` whose close path detaches the current async flow, then marks the captured holder closed on the first of Commit / Rollback / Dispose.
 
-Every IInquiry method then routes via `ActivePipeline => _ambientSlot.Value?.Pipeline ?? _defaultPipeline`. Slot present → transacted pipeline reusing one connection. Slot absent or `Pipeline == null` → default pipeline opening a fresh connection per call. Generated stores (which hold the same DI-scoped `DefaultInquiry`) participate automatically without per-call wiring.
+Every IInquiry method then routes through the ambient slot. Active slot → transacted pipeline reusing one connection. No slot → default pipeline opening a fresh connection per call. Closed captured slot → `ObjectDisposedException`, which prevents async work that started inside a transaction from silently continuing outside it after close. Generated stores (which hold the same DI-scoped `DefaultInquiry`) participate automatically without per-call wiring.
 
 The nested case in `BeginTransactionAsync` short-circuits: if `_ambientSlot.Value?.Pipeline` is already set, it doesn't open a new physical transaction; it calls `outerPipeline.SaveSavepointAsync(name, ct)` and returns a `SavepointInquiryTransaction`. The slot stays pointing at the outer pipeline — savepoints share its physical connection.
 
@@ -117,7 +117,7 @@ The nested case in `BeginTransactionAsync` short-circuits: if `_ambientSlot.Valu
 
 `DbConnection` isn't thread-safe. `TransactedInquiryRequestPipeline` serializes access with an `Interlocked.CompareExchange(ref _inFlight, 1, 0)` guard at the top of every operation. A second op starting while another is in flight throws `InvalidOperationException("Cannot start a new Inquiry operation while another operation is in flight on the same transaction.")` instead of corrupting the connection.
 
-The savepoint primitives (`SaveSavepointAsync` / `ReleaseSavepointAsync` / `RollbackToSavepointAsync`) respect the same guard — they're SQL statements on the connection, just like data ops.
+Root commit / rollback and the savepoint primitives (`SaveSavepointAsync` / `ReleaseSavepointAsync` / `RollbackToSavepointAsync`) respect the same guard — they're SQL statements on the connection, just like data ops.
 
 ### DI lifetimes
 

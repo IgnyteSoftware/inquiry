@@ -45,7 +45,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM \\\"TThing\\\" WHERE \\\"Id\\\" IN (@keys)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@keys\", ids);", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@keys\", ids, Inquiry.MaxParametersPerCommand);", text);
         Assert.Contains("return Inquiry.ExecuteAsync(_cmd,", text);
     }
 
@@ -88,7 +88,7 @@ public sealed partial class InquiryGeneratorTests
         // passes the same ':keys' so its runtime text-rewrite finds the baked sentinel (FinalizeCommand
         // reconciles the per-element params under BindByName).
         Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM TThing WHERE Id IN (:keys)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \":keys\", ids);", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \":keys\", ids, Inquiry.MaxParametersPerCommand);", text);
     }
 
     [Fact]

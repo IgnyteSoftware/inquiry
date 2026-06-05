@@ -51,6 +51,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sb.Append(_sqlUpdateAllRow.Replace(\"{r}\", _r.ToString(global::System.Globalization.CultureInfo.InvariantCulture)));", text);
         Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_0\";", text);
         Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_k0\";", text);
+        Assert.Contains("if ((long)_list.Count * 3L > Inquiry.MaxParametersPerCommand)", text);
     }
 
     [Fact]

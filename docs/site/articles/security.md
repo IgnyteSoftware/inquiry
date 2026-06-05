@@ -39,6 +39,13 @@ await inquiry.QueryListAsync<Customer>(
     "SELECT * FROM Customers WHERE Country = '" + userInput + "'");
 ```
 
+For interpolated values, prefer the `InquirySql.Sql(FormattableString)` factory. It turns each interpolation hole into a bound parameter before the command reaches ADO.NET:
+
+```csharp
+var command = InquirySql.Sql($"SELECT * FROM Customers WHERE Country = {userInput}");
+var customers = await inquiry.QueryListAsync<Customer>(command);
+```
+
 The rule is the ordinary one: **never string-concatenate untrusted input into a SQL command.** Bind it.
 
 ## Credentials and connection strings

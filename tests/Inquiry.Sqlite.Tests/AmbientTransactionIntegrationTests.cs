@@ -104,6 +104,34 @@ public sealed class AmbientTransactionIntegrationTests
     }
 
     [Fact]
+    public async Task StoreCallCapturedInsideTransactionThrowsAfterTransactionCloses()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Ambient");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<CustomerStore>();
+        var releaseStraggler = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task straggler;
+        await using (var tx = await inquiry.BeginTransactionAsync())
+        {
+            straggler = Task.Run(async () =>
+            {
+                await releaseStraggler.Task;
+                await store.InsertAsync(new Customer { CustomerID = "LATE1", CompanyName = "Late" });
+            });
+
+            await tx.CommitAsync();
+        }
+
+        releaseStraggler.SetResult();
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => straggler);
+        Assert.Null(await store.SelectByKeyAsync("LATE1"));
+
+        await store.InsertAsync(new Customer { CustomerID = "POST1", CompanyName = "Post Transaction" });
+        Assert.NotNull(await store.SelectByKeyAsync("POST1"));
+    }
+
+    [Fact]
     public async Task BackToBackTransactionsEachOpenFreshPipeline()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Ambient");

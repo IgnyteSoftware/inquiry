@@ -296,6 +296,26 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void BatchUpdateOnTokenEntityIsRejected()
+    {
+        var result = RunGenerator(TokenStore("""
+            [InquiryUpdateAll]
+            public partial Task<int> UpdateAllAsync(IEnumerable<Widget> widgets, CancellationToken cancellationToken = default);
+            """));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ022");
+    }
+
+    [Fact]
+    public void BatchDeleteOnTokenEntityIsRejected()
+    {
+        var result = RunGenerator(TokenStore("""
+            [InquiryDeleteAll]
+            public partial Task<int> DeleteAllAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
+            """));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ022");
+    }
+
+    [Fact]
     public void OrmTokenComposesAcrossDialects()
     {
         var pg = GetTokenStore(RunGenerator(TokenStore(TokenCrud), dialect: "PostgreSql"));

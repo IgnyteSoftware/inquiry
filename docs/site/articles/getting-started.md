@@ -118,7 +118,7 @@ Key points:
 
 - **Stores join automatically.** No `WithTransaction` builder, no per-call parameter. The transaction is *ambient* — once open, every Inquiry call on the same async flow uses it.
 - **Two call styles, same outcome.** `tx.ExecuteAsync(...)` for ad-hoc SQL; `store.X(...)` for typed generated methods. Both run on the same connection in the same transaction.
-- **Use-after-close on `tx` throws.** Calling `tx.X(...)` after `Commit` / `Rollback` / `Dispose` throws `ObjectDisposedException`. (Store calls fall back to non-transactional behavior after close — see [the transactions feature page](features/transactions.md) for why.)
+- **Use-after-close fails fast.** Calling `tx.X(...)` after `Commit` / `Rollback` / `Dispose` throws `ObjectDisposedException`. Store calls from async work that captured the transaction also throw after close; fresh store calls after the transaction scope use the default non-transactional pipeline.
 - **Nested calls become savepoints.** `await using var sp = await tx.BeginTransactionAsync()` emits `SAVEPOINT`. Inner commit releases it; inner rollback reverts just that scope; the outer transaction continues.
 
 ```csharp
