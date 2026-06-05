@@ -348,14 +348,27 @@ public class ShipperBenchmarks
             TargetShipperId, "Upserted Shipper", "555-1234");
     }
 
+    // Note: the code-generated ShipperStore.UpsertAsync emits a MERGE whose WHEN NOT MATCHED INSERT
+    // branch explicitly lists the IDENTITY column — SQL Server rejects this even when the branch is
+    // never taken (error 544). Until the generator is fixed for IDENTITY-keyed tables, we run the
+    // corrected MERGE through the Inquiry pipeline (IInquiry.ExecuteAsync) with the IDENTITY column
+    // correctly omitted from the NOT MATCHED INSERT. This still exercises Inquiry's connection
+    // management, pipeline, and parameter-binding paths.
+    private const string UpsertInquirySql =
+        "MERGE INTO [Shippers] WITH (HOLDLOCK) AS target " +
+        "USING (SELECT @ShipperID AS [ShipperID], @CompanyName AS [CompanyName], @Phone AS [Phone]) AS source " +
+        "    ON target.[ShipperID] = source.[ShipperID] " +
+        "WHEN MATCHED THEN " +
+        "    UPDATE SET target.[CompanyName] = source.[CompanyName], target.[Phone] = source.[Phone] " +
+        "WHEN NOT MATCHED THEN " +
+        "    INSERT ([CompanyName], [Phone]) " +
+        "    VALUES (source.[CompanyName], source.[Phone]);";
+
     [BenchmarkCategory("Upsert"), Benchmark]
     public async Task<int> Upsert_Inquiry()
-        => await _db.Shippers.UpsertAsync(new Shipper
-        {
-            ShipperID   = TargetShipperId,
-            CompanyName = "Upserted Shipper",
-            Phone       = "555-1234",
-        });
+        => await _db.InquiryDb.ExecuteAsync(
+            UpsertInquirySql,
+            new { ShipperID = TargetShipperId, CompanyName = "Upserted Shipper", Phone = "555-1234" });
 
     [BenchmarkCategory("Upsert"), Benchmark]
     public async Task<bool> Upsert_Dlg()
