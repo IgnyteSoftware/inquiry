@@ -232,13 +232,19 @@ Upsert atomicity differs per dialect; the table below pins what each provider do
 |---|---|---|
 | SQLite | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` (the key is included in the INSERT) — single statement, atomic |
 | PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` on the explicit-key branch — atomic (the explicit key is supplied, so no sequence value is consumed) |
-| MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic |
+| MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Integer `AUTO_INCREMENT` key: same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic. GUID key (`UseDatabaseDefault`): generated server-side via `COALESCE(@key, UUID())`, captured in a `@_inquiry_genkey` user variable so the emulated returning can read it back — atomic. |
 | SQL Server | `MERGE ... WITH (HOLDLOCK)` (`WHEN MATCHED THEN UPDATE` / `WHEN NOT MATCHED THEN INSERT`) — the `HOLDLOCK` hint serializes concurrent same-key upserts, so the statement is atomic with no duplicate-key race | `MERGE ... WITH (HOLDLOCK)` on the explicit-key branch — single atomic statement (the null/generate branch is a plain INSERT) |
 | Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ039` warning + throwing stub): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead |
 
 What the contract guarantees, on every dialect: **N concurrent upserts of the same key always end with exactly one row whose state matches one of the inputs**. The integration test `UpsertConcurrencyTests.ConcurrentUpsertsOfSameKeyEndInOneRowMatchingOneInput` pins this against each live provider.
 
 What it does **not** guarantee on every dialect: that every parallel upsert succeeds. On Oracle, a duplicate-key failure on one parallel call is a known engine-level race and surfaces as an exception (SQL Server is now hardened with `HOLDLOCK`, so all parallel upserts succeed). If your app must serialize on Oracle, wrap the upsert in an explicit transaction with an appropriate isolation level (`SERIALIZABLE`, or `READ COMMITTED` plus an advisory lock).
+
+On **MySQL**, a database-generated GUID key (a `Guid?` property with `UseDatabaseDefault = true`, e.g. a
+`CHAR(36) DEFAULT (UUID())` column) is supported: because MySQL has no `RETURNING` and `LAST_INSERT_ID()`
+only tracks `AUTO_INCREMENT`, Inquiry generates the value server-side with `UUID()`, captures it in a
+`@_inquiry_genkey` user variable, and selects the row back by it. Inquiry therefore enables
+`AllowUserVariables=true` on MySQL connections automatically.
 
 ## See also
 
