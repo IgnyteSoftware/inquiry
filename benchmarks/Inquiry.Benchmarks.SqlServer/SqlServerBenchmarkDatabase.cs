@@ -1,3 +1,4 @@
+using Inquiry;
 using Inquiry.Benchmarks.SqlServer.Ef;
 using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
@@ -43,6 +44,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
     public ProductStore Products => _services!.GetRequiredService<ProductStore>();
     public CategoryStore Categories => _services!.GetRequiredService<CategoryStore>();
+    public IInquiry InquiryDb => _services!.GetRequiredService<IInquiry>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.

@@ -1,7 +1,7 @@
 # DLG benchmark integration — design (Phase 1, trimmed)
 
 **Date:** 2026-06-04
-**Status:** Approved direction (trimmed-first); pending spec review
+**Status:** Implemented (Phase 1)
 **Author:** Jake Overstreet + Claude
 
 ## Problem
