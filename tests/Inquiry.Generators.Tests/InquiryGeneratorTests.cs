@@ -1604,6 +1604,66 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void MySqlGeneratedGuidKeyUpsertUsesServerSideUuidUserVariable()
+    {
+        // A database-generated GUID key (UseDatabaseDefault) cannot use LAST_INSERT_ID() (that only
+        // tracks AUTO_INCREMENT). The builder generates the GUID server-side via UUID(), captured in a
+        // @_inquiry_genkey user variable, so the emulated returning SELECT can read the row back by it.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TGuidItem")]
+            public sealed class GuidItem
+            {
+                [InquiryKey("Id", UseDatabaseDefault = true)]
+                public Guid? Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class GuidItemStore : InquiryStore<GuidItem>
+            {
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(GuidItem g, CancellationToken cancellationToken = default);
+
+                [InquiryUpsert(ReturnEntity = true)]
+                public partial Task<GuidItem?> UpsertReturningAsync(GuidItem g, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "MySql");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("GuidItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        // Non-returning: COALESCE(@Id, UUID()) supplies the key (explicit passes through, null generates).
+        Assert.Contains("private const string _sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\";", generatedText);
+        // Returning: capture the key in a user variable, then SELECT the row back by it.
+        Assert.Contains("private const string _sqlUpsertReturning = \"SET @_inquiry_genkey = COALESCE(@Id, UUID()); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
+        // Insert-returning (the null-key upsert branch + any explicit InsertReturning) uses the same
+        // user-variable capture, without ON DUPLICATE KEY UPDATE — so it can read back the generated GUID.
+        Assert.Contains("private const string _sqlInsertReturning = \"SET @_inquiry_genkey = COALESCE(@Id, UUID()); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
+        // LAST_INSERT_ID() is only for AUTO_INCREMENT — it must NOT appear for a GUID key.
+        Assert.DoesNotContain("LAST_INSERT_ID", generatedText);
+    }
+
+    [Fact]
     public void ReportsAmbiguousDialectWhenMultipleProvidersAreReferenced()
     {
         // The test compilation references all three Inquiry provider assemblies (Sqlite,
