@@ -1,6 +1,8 @@
 using Inquiry.DependencyInjection;
+using Inquiry.FeatureCatalog;
 using Inquiry.MySql.DependencyInjection;
 using Inquiry.Northwind;
+using Inquiry.Northwind.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using MySqlConnector;
 
@@ -63,7 +65,7 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         }
 
         var services = new ServiceCollection()
-            .AddInquiry()
+            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly, typeof(VersionedItemStore).Assembly)
             .AddInquiryMySql(connectionString)
             .BuildServiceProvider();
 

@@ -83,7 +83,7 @@ public sealed class ConcurrencyIntegrationTests
         await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.MySqlDdl, "concthrow");
 
         await using var throwing = new ServiceCollection()
-            .AddInquiry(o => o.ThrowOnConcurrencyConflict = true)
+            .AddInquiry(o => o.ThrowOnConcurrencyConflict = true, typeof(VersionedItemStore).Assembly)
             .AddInquiryMySql(harness.ConnectionString)
             .BuildServiceProvider();
         var store = throwing.GetRequiredService<VersionedItemStore>();

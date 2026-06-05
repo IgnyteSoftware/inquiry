@@ -39,15 +39,15 @@ internal static class InquiryProviderSetup
         {
             case Provider.Sqlite:
                 await EnsureSqliteAsync(connectionString).ConfigureAwait(false);
-                builder.Services.AddInquiry().AddInquirySqlite(connectionString);
+                builder.Services.AddInquiry().AddInquiryGeneratedStores().AddInquirySqlite(connectionString);
                 break;
             case Provider.SqlServer:
                 await EnsureSqlServerAsync(connectionString).ConfigureAwait(false);
-                builder.Services.AddInquiry().AddInquirySqlServer(connectionString);
+                builder.Services.AddInquiry().AddInquiryGeneratedStores().AddInquirySqlServer(connectionString);
                 break;
             case Provider.PostgreSql:
                 await EnsurePostgreSqlAsync(connectionString).ConfigureAwait(false);
-                builder.Services.AddInquiry().AddInquiryPostgreSql(connectionString);
+                builder.Services.AddInquiry().AddInquiryGeneratedStores().AddInquiryPostgreSql(connectionString);
                 break;
         }
     }

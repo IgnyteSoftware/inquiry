@@ -1,5 +1,6 @@
 using Inquiry.DependencyInjection;
 using Inquiry.Sqlite.DependencyInjection;
+using Inquiry.Northwind.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -70,7 +71,7 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
         }
 
         var services = new ServiceCollection()
-            .AddInquiry()
+            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly)
             .AddInquirySqlite(connectionString)
             .BuildServiceProvider();
 

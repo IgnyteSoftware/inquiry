@@ -111,7 +111,7 @@ public sealed class ConcurrencyIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "Concurrency");
 
         await using var throwing = new ServiceCollection()
-            .AddInquiry(o => o.ThrowOnConcurrencyConflict = true)
+            .AddInquiry(o => o.ThrowOnConcurrencyConflict = true, typeof(VersionedDocStore).Assembly)
             .AddInquirySqlite(harness.ConnectionString)
             .BuildServiceProvider();
         var store = throwing.GetRequiredService<VersionedDocStore>();
