@@ -7,7 +7,7 @@ internal static class InquiryDiagnosticDescriptors
     // ---------------------------------------------------------------------------------------------
     // DIAGNOSTIC-ID REGISTRY
     //
-    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ021,
+    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ022,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
@@ -169,6 +169,14 @@ internal static class InquiryDiagnosticDescriptors
         "INQ021",
         "ORDER BY / keyset references an unmapped property or column",
         "Query method '{0}' orders by unmapped field '{1}'.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor BatchMutationUnsupportedWithConcurrencyToken = new(
+        "INQ022",
+        "Batch mutation is not supported for optimistic-concurrency entities",
+        "Store method '{0}' uses a batch update/delete operation on entity '{1}', which has an InquiryConcurrencyToken. Use single-row update/delete methods so the token can be matched and advanced.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

@@ -230,7 +230,7 @@ public sealed partial class InquiryGeneratorTests
 
         // Unquoted identifiers (Oracle uppercase-folds) and the ':' bind sigil on the IN sentinel.
         Assert.Contains("WHERE CategoryId IN (:CategoryId)\";", generatedText);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \":CategoryId\", categoryIds);", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \":CategoryId\", categoryIds, Inquiry.MaxParametersPerCommand);", generatedText);
     }
 
     [Fact]

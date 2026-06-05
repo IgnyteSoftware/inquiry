@@ -48,9 +48,9 @@ What happens if you call them *after* `CommitAsync` / `RollbackAsync` / `Dispose
 | Style | After close |
 |---|---|
 | **A. `tx.X(...)`** | ✅ Throws `ObjectDisposedException`. The transaction handle tracks its closed state and every query / execute method on it fails fast. |
-| **B. `store.X(...)`** (generated store from DI) | ⚠️ Does NOT throw — stores hold the root `IInquiry` singleton from DI, which is intentionally usable after the tx closes (it has no knowledge of the tx). Calls after the tx closes silently route to the non-transactional default pipeline. |
+| **B. `store.X(...)`** (generated store from DI) | Fresh calls after the transaction closes route to the non-transactional default pipeline. Async work that captured the transaction before it closed throws `ObjectDisposedException` if it resumes afterward. |
 
-**Style B is intentionally permissive.** A store resolved from DI doesn't know about any individual transaction — it's a scoped service that ambient-routes through whatever's in the AsyncLocal slot when called. After the tx closes, the slot is cleared, and the store falls through to the default pipeline. This is what makes the natural pattern work:
+A store resolved from DI doesn't know about any individual transaction. It ambient-routes through whatever is in the `AsyncLocal` slot when called. When the transaction closes, Inquiry detaches the current async flow so normal post-transaction code can keep using stores:
 
 ```csharp
 await using (var tx = await inquiry.BeginTransactionAsync())
@@ -62,7 +62,7 @@ await using (var tx = await inquiry.BeginTransactionAsync())
 await customers.InsertAsync(c2);         // non-transactional, as expected
 ```
 
-The unfortunate consequence: a store call *between* `tx.CommitAsync()` and the using-block exit will silently auto-commit. If you need to enforce "no more work after commit," structure your code so the commit is the last statement before the using-block exits — or use Style A for any post-commit calls and let them throw.
+Async descendants that started inside the transaction keep their captured slot. If they resume after `CommitAsync`, `RollbackAsync`, or `DisposeAsync`, Inquiry fails fast instead of silently auto-committing outside the transaction. Await child work before closing the transaction, or start that work after the transaction scope exits.
 
 ## How it works (the ambient mechanism)
 
@@ -70,8 +70,8 @@ The unfortunate consequence: a store call *between* `tx.CommitAsync()` and the u
 
 1. **Installs the slot synchronously**, before any await. (`AsyncLocal` values set inside an async callee don't flow back up to the caller — a documented .NET behavior — so the holder must exist before we await on opening the connection.)
 2. Opens a fresh connection, calls `connection.BeginTransactionAsync(isolationLevel, ct)`, and fills in the holder's `Pipeline` field with a `TransactedInquiryRequestPipeline` wrapping the (connection, transaction) pair. The caller's async context already references the same holder → the post-await mutation is visible.
-3. Every `IInquiry` method on the root singleton routes through `ActivePipeline = ambientSlot?.Pipeline ?? defaultPipeline`. Slot present → transacted pipeline reusing one connection. Slot absent → default pipeline opening a fresh connection per call.
-4. On the first of **Commit / Rollback / Dispose**, an `onClose` callback nulls out the slot's `Pipeline` field. Straggler async work that fires after the transaction has closed silently falls through to the default pipeline — no use-after-dispose, no leak.
+3. Every `IInquiry` method on the root singleton checks the ambient slot. Active slot → transacted pipeline reusing one connection. No slot → default pipeline opening a fresh connection per call. Closed captured slot → `ObjectDisposedException`.
+4. On the first of **Commit / Rollback / Dispose**, Inquiry detaches the current async flow from the slot and then marks the captured holder closed. Fresh work falls through to the default pipeline; straggler async work that captured the old holder fails fast.
 
 This is what lets generated stores (which were resolved from DI before any transaction existed) participate in transactions without a per-call parameter, a `WithTransaction` builder, or a re-resolution step.
 

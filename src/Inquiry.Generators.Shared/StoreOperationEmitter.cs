@@ -215,7 +215,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("            _sqlDeleteAll,");
                 source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
                 source.AppendLine("            {");
-                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam});");
+                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand);");
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 source.AppendLine("    }");
@@ -285,6 +285,8 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: true);
                 source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}> ?? global::System.Linq.Enumerable.ToList({itemsParam});");
                 source.AppendLine("        if (_list.Count == 0) return 0;");
+                source.AppendLine($"        if ((long)_list.Count * {insertable.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)}L > Inquiry.MaxParametersPerCommand)");
+                source.AppendLine("            throw new global::System.InvalidOperationException(\"Inquiry batch insert would exceed the configured parameter limit for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.\");");
                 // Dialect-aware multi-row INSERT shape: header + per-row (rowOpen + bound params) joined by a
                 // separator + footer. Base => `INSERT INTO t (cols) VALUES (…),(…)`; Oracle => `INSERT ALL
                 // INTO t (cols) VALUES (…) INTO … SELECT 1 FROM dual`. The row-param sigil follows the dialect
@@ -349,6 +351,8 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: true);
                 source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}> ?? global::System.Linq.Enumerable.ToList({itemsParam});");
                 source.AppendLine("        if (_list.Count == 0) return 0;");
+                source.AppendLine($"        if ((long)_list.Count * {(setColumns.Length + keyColumns.Count).ToString(System.Globalization.CultureInfo.InvariantCulture)}L > Inquiry.MaxParametersPerCommand)");
+                source.AppendLine("            throw new global::System.InvalidOperationException(\"Inquiry batch update would exceed the configured parameter limit for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.\");");
                 source.AppendLine("        var _sb = new global::System.Text.StringBuilder();");
                 source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
                 source.AppendLine("        {");
@@ -662,7 +666,7 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[binding.MethodParameterIndex].Name;
             if (binding.IsCollection)
             {
-                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg});");
+                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg}, Inquiry.MaxParametersPerCommand);");
             }
             else
             {

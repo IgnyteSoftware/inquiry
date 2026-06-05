@@ -67,4 +67,15 @@ public class InquiryInExpansionTests
         Assert.Equal("SELECT * FROM t WHERE c IN (NULL)", command.CommandText);
         Assert.Equal(0, command.Parameters.Count);
     }
+
+    [Fact]
+    public void Expand_TooManyParameters_ThrowsBeforeExecutingCommand()
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c)" };
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => InquiryInExpansion.Expand(command, "@c", new List<int> { 1, 2, 3 }, maxParameterCount: 2));
+
+        Assert.Contains("parameter limit", ex.Message, System.StringComparison.OrdinalIgnoreCase);
+    }
 }

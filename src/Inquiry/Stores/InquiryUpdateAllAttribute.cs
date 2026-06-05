@@ -9,9 +9,9 @@ namespace Inquiry.Stores;
 /// </summary>
 /// <remarks>
 /// Each row is matched by its primary key and the same non-key columns the single-row update sets are
-/// written. Batch update does NOT perform optimistic-concurrency checks (the concurrency token is
-/// neither matched nor advanced), unlike <c>[InquiryUpdate]</c>. The whole collection becomes one
-/// command with <c>rows × (set + key) columns</c> bound parameters, so a call must stay under the
+/// written. Batch update is not generated for entities with <c>[InquiryConcurrencyToken]</c>; use
+/// <c>[InquiryUpdate]</c> so each row can match and advance its token. The whole collection becomes
+/// one command with <c>rows × (set + key) columns</c> bound parameters, so a call must stay under the
 /// provider's parameter cap; chunk large collections at the call site.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]

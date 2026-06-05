@@ -78,14 +78,31 @@ public static class InquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
-        var options = new InquiryOptions();
-        configureOptions?.Invoke(options);
-        services.TryAddSingleton(options);
+        AddOrConfigureOptions(services, configureOptions);
 
         services.TryAddScoped<IInquiry, DefaultInquiry>();
         services.TryAddScoped<IInquiryRequestPipeline, InquiryRequestPipeline>();
         AddGeneratedServices(services, additionalAssemblies);
         return services;
+    }
+
+    private static void AddOrConfigureOptions(IServiceCollection services, Action<InquiryOptions>? configureOptions)
+    {
+        var descriptor = services.LastOrDefault(static service => service.ServiceType == typeof(InquiryOptions));
+        if (descriptor?.ImplementationInstance is InquiryOptions existingOptions)
+        {
+            configureOptions?.Invoke(existingOptions);
+            return;
+        }
+
+        if (descriptor is not null)
+        {
+            services.RemoveAll<InquiryOptions>();
+        }
+
+        var options = new InquiryOptions();
+        configureOptions?.Invoke(options);
+        services.AddSingleton(options);
     }
 
     private static void AddGeneratedServices(IServiceCollection services, Assembly[]? additionalAssemblies)

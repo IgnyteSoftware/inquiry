@@ -25,7 +25,18 @@ public static class InquiryInExpansion
     /// </summary>
     /// <typeparam name="T">The element type of the IN collection.</typeparam>
     public static void Expand<T>(DbCommand command, string parameterName, IEnumerable<T>? values)
+        => Expand(command, parameterName, values, InquiryOptions.DefaultMaxParametersPerCommand);
+
+    /// <summary>
+    /// Expands the <c>IN</c> sentinel with an explicit maximum total parameter count.
+    /// </summary>
+    /// <typeparam name="T">The element type of the IN collection.</typeparam>
+    public static void Expand<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount)
     {
+        if (command is null) throw new System.ArgumentNullException(nameof(command));
+        if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
+        if (maxParameterCount < 1) throw new System.ArgumentOutOfRangeException(nameof(maxParameterCount));
+
         var sentinel = "(" + parameterName + ")";
 
         if (values is null)
@@ -44,6 +55,14 @@ public static class InquiryInExpansion
         var count = 0;
         foreach (var value in values)
         {
+            if (command.Parameters.Count >= maxParameterCount)
+            {
+                throw new System.InvalidOperationException(
+                    "Inquiry IN expansion would exceed the configured parameter limit of "
+                    + maxParameterCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + " parameters for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.");
+            }
+
             if (count > 0)
             {
                 placeholders.Append(", ");

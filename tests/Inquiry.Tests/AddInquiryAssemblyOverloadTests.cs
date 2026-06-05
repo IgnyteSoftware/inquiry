@@ -59,6 +59,20 @@ public sealed class AddInquiryAssemblyOverloadTests
     }
 
     [Fact]
+    public void RepeatedAddInquiryCallsComposeOptions()
+    {
+        var services = new ServiceCollection();
+
+        services.AddInquiry(o => o.PrepareStatements = PreparedStatementMode.Auto);
+        services.AddInquiry(o => o.ThrowOnConcurrencyConflict = true);
+
+        var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<InquiryOptions>();
+        Assert.Equal(PreparedStatementMode.Auto, options.PrepareStatements);
+        Assert.True(options.ThrowOnConcurrencyConflict);
+    }
+
+    [Fact]
     public void AddInquiryWithExplicitAssemblyDoesNotDoubleRegisterWhenAssemblyIsAlsoInAppDomain()
     {
         // The test assembly is loaded into AppDomain, so the implicit AppDomain scan already
