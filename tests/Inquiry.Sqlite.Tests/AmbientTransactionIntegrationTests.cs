@@ -209,7 +209,7 @@ public sealed class AmbientTransactionIntegrationTests
         // is buffered now, so use the transaction's QueryAsync directly to keep the streaming
         // shape this test exercises.
         var streaming = tx.QueryAsync<Customer>(
-            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+            $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
         var enumerator = streaming.GetAsyncEnumerator();
         try
         {

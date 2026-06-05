@@ -265,10 +265,10 @@ public sealed class InquiryRequestPipelineTests
 
         var inquiry = services.GetRequiredService<IInquiry>();
 
-        await inquiry.ExecuteAsync("INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)");
+        await inquiry.ExecuteAsync($"INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)");
 
-        var items = await ToListAsync(inquiry.QueryAsync<TestItem>("SELECT Id, Name, IsActive FROM Items"));
-        var selected = await inquiry.QuerySingleOrDefaultAsync<TestItem>("SELECT Id, Name, IsActive FROM Items WHERE Id = 1");
+        var items = await ToListAsync(inquiry.QueryAsync<TestItem>($"SELECT Id, Name, IsActive FROM Items"));
+        var selected = await inquiry.QuerySingleOrDefaultAsync<TestItem>($"SELECT Id, Name, IsActive FROM Items WHERE Id = 1");
 
         Assert.Single(items);
         Assert.Equal("Alpha", items[0].Name);
@@ -277,7 +277,7 @@ public sealed class InquiryRequestPipelineTests
     }
 
     [Fact]
-    public async Task InquiryFacadeBindsAnonymousObjectAndDictionaryParameters()
+    public async Task InquiryFacadeParameterizesInterpolatedSql()
     {
         var connectionString = CreateSharedInMemoryConnectionString();
         await using var keeperConnection = new SqliteConnection(connectionString);
@@ -292,21 +292,21 @@ public sealed class InquiryRequestPipelineTests
 
         var inquiry = services.GetRequiredService<IInquiry>();
 
+        var id = 1;
+        var insertedName = "Alpha";
+        var active = 1;
         var inserted = await inquiry.ExecuteAsync(
-            "INSERT INTO Items (Id, Name, IsActive) VALUES (@Id, @Name, @IsActive)",
-            new { Id = 1, Name = "Alpha", IsActive = 1 });
+            $"INSERT INTO Items (Id, Name, IsActive) VALUES ({id}, {insertedName}, {active})");
 
         var selected = await inquiry.QuerySingleOrDefaultAsync<TestItem>(
-            "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
-            new Dictionary<string, object?> { ["Id"] = 1 });
+            $"SELECT Id, Name, IsActive FROM Items WHERE Id = {id}");
 
+        var updatedName = "Beta";
         var updated = await inquiry.ExecuteAsync(
-            "UPDATE Items SET Name = @Name WHERE Id = @Id",
-            new Dictionary<string, object?> { ["Name"] = "Beta", ["Id"] = 1 });
+            $"UPDATE Items SET Name = {updatedName} WHERE Id = {id}");
 
         var streamed = await ToListAsync(inquiry.QueryAsync<TestItem>(
-            "SELECT Id, Name, IsActive FROM Items WHERE Name = @Name",
-            new { Name = "Beta" }));
+            $"SELECT Id, Name, IsActive FROM Items WHERE Name = {updatedName}"));
 
         Assert.Equal(1, inserted);
         Assert.NotNull(selected);

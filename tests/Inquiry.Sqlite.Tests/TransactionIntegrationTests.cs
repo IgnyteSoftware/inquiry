@@ -6,8 +6,8 @@ namespace Inquiry.Sqlite.Tests;
 
 public sealed class TransactionIntegrationTests
 {
-    private const string InsertCustomerSql =
-        "INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES (@CustomerID, @CompanyName, @Country)";
+    private static FormattableString InsertCustomer(string customerId, string companyName, string country)
+        => $"INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES ({customerId}, {companyName}, {country})";
 
     [Fact]
     public async Task CommittedTransactionPersistsChanges()
@@ -17,7 +17,7 @@ public sealed class TransactionIntegrationTests
         var store = harness.GetRequiredService<CustomerStore>();
 
         await using var tx = await inquiry.BeginTransactionAsync();
-        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "TX001", CompanyName = "Widget", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomer("TX001", "Widget", "USA"));
         await tx.CommitAsync();
 
         var loaded = await store.SelectByKeyAsync("TX001");
@@ -34,7 +34,7 @@ public sealed class TransactionIntegrationTests
 
         await using (var tx = await inquiry.BeginTransactionAsync())
         {
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "GHOST", CompanyName = "Ghost", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("GHOST", "Ghost", "USA"));
             // No commit — dispose rolls back
         }
 
@@ -50,7 +50,7 @@ public sealed class TransactionIntegrationTests
         var store = harness.GetRequiredService<CustomerStore>();
 
         await using var tx = await inquiry.BeginTransactionAsync();
-        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "REV01", CompanyName = "Reverted", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomer("REV01", "Reverted", "USA"));
         await tx.RollbackAsync();
 
         var loaded = await store.SelectByKeyAsync("REV01");
@@ -67,7 +67,7 @@ public sealed class TransactionIntegrationTests
         await using var tx = await inquiry.BeginTransactionAsync();
         for (var i = 1; i <= 5; i++)
         {
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = $"M{i:D4}", CompanyName = $"Customer {i}", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer($"M{i:D4}", $"Customer {i}", "USA"));
         }
         await tx.CommitAsync();
 
@@ -121,11 +121,11 @@ public sealed class TransactionIntegrationTests
 
         await using (var outer = await inquiry.BeginTransactionAsync())
         {
-            await outer.ExecuteAsync(InsertCustomerSql, new { CustomerID = "OUT01", CompanyName = "Outer", Country = "USA" });
+            await outer.ExecuteAsync(InsertCustomer("OUT01", "Outer", "USA"));
 
             await using (var inner = await outer.BeginTransactionAsync())
             {
-                await inner.ExecuteAsync(InsertCustomerSql, new { CustomerID = "INN01", CompanyName = "Inner", Country = "USA" });
+                await inner.ExecuteAsync(InsertCustomer("INN01", "Inner", "USA"));
                 await inner.CommitAsync(); // RELEASE SAVEPOINT
             }
 
@@ -145,11 +145,11 @@ public sealed class TransactionIntegrationTests
 
         await using (var outer = await inquiry.BeginTransactionAsync())
         {
-            await outer.ExecuteAsync(InsertCustomerSql, new { CustomerID = "OUT02", CompanyName = "Outer", Country = "USA" });
+            await outer.ExecuteAsync(InsertCustomer("OUT02", "Outer", "USA"));
 
             await using (var inner = await outer.BeginTransactionAsync())
             {
-                await inner.ExecuteAsync(InsertCustomerSql, new { CustomerID = "INN02", CompanyName = "Inner", Country = "USA" });
+                await inner.ExecuteAsync(InsertCustomer("INN02", "Inner", "USA"));
                 await inner.RollbackAsync(); // ROLLBACK TO SAVEPOINT
             }
 
@@ -169,11 +169,11 @@ public sealed class TransactionIntegrationTests
 
         await using (var outer = await inquiry.BeginTransactionAsync())
         {
-            await outer.ExecuteAsync(InsertCustomerSql, new { CustomerID = "OUT03", CompanyName = "Outer", Country = "USA" });
+            await outer.ExecuteAsync(InsertCustomer("OUT03", "Outer", "USA"));
 
             await using (var inner = await outer.BeginTransactionAsync())
             {
-                await inner.ExecuteAsync(InsertCustomerSql, new { CustomerID = "INN03", CompanyName = "Inner", Country = "USA" });
+                await inner.ExecuteAsync(InsertCustomer("INN03", "Inner", "USA"));
                 // No commit — dispose rolls back to savepoint.
             }
 
@@ -193,15 +193,15 @@ public sealed class TransactionIntegrationTests
 
         await using (var l1 = await inquiry.BeginTransactionAsync())
         {
-            await l1.ExecuteAsync(InsertCustomerSql, new { CustomerID = "LV1", CompanyName = "Level 1", Country = "USA" });
+            await l1.ExecuteAsync(InsertCustomer("LV1", "Level 1", "USA"));
 
             await using (var l2 = await l1.BeginTransactionAsync())
             {
-                await l2.ExecuteAsync(InsertCustomerSql, new { CustomerID = "LV2", CompanyName = "Level 2", Country = "USA" });
+                await l2.ExecuteAsync(InsertCustomer("LV2", "Level 2", "USA"));
 
                 await using (var l3 = await l2.BeginTransactionAsync())
                 {
-                    await l3.ExecuteAsync(InsertCustomerSql, new { CustomerID = "LV3", CompanyName = "Level 3", Country = "USA" });
+                    await l3.ExecuteAsync(InsertCustomer("LV3", "Level 3", "USA"));
                     await l3.CommitAsync();
                 }
 
@@ -230,12 +230,12 @@ public sealed class TransactionIntegrationTests
         {
             await using (var inner = await outer.BeginTransactionAsync())
             {
-                await inner.ExecuteAsync(InsertCustomerSql, new { CustomerID = "INNX", CompanyName = "Reverted", Country = "USA" });
+                await inner.ExecuteAsync(InsertCustomer("INNX", "Reverted", "USA"));
                 await inner.RollbackAsync();
             }
 
             // This insert must still be inside the OUTER transaction.
-            await outer.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTR", CompanyName = "After Rollback", Country = "USA" });
+            await outer.ExecuteAsync(InsertCustomer("AFTR", "After Rollback", "USA"));
             // Roll back the outer too — both INNX (already reverted) and AFTR should vanish.
             await outer.RollbackAsync();
         }
@@ -292,7 +292,7 @@ public sealed class TransactionIntegrationTests
         await using (var tx = await inquiry.BeginTransactionAsync())
         {
             // Every transactional call is a direct method on the transaction handle.
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "FWD01", CompanyName = "Forwarded", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("FWD01", "Forwarded", "USA"));
             await tx.CommitAsync();
         }
 
@@ -308,13 +308,13 @@ public sealed class TransactionIntegrationTests
         var inquiry = harness.GetRequiredService<IInquiry>();
 
         var tx = await inquiry.BeginTransactionAsync();
-        await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "CLS01", CompanyName = "Closed", Country = "USA" });
+        await tx.ExecuteAsync(InsertCustomer("CLS01", "Closed", "USA"));
         await tx.CommitAsync();
 
         // Subsequent forwarding call must fail-fast rather than silently routing through the
         // default (non-transactional) pipeline and auto-committing a write.
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTC1", CompanyName = "AfterCommit", Country = "USA" }));
+            () => tx.ExecuteAsync(InsertCustomer("AFTC1", "AfterCommit", "USA")));
     }
 
     [Fact]
@@ -327,7 +327,7 @@ public sealed class TransactionIntegrationTests
         await tx.RollbackAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTR1", CompanyName = "AfterRollback", Country = "USA" }));
+            () => tx.ExecuteAsync(InsertCustomer("AFTR1", "AfterRollback", "USA")));
     }
 
     [Fact]
@@ -340,7 +340,7 @@ public sealed class TransactionIntegrationTests
         await tx.DisposeAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "AFTD1", CompanyName = "AfterDispose", Country = "USA" }));
+            () => tx.ExecuteAsync(InsertCustomer("AFTD1", "AfterDispose", "USA")));
     }
 
     [Fact]
@@ -355,7 +355,7 @@ public sealed class TransactionIntegrationTests
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
             () => tx.QueryListAsync<Inquiry.Northwind.Models.Customer>(
-                "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers"));
+                $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers"));
     }
 
     [Fact]
@@ -382,7 +382,7 @@ public sealed class TransactionIntegrationTests
         await inner.CommitAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => inner.ExecuteAsync(InsertCustomerSql, new { CustomerID = "SPCOM", CompanyName = "SavepointAfterCommit", Country = "USA" }));
+            () => inner.ExecuteAsync(InsertCustomer("SPCOM", "SavepointAfterCommit", "USA")));
 
         await outer.CommitAsync();
     }
@@ -398,7 +398,7 @@ public sealed class TransactionIntegrationTests
         await inner.RollbackAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => inner.ExecuteAsync(InsertCustomerSql, new { CustomerID = "SPROL", CompanyName = "SavepointAfterRollback", Country = "USA" }));
+            () => inner.ExecuteAsync(InsertCustomer("SPROL", "SavepointAfterRollback", "USA")));
 
         await outer.CommitAsync();
     }
@@ -416,7 +416,7 @@ public sealed class TransactionIntegrationTests
 
         await using (var tx = await inquiry.BeginTransactionAsync())
         {
-            await tx.ExecuteAsync(InsertCustomerSql, new { CustomerID = "INTX1", CompanyName = "InTx", Country = "USA" });
+            await tx.ExecuteAsync(InsertCustomer("INTX1", "InTx", "USA"));
             await tx.CommitAsync();
         }
 
@@ -437,8 +437,7 @@ public sealed class TransactionIntegrationTests
 
         await using var tx = await inquiry.BeginTransactionAsync();
         var loaded = await tx.QuerySingleOrDefaultAsync<Inquiry.Northwind.Models.Customer>(
-            "SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers WHERE CustomerID = @id",
-            new { id = "READ1" });
+            $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers WHERE CustomerID = {"READ1"}");
 
         Assert.NotNull(loaded);
         Assert.Equal("Read Me", loaded!.CompanyName);

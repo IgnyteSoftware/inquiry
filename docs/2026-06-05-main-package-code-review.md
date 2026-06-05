@@ -14,10 +14,10 @@ Started on the P1/P2 release blockers in branch `codex-main-package-findings`.
 - Fixed batch mutation/concurrency-token bypass by rejecting `[InquiryUpdateAll]` and `[InquiryDeleteAll]` on token entities with `INQ022`.
 - Added a configurable parameter cap (`InquiryOptions.MaxParametersPerCommand`, default 2000) and wired it through `Compare.In`, batch delete, batch insert, and batch update expansion.
 - Fixed repeated `AddInquiry(...)` option configuration so later calls compose into the single registered `InquiryOptions` instance instead of being silently ignored.
-- Added `InquirySql.Sql(FormattableString)` as an explicit safe ad-hoc SQL factory that parameterizes interpolation holes into an `InquiryCommand`.
+- Added safe ad-hoc SQL APIs: `InquirySql.Sql(FormattableString)` and high-level `IInquiry` / `IInquiryTransaction` `FormattableString` overloads parameterize interpolation holes into an `InquiryCommand`.
 - Replaced default AppDomain-wide generated-service discovery with explicit generated registration: `AddInquiry()` is core-only, the generator emits `AddInquiryGeneratedStores()`, and the assembly overload scans only assemblies the caller supplies.
 - Updated transaction docs to describe the new captured-slot behavior.
-- Updated security and batch-operation docs for `InquirySql.Sql(...)` and `InquiryOptions.MaxParametersPerCommand`.
+- Updated security and batch-operation docs for safe ad-hoc SQL and `InquiryOptions.MaxParametersPerCommand`.
 
 Verification run:
 
@@ -91,13 +91,13 @@ Proposed fix: before release, either reject batch mutations on concurrency-token
 
 ### P2 - Raw SQL overloads make injection-prone usage easy
 
-Status: partially addressed with `InquirySql.Sql(FormattableString)` in `src/Inquiry/InquirySql.cs`. This gives users an explicit safe factory for ad-hoc SQL while preserving existing raw string overloads. A future breaking API pass should still consider renaming/removing raw string overloads, because C# overload resolution chooses `string` over `FormattableString` when both same-name overloads exist.
+Status: fixed in `src/Inquiry/IInquiry.cs`, `src/Inquiry/DefaultInquiry.cs`, and the transaction facade. High-level ad-hoc APIs no longer expose raw `string commandText` overloads; callers use safe `FormattableString` overloads or pass an explicit `InquiryCommand`.
 
-Evidence: `IInquiry` exposes raw `string commandText` query/execute overloads; `DefaultInquiry` wraps those strings into `InquiryCommand`; `InquiryRequestPipeline.InitializeCommandSync` assigns `DbCommand.CommandText` directly. Parameter values are safely bound through `DbParameter`, but command text is entirely caller-controlled.
+Original evidence: `IInquiry` exposed raw `string commandText` query/execute overloads; `DefaultInquiry` wrapped those strings into `InquiryCommand`; `InquiryRequestPipeline.InitializeCommandSync` assigns `DbCommand.CommandText` directly. Parameter values were safely bound through `DbParameter`, but command text was entirely caller-controlled.
 
 Impact: this is not a generated-SQL injection bug, but consuming apps can easily interpolate end-user input into raw SQL. A micro-ORM should keep raw SQL available, but the safer path should be the most ergonomic path.
 
-Proposed fix: keep `InquirySql.Sql(...)` as the safe interpolation path for now. In a later breaking API pass, consider renaming/removing raw string overloads or adding an analyzer warning for interpolated or non-constant strings passed to raw overloads. Do not add same-name `FormattableString` overloads while raw `string` overloads remain, because C# overload resolution still selects `string` for interpolated string expressions.
+Implemented fix: remove high-level raw string overloads and add same-name `FormattableString` overloads now that overload resolution can safely choose them for interpolated strings. Keep `InquiryCommand` as the explicit advanced escape hatch for hand-authored raw SQL and stored procedures.
 
 ### P2 - Unbounded IN and batch parameter expansion can DoS callers or hit provider caps
 
@@ -183,16 +183,14 @@ Proposed fix: add generator diagnostics for null, empty, and unknown dialect nam
 
 1. Add a typed transaction API. The ambient model is elegant, but users need a safer option for critical workflows: `ExecuteInTransactionAsync`, store methods that accept `IInquiryTransaction`, or generated transaction-bound store wrappers.
 2. Support multiple named database contexts. The single global `IInquiryConnectionFactory` intentionally blocks multiple providers in one service provider, but many apps need read/write split, tenant databases, or two stores against different engines. A pre-release breaking change could introduce `IInquiry<TContext>` and provider registrations keyed by context.
-3. Continue the safe SQL interpolation API pass. `InquirySql.Sql(FormattableString)` now provides a safe path; a later breaking change can make the raw SQL surface more explicit and analyzer-backed.
-4. Expand stored procedure support. Docs already list missing OUT/INOUT parameters, scalar returns, multiple result sets, table-valued parameters, and Oracle ref cursors.
-5. Make JSON conversion configurable and AOT-friendly. `InquiryJsonConverter<T>` uses default `JsonSerializer` options and no context. Add attribute or options support for a `JsonSerializerOptions`/`JsonTypeInfo` provider.
-6. Make batch APIs first-class around limits and concurrency. Provide chunking helpers, provider caps, and concurrency-aware batch shapes instead of asking callers to remember all limits.
-7. Improve multi-assembly generated-registration ergonomics. `AddInquiryGeneratedStores()` is explicit for one generated assembly, and `AddInquiry(params Assembly[])` remains as a fallback; multi-assembly apps may still want a more discoverable generated name or host-level helper.
+3. Expand stored procedure support. Docs already list missing OUT/INOUT parameters, scalar returns, multiple result sets, table-valued parameters, and Oracle ref cursors.
+4. Make JSON conversion configurable and AOT-friendly. `InquiryJsonConverter<T>` uses default `JsonSerializer` options and no context. Add attribute or options support for a `JsonSerializerOptions`/`JsonTypeInfo` provider.
+5. Make batch APIs first-class around limits and concurrency. Provide chunking helpers, provider caps, and concurrency-aware batch shapes instead of asking callers to remember all limits.
+6. Improve multi-assembly generated-registration ergonomics. `AddInquiryGeneratedStores()` is explicit for one generated assembly, and `AddInquiry(params Assembly[])` remains as a fallback; multi-assembly apps may still want a more discoverable generated name or host-level helper.
 
 ## Optimizations
 
-1. Cache ad-hoc parameter object accessors. `InquiryParameterReader` reflects public properties and invokes getters on every ad-hoc call. Cache readable property metadata or compiled accessors per parameter type.
-2. Consider bounded list pre-sizing where counts are cheaply known. Buffered query paths currently allocate `new List<T>()`; generated methods with known page size could allocate capacity in keyset/offset cases.
+1. Consider bounded list pre-sizing where counts are cheaply known. Buffered query paths currently allocate `new List<T>()`; generated methods with known page size could allocate capacity in keyset/offset cases.
 
 ## Coverage notes
 

@@ -57,14 +57,7 @@ public interface IInquiryTransaction : IAsyncDisposable
 
     /// <summary>Executes a SQL query and streams mapped entities, within this transaction.</summary>
     IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        string commandText,
-        CancellationToken cancellationToken = default)
-        where TEntity : class;
-
-    /// <summary>Executes a SQL query with parameters and streams mapped entities, within this transaction.</summary>
-    IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        string commandText,
-        object? parameters,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
@@ -76,14 +69,7 @@ public interface IInquiryTransaction : IAsyncDisposable
 
     /// <summary>Executes a SQL query and returns the buffered list of mapped entities, within this transaction.</summary>
     Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        string commandText,
-        CancellationToken cancellationToken = default)
-        where TEntity : class;
-
-    /// <summary>Executes a SQL query with parameters and returns the buffered list of mapped entities, within this transaction.</summary>
-    Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        string commandText,
-        object? parameters,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
@@ -95,14 +81,7 @@ public interface IInquiryTransaction : IAsyncDisposable
 
     /// <summary>Executes a SQL query and returns the first mapped entity, or null when no row is returned, within this transaction.</summary>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        string commandText,
-        CancellationToken cancellationToken = default)
-        where TEntity : class;
-
-    /// <summary>Executes a SQL query with parameters and returns the first mapped entity, or null when no row is returned, within this transaction.</summary>
-    Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        string commandText,
-        object? parameters,
+        FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
@@ -114,18 +93,17 @@ public interface IInquiryTransaction : IAsyncDisposable
 
     /// <summary>Executes a SQL command and returns the affected row count, within this transaction.</summary>
     Task<int> ExecuteAsync(
-        string commandText,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>Executes a SQL command with parameters and returns the affected row count, within this transaction.</summary>
-    Task<int> ExecuteAsync(
-        string commandText,
-        object? parameters,
+        FormattableString commandText,
         CancellationToken cancellationToken = default);
 
     /// <summary>Executes a SQL command and returns the affected row count, within this transaction.</summary>
     Task<int> ExecuteAsync(
         InquiryCommand command,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Executes a command returning a single scalar value (COUNT/SUM/MIN/MAX/AVG), within this transaction.</summary>
+    Task<T> ExecuteScalarAsync<T>(
+        FormattableString commandText,
         CancellationToken cancellationToken = default);
 
     /// <summary>Executes a command returning a single scalar value (COUNT/SUM/MIN/MAX/AVG), within this transaction.</summary>
