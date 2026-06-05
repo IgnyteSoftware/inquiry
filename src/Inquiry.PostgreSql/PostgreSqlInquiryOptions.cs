@@ -27,4 +27,10 @@ public sealed class PostgreSqlInquiryOptions
     /// <c>200ms</c>.
     /// </summary>
     public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
+    /// Gets or sets the maximum exponential-backoff delay between connection-open attempts.
+    /// Defaults to <c>30s</c>.
+    /// </summary>
+    public TimeSpan RetryMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
 }

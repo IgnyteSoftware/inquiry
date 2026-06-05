@@ -85,6 +85,9 @@ public interface IColumn
     /// <summary>Referenced table name when this column is a foreign key, or null.</summary>
     string? ForeignKeyTable { get; }
 
+    /// <summary>Referenced schema name when this column is a foreign key, or null.</summary>
+    string? ForeignKeySchema { get; }
+
     /// <summary>Referenced column name when this column is a foreign key, or null.</summary>
     string? ForeignKeyColumn { get; }
 

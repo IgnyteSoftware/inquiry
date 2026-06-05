@@ -173,8 +173,16 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             InitializeCommandSync(dbCommand, command);
             if (HasInterceptors)
             {
-                await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
-                await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
             }
 
             try
@@ -217,7 +225,18 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 yield return item;
             }
 
-            if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+            if (HasInterceptors)
+            {
+                try
+                {
+                    await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+            }
         }
         finally
         {
@@ -350,8 +369,16 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             InitializeCommandSync(dbCommand, command);
             if (HasInterceptors)
             {
-                await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
-                await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
             }
 
             try
@@ -394,7 +421,18 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 yield return item;
             }
 
-            if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+            if (HasInterceptors)
+            {
+                try
+                {
+                    await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+            }
         }
         finally
         {

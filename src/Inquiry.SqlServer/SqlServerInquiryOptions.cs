@@ -31,6 +31,12 @@ public sealed class SqlServerInquiryOptions
     public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
+    /// Gets or sets the maximum exponential-backoff delay between connection-open attempts.
+    /// Defaults to <c>30s</c>.
+    /// </summary>
+    public TimeSpan RetryMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Gets or sets an optional callback that supplies an Azure AD / Entra access token assigned to
     /// <see cref="SqlConnection.AccessToken"/> before the connection is opened. Leave
     /// <see langword="null"/> when authentication is handled entirely by the connection string

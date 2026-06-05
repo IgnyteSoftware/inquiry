@@ -131,7 +131,9 @@ Proposed fix: make configured repeat calls fail fast, replace/update the existin
 
 ### P3 - Root transaction close methods can be invoked again after close
 
-Evidence: `InquiryTransaction.CommitAsync` and `RollbackAsync` check only `_disposed`; they do not check `_closed`, even though `Close()` records the first terminal transition.
+Status: fixed in `src/Inquiry/Transactions/InquiryTransaction.cs`; `CommitAsync` and `RollbackAsync` now reject calls after the root transaction has closed, and `tests/Inquiry.Sqlite.Tests/TransactionStateMachineTests.cs` covers repeated commit/rollback calls.
+
+Original evidence: `InquiryTransaction.CommitAsync` and `RollbackAsync` checked only `_disposed`; they did not check `_closed`, even though `Close()` records the first terminal transition.
 
 Impact: double commit, rollback-after-commit, or commit-after-rollback calls through to the underlying `DbTransaction` again, leaving behavior provider-specific.
 
@@ -139,7 +141,9 @@ Proposed fix: check `_closed` in commit/rollback and either throw `ObjectDispose
 
 ### P3 - Streaming interceptor failures are inconsistent
 
-Evidence: streaming `QueryAsync` invokes initialized/executing interceptors before entering the inner execute/read/materialize failure blocks. Buffered paths wrap the full body and report failures to `CommandFailedAsync`.
+Status: fixed in `src/Inquiry/Pipeline/InquiryRequestPipeline.cs` and `src/Inquiry/Pipeline/TransactedInquiryRequestPipeline.cs`; streaming setup and completion interceptor failures now route through `CommandFailedAsync`, matching buffered query behavior.
+
+Original evidence: streaming `QueryAsync` invoked initialized/executing interceptors before entering the inner execute/read/materialize failure blocks. Buffered paths wrap the full body and report failures to `CommandFailedAsync`.
 
 Impact: an interceptor exception during streaming setup is invisible to failure interceptors, while the same interceptor failure in buffered execution is reported. That makes diagnostics and tracing inconsistent.
 
@@ -147,7 +151,9 @@ Proposed fix: define interceptor failure semantics and make streaming and buffer
 
 ### P3 - Retry backoff is unbounded and trusts jitter
 
-Evidence: `RetryingConnectionOpener.NextDelay` multiplies base delay by exponential factor and `1.0 + _jitter()`, then casts to ticks.
+Status: fixed in `src/Inquiry/Connections/RetryingConnectionOpener.cs`; retry delays now validate jitter and clamp to a maximum delay. SQL Server and PostgreSQL expose `RetryMaxDelay` provider options.
+
+Original evidence: `RetryingConnectionOpener.NextDelay` multiplied base delay by exponential factor and `1.0 + _jitter()`, then cast to ticks.
 
 Impact: very large `maxAttempts` or `baseDelay`, or a custom jitter delegate returning an invalid value, can overflow, throw, or sleep much longer than intended.
 
@@ -155,7 +161,9 @@ Proposed fix: validate jitter output, cap max delay, and clamp or checked-conver
 
 ### P3 - Schema-qualified foreign keys cannot be expressed
 
-Evidence: `InquiryTableAttribute` has `Schema`, but `InquiryForeignKeyAttribute` carries only `ReferencedTable` and `ReferencedColumn`.
+Status: fixed in `src/Inquiry/Entities/InquiryForeignKeyAttribute.cs` and the shared generator model; `[InquiryForeignKey(..., ReferencedSchema = "...")]` now emits schema-qualified FK DDL and participates in schema-aware FK ordering and length derivation.
+
+Original evidence: `InquiryTableAttribute` has `Schema`, but `InquiryForeignKeyAttribute` carried only `ReferencedTable` and `ReferencedColumn`.
 
 Impact: generated DDL cannot correctly express cross-schema or non-default-schema foreign keys.
 
@@ -163,7 +171,9 @@ Proposed fix: add `ReferencedSchema`, or better, a type-based foreign key overlo
 
 ### P3 - Dialect marker fails late for invalid names
 
-Evidence: `InquiryDialectAttribute` stores `Name` without null/whitespace validation, and its docs say unknown values leave partial store methods without implementations.
+Status: fixed in `src/Inquiry.Generators.Shared/InquiryGeneratorBase.cs`; an explicit dialect that no referenced provider advertises now reports `INQ043` once and skips provider-specific emission.
+
+Original evidence: `InquiryDialectAttribute` stores `Name` without null/whitespace validation, and its docs said unknown values leave partial store methods without implementations.
 
 Impact: typos or casing mistakes produce confusing generator/build failures.
 
@@ -187,6 +197,8 @@ Proposed fix: add generator diagnostics for null, empty, and unknown dialect nam
 ## Coverage notes
 
 No direct parameter-value SQL injection was found in the binder path: `InquiryParameterBinder` creates provider parameters and assigns values through `DbParameter.Value`.
+
+P3 verification run: focused generator, runtime, and SQLite transaction regressions passed across the target frameworks.
 
 No network, file-system, process execution, deserialization-of-arbitrary-type, SSRF, auth, or path traversal product surfaces exist in the core runtime package.
 

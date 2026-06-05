@@ -8,7 +8,7 @@ internal static class InquiryDiagnosticDescriptors
     // DIAGNOSTIC-ID REGISTRY
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ022,
-    //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042.
+    //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -121,6 +121,14 @@ internal static class InquiryDiagnosticDescriptors
         "INQ014",
         "Multiple Inquiry SQL dialects are referenced",
         "Multiple Inquiry SQL dialects are referenced ({0}). Reference exactly one provider package or apply [assembly: InquiryDialect(\"<dialect>\")] to this assembly to disambiguate.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DialectUnknown = new(
+        "INQ043",
+        "Unknown Inquiry SQL dialect",
+        "Inquiry SQL dialect '{0}' is not provided by any referenced Inquiry provider. Use one of: {1}.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

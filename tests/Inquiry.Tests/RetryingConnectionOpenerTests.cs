@@ -131,6 +131,57 @@ public sealed class RetryingConnectionOpenerTests
     }
 
     [Fact]
+    public void RejectsNegativeMaxDelay()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new RetryingConnectionOpener(new PredicateDetector(_ => true), 2, TimeSpan.Zero, maxDelay: TimeSpan.FromTicks(-1)));
+    }
+
+    [Fact]
+    public async Task RejectsInvalidJitterValue()
+    {
+        var delays = new List<TimeSpan>();
+        var opener = new RetryingConnectionOpener(
+            new PredicateDetector(ex => ex is TransientException),
+            2,
+            TimeSpan.FromMilliseconds(100),
+            delay: (d, _) =>
+            {
+                delays.Add(d);
+                return Task.CompletedTask;
+            },
+            jitter: () => double.NaN);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            opener.OpenAsync(_ => throw new TransientException()).AsTask());
+
+        Assert.Contains("jitter", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(delays);
+    }
+
+    [Fact]
+    public async Task DelayIsClampedToConfiguredMaximum()
+    {
+        var recorded = new List<TimeSpan>();
+        var opener = new RetryingConnectionOpener(
+            new PredicateDetector(ex => ex is TransientException),
+            maxAttempts: 3,
+            baseDelay: TimeSpan.FromDays(1),
+            delay: (d, _) =>
+            {
+                recorded.Add(d);
+                return Task.CompletedTask;
+            },
+            jitter: () => 0.0,
+            maxDelay: TimeSpan.FromSeconds(5));
+
+        await Assert.ThrowsAsync<TransientException>(() =>
+            opener.OpenAsync(_ => throw new TransientException()).AsTask());
+
+        Assert.Equal(new[] { TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5) }, recorded);
+    }
+
+    [Fact]
     public async Task CancellationIsNotRetriedAndPropagates()
     {
         var opener = TransientOpener(maxAttempts: 5, out var delays);

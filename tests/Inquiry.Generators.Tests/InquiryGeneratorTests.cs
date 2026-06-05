@@ -1720,11 +1720,8 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void UnknownDialectProducesNoStoreSqlBecauseNoInstalledProviderMatches()
     {
-        // In the per-provider architecture there's no central registry that knows which dialect
-        // names are valid; each installed provider's generator only emits when the resolved
-        // dialect matches its own. Declaring an unrecognised dialect therefore silently leaves
-        // the store partial methods without implementations (a CS8795 the user resolves by
-        // installing a matching provider or fixing the dialect name).
+        // The first installed provider generator reports the invalid explicit dialect once, instead
+        // of silently leaving the store partial methods without implementations.
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -1752,6 +1749,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "Db2");
 
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ043");
         Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));

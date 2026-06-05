@@ -41,7 +41,7 @@ public sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFacto
         var detector = CreateDetector(options.Compatibility);
         if (detector is not null)
         {
-            _retryingOpener = new RetryingConnectionOpener(detector, options.MaxAttempts, options.RetryBaseDelay);
+            _retryingOpener = new RetryingConnectionOpener(detector, options.MaxAttempts, options.RetryBaseDelay, maxDelay: options.RetryMaxDelay);
         }
     }
 

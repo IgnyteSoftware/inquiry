@@ -340,7 +340,7 @@ public abstract class SqlBuilder
                 }
 
                 lines.Add("FOREIGN KEY (" + QuoteIdentifier(column.ColumnName) + ") REFERENCES "
-                    + QuoteIdentifier(column.ForeignKeyTable!) + "(" + QuoteIdentifier(column.ForeignKeyColumn!) + ")");
+                    + QuoteTable(column.ForeignKeySchema, column.ForeignKeyTable!) + "(" + QuoteIdentifier(column.ForeignKeyColumn!) + ")");
             }
         }
 
