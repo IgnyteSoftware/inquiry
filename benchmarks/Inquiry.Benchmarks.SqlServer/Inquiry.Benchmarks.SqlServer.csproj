@@ -27,6 +27,7 @@
     <!-- INQ014: exactly ONE dialect runtime per compilation. -->
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
+    <ProjectReference Include="..\Inquiry.Benchmarks.DLG\Inquiry.Benchmarks.DLG.csproj" />
   </ItemGroup>
 
   <ItemGroup>
