@@ -54,7 +54,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         _transaction = transaction;
         _interceptors = interceptors;
         _connectionFactory = connectionFactory;
-        _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.None) == PreparedStatementMode.Auto
+        _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.Auto) == PreparedStatementMode.Auto
             && _connectionFactory.SupportsPersistentPreparedStatements;
     }
 

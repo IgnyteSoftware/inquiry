@@ -35,7 +35,7 @@ services.AddInquiryMySql("Server=localhost;Database=app;User=app;Password=…");
 ## Notes
 
 - **MariaDB compatibility:** the generator's MySQL dialect targets the MySQL feature set; MariaDB-specific extensions (e.g. `RETURNING`) are not emitted by default to keep the compiled SQL portable.
-- **Prepared statements:** server-side, per-connection. Enable with `PreparedStatementMode.Auto`.
+- **Prepared statements:** server-side, per-connection. Inquiry's default `PreparedStatementMode.Auto` is currently a no-op for MySQL because the provider does not advertise persistent prepared-state reuse across the per-operation connection lifecycle.
 - **`max_allowed_packet`:** bulk inserts and updates respect server-side packet limits — chunk your batches if you exceed the default 64 MB.
 - **Case sensitivity:** identifier case-sensitivity depends on the server's `lower_case_table_names` setting and OS. Inquiry always emits backticked identifiers matching your C# property casing.
 

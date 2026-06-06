@@ -34,6 +34,9 @@ public sealed class AddInquiryAssemblyOverloadTests
         Assert.Equal(0, SentinelMarkerCount(services));
         Assert.Contains(services, sd => sd.ServiceType == typeof(IInquiry));
         Assert.Contains(services, sd => sd.ServiceType == typeof(IInquiryRequestPipeline));
+
+        var provider = services.BuildServiceProvider();
+        Assert.Equal(PreparedStatementMode.Auto, provider.GetRequiredService<InquiryOptions>().PrepareStatements);
     }
 
     [Fact]

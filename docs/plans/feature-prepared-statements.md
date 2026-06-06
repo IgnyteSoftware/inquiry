@@ -3,16 +3,16 @@
 > See [README.md](README.md). Depends on: **F4** (command hook), **F6** (DbType metadata — prerequisite, valuable standalone). Size: **M**. Contention: **MEDIUM–HIGH** (`StoreOperationEmitter` binder + pipeline).
 
 ## 1. Feature summary & surface
-inquiry bakes every statement as `const string` — ideal for `Prepare()`. Make the pipeline call `PrepareAsync()` (and ensure parameter-type metadata exists so preparation is real), gated by a DI option, **default off**.
+inquiry bakes every statement as `const string` — ideal for `Prepare()`. Make the pipeline call `PrepareAsync()` (and ensure parameter-type metadata exists so preparation is real), gated by a DI option. Current pre-release behavior is **default Auto**, with `PreparedStatementMode.None` as the opt-out.
 ```csharp
-services.AddInquiry(o => o.PrepareStatements = PreparedStatementMode.Auto); // None (default) | Auto
+services.AddInquiry(o => o.PrepareStatements = PreparedStatementMode.None); // Auto (default) | None
 ```
-Default off because the win is connection-lifecycle-dependent and can regress short-lived-connection workloads. Document Npgsql `Max Auto Prepare=N;Auto Prepare Min Usages=M` as the recommended zero-code path; inquiry's per-command `Prepare()` is the cross-provider fallback.
+The default changed before release after the PostgreSQL benchmark showed the `Auto` path faster for stable Npgsql SQL. Capability gating keeps providers with connection-scoped prepared state on a silent no-op path.
 
 ## 2. Approach (recommended C — hybrid, capability-gated)
 - **A** explicit `PrepareAsync()` every command — but only pays where prepared state survives connection dispose (Npgsql pool-level cache: yes; SqlClient: no, handle dies on dispose; SQLite: per-op-new-connection negates).
 - **B** lean entirely on provider auto-prepare — zero code/risk but doesn't deliver the feature or help SQLite.
-- **C (chosen):** `PreparedStatementMode` option (off default) + `SupportsPersistentPreparedStatements` capability gate (Npgsql true; SqlClient false → rely on its plan cache; SQLite configurable, default false) + **thread compile-time `DbType` metadata into binders so `Prepare()` is effective**. The DbType work (F6) is worth doing regardless.
+- **C (chosen):** `PreparedStatementMode` option (`Auto` default, `None` opt-out) + `SupportsPersistentPreparedStatements` capability gate (Npgsql true; SqlClient false → rely on its plan cache; SQLite configurable, default false) + **thread compile-time `DbType` metadata into binders so `Prepare()` is effective**. The DbType work (F6) is worth doing regardless.
 
 ## 3. Design
 ### 3a. The prerequisite (F6 — the real work)
@@ -31,7 +31,7 @@ inquiry opens/disposes per op → only Npgsql's pool-level cache + the transacte
 
 ## 4. Implementation steps (TDD)
 1. **F6 DbType in binders.** `DbTypeMapper` + unit test (mapping); update 3 emit sites. *Verify:* snapshot tests re-emit with `_pN.DbType`; full generator suite (incremental cache stable).
-2. `InquiryOptions` + `PreparedStatementMode` + `AddInquiry(Action<InquiryOptions>)` overload. *Verify:* DI default `None`.
+2. `InquiryOptions` + `PreparedStatementMode` + `AddInquiry(Action<InquiryOptions>)` overload. *Verify:* DI default `Auto`.
 3. `SupportsPersistentPreparedStatements` on `IInquiryConnectionFactory` (default-interface-member `=> false`; Npgsql `true`). *Verify:* per-provider flag test.
 4. Wire `PrepareAsync()` into both pipelines (exclude StoredProcedure). *Verify:* fake-`DbCommand` asserts Prepare called/not per mode×capability×CommandType; integration (SQLite + Npgsql) Auto == None results; prepared query correct after param value changes.
 5. Benchmark (Npgsql, `[Params(None,Auto)]`, pooled, `Max Auto Prepare` off) over SelectByKey + a 2–3-join eager select. *Verify:* mean-time reduction on Auto, no alloc regression when None.

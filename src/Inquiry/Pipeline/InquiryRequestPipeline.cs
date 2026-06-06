@@ -77,7 +77,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _interceptors = interceptors?.ToArray() ?? throw new ArgumentNullException(nameof(interceptors));
-        _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.None) == PreparedStatementMode.Auto
+        _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.Auto) == PreparedStatementMode.Auto
             && _connectionFactory.SupportsPersistentPreparedStatements;
     }
 
@@ -95,7 +95,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     // Prepares the command when enabled and it is not a stored procedure. Kept as a single guarded
-    // statement so the default (off) path stays branch-cheap.
+    // statement so unsupported providers and explicit opt-outs stay branch-cheap.
     private ValueTask MaybePrepareAsync(DbCommand dbCommand, CancellationToken cancellationToken)
     {
         if (_prepareEnabled && dbCommand.CommandType != CommandType.StoredProcedure)

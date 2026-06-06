@@ -34,6 +34,7 @@ services.AddInquirySqlite("Data Source=app.db");
 
 - **In-memory test databases:** use `Data Source=:memory:` for a one-off, or `Data Source=Db_<guid>;Mode=Memory;Cache=Shared` plus a "keeper" connection for tests that need multiple connections to see the same data.
 - **SequentialAccess is a no-op:** Microsoft.Data.Sqlite buffers rows regardless of the flag. Inquiry passes it anyway for parity; allocation numbers are determined by the buffering provider, not the flag.
+- **Prepared statements:** the default `PreparedStatementMode.Auto` is a silent no-op for SQLite because prepared state is tied to the open connection and Inquiry opens a connection per operation.
 - **No stored-procedure runtime:** SQLite has no native SP engine. SP-feature *generation* is exercised in `Inquiry.Generators.Tests`, but runtime SP integration tests run on the server dialects only.
 - **Concurrency:** SQLite's default journal mode serializes writes. For high-concurrency tests, set `PRAGMA journal_mode = WAL;` on connection open.
 

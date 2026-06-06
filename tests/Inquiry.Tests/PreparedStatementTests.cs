@@ -42,11 +42,23 @@ public sealed class PreparedStatementTests
     }
 
     [Fact]
-    public async Task DefaultOptionsDoNotPrepare()
+    public async Task DefaultOptionsPrepareWhenProviderSupportsPersistentPreparation()
     {
         var command = new FakeDbCommand();
         var factory = new FakeConnectionFactory(command, capability: true);
-        // No options argument => default None.
+        // No options argument => default Auto.
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>());
+
+        await pipeline.ExecuteAsync(new InquiryCommand("UPDATE T SET X = 1"));
+
+        Assert.True(command.PrepareCalled);
+    }
+
+    [Fact]
+    public async Task DefaultOptionsDoNotPrepareWhenProviderDoesNotSupportPersistentPreparation()
+    {
+        var command = new FakeDbCommand();
+        var factory = new FakeConnectionFactory(command, capability: false);
         var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>());
 
         await pipeline.ExecuteAsync(new InquiryCommand("UPDATE T SET X = 1"));
