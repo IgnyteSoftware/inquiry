@@ -198,11 +198,65 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetStore(result);
 
-        // The SQL text takes Oracle's ':' sigil for the synthetic paging parameters (the shared generator
-        // applies SqlBuilder.ParameterName); the generated paging binder still emits the '@__offset'/
-        // '@__limit' runtime parameters, which OracleInquiryConnectionFactory.FinalizeCommand reconciles.
+        // The SQL text takes Oracle's ':' sigil plus safe names for the synthetic paging parameters; the
+        // generated paging binder still emits the '@__offset'/'@__limit' runtime parameters, which
+        // OracleInquiryConnectionFactory.FinalizeCommand reconciles.
         // Verified live by Inquiry.Oracle.Tests.PaginationIntegrationTests.
-        Assert.Contains("ORDER BY Id ASC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY", text);
+        Assert.Contains("ORDER BY Id ASC OFFSET :inq$8$__offset ROWS FETCH NEXT :inq$7$__limit ROWS ONLY", text);
+        Assert.Contains("_p0.ParameterName = \"@__offset\";", text);
+        Assert.Contains("_p1.ParameterName = \"@__limit\";", text);
+    }
+
+    [Fact]
+    public void OracleDialectEncodesLeadingUnderscoreBindNamesWithoutCollapsing()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TBinding")]
+            public sealed class BindingRow
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn("OffsetValue")]
+                public int offset { get; set; }
+
+                [InquiryColumn("LeadingOffset")]
+                public int _offset { get; set; }
+
+                [InquiryColumn("DoubleLeadingOffset")]
+                public int __offset { get; set; }
+            }
+
+            public partial class BindingStore : InquiryStore<BindingRow>
+            {
+                [InquirySelectAllByField("_offset")]
+                public partial Task<IReadOnlyList<BindingRow>> SelectByLeadingOffsetAsync(int _offset, CancellationToken cancellationToken = default);
+
+                [InquirySelectAll(OrderBy = "Id ASC", Paged = true)]
+                public partial Task<IReadOnlyList<BindingRow>> PageAsync(int offset, int limit, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        AssertNoErrors(result);
+        var tree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("BindingStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("WHERE LeadingOffset = :inq$7$_offset", text);
+        Assert.Contains("OFFSET :inq$8$__offset ROWS FETCH NEXT :inq$7$__limit ROWS ONLY", text);
+        Assert.DoesNotContain("OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY", text);
+        Assert.Contains("_p0.ParameterName = \"@_offset\";", text);
         Assert.Contains("_p0.ParameterName = \"@__offset\";", text);
         Assert.Contains("_p1.ParameterName = \"@__limit\";", text);
     }

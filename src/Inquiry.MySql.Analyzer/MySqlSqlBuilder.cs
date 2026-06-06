@@ -69,7 +69,13 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
             + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
-        => BuildUpdateSql(context) + "; SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
+    {
+        var returningPredicate = context.ConcurrencyToken is null
+            ? context.KeyWhereClause
+            : AppendWhere(context.KeyWhereClause, "ROW_COUNT() > 0");
+
+        return BuildUpdateSql(context) + "; SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + returningPredicate;
+    }
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);

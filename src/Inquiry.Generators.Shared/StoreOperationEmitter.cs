@@ -283,10 +283,7 @@ internal static class StoreOperationEmitter
 
                 var itemsParam = method.Parameters[0].Name;
                 AppendHeader(source, method, parameters, isAsync: true);
-                source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}> ?? global::System.Linq.Enumerable.ToList({itemsParam});");
-                source.AppendLine("        if (_list.Count == 0) return 0;");
-                source.AppendLine($"        if ((long)_list.Count * {insertable.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)}L > Inquiry.MaxParametersPerCommand)");
-                source.AppendLine("            throw new global::System.InvalidOperationException(\"Inquiry batch insert would exceed the configured parameter limit for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.\");");
+                AppendBatchListMaterialization(source, itemsParam, entityType, insertable.Length, "insert");
                 // Dialect-aware multi-row INSERT shape: header + per-row (rowOpen + bound params) joined by a
                 // separator + footer. Base => `INSERT INTO t (cols) VALUES (…),(…)`; Oracle => `INSERT ALL
                 // INTO t (cols) VALUES (…) INTO … SELECT 1 FROM dual`. The row-param sigil follows the dialect
@@ -349,10 +346,7 @@ internal static class StoreOperationEmitter
                 var setColumns = SelectUpdateSetColumns(entity);
                 var keyColumns = entity.Keys;
                 AppendHeader(source, method, parameters, isAsync: true);
-                source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}> ?? global::System.Linq.Enumerable.ToList({itemsParam});");
-                source.AppendLine("        if (_list.Count == 0) return 0;");
-                source.AppendLine($"        if ((long)_list.Count * {(setColumns.Length + keyColumns.Count).ToString(System.Globalization.CultureInfo.InvariantCulture)}L > Inquiry.MaxParametersPerCommand)");
-                source.AppendLine("            throw new global::System.InvalidOperationException(\"Inquiry batch update would exceed the configured parameter limit for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.\");");
+                AppendBatchListMaterialization(source, itemsParam, entityType, setColumns.Length + keyColumns.Count, "update");
                 source.AppendLine("        var _sb = new global::System.Text.StringBuilder();");
                 source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
                 source.AppendLine("        {");
@@ -853,6 +847,29 @@ internal static class StoreOperationEmitter
         source.AppendLine($"                _p{pi}.Value = {valueExpr};");
         source.AppendLine($"                _c.Parameters.Add(_p{pi});");
         pi++;
+    }
+
+    private static void AppendBatchListMaterialization(StringBuilder source, string itemsParam, string entityType, int parametersPerItem, string operation)
+    {
+        var parameterCount = Math.Max(parametersPerItem, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var message = "Inquiry batch " + operation + " would exceed the configured parameter limit for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.";
+
+        source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}>;");
+        source.AppendLine("        if (_list is null)");
+        source.AppendLine("        {");
+        source.AppendLine($"            if ({itemsParam} is null) throw new global::System.ArgumentNullException(nameof({itemsParam}));");
+        source.AppendLine($"            var _tmp = new global::System.Collections.Generic.List<{entityType}>();");
+        source.AppendLine($"            foreach (var _item in {itemsParam})");
+        source.AppendLine("            {");
+        source.AppendLine($"                if ((long)(_tmp.Count + 1) * {parameterCount}L > Inquiry.MaxParametersPerCommand)");
+        source.AppendLine($"                    throw new global::System.InvalidOperationException(\"{message}\");");
+        source.AppendLine("                _tmp.Add(_item);");
+        source.AppendLine("            }");
+        source.AppendLine("            _list = _tmp;");
+        source.AppendLine("        }");
+        source.AppendLine("        if (_list.Count == 0) return 0;");
+        source.AppendLine($"        if ((long)_list.Count * {parameterCount}L > Inquiry.MaxParametersPerCommand)");
+        source.AppendLine($"            throw new global::System.InvalidOperationException(\"{message}\");");
     }
 
     /// <summary>Strips a trailing nullable annotation/<c>Nullable&lt;&gt;</c> marker from a cursor type display.</summary>

@@ -87,6 +87,22 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void OrmTokenUpdateReturningRequiresAffectedRow_MySql()
+    {
+        var result = RunGenerator(TokenStore("""
+            [InquiryUpdate(ReturnEntity = true)]
+            public partial Task<Widget?> UpdateAsync(Widget widget, CancellationToken cancellationToken = default);
+            """), dialect: "MySql");
+        AssertNoErrors(result);
+        var text = GetTokenStore(result);
+
+        // MySQL emulates RETURNING with UPDATE; SELECT. For token entities the trailing SELECT must be
+        // gated by the previous UPDATE, otherwise a stale token returns the current row and bypasses the
+        // generated null-result concurrency guard.
+        Assert.Contains("_sqlUpdateReturning = \"UPDATE `TWidget` SET `Name` = @Name, `Version` = `Version` + 1 WHERE `Id` = @Id AND `Version` = @Version; SELECT `Id`, `Name`, `Version` FROM `TWidget` WHERE `Id` = @Id AND ROW_COUNT() > 0\";", text);
+    }
+
+    [Fact]
     public void ConflictThrowBranchEmittedForTokenEntity_Sqlite()
     {
         var result = RunGenerator(TokenStore(TokenCrud));

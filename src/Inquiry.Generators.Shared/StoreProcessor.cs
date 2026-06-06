@@ -1601,9 +1601,9 @@ internal static class StoreProcessor
         }
     }
 
-    // Synthetic paging parameter LOGICAL names (no sigil). The SQL text takes the dialect sigil via
-    // SqlBuilder.ParameterName (':' on Oracle, '@' elsewhere); the generated paging binder emits the
-    // matching '@__…' runtime parameter, which FinalizeCommand reconciles on Oracle.
+    // Synthetic paging parameter LOGICAL names (no sigil). The SQL text takes the dialect sigil and any
+    // dialect-specific safe-name transform via SqlBuilder.ParameterName; the generated paging binder emits
+    // the matching '@__…' runtime parameter, which FinalizeCommand reconciles on Oracle.
     private const string OffsetLogicalName = "__offset";
     private const string LimitLogicalName = "__limit";
     private const string PageSizeLogicalName = "__pageSize";
