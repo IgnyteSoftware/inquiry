@@ -13,7 +13,7 @@ namespace Inquiry.Sqlite.Tests;
 /// <summary>
 /// Integration: running the full CRUD suite with <see cref="PreparedStatementMode.Auto"/> (over a
 /// SQLite factory that opts into the persistent-prepared capability so <c>PrepareAsync</c> actually
-/// fires) produces identical results to the default <see cref="PreparedStatementMode.None"/> path,
+/// fires) produces identical results to the explicit <see cref="PreparedStatementMode.None"/> path,
 /// including correctness after a parameter value changes between calls.
 /// </summary>
 public sealed class PreparedStatementIntegrationTests
@@ -58,7 +58,7 @@ public sealed class PreparedStatementIntegrationTests
         }
         else
         {
-            services.AddInquiry(typeof(CustomerStore).Assembly);
+            services.AddInquiry(o => o.PrepareStatements = PreparedStatementMode.None, typeof(CustomerStore).Assembly);
         }
 
         // A SQLite factory that advertises the persistent-prepared capability so the Auto path

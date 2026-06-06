@@ -14,9 +14,9 @@ public sealed class InquiryOptions
 
     /// <summary>
     /// Gets or sets whether generated commands are prepared before execution. Defaults to
-    /// <see cref="PreparedStatementMode.None"/>.
+    /// <see cref="PreparedStatementMode.Auto"/>.
     /// </summary>
-    public PreparedStatementMode PrepareStatements { get; set; } = PreparedStatementMode.None;
+    public PreparedStatementMode PrepareStatements { get; set; } = PreparedStatementMode.Auto;
 
     /// <summary>
     /// Gets or sets whether a 0-row UPDATE/DELETE on an optimistic-concurrency token entity

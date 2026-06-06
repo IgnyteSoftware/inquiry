@@ -6,7 +6,7 @@ Reviewed the main runtime NuGet package surface under `src/Inquiry`, excluding `
 
 ## Implementation progress
 
-Started on the P1/P2 release blockers in branch `codex-main-package-findings`.
+The P1/P2/P3 review findings are implemented on `main`.
 
 - Fixed soft-delete predicate precedence for `OR` predicates by grouping existing predicate bodies before global `AND` filters are appended. Added a generator regression for `OR + soft delete`.
 - Fixed ambient transaction straggler escapes by distinguishing fresh post-transaction work from async work that captured a transaction slot before close. Fresh store calls after the transaction still use the default pipeline; captured late work now throws `ObjectDisposedException`.
@@ -19,19 +19,13 @@ Started on the P1/P2 release blockers in branch `codex-main-package-findings`.
 - Added `IInquiry.ExecuteInTransactionAsync(...)` overloads so callers can let Inquiry own begin/commit/rollback for critical units of work.
 - Updated transaction docs to describe the new captured-slot behavior.
 - Updated security and batch-operation docs for safe ad-hoc SQL and `InquiryOptions.MaxParametersPerCommand`.
+- Completed the formal Codex Security scan follow-up and fixed the validated findings: lazy batch enumeration now enforces parameter caps during materialization, MySQL update-returning on concurrency-token rows returns `null` for stale updates, and Oracle generated bind names no longer collapse leading-underscore parameters.
 
-Verification run:
+Verification highlights:
 
-- `dotnet test tests\Inquiry.Generators.Tests\Inquiry.Generators.Tests.csproj` - passed: 185 tests on net8.0, net9.0, and net10.0.
-- `dotnet test tests\Inquiry.Sqlite.Tests\Inquiry.Sqlite.Tests.csproj` - passed: 160 tests on net8.0, net9.0, and net10.0.
-- `dotnet test tests\Inquiry.Tests\Inquiry.Tests.csproj` - passed: 91 tests on net8.0, net9.0, and net10.0.
-- `dotnet build samples\Inquiry.Sample\Inquiry.Sample.csproj` - passed.
-- `dotnet build tests\Inquiry.SqlServer.Tests\Inquiry.SqlServer.Tests.csproj` - passed with existing benchmark nullability warnings.
-- `dotnet build tests\Inquiry.PostgreSql.Tests\Inquiry.PostgreSql.Tests.csproj` - passed.
-- `dotnet build tests\Inquiry.MySql.Tests\Inquiry.MySql.Tests.csproj` - passed.
-- `dotnet build tests\Inquiry.Oracle.Tests\Inquiry.Oracle.Tests.csproj` - passed.
-- `git diff --check` - passed with only existing line-ending normalization warnings from Git.
-- `dotnet test Inquiry.slnx` - previously attempted, but the command timed out after five minutes before returning output. The solution includes Docker-backed provider suites, so run those separately when Docker availability is known.
+- Main-package hardening pass: generator, runtime, SQLite, sample, and provider test projects built or passed in focused runs.
+- Formal security-fix pass on `318ee5f`: `git diff --check` passed with only Git line-ending normalization warnings; `Inquiry.Generators.Tests` passed 189 tests on net8.0, net9.0, and net10.0; `Inquiry.MySql.Tests` passed 74 tests on net8.0, net9.0, and net10.0; `Inquiry.Oracle.Tests` passed 67 tests on net8.0, net9.0, and net10.0.
+- `dotnet test Inquiry.slnx` was previously attempted, but the command timed out after five minutes before returning output. The solution includes Docker-backed provider suites, so run those separately when Docker availability is known.
 
 Security review used the Codex Security phase model:
 
@@ -201,4 +195,4 @@ P3 verification run: focused generator, runtime, and SQLite transaction regressi
 
 No network, file-system, process execution, deserialization-of-arbitrary-type, SSRF, auth, or path traversal product surfaces exist in the core runtime package.
 
-This document started as a review-only artifact. The P1 items and several P2 items are now implemented with targeted generator/runtime tests; remaining proposed fixes should still be implemented with focused coverage before release.
+This document started as a review-only artifact. The reviewed P1/P2/P3 findings are now implemented with targeted generator/runtime/provider coverage; remaining broader feature ideas are tracked in the docs-site roadmap.

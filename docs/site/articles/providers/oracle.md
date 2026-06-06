@@ -39,8 +39,9 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 - **`INSERT ALL` for batch inserts:** Oracle doesn't support multi-row `VALUES`. The generator emits `INSERT ALL INTO t (...) VALUES (...) INTO t (...) VALUES (...) SELECT 1 FROM dual`.
 - **`UpdateAll` is unsupported** — Oracle has no clean equivalent of multi-row `UPDATE … VALUES`. The generator emits a throwing stub (`INQ039` warning).
 - **`Upsert` with DB-generated key** — the upsert path requires a known key. For a DB-generated key, use `InsertAsync` for new rows and `UpdateAsync` for existing ones; `UpsertAsync` is a throwing stub in that scenario.
+- **Prepared statements:** the default `PreparedStatementMode.Auto` is currently a silent no-op for Oracle because prepared state is connection-scoped and Inquiry opens a connection per operation.
 - **Stored-procedure result sets** (today) require an OUT `SYS_REFCURSOR` parameter, which the generator doesn't yet emit. Either use a `FUNCTION` that `RETURN SYS_REFCURSOR`, or wait for the planned stored-procedure expansion.
 
 ## Testing
 
-`tests/Inquiry.Oracle.Tests` runs against a Testcontainers-managed `gvenzl/oracle-xe:21-slim-faststart` image, in the per-PR CI integration matrix alongside the other engines (~3 min container warm-up).
+`tests/Inquiry.Oracle.Tests` runs against a Testcontainers-managed `gvenzl/oracle-xe:21-slim-faststart` image, in the CI integration matrix alongside the other engines (~3 min container warm-up).

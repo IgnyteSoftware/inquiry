@@ -16,6 +16,11 @@ raw ADO.NET. Two suites:
   databases. All identifiers are **all-lowercase** so the one physical `shippers` table is addressable
   identically by EF Core (which quotes identifiers), the portable-unquoted libraries, and each engine's
   folding/casing rules — which is what lets EF Core join the cross-dialect comparison. Requires Docker.
+- **Provider-specific (networked, Testcontainers)** — provider projects under
+  `benchmarks/Inquiry.Benchmarks.{PostgreSql,MySql,Oracle,SqlServer}` compile generated stores for one
+  dialect at a time. PostgreSQL also includes `PreparedStatementBenchmarks`, which compares Inquiry
+  `PreparedStatementMode.None` vs `Auto` on Npgsql for a generated simple point read and a stable ad-hoc
+  multi-join point read.
 
 ```powershell
 # Cross-dialect read suite (PostgreSQL + MySQL + SQL Server, needs Docker).
@@ -23,6 +28,12 @@ raw ADO.NET. Two suites:
 # any numbers you intend to publish or compare — short-job noise can invert sub-microsecond
 # orderings (and is what made wrappers appear to "beat" the ADO.NET baseline in an earlier run).
 dotnet run -c Release --project benchmarks\Inquiry.Benchmarks -- --filter "*CrossDialect*" --job short
+```
+
+```powershell
+# PostgreSQL prepared-statement comparison (needs Docker).
+# Use --job short only as a smoke run; use the default BenchmarkDotNet job before publishing numbers.
+dotnet run -c Release --project benchmarks\Inquiry.Benchmarks.PostgreSql\Inquiry.Benchmarks.PostgreSql.csproj -- --filter "*PreparedStatementBenchmarks*" --job short --inProcess
 ```
 
 ## Fairness (apples-to-apples)
@@ -89,6 +100,7 @@ a like-for-like comparison it is omitted (noted in each class's doc comment).
 | `PredicateBenchmarks`            | Search, InList            | Two-clause AND predicate (`UnitPrice >=` + `ProductName LIKE`) and `CategoryID IN (...)`.                   |
 | `BatchBenchmarks`                | BatchInsert               | One batched multi-row INSERT (`[InquiryInsertAll]`) vs an N-row INSERT loop in a transaction.               |
 | `EagerLoadingBenchmarks`         | EagerAll                  | Separate-query eager load of `Product.Category` vs a Dapper/ADO two-query-then-stitch of the same shape.    |
+| `PreparedStatementBenchmarks`    | SimplePointRead, MultiJoinPointRead | PostgreSQL-only comparison of Inquiry `PreparedStatementMode.None` vs `Auto` on generated and ad-hoc stable SQL. |
 
 `ParameterBindingBenchmarks` (Inquiry's parameter-binding path in isolation, no SQL execution)
 rounds out the suite.

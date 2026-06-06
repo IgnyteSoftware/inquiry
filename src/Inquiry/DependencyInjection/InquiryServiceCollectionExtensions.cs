@@ -18,7 +18,7 @@ public static class InquiryServiceCollectionExtensions
 
     /// <summary>
     /// Registers core Inquiry runtime services, applying the supplied
-    /// <see cref="InquiryOptions"/> configuration (e.g. <c>o.PrepareStatements = PreparedStatementMode.Auto</c>).
+    /// <see cref="InquiryOptions"/> configuration (e.g. <c>o.PrepareStatements = PreparedStatementMode.None</c>).
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services, Action<InquiryOptions> configureOptions)
     {

@@ -3,17 +3,17 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code:** 2026-06-04.
+**Last reconciled against the code:** 2026-06-06.
 
 ## Supported database engines (5, all live-tested)
 
 | Dialect (`[assembly: InquiryDialect("…")]`) | Runtime package | Analyzer (source generator) | Live test status |
 |---|---|---|---|
 | `Sqlite` | `Inquiry.Sqlite` | `Inquiry.Sqlite.Analyzer` | in-process (no Docker) |
-| `SqlServer` | `Inquiry.SqlServer` | `Inquiry.SqlServer.Analyzer` | Testcontainers (PR CI matrix) |
-| `PostgreSql` | `Inquiry.PostgreSql` | `Inquiry.PostgreSql.Analyzer` | Testcontainers (PR CI matrix) |
-| `MySql` | `Inquiry.MySql` | `Inquiry.MySql.Analyzer` | Testcontainers (PR CI matrix) |
-| `Oracle` | `Inquiry.Oracle` | `Inquiry.Oracle.Analyzer` | Testcontainers (PR CI matrix) |
+| `SqlServer` | `Inquiry.SqlServer` | `Inquiry.SqlServer.Analyzer` | Testcontainers (CI integration matrix) |
+| `PostgreSql` | `Inquiry.PostgreSql` | `Inquiry.PostgreSql.Analyzer` | Testcontainers (CI integration matrix) |
+| `MySql` | `Inquiry.MySql` | `Inquiry.MySql.Analyzer` | Testcontainers (CI integration matrix) |
+| `Oracle` | `Inquiry.Oracle` | `Inquiry.Oracle.Analyzer` | Testcontainers (CI integration matrix) |
 
 The shared generator framework lives in `Inquiry.Generators.Shared` and is bundled privately into each
 `*.Analyzer` (Roslyn loads each analyzer in its own `AssemblyLoadContext`, so the framework cannot be a
@@ -35,10 +35,18 @@ design record is in [Design notes](design-notes.md); user-facing docs for each f
 
 Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roadmap](roadmap.md).
 
+## Security status
+
+A formal Codex Security repository scan was completed during pre-release hardening. The validated findings
+were fixed on `main` in `318ee5f` (`Fix security scan findings`): lazy batch materialization now enforces
+the parameter cap while enumerating, MySQL update-returning on concurrency-token rows no longer returns stale
+rows after a failed update, and Oracle generated bind names no longer collapse leading-underscore parameters.
+
 ## Test status
 
 Tests are organized per concern; the non-Docker suites always run, and the provider suites use
-Testcontainers and **skip gracefully when Docker is unavailable**.
+Testcontainers. Local provider runs **skip gracefully when Docker is unavailable**; CI sets
+`INQUIRY_REQUIRE_DOCKER=1`, so a missing or failed provider container fails the integration job.
 
 | Suite | Scope | Needs Docker? |
 |---|---|---|

@@ -47,14 +47,14 @@ approach is the convention.)
 ## CI
 
 [`.github/workflows/ci.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/ci.yml)
-runs on every pull request and on pushes to `main`:
+runs on pushes to `main` and also on the `pull_request` event if a PR is opened:
 
 - a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker); and
 - an **integration** job — a matrix of **PostgreSQL, MySQL, SQL Server, and Oracle** live suites, each on
   **net8.0** and **net9.0**, provisioned with Testcontainers.
 
 CI uploads TRX result artifacts (`if: always()`) so failures and skips can be inspected. There is no
-separate nightly workflow — Oracle runs in the per-PR matrix alongside the other engines.
+separate nightly workflow — Oracle runs in the same integration matrix as the other engines.
 
 ## Adding a database
 

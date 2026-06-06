@@ -2,6 +2,14 @@
 
 Inquiry has one security-relevant boundary worth understanding up front: **generated store methods are injection-safe by construction, and ad-hoc facade SQL parameterizes interpolated values before it reaches ADO.NET.**
 
+## Current scan status
+
+A formal Codex Security repository scan was completed during pre-release hardening. The validated findings
+were fixed on `main` in `318ee5f` (`Fix security scan findings`): lazy `IEnumerable<T>` batch operations now
+check the configured parameter cap during materialization, MySQL update-returning on optimistic-concurrency
+entities returns `null` for stale updates instead of re-reading the current row, and Oracle generated bind
+names preserve leading-underscore parameters without collisions.
+
 ## Generated stores - no injection surface
 
 Every method the generator emits for an `InquiryStore<T>` is safe against SQL injection by design, because of three architectural constraints (see [Architecture](architecture.md#key-design-constraints)):

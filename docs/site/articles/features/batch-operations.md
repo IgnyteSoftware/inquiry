@@ -36,7 +36,9 @@ Batch methods and generated `IN` predicates stop before a command grows past `In
 ## Provider differences
 
 - **PostgreSQL / SQLite** support multi-row `INSERT … VALUES (…), (…), …` directly.
-- **SQL Server** uses the same multi-row VALUES, capped at 1000 rows per batch (then chunked).
+- **SQL Server** uses the same multi-row VALUES. SQL Server caps one `INSERT ... VALUES` statement at
+  1000 rows; Inquiry enforces `MaxParametersPerCommand` but does not auto-chunk, so chunk larger calls at
+  the call site or lower the configured parameter cap for SQL Server workloads.
 - **MySQL** supports multi-row VALUES with no hard cap (limited by `max_allowed_packet`).
 - **Oracle** doesn't support multi-row VALUES; the generator emits `INSERT ALL` instead.
 - **`UpdateAll` on Oracle** is unsupported — the generator emits a throwing stub with `INQ039`.

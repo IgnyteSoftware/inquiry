@@ -34,7 +34,7 @@ services.AddInquiryPostgreSql("Host=localhost;Database=app;Username=app;Password
 
 ## Notes
 
-- **Prepared statements:** Npgsql has a per-connection auto-prepare cache. Enable with `PreparedStatementMode.Auto`. The first N executions of a statement go through normal `Parse/Bind/Execute`; after the threshold, Npgsql auto-prepares it and reuses the parsed plan for the connection's lifetime.
+- **Prepared statements:** `PreparedStatementMode.Auto` is the Inquiry default, and PostgreSQL is the provider that currently opts into it. Npgsql keeps prepared statements on the pooled physical connection, so stable Inquiry SQL can reuse the parsed plan across logical connection opens. If you prefer Npgsql's usage-threshold auto-prepare policy, set Inquiry to `PreparedStatementMode.None` and configure `Max Auto Prepare` / `Auto Prepare Min Usages` in the connection string.
 - **Identifier case:** unlike SQL Server, PostgreSQL folds unquoted identifiers to lowercase. Inquiry always emits quoted identifiers to preserve the C# property casing, so `[InquiryColumn] public string CompanyName` stays as `"CompanyName"` in the database.
 - **Cloud retry:** Aurora-style transient errors (`08001`, `08006`, certain `40xxx` codes) are auto-retried.
 - **Stored functions vs procedures:** Npgsql 5+ handles both kinds under `CommandType.StoredProcedure`. Functions are wrapped as `SELECT * FROM fn(args)`; procedures use `CALL proc(args)`.

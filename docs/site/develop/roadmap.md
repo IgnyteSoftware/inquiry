@@ -4,7 +4,7 @@
 > enhancements. Resolved items are summarized at the [bottom](#recently-resolved). Nothing here blocks
 > `main`: the library builds and every test suite passes.
 >
-> **Last reconciled against the code:** 2026-06-05.
+> **Last reconciled against the code:** 2026-06-06.
 
 ## Known issues & correctness
 
@@ -15,16 +15,11 @@
 
 ## Security
 
-- **Run the formal fanout security scan.** The code has had a manual, Codex Security-oriented repository review and the raw-SQL
-  trust boundary is documented (see [Security](../articles/security.md)). The remaining release-bar follow-up is the delegated
-  repository-wide scan; it requires explicit sub-agent authorization in Codex. *No vulnerability is currently known
-  — generated SQL is parameterized and identifiers come from compile-time metadata.*
+- *No open security follow-ups are currently known.* The formal Codex Security repository scan has been run;
+  validated findings were fixed in `318ee5f` and summarized in [Security](../articles/security.md).
 
 ## Performance & optimization
 
-- **Prepared-statement benchmark (W4 follow-up).** Quantify `PreparedStatementMode.None` vs `Auto` on
-  Npgsql (simple + multi-join) with BenchmarkDotNet; the win depends on connection lifecycle (see
-  [Prepared statements](../articles/features/prepared-statements.md)).
 - **Array parameters for `IN`.** `Compare.In` predicates rewrite the command text per list cardinality,
   which defeats prepared-statement reuse across list lengths. PostgreSQL `= ANY(@ids)` (and equivalents)
   would keep the SQL constant.
@@ -91,10 +86,18 @@ open:
   registering two providers in one container now fails fast with a clear message.
 - **Hardening:** sample DB credentials are labeled local-dev-only with an `INQUIRY_SAMPLE_DB` override;
   the known build-warning sources are scoped-suppressed (production projects are warnings-as-errors).
-- **CI:** Oracle moved into the per-PR integration matrix (net8.0/net9.0); CI emits TRX artifacts.
+- **CI:** Oracle moved into the integration matrix (net8.0/net9.0); CI emits TRX artifacts.
 - **CI hardening:** a provider suite that can't start its Docker container now FAILS CI (via the
   `INQUIRY_REQUIRE_DOCKER` guard) instead of silently skipping; a new scheduled weekly workflow runs the
-  full provider × net8.0/net9.0/net10.0 matrix (PR CI stays net8.0/net9.0).
+  full provider × net8.0/net9.0/net10.0 matrix (the normal integration matrix stays net8.0/net9.0).
+- **Formal security scan:** the Codex Security repository scan completed during pre-release hardening.
+  Findings were fixed with regression coverage for lazy batch parameter-cap enforcement, MySQL
+  update-returning concurrency behavior, and Oracle generated bind-name collisions.
+- **Prepared-statement benchmark:** the PostgreSQL BenchmarkDotNet harness compares
+  `PreparedStatementMode.None` vs `Auto` on Npgsql for a generated simple point read and a stable ad-hoc
+  multi-join point read. The 2026-06-06 full run measured lower means for `Auto` in both categories
+  (multi-join: 713.5 us vs 944.5 us; simple point read: 587.9 us vs 662.6 us), with BDN distribution
+  warnings appropriate for networked container benchmarks.
 - **Generator robustness:** a mistyped collection-relation foreign key on a store with no eager method no
   longer crashes the generator (`NullReferenceException`) — relation SELECT consts are emitted only when a
   valid eager method consumes them; a bad relation that *is* eager-loaded still reports `INQ040`/`INQ041`.
