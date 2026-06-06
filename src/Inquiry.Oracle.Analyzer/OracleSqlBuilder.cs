@@ -1,6 +1,7 @@
 using Inquiry.Generators.Abstractions;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace Inquiry.Oracle.Analyzer;
@@ -41,11 +42,15 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     /// <summary>
     /// Oracle bind variables use the <c>:name</c> prefix. Oracle identifiers (and so bind names) cannot
     /// begin with <c>_</c>, but the shared generator names synthetic paging parameters <c>__offset</c>
-    /// etc.; drop the leading underscores so the emitted placeholder is a valid Oracle bind. The runtime
-    /// <c>OracleInquiryConnectionFactory.FinalizeCommand</c> applies the same trim to the bound parameter
-    /// name so the two still match under <see cref="OracleCommand.BindByName"/>.
+    /// etc. Leading-underscore names move into a generated-safe namespace instead of being trimmed, so
+    /// <c>offset</c>, <c>_offset</c>, and <c>__offset</c> remain distinct.
     /// </summary>
-    public override string ParameterName(string logicalName) => ":" + logicalName.TrimStart('_');
+    public override string ParameterName(string logicalName) => ":" + SafeBindName(logicalName);
+
+    private static string SafeBindName(string logicalName)
+        => !string.IsNullOrEmpty(logicalName) && logicalName[0] == '_'
+            ? "inq$" + logicalName.Length.ToString(CultureInfo.InvariantCulture) + "$" + logicalName
+            : logicalName;
 
     /// <summary>
     /// ODP.NET's <c>OracleParameter.set_DbType</c> rejects <c>DbType.DateTime2</c> ("Value does not fall

@@ -57,6 +57,27 @@ public sealed class ConcurrencyIntegrationTests
     }
 
     [SkippableFact]
+    public async Task StaleUpdateReturningReturnsNullAndDoesNotApply()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.MySqlDdl, "concreturn");
+        var store = harness.GetRequiredService<VersionedItemStore>();
+        var stale = await store.InsertAsync(new VersionedItem { Title = "v0" });
+
+        var fresh = await store.ByIdAsync(stale!.Id);
+        fresh!.Title = "winner";
+        var updated = await store.UpdateReturningAsync(fresh);
+        Assert.Equal(1, updated!.Version);
+
+        stale.Title = "loser";
+        Assert.Null(await store.UpdateReturningAsync(stale));
+
+        var reloaded = await store.ByIdAsync(stale.Id);
+        Assert.Equal("winner", reloaded!.Title);
+        Assert.Equal(1, reloaded.Version);
+    }
+
+    [SkippableFact]
     public async Task StaleDeleteReturnsFalseAndCurrentDeleteSucceeds()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);

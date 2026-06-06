@@ -55,6 +55,52 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void UpdateAllChecksParameterCapWhileMaterializingLazyEnumerable()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TThing")]
+            public sealed class Thing
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Name")]
+                public string Name { get; set; } = string.Empty;
+
+                [InquiryColumn("Qty")]
+                public int Qty { get; set; }
+            }
+
+            public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
+            {
+                [InquiryUpdateAll]
+                public partial Task<int> UpdateAllAsync(IEnumerable<Thing> things, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.DoesNotContain("global::System.Linq.Enumerable.ToList(things)", text);
+        Assert.Contains("var _list = things as global::System.Collections.Generic.IReadOnlyList<global::Demo.Thing>;", text);
+        Assert.Contains("var _tmp = new global::System.Collections.Generic.List<global::Demo.Thing>();", text);
+        Assert.Contains("foreach (var _item in things)", text);
+        Assert.Contains("if ((long)(_tmp.Count + 1) * 3L > Inquiry.MaxParametersPerCommand)", text);
+        Assert.Contains("_tmp.Add(_item);", text);
+    }
+
+    [Fact]
     public void UpdateAllCompositeKeyAndsAllKeyColumns()
     {
         const string source = """

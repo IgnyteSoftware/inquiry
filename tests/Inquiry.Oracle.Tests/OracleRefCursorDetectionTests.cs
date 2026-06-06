@@ -16,6 +16,38 @@ namespace Inquiry.Oracle.Tests;
 public sealed class OracleRefCursorDetectionTests
 {
     [Fact]
+    public void GeneratedLeadingUnderscoreBindNamesAreMappedWithoutCollapsing()
+    {
+        var factory = new OracleInquiryConnectionFactory("User Id=x;Password=x;Data Source=x");
+        using var command = new OracleCommand(
+            "SELECT * FROM T WHERE OffsetValue = :offset AND LeadingOffset = :inq$7$_offset AND DoubleLeadingOffset = :inq$8$__offset");
+        command.Parameters.Add(new OracleParameter("@offset", 1));
+        command.Parameters.Add(new OracleParameter("@_offset", 2));
+        command.Parameters.Add(new OracleParameter("@__offset", 3));
+
+        factory.FinalizeCommand(command);
+
+        var names = command.Parameters.Cast<OracleParameter>().Select(static p => p.ParameterName).ToArray();
+        Assert.Contains("offset", names);
+        Assert.Contains("inq$7$_offset", names);
+        Assert.Contains("inq$8$__offset", names);
+        Assert.Equal(3, names.Distinct().Count());
+    }
+
+    [Fact]
+    public void UserAuthoredRawLeadingUnderscoreBindNameIsLeftAsWritten()
+    {
+        var factory = new OracleInquiryConnectionFactory("User Id=x;Password=x;Data Source=x");
+        using var command = new OracleCommand("SELECT * FROM T WHERE DoubleLeadingOffset = :__offset");
+        command.Parameters.Add(new OracleParameter("@__offset", 3));
+
+        factory.FinalizeCommand(command);
+
+        var parameter = Assert.Single(command.Parameters.Cast<OracleParameter>());
+        Assert.Equal("__offset", parameter.ParameterName);
+    }
+
+    [Fact]
     public void GeneratorEmittedBeginBlockWithRcGainsRefCursorOut()
     {
         var factory = new OracleInquiryConnectionFactory("User Id=x;Password=x;Data Source=x");

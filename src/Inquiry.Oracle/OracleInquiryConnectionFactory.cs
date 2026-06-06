@@ -1,6 +1,7 @@
 using Inquiry.Connections;
 using Oracle.ManagedDataAccess.Client;
 using System.Data.Common;
+using System.Globalization;
 
 namespace Inquiry.Oracle;
 
@@ -63,7 +64,9 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     /// name. Oracle's SQL references bind variables as <c>:name</c>, and ODP.NET with
     /// <see cref="OracleCommand.BindByName"/> matches by bare name — it does not reconcile a leading
     /// <c>@</c>, so without this every bound query fails with ORA-50028 ("invalid parameter
-    /// binding").</description></item>
+    /// binding"). Generated leading-underscore names are also mapped to the same collision-resistant
+    /// bind name emitted by the Oracle analyzer when the command text contains that generated
+    /// placeholder.</description></item>
     /// <item><description>Converts <see cref="bool"/> values to their <c>0</c>/<c>1</c> numeric form.
     /// Oracle has no BOOLEAN SQL type; Inquiry maps bool columns to <c>NUMBER(1)</c>, and ODP.NET does
     /// not coerce a CLR bool parameter to NUMBER, so binding one fails with ORA-00932 ("inconsistent
@@ -83,10 +86,10 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                     name = name.Substring(1);
                 }
 
-                // Oracle bind names cannot begin with '_'. OracleSqlBuilder.ParameterName drops the
-                // leading underscores the shared generator uses for synthetic paging params, so apply the
-                // same trim here to keep the bound name matching the ':name' placeholder under BindByName.
-                parameter.ParameterName = name.TrimStart('_');
+                var safeName = SafeBindName(name);
+                parameter.ParameterName = safeName != name && ContainsBindName(command.CommandText, safeName)
+                    ? safeName
+                    : name;
             }
 
             if (parameter.Value is bool boolValue)
@@ -119,4 +122,39 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         => (commandText.StartsWith("DECLARE", System.StringComparison.Ordinal)
             || commandText.StartsWith("BEGIN", System.StringComparison.Ordinal))
            && commandText.IndexOf(":rc", System.StringComparison.Ordinal) >= 0;
+
+    private static string SafeBindName(string name)
+        => !string.IsNullOrEmpty(name) && name[0] == '_'
+            ? "inq$" + name.Length.ToString(CultureInfo.InvariantCulture) + "$" + name
+            : name;
+
+    private static bool ContainsBindName(string commandText, string bindName)
+    {
+        var needle = ":" + bindName;
+        var start = 0;
+        while (true)
+        {
+            var index = commandText.IndexOf(needle, start, System.StringComparison.Ordinal);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            var next = index + needle.Length;
+            if (next == commandText.Length || !IsBindNameChar(commandText[next]))
+            {
+                return true;
+            }
+
+            start = index + 1;
+        }
+    }
+
+    private static bool IsBindNameChar(char c)
+        => (c >= 'A' && c <= 'Z')
+           || (c >= 'a' && c <= 'z')
+           || (c >= '0' && c <= '9')
+           || c == '_'
+           || c == '$'
+           || c == '#';
 }
