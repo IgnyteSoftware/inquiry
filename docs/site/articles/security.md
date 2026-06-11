@@ -44,6 +44,10 @@ Plain string facade overloads such as `ExecuteAsync(string)` and `QueryListAsync
 
 Connection strings, and the credentials in them, are the host application's responsibility. Inquiry takes a connection string at DI-registration time (`AddInquirySqlServer(connectionString)`, ...) and hands it to the provider's `DbConnection`; it never logs it. Keep real credentials out of source control: load them from environment variables, a secrets manager, or your platform's configuration provider. The bundled sample demonstrates this with its `INQUIRY_SAMPLE_DB` environment-variable override; see [`samples/Inquiry.Sample/README.md`](https://github.com/JakeOverstreet/inquiry/blob/main/samples/Inquiry.Sample/README.md).
 
+## Telemetry and data exposure
+
+The opt-in telemetry layer (`AddInquiryTelemetry()`) never records parameter values — Inquiry SQL is compile-time-constant and data flows only through bound parameters. Spans and debug logs carry the SQL text (table/column names) by default; set `RecordCommandText = false` to redact it. See [Observability](features/observability.md).
+
 ## Reporting
 
 Found a security issue in Inquiry itself? Open a private report via the repository's GitHub security advisories rather than a public issue.

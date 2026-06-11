@@ -48,14 +48,19 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
+        if (_options.FailoverConnectionString is { } failover)
+        {
+            return FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, _retryingOpener, cancellationToken);
+        }
+
         return _retryingOpener is null
-            ? OpenCoreAsync(cancellationToken)
-            : _retryingOpener.OpenAsync(OpenCoreAsync, cancellationToken);
+            ? OpenCoreAsync(_connectionString, cancellationToken)
+            : _retryingOpener.OpenAsync(ct => OpenCoreAsync(_connectionString, ct), cancellationToken);
     }
 
-    private async ValueTask<DbConnection> OpenCoreAsync(CancellationToken cancellationToken)
+    private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
     {
-        var connection = new SqlConnection(_connectionString);
+        var connection = new SqlConnection(connectionString);
 
         try
         {

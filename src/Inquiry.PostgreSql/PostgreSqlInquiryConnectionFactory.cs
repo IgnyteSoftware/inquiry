@@ -10,6 +10,7 @@ namespace Inquiry.PostgreSql;
 internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
+    private readonly string? _failoverConnectionString;
     private readonly RetryingConnectionOpener? _retryingOpener;
 
     /// <summary>
@@ -37,6 +38,7 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
         }
 
         _connectionString = connectionString;
+        _failoverConnectionString = options.FailoverConnectionString;
 
         var detector = CreateDetector(options.Compatibility);
         if (detector is not null)
@@ -56,9 +58,14 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
+        if (_failoverConnectionString is { } failover)
+        {
+            return FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, _retryingOpener, cancellationToken);
+        }
+
         return _retryingOpener is null
-            ? OpenCoreAsync(cancellationToken)
-            : _retryingOpener.OpenAsync(OpenCoreAsync, cancellationToken);
+            ? OpenCoreAsync(_connectionString, cancellationToken)
+            : _retryingOpener.OpenAsync(ct => OpenCoreAsync(_connectionString, ct), cancellationToken);
     }
 
     private static ITransientErrorDetector? CreateDetector(PostgreSqlCompatibility compatibility) => compatibility switch
@@ -68,9 +75,9 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
         _ => null,
     };
 
-    private async ValueTask<DbConnection> OpenCoreAsync(CancellationToken cancellationToken)
+    private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
     {
-        var connection = new NpgsqlConnection(_connectionString);
+        var connection = new NpgsqlConnection(connectionString);
         try
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
