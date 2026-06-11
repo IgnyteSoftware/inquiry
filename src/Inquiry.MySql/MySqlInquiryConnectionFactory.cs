@@ -10,15 +10,29 @@ namespace Inquiry.MySql;
 internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
+    private readonly string? _failoverConnectionString;
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="MySqlInquiryConnectionFactory"/> with default options.
+    /// </summary>
+    public MySqlInquiryConnectionFactory(string connectionString)
+        : this(connectionString, new MySqlInquiryOptions())
+    {
+    }
 
     /// <summary>
     /// Initializes a new instance of <see cref="MySqlInquiryConnectionFactory"/>.
     /// </summary>
-    public MySqlInquiryConnectionFactory(string connectionString)
+    public MySqlInquiryConnectionFactory(string connectionString, MySqlInquiryOptions options)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
+        }
+
+        if (options is null)
+        {
+            throw new ArgumentNullException(nameof(options));
         }
 
         // Inquiry's emulated RETURNING for a database-generated GUID key captures the value in a
@@ -28,16 +42,29 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
         // for ad-hoc SQL (the IInquiry.Query*/Execute* string overloads), a missing or misspelled @param
         // is now silently treated as a NULL user variable rather than throwing "parameter not found" —
         // callers passing raw command text must name their parameters correctly.
-        _connectionString = new MySqlConnectionStringBuilder(connectionString)
+        _connectionString = WithUserVariables(connectionString);
+        _failoverConnectionString = options.FailoverConnectionString is { } failover
+            ? WithUserVariables(failover)
+            : null;
+    }
+
+    private static string WithUserVariables(string connectionString)
+        => new MySqlConnectionStringBuilder(connectionString)
         {
             AllowUserVariables = true,
         }.ConnectionString;
-    }
 
     /// <inheritdoc />
-    public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+    public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
-        var connection = new MySqlConnection(_connectionString);
+        return _failoverConnectionString is { } failover
+            ? FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, retryingOpener: null, cancellationToken)
+            : OpenCoreAsync(_connectionString, cancellationToken);
+    }
+
+    private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
+    {
+        var connection = new MySqlConnection(connectionString);
         try
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);

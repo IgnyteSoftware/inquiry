@@ -3,7 +3,7 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code:** 2026-06-06.
+**Last reconciled against the code:** 2026-06-11.
 
 ## Supported database engines (5, all live-tested)
 
@@ -32,6 +32,12 @@ reuse, projections + aggregations, optimistic concurrency, schema-DDL generation
 search, and JSON/array/value-converter columns — is **implemented and merged to `main`**. The per-workstream
 design record is in [Design notes](design-notes.md); user-facing docs for each feature are under
 [Features](../articles/features/crud.md).
+
+Beyond that roadmap, the runtime also ships an opt-in **observability layer** (OpenTelemetry tracing +
+metrics + `ILogger` logging via `AddInquiryTelemetry()`; see
+[Observability](../articles/features/observability.md)) and **open-time resiliency** (cloud transient-fault
+retry and per-provider backup-server failover; see
+[Resiliency & failover](../articles/features/resiliency.md)).
 
 Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roadmap](roadmap.md).
 

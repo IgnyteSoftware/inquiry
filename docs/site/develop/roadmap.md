@@ -4,7 +4,7 @@
 > enhancements. Resolved items are summarized at the [bottom](#recently-resolved). Nothing here blocks
 > `main`: the library builds and every test suite passes.
 >
-> **Last reconciled against the code:** 2026-06-06.
+> **Last reconciled against the code:** 2026-06-11.
 
 ## Known issues & correctness
 
@@ -39,6 +39,11 @@
   [Recently resolved](#recently-resolved).)*
 - **Optional Roslyn bump.** `Microsoft.CodeAnalysis.CSharp` is intentionally held at 4.8.0 to keep the
   analyzer's minimum-SDK floor low; revisit only if a newer Roslyn API is needed.
+- **Telemetry enrichment.** The opt-in telemetry layer (see
+  [Observability](../articles/features/observability.md)) emits OTel-conventional spans, a
+  `db.client.operation.duration` histogram, and `ILogger` messages. Candidate follow-ups:
+  a `db.collection.name` (table) span tag, sqlcommenter-style trace-context SQL comments, and
+  connection-open / pool-wait instruments.
 - **Broaden relation-shape diagnostics.** `INQ040` (unknown relation foreign key) and `INQ041`
   (composite-key child) fire only when an eager-loading method traverses the relation. A relation that is
   mistyped but never eager-loaded is silently skipped (it no longer crashes the generator), and a foreign
@@ -59,6 +64,15 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Observability (2026-06-11):** opt-in `AddInquiryTelemetry()` emits OpenTelemetry-compatible spans
+  (`ActivitySource` "Inquiry", db semantic conventions), a `db.client.operation.duration` histogram
+  (`Meter` "Inquiry"), and `ILogger` messages on the `Inquiry.Command` category. Parameter values are
+  never recorded; command text is redactable. Zero pipeline overhead when not registered. See
+  [Observability](../articles/features/observability.md).
+- **Backup-server failover (2026-06-11):** SQL Server, PostgreSQL, MySQL, and Oracle provider options
+  accept a `FailoverConnectionString`; the factory falls back to the backup server when the primary
+  fails to open (after any configured retry), per open, with both faults surfaced if both fail. See
+  [Resiliency & failover](../articles/features/resiliency.md).
 - **Build / runtime floor:** dropped EOL net6.0/net7.0 (now net8.0/net9.0/net10.0; provider runtimes
   net8.0); upgraded all four provider DB clients (Microsoft.Data.SqlClient 7.0.1, Npgsql 10.0.3,
   MySqlConnector 2.6.0, Oracle.ManagedDataAccess.Core 23.26.200) and Testcontainers 3 → 4.12.
