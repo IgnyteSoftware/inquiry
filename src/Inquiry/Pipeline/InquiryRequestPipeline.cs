@@ -57,6 +57,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     // connection lifecycle. The per-command StoredProcedure check is applied at the call site.
     private readonly bool _prepareEnabled;
 
+    // Whole seconds from InquiryOptions.DefaultCommandTimeout; 0 = not configured (provider default).
+    private readonly int _defaultCommandTimeoutSeconds;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryRequestPipeline"/> class.
     /// </summary>
@@ -79,6 +82,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         _interceptors = interceptors?.ToArray() ?? throw new ArgumentNullException(nameof(interceptors));
         _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.Auto) == PreparedStatementMode.Auto
             && _connectionFactory.SupportsPersistentPreparedStatements;
+        _defaultCommandTimeoutSeconds = options?.DefaultCommandTimeout is { } timeout
+            ? (int)Math.Ceiling(timeout.TotalSeconds)
+            : 0;
     }
 
     private bool HasInterceptors => _interceptors.Length > 0;
@@ -90,6 +96,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     private DbCommand CreateCommand(DbConnection connection)
     {
         var dbCommand = connection.CreateCommand();
+        // Applied here (the chokepoint every path passes through) so the TArgs fast paths get it
+        // too; an explicit InquiryCommand.CommandTimeout overrides it in InitializeCommandSync.
+        if (_defaultCommandTimeoutSeconds > 0) dbCommand.CommandTimeout = _defaultCommandTimeoutSeconds;
         _connectionFactory.InitializeCommand(dbCommand);
         return dbCommand;
     }

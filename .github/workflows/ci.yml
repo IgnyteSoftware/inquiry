@@ -32,6 +32,24 @@ jobs:
           name: unit-test-results
           path: test-results/
 
+  aot-smoke:
+    # Verifies the NativeAOT story end-to-end: publish the smoke app as a native binary
+    # (trim/AOT analyzer warnings surface here) and run its generated-store CRUD pass.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish AOT smoke app
+        run: dotnet publish samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj -c Release -r linux-x64 -o aot-out
+      - name: Run native binary
+        run: |
+          out=$(./aot-out/Inquiry.AotSmoke)
+          echo "$out"
+          echo "$out" | grep -q "AOT-SMOKE-OK"
+
   integration:
     runs-on: ubuntu-latest
     # Oracle's container warmup is ~3 minutes; 40 mins is the existing budget that was

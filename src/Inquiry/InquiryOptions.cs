@@ -12,6 +12,29 @@ public sealed class InquiryOptions
     /// </summary>
     public const int DefaultMaxParametersPerCommand = 2000;
 
+    private TimeSpan? _defaultCommandTimeout;
+
+    /// <summary>
+    /// Gets or sets the command timeout applied to every command Inquiry executes, unless an
+    /// <see cref="Commands.InquiryCommand"/> carries its own explicit timeout. Defaults to
+    /// <see langword="null"/>, leaving the ADO.NET provider's default (typically 30 seconds) in
+    /// effect. Sub-second values round up to one second (<see cref="System.Data.Common.DbCommand.CommandTimeout"/>
+    /// has whole-second granularity).
+    /// </summary>
+    public TimeSpan? DefaultCommandTimeout
+    {
+        get => _defaultCommandTimeout;
+        set
+        {
+            if (value is { } timeout && (timeout <= TimeSpan.Zero || timeout.TotalSeconds > int.MaxValue))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Default command timeout must be positive and at most int.MaxValue seconds.");
+            }
+
+            _defaultCommandTimeout = value;
+        }
+    }
+
     /// <summary>
     /// Gets or sets whether generated commands are prepared before execution. Defaults to
     /// <see cref="PreparedStatementMode.Auto"/>.

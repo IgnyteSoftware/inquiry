@@ -41,6 +41,9 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     private readonly IInquiryCommandInterceptor[] _interceptors;
     private readonly IInquiryConnectionFactory _connectionFactory;
     private readonly bool _prepareEnabled;
+
+    // Whole seconds from InquiryOptions.DefaultCommandTimeout; 0 = not configured (provider default).
+    private readonly int _defaultCommandTimeoutSeconds;
     private int _inFlight; // 0 = idle, 1 = busy
 
     internal TransactedInquiryRequestPipeline(
@@ -56,6 +59,9 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         _connectionFactory = connectionFactory;
         _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.Auto) == PreparedStatementMode.Auto
             && _connectionFactory.SupportsPersistentPreparedStatements;
+        _defaultCommandTimeoutSeconds = options?.DefaultCommandTimeout is { } timeout
+            ? (int)Math.Ceiling(timeout.TotalSeconds)
+            : 0;
     }
 
     /// <summary>
@@ -136,6 +142,9 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     private DbCommand CreateCommand()
     {
         var dbCommand = _connection.CreateCommand();
+        // Applied here (the chokepoint every path passes through) so the TArgs fast paths get it
+        // too; an explicit InquiryCommand.CommandTimeout overrides it in InitializeCommandSync.
+        if (_defaultCommandTimeoutSeconds > 0) dbCommand.CommandTimeout = _defaultCommandTimeoutSeconds;
         _connectionFactory.InitializeCommand(dbCommand);
         return dbCommand;
     }

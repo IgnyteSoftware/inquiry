@@ -69,6 +69,20 @@ shape (table/column names) must not leave the process, turn the text off:
 services.AddInquiryTelemetry(o => o.RecordCommandText = false);
 ```
 
+## Health checks
+
+The core package ships an ASP.NET Core health check that opens a connection through the
+registered connection factory — the same open path the pipeline uses, including configured retry
+and failover:
+
+```csharp
+builder.Services.AddHealthChecks().AddInquiry();   // name "inquiry", Unhealthy on failure
+app.MapHealthChecks("/health");
+```
+
+`AddInquiry(name, failureStatus, tags)` overload parameters integrate with readiness/liveness
+endpoint filtering.
+
 ## Custom interceptors
 
 The telemetry layer is an ordinary [`IInquiryCommandInterceptor`](../architecture.md); register your
