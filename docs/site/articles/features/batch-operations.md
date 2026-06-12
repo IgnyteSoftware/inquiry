@@ -29,9 +29,25 @@ The SQL is **assembled at run time** per batch (the row count is unknown at comp
 
 This is the one place Inquiry builds SQL at run time — necessarily, since the row count varies — but the column list and parameter shape come straight from the compile-time generator output.
 
+## How `UpdateAll` executes (ADO.NET `DbBatch`)
+
+Batch update does **not** concatenate statements: each item runs the ordinary single-row
+`UPDATE` (`_sqlUpdate`) with its own parameter set, dispatched through
+`IInquiry.ExecuteBatchAsync`. On providers whose ADO.NET driver implements
+`System.Data.Common.DbBatch` (Npgsql, Microsoft.Data.SqlClient, MySqlConnector) every row ships in
+**one round trip**; elsewhere (SQLite, Oracle) the rows execute sequentially on a single
+connection. Because each row is its own command, `UpdateAll` is no longer subject to the
+per-command parameter cap, the SQL stays constant (prepared-statement friendly), and the row
+count returned is the sum across items. `ExecuteBatchAsync` is also public on `IInquiry` for your
+own repeated-statement workloads. Note: command interceptors fire per item only on the sequential
+path; the `DbBatch` path has no per-command `DbCommand` to expose.
+
+Like the multi-statement form before it, a batch is **not implicitly transactional** — wrap the
+call in `ExecuteInTransactionAsync` if all-or-nothing semantics are required.
+
 ## Parameter limits
 
-Batch methods and generated `IN` predicates stop before a command grows past `InquiryOptions.MaxParametersPerCommand` (default: `2000`). Lower it for providers or deployments with stricter limits; raise it only when your database and driver can handle larger commands reliably.
+`InsertAll`, `DeleteAll`, and generated `IN` predicates stop before a command grows past `InquiryOptions.MaxParametersPerCommand` (default: `2000`). Lower it for providers or deployments with stricter limits; raise it only when your database and driver can handle larger commands reliably. (`UpdateAll` is exempt — see above.)
 
 ## Provider differences
 
@@ -41,4 +57,5 @@ Batch methods and generated `IN` predicates stop before a command grows past `In
   the call site or lower the configured parameter cap for SQL Server workloads.
 - **MySQL** supports multi-row VALUES with no hard cap (limited by `max_allowed_packet`).
 - **Oracle** doesn't support multi-row VALUES; the generator emits `INSERT ALL` instead.
-- **`UpdateAll` on Oracle** is unsupported — the generator emits a throwing stub with `INQ039`.
+- **`UpdateAll` works on every provider**, including Oracle, via the `DbBatch`/sequential execution
+  described above (the previous Oracle `INQ039` stub is gone).
