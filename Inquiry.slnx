@@ -24,6 +24,7 @@
     <Project Path="src/Inquiry.Sqlite/Inquiry.Sqlite.csproj" />
     <Project Path="src/Inquiry.SqlServer.Analyzer/Inquiry.SqlServer.Analyzer.csproj" />
     <Project Path="src/Inquiry.SqlServer/Inquiry.SqlServer.csproj" />
+    <Project Path="src/Inquiry.Testing/Inquiry.Testing.csproj" />
     <Project Path="src/Inquiry/Inquiry.csproj" />
   </Folder>
   <Folder Name="/tests/">

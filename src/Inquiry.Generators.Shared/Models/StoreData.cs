@@ -14,6 +14,7 @@ internal sealed record StoreData(
     string FullyQualifiedName,
     string EntityFullyQualifiedName,
     bool IsEmittable,
+    bool GenerateInterface,
     EquatableArray<StoreMethodData> Methods,
     LocationData? Location,
     EquatableArray<DiagnosticData> Diagnostics);

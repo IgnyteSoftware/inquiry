@@ -159,6 +159,27 @@ Behind the scenes, the source generator turned your `partial` declarations into:
 
 For the **full annotated generator output** of the example above, see the [CRUD feature page](features/crud.md).
 
+## Troubleshooting: red squiggles under `partial` methods
+
+Your IDE runs the source generator live, so a valid `partial` store method gets its generated body
+(and IntelliSense) immediately — **no build required**. If a method stays red with *"partial method
+must have an implementation"* (CS8795), the generator didn't run for that declaration. Check, in
+order:
+
+1. **Is a provider package referenced?** The generator ships inside the provider package
+   (`Inquiry.Sqlite`, `Inquiry.SqlServer`, …) — the core `Inquiry` package alone generates nothing.
+2. **Is the dialect resolved?** Generation only fires when the assembly's dialect is known — either
+   a referenced provider's `[assembly: InquiryDialect]` marker or your own. Look for `INQ0xx`
+   diagnostics in the Error List; they explain what was skipped and why.
+3. **Did you just update the Inquiry package?** Visual Studio can keep the previous generator
+   loaded — restart the IDE.
+4. **Building Inquiry itself from source?** In this repository the analyzer is attached via built
+   DLL paths, so run `dotnet build` once after a fresh clone or `git clean` before the IDE can load
+   it. NuGet consumers are unaffected.
+
+A persistent CS8795 alongside an `INQ039` warning is different — it means the active dialect cannot
+emit that operation, and the method body is a throwing stub by design.
+
 ## Next steps
 
 - **[How it works](concepts.md)** — the compile-time pipeline explained end-to-end.

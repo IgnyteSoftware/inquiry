@@ -31,6 +31,8 @@ public enum DbTypeClass
     Decimal,
     DateTime,
     DateTimeOffset,
+    DateOnly,
+    TimeOnly,
     Guid,
     ByteArray,
 }
