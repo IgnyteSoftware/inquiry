@@ -238,6 +238,14 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteAsync(commandText, args, bindParameters, cancellationToken);
 
     /// <inheritdoc />
+    public Task<int> ExecuteBatchAsync<TItem>(
+        string commandText,
+        IReadOnlyList<TItem> items,
+        Action<InquiryParameterTarget, TItem> bindParameters,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteBatchAsync(commandText, items, bindParameters, cancellationToken);
+
+    /// <inheritdoc />
     public Task<T> ExecuteScalarAsync<T>(
         FormattableString commandText,
         CancellationToken cancellationToken = default)
