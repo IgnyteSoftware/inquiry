@@ -68,6 +68,32 @@ internal interface IInquiryRequestPipeline
         where TMaterializer : struct, IInquiryEntityMaterializer<T>;
 
     /// <summary>
+    /// Streaming query whose parameters are bound by a caller-supplied static delegate, avoiding
+    /// the <c>InquiryCommand</c> / <c>InquiryParameter[]</c> allocations of the boxed path —
+    /// generated stores pass a method group / static lambda (no closure capture).
+    /// </summary>
+    /// <remarks>
+    /// The default implementation routes through <c>QueryAsync&lt;T, TMaterializer&gt;(InquiryCommand, …)</c>
+    /// via <see cref="InquiryCommand.DbCommandBinder"/>, so custom <c>IInquiryRequestPipeline</c>
+    /// implementations stay source-compatible. The built-in pipelines override this with an
+    /// allocation-free fast path.
+    /// </remarks>
+    IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return QueryAsync<T, TMaterializer>(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
+    }
+
+    /// <summary>
     /// Buffered query whose parameters are bound by a caller-supplied static delegate, avoiding
     /// the <c>InquiryCommand</c> / <c>InquiryParameter[]</c> allocations of the boxed path —
     /// generated stores pass a method group / static lambda (no closure capture).

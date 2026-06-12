@@ -23,4 +23,30 @@ public static class OracleInquiryServiceCollectionExtensions
         services.AddSingleton<IInquiryConnectionFactory>(_ => new OracleInquiryConnectionFactory(connectionString));
         return services;
     }
+
+    /// <summary>
+    /// Registers the Oracle connection factory with provider-specific options (failover).
+    /// </summary>
+    public static IServiceCollection AddInquiryOracle(
+        this IServiceCollection services,
+        string connectionString,
+        Action<OracleInquiryOptions> configure)
+    {
+        if (services is null)
+        {
+            throw new ArgumentNullException(nameof(services));
+        }
+
+        if (configure is null)
+        {
+            throw new ArgumentNullException(nameof(configure));
+        }
+
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Oracle");
+        var options = new OracleInquiryOptions();
+        configure(options);
+
+        services.AddSingleton<IInquiryConnectionFactory>(_ => new OracleInquiryConnectionFactory(connectionString, options));
+        return services;
+    }
 }

@@ -11,24 +11,46 @@ namespace Inquiry.Oracle;
 internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
+    private readonly string? _failoverConnectionString;
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="OracleInquiryConnectionFactory"/> with default options.
+    /// </summary>
+    public OracleInquiryConnectionFactory(string connectionString)
+        : this(connectionString, new OracleInquiryOptions())
+    {
+    }
 
     /// <summary>
     /// Initializes a new instance of <see cref="OracleInquiryConnectionFactory"/>.
     /// </summary>
-    public OracleInquiryConnectionFactory(string connectionString)
+    public OracleInquiryConnectionFactory(string connectionString, OracleInquiryOptions options)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
         }
 
+        if (options is null)
+        {
+            throw new ArgumentNullException(nameof(options));
+        }
+
         _connectionString = connectionString;
+        _failoverConnectionString = options.FailoverConnectionString;
     }
 
     /// <inheritdoc />
-    public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+    public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
-        var connection = new OracleConnection(_connectionString);
+        return _failoverConnectionString is { } failover
+            ? FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, retryingOpener: null, cancellationToken)
+            : OpenCoreAsync(_connectionString, cancellationToken);
+    }
+
+    private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
+    {
+        var connection = new OracleConnection(connectionString);
         try
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);

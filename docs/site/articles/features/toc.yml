@@ -28,3 +28,7 @@
   href: stored-procedures.md
 - name: Schema DDL
   href: schema-ddl.md
+- name: Observability
+  href: observability.md
+- name: Resiliency & failover
+  href: resiliency.md

@@ -4,9 +4,11 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
 using Inquiry.Benchmarks.Ef;
+using Inquiry.Commands;
 using Inquiry.DependencyInjection;
 using Inquiry.MySql.DependencyInjection;
 using Inquiry.Northwind.Models;
+using Inquiry.Parameters;
 using Inquiry.PostgreSql.DependencyInjection;
 using Inquiry.SqlServer.DependencyInjection;
 using Microsoft.Data.SqlClient;
@@ -179,7 +181,7 @@ public class CrossDialectReadBenchmarks
 
     [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Inquiry()
-        => (await _inquiry.QueryListAsync<Shipper>(SelectAllSql)).Count;
+        => (await _inquiry.QueryListAsync<Shipper>(new InquiryCommand(SelectAllSql))).Count;
 
     // ---- SelectByKey --------------------------------------------------------------------
 
@@ -213,5 +215,6 @@ public class CrossDialectReadBenchmarks
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
     public async Task<Shipper?> SelectByKey_Inquiry()
-        => await _inquiry.QuerySingleOrDefaultAsync<Shipper>(SelectByKeySql, new { id = TargetShipperId });
+        => await _inquiry.QuerySingleOrDefaultAsync<Shipper>(
+            new InquiryCommand(SelectByKeySql, new[] { new InquiryParameter("id", TargetShipperId) }));
 }

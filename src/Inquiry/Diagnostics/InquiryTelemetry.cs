@@ -1,0 +1,45 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Reflection;
+
+namespace Inquiry.Diagnostics;
+
+/// <summary>
+/// Names of the <see cref="System.Diagnostics.ActivitySource"/> and
+/// <see cref="System.Diagnostics.Metrics.Meter"/> Inquiry emits when telemetry is enabled via
+/// <c>AddInquiryTelemetry()</c>. Subscribe an OpenTelemetry <c>TracerProvider</c> /
+/// <c>MeterProvider</c> (or any <see cref="ActivityListener"/> / <see cref="MeterListener"/>)
+/// to these names:
+/// <code>
+/// builder.Services.AddOpenTelemetry()
+///     .WithTracing(t => t.AddSource(InquiryTelemetry.ActivitySourceName))
+///     .WithMetrics(m => m.AddMeter(InquiryTelemetry.MeterName));
+/// </code>
+/// </summary>
+public static class InquiryTelemetry
+{
+    /// <summary>The name of the <see cref="ActivitySource"/> Inquiry emits database spans on.</summary>
+    public const string ActivitySourceName = "Inquiry";
+
+    /// <summary>The name of the <see cref="Meter"/> Inquiry emits database metrics on.</summary>
+    public const string MeterName = "Inquiry";
+
+    private static readonly string Version =
+        typeof(InquiryTelemetry).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(InquiryTelemetry).Assembly.GetName().Version?.ToString()
+        ?? "unknown";
+
+    internal static readonly ActivitySource ActivitySource = new(ActivitySourceName, Version);
+
+    internal static readonly Meter Meter = new(MeterName, Version);
+
+    /// <summary>
+    /// Duration of database commands executed by the Inquiry pipeline, following the OpenTelemetry
+    /// database semantic conventions (<c>db.client.operation.duration</c>, seconds). Failed commands
+    /// carry an <c>error.type</c> tag, so error rate is derivable from the same instrument.
+    /// </summary>
+    internal static readonly Histogram<double> CommandDuration = Meter.CreateHistogram<double>(
+        "db.client.operation.duration",
+        unit: "s",
+        description: "Duration of database commands executed by the Inquiry pipeline.");
+}
