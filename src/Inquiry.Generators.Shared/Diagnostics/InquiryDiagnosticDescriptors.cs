@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ048.
+    //                  INQ045–INQ050.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -30,6 +30,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ045–INQ046  Ad-hoc DTO materialization    (INQ045 no mappable properties, INQ046 not constructible) [IN USE]
     //   INQ047         Sequential GUID key           (SequentialGuid on non-Guid / generated / db-default key) [IN USE]
     //   INQ048         Raw-SQL injection lint        (non-constant command text passed to InquiryCommand) [IN USE]
+    //   INQ049–INQ050  Auditing timestamps           (INQ049 invalid type/placement, INQ050 duplicate) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -380,6 +381,25 @@ internal static class InquiryDiagnosticDescriptors
         "INQ047",
         "SequentialGuid requires a client-supplied Guid key",
         "Entity '{0}' marks key property '{1}' with SequentialGuid = true, but the key is not a plain client-supplied Guid. SequentialGuid requires a Guid (or Guid?) key without IsGenerated or UseDatabaseDefault.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ049: an auditing timestamp must be a writable DateTime/DateTimeOffset column the generator
+    // can stamp client-side, and it cannot double as the key, a generated/db-default column, the
+    // soft-delete indicator, or the concurrency token (each of those is owned by other machinery).
+    public static readonly DiagnosticDescriptor AuditTimestampInvalid = new(
+        "INQ049",
+        "Auditing timestamp column is invalid",
+        "Entity '{0}' marks property '{1}' as an auditing timestamp, but it is not a plain DateTime/DateTimeOffset column. Auditing timestamps must be DateTime or DateTimeOffset (nullable allowed) and must not be a key, database-generated, database-defaulted, the soft-delete indicator, or a concurrency token.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DuplicateAuditTimestamp = new(
+        "INQ050",
+        "Entity declares more than one auditing timestamp of the same kind",
+        "Entity '{0}' marks more than one property with the same auditing-timestamp attribute (e.g. '{1}'). At most one [InquiryCreatedAt] and one [InquiryModifiedAt] are allowed.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
