@@ -13,6 +13,10 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
     private readonly SqlServerInquiryOptions _options;
     private readonly RetryingConnectionOpener? _retryingOpener;
 
+    // Cached so the retry path doesn't allocate a closure per open (OpenConnectionAsync runs once
+    // per pipeline operation).
+    private readonly Func<CancellationToken, ValueTask<DbConnection>> _openPrimary;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="SqlServerInquiryConnectionFactory"/> class with
     /// default options (<see cref="SqlServerCompatibility.None"/>).
@@ -34,6 +38,7 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
 
         _connectionString = connectionString;
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
 
         if (_options.Compatibility != SqlServerCompatibility.None)
         {
@@ -48,14 +53,19 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
+        if (_options.FailoverConnectionString is { } failover)
+        {
+            return FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, _retryingOpener, cancellationToken);
+        }
+
         return _retryingOpener is null
-            ? OpenCoreAsync(cancellationToken)
-            : _retryingOpener.OpenAsync(OpenCoreAsync, cancellationToken);
+            ? OpenCoreAsync(_connectionString, cancellationToken)
+            : _retryingOpener.OpenAsync(_openPrimary, cancellationToken);
     }
 
-    private async ValueTask<DbConnection> OpenCoreAsync(CancellationToken cancellationToken)
+    private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
     {
-        var connection = new SqlConnection(_connectionString);
+        var connection = new SqlConnection(connectionString);
 
         try
         {

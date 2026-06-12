@@ -57,8 +57,8 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         // Custom converter at ordinal 1; JSON converter (nullable) guarded at ordinal 2.
-        Assert.Contains("Balance = new global::Demo.MoneyConverter().FromProvider(reader.GetDecimal(1))", text);
-        Assert.Contains("Meta = reader.IsDBNull(2) ? null : new global::Inquiry.Converters.InquiryJsonConverter<global::System.Collections.Generic.Dictionary<string, string>>().FromProvider(reader.GetString(2))", text);
+        Assert.Contains("Balance = global::Inquiry.Entities.InquiryConverterCache<global::Demo.MoneyConverter>.Instance.FromProvider(reader.GetDecimal(1))", text);
+        Assert.Contains("Meta = reader.IsDBNull(2) ? null : global::Inquiry.Entities.InquiryConverterCache<global::Inquiry.Converters.InquiryJsonConverter<global::System.Collections.Generic.Dictionary<string, string>>>.Instance.FromProvider(reader.GetString(2))", text);
     }
 
     [Fact]
@@ -70,8 +70,8 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("AccountStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("new global::Demo.MoneyConverter().ToProvider(", text);
-        Assert.Contains("new global::Inquiry.Converters.InquiryJsonConverter<global::System.Collections.Generic.Dictionary<string, string>>().ToProvider(", text);
+        Assert.Contains("global::Inquiry.Entities.InquiryConverterCache<global::Demo.MoneyConverter>.Instance.ToProvider(", text);
+        Assert.Contains("global::Inquiry.Entities.InquiryConverterCache<global::Inquiry.Converters.InquiryJsonConverter<global::System.Collections.Generic.Dictionary<string, string>>>.Instance.ToProvider(", text);
         // Provider DbType, not the model type: decimal for Money, string for the JSON column.
         Assert.Contains("global::System.Data.DbType.Decimal", text);
         Assert.Contains("global::System.Data.DbType.String", text);
@@ -134,7 +134,7 @@ public sealed partial class InquiryGeneratorTests
         var entity = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("Account.InquiryEntity.g.cs", StringComparison.Ordinal));
         var entityText = entity.GetText().ToString();
         // Read: nullable value-type guard wraps the FromProvider call.
-        Assert.Contains("reader.IsDBNull(1) ? (global::Demo.Money?)null : new global::Demo.MoneyConverter().FromProvider(reader.GetDecimal(1))", entityText);
+        Assert.Contains("reader.IsDBNull(1) ? (global::Demo.Money?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.MoneyConverter>.Instance.FromProvider(reader.GetDecimal(1))", entityText);
 
         var store = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("AccountStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var storeText = store.GetText().ToString();

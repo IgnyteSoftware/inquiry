@@ -787,6 +787,12 @@ internal static class StoreProcessor
             () => sqlBuilder.SupportsMultiRowUpdate
                 ? BuildUpdateAllRowTemplate(sqlBuilder, ctx, entity)
                 : throw new System.NotSupportedException(MultiRowUpdateUnsupportedMessage(sqlBuilder)));
+        if (needsUpdateAll && updateAllError is null)
+        {
+            // Pre-split the row template at its {r} tokens once, so the UpdateAll body splices the row
+            // index between const segments instead of string.Replace-ing the whole template per row.
+            source.AppendLine("    private static readonly string[] _sqlUpdateAllRowSegments = _sqlUpdateAllRow.Split(new[] { \"{r}\" }, global::System.StringSplitOptions.None);");
+        }
 
         foreach (var fieldColumns in byFieldOps)
         {

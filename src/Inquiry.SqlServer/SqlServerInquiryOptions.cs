@@ -43,4 +43,12 @@ public sealed class SqlServerInquiryOptions
     /// (e.g. <c>Authentication=Active Directory Default</c>).
     /// </summary>
     public Func<CancellationToken, ValueTask<string>>? AccessTokenProvider { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional backup-server connection string. When the primary connection
+    /// string fails to open (after any configured retry), the factory opens against this
+    /// connection string instead. Every open tries the primary first, so traffic returns to the
+    /// primary automatically once it recovers. Defaults to <see langword="null"/> (no failover).
+    /// </summary>
+    public string? FailoverConnectionString { get; set; }
 }

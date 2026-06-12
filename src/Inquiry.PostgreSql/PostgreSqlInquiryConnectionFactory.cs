@@ -10,7 +10,12 @@ namespace Inquiry.PostgreSql;
 internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
+    private readonly string? _failoverConnectionString;
     private readonly RetryingConnectionOpener? _retryingOpener;
+
+    // Cached so the retry path doesn't allocate a closure per open (OpenConnectionAsync runs once
+    // per pipeline operation).
+    private readonly Func<CancellationToken, ValueTask<DbConnection>> _openPrimary;
 
     /// <summary>
     /// Initializes a new instance of <see cref="PostgreSqlInquiryConnectionFactory"/> with default
@@ -37,6 +42,8 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
         }
 
         _connectionString = connectionString;
+        _failoverConnectionString = options.FailoverConnectionString;
+        _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
 
         var detector = CreateDetector(options.Compatibility);
         if (detector is not null)
@@ -56,9 +63,14 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
+        if (_failoverConnectionString is { } failover)
+        {
+            return FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, _retryingOpener, cancellationToken);
+        }
+
         return _retryingOpener is null
-            ? OpenCoreAsync(cancellationToken)
-            : _retryingOpener.OpenAsync(OpenCoreAsync, cancellationToken);
+            ? OpenCoreAsync(_connectionString, cancellationToken)
+            : _retryingOpener.OpenAsync(_openPrimary, cancellationToken);
     }
 
     private static ITransientErrorDetector? CreateDetector(PostgreSqlCompatibility compatibility) => compatibility switch
@@ -68,9 +80,9 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
         _ => null,
     };
 
-    private async ValueTask<DbConnection> OpenCoreAsync(CancellationToken cancellationToken)
+    private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
     {
-        var connection = new NpgsqlConnection(_connectionString);
+        var connection = new NpgsqlConnection(connectionString);
         try
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);

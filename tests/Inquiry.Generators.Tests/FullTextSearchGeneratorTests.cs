@@ -91,7 +91,10 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetDocStore(result);
 
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@searchTerm\", term)", text);
+        // Streaming FTS uses the same allocation-free TArgs fast path as the buffered overload.
+        Assert.Contains("Inquiry.QueryAsync<global::Demo.Doc, string, global::Demo.DocInquiryEntityStructMaterializer>(", text);
+        Assert.Contains("_p.ParameterName = \"@searchTerm\";", text);
+        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"@searchTerm\"", text);
     }
 
     [Fact]

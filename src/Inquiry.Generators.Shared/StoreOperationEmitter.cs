@@ -85,21 +85,9 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectAllByField:
                 AppendHeader(source, method, parameters, isAsync: false);
-                if (method.ReturnsList)
-                {
-                    // Buffered: allocation-free fast path (static binder, no InquiryParameter[]).
-                    EmitFastQueryListByFields(source, sqlBuilder, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ", sqlField: baseSelectField);
-                }
-                else
-                {
-                    // Streaming IAsyncEnumerable: no fast streaming overload, keep the InquiryParameter[] path.
-                    source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
-                    source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                    source.AppendLine($"                {baseSelectField ?? "_sqlSelectBy_" + BuildFieldSuffix(fieldColumns)},");
-                    AppendPositionalParameters(source, sqlBuilder, fieldColumns, method.Parameters, indent: "                ");
-                    source.AppendLine("            default,");
-                    source.AppendLine($"            {cancellation});");
-                }
+                // Buffered and streaming both use the allocation-free fast path (static binder,
+                // no InquiryParameter[] / InquiryCommand per call).
+                EmitFastQueryByFields(source, sqlBuilder, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ", sqlField: baseSelectField, returnsList: method.ReturnsList);
                 source.AppendLine("    }");
                 break;
 
@@ -243,31 +231,22 @@ internal static class StoreOperationEmitter
                 // full-text predicate over the searched columns.
                 var searchArg = method.Parameters[0].Name;
                 AppendHeader(source, method, parameters, isAsync: false);
-                if (method.ReturnsList)
-                {
-                    source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, string, {structMat}>(");
-                    source.AppendLine($"            _sqlFts_{method.Name},");
-                    source.AppendLine($"            {searchArg},");
-                    source.AppendLine("            static (_cmd, _arg) =>");
-                    source.AppendLine("            {");
-                    source.AppendLine("                var _p = _cmd.CreateParameter();");
-                    source.AppendLine("                _p.ParameterName = \"@searchTerm\";");
-                    source.AppendLine("                _p.DbType = global::System.Data.DbType.String;");
-                    source.AppendLine("                _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
-                    source.AppendLine("                _cmd.Parameters.Add(_p);");
-                    source.AppendLine("            },");
-                    source.AppendLine("            default,");
-                    source.AppendLine($"            {cancellation});");
-                }
-                else
-                {
-                    source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(");
-                    source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
-                    source.AppendLine($"                _sqlFts_{method.Name},");
-                    source.AppendLine($"                new global::Inquiry.Parameters.InquiryParameter[] {{ new global::Inquiry.Parameters.InquiryParameter(\"@searchTerm\", {searchArg}) }}),");
-                    source.AppendLine("            default,");
-                    source.AppendLine($"            {cancellation});");
-                }
+                // Buffered and streaming both use the allocation-free fast path (static binder,
+                // no InquiryParameter[] / InquiryCommand per call).
+                var ftsQueryMethod = method.ReturnsList ? "QueryListAsync" : "QueryAsync";
+                source.AppendLine($"        return Inquiry.{ftsQueryMethod}<{entityType}, string, {structMat}>(");
+                source.AppendLine($"            _sqlFts_{method.Name},");
+                source.AppendLine($"            {searchArg},");
+                source.AppendLine("            static (_cmd, _arg) =>");
+                source.AppendLine("            {");
+                source.AppendLine("                var _p = _cmd.CreateParameter();");
+                source.AppendLine("                _p.ParameterName = \"@searchTerm\";");
+                source.AppendLine("                _p.DbType = global::System.Data.DbType.String;");
+                source.AppendLine("                _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
+                source.AppendLine("                _cmd.Parameters.Add(_p);");
+                source.AppendLine("            },");
+                source.AppendLine("            default,");
+                source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
                 break;
             }
@@ -347,10 +326,16 @@ internal static class StoreOperationEmitter
                 var keyColumns = entity.Keys;
                 AppendHeader(source, method, parameters, isAsync: true);
                 AppendBatchListMaterialization(source, itemsParam, entityType, setColumns.Length + keyColumns.Count, "update");
+                // Append the pre-split row-template segments with the row index spliced in, instead of
+                // a per-row string.Replace over the whole template (one template-sized string per row).
                 source.AppendLine("        var _sb = new global::System.Text.StringBuilder();");
                 source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
                 source.AppendLine("        {");
-                source.AppendLine("            _sb.Append(_sqlUpdateAllRow.Replace(\"{r}\", _r.ToString(global::System.Globalization.CultureInfo.InvariantCulture)));");
+                source.AppendLine("            _sb.Append(_sqlUpdateAllRowSegments[0]);");
+                source.AppendLine("            for (var _s = 1; _s < _sqlUpdateAllRowSegments.Length; _s++)");
+                source.AppendLine("            {");
+                source.AppendLine("                _sb.Append(_r).Append(_sqlUpdateAllRowSegments[_s]);");
+                source.AppendLine("            }");
                 source.AppendLine("        }");
                 source.AppendLine($"        return await Inquiry.ExecuteAsync<global::System.Collections.Generic.IReadOnlyList<{entityType}>>(");
                 source.AppendLine("            _sb.ToString(),");
@@ -459,7 +444,8 @@ internal static class StoreOperationEmitter
         // a converter column binds ToProvider(value); a null nullable model → NULL (converter not called).
         if (column.Converter is { } converter)
         {
-            var toProvider = $"new {converter.ConverterTypeDisplay}().ToProvider({NonNullableValueExpression(column.Type, accessor)})";
+            // converters are stateless; bind through the shared cached instance instead of allocating one per bind.
+            var toProvider = $"global::Inquiry.Entities.InquiryConverterCache<{converter.ConverterTypeDisplay}>.Instance.ToProvider({NonNullableValueExpression(column.Type, accessor)})";
             return column.Type.IsNullable
                 ? $"{accessor} is null ? global::System.DBNull.Value : (object){toProvider}"
                 : $"(object){toProvider}";
@@ -601,7 +587,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
     }
 
-    private static void EmitFastQueryListByFields(
+    private static void EmitFastQueryByFields(
         StringBuilder source,
         SqlBuilder sqlBuilder,
         EquatableArray<ParameterData> methodParameters,
@@ -610,13 +596,15 @@ internal static class StoreOperationEmitter
         string structMat,
         string cancellation,
         string indent,
-        string? sqlField = null)
+        string? sqlField = null,
+        bool returnsList = true)
     {
         sqlField ??= "_sqlSelectBy_" + BuildFieldSuffix(fieldColumns);
+        var queryMethod = returnsList ? "QueryListAsync" : "QueryAsync";
         if (fieldColumns.Count == 1)
         {
             var fieldParam = methodParameters[0];
-            source.AppendLine($"{indent}return Inquiry.QueryListAsync<{entityType}, {fieldParam.TypeDisplay}, {structMat}>(");
+            source.AppendLine($"{indent}return Inquiry.{queryMethod}<{entityType}, {fieldParam.TypeDisplay}, {structMat}>(");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {fieldParam.Name},");
             AppendBinderLambda(source, sqlBuilder, "_arg", fieldColumns, _ => "_arg", indent + "    ");
@@ -627,7 +615,7 @@ internal static class StoreOperationEmitter
 
         var tupleArgs = string.Join(", ", Take(methodParameters, fieldColumns.Count).Select(p => p.Name));
         var tupleType = "(" + string.Join(", ", Take(methodParameters, fieldColumns.Count).Select(p => p.TypeDisplay)) + ")";
-        source.AppendLine($"{indent}return Inquiry.QueryListAsync<{entityType}, {tupleType}, {structMat}>(");
+        source.AppendLine($"{indent}return Inquiry.{queryMethod}<{entityType}, {tupleType}, {structMat}>(");
         source.AppendLine($"{indent}    {sqlField},");
         source.AppendLine($"{indent}    ({tupleArgs}),");
         AppendBinderLambda(source, sqlBuilder, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "    ");
@@ -960,42 +948,6 @@ internal static class StoreOperationEmitter
         }
 
         source.AppendLine("    }");
-    }
-
-    private static void AppendPositionalParameters(
-        StringBuilder source,
-        SqlBuilder sqlBuilder,
-        IReadOnlyList<ColumnData> columns,
-        EquatableArray<ParameterData> methodParameters,
-        string indent)
-    {
-        source.AppendLine($"{indent}new global::Inquiry.Parameters.InquiryParameter[]");
-        source.AppendLine($"{indent}{{");
-        for (var i = 0; i < columns.Count; i++)
-        {
-            var column = columns[i];
-            var paramName = methodParameters[i].Name;
-            // '@'-prefix lets the binder skip its NormalizeName string concat.
-            // enum-as-string filters bind the member name; the runtime's CoerceValue would
-            // otherwise integerize the enum, mismatching the text column.
-            string valueArg;
-            string dbTypeArg;
-            if (column.EnumAsString)
-            {
-                valueArg = column.Type.IsNullable
-                    ? $"{paramName}.HasValue ? (object){paramName}.Value.ToString() : null"
-                    : $"{paramName}.ToString()";
-                dbTypeArg = ", dbType: global::System.Data.DbType.String";
-            }
-            else
-            {
-                valueArg = paramName;
-                var dbType = sqlBuilder.MapDbTypeExpression(column.Type);
-                dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
-            }
-            source.AppendLine($"{indent}    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(column.PropertyName)}\", {valueArg}{dbTypeArg}),");
-        }
-        source.AppendLine($"{indent}}}),");
     }
 
     /// <summary>

@@ -33,4 +33,12 @@ public sealed class PostgreSqlInquiryOptions
     /// Defaults to <c>30s</c>.
     /// </summary>
     public TimeSpan RetryMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Gets or sets an optional backup-server connection string. When the primary connection
+    /// string fails to open (after any configured retry), the factory opens against this
+    /// connection string instead. Every open tries the primary first, so traffic returns to the
+    /// primary automatically once it recovers. Defaults to <see langword="null"/> (no failover).
+    /// </summary>
+    public string? FailoverConnectionString { get; set; }
 }

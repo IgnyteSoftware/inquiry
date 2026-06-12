@@ -48,7 +48,9 @@ public sealed partial class InquiryGeneratorTests
 
         // Key is generated → excluded from SET, used in WHERE.
         Assert.Contains("private const string _sqlUpdateAllRow = \"UPDATE \\\"TThing\\\" SET \\\"Name\\\" = @u{r}_0, \\\"Qty\\\" = @u{r}_1 WHERE \\\"Id\\\" = @u{r}_k0;\";", text);
-        Assert.Contains("_sb.Append(_sqlUpdateAllRow.Replace(\"{r}\", _r.ToString(global::System.Globalization.CultureInfo.InvariantCulture)));", text);
+        Assert.Contains("private static readonly string[] _sqlUpdateAllRowSegments = _sqlUpdateAllRow.Split(new[] { \"{r}\" }, global::System.StringSplitOptions.None);", text);
+        Assert.Contains("_sb.Append(_sqlUpdateAllRowSegments[0]);", text);
+        Assert.Contains("_sb.Append(_r).Append(_sqlUpdateAllRowSegments[_s]);", text);
         Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_0\";", text);
         Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_k0\";", text);
         Assert.Contains("if ((long)_list.Count * 3L > Inquiry.MaxParametersPerCommand)", text);

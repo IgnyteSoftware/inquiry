@@ -110,10 +110,11 @@ public sealed partial class InquiryGeneratorTests
         // Non-returning Insert/Update/Delete use the allocation-free ExecuteAsync<TArgs> fast path.
         Assert.Contains("Inquiry.ExecuteAsync", generatedText);
 
-        // Streaming SelectAllByField (IAsyncEnumerable, no buffered list) keeps the InquiryParameter[]
-        // path — there is no fast streaming overload. The compile-time DbType is threaded through the
-        // InquiryParameter constructor so the positional path is also prepare-ready.
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@IsActive\", isActive, dbType: global::System.Data.DbType.Boolean)", generatedText);
+        // Streaming SelectAllByField (IAsyncEnumerable, no buffered list) uses the same
+        // allocation-free TArgs fast path as the buffered overload — static binder, no
+        // InquiryParameter[] / InquiryCommand per call.
+        Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization, bool, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.DoesNotContain("new global::Inquiry.Parameters.InquiryParameter(\"@IsActive\"", generatedText);
         Assert.DoesNotContain("InquirySqlDialect", generatedText);
         Assert.DoesNotContain("CreateContext", generatedText);
         Assert.DoesNotContain("BuildSelectAllSql", generatedText);

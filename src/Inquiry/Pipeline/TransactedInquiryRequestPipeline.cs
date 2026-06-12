@@ -545,6 +545,104 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
+    public async IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        EnterInFlight();
+        DbDataReader? reader = null;
+        var dbCommand = CreateCommand();
+        var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+        try
+        {
+            dbCommand.Transaction = _transaction;
+            dbCommand.CommandText = commandText;
+            bindParameters(dbCommand, args);
+            _connectionFactory.FinalizeCommand(dbCommand);
+            if (interceptorCommand is not null)
+            {
+                try
+                {
+                    await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+            }
+
+            try
+            {
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+                reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+
+            while (true)
+            {
+                bool hasRow;
+                try
+                {
+                    hasRow = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+
+                if (!hasRow) break;
+
+                T item;
+                try
+                {
+                    item = materializer.Materialize(reader);
+                }
+                catch (Exception exception)
+                {
+                    if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+
+                yield return item;
+            }
+
+            if (interceptorCommand is not null)
+            {
+                try
+                {
+                    await InvokeExecutedAsync(interceptorCommand, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
+            }
+        }
+        finally
+        {
+            if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
+            await dbCommand.DisposeAsync().ConfigureAwait(false);
+            ExitInFlight();
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
         string commandText,
         TArgs args,
