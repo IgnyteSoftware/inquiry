@@ -1,5 +1,6 @@
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.PostgreSql.DependencyInjection;
@@ -49,5 +50,49 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(connectionString, options));
         return services;
+    }
+
+    /// <summary>
+    /// Registers the PostgreSQL connection factory, resolving the connection string from
+    /// <paramref name="configuration"/> under <c>ConnectionStrings:{connectionStringName}</c>.
+    /// </summary>
+    public static IServiceCollection AddInquiryPostgreSql(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        string connectionStringName = "Inquiry")
+    {
+        return services.AddInquiryPostgreSql(GetRequiredConnectionString(configuration, connectionStringName));
+    }
+
+    /// <summary>
+    /// Registers the PostgreSQL connection factory with provider-specific options, resolving the
+    /// connection string from <paramref name="configuration"/> under
+    /// <c>ConnectionStrings:{connectionStringName}</c>.
+    /// </summary>
+    public static IServiceCollection AddInquiryPostgreSql(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        Action<PostgreSqlInquiryOptions> configure,
+        string connectionStringName = "Inquiry")
+    {
+        return services.AddInquiryPostgreSql(GetRequiredConnectionString(configuration, connectionStringName), configure);
+    }
+
+    private static string GetRequiredConnectionString(IConfiguration configuration, string connectionStringName)
+    {
+        if (configuration is null)
+        {
+            throw new ArgumentNullException(nameof(configuration));
+        }
+
+        var connectionString = configuration.GetConnectionString(connectionStringName);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"Connection string '{connectionStringName}' was not found in configuration. " +
+                $"Add a 'ConnectionStrings:{connectionStringName}' entry, or pass the name of a configured connection string.");
+        }
+
+        return connectionString;
     }
 }

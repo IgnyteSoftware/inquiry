@@ -1,5 +1,6 @@
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.MySql.DependencyInjection;
@@ -48,5 +49,49 @@ public static class MySqlInquiryServiceCollectionExtensions
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MySqlInquiryConnectionFactory(connectionString, options));
         return services;
+    }
+
+    /// <summary>
+    /// Registers the MySQL/MariaDB connection factory, resolving the connection string from
+    /// <paramref name="configuration"/> under <c>ConnectionStrings:{connectionStringName}</c>.
+    /// </summary>
+    public static IServiceCollection AddInquiryMySql(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        string connectionStringName = "Inquiry")
+    {
+        return services.AddInquiryMySql(GetRequiredConnectionString(configuration, connectionStringName));
+    }
+
+    /// <summary>
+    /// Registers the MySQL/MariaDB connection factory with provider-specific options, resolving the
+    /// connection string from <paramref name="configuration"/> under
+    /// <c>ConnectionStrings:{connectionStringName}</c>.
+    /// </summary>
+    public static IServiceCollection AddInquiryMySql(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        Action<MySqlInquiryOptions> configure,
+        string connectionStringName = "Inquiry")
+    {
+        return services.AddInquiryMySql(GetRequiredConnectionString(configuration, connectionStringName), configure);
+    }
+
+    private static string GetRequiredConnectionString(IConfiguration configuration, string connectionStringName)
+    {
+        if (configuration is null)
+        {
+            throw new ArgumentNullException(nameof(configuration));
+        }
+
+        var connectionString = configuration.GetConnectionString(connectionStringName);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"Connection string '{connectionStringName}' was not found in configuration. " +
+                $"Add a 'ConnectionStrings:{connectionStringName}' entry, or pass the name of a configured connection string.");
+        }
+
+        return connectionString;
     }
 }
