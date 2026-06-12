@@ -1179,6 +1179,25 @@ internal static class StoreOperationEmitter
         return string.Join(", ", parts);
     }
 
+    /// <summary>
+    /// Parameter declaration for a generated <c>I{StoreName}</c> interface signature. Unlike
+    /// <see cref="GetParameterDeclaration"/> (the implementation half, where repeating a default fires
+    /// CS1066), the interface carries each parameter's rendered default value so optional arguments
+    /// survive calls through the interface.
+    /// </summary>
+    public static string GetInterfaceParameterDeclaration(EquatableArray<ParameterData> parameters)
+    {
+        var parts = new List<string>(parameters.Count);
+        for (var i = 0; i < parameters.Count; i++)
+        {
+            var parameter = parameters[i];
+            var suffix = parameter.DefaultValueLiteral is null ? string.Empty : " = " + parameter.DefaultValueLiteral;
+            parts.Add($"{parameter.TypeDisplay} {parameter.Name}{suffix}");
+        }
+
+        return string.Join(", ", parts);
+    }
+
     /// <summary>Emits one bound DbParameter for a batch-update column (name expression + DbType + value).</summary>
     private static void AppendUpdateAllParam(StringBuilder source, SqlBuilder sqlBuilder, ColumnData column, string nameExpression)
     {
