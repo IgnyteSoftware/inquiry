@@ -103,8 +103,6 @@
 - **Raw-SQL injection analyzer** *(adoption review 2026-06-12)*. A Roslyn diagnostic when
   non-constant string text reaches `InquiryCommand` — cheap, fits the existing analyzer surface, and
   hardens the documented raw-SQL escape hatch.
-- **Configuration binding** *(adoption review 2026-06-12)*. `AddInquiry{Provider}(IConfiguration, sectionName)`
-  overloads + named-connection-string resolution, the standard ASP.NET Core registration shape.
 - **JSON-path querying & column-encryption docs** *(adoption review 2026-06-12)*. Predicate support
   for filtering into JSON columns (EF parity), and documentation for SQL Server Always Encrypted /
   pgcrypto patterns over the existing value-converter seam (mostly docs, little code).
@@ -112,10 +110,6 @@
   (currently a placeholder), SourceLink + symbol packages, package readme/icon, a pack/publish
   workflow, and a published versioning / breaking-change / support-window policy — the remaining
   pre-1.0 go-live bucket.
-- **Set-based predicate mutations** *(gap research 2026-06-12)*. `ExecuteUpdate`/`ExecuteDelete`-style
-  operations — UPDATE/DELETE by WHERE predicate without loading entities (e.g. `[InquiryUpdateWhere]`,
-  `[InquiryDeleteWhere]`), reusing the existing compile-time predicate model. The most-missed everyday
-  feature relative to EF Core.
 - **Default interceptor library** *(gap research 2026-06-12)*. A companion package (e.g.
   `Inquiry.Interceptors`) of ready-made `IInquiryCommandInterceptor` implementations: audit trail
   (who/when/what changed — XPO's module as an interceptor), sqlcommenter-style trace-context SQL
@@ -226,6 +220,15 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Set-based predicate mutations (2026-06-12):** `[InquiryUpdateWhere(setFields…)]` and
+  `[InquiryDeleteWhere]` (with `HardDelete`) — UPDATE/DELETE by `[InquiryWhere]` predicate without
+  loading entities, reusing the compile-time predicate model (IN expansion included). Soft-delete
+  entities get the soft UPDATE form and compose the active-row filter; concurrency-token entities are
+  rejected (INQ022); at least one predicate is required (new INQ023) and SET fields are validated
+  (new INQ044). See [Set-based mutations](../articles/features/set-based-mutations.md).
+- **Configuration binding (2026-06-12):** every provider gained
+  `AddInquiry{Provider}(IConfiguration, connectionStringName = "Inquiry")` overloads (+ options
+  variants) resolving `ConnectionStrings:{name}` with an actionable error on a missing key.
 - **`DbBatch` pipeline support (2026-06-12):** `IInquiry.ExecuteBatchAsync` executes one command text
   per item with per-item parameters — a single ADO.NET `DbBatch` round trip on Npgsql / SqlClient /
   MySqlConnector (capability-probed), sequential same-connection execution elsewhere.
