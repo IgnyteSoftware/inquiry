@@ -67,6 +67,20 @@ internal static class EntityProcessor
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MultipleSoftDeleteColumns, location, entitySymbol.Name, softDeleteColumns[1].PropertyName));
         }
 
+        // at most one [InquiryCreatedAt] and one [InquiryModifiedAt] (INQ050). Columns whose
+        // attribute was invalid carry cleared flags (already reported), so they don't count here.
+        var createdAtColumns = columns.Where(static c => c.IsCreatedAt).ToImmutableArray();
+        if (createdAtColumns.Length > 1)
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.DuplicateAuditTimestamp, location, entitySymbol.Name, createdAtColumns[1].PropertyName));
+        }
+
+        var modifiedAtColumns = columns.Where(static c => c.IsModifiedAt).ToImmutableArray();
+        if (modifiedAtColumns.Length > 1)
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.DuplicateAuditTimestamp, location, entitySymbol.Name, modifiedAtColumns[1].PropertyName));
+        }
+
         // at most one [InquiryConcurrencyToken] (INQ028), and it must not be the key (INQ029).
         var concurrencyTokens = columns.Where(static c => c.IsConcurrencyToken).ToImmutableArray();
         if (concurrencyTokens.Length > 1)
@@ -152,7 +166,12 @@ internal static class EntityProcessor
             // [InquiryConcurrencyToken] derives InquiryColumnAttribute, so it is discovered as a
             // column (like [InquiryKey]). Probed after the key but before the plain column probe.
             var concurrencyTokenAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryConcurrencyTokenAttribute");
-            var columnAttribute = keyAttribute ?? concurrencyTokenAttribute ?? GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
+            // [InquiryCreatedAt]/[InquiryModifiedAt] derive InquiryColumnAttribute, so they are
+            // discovered as columns (like [InquiryKey]/[InquiryConcurrencyToken]).
+            var createdAtAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryCreatedAtAttribute");
+            var modifiedAtAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryModifiedAtAttribute");
+            var columnAttribute = keyAttribute ?? concurrencyTokenAttribute ?? createdAtAttribute ?? modifiedAtAttribute
+                ?? GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
             var foreignKeyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryForeignKeyAttribute");
             if (columnAttribute is null && foreignKeyAttribute is null)
             {
@@ -197,6 +216,28 @@ internal static class EntityProcessor
             var isConcurrencyToken = concurrencyTokenAttribute is not null;
             var isDatabaseGeneratedToken = isConcurrencyToken &&
                 GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute!, "DatabaseGenerated");
+
+            // Auditing timestamps: a writable DateTime/DateTimeOffset column that no other
+            // machinery owns (INQ049 otherwise; flags cleared so emission stays valid).
+            var isCreatedAt = createdAtAttribute is not null;
+            var isModifiedAt = modifiedAtAttribute is not null;
+            if (isCreatedAt || isModifiedAt)
+            {
+                var isTimestampType = typeData.SpecialType == SpecialType.System_DateTime ||
+                    typeData.NonNullableDisplayName == "global::System.DateTimeOffset";
+                if (!isTimestampType || (isCreatedAt && isModifiedAt) || keyAttribute is not null ||
+                    isGenerated || useDatabaseDefault || isConcurrencyToken ||
+                    GeneratorHelpers.GetEntityAttribute(property, "InquirySoftDeleteAttribute") is not null)
+                {
+                    diagnostics.Add(DiagnosticData.Create(
+                        InquiryDiagnosticDescriptors.AuditTimestampInvalid,
+                        property.Locations.FirstOrDefault(),
+                        entitySymbol.Name,
+                        property.Name));
+                    isCreatedAt = false;
+                    isModifiedAt = false;
+                }
+            }
 
             // [InquiryEnumAsString] stores an enum column as its member name. Only valid on an
             // enum (or nullable enum) property; otherwise report INQ036 and leave the flag clear.
@@ -248,6 +289,8 @@ internal static class EntityProcessor
                 SoftDelete = softDelete,
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
+                IsCreatedAt = isCreatedAt,
+                IsModifiedAt = isModifiedAt,
                 EnumAsString = enumAsString,
                 // a converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
                 TypeClass = converter is not null ? MapSpecialType(converter.ProviderSpecialType) : MapTypeClass(typeData),
