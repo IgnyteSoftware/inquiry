@@ -96,10 +96,6 @@
   no documented position on ambient `TransactionScope`; per-operation connection opening means each
   operation enlists separately (risking distributed-transaction escalation). Needs a docs page and
   possibly an explicit enlistment option for brownfield code.
-- **Ad-hoc DTO materialization** *(adoption review 2026-06-12)*. The ad-hoc `IInquiry.Query*` path
-  requires a DI-registered materializer, so quick reporting queries cannot map into an unregistered
-  POCO (Dapper's bread and butter). An `[InquiryAdHoc]`-style attribute generating a materializer for
-  any DTO closes the most common "I'd just use Dapper for this one query" escape.
 - **Raw-SQL injection analyzer** *(adoption review 2026-06-12)*. A Roslyn diagnostic when
   non-constant string text reaches `InquiryCommand` — cheap, fits the existing analyzer surface, and
   hardens the documented raw-SQL escape hatch.
@@ -220,6 +216,13 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Ad-hoc DTO materialization (2026-06-12):** `[InquiryAdHoc]` on a plain class or record generates
+  an ordinal-reading materializer (publicly settable properties in declaration order, no per-property
+  attributes; `[InquiryEnumAsString]` honored) and registers it via `AddInquiryGeneratedStores()`, so
+  the ad-hoc `IInquiry.Query*` methods map hand-written reporting SQL (joins, GROUP BY) into POCOs
+  that are neither entities nor projections — closing the "I'd just use Dapper for this one query"
+  escape. Property-less or non-constructible DTOs (e.g. positional records) are rejected at build
+  time (new INQ045/INQ046). See [Ad-hoc DTOs](../articles/features/ad-hoc-dtos.md).
 - **Set-based predicate mutations (2026-06-12):** `[InquiryUpdateWhere(setFields…)]` and
   `[InquiryDeleteWhere]` (with `HardDelete`) — UPDATE/DELETE by `[InquiryWhere]` predicate without
   loading entities, reusing the compile-time predicate model (IN expansion included). Soft-delete

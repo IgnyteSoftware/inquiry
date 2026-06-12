@@ -61,6 +61,17 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .WithTrackingName(ProjectionsTrackingName)
             .Collect();
 
+        // Ad-hoc DTOs: each [InquiryAdHoc] class is projected into an equatable AdHocData. Its
+        // materializer registers like an entity's, giving the ad-hoc IInquiry.Query* path a
+        // DI-resolved materializer for result shapes that are neither entities nor projections.
+        var adHocs = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                KnownSymbols.EntityAttributeNamespace + ".InquiryAdHocAttribute",
+                predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                transform: static (ctx, _) => AdHocProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol))
+            .WithTrackingName(AdHocTrackingName)
+            .Collect();
+
         // Stores carry no class-level attribute (identified by the InquiryStore<T> base), so they use
         // a narrow syntactic predicate; non-stores transform to null and are filtered out.
         var stores = context.SyntaxProvider
@@ -79,15 +90,16 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .Select((compilation, _) => ResolveOwnership(compilation))
             .WithTrackingName(OwnershipTrackingName);
 
-        var combined = entities.Combine(stores).Combine(projections).Combine(ownership);
+        var combined = entities.Combine(stores).Combine(projections).Combine(adHocs).Combine(ownership);
 
         context.RegisterSourceOutput(combined, (spc, data) =>
-            Execute(spc, data.Left.Left.Left, data.Left.Left.Right, data.Left.Right, data.Right));
+            Execute(spc, data.Left.Left.Left.Left, data.Left.Left.Left.Right, data.Left.Left.Right, data.Left.Right, data.Right));
     }
 
     internal const string EntitiesTrackingName = "InquiryEntities";
     internal const string StoresTrackingName = "InquiryStores";
     internal const string ProjectionsTrackingName = "InquiryProjections";
+    internal const string AdHocTrackingName = "InquiryAdHocDtos";
     internal const string OwnershipTrackingName = "InquiryDialectOwnership";
 
     private static bool IsStoreCandidateClass(SyntaxNode node)
@@ -134,10 +146,11 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         ImmutableArray<EntityData> entities,
         ImmutableArray<StoreData> stores,
         ImmutableArray<ProjectionData> projections,
+        ImmutableArray<AdHocData> adHocs,
         DialectOwnership ownership)
     {
-        // Entity (and projection) diagnostics are surfaced regardless of dialect ownership (matching the
-        // previous behavior, where entity discovery ran before arbitration).
+        // Entity (and projection/ad-hoc) diagnostics are surfaced regardless of dialect ownership
+        // (matching the previous behavior, where entity discovery ran before arbitration).
         foreach (var entity in entities)
         {
             foreach (var diagnostic in entity.Diagnostics)
@@ -149,6 +162,14 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         foreach (var projection in projections)
         {
             foreach (var diagnostic in projection.Diagnostics)
+            {
+                context.ReportDiagnostic(diagnostic.ToDiagnostic());
+            }
+        }
+
+        foreach (var adHoc in adHocs)
+        {
+            foreach (var diagnostic in adHoc.Diagnostics)
             {
                 context.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
@@ -172,9 +193,18 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             }
         }
 
+        var mappedAdHocs = new Dictionary<string, AdHocData>();
+        foreach (var adHoc in adHocs)
+        {
+            if (adHoc.IsMapped)
+            {
+                mappedAdHocs[adHoc.FullyQualifiedName] = adHoc;
+            }
+        }
+
         // Nothing in this compilation needs codegen — skip arbitration so consumer projects that
         // only reference the runtime don't get spurious referenced-package dialect-collision noise.
-        if (mappedEntities.Count == 0 && stores.IsEmpty && mappedProjections.Count == 0)
+        if (mappedEntities.Count == 0 && stores.IsEmpty && mappedProjections.Count == 0 && mappedAdHocs.Count == 0)
         {
             return;
         }
@@ -205,6 +235,14 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         foreach (var projection in mappedProjections.Values)
         {
             entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection));
+        }
+
+        // ad-hoc DTO materializers share the registration set too. They are dialect-independent
+        // (reads only — no SQL is ever generated for them), so the dialect owner emits them like
+        // the other materializers.
+        foreach (var adHoc in mappedAdHocs.Values)
+        {
+            entityRegistrations.Add(AdHocProcessor.EmitMaterializer(context, adHoc));
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();

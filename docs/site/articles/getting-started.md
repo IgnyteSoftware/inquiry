@@ -107,6 +107,23 @@ await store.InsertAsync(new Shipper { CompanyName = "Speedy Express", Phone = "(
 var all = await store.SelectAllAsync();
 ```
 
+For a one-off reporting query whose shape isn't an entity, you don't need a store at all — mark a plain DTO with `[InquiryAdHoc]` and pass hand-written SQL to the `IInquiry` facade (interpolated values become bound parameters):
+
+```csharp
+[InquiryAdHoc]
+public sealed class ShipperOrderCount
+{
+    public string CompanyName { get; set; } = "";   // ordinal 0
+    public int Orders { get; set; }                 // ordinal 1
+}
+
+var inquiry = provider.GetRequiredService<IInquiry>();
+var counts = await inquiry.QueryListAsync<ShipperOrderCount>(
+    $"SELECT s.CompanyName, COUNT(o.OrderID) FROM Shippers s LEFT JOIN Orders o ON o.ShipVia = s.ShipperID GROUP BY s.CompanyName");
+```
+
+Properties map to SELECT-list positions in declaration order — see [Ad-hoc DTOs](features/ad-hoc-dtos.md).
+
 ## 7. Wrap multiple calls in a transaction
 
 `IInquiry.ExecuteInTransactionAsync()` opens an `IInquiryTransaction` that owns a connection and a `DbTransaction`, runs your delegate, and commits only when the delegate completes successfully. Every operation in the delegate — generated store methods *and* any ad-hoc SQL called directly on the handle — shares that transaction.
