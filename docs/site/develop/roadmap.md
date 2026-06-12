@@ -85,6 +85,22 @@
 - **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 5;
   add engines (Firebird, DB2, MariaDB-specific, …) demand-driven — the provider + analyzer split makes
   each one mechanical.
+- **Verified cloud-platform compatibility matrix** *(post-1.0 — deferred to a later release)*. Most
+  popular hosted databases are wire-compatible with engines Inquiry already ships, so this is
+  compatibility modes + verified docs, not new dialects — extending the existing `Compatibility`
+  enum pattern (`CockroachDb`, `AuroraPostgreSql`, `AzureSql`):
+  - **Supabase** (Postgres): document/handle its Supavisor pooler — transaction-mode pooling breaks
+    server-side prepared statements, so guide to `PreparedStatementMode.None` or session pooling;
+    add a transient-error detector entry.
+  - **Neon** (serverless Postgres): scale-to-zero cold starts make open-time retry essential
+    (already built); add its documented transient codes.
+  - **PlanetScale** (Vitess/MySQL): a compat mode that suppresses foreign-key DDL (Vitess
+    historically rejects FKs) and documents eager-loading implications.
+  - Lower priority, same pattern: YugabyteDB / AlloyDB / Timescale (Postgres wire), TiDB /
+    SingleStore (MySQL wire). Turso/libSQL waits on a mature .NET client; DuckDB / ClickHouse are
+    OLAP and out of scope unless demanded.
+  - Where feasible, a scheduled CI leg per platform (Supabase local Docker stack, Vitess image) so
+    "works with Supabase" stays test-proven rather than asserted.
 - **Full-Northwind test & benchmark coverage.** The suites exercise a representative subset across the
   five engines; replicate the full Northwind entity/relationship surface (all tables, all CRUD + read
   shapes) across ADO.NET / Inquiry / Dapper / EF Core in both tests and benchmarks, so every feature is
