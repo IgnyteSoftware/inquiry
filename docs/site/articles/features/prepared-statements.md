@@ -91,7 +91,7 @@ Independently of the mode, the generator emits an explicit `DbType` on each gene
 
 ## Caveats
 
-- **`Compare.In` predicates are not prepared-reuse-friendly.** Variadic `IN` expansion rewrites the command text per cardinality, so the text is no longer constant and a prepared statement is not reused across different list lengths. A future option is array parameters (`= ANY(@ids)` on PostgreSQL), which keep the SQL constant.
+- **`Compare.In` is prepared-reuse-friendly on PostgreSQL only.** On PostgreSQL, `Compare.In` renders constant `col = ANY(@ids)` SQL and binds the whole collection as one native array parameter, so the statement stays preparable across every list length (and the per-element parameter cap doesn't apply to IN lists there). On the other dialects, variadic `IN` expansion rewrites the command text per cardinality, so the text is not constant and a prepared statement is not reused across different list lengths.
 - **Connection lifecycle is the crux.** Inquiry opens and disposes a connection per operation, so only Npgsql's pool-level prepared-statement cache and the *transacted* pipeline (which holds one connection across the transaction) see real reuse.
 
 ## Stored procedures are skipped

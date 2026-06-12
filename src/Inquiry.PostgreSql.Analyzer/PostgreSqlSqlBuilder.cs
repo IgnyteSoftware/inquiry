@@ -43,6 +43,17 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     /// <summary>PostgreSQL stamps the soft-delete (and restore) timestamp from <c>now()</c>.</summary>
     public override string CurrentTimestampExpression => "now()";
 
+    /// <summary>
+    /// PostgreSQL binds IN collections as a single native array parameter: the SQL stays
+    /// <c>col = ANY(@name)</c> for every list length, so server-side prepared statements remain
+    /// reusable and the per-element parameter cap does not apply to IN lists.
+    /// </summary>
+    public override bool UseArrayInParameters => true;
+
+    /// <inheritdoc cref="UseArrayInParameters"/>
+    protected override string RenderIn(string quotedColumn, string parameterName)
+        => quotedColumn + " = ANY(" + parameterName + ")";
+
     public override string BuildInsertSql(SqlBuildContext context)
     {
         if (context.InsertableColumns.Count == 0)
