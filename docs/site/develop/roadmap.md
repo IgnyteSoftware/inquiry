@@ -4,7 +4,7 @@
 > enhancements. Resolved items are summarized at the [bottom](#recently-resolved). Nothing here blocks
 > `main`: the library builds and every test suite passes.
 >
-> **Last reconciled against the code:** 2026-06-11.
+> **Last reconciled against the code:** 2026-06-12.
 
 ## Known issues & correctness
 
@@ -20,12 +20,71 @@
 
 ## Performance & optimization
 
-- **Array parameters for `IN`.** `Compare.In` predicates rewrite the command text per list cardinality,
-  which defeats prepared-statement reuse across list lengths. PostgreSQL `= ANY(@ids)` (and equivalents)
-  would keep the SQL constant.
+> The four items below came out of the 2026-06-12 competitive feature-gap research (vs EF Core, XPO,
+> Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact.
+
+- **`DbBatch` pipeline support.** Adopt the ADO.NET batching API
+  (`System.Data.Common.DbBatch`, .NET 6+; supported by Npgsql, SqlClient, MySqlConnector) so
+  multi-command operations run in one round trip. Cleaner than today's concatenated multi-statement
+  batch-update text, and could unlock batch `UpdateAll` on **Oracle** (currently a throwing stub —
+  Oracle has no portable multi-statement text form). Only Dapper.AOT exposes this today; no mainstream
+  .NET ORM does.
+- **Provider-native bulk copy.** A `BulkInsertAsync` tier riding `SqlBulkCopy`, Npgsql binary `COPY`,
+  and `MySqlBulkCopy` (the Dapper Plus / linq2db class of operation). Inquiry's multi-row `VALUES`
+  batch insert is parameter-capped (~2k parameters); bulk copy is the 100k+-row tier. Falls back to
+  the existing batch SQL where a provider has no bulk-copy API.
+- **Array parameters for `IN` + table-valued parameters.** `Compare.In` predicates rewrite the command
+  text per list cardinality, which defeats prepared-statement reuse across list lengths. PostgreSQL
+  `= ANY(@ids)` (and equivalents) would keep the SQL constant; SQL Server TVPs are the sibling
+  mechanism for passing sets to commands and stored procedures.
+- **Single-round-trip eager loading.** Separate-query eager loading currently pays one round trip per
+  relation; combining the parent + relation SELECTs into one multi-result-set command (Dapper
+  `QueryMultiple`-style) keeps the design but cuts the latency to one round trip.
 
 ## Planned features & enhancements
 
+> Items marked *(gap research 2026-06-12)* came out of the competitive feature-gap analysis vs
+> EF Core, XPO, Dapper + ecosystem, and the JS/TS ORMs (Prisma, Drizzle, TypeORM, Sequelize, Kysely).
+
+- **Set-based predicate mutations** *(gap research 2026-06-12)*. `ExecuteUpdate`/`ExecuteDelete`-style
+  operations — UPDATE/DELETE by WHERE predicate without loading entities (e.g. `[InquiryUpdateWhere]`,
+  `[InquiryDeleteWhere]`), reusing the existing compile-time predicate model. The most-missed everyday
+  feature relative to EF Core.
+- **Default interceptor library** *(gap research 2026-06-12)*. A companion package (e.g.
+  `Inquiry.Interceptors`) of ready-made `IInquiryCommandInterceptor` implementations: audit trail
+  (who/when/what changed — XPO's module as an interceptor), sqlcommenter-style trace-context SQL
+  comments / query tagging for DBA correlation (no .NET ORM ships sqlcommenter today), slow-query
+  warning logging, and a command-text assertion interceptor for tests. Keeps the core dependency-free
+  while making the interceptor seam batteries-included.
+- **Read-replica routing** *(gap research 2026-06-12)*. Route SELECTs to a read-replica pool and pin
+  mutations + transactions to the primary (Drizzle `withReplicas` / Sequelize / TypeORM semantics).
+  No mainstream .NET ORM ships this; Inquiry already has the connection-factory and failover chassis
+  to build on.
+- **Stored-procedure output/return parameters** *(gap research 2026-06-12)*. Surface
+  `ParameterDirection.Output`/`ReturnValue` on generated stored-procedure methods, completing the
+  sproc story (Dapper `DynamicParameters` parity).
+- **Database-first scaffolding CLI** *(gap research 2026-06-12)*. A `dotnet inquiry scaffold` tool
+  that introspects an existing database and emits attributed entities + store skeletons — the
+  `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
+  largest onboarding lever for existing databases.
+- **View-mapped / keyless read-only entities** *(gap research 2026-06-12)*. Map a read-only store
+  over a database view or keyless projection (EF keyless entities / TypeORM `@ViewEntity`).
+- **Server-computed columns** *(gap research 2026-06-12)*. Computed-column DDL + materializer support
+  for properties calculated by the database (EF `HasComputedColumnSql`, XPO persistent aliases).
+- **Many-to-many relations** *(gap research 2026-06-12)*. Auto-managed junction tables for M:N
+  associations; the relation model is currently 1:N / N:1 only.
+- **CTEs and set operations** *(gap research 2026-06-12)*. `WITH` / `UNION` / `INTERSECT` / `EXCEPT`
+  composition in the predicate/select model (Kysely-style); ad-hoc SQL covers this today.
+- **Tenant/global query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. Generalize the
+  soft-delete global-filter machinery to user-defined columns (EF `HasQueryFilter` / EF 10 named
+  filters), plus row-level-security session helpers for PostgreSQL (Drizzle RLS-style).
+- **Data-seeding convention** *(gap research 2026-06-12)*. A thin first-class seeding hook
+  (EF `UseSeeding` / `prisma db seed` analog) formalizing the sample's `DataSeeder` pattern.
+- **Provider-specific column types** *(gap research 2026-06-12)*. SQL Server **vector** columns first
+  (EF 10 `SqlVector` parity — AI embeddings / semantic search); spatial and `hierarchyid` by demand.
+- **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 5;
+  add engines (Firebird, DB2, MariaDB-specific, …) demand-driven — the provider + analyzer split makes
+  each one mechanical.
 - **Full-Northwind test & benchmark coverage.** The suites exercise a representative subset across the
   five engines; replicate the full Northwind entity/relationship surface (all tables, all CRUD + read
   shapes) across ADO.NET / Inquiry / Dapper / EF Core in both tests and benchmarks, so every feature is
@@ -58,6 +117,12 @@
   JOIN/eager-loading model.
 - **JOIN-based or lazy eager loading** — Inquiry's separate-query eager loading is the recommended
   high-performance pattern by design.
+- **Inheritance mapping (TPH/TPT), dynamic/untyped rows, shadow properties** — all pull toward
+  runtime-shaped mapping, against the compile-time, source-generated ethos (gap research 2026-06-12).
+- **Data-browser GUIs** (Prisma/Drizzle Studio analogs) — a library concern, not an ORM concern; use
+  existing database tools.
+- **CDC/realtime and managed infrastructure services** (Prisma Pulse/Accelerate analogs) — products,
+  not library features.
 
 ## Recently resolved
 
