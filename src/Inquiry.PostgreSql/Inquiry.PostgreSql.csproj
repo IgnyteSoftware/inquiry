@@ -4,6 +4,8 @@
     <Description>PostgreSQL provider for Inquiry. Bundles the PostgreSQL-flavoured source generator (Inquiry.PostgreSql.Analyzer) so referencing this package alone enables store SQL generation.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Runs the trim/AOT analyzers and stamps the trimming/AOT-compatibility metadata. -->
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
   <ItemGroup>
