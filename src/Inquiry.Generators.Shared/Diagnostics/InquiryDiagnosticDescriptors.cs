@@ -8,7 +8,8 @@ internal static class InquiryDiagnosticDescriptors
     // DIAGNOSTIC-ID REGISTRY
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
-    //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044.
+    //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
+    //                  INQ045–INQ046.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -26,6 +27,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ035         Full-text search              (unsupported by dialect)
     //   INQ036–INQ038  JSON/array/value-converter column types
     //   INQ039         Graceful degradation: operation unsupported by the active dialect (stub + warning) [IN USE]
+    //   INQ045–INQ046  Ad-hoc DTO materialization    (INQ045 no mappable properties, INQ046 not constructible) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -343,6 +345,28 @@ internal static class InquiryDiagnosticDescriptors
         "INQ042",
         "OrderBy term has an invalid direction token",
         "Store method '{0}': OrderBy term '{1}' is invalid. Each term must be 'field' or 'field ASC' / 'field DESC' (case-insensitive); '{2}' is not a recognised direction token.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ045: an [InquiryAdHoc] DTO with nothing to map. Ordinal mapping covers every public/internal
+    // instance property with an accessible setter, in declaration order; a type with none of those
+    // would emit a materializer that returns empty objects for every row.
+    public static readonly DiagnosticDescriptor AdHocNoProperties = new(
+        "INQ045",
+        "Ad-hoc DTO declares no mappable properties",
+        "Ad-hoc DTO '{0}' has no instance property with a public or internal setter. [InquiryAdHoc] maps every such property to a SELECT-list ordinal in declaration order; declare at least one.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ046: the generated materializer instantiates the DTO with `new T { ... }`, which needs a
+    // concrete type with an accessible parameterless constructor. Positional records are the common
+    // trip-up — their only constructor is the primary one.
+    public static readonly DiagnosticDescriptor AdHocNotConstructible = new(
+        "INQ046",
+        "Ad-hoc DTO must be a concrete type with an accessible parameterless constructor",
+        "Ad-hoc DTO '{0}' cannot be instantiated by the generated materializer: it is abstract or has no public/internal parameterless constructor. Use init-only properties instead of positional record or constructor parameters.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
