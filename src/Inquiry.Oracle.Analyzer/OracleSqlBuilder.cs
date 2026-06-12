@@ -271,14 +271,6 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     public override string BatchInsertFooter => " SELECT 1 FROM dual";
 
-    /// <summary>
-    /// Oracle has no portable multi-row UPDATE: the shared emitter's <c>UPDATE …; UPDATE …;</c> batch is
-    /// rejected (ORA-00936), and wrapping it in a PL/SQL <c>BEGIN … END;</c> block would not return a
-    /// reliable rows-affected count. So <c>UpdateAll</c> stays unsupported (INQ039 stub). Batch
-    /// <c>InsertAll</c> (INSERT ALL, above) and <c>DeleteAll</c> (IN-expansion) work.
-    /// </summary>
-    public override bool SupportsMultiRowUpdate => false;
-
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
         DbTypeClass.Boolean => "NUMBER(1)",

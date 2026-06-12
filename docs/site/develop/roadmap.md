@@ -20,15 +20,10 @@
 
 ## Performance & optimization
 
-> The four items below came out of the 2026-06-12 competitive feature-gap research (vs EF Core, XPO,
-> Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact.
+> The items below came out of the 2026-06-12 competitive feature-gap research (vs EF Core, XPO,
+> Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact. (`DbBatch` pipeline
+> support shipped — see [Recently resolved](#recently-resolved).)
 
-- **`DbBatch` pipeline support.** Adopt the ADO.NET batching API
-  (`System.Data.Common.DbBatch`, .NET 6+; supported by Npgsql, SqlClient, MySqlConnector) so
-  multi-command operations run in one round trip. Cleaner than today's concatenated multi-statement
-  batch-update text, and could unlock batch `UpdateAll` on **Oracle** (currently a throwing stub —
-  Oracle has no portable multi-statement text form). Only Dapper.AOT exposes this today; no mainstream
-  .NET ORM does.
 - **Provider-native bulk copy.** A `BulkInsertAsync` tier riding `SqlBulkCopy`, Npgsql binary `COPY`,
   and `MySqlBulkCopy` (the Dapper Plus / linq2db class of operation). Inquiry's multi-row `VALUES`
   batch insert is parameter-capped (~2k parameters); bulk copy is the 100k+-row tier. Falls back to
@@ -230,6 +225,14 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **`DbBatch` pipeline support (2026-06-12):** `IInquiry.ExecuteBatchAsync` executes one command text
+  per item with per-item parameters — a single ADO.NET `DbBatch` round trip on Npgsql / SqlClient /
+  MySqlConnector (capability-probed), sequential same-connection execution elsewhere.
+  `[InquiryUpdateAll]` now routes through it reusing the single-row `_sqlUpdate` const: the
+  multi-statement `{r}`-template machinery and per-row parameter mangling are gone, the UpdateAll
+  parameter cap no longer applies, and **Oracle UpdateAll works** (the `INQ039` stub is removed; live
+  Oracle batch-update test added). Interceptors fire per item on the sequential path only.
 
 - **Adoption round 1 (2026-06-12):** opt-in **generated store interfaces** —
   `[InquiryGenerateInterface]` emits `I{Store}` (signatures with defaults preserved), the generated

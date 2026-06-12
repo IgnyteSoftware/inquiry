@@ -3,13 +3,14 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// Batch-update emission: <c>[InquiryUpdateAll]</c> emits a per-row UPDATE template (with a
-/// <c>{r}</c> row token) and a binder writing <c>@u{r}_&lt;n&gt;</c> / <c>@u{r}_k&lt;n&gt;</c> params.
+/// Batch-update emission: <c>[InquiryUpdateAll]</c> reuses the single-row <c>_sqlUpdate</c> const and
+/// routes through <c>Inquiry.ExecuteBatchAsync</c> — one UPDATE per item, a single DbBatch round trip
+/// where the provider supports it — with a per-item binder mirroring the single-row update binder.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
     [Fact]
-    public void UpdateAllEmitsPerRowTemplateAndBinder()
+    public void UpdateAllEmitsBatchExecuteOverSingleRowUpdate()
     {
         const string source = """
             using System.Collections.Generic;
@@ -46,18 +47,25 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // Key is generated → excluded from SET, used in WHERE.
-        Assert.Contains("private const string _sqlUpdateAllRow = \"UPDATE \\\"TThing\\\" SET \\\"Name\\\" = @u{r}_0, \\\"Qty\\\" = @u{r}_1 WHERE \\\"Id\\\" = @u{r}_k0;\";", text);
-        Assert.Contains("private static readonly string[] _sqlUpdateAllRowSegments = _sqlUpdateAllRow.Split(new[] { \"{r}\" }, global::System.StringSplitOptions.None);", text);
-        Assert.Contains("_sb.Append(_sqlUpdateAllRowSegments[0]);", text);
-        Assert.Contains("_sb.Append(_r).Append(_sqlUpdateAllRowSegments[_s]);", text);
-        Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_0\";", text);
-        Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_k0\";", text);
-        Assert.Contains("if ((long)_list.Count * 3L > Inquiry.MaxParametersPerCommand)", text);
+        // Key is generated → excluded from SET, referenced in the WHERE of the shared single-row UPDATE.
+        Assert.Contains("private const string _sqlUpdate = \"UPDATE \\\"TThing\\\" SET \\\"Name\\\" = @Name, \\\"Qty\\\" = @Qty WHERE \\\"Id\\\" = @Id\";", text);
+        Assert.Contains("return await Inquiry.ExecuteBatchAsync(", text);
+        Assert.Contains("_sqlUpdate,", text);
+        Assert.Contains("static (_t, _it) =>", text);
+        // Binder mirrors the single-row update binder: @PropertyName params written to the target.
+        Assert.Contains("var _p0 = _t.CreateParameter();", text);
+        Assert.Contains("_p0.ParameterName = \"@Id\";", text);
+        Assert.Contains("_t.AddParameter(_p0);", text);
+        Assert.Contains("_p1.ParameterName = \"@Name\";", text);
+        Assert.Contains("_p2.ParameterName = \"@Qty\";", text);
+        Assert.Contains("_p2.Value = (object?)_it.Qty ?? global::System.DBNull.Value;", text);
+        // The old per-row template/segments and parameter-cap guard are gone.
+        Assert.DoesNotContain("_sqlUpdateAllRow", text);
+        Assert.DoesNotContain("MaxParametersPerCommand", text);
     }
 
     [Fact]
-    public void UpdateAllChecksParameterCapWhileMaterializingLazyEnumerable()
+    public void UpdateAllMaterializesLazyEnumerableWithoutParameterCap()
     {
         const string source = """
             using System.Collections.Generic;
@@ -96,10 +104,13 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.DoesNotContain("global::System.Linq.Enumerable.ToList(things)", text);
         Assert.Contains("var _list = things as global::System.Collections.Generic.IReadOnlyList<global::Demo.Thing>;", text);
+        Assert.Contains("if (things is null) throw new global::System.ArgumentNullException(nameof(things));", text);
         Assert.Contains("var _tmp = new global::System.Collections.Generic.List<global::Demo.Thing>();", text);
         Assert.Contains("foreach (var _item in things)", text);
-        Assert.Contains("if ((long)(_tmp.Count + 1) * 3L > Inquiry.MaxParametersPerCommand)", text);
         Assert.Contains("_tmp.Add(_item);", text);
+        Assert.Contains("if (_list.Count == 0) return 0;", text);
+        // Each item binds to its own command in the batch, so no per-command parameter cap applies.
+        Assert.DoesNotContain("MaxParametersPerCommand", text);
     }
 
     [Fact]
@@ -140,9 +151,11 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("OrderLineStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // Composite key: both key columns AND-composed in the WHERE, bound as @u{r}_k0 / @u{r}_k1.
-        Assert.Contains("WHERE \\\"OrderId\\\" = @u{r}_k0 AND \\\"ProductId\\\" = @u{r}_k1;", text);
-        Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_k0\";", text);
-        Assert.Contains("_p.ParameterName = \"@u\" + _r + \"_k1\";", text);
+        // Composite key: both key columns AND-composed in the single-row UPDATE's WHERE, and both
+        // bound by the batch binder alongside the SET column.
+        Assert.Contains("WHERE \\\"OrderId\\\" = @OrderId AND \\\"ProductId\\\" = @ProductId\";", text);
+        Assert.Contains("_p0.ParameterName = \"@OrderId\";", text);
+        Assert.Contains("_p1.ParameterName = \"@ProductId\";", text);
+        Assert.Contains("_p2.ParameterName = \"@Qty\";", text);
     }
 }
