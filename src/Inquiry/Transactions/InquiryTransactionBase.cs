@@ -27,6 +27,8 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
     }
 
     public abstract IsolationLevel IsolationLevel { get; }
+    public abstract DbConnection Connection { get; }
+    public abstract DbTransaction Transaction { get; }
     public abstract Task CommitAsync(CancellationToken cancellationToken = default);
     public abstract Task RollbackAsync(CancellationToken cancellationToken = default);
     public abstract ValueTask DisposeAsync();

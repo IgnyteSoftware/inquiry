@@ -52,11 +52,6 @@
   the Aspire dashboard. Foundation work: build provider connection factories on
   **`System.Data.Common.DbDataSource`** (the .NET 7+ pooled primitive Aspire registers) instead of
   raw connection strings.
-- **Transactional-outbox enablement** *(integration research 2026-06-12)*. MassTransit/Wolverine
-  outbox patterns need to enlist their writes in Inquiry's active transaction;
-  `IInquiryTransaction` currently hides its `DbConnection`/`DbTransaction`. Expose them (read-only,
-  documented) to unlock the .NET messaging ecosystem — the most-requested integration in
-  event-driven shops.
 - **Build-time SQL validation against a dev database** *(integration research 2026-06-12)*. The
   Rust sqlx `query!` / Go sqlc model: because Inquiry's SQL is compile-time constant, an opt-in
   build step or test helper can `PREPARE`/`EXPLAIN` every generated SQL const against a
@@ -216,6 +211,13 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Transactional-outbox enablement (2026-06-12):** `IInquiryTransaction` now exposes its live
+  `Connection` and `DbTransaction` (fail-fast after close; a savepoint handle surfaces the outer
+  pair), so MassTransit/Wolverine-style outbox writes can enlist in the active Inquiry transaction
+  and commit atomically with entity work. Documented under
+  [Transactions](../articles/features/transactions.md) with ownership rules (borrowed, never
+  committed/disposed by the caller); default interface implementations keep existing test doubles
+  source-compatible.
 - **Ad-hoc DTO materialization (2026-06-12):** `[InquiryAdHoc]` on a plain class or record generates
   an ordinal-reading materializer (publicly settable properties in declaration order, no per-property
   attributes; `[InquiryEnumAsString]` honored) and registers it via `AddInquiryGeneratedStores()`, so

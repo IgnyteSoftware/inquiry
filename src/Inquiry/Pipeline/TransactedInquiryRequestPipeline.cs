@@ -65,11 +65,19 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <summary>
-    /// The underlying database transaction. Internal-only because savepoint creation is the
-    /// only legitimate consumer (<see cref="Inquiry.Transactions.SavepointInquiryTransaction"/>);
-    /// regular query/execute paths go through the pipeline methods that enlist commands automatically.
+    /// The underlying database transaction. Internal-only: consumed by
+    /// <see cref="Inquiry.Transactions.SavepointInquiryTransaction"/> for savepoint creation and
+    /// for its <c>IInquiryTransaction.Transaction</c> interop surface; regular query/execute
+    /// paths go through the pipeline methods that enlist commands automatically.
     /// </summary>
     internal DbTransaction Transaction => _transaction;
+
+    /// <summary>
+    /// The open connection this pipeline executes on. Internal-only: consumed by
+    /// <see cref="Inquiry.Transactions.SavepointInquiryTransaction"/> for its
+    /// <c>IInquiryTransaction.Connection</c> interop surface.
+    /// </summary>
+    internal DbConnection Connection => _connection;
 
     internal InFlightLease EnterExclusiveOperation()
     {

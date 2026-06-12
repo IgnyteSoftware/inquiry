@@ -1,5 +1,6 @@
 using Inquiry.Pipeline;
 using System.Data;
+using System.Data.Common;
 
 namespace Inquiry.Transactions;
 
@@ -54,6 +55,26 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
 
     /// <inheritdoc />
     public override IsolationLevel IsolationLevel => _isolationLevel;
+
+    /// <inheritdoc />
+    public override DbConnection Connection
+    {
+        get
+        {
+            ThrowIfClosed();
+            return _outerPipeline.Connection;
+        }
+    }
+
+    /// <inheritdoc />
+    public override DbTransaction Transaction
+    {
+        get
+        {
+            ThrowIfClosed();
+            return _outerPipeline.Transaction;
+        }
+    }
 
     /// <inheritdoc />
     public override void ThrowIfClosed()

@@ -1,5 +1,6 @@
 using Inquiry.Commands;
 using System.Data;
+using System.Data.Common;
 
 namespace Inquiry.Transactions;
 
@@ -30,6 +31,35 @@ public interface IInquiryTransaction : IAsyncDisposable
     /// Gets the isolation level the underlying database transaction was opened with.
     /// </summary>
     IsolationLevel IsolationLevel { get; }
+
+    /// <summary>
+    /// Gets the open database connection this transaction runs on. Interop access for libraries
+    /// that must enlist their own commands in the active transaction — e.g. a MassTransit or
+    /// Wolverine transactional outbox writing its message rows atomically with your entity work.
+    /// Treat it as borrowed infrastructure: issue commands on it (paired with
+    /// <see cref="Transaction"/>), but never close or dispose it — the
+    /// <see cref="IInquiryTransaction"/> owns its lifetime. For a savepoint handle this is the
+    /// outer transaction's connection. Throws <see cref="ObjectDisposedException"/> after the
+    /// transaction has been committed, rolled back, or disposed.
+    /// </summary>
+    /// <remarks>The default throws; the built-in transaction implementations expose the live
+    /// connection, so existing <see cref="IInquiryTransaction"/> test doubles stay source-compatible.</remarks>
+    DbConnection Connection
+        => throw new NotSupportedException("Connection interop requires the built-in Inquiry transaction.");
+
+    /// <summary>
+    /// Gets the underlying ADO.NET transaction. Interop access for libraries that must enlist
+    /// their own commands in the active transaction (assign it to <c>DbCommand.Transaction</c>
+    /// together with <see cref="Connection"/>). Never commit, roll back, or dispose it directly —
+    /// use <see cref="CommitAsync"/> / <see cref="RollbackAsync"/> on this handle. For a savepoint
+    /// handle this is the outer transaction's <see cref="DbTransaction"/>. Throws
+    /// <see cref="ObjectDisposedException"/> after the transaction has been committed, rolled
+    /// back, or disposed.
+    /// </summary>
+    /// <remarks>The default throws; the built-in transaction implementations expose the live
+    /// transaction, so existing <see cref="IInquiryTransaction"/> test doubles stay source-compatible.</remarks>
+    DbTransaction Transaction
+        => throw new NotSupportedException("Transaction interop requires the built-in Inquiry transaction.");
 
     /// <summary>
     /// Commits the transaction (or releases the savepoint, for a nested transaction).
