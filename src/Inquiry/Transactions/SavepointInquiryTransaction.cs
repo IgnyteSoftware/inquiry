@@ -81,8 +81,11 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     {
         // _closed is set after a successful Commit or Rollback; _committed implies _closed
         // (kept separately so Dispose can distinguish "released" from "rolled back at exit").
-        // _disposed is set by DisposeAsync. Any of these terminal states blocks further forwarding.
-        if (_closed || _committed || _disposed)
+        // _disposed is set by DisposeAsync. The outer pipeline's IsClosed covers out-of-order
+        // teardown (outer committed/rolled back/disposed while this savepoint handle is still
+        // held) — without it the Connection/Transaction interop getters would hand out a
+        // disposed pair instead of failing fast. Any of these terminal states blocks forwarding.
+        if (_closed || _committed || _disposed || _outerPipeline.IsClosed)
         {
             throw new ObjectDisposedException(
                 nameof(SavepointInquiryTransaction),
