@@ -84,9 +84,6 @@
   (each test inside a rolled-back transaction with connection ownership, enabling parallel
   database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
   Bogus-compatible).
-- **Sequential `Guid` v7 keys** *(adoption review 2026-06-12)*. A `Guid.CreateVersion7()`
-  key-generation default for index locality. (`DateOnly`/`TimeOnly` mapping shipped — see
-  [Recently resolved](#recently-resolved).)
 - **`TransactionScope` / `System.Transactions` interop** *(adoption review 2026-06-12)*. Inquiry has
   no documented position on ambient `TransactionScope`; per-operation connection opening means each
   operation enlists separately (risking distributed-transaction escalation). Needs a docs page and
@@ -211,6 +208,13 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Sequential `Guid` v7 keys (2026-06-12):** `[InquiryKey(SequentialGuid = true)]` makes
+  insert/upsert/batch-insert assign a time-ordered UUID v7 via the new public
+  `InquiryGuid.NewVersion7()` (delegates to `Guid.CreateVersion7()` on .NET 9+, RFC 9562 polyfill
+  on .NET 8) whenever the key is unset; supplied keys are never overwritten, the caller observes
+  the generated key, and misuse (non-Guid / `IsGenerated` / `UseDatabaseDefault` keys) is a
+  build-time error (new INQ047). See the key-generation section in
+  [CRUD](../articles/features/crud.md).
 - **Transactional-outbox enablement (2026-06-12):** `IInquiryTransaction` now exposes its live
   `Connection` and `DbTransaction` (fail-fast after close; a savepoint handle surfaces the outer
   pair), so MassTransit/Wolverine-style outbox writes can enlist in the active Inquiry transaction
