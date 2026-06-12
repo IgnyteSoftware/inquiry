@@ -13,6 +13,10 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
     private readonly string? _failoverConnectionString;
     private readonly RetryingConnectionOpener? _retryingOpener;
 
+    // Cached so the retry path doesn't allocate a closure per open (OpenConnectionAsync runs once
+    // per pipeline operation).
+    private readonly Func<CancellationToken, ValueTask<DbConnection>> _openPrimary;
+
     /// <summary>
     /// Initializes a new instance of <see cref="PostgreSqlInquiryConnectionFactory"/> with default
     /// options (<see cref="PostgreSqlCompatibility.None"/>).
@@ -39,6 +43,7 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
 
         _connectionString = connectionString;
         _failoverConnectionString = options.FailoverConnectionString;
+        _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
 
         var detector = CreateDetector(options.Compatibility);
         if (detector is not null)
@@ -65,7 +70,7 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
 
         return _retryingOpener is null
             ? OpenCoreAsync(_connectionString, cancellationToken)
-            : _retryingOpener.OpenAsync(ct => OpenCoreAsync(_connectionString, ct), cancellationToken);
+            : _retryingOpener.OpenAsync(_openPrimary, cancellationToken);
     }
 
     private static ITransientErrorDetector? CreateDetector(PostgreSqlCompatibility compatibility) => compatibility switch
