@@ -80,15 +80,6 @@ public abstract class SqlBuilder
     /// <summary>Trailing text after all row tuples. Default empty; Oracle appends <c> SELECT 1 FROM dual</c>.</summary>
     public virtual string BatchInsertFooter => "";
 
-    /// <summary>
-    /// Whether the dialect supports the shared emitter's multi-statement per-row batch <c>UpdateAll</c>
-    /// (<c>UPDATE …; UPDATE …;</c>). Default <c>true</c>. Oracle overrides with <c>false</c> — it has no
-    /// portable multi-row UPDATE (a PL/SQL block would not return a reliable row count), so <c>UpdateAll</c>
-    /// degrades to a throwing stub + INQ039. Batch <c>InsertAll</c> is supported on every dialect via the
-    /// shape hooks above; batch <c>DeleteAll</c> uses IN-expansion.
-    /// </summary>
-    public virtual bool SupportsMultiRowUpdate => true;
-
     public string QuoteTable(string? schema, string tableName)
     {
         return string.IsNullOrEmpty(schema)

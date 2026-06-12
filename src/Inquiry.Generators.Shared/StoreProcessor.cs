@@ -773,7 +773,10 @@ internal static class StoreProcessor
         var needsSelectByKey = valid.Any(m => UsesSharedSelect(m) && m.Method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
         var needsInsert = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && !m.Method.ReturnsEntity) ||
             nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity);
-        var needsUpdate = valid.Any(static m => m.Method.Operation == StoreOperation.Update && !m.Method.ReturnsEntity);
+        // UpdateAll reuses the single-row _sqlUpdate const (one UPDATE per item via the batch API).
+        var needsUpdate = valid.Any(static m =>
+            (m.Method.Operation == StoreOperation.Update && !m.Method.ReturnsEntity) ||
+            m.Method.Operation == StoreOperation.UpdateAll);
         var needsUpsert = valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity);
         var needsInsertReturning = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && m.Method.ReturnsEntity) ||
             nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && m.Method.ReturnsEntity);
@@ -789,7 +792,6 @@ internal static class StoreProcessor
         var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count);
         var needsInsertAll = valid.Any(static m => m.Method.Operation == StoreOperation.InsertAll);
         var needsDeleteAll = valid.Any(static m => m.Method.Operation == StoreOperation.DeleteAll);
-        var needsUpdateAll = valid.Any(static m => m.Method.Operation == StoreOperation.UpdateAll);
 
         var byFieldOps = valid
             .Where(m => UsesSharedSelect(m) && m.Method.Operation == StoreOperation.SelectAllByField && m.SelectPlan is null && m.FieldColumns.Count > 0)
@@ -837,19 +839,6 @@ internal static class StoreProcessor
             AppendConstSql(source, "_sqlInsertAllRowOpen", sqlBuilder.BuildBatchInsertRowOpen(ctx));
         }
         if (needsDeleteAll) AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
-        // UpdateAll's multi-statement UPDATE batch has no portable Oracle form (a PL/SQL block loses the row
-        // count), so build it degradably: a dialect without multi-row UPDATE skips the const and UpdateAll
-        // becomes a throwing stub + INQ039 — the same graceful-degradation path as the generated-key upsert.
-        var updateAllError = TryBuildDegradableConst(source, "_sqlUpdateAllRow", needsUpdateAll,
-            () => sqlBuilder.SupportsMultiRowUpdate
-                ? BuildUpdateAllRowTemplate(sqlBuilder, ctx, entity)
-                : throw new System.NotSupportedException(MultiRowUpdateUnsupportedMessage(sqlBuilder)));
-        if (needsUpdateAll && updateAllError is null)
-        {
-            // Pre-split the row template at its {r} tokens once, so the UpdateAll body splices the row
-            // index between const segments instead of string.Replace-ing the whole template per row.
-            source.AppendLine("    private static readonly string[] _sqlUpdateAllRowSegments = _sqlUpdateAllRow.Split(new[] { \"{r}\" }, global::System.StringSplitOptions.None);");
-        }
 
         foreach (var fieldColumns in byFieldOps)
         {
@@ -1027,8 +1016,6 @@ internal static class StoreProcessor
                 StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ?? insertReturningError,
                 // Non-returning upsert uses _sqlUpsert (throws for a generated-key MERGE on Oracle).
                 StoreOperation.Upsert => upsertError,
-                // UpdateAll's multi-statement batch is unsupported on Oracle (no portable multi-row UPDATE).
-                StoreOperation.UpdateAll => updateAllError,
                 _ => null,
             };
             if (unsupportedReason is not null)
@@ -1640,31 +1627,6 @@ internal static class StoreProcessor
 
         return list;
     }
-
-    /// <summary>
-    /// Per-row UPDATE template for batch update, with a <c>{r}</c> token the emitter replaces with
-    /// each row index — e.g. <c>UPDATE "T" SET "A" = @u{r}_0 WHERE "Id" = @u{r}_k0;</c>. The <c>@</c>
-    /// sigil is literal (consistent with the parameterized-predicate convention; shares the documented
-    /// Oracle limitation).
-    /// </summary>
-    private static string BuildUpdateAllRowTemplate(SqlBuilder sqlBuilder, SqlBuildContext ctx, EntityData entity)
-    {
-        var setColumns = StoreOperationEmitter.SelectUpdateSetColumns(entity);
-        var keyColumns = entity.Keys.AsImmutableArray();
-        var setList = string.Join(", ", setColumns.Select((c, i) => sqlBuilder.QuoteIdentifier(c.ColumnName) + " = @u{r}_" + i));
-        var whereList = string.Join(" AND ", keyColumns.Select((k, i) => sqlBuilder.QuoteIdentifier(k.ColumnName) + " = @u{r}_k" + i));
-        return "UPDATE " + ctx.Table + " SET " + setList + " WHERE " + whereList + ";";
-    }
-
-    /// <summary>
-    /// The <see cref="System.NotSupportedException"/> message for a dialect that cannot emit the multi-row
-    /// batch <c>UpdateAll</c> — surfaced as INQ039 on a throwing stub. Points users at the alternatives
-    /// (single-row <c>Update</c> in a loop; batch <c>InsertAll</c>/<c>DeleteAll</c> are supported).
-    /// </summary>
-    private static string MultiRowUpdateUnsupportedMessage(SqlBuilder sqlBuilder)
-        => "Inquiry " + sqlBuilder.DialectName + " provider (v1) does not support batch UpdateAll: it has no " +
-            "portable multi-row UPDATE form. Use single-row Update in a loop; batch InsertAll and DeleteAll " +
-            "are supported.";
 
     private static List<IColumn> ToColumnList(IReadOnlyList<ColumnData> columns)
     {

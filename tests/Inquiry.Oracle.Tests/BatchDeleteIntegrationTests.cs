@@ -9,8 +9,8 @@ namespace Inquiry.Oracle.Tests;
 /// Batch operations over the Northwind <c>Region</c> entity against real Oracle. Batch <c>InsertAll</c>
 /// works via Oracle's set-based <c>INSERT ALL … SELECT 1 FROM dual</c> (a single statement, so the affected
 /// row count round-trips), and <c>DeleteAll</c> works via the dialect-aware <c>:keys</c> IN-expansion sentinel
-/// (an empty collection rewrites to <c>IN (NULL)</c> — a no-op). Only <c>UpdateAll</c> stays unsupported:
-/// Oracle has no portable multi-row UPDATE, so it degrades to a throwing stub (INQ039) at compile time.
+/// (an empty collection rewrites to <c>IN (NULL)</c> — a no-op). <c>UpdateAll</c> executes the single-row
+/// UPDATE once per item through the runtime batch API (sequential same-connection fallback on Oracle).
 /// </summary>
 [Collection(OracleCollection.Name)]
 public sealed class BatchDeleteIntegrationTests
@@ -82,16 +82,32 @@ public sealed class BatchDeleteIntegrationTests
     }
 
     [SkippableFact]
-    public async Task UpdateAllIsUnsupportedOnOracle()
+    public async Task UpdateAllUpdatesEachRowByKey()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        // UpdateAll has no portable Oracle multi-row form, so it degrades to a throwing stub (the generated
-        // body throws synchronously), matching the compile-time INQ039 + generator-emission test. InsertAll
-        // and DeleteAll are supported (above).
-        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "batchupdunsup");
+        // UpdateAll executes the ordinary single-row UPDATE once per item through the runtime batch API
+        // (sequential same-connection fallback on Oracle), mirroring the other providers' UpdateAll tests.
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "batchupd");
         var regions = harness.GetRequiredService<RegionStore>();
-        var rows = new[] { new Region { RegionID = 1, RegionDescription = "Eastern" } };
+        await regions.InsertAllAsync(new[]
+        {
+            new Region { RegionID = 1, RegionDescription = "Eastern" },
+            new Region { RegionID = 2, RegionDescription = "Western" },
+            new Region { RegionID = 3, RegionDescription = "Northern" },
+        });
 
-        Assert.Throws<System.NotSupportedException>(() => { _ = regions.UpdateAllAsync(rows); });
+        var affected = await regions.UpdateAllAsync(new[]
+        {
+            new Region { RegionID = 1, RegionDescription = "East" },
+            new Region { RegionID = 3, RegionDescription = "North" },
+        });
+
+        Assert.Equal(2, affected);
+        Assert.Equal("East", (await regions.SelectByKeyAsync(1))!.RegionDescription);
+        Assert.Equal("Western", (await regions.SelectByKeyAsync(2))!.RegionDescription); // untouched
+        Assert.Equal("North", (await regions.SelectByKeyAsync(3))!.RegionDescription);
+
+        // Empty collection is a no-op.
+        Assert.Equal(0, await regions.UpdateAllAsync(System.Array.Empty<Region>()));
     }
 }
