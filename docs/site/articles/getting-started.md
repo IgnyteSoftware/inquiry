@@ -88,6 +88,16 @@ var provider = services.BuildServiceProvider();
 
 `AddInquiryGeneratedStores()` calls the generator's `InquiryGeneratedServiceRegistration` - every store you declared is registered as scoped, matching `IInquiry`'s DI lifetime.
 
+Every provider also has an `IConfiguration` overload that resolves the connection string by name
+(`ConnectionStrings:Inquiry` by default), the standard ASP.NET Core shape:
+
+```csharp
+builder.Services.AddInquirySqlite(builder.Configuration);                  // ConnectionStrings:Inquiry
+builder.Services.AddInquirySqlServer(builder.Configuration, "Northwind"); // ConnectionStrings:Northwind
+```
+
+A missing connection string throws at registration time with the exact configuration key named.
+
 ## 6. Run a query
 
 ```csharp

@@ -7,8 +7,8 @@ internal static class InquiryDiagnosticDescriptors
     // ---------------------------------------------------------------------------------------------
     // DIAGNOSTIC-ID REGISTRY
     //
-    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ022,
-    //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043.
+    // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
+    //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -17,7 +17,7 @@ internal static class InquiryDiagnosticDescriptors
     // this table in the same commit.
     //   INQ018–INQ019  Richer WHERE predicates      (e.g. bad IN collection, op/type mismatch)  [IN USE]
     //   INQ020–INQ021  ORDER BY + pagination         (paging requires ORDER BY, unknown order field) [IN USE]
-    //   INQ022–INQ023  Batch & bulk operations
+    //   INQ022–INQ023  Batch & bulk operations       (INQ022 token entity, INQ023 set-based mutation needs [InquiryWhere]) [IN USE]
     //   INQ024–INQ027  Projections + aggregations    (INQ024 no columns, INQ025 not mapped, INQ026 entity mismatch; INQ027 retired in P3 #14) [IN USE]
     //   INQ028–INQ029  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
     //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per convention)
@@ -189,6 +189,17 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    // INQ023: an [InquiryUpdateWhere]/[InquiryDeleteWhere] method with no [InquiryWhere] criteria would
+    // mutate every row in the table — almost certainly a bug. Whole-collection mutations have explicit
+    // operations ([InquiryUpdateAll]/[InquiryDeleteAll]), so the unfiltered form is rejected up front.
+    public static readonly DiagnosticDescriptor PredicateMutationRequiresWhere = new(
+        "INQ023",
+        "Set-based mutation requires at least one InquiryWhere criterion",
+        "Store method '{0}' uses a set-based update/delete with no [InquiryWhere] criteria. An unfiltered set-based mutation would affect every row; add at least one [InquiryWhere], or use [InquiryUpdateAll]/[InquiryDeleteAll] for whole-collection operations.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public static readonly DiagnosticDescriptor MultipleConcurrencyTokens = new(
         "INQ028",
         "Entity declares more than one InquiryConcurrencyToken column",
@@ -332,6 +343,17 @@ internal static class InquiryDiagnosticDescriptors
         "INQ042",
         "OrderBy term has an invalid direction token",
         "Store method '{0}': OrderBy term '{1}' is invalid. Each term must be 'field' or 'field ASC' / 'field DESC' (case-insensitive); '{2}' is not a recognised direction token.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ044: an [InquiryUpdateWhere] SET field that resolved to a column the ORM must not assign.
+    // Keys and database-generated columns are immutable; the soft-delete indicator is owned by the
+    // delete/restore operations; a concurrency token is matched/advanced only by single-row updates.
+    public static readonly DiagnosticDescriptor SetFieldNotUpdatable = new(
+        "INQ044",
+        "InquiryUpdateWhere SET field is not an updatable column",
+        "Store method '{0}' assigns field '{1}', which cannot be SET by a set-based update. SET fields must map to a mutable column — not a key, a database-generated column, the soft-delete indicator, or a concurrency token.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
