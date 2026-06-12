@@ -46,13 +46,56 @@
 > Items marked *(gap research 2026-06-12)* came out of the competitive feature-gap analysis vs
 > EF Core, XPO, Dapper + ecosystem, and the JS/TS ORMs (Prisma, Drizzle, TypeORM, Sequelize, Kysely).
 > Items marked *(adoption review 2026-06-12)* came out of the follow-up "what do companies actually
-> hit" review; the first four are the highest-leverage adoption items on this page.
+> hit" review; the first four are the highest-leverage adoption items on this page. Items marked
+> *(integration research 2026-06-12)* came out of the cross-framework integration/DX research
+> (Aspire, MassTransit/Wolverine, Spring/Micronaut, Rails/Laravel/Ecto, sqlc/sqlx/Atlas).
 
+- **Aspire integration package** *(integration research 2026-06-12)*. An `Inquiry.Aspire` client
+  integration in the standard shape every mainstream data library now ships: resolve the
+  Aspire-provisioned connection string by resource name, register the provider factory, and
+  auto-wire the existing telemetry (`AddInquiryTelemetry()`) and health check so Inquiry lights up
+  the Aspire dashboard. Foundation work: build provider connection factories on
+  **`System.Data.Common.DbDataSource`** (the .NET 7+ pooled primitive Aspire registers) instead of
+  raw connection strings.
+- **Transactional-outbox enablement** *(integration research 2026-06-12)*. MassTransit/Wolverine
+  outbox patterns need to enlist their writes in Inquiry's active transaction;
+  `IInquiryTransaction` currently hides its `DbConnection`/`DbTransaction`. Expose them (read-only,
+  documented) to unlock the .NET messaging ecosystem — the most-requested integration in
+  event-driven shops.
+- **Build-time SQL validation against a dev database** *(integration research 2026-06-12)*. The
+  Rust sqlx `query!` / Go sqlc model: because Inquiry's SQL is compile-time constant, an opt-in
+  build step or test helper can `PREPARE`/`EXPLAIN` every generated SQL const against a
+  dev/Testcontainers database, catching schema drift at build time. No .NET ORM offers this, and
+  Inquiry is uniquely positioned — the internal schema-fidelity tests already prove the approach;
+  this productizes it for consumers.
+- **Dev-time query diagnostics** *(integration research 2026-06-12)*. An N+1 detector for the
+  default interceptor library (Rails bullet/prosopite model — fingerprint repeated
+  identical-SQL/different-parameter executions per scope and warn with call sites; no .NET ORM has
+  this) plus an `ExplainAsync` helper surfacing the database query plan for any generated method
+  (Django `QuerySet.explain()` analog).
+- **Derived query methods** *(integration research 2026-06-12)*. Infer filter columns from the
+  method name (`SelectByCompanyNameAsync`) so store attributes need no arguments in the common case
+  — the Spring Data convention, done at compile time like Micronaut Data.
+- **Auditing timestamp columns** *(integration research 2026-06-12)*. Auto-populated
+  created/modified metadata (`[InquiryCreatedAt]`/`[InquiryModifiedBy]`-style — Spring Data's
+  `@CreatedDate`/`@LastModifiedBy`); table-stakes in the Java ecosystem and complementary to the
+  audit-trail interceptor.
+- **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
+  template with a provider, telemetry, health checks, and tests wired from the first build.
+- **GraphQL DataLoader recipe** *(integration research 2026-06-12)*. Docs + sample showing Hot
+  Chocolate `BatchDataLoader` over Inquiry's `Compare.In` batch selects (the standard non-LINQ ORM
+  integration path) — documentation, not a feature.
+- **DDL safety lint** *(integration research 2026-06-12)*. squawk-inspired analyzer warnings for
+  risky patterns in generated DDL; small and fits the existing analyzer/diagnostic surface.
 - **Generated store interfaces + testing package** *(adoption review 2026-06-12)*. Services depend on
   concrete generated store classes, so consumers cannot mock stores in unit tests. Add opt-in
   interface generation (each store also emits `I{Store}` and registers it in DI) plus an
-  `Inquiry.Testing` helpers package (in-memory SQLite fixture, command-assertion interceptor). The
-  single biggest enterprise-adoption gap.
+  `Inquiry.Testing` helpers package: in-memory SQLite fixture, command-assertion interceptor, an
+  **Ecto-style SQL sandbox** (each test inside a rolled-back transaction with connection ownership,
+  enabling parallel database tests), a **Respawn**-based reset fixture, and
+  **factory_bot/Laravel-style test-data factories** (states/sequences, Bogus-compatible)
+  *(testing scope expanded by integration research 2026-06-12)*. The single biggest
+  enterprise-adoption gap.
 - **`DateOnly`/`TimeOnly` first-class mapping + `Guid` v7 keys** *(adoption review 2026-06-12)*.
   `DbTypeMapper` has no `DateOnly`/`TimeOnly` entries: reads may survive via the `GetFieldValue<T>`
   fallback, but parameter `DbType` stamping and generated `CREATE TABLE` DDL do not handle them —
@@ -86,9 +129,9 @@
   `Inquiry.Interceptors`) of ready-made `IInquiryCommandInterceptor` implementations: audit trail
   (who/when/what changed — XPO's module as an interceptor), sqlcommenter-style trace-context SQL
   comments / query tagging for DBA correlation (no .NET ORM ships sqlcommenter today), slow-query
-  warning logging, DataAnnotations entity validation before insert/update, and a command-text
-  assertion interceptor for tests. Keeps the core dependency-free while making the interceptor seam
-  batteries-included.
+  warning logging, DataAnnotations entity validation before insert/update, the N+1 detector (see
+  *Dev-time query diagnostics* above), and a command-text assertion interceptor for tests. Keeps the
+  core dependency-free while making the interceptor seam batteries-included.
 - **Read-replica routing** *(gap research 2026-06-12)*. Route SELECTs to a read-replica pool and pin
   mutations + transactions to the primary (Drizzle `withReplicas` / Sequelize / TypeORM semantics).
   No mainstream .NET ORM ships this; Inquiry already has the connection-factory and failover chassis
@@ -144,7 +187,8 @@
   compared apples-to-apples on every entity.
 - **Multi-database in one container.** Inquiry binds a single global `IInquiryConnectionFactory` per
   service collection (now enforced — registering two providers throws a clear exception). True
-  multi-provider support would require keyed/named factories or per-provider store scopes.
+  multi-provider support would require keyed/named factories or per-provider store scopes — .NET 8
+  keyed DI services are the natural mechanism *(integration research 2026-06-12)*.
 - **CI: repo-wide warning gate.** Production projects are warnings-as-errors and the known warning
   sources are scoped-suppressed; a repo-wide build-warning gate (extending coverage to the test projects)
   would catch new warnings. *(Skip-gating and the scheduled full-TFM matrix are done — see
@@ -176,6 +220,15 @@
   existing database tools.
 - **CDC/realtime and managed infrastructure services** (Prisma Pulse/Accelerate analogs) — products,
   not library features.
+- **OData and LINQPad drivers** — both want an `IQueryable` provider, which Inquiry deliberately
+  does not have (integration research 2026-06-12).
+- **Orleans grain storage, Dapr state stores, Hangfire/Quartz job storage** — different abstraction
+  layers; those frameworks manage their own persistence (integration research 2026-06-12).
+- **Admin UIs, REPL consoles, and query dashboards** (Django admin / Laravel Telescope analogs) —
+  the telemetry layer feeds existing dashboards; building one is a product, not a library feature
+  (integration research 2026-06-12).
+- **Schema-branching and migration-platform tooling** (Atlas, Neon/PlanetScale branch-per-PR) —
+  external workflow tools; at most a docs pointer (integration research 2026-06-12).
 
 ## Recently resolved
 
