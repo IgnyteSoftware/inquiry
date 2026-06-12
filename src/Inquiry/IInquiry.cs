@@ -156,6 +156,46 @@ public interface IInquiry
     }
 
     /// <summary>
+    /// Executes <paramref name="commandText"/> once per item in <paramref name="items"/>, binding
+    /// each item's parameters via the caller-supplied static delegate, and returns the total
+    /// affected row count. An empty list returns 0 without touching the database. Generated batch
+    /// helpers use this overload; the built-in pipeline executes the items as a single
+    /// <see cref="DbBatch"/> round trip when the provider supports it.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation loops over <c>ExecuteAsync&lt;TArgs&gt;(string, TArgs, Action&lt;DbCommand, TArgs&gt;, …)</c>
+    /// per item, so existing <see cref="IInquiry"/> implementations (e.g. test mocks) stay
+    /// source-compatible. <see cref="DefaultInquiry"/> overrides this and delegates to the
+    /// pipeline's fast path, which uses provider batching where available.
+    /// </remarks>
+    /// <typeparam name="TItem">
+    /// The bound state per command (typically the entity or key). Pass a static method group /
+    /// static lambda for <paramref name="bindParameters"/> to keep the fast path allocation-free.
+    /// </typeparam>
+    async Task<int> ExecuteBatchAsync<TItem>(
+        string commandText,
+        IReadOnlyList<TItem> items,
+        Action<InquiryParameterTarget, TItem> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (items is null) throw new ArgumentNullException(nameof(items));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        var total = 0;
+        for (var i = 0; i < items.Count; i++)
+        {
+            total += await ExecuteAsync(
+                commandText,
+                items[i],
+                (cmd, item) => bindParameters(new InquiryParameterTarget(cmd), item),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        return total;
+    }
+
+    /// <summary>
     /// Executes a command returning a single scalar value (COUNT/SUM/MIN/MAX/AVG). A null/DBNull
     /// result maps to <c>default(T)</c> (e.g. <see langword="null"/> for a nullable T).
     /// </summary>

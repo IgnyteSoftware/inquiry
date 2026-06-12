@@ -169,6 +169,41 @@ internal interface IInquiryRequestPipeline
             cancellationToken);
     }
 
+    /// <summary>
+    /// Executes <paramref name="commandText"/> once per item in <paramref name="items"/>, binding
+    /// each item's parameters via a caller-supplied static delegate, and returns the total affected
+    /// row count. An empty list returns 0 without touching the database.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation loops over the existing
+    /// <c>ExecuteAsync&lt;TArgs&gt;(string, TArgs, Action&lt;DbCommand, TArgs&gt;, …)</c> per item, so
+    /// custom <c>IInquiryRequestPipeline</c> implementations stay source-compatible. The built-in
+    /// pipelines override this with a fast path that executes all items in a single
+    /// <see cref="DbBatch"/> round trip when the provider and connection factory support it.
+    /// </remarks>
+    async Task<int> ExecuteBatchAsync<TItem>(
+        string commandText,
+        IReadOnlyList<TItem> items,
+        Action<InquiryParameterTarget, TItem> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (items is null) throw new ArgumentNullException(nameof(items));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        var total = 0;
+        for (var i = 0; i < items.Count; i++)
+        {
+            total += await ExecuteAsync(
+                commandText,
+                items[i],
+                (cmd, item) => bindParameters(new InquiryParameterTarget(cmd), item),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        return total;
+    }
+
     /// <summary>Executes a command returning a single scalar value (e.g. COUNT/SUM/MIN/MAX).</summary>
     /// <remarks>A default-interface-method (throwing) so custom pipelines stay source-compatible; the
     /// built-in pipelines provide the real implementation.</remarks>

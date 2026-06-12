@@ -41,4 +41,16 @@ public interface IInquiryConnectionFactory
     /// should return <see langword="true"/>.
     /// </summary>
     bool SupportsPersistentPreparedStatements => false;
+
+    /// <summary>
+    /// Gets whether the pipeline may execute multi-item writes through <see cref="DbBatch"/> when
+    /// the provider's connection reports <see cref="DbConnection.CanCreateBatch"/>. Defaults to
+    /// <see langword="true"/>. Providers whose <see cref="FinalizeCommand"/> rewrites parameters on
+    /// the bound <see cref="DbCommand"/> (e.g. renaming or value coercion) must return
+    /// <see langword="false"/>: the DbBatch path binds parameters onto
+    /// <see cref="DbBatchCommand"/> instances and never calls <see cref="FinalizeCommand"/>, so
+    /// those fixups would be silently skipped. Returning <see langword="false"/> routes batches
+    /// through the sequential per-command path instead.
+    /// </summary>
+    bool SupportsBatchExecution => true;
 }
