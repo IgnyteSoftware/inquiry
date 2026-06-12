@@ -20,6 +20,9 @@ internal sealed record ColumnData : IColumn
     public required TypeData Type { get; init; }
     public bool IsKey { get; init; }
     public bool IsGenerated { get; init; }
+
+    /// <summary>Insert/upsert assigns a v7 GUID when this key is unset ([InquiryKey(SequentialGuid = true)]).</summary>
+    public bool IsSequentialGuid { get; init; }
     public bool UseDatabaseDefault { get; init; }
     public SoftDeleteKind SoftDelete { get; init; } = SoftDeleteKind.None;
     public bool IsConcurrencyToken { get; init; }
