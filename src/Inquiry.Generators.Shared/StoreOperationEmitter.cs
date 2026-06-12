@@ -93,7 +93,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectAllByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitSelectAllByPredicate(source, method, predicatePlan!, entityType, structMat, cancellation);
+                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, entityType, structMat, cancellation);
                 source.AppendLine("    }");
                 break;
 
@@ -197,17 +197,21 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.DeleteAll:
             {
-                // batch delete over a key collection. The (keys) sentinel in _sqlDeleteAll is expanded
-                // at runtime into one placeholder per key by InquiryInExpansion; the Expand name takes the
-                // dialect sigil (':keys' on Oracle, '@keys' elsewhere) to match the baked sentinel. Returns
-                // rows affected; for a soft-delete entity _sqlDeleteAll is the soft UPDATE form.
+                // batch delete over a key collection. On array dialects the (keys) placeholder binds
+                // the whole collection as one native array parameter (constant SQL); elsewhere the
+                // sentinel is expanded at runtime into one placeholder per key by InquiryInExpansion.
+                // The bind/Expand name takes the dialect sigil (':keys' on Oracle, '@keys' elsewhere)
+                // to match the baked SQL. Returns rows affected; for a soft-delete entity
+                // _sqlDeleteAll is the soft UPDATE form.
                 var keysParam = method.Parameters[0].Name;
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine("            _sqlDeleteAll,");
                 source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
                 source.AppendLine("            {");
-                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand);");
+                source.AppendLine(sqlBuilder.UseArrayInParameters
+                    ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam});"
+                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand);");
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 source.AppendLine("    }");
@@ -640,6 +644,7 @@ internal static class StoreOperationEmitter
     /// </summary>
     private static void EmitSelectAllByPredicate(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         StoreMethodData method,
         ResolvedPredicatePlan plan,
         string entityType,
@@ -656,7 +661,9 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[binding.MethodParameterIndex].Name;
             if (binding.IsCollection)
             {
-                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg}, Inquiry.MaxParametersPerCommand);");
+                source.AppendLine(sqlBuilder.UseArrayInParameters
+                    ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg});"
+                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg}, Inquiry.MaxParametersPerCommand);");
             }
             else
             {
@@ -725,7 +732,9 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[binding.MethodParameterIndex].Name;
             if (binding.IsCollection)
             {
-                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg}, Inquiry.MaxParametersPerCommand);");
+                source.AppendLine(sqlBuilder.UseArrayInParameters
+                    ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg});"
+                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg}, Inquiry.MaxParametersPerCommand);");
             }
             else
             {
