@@ -64,6 +64,16 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Production-readiness round (2026-06-12):** `InquiryOptions.DefaultCommandTimeout` applies a
+  global command timeout (explicit `InquiryCommand.CommandTimeout` still wins); an ASP.NET Core
+  health check (`AddHealthChecks().AddInquiry()`) opens a connection through the registered
+  factory; the sample app wires up `AddInquiryTelemetry()`, `Inquiry.Command` debug logging, and
+  a `/health` endpoint; and the **NativeAOT story is verified in CI** — the runtime packages are
+  marked `IsAotCompatible` (the assembly-scanning `AddInquiry(Assembly[])` overload and the
+  reflection-based `InquiryJsonConverter` are annotated `RequiresUnreferencedCode`; use
+  `AddInquiryGeneratedStores()` and source-generated JSON converters under AOT), and a new
+  `samples/Inquiry.AotSmoke` app is published as a native binary and executed by the `aot-smoke`
+  CI job.
 - **Allocation micro-optimizations (2026-06-12):** generated materializers/binders read value converters
   through a shared cached instance instead of allocating one per column per row; streaming filtered
   selects and streaming full-text search use a new allocation-free `QueryAsync<T, TArgs, TMaterializer>`
