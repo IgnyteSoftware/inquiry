@@ -291,6 +291,11 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         DbTypeClass.Decimal => "NUMBER(" + DecimalSpec(column, 19, 4) + ")",
         DbTypeClass.DateTime => "TIMESTAMP",
         DbTypeClass.DateTimeOffset => "TIMESTAMP WITH TIME ZONE",
+        DbTypeClass.DateOnly => "DATE",
+        // Oracle has no time-of-day type. A day-to-second interval bounded to one day (DAY(0)) with
+        // SECOND(7) fractional precision preserves TimeOnly's 100ns ticks; ODP.NET maps DbType.Time
+        // to OracleDbType.IntervalDS, so parameter binding lines up with this column type.
+        DbTypeClass.TimeOnly => "INTERVAL DAY(0) TO SECOND(7)",
         DbTypeClass.Guid => "RAW(16)",
         DbTypeClass.ByteArray => "BLOB",
         // Oracle has no unbounded VARCHAR2; unbounded text falls back to CLOB.

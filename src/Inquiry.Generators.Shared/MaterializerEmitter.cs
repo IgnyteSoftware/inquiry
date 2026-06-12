@@ -41,7 +41,13 @@ internal static class MaterializerEmitter
                     ? $"({nonNullable}){ReadCallForSpecialType(type.EnumUnderlyingSpecialType, index, nonNullable)}"
                     : type.IsGuid
                         ? $"reader.GetGuid({index})"
-                        : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
+                        // DbDataReader has no GetDateOnly/GetTimeOnly; GetFieldValue<T> is the
+                        // documented read path for both on modern providers.
+                        : type.IsDateOnly
+                            ? $"reader.GetFieldValue<global::System.DateOnly>({index})"
+                            : type.IsTimeOnly
+                                ? $"reader.GetFieldValue<global::System.TimeOnly>({index})"
+                                : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
 
         if (!type.IsNullable)
         {

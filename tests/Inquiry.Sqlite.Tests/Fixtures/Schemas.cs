@@ -23,6 +23,16 @@ internal static class Schemas
         );
         """;
 
+    public const string ScheduleItem = """
+        CREATE TABLE TScheduleItem (
+            Id INTEGER PRIMARY KEY,
+            EventDate TEXT NOT NULL,
+            StartTime TEXT NOT NULL,
+            EndDate TEXT,
+            EndTime TEXT
+        );
+        """;
+
     public const string DefaultedKeyItem = """
         CREATE TABLE TDefaultedKeyItem (
             Id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),

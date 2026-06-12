@@ -25,6 +25,16 @@ internal static class DbTypeMapper
             return "global::System.Data.DbType.Guid";
         }
 
+        if (type.IsDateOnly)
+        {
+            return "global::System.Data.DbType.Date";
+        }
+
+        if (type.IsTimeOnly)
+        {
+            return "global::System.Data.DbType.Time";
+        }
+
         var special = type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType;
         return Map(special);
     }
