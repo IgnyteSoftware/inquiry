@@ -66,12 +66,28 @@ public sealed class TransactionInteropTests
         await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "TxInterop");
         var inquiry = harness.GetRequiredService<IInquiry>();
 
-        var tx = await inquiry.BeginTransactionAsync();
+        await using var tx = await inquiry.BeginTransactionAsync();
         await tx.CommitAsync();
 
         Assert.Throws<ObjectDisposedException>(() => tx.Connection);
         Assert.Throws<ObjectDisposedException>(() => tx.Transaction);
-        await tx.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task SavepointHandlesThrowAfterOuterCloses()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "TxInterop");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await using var outer = await inquiry.BeginTransactionAsync();
+        await using var inner = await outer.BeginTransactionAsync();
+
+        // Out-of-order teardown: the outer transaction closes while the savepoint handle is
+        // still held. The savepoint must not hand out the now-disposed connection/transaction.
+        await outer.CommitAsync();
+
+        Assert.Throws<ObjectDisposedException>(() => inner.Connection);
+        Assert.Throws<ObjectDisposedException>(() => inner.Transaction);
     }
 
     [Fact]

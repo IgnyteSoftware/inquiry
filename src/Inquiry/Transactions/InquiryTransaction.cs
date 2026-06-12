@@ -169,6 +169,7 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     {
         if (_closed) return;
         _closed = true;
+        _pipeline.MarkClosed();
         _onClose();
     }
 }
