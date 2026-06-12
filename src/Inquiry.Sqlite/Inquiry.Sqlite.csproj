@@ -17,6 +17,7 @@
     <None Include="..\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Sqlite.Analyzer.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="..\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 
