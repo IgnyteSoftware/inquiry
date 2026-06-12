@@ -31,8 +31,10 @@ internal static class MaterializerEmitter
     {
         var nonNullable = type.NonNullableDisplayName;
         // a converter reads the provider primitive and maps it back via FromProvider.
+        // converters are stateless; read through the shared cached instance instead of allocating
+        // one per column per row.
         var read = converter is not null
-            ? $"new {converter.ConverterTypeDisplay}().FromProvider({ReadCallForSpecialType(converter.ProviderSpecialType, index, converter.ProviderTypeDisplay)})"
+            ? $"global::Inquiry.Entities.InquiryConverterCache<{converter.ConverterTypeDisplay}>.Instance.FromProvider({ReadCallForSpecialType(converter.ProviderSpecialType, index, converter.ProviderTypeDisplay)})"
             : enumAsString
                 ? $"global::System.Enum.Parse<{nonNullable}>(reader.GetString({index}))"
                 : type.IsEnum

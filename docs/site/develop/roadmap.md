@@ -64,6 +64,13 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Allocation micro-optimizations (2026-06-12):** generated materializers/binders read value converters
+  through a shared cached instance instead of allocating one per column per row; streaming filtered
+  selects and streaming full-text search use a new allocation-free `QueryAsync<T, TArgs, TMaterializer>`
+  fast path (no `InquiryParameter[]`/`InquiryCommand` per call), matching the buffered overloads; batch
+  update splices the row index between pre-split template segments instead of `string.Replace` per row;
+  `InquirySql` caches the generated `@p0…@p15` parameter names; retrying provider factories no longer
+  allocate an open-delegate per connection open.
 - **Observability (2026-06-11):** opt-in `AddInquiryTelemetry()` emits OpenTelemetry-compatible spans
   (`ActivitySource` "Inquiry", db semantic conventions), a `db.client.operation.duration` histogram
   (`Meter` "Inquiry"), and `ILogger` messages on the `Inquiry.Command` category. Parameter values are

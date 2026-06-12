@@ -195,6 +195,32 @@ public interface IInquiry
     }
 
     /// <summary>
+    /// Streaming query with a struct materializer, binding parameters via a caller-supplied static
+    /// delegate. The generated-store path uses this overload to avoid allocating an
+    /// <c>InquiryParameter[]</c> or <c>InquiryCommand</c> per call — the delegate writes directly
+    /// into the <see cref="DbCommand"/>'s parameter collection.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation routes through <c>QueryAsync&lt;TEntity, TMaterializer&gt;(InquiryCommand, …)</c>,
+    /// so existing <see cref="IInquiry"/> implementations stay source-compatible.
+    /// <see cref="DefaultInquiry"/> overrides this and delegates to the pipeline's allocation-free fast path.
+    /// </remarks>
+    IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        return QueryAsync<TEntity, TMaterializer>(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
+    }
+
+    /// <summary>
     /// Buffered query with a struct materializer, binding parameters via a caller-supplied static
     /// delegate. The generated-store path uses this overload to avoid allocating an
     /// <c>InquiryParameter[]</c> or <c>InquiryCommand</c> per call — the delegate writes directly
