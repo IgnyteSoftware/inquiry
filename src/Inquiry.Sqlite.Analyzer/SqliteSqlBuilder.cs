@@ -95,6 +95,8 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
         DbTypeClass.Boolean or DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64 => "INTEGER",
         DbTypeClass.Single or DbTypeClass.Double => "REAL",
         DbTypeClass.Decimal => "NUMERIC",
+        // SQLite has no date/time storage classes; DateOnly/TimeOnly round-trip as ISO-8601 TEXT.
+        DbTypeClass.DateOnly or DbTypeClass.TimeOnly => "TEXT",
         DbTypeClass.ByteArray => "BLOB",
         _ => "TEXT",
     };

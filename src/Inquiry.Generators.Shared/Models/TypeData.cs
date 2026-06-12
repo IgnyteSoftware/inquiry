@@ -23,6 +23,14 @@ internal sealed record TypeData(
     /// <summary>True when the type is <c>byte[]</c> (or nullable <c>byte[]</c>), mapped to a binary/BLOB column.</summary>
     public bool IsByteArray { get; init; }
 
+    /// <summary>True when the type is <see cref="System.DateOnly"/> (or <c>DateOnly?</c>). Like
+    /// <see cref="IsGuid"/>, matched by display name because the type has no <see cref="SpecialType"/>.</summary>
+    public bool IsDateOnly { get; init; }
+
+    /// <summary>True when the type is <see cref="System.TimeOnly"/> (or <c>TimeOnly?</c>). Like
+    /// <see cref="IsGuid"/>, matched by display name because the type has no <see cref="SpecialType"/>.</summary>
+    public bool IsTimeOnly { get; init; }
+
     /// <summary>Builds a <see cref="TypeData"/> from a type symbol. Called only during discovery —
     /// the result holds no symbol. Mirrors the old <c>TypeInfo.Create</c> exactly.</summary>
     public static TypeData Create(ITypeSymbol symbol, NullableAnnotation nullableAnnotation)
@@ -46,6 +54,8 @@ internal sealed record TypeData(
             IsEnum: isEnum)
         {
             IsByteArray = isByteArray,
+            IsDateOnly = nonNullableDisplay == "global::System.DateOnly",
+            IsTimeOnly = nonNullableDisplay == "global::System.TimeOnly",
         };
     }
 

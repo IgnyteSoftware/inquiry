@@ -242,6 +242,9 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
         DbTypeClass.Double => "DOUBLE",
         DbTypeClass.Decimal => "DECIMAL(" + DecimalSpec(column, 18, 2) + ")",
         DbTypeClass.DateTime or DbTypeClass.DateTimeOffset => "DATETIME",
+        DbTypeClass.DateOnly => "DATE",
+        // TIME(6) keeps the microsecond precision a TimeOnly carries (plain TIME truncates to seconds).
+        DbTypeClass.TimeOnly => "TIME(6)",
         DbTypeClass.Guid => "CHAR(36)",
         DbTypeClass.ByteArray => "LONGBLOB",
         // MySQL cannot index LONGTEXT; a bounded Length is required for PK/FK string columns.
