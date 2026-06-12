@@ -45,7 +45,39 @@
 
 > Items marked *(gap research 2026-06-12)* came out of the competitive feature-gap analysis vs
 > EF Core, XPO, Dapper + ecosystem, and the JS/TS ORMs (Prisma, Drizzle, TypeORM, Sequelize, Kysely).
+> Items marked *(adoption review 2026-06-12)* came out of the follow-up "what do companies actually
+> hit" review; the first four are the highest-leverage adoption items on this page.
 
+- **Generated store interfaces + testing package** *(adoption review 2026-06-12)*. Services depend on
+  concrete generated store classes, so consumers cannot mock stores in unit tests. Add opt-in
+  interface generation (each store also emits `I{Store}` and registers it in DI) plus an
+  `Inquiry.Testing` helpers package (in-memory SQLite fixture, command-assertion interceptor). The
+  single biggest enterprise-adoption gap.
+- **`DateOnly`/`TimeOnly` first-class mapping + `Guid` v7 keys** *(adoption review 2026-06-12)*.
+  `DbTypeMapper` has no `DateOnly`/`TimeOnly` entries: reads may survive via the `GetFieldValue<T>`
+  fallback, but parameter `DbType` stamping and generated `CREATE TABLE` DDL do not handle them —
+  and they are the default date/time choice in new .NET 8+ code. Same bucket: a sequential
+  `Guid.CreateVersion7()` key-generation default for index locality.
+- **`TransactionScope` / `System.Transactions` interop** *(adoption review 2026-06-12)*. Inquiry has
+  no documented position on ambient `TransactionScope`; per-operation connection opening means each
+  operation enlists separately (risking distributed-transaction escalation). Needs a docs page and
+  possibly an explicit enlistment option for brownfield code.
+- **Ad-hoc DTO materialization** *(adoption review 2026-06-12)*. The ad-hoc `IInquiry.Query*` path
+  requires a DI-registered materializer, so quick reporting queries cannot map into an unregistered
+  POCO (Dapper's bread and butter). An `[InquiryAdHoc]`-style attribute generating a materializer for
+  any DTO closes the most common "I'd just use Dapper for this one query" escape.
+- **Raw-SQL injection analyzer** *(adoption review 2026-06-12)*. A Roslyn diagnostic when
+  non-constant string text reaches `InquiryCommand` — cheap, fits the existing analyzer surface, and
+  hardens the documented raw-SQL escape hatch.
+- **Configuration binding** *(adoption review 2026-06-12)*. `AddInquiry{Provider}(IConfiguration, sectionName)`
+  overloads + named-connection-string resolution, the standard ASP.NET Core registration shape.
+- **JSON-path querying & column-encryption docs** *(adoption review 2026-06-12)*. Predicate support
+  for filtering into JSON columns (EF parity), and documentation for SQL Server Always Encrypted /
+  pgcrypto patterns over the existing value-converter seam (mostly docs, little code).
+- **Release engineering & governance** *(adoption review 2026-06-12)*. Real `RepositoryUrl`
+  (currently a placeholder), SourceLink + symbol packages, package readme/icon, a pack/publish
+  workflow, and a published versioning / breaking-change / support-window policy — the remaining
+  pre-1.0 go-live bucket.
 - **Set-based predicate mutations** *(gap research 2026-06-12)*. `ExecuteUpdate`/`ExecuteDelete`-style
   operations — UPDATE/DELETE by WHERE predicate without loading entities (e.g. `[InquiryUpdateWhere]`,
   `[InquiryDeleteWhere]`), reusing the existing compile-time predicate model. The most-missed everyday
@@ -54,8 +86,9 @@
   `Inquiry.Interceptors`) of ready-made `IInquiryCommandInterceptor` implementations: audit trail
   (who/when/what changed — XPO's module as an interceptor), sqlcommenter-style trace-context SQL
   comments / query tagging for DBA correlation (no .NET ORM ships sqlcommenter today), slow-query
-  warning logging, and a command-text assertion interceptor for tests. Keeps the core dependency-free
-  while making the interceptor seam batteries-included.
+  warning logging, DataAnnotations entity validation before insert/update, and a command-text
+  assertion interceptor for tests. Keeps the core dependency-free while making the interceptor seam
+  batteries-included.
 - **Read-replica routing** *(gap research 2026-06-12)*. Route SELECTs to a read-replica pool and pin
   mutations + transactions to the primary (Drizzle `withReplicas` / Sequelize / TypeORM semantics).
   No mainstream .NET ORM ships this; Inquiry already has the connection-factory and failover chassis
@@ -85,6 +118,10 @@
 - **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 5;
   add engines (Firebird, DB2, MariaDB-specific, …) demand-driven — the provider + analyzer split makes
   each one mechanical.
+- **Migrations integration recipe** *(post-1.0 — deferred to a later release)*. Migrations beyond the
+  initial DDL stay out of scope (see below), but a docs guide showing `InquiryGeneratedSchema.Ddl`
+  feeding DbUp / FluentMigrator would defuse the most common "but no migrations?" objection without
+  building a migration engine.
 - **Verified cloud-platform compatibility matrix** *(post-1.0 — deferred to a later release)*. Most
   popular hosted databases are wire-compatible with engines Inquiry already ships, so this is
   compatibility modes + verified docs, not new dialects — extending the existing `Compatibility`
