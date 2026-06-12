@@ -143,6 +143,33 @@ Semantics:
 - **Nesting is unbounded.** Each call gets a unique savepoint name (`inquiry_sp_<N>`).
 - **Oracle quirk** — Oracle does not support explicit savepoint release. Inner Commit catches the resulting `NotSupportedException` and treats the savepoint as committed locally; Oracle implicitly cleans it up when the outer transaction commits.
 
+## Enlisting external writes (outbox interop)
+
+Messaging libraries with a transactional outbox — MassTransit, Wolverine, or your own — need to write their message rows on **the same connection and transaction** as your entity work, so the business change and the outgoing message commit or roll back atomically. The transaction handle exposes both for exactly this:
+
+```csharp
+await using var tx = await inquiry.BeginTransactionAsync();
+
+await orderStore.InsertAsync(order);                       // Inquiry's work
+
+await using (var cmd = tx.Connection.CreateCommand())      // the outbox's work
+{
+    cmd.Transaction = tx.Transaction;
+    cmd.CommandText = "INSERT INTO OutboxMessages (Payload) VALUES (@p)";
+    // ... bind, execute ...
+    await cmd.ExecuteNonQueryAsync();
+}
+
+await tx.CommitAsync();                                    // both or neither
+```
+
+Rules of the road:
+
+- **Borrowed, not owned.** Issue commands on `tx.Connection` / `tx.Transaction`, but never close, commit, roll back, or dispose them directly — the `IInquiryTransaction` handle owns their lifetime. Use `tx.CommitAsync()` / `tx.RollbackAsync()`.
+- **Fail-fast after close.** Both properties throw `ObjectDisposedException` once the transaction is committed, rolled back, or disposed — same as every other member on the handle.
+- **Savepoints share the pair.** A nested handle's `Connection` / `Transaction` are the *outer* transaction's — a savepoint is the same physical transaction.
+- **Serialize access.** The same single-connection rule as everything else in a transaction applies (see below): don't run external commands concurrently with Inquiry operations on the same handle.
+
 ## Concurrency inside a transaction
 
 `DbConnection` isn't thread-safe. The transacted pipeline serializes operations with an `Interlocked.CompareExchange` guard: if a second operation starts while another is in flight on the same transaction, you get an explicit:

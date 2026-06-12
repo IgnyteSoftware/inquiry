@@ -39,6 +39,26 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     public override IsolationLevel IsolationLevel => _transaction.IsolationLevel;
 
     /// <inheritdoc />
+    public override DbConnection Connection
+    {
+        get
+        {
+            ThrowIfClosed();
+            return _connection;
+        }
+    }
+
+    /// <inheritdoc />
+    public override DbTransaction Transaction
+    {
+        get
+        {
+            ThrowIfClosed();
+            return _transaction;
+        }
+    }
+
+    /// <inheritdoc />
     public override void ThrowIfClosed()
     {
         // _closed is set on the first of Commit/Rollback/Dispose; _disposed is set by
@@ -149,6 +169,7 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     {
         if (_closed) return;
         _closed = true;
+        _pipeline.MarkClosed();
         _onClose();
     }
 }
