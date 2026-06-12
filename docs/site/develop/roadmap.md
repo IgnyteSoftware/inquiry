@@ -87,9 +87,6 @@
   no documented position on ambient `TransactionScope`; per-operation connection opening means each
   operation enlists separately (risking distributed-transaction escalation). Needs a docs page and
   possibly an explicit enlistment option for brownfield code.
-- **Raw-SQL injection analyzer** *(adoption review 2026-06-12)*. A Roslyn diagnostic when
-  non-constant string text reaches `InquiryCommand` — cheap, fits the existing analyzer surface, and
-  hardens the documented raw-SQL escape hatch.
 - **JSON-path querying & column-encryption docs** *(adoption review 2026-06-12)*. Predicate support
   for filtering into JSON columns (EF parity), and documentation for SQL Server Always Encrypted /
   pgcrypto patterns over the existing value-converter seam (mostly docs, little code).
@@ -207,6 +204,10 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Raw-SQL injection analyzer (2026-06-12):** new `InquiryRawSqlAnalyzer` (ships in every
+  provider's analyzer assembly) warns with **INQ048** when a non-constant string reaches
+  `InquiryCommand`'s command text — literals, consts, `nameof`, and constant concatenation stay
+  silent; generated code is excluded. Documented in [Security](../articles/security.md).
 - **PostgreSQL array `IN` parameters (2026-06-12):** `Compare.In` predicates, `[InquiryDeleteAll]`,
   and IN criteria on set-based mutations now render `col = ANY(@ids)` on PostgreSQL and bind the
   collection as one native array parameter (new `InquiryArrayParameter`; enum elements coerce to
