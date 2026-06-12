@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Description>Test helpers for the Inquiry source-generated micro-ORM: an in-memory SQLite fixture, a recording command interceptor, and a Respawn-based database reset wrapper. Test-framework-agnostic.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Respawn" />
+  </ItemGroup>
+</Project>
