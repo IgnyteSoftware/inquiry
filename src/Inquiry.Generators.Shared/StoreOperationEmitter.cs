@@ -318,42 +318,33 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.UpdateAll:
             {
-                // batch update — one UPDATE statement per row in a single multi-statement command.
-                // The _sqlUpdateAllRow template carries a {r} token replaced with each row index; the
-                // binder writes @u{r}_<n> for SET columns and @u{r}_k<n> for key columns to match.
+                // batch update — the ordinary single-row UPDATE (_sqlUpdate) executed once per item
+                // through the runtime batch API: one DbBatch round trip where the provider supports it,
+                // a sequential same-connection fallback otherwise. Each item gets its own parameter
+                // space, so the binder mirrors the single-row update binder (same columns, same order,
+                // same "@PropertyName" names) and no parameter-cap guard applies.
                 var itemsParam = method.Parameters[0].Name;
-                var setColumns = SelectUpdateSetColumns(entity);
-                var keyColumns = entity.Keys;
+                var updateColumns = SelectMutationColumns(entity, includeKey: true);
                 AppendHeader(source, method, parameters, isAsync: true);
-                AppendBatchListMaterialization(source, itemsParam, entityType, setColumns.Length + keyColumns.Count, "update");
-                // Append the pre-split row-template segments with the row index spliced in, instead of
-                // a per-row string.Replace over the whole template (one template-sized string per row).
-                source.AppendLine("        var _sb = new global::System.Text.StringBuilder();");
-                source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
-                source.AppendLine("        {");
-                source.AppendLine("            _sb.Append(_sqlUpdateAllRowSegments[0]);");
-                source.AppendLine("            for (var _s = 1; _s < _sqlUpdateAllRowSegments.Length; _s++)");
-                source.AppendLine("            {");
-                source.AppendLine("                _sb.Append(_r).Append(_sqlUpdateAllRowSegments[_s]);");
-                source.AppendLine("            }");
-                source.AppendLine("        }");
-                source.AppendLine($"        return await Inquiry.ExecuteAsync<global::System.Collections.Generic.IReadOnlyList<{entityType}>>(");
-                source.AppendLine("            _sb.ToString(),");
+                AppendBatchListMaterialization(source, itemsParam, entityType, updateColumns.Length, "update", enforceParameterCap: false);
+                source.AppendLine("        return await Inquiry.ExecuteBatchAsync(");
+                source.AppendLine("            _sqlUpdate,");
                 source.AppendLine("            _list,");
-                source.AppendLine("            static (_cmd, _items) =>");
+                source.AppendLine("            static (_t, _it) =>");
                 source.AppendLine("            {");
-                source.AppendLine("                for (var _r = 0; _r < _items.Count; _r++)");
-                source.AppendLine("                {");
-                source.AppendLine("                    var _it = _items[_r];");
-                for (var _c = 0; _c < setColumns.Length; _c++)
+                for (var _c = 0; _c < updateColumns.Length; _c++)
                 {
-                    AppendUpdateAllParam(source, sqlBuilder, setColumns[_c], "\"@u\" + _r + \"_" + _c + "\"");
+                    var col = updateColumns[_c];
+                    var dbType = ResolveDbType(col, sqlBuilder);
+                    source.AppendLine($"                var _p{_c} = _t.CreateParameter();");
+                    source.AppendLine($"                _p{_c}.ParameterName = \"@{GeneratorHelpers.Escape(col.PropertyName)}\";");
+                    if (dbType is not null)
+                    {
+                        source.AppendLine($"                _p{_c}.DbType = {dbType};");
+                    }
+                    source.AppendLine($"                _p{_c}.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName)};");
+                    source.AppendLine($"                _t.AddParameter(_p{_c});");
                 }
-                for (var _k = 0; _k < keyColumns.Count; _k++)
-                {
-                    AppendUpdateAllParam(source, sqlBuilder, keyColumns[_k], "\"@u\" + _r + \"_k" + _k + "\"");
-                }
-                source.AppendLine("                }");
                 source.AppendLine("            },");
                 source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
@@ -837,8 +828,11 @@ internal static class StoreOperationEmitter
         pi++;
     }
 
-    private static void AppendBatchListMaterialization(StringBuilder source, string itemsParam, string entityType, int parametersPerItem, string operation)
+    private static void AppendBatchListMaterialization(StringBuilder source, string itemsParam, string entityType, int parametersPerItem, string operation, bool enforceParameterCap = true)
     {
+        // enforceParameterCap guards a batch that packs every row's parameters into ONE command
+        // (InsertAll's multi-row VALUES). A batched-per-item operation (UpdateAll via ExecuteBatchAsync)
+        // binds each row to its own command, so per-command parameter counts stay tiny and no cap applies.
         var parameterCount = Math.Max(parametersPerItem, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
         var message = "Inquiry batch " + operation + " would exceed the configured parameter limit for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.";
 
@@ -849,15 +843,21 @@ internal static class StoreOperationEmitter
         source.AppendLine($"            var _tmp = new global::System.Collections.Generic.List<{entityType}>();");
         source.AppendLine($"            foreach (var _item in {itemsParam})");
         source.AppendLine("            {");
-        source.AppendLine($"                if ((long)(_tmp.Count + 1) * {parameterCount}L > Inquiry.MaxParametersPerCommand)");
-        source.AppendLine($"                    throw new global::System.InvalidOperationException(\"{message}\");");
+        if (enforceParameterCap)
+        {
+            source.AppendLine($"                if ((long)(_tmp.Count + 1) * {parameterCount}L > Inquiry.MaxParametersPerCommand)");
+            source.AppendLine($"                    throw new global::System.InvalidOperationException(\"{message}\");");
+        }
         source.AppendLine("                _tmp.Add(_item);");
         source.AppendLine("            }");
         source.AppendLine("            _list = _tmp;");
         source.AppendLine("        }");
         source.AppendLine("        if (_list.Count == 0) return 0;");
-        source.AppendLine($"        if ((long)_list.Count * {parameterCount}L > Inquiry.MaxParametersPerCommand)");
-        source.AppendLine($"            throw new global::System.InvalidOperationException(\"{message}\");");
+        if (enforceParameterCap)
+        {
+            source.AppendLine($"        if ((long)_list.Count * {parameterCount}L > Inquiry.MaxParametersPerCommand)");
+            source.AppendLine($"            throw new global::System.InvalidOperationException(\"{message}\");");
+        }
     }
 
     /// <summary>Strips a trailing nullable annotation/<c>Nullable&lt;&gt;</c> marker from a cursor type display.</summary>
@@ -1197,31 +1197,6 @@ internal static class StoreOperationEmitter
 
         return string.Join(", ", parts);
     }
-
-    /// <summary>Emits one bound DbParameter for a batch-update column (name expression + DbType + value).</summary>
-    private static void AppendUpdateAllParam(StringBuilder source, SqlBuilder sqlBuilder, ColumnData column, string nameExpression)
-    {
-        var dbType = ResolveDbType(column, sqlBuilder);
-        source.AppendLine("                    {");
-        source.AppendLine("                        var _p = _cmd.CreateParameter();");
-        source.AppendLine($"                        _p.ParameterName = {nameExpression};");
-        if (dbType is not null)
-        {
-            source.AppendLine($"                        _p.DbType = {dbType};");
-        }
-        source.AppendLine($"                        _p.Value = {BuildParameterValueExpression(column, "_it." + column.PropertyName)};");
-        source.AppendLine("                        _cmd.Parameters.Add(_p);");
-        source.AppendLine("                    }");
-    }
-
-    /// <summary>
-    /// The columns a batch UPDATE assigns — non-key, non-generated, non-concurrency-token — matching
-    /// the single-row update's SET composition (the key columns go in the WHERE, the token is untouched).
-    /// </summary>
-    internal static ColumnData[] SelectUpdateSetColumns(EntityData entity)
-        => entity.Columns.AsImmutableArray()
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken)
-            .ToArray();
 
     private static ColumnData[] SelectMutationColumns(EntityData entity, bool includeKey)
         => entity.Columns.AsImmutableArray()

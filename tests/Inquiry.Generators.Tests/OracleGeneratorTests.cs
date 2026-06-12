@@ -381,21 +381,19 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void OracleDialectEmitsInsertAllAndDegradesUpdateAll()
+    public void OracleDialectEmitsInsertAllAndBatchUpdateAll()
     {
         // Oracle batch InsertAll is real: Oracle has no multi-row VALUES, so the generator emits the
         // set-based `INSERT ALL INTO t (cols) VALUES (...) ... SELECT 1 FROM dual` form (a single INSERT
-        // statement, so ExecuteNonQuery returns the inserted-row count) with ':'-sigil parameters. UpdateAll
-        // has no portable Oracle multi-row form, so it stays a throwing stub + INQ039; batch DELETE
-        // (IN-expansion) works. Verified live by Inquiry.Oracle.Tests.BatchIntegrationTests.
+        // statement, so ExecuteNonQuery returns the inserted-row count) with ':'-sigil parameters.
+        // UpdateAll now routes through the runtime batch API (one single-row UPDATE per item), so Oracle
+        // generates a working body too — no INQ039, no throwing stub. Batch DELETE (IN-expansion) works.
         var result = RunGenerator(BatchStoreSource, dialect: "Oracle");
 
         var inq039 = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics)
             .Where(static d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning)
             .ToArray();
-        // Only UpdateAll degrades; InsertAll is supported (no INQ039 naming it).
-        Assert.Contains(inq039, static d => d.GetMessage().Contains("UpdateAllAsync", StringComparison.Ordinal));
-        Assert.DoesNotContain(inq039, static d => d.GetMessage().Contains("InsertAllAsync", StringComparison.Ordinal));
+        Assert.Empty(inq039);
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
 
         var tree = Assert.Single(
@@ -409,8 +407,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("private const string _sqlInsertAllRowOpen = \"INTO TRegion (RegionId, Name) VALUES (\";", text);
         Assert.Contains("_sb.Append(\":p\").Append(_r).Append(\"_0\");", text);
         Assert.Contains("_sb.Append(\" SELECT 1 FROM dual\");", text);
-        // UpdateAll degrades to a throwing stub; its template const is skipped. DeleteAll still emitted.
-        Assert.Contains("throw new global::System.NotSupportedException(", text);
+        // UpdateAll executes the single-row UPDATE per item via the batch API; no stub, no template const.
+        Assert.Contains("return await Inquiry.ExecuteBatchAsync(", text);
+        Assert.Contains("_sqlUpdate,", text);
+        Assert.DoesNotContain("throw new global::System.NotSupportedException(", text);
         Assert.DoesNotContain("_sqlUpdateAllRow", text);
         Assert.Contains("_sqlDeleteAll", text);
     }
@@ -418,9 +418,8 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void NonOracleDialectEmitsMultiRowValuesBatchInsertAndUpdate()
     {
-        // Preservation guard: non-Oracle dialects keep the multi-row VALUES InsertAll and the per-row
-        // UPDATE-batch UpdateAll, with no throwing stub (the shape hooks default for all of them). SqlServer
-        // shown here.
+        // Preservation guard: non-Oracle dialects keep the multi-row VALUES InsertAll, and UpdateAll
+        // routes through the batch API with no throwing stub. SqlServer shown here.
         var result = RunGenerator(BatchStoreSource, dialect: "SqlServer");
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
 
@@ -434,7 +433,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sb.Append(\"@p\").Append(_r).Append(\"_0\");", text);
         Assert.DoesNotContain("INSERT ALL", text);
         Assert.DoesNotContain("SELECT 1 FROM dual", text);
-        Assert.Contains("_sqlUpdateAllRow", text);
+        Assert.Contains("return await Inquiry.ExecuteBatchAsync(", text);
+        Assert.DoesNotContain("_sqlUpdateAllRow", text);
         Assert.DoesNotContain("throw new global::System.NotSupportedException(", text);
     }
 
