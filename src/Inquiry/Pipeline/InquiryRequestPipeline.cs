@@ -807,6 +807,89 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// When the connection factory allows batching and the provider supports
+    /// <see cref="DbConnection.CanCreateBatch"/> with parameter creation on
+    /// <see cref="DbBatchCommand"/>, all items execute in a single <see cref="DbBatch"/> round
+    /// trip. Interceptors do NOT fire on the DbBatch path — there is no <see cref="DbCommand"/>
+    /// to expose to them. The sequential fallback (one connection, one command per item) fires
+    /// interceptors per command as usual.
+    /// </remarks>
+    public async Task<int> ExecuteBatchAsync<TItem>(
+        string commandText,
+        IReadOnlyList<TItem> items,
+        Action<InquiryParameterTarget, TItem> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (items is null) throw new ArgumentNullException(nameof(items));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        if (items.Count == 0) return 0;
+
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_connectionFactory.SupportsBatchExecution && connection.CanCreateBatch)
+        {
+            // Probe: some providers expose DbBatch but not DbBatchCommand.CreateParameter; those
+            // fall back to the sequential path below (the probe batch is disposed by await using).
+            await using var batch = connection.CreateBatch();
+            var firstCommand = batch.CreateBatchCommand();
+            if (firstCommand.CanCreateParameter)
+            {
+                if (_defaultCommandTimeoutSeconds > 0) batch.Timeout = _defaultCommandTimeoutSeconds;
+                firstCommand.CommandText = commandText;
+                bindParameters(new InquiryParameterTarget(firstCommand), items[0]);
+                batch.BatchCommands.Add(firstCommand);
+                for (var i = 1; i < items.Count; i++)
+                {
+                    var batchCommand = batch.CreateBatchCommand();
+                    batchCommand.CommandText = commandText;
+                    bindParameters(new InquiryParameterTarget(batchCommand), items[i]);
+                    batch.BatchCommands.Add(batchCommand);
+                }
+
+                // DbBatch.ExecuteNonQueryAsync returns the summed rows affected across commands.
+                return await batch.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        // Sequential fallback: one connection, one command per item (mirrors ExecuteAsync<TArgs>).
+        var total = 0;
+        for (var i = 0; i < items.Count; i++)
+        {
+            await using var dbCommand = CreateCommand(connection);
+            // Lazy: only allocate the InquiryCommand if interceptors are present.
+            InquiryCommand? interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+
+            try
+            {
+                dbCommand.CommandText = commandText;
+                bindParameters(new InquiryParameterTarget(dbCommand), items[i]);
+                _connectionFactory.FinalizeCommand(dbCommand);
+
+                if (interceptorCommand is not null)
+                {
+                    await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+                var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+                if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
+                total += recordsAffected;
+            }
+            catch (Exception exception)
+            {
+                if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        return total;
+    }
+
     // ---- Synchronous setup + interceptor slow paths --------------------------------------
 
     private void InitializeCommandSync(DbCommand dbCommand, InquiryCommand command)
