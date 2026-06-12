@@ -12,6 +12,8 @@
   href: concurrency.md
 - name: Batch operations
   href: batch-operations.md
+- name: Set-based mutations
+  href: set-based-mutations.md
 - name: Full-text search
   href: full-text-search.md
 - name: Prepared statements
