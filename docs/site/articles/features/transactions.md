@@ -180,10 +180,23 @@ This catches the bug at the API boundary instead of letting it corrupt the conne
 
 Across **different** async flows / different transactions, there's no contention — the `AsyncLocal` slot keeps them isolated, and each has its own connection.
 
+## `TransactionScope` / System.Transactions
+
+Inquiry's transaction model is ADO.NET `DbTransaction`, not the ambient `Transaction.Current`. That's a deliberate position, and here is exactly what it means for brownfield code that already uses `TransactionScope`:
+
+- **Inquiry never opens or enlists a `TransactionScope` itself.** `BeginTransactionAsync` / `ExecuteInTransactionAsync` own a plain `DbTransaction` on a dedicated connection.
+- **Operations *outside* an Inquiry transaction open one connection each.** If an ambient `TransactionScope` is active, whether that connection enlists is the **provider's** behavior, governed by its connection string (`Enlist=true` is the SqlClient/Npgsql default; MySqlConnector uses `AutoEnlist=true`; SQLite and Oracle have their own rules). Inquiry does not interfere either way.
+- **The escalation trap:** because Inquiry opens a connection *per operation*, two Inquiry calls inside one `TransactionScope` enlist two connections. On SQL Server that promotes the transaction to a distributed (MSDTC) transaction — which throws on platforms without a DTC (i.e., Linux containers). This is the main reason to avoid mixing `TransactionScope` with multi-operation Inquiry work.
+- **Recommended patterns:**
+  - Use **Inquiry's own transaction** (`ExecuteInTransactionAsync`) for multi-operation atomicity — one connection, no escalation, stores enlist automatically.
+  - If other libraries must share the unit of work, put *their* commands on Inquiry's transaction via the [outbox interop surface](#enlisting-external-writes-outbox-interop) (`tx.Connection` / `tx.Transaction`) instead of an ambient scope.
+  - If an ambient `TransactionScope` is unavoidable, keep the Inquiry work inside it to a **single operation**, and verify your provider's enlistment setting.
+
+An explicit opt-in enlistment API (`Connection.EnlistTransaction` on open) has been considered and remains unplanned unless there's demand — the patterns above cover the known cases without distributed-transaction risk.
+
 ## What's not supported
 
 - **DTC / cross-database transactions.** Out of scope for a single-engine ORM.
-- **`TransactionScope` (System.Transactions).** Inquiry uses ADO.NET `DbTransaction` directly, not the ambient `Transaction.Current`. If you need to participate in a wider `TransactionScope` ambient, open it before resolving Inquiry and let the provider's connection auto-enlist (per its own ADO.NET behavior).
 
 ## See also
 
