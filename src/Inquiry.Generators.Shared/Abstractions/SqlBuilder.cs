@@ -106,6 +106,54 @@ public abstract class SqlBuilder
         => "SELECT " + context.SelectColumns + " FROM " + context.Table
             + " WHERE " + AppendWhere(RenderPredicates(predicates), context.SoftDeleteActivePredicate);
 
+    // ---- Set-based predicate mutations ([InquiryUpdateWhere] / [InquiryDeleteWhere]) ----
+
+    /// <summary>
+    /// Builds a set-based UPDATE whose WHERE clause is the AND/OR composition of
+    /// <paramref name="predicates"/> — the ExecuteUpdate analog. SET parameters take the same
+    /// <c>@{PropertyName}</c> scheme as the single-row UPDATE; predicate parameter names are
+    /// uniquified against the SET names by the generator (a column both assigned and filtered binds
+    /// its filter as <c>@{PropertyName}2</c>), so the two namespaces cannot collide. A soft-delete
+    /// entity AND-composes the active-row filter, exactly like predicate SELECTs — a set-based
+    /// update never touches soft-deleted rows. Dialect-uniform (quoting, sigils, and operator
+    /// rendering all route through the shared hooks), so concrete and inherited by every provider.
+    /// </summary>
+    public virtual string BuildUpdateByPredicateSql(SqlBuildContext context, IReadOnlyList<IColumn> setColumns, IReadOnlyList<SqlPredicate> predicates)
+    {
+        var set = new System.Text.StringBuilder();
+        for (var i = 0; i < setColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                set.Append(", ");
+            }
+
+            set.Append(QuoteIdentifier(setColumns[i].ColumnName)).Append(" = ").Append(ParameterName(setColumns[i].PropertyName));
+        }
+
+        return "UPDATE " + context.Table + " SET " + set.ToString()
+            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.SoftDeleteActivePredicate);
+    }
+
+    /// <summary>
+    /// Builds a set-based literal DELETE whose WHERE clause is the AND/OR composition of
+    /// <paramref name="predicates"/> — the ExecuteDelete analog. Used for entities without a
+    /// soft-delete column, or with <c>HardDelete = true</c> (mirroring the by-key delete, no
+    /// active-row filter is composed: a hard delete may remove already-soft-deleted rows too).
+    /// </summary>
+    public virtual string BuildDeleteByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+        => "DELETE FROM " + context.Table + " WHERE " + RenderPredicates(predicates);
+
+    /// <summary>
+    /// The soft form of <see cref="BuildDeleteByPredicateSql"/>: an UPDATE that sets the soft-delete
+    /// indicator (the same SET shape as <see cref="BuildSoftDeleteByKeySql"/>) on every matching row.
+    /// AND-composes the active-row filter — soft-deleting an already-deleted row is a no-op, and
+    /// excluding those rows keeps the returned rows-affected count meaningful.
+    /// </summary>
+    public virtual string BuildSoftDeleteByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
+            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.SoftDeleteActivePredicate);
+
     public abstract string BuildInsertSql(SqlBuildContext context);
 
     public abstract string BuildInsertReturningSql(SqlBuildContext context);

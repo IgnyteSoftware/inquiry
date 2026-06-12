@@ -351,6 +351,18 @@ internal static class StoreOperationEmitter
                 break;
             }
 
+            case StoreOperation.UpdateByPredicate:
+                AppendHeader(source, method, parameters, isAsync: false);
+                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.Name, cancellation);
+                source.AppendLine("    }");
+                break;
+
+            case StoreOperation.DeleteByPredicate:
+                AppendHeader(source, method, parameters, isAsync: false);
+                EmitMutationByPredicate(source, sqlBuilder, method, Array.Empty<ColumnData>(), predicatePlan!, "_sqlDeleteWhere_" + method.Name, cancellation);
+                source.AppendLine("    }");
+                break;
+
             case StoreOperation.StoredProcedure:
                 EmitStoredProcedure(source, method, parameters, entityType, structMat, cancellation);
                 break;
@@ -659,6 +671,69 @@ internal static class StoreOperationEmitter
         {
             source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
         }
+    }
+
+    /// <summary>
+    /// Emits a set-based predicate mutation body ([InquiryUpdateWhere]/[InquiryDeleteWhere]),
+    /// following the <see cref="EmitSelectAllByPredicate"/> InquiryCommand + DbCommandBinder closure
+    /// pattern (the binder runs after the pipeline assigns the command text, which lets
+    /// <c>InquiryInExpansion</c> rewrite an IN sentinel). Binds the SET parameters first — with
+    /// DbType stamping and converter/enum-aware value expressions, matching the single-row update
+    /// binder — then the predicate bindings, and returns the rows-affected count via ExecuteAsync.
+    /// For a delete, <paramref name="setColumns"/> is empty.
+    /// </summary>
+    private static void EmitMutationByPredicate(
+        StringBuilder source,
+        SqlBuilder sqlBuilder,
+        StoreMethodData method,
+        IReadOnlyList<ColumnData> setColumns,
+        ResolvedPredicatePlan plan,
+        string sqlField,
+        string cancellation)
+    {
+        source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
+        source.AppendLine($"            {sqlField},");
+        source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
+        source.AppendLine("            {");
+
+        var pi = 0;
+        for (var i = 0; i < setColumns.Count; i++)
+        {
+            var column = setColumns[i];
+            var arg = method.Parameters[i].Name;
+            source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+            source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
+            var dbType = ResolveDbType(column, sqlBuilder);
+            if (dbType is not null)
+            {
+                source.AppendLine($"                _p{pi}.DbType = {dbType};");
+            }
+            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(column, arg)};");
+            source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+            pi++;
+        }
+
+        // Predicate bindings carry absolute method-parameter indexes (offset past the SET values for
+        // an update), so this loop is identical to the predicate-select binder.
+        foreach (var binding in plan.Bindings)
+        {
+            var arg = method.Parameters[binding.MethodParameterIndex].Name;
+            if (binding.IsCollection)
+            {
+                source.AppendLine($"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg}, Inquiry.MaxParametersPerCommand);");
+            }
+            else
+            {
+                source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+                source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
+                source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg)};");
+                source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+                pi++;
+            }
+        }
+
+        source.AppendLine("            });");
+        source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
     }
 
     /// <summary>

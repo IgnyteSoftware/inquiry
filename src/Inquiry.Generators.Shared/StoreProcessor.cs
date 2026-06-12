@@ -114,8 +114,10 @@ internal static class StoreProcessor
             return null;
         }
 
+        // FieldNames double as the SET field list for UpdateByPredicate (the [InquiryUpdateWhere]
+        // constructor arguments), resolved against the entity's mutable columns at emit.
         var fieldNames = ImmutableArray<string>.Empty;
-        if (operation is StoreOperation.SelectAllByField or StoreOperation.FullTextSearch)
+        if (operation is StoreOperation.SelectAllByField or StoreOperation.FullTextSearch or StoreOperation.UpdateByPredicate)
         {
             var names = GeneratorHelpers.GetConstructorStringArray(attribute);
             if (names is null || names.Length == 0)
@@ -127,12 +129,18 @@ internal static class StoreProcessor
         }
 
         var predicates = ImmutableArray<PredicateData>.Empty;
-        if (operation == StoreOperation.SelectAllByPredicate)
+        if (operation is StoreOperation.SelectAllByPredicate or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate)
         {
             predicates = ReadWherePredicates(method);
             if (predicates.Length == 0)
             {
-                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, location, method.Name));
+                // A predicate select with no criteria is a parameter mismatch (INQ019); a set-based
+                // mutation with no criteria would touch every row, so it gets its own diagnostic (INQ023).
+                diagnostics.Add(DiagnosticData.Create(
+                    operation == StoreOperation.SelectAllByPredicate
+                        ? InquiryDiagnosticDescriptors.PredicateParameterMismatch
+                        : InquiryDiagnosticDescriptors.PredicateMutationRequiresWhere,
+                    location, method.Name));
                 return null;
             }
         }
@@ -228,7 +236,8 @@ internal static class StoreProcessor
             or StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager
             or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate &&
             GeneratorHelpers.GetNamedBool(attribute, "IncludeDeleted");
-        var hardDelete = operation == StoreOperation.DeleteOneByKey && GeneratorHelpers.GetNamedBool(attribute, "HardDelete");
+        var hardDelete = operation is StoreOperation.DeleteOneByKey or StoreOperation.DeleteByPredicate &&
+            GeneratorHelpers.GetNamedBool(attribute, "HardDelete");
 
         return new StoreMethodData(
             Name: method.Name,
@@ -461,6 +470,8 @@ internal static class StoreProcessor
                 case "InquiryUpdateAttribute": attribute = candidate; return StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
                 case "InquiryDeleteOneByKeyAttribute": attribute = candidate; return StoreOperation.DeleteOneByKey;
+                case "InquiryUpdateWhereAttribute": attribute = candidate; return StoreOperation.UpdateByPredicate;
+                case "InquiryDeleteWhereAttribute": attribute = candidate; return StoreOperation.DeleteByPredicate;
                 case "InquiryRestoreOneByKeyAttribute": attribute = candidate; return StoreOperation.RestoreOneByKey;
                 case "InquiryStoredProcedureAttribute": attribute = candidate; return StoreOperation.StoredProcedure;
             }
@@ -503,7 +514,8 @@ internal static class StoreProcessor
             StoreOperation.Count =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
             StoreOperation.Aggregate => IsTaskOfSingleTypeArgument(returnType),
-            StoreOperation.InsertAll or StoreOperation.DeleteAll or StoreOperation.UpdateAll =>
+            StoreOperation.InsertAll or StoreOperation.DeleteAll or StoreOperation.UpdateAll or
+            StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
@@ -853,6 +865,28 @@ internal static class StoreProcessor
             }
         }
 
+        // Per-method set-based mutation consts. UpdateByPredicate carries its SET columns in the
+        // resolved field columns; DeleteByPredicate picks the soft UPDATE form on a soft-delete entity
+        // unless HardDelete forces the literal DELETE (mirroring DeleteOneByKey's routing).
+        foreach (var (method, fieldColumns, predicatePlan, _) in valid)
+        {
+            if (predicatePlan is null)
+            {
+                continue;
+            }
+
+            if (method.Operation == StoreOperation.UpdateByPredicate)
+            {
+                AppendConstSql(source, "_sqlUpdateWhere_" + method.Name, sqlBuilder.BuildUpdateByPredicateSql(ctx, ToColumnList(fieldColumns), predicatePlan.Predicates));
+            }
+            else if (method.Operation == StoreOperation.DeleteByPredicate)
+            {
+                AppendConstSql(source, "_sqlDeleteWhere_" + method.Name, hasSoftDelete && !method.HardDelete
+                    ? sqlBuilder.BuildSoftDeleteByPredicateSql(ctx, predicatePlan.Predicates)
+                    : sqlBuilder.BuildDeleteByPredicateSql(ctx, predicatePlan.Predicates));
+            }
+        }
+
         foreach (var (method, _, _, _) in valid)
         {
             if (method.Operation == StoreOperation.Aggregate)
@@ -1110,7 +1144,11 @@ internal static class StoreProcessor
             return TryValidateKeysetPage(context, method, entity, out selectPlan);
         }
 
-        if (entity.ConcurrencyToken is not null && method.Operation is StoreOperation.UpdateAll or StoreOperation.DeleteAll)
+        // Set-based mutations bypass the token check/advance (the WHERE binds no @token and the SET
+        // never bumps it), so a concurrency-token entity rejects them outright — same rationale as the
+        // batch-mutation rejection, hence the shared INQ022.
+        if (entity.ConcurrencyToken is not null && method.Operation is StoreOperation.UpdateAll or StoreOperation.DeleteAll
+            or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 InquiryDiagnosticDescriptors.BatchMutationUnsupportedWithConcurrencyToken,
@@ -1164,6 +1202,57 @@ internal static class StoreProcessor
             }
 
             return true;
+        }
+
+        if (method.Operation is StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate)
+        {
+            // SET columns (UpdateByPredicate only; FieldNames is empty for DeleteByPredicate). Each
+            // field must resolve to a column the ORM may assign: not a key, not database-generated,
+            // not the soft-delete indicator (owned by delete/restore), not a concurrency token.
+            var setColumns = new List<ColumnData>(method.FieldNames.Count);
+            foreach (var name in method.FieldNames)
+            {
+                var column = FindColumn(entity, name);
+                if (column is null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnknownField, method.Location?.ToLocation(), method.Name, name));
+                    return false;
+                }
+
+                if (column.IsKey || column.IsGenerated || column.SoftDelete != SoftDeleteKind.None || column.IsConcurrencyToken)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SetFieldNotUpdatable, method.Location?.ToLocation(), method.Name, name));
+                    return false;
+                }
+
+                setColumns.Add(column);
+            }
+
+            fieldColumns = setColumns;
+
+            // Trailing CancellationToken plus enough leading parameters for the SET values; the first
+            // N non-token parameters must match the SET columns' types positionally.
+            if (method.Parameters.Count == 0 ||
+                !method.Parameters[method.Parameters.Count - 1].IsCancellationToken ||
+                method.Parameters.Count - 1 < setColumns.Count)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
+                return false;
+            }
+
+            for (var i = 0; i < setColumns.Count; i++)
+            {
+                if (!ParameterMatchesColumn(method.Parameters[i], setColumns[i]))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
+                    return false;
+                }
+            }
+
+            // The remaining parameters bind the [InquiryWhere] criteria positionally; passing the SET
+            // columns seeds both the positional cursor and the parameter-name pool (see
+            // TryResolvePredicates) so predicate names can never collide with SET names.
+            return TryResolvePredicates(context, method, entity, sqlBuilder, out predicatePlan, setColumns);
         }
 
         if (method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager && entity.Keys.Count > 1)
@@ -1392,7 +1481,7 @@ internal static class StoreProcessor
     /// positionally to the method parameters. Reports INQ007 for an unknown field, INQ018 for a bad
     /// <c>In</c> collection, and INQ019 for any arity / parameter-order / Like-on-non-string mismatch.
     /// </summary>
-    private static bool TryResolvePredicates(SourceProductionContext context, StoreMethodData method, EntityData entity, SqlBuilder sqlBuilder, out ResolvedPredicatePlan? plan)
+    private static bool TryResolvePredicates(SourceProductionContext context, StoreMethodData method, EntityData entity, SqlBuilder sqlBuilder, out ResolvedPredicatePlan? plan, IReadOnlyList<ColumnData>? setColumns = null)
     {
         plan = null;
         var nonCancellationCount = method.Parameters.Count - 1;
@@ -1401,6 +1490,19 @@ internal static class StoreProcessor
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
         var paramIndex = 0;
         var hasIn = false;
+
+        // For a set-based UPDATE the leading parameters supply the SET values (bound as
+        // "@{PropertyName}"), so predicate binding starts after them and the SET property names are
+        // pre-claimed: a column that is both assigned and filtered binds its filter parameter as
+        // "@{PropertyName}2" via UniqueName, so SET and WHERE parameters can never collide.
+        if (setColumns is not null)
+        {
+            paramIndex = setColumns.Count;
+            foreach (var setColumn in setColumns)
+            {
+                usedNames.Add(setColumn.PropertyName);
+            }
+        }
 
         foreach (var predicate in method.Predicates.AsImmutableArray())
         {
