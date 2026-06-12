@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ047.
+    //                  INQ045–INQ048.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -29,6 +29,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ039         Graceful degradation: operation unsupported by the active dialect (stub + warning) [IN USE]
     //   INQ045–INQ046  Ad-hoc DTO materialization    (INQ045 no mappable properties, INQ046 not constructible) [IN USE]
     //   INQ047         Sequential GUID key           (SequentialGuid on non-Guid / generated / db-default key) [IN USE]
+    //   INQ048         Raw-SQL injection lint        (non-constant command text passed to InquiryCommand) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -381,6 +382,17 @@ internal static class InquiryDiagnosticDescriptors
         "Entity '{0}' marks key property '{1}' with SequentialGuid = true, but the key is not a plain client-supplied Guid. SequentialGuid requires a Guid (or Guid?) key without IsGenerated or UseDatabaseDefault.",
         "Inquiry",
         DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ048: InquiryCommand's raw string constructor is the documented advanced escape hatch; a
+    // non-constant command text is where injection bugs live. Warning (not error) because dynamic
+    // SQL composed from trusted fragments is legitimate — the analyzer makes the reviewer look.
+    public static readonly DiagnosticDescriptor NonConstantRawSql = new(
+        "INQ048",
+        "Non-constant SQL passed to InquiryCommand",
+        "The command text passed to InquiryCommand is not a compile-time constant. If it embeds runtime values, use the FormattableString overloads on IInquiry/IInquiryTransaction (or InquirySql.Sql($\"…\")) so each value becomes a bound parameter. Pass dynamic text here only when it cannot contain user input; suppress this warning at the call site once reviewed.",
+        "Inquiry",
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
     // INQ044: an [InquiryUpdateWhere] SET field that resolved to a column the ORM must not assign.
