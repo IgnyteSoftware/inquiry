@@ -211,14 +211,14 @@ public abstract class SqlBuilder
     /// Dialect-uniform (single key guaranteed by validation), so concrete and inherited by every provider.
     /// </summary>
     public virtual string BuildDeleteAllByKeysSql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + context.QuotedKeyColumns[0] + " IN (" + ParameterName("keys") + ")";
+        => "DELETE FROM " + context.Table + " WHERE " + RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"));
 
     /// <summary>
     /// The soft-delete form of <see cref="BuildDeleteAllByKeysSql"/> — sets the soft-delete indicator
     /// on every row whose key is in the collection instead of physically removing it.
     /// </summary>
     public virtual string BuildSoftDeleteAllByKeysSql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + context.QuotedKeyColumns[0] + " IN (" + ParameterName("keys") + ")";
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"));
 
     public abstract string BuildUpsertSql(SqlBuildContext context);
 
@@ -577,8 +577,19 @@ public abstract class SqlBuilder
     /// <summary>
     /// Renders an IN criterion as a single-placeholder sentinel — the runtime binder expands the one
     /// parameter into <c>(@p0, @p1, …)</c> or <c>(NULL)</c>/<c>1=0</c> for an empty collection. Override
-    /// only if a dialect prefers array parameters (e.g. PostgreSQL <c>= ANY</c>).
+    /// only if a dialect prefers array parameters (e.g. PostgreSQL <c>= ANY</c>) — and override
+    /// <see cref="UseArrayInParameters"/> in lockstep so the emitter binds the collection as a single
+    /// array parameter instead of rewriting the command text.
     /// </summary>
     protected virtual string RenderIn(string quotedColumn, string parameterName)
         => quotedColumn + " IN (" + parameterName + ")";
+
+    /// <summary>
+    /// True when this dialect binds an IN collection as a single native array parameter
+    /// (<see cref="RenderIn"/> emits <c>= ANY(@name)</c>-style SQL) rather than expanding the
+    /// sentinel into per-element placeholders at run time. Keeps the command text constant across
+    /// list lengths, so server-side prepared statements stay reusable, and lifts the per-element
+    /// parameter cap from IN lists. Default false (per-element expansion).
+    /// </summary>
+    public virtual bool UseArrayInParameters => false;
 }
