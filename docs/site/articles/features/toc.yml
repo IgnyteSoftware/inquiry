@@ -6,6 +6,8 @@
   href: soft-delete.md
 - name: Projections
   href: projections.md
+- name: Ad-hoc DTOs
+  href: ad-hoc-dtos.md
 - name: Aggregates
   href: aggregates.md
 - name: Optimistic concurrency

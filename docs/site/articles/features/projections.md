@@ -48,4 +48,5 @@ So a projection hides soft-deleted rows exactly like a full-entity select. Add `
 ## See also
 
 - [CRUD](crud.md) — full-entity selects.
+- [Ad-hoc DTOs](ad-hoc-dtos.md) — result shapes that aren't a column subset of one entity (joins, GROUP BY reports), mapped from hand-written SQL.
 - [Aggregates](aggregates.md) — return a single scalar.
