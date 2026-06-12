@@ -1,6 +1,7 @@
 using Inquiry.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Inquiry.DependencyInjection;
@@ -10,11 +11,15 @@ namespace Inquiry.DependencyInjection;
 /// </summary>
 public static class InquiryServiceCollectionExtensions
 {
+    private const string AssemblyScanRequiresUnreferencedCode =
+        "Assembly scanning discovers generated IInquiryServiceRegistration types via reflection, which trimming may remove. " +
+        "For trimmed/NativeAOT applications, call the generated AddInquiryGeneratedStores() extension instead.";
+
     /// <summary>
     /// Registers core Inquiry runtime services.
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services)
-        => AddInquiryCore(services, configureOptions: null, additionalAssemblies: null);
+        => AddInquiryCore(services, configureOptions: null);
 
     /// <summary>
     /// Registers core Inquiry runtime services, applying the supplied
@@ -27,7 +32,7 @@ public static class InquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(configureOptions));
         }
 
-        return AddInquiryCore(services, configureOptions, additionalAssemblies: null);
+        return AddInquiryCore(services, configureOptions);
     }
 
     /// <summary>
@@ -36,6 +41,7 @@ public static class InquiryServiceCollectionExtensions
     /// <c>AddInquiryGeneratedStores()</c> extension when the stores live in the current assembly.
     /// Assemblies passed explicitly are deduped by identity, so passing one twice is a no-op.
     /// </summary>
+    [RequiresUnreferencedCode(AssemblyScanRequiresUnreferencedCode)]
     public static IServiceCollection AddInquiry(this IServiceCollection services, params Assembly[] additionalAssemblies)
     {
         if (additionalAssemblies is null)
@@ -43,7 +49,9 @@ public static class InquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(additionalAssemblies));
         }
 
-        return AddInquiryCore(services, configureOptions: null, additionalAssemblies);
+        AddInquiryCore(services, configureOptions: null);
+        AddGeneratedServices(services, additionalAssemblies);
+        return services;
     }
 
     /// <summary>
@@ -52,6 +60,7 @@ public static class InquiryServiceCollectionExtensions
     /// <see cref="IInquiryServiceRegistration"/> implementations. See the <see cref="Assembly"/>-only
     /// overload for the dedupe semantics.
     /// </summary>
+    [RequiresUnreferencedCode(AssemblyScanRequiresUnreferencedCode)]
     public static IServiceCollection AddInquiry(this IServiceCollection services, Action<InquiryOptions> configureOptions, params Assembly[] additionalAssemblies)
     {
         if (configureOptions is null)
@@ -63,13 +72,14 @@ public static class InquiryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(additionalAssemblies));
         }
 
-        return AddInquiryCore(services, configureOptions, additionalAssemblies);
+        AddInquiryCore(services, configureOptions);
+        AddGeneratedServices(services, additionalAssemblies);
+        return services;
     }
 
     private static IServiceCollection AddInquiryCore(
         IServiceCollection services,
-        Action<InquiryOptions>? configureOptions,
-        Assembly[]? additionalAssemblies)
+        Action<InquiryOptions>? configureOptions)
     {
         if (services is null)
         {
@@ -80,11 +90,6 @@ public static class InquiryServiceCollectionExtensions
 
         services.TryAddScoped<IInquiry, DefaultInquiry>();
         services.TryAddScoped<IInquiryRequestPipeline, InquiryRequestPipeline>();
-
-        if (additionalAssemblies is { Length: > 0 })
-        {
-            AddGeneratedServices(services, additionalAssemblies);
-        }
 
         return services;
     }
@@ -108,6 +113,7 @@ public static class InquiryServiceCollectionExtensions
         services.AddSingleton(options);
     }
 
+    [RequiresUnreferencedCode(AssemblyScanRequiresUnreferencedCode)]
     private static void AddGeneratedServices(IServiceCollection services, Assembly[] additionalAssemblies)
     {
         // Dedupe by Assembly identity: a caller may pass an Assembly twice, and we must not invoke
@@ -130,6 +136,7 @@ public static class InquiryServiceCollectionExtensions
         }
     }
 
+    [RequiresUnreferencedCode(AssemblyScanRequiresUnreferencedCode)]
     private static IEnumerable<Type> GetRegistrationTypes(Assembly assembly)
     {
         try
