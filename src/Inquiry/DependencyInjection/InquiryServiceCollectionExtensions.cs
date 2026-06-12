@@ -11,13 +11,13 @@ namespace Inquiry.DependencyInjection;
 /// </summary>
 public static class InquiryServiceCollectionExtensions
 {
-    /// <summary>
-    /// Registers core Inquiry runtime services.
-    /// </summary>
     private const string AssemblyScanRequiresUnreferencedCode =
         "Assembly scanning discovers generated IInquiryServiceRegistration types via reflection, which trimming may remove. " +
         "For trimmed/NativeAOT applications, call the generated AddInquiryGeneratedStores() extension instead.";
 
+    /// <summary>
+    /// Registers core Inquiry runtime services.
+    /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services)
         => AddInquiryCore(services, configureOptions: null);
 
