@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ046.
+    //                  INQ045–INQ047.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -28,6 +28,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ036–INQ038  JSON/array/value-converter column types
     //   INQ039         Graceful degradation: operation unsupported by the active dialect (stub + warning) [IN USE]
     //   INQ045–INQ046  Ad-hoc DTO materialization    (INQ045 no mappable properties, INQ046 not constructible) [IN USE]
+    //   INQ047         Sequential GUID key           (SequentialGuid on non-Guid / generated / db-default key) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -367,6 +368,17 @@ internal static class InquiryDiagnosticDescriptors
         "INQ046",
         "Ad-hoc DTO must be a concrete type with an accessible parameterless constructor",
         "Ad-hoc DTO '{0}' cannot be instantiated by the generated materializer: it is abstract or has no public/internal parameterless constructor. Use init-only properties instead of positional record or constructor parameters.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ047: [InquiryKey(SequentialGuid = true)] only makes sense on a client-supplied Guid key —
+    // the generator assigns InquiryGuid.NewVersion7() into the property, which requires a Guid
+    // type, and a database-generated or database-defaulted key is never client-assigned.
+    public static readonly DiagnosticDescriptor SequentialGuidKeyInvalid = new(
+        "INQ047",
+        "SequentialGuid requires a client-supplied Guid key",
+        "Entity '{0}' marks key property '{1}' with SequentialGuid = true, but the key is not a plain client-supplied Guid. SequentialGuid requires a Guid (or Guid?) key without IsGenerated or UseDatabaseDefault.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

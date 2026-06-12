@@ -162,9 +162,23 @@ internal static class EntityProcessor
             var columnName = ResolveColumnName(columnAttribute, foreignKeyAttribute, property.Name);
             var typeData = TypeData.Create(property.Type, property.NullableAnnotation);
             var isGenerated = keyAttribute is not null && GeneratorHelpers.GetNamedBool(keyAttribute, "IsGenerated");
+            var isSequentialGuid = keyAttribute is not null && GeneratorHelpers.GetNamedBool(keyAttribute, "SequentialGuid");
             var useDatabaseDefault =
                 columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "UseDatabaseDefault") ||
                 foreignKeyAttribute is not null && GeneratorHelpers.GetNamedBool(foreignKeyAttribute, "UseDatabaseDefault");
+
+            // SequentialGuid assigns InquiryGuid.NewVersion7() into the property on insert/upsert,
+            // so the key must be a plain client-supplied Guid (INQ047 otherwise; flag cleared so
+            // emission never produces an invalid assignment).
+            if (isSequentialGuid && (!typeData.IsGuid || isGenerated || useDatabaseDefault))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.SequentialGuidKeyInvalid,
+                    property.Locations.FirstOrDefault(),
+                    entitySymbol.Name,
+                    property.Name));
+                isSequentialGuid = false;
+            }
 
             var softDelete = SoftDeleteKind.None;
             if (GeneratorHelpers.GetEntityAttribute(property, "InquirySoftDeleteAttribute") is not null)
@@ -229,6 +243,7 @@ internal static class EntityProcessor
                 Type = typeData,
                 IsKey = isKey,
                 IsGenerated = isGenerated,
+                IsSequentialGuid = isSequentialGuid,
                 UseDatabaseDefault = useDatabaseDefault,
                 SoftDelete = softDelete,
                 IsConcurrencyToken = isConcurrencyToken,

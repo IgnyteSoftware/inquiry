@@ -99,6 +99,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.Insert:
                 AppendHeader(source, method, parameters, isAsync: false);
+                EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ");
                 if (method.ReturnsEntity)
                 {
                     EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlInsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: false, isAwait: false);
@@ -125,6 +126,9 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.Upsert:
                 AppendHeader(source, method, parameters, isAsync: false);
+                // An unset SequentialGuid key gets a fresh v7 before the upsert, making it an
+                // insert of a new row — same "default key generation" semantics as Insert.
+                EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ");
                 if (method.ReturnsEntity)
                 {
                     if (ShouldUseInsertWhenKeyIsNull(entity))
@@ -263,6 +267,7 @@ internal static class StoreOperationEmitter
                 var itemsParam = method.Parameters[0].Name;
                 AppendHeader(source, method, parameters, isAsync: true);
                 AppendBatchListMaterialization(source, itemsParam, entityType, insertable.Length, "insert");
+                EmitSequentialGuidBatchAssignment(source, entity, indent: "        ");
                 // Dialect-aware multi-row INSERT shape: header + per-row (rowOpen + bound params) joined by a
                 // separator + footer. Base => `INSERT INTO t (cols) VALUES (…),(…)`; Oracle => `INSERT ALL
                 // INTO t (cols) VALUES (…) INTO … SELECT 1 FROM dual`. The row-param sigil follows the dialect
@@ -1235,6 +1240,77 @@ internal static class StoreOperationEmitter
 
     private static bool ShouldUseInsertWhenKeyIsNull(EntityData entity)
         => entity.Keys[0].Type.IsNullable && (entity.Keys[0].IsGenerated || entity.Keys[0].UseDatabaseDefault);
+
+    private static bool HasSequentialGuidKey(EntityData entity)
+    {
+        foreach (var key in entity.Keys.AsImmutableArray())
+        {
+            if (key.IsSequentialGuid)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string SequentialGuidUnsetCheck(ColumnData key, string access)
+        => key.Type.IsNullable
+            ? $"{access} is null || {access} == global::System.Guid.Empty"
+            : $"{access} == global::System.Guid.Empty";
+
+    /// <summary>
+    /// Emits the unset-key check + v7 assignment for a single entity parameter:
+    /// <c>if (e.Key == Guid.Empty) e.Key = InquiryGuid.NewVersion7();</c> (null/empty for Guid?).
+    /// Every [InquiryKey(SequentialGuid = true)] key is assigned (a composite key may flag more
+    /// than one part). The assignment mutates the caller's entity so the generated key is
+    /// observable after the call. INQ047 validation already cleared the flag for anything that
+    /// is not a plain client-supplied Guid key.
+    /// </summary>
+    private static void EmitSequentialGuidAssignment(StringBuilder source, EntityData entity, string parameter, string indent)
+    {
+        foreach (var key in entity.Keys.AsImmutableArray())
+        {
+            if (!key.IsSequentialGuid)
+            {
+                continue;
+            }
+
+            var access = $"{parameter}.{key.PropertyName}";
+            source.AppendLine($"{indent}if ({SequentialGuidUnsetCheck(key, access)})");
+            source.AppendLine($"{indent}{{");
+            source.AppendLine($"{indent}    {access} = global::Inquiry.InquiryGuid.NewVersion7();");
+            source.AppendLine($"{indent}}}");
+            source.AppendLine();
+        }
+    }
+
+    /// <summary>Per-item v7 assignment pre-pass over the materialized batch list (<c>_list</c>).</summary>
+    private static void EmitSequentialGuidBatchAssignment(StringBuilder source, EntityData entity, string indent)
+    {
+        if (!HasSequentialGuidKey(entity))
+        {
+            return;
+        }
+
+        source.AppendLine($"{indent}for (var _g = 0; _g < _list.Count; _g++)");
+        source.AppendLine($"{indent}{{");
+        foreach (var key in entity.Keys.AsImmutableArray())
+        {
+            if (!key.IsSequentialGuid)
+            {
+                continue;
+            }
+
+            var access = $"_list[_g].{key.PropertyName}";
+            source.AppendLine($"{indent}    if ({SequentialGuidUnsetCheck(key, access)})");
+            source.AppendLine($"{indent}    {{");
+            source.AppendLine($"{indent}        {access} = global::Inquiry.InquiryGuid.NewVersion7();");
+            source.AppendLine($"{indent}    }}");
+        }
+        source.AppendLine($"{indent}}}");
+        source.AppendLine();
+    }
 
     private static string GetParameterDeclaration(EquatableArray<ParameterData> parameters, bool enumeratorCancellation = false)
     {

@@ -211,6 +211,34 @@ partial class ShipperStore
 - **`DbType` is pre-computed.** The generator looks up the right `DbType` from your column's CLR type, so the binder doesn't pay reflection costs.
 - **Reads pass `CommandBehavior.SingleResult`** at the pipeline level; generated-store reads (struct materializers) additionally pass `SequentialAccess` so the row streams forward-only. Both are wired in `InquiryRequestPipeline`, not visible at the call site. (`CommandBehavior.SingleRow` is deliberately omitted from single-row reads — it would let providers stop after the first row, suppressing the `QuerySingleOrDefaultAsync` multi-row throw.)
 
+## Key generation: sequential GUIDs
+
+Random `Guid.NewGuid()` keys fragment clustered B-tree indexes — every insert lands at a random page. For client-supplied GUID keys, opt into time-ordered **UUID v7** generation:
+
+```csharp
+[InquiryTable("Documents")]
+public sealed class Document
+{
+    [InquiryKey(SequentialGuid = true)]
+    public Guid Id { get; set; }          // Guid? works too
+
+    [InquiryColumn] public string Title { get; set; } = "";
+}
+```
+
+Insert, upsert, and batch-insert methods then assign `InquiryGuid.NewVersion7()` whenever the key is unset (`Guid.Empty` or `null`):
+
+```csharp
+var doc = new Document { Title = "spec" };
+await store.InsertAsync(doc);
+// doc.Id is now a v7 GUID — time-ordered, observable by the caller, usable for follow-up reads.
+```
+
+- **Supplied keys win.** A non-empty key is never overwritten.
+- **The entity is mutated** so you see the generated key after the call — same ergonomics as a database-generated identity.
+- **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a v7 GUID. On .NET 9+ it delegates to `Guid.CreateVersion7()`; on .NET 8 it's an RFC 9562-conformant polyfill.
+- `SequentialGuid` requires a plain client-supplied `Guid`/`Guid?` key — combining it with `IsGenerated` or `UseDatabaseDefault`, or putting it on a non-Guid key, is a build-time error (`INQ047`).
+
 ## Cross-dialect SQL differences
 
 The same C# source produces dialect-specific SQL. A small sample:
