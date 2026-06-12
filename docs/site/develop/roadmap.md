@@ -71,9 +71,6 @@
   audit-trail interceptor.
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
-- **GraphQL DataLoader recipe** *(integration research 2026-06-12)*. Docs + sample showing Hot
-  Chocolate `BatchDataLoader` over Inquiry's `Compare.In` batch selects (the standard non-LINQ ORM
-  integration path) — documentation, not a feature.
 - **DDL safety lint** *(integration research 2026-06-12)*. squawk-inspired analyzer warnings for
   risky patterns in generated DDL; small and fits the existing analyzer/diagnostic surface.
 - **Testing follow-ups: transaction sandbox + data factories** *(adoption review 2026-06-12)*.
@@ -83,10 +80,6 @@
   (each test inside a rolled-back transaction with connection ownership, enabling parallel
   database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
   Bogus-compatible).
-- **`TransactionScope` / `System.Transactions` interop** *(adoption review 2026-06-12)*. Inquiry has
-  no documented position on ambient `TransactionScope`; per-operation connection opening means each
-  operation enlists separately (risking distributed-transaction escalation). Needs a docs page and
-  possibly an explicit enlistment option for brownfield code.
 - **JSON-path querying & column-encryption docs** *(adoption review 2026-06-12)*. Predicate support
   for filtering into JSON columns (EF parity), and documentation for SQL Server Always Encrypted /
   pgcrypto patterns over the existing value-converter seam (mostly docs, little code).
@@ -130,10 +123,6 @@
 - **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 5;
   add engines (Firebird, DB2, MariaDB-specific, …) demand-driven — the provider + analyzer split makes
   each one mechanical.
-- **Migrations integration recipe** *(post-1.0 — deferred to a later release)*. Migrations beyond the
-  initial DDL stay out of scope (see below), but a docs guide showing `InquiryGeneratedSchema.Ddl`
-  feeding DbUp / FluentMigrator would defuse the most common "but no migrations?" objection without
-  building a migration engine.
 - **Verified cloud-platform compatibility matrix** *(post-1.0 — deferred to a later release)*. Most
   popular hosted databases are wire-compatible with engines Inquiry already ships, so this is
   compatibility modes + verified docs, not new dialects — extending the existing `Compatibility`
@@ -204,6 +193,14 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Docs round (2026-06-12):** a documented **`TransactionScope`/System.Transactions position**
+  (per-operation auto-enlistment behavior, the MSDTC escalation trap, recommended patterns; the
+  explicit enlistment API stays unplanned unless demanded) in
+  [Transactions](../articles/features/transactions.md); a **migrations recipe**
+  ([Migrations](../articles/features/migrations.md)) wiring `InquiryGeneratedSchema.Ddl` into
+  DbUp/FluentMigrator with a schema-drift CI practice; and a **GraphQL DataLoader recipe**
+  ([GraphQL DataLoader](../articles/features/graphql-dataloader.md)) — Hot Chocolate
+  `BatchDataLoader`/`GroupedDataLoader` over `Compare.In` batch selects.
 - **Raw-SQL injection analyzer (2026-06-12):** new `InquiryRawSqlAnalyzer` (ships in every
   provider's analyzer assembly) warns with **INQ048** when a non-constant string reaches
   `InquiryCommand`'s command text — literals, consts, `nameof`, and constant concatenation stay
