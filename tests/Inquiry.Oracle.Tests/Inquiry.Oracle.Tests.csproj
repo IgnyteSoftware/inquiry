@@ -4,7 +4,7 @@
     <IsPackable>false</IsPackable>
     <!--
       Inquiry.Northwind is link-compiled here as the Oracle test fixture. Several of its store
-      methods (Product.UpsertAsync, Region.UpdateAllAsync, Shipper.UpsertAsync, …) intentionally
+      methods (Product.UpsertAsync, Shipper.UpsertAsync, …) intentionally
       cover the cross-dialect surface and fire INQ039 against Oracle — that diagnostic is the
       point of the test: the Oracle generator emits a stub that throws NotSupportedException
       at runtime, and there are tests that assert exactly that. Suppressing INQ039 at project
