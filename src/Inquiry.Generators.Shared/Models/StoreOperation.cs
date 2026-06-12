@@ -21,5 +21,7 @@ internal enum StoreOperation
     Upsert,
     DeleteOneByKey,
     RestoreOneByKey,
+    UpdateByPredicate,
+    DeleteByPredicate,
     StoredProcedure,
 }
