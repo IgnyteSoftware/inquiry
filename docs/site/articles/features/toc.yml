@@ -32,6 +32,10 @@
   href: stored-procedures.md
 - name: Schema DDL
   href: schema-ddl.md
+- name: Migrations recipe
+  href: migrations.md
+- name: GraphQL DataLoader recipe
+  href: graphql-dataloader.md
 - name: Observability
   href: observability.md
 - name: Testing
