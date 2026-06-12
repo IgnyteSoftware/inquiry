@@ -30,5 +30,7 @@
   href: schema-ddl.md
 - name: Observability
   href: observability.md
+- name: Testing
+  href: testing.md
 - name: Resiliency & failover
   href: resiliency.md

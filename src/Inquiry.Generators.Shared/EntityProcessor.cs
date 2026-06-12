@@ -272,6 +272,8 @@ internal static class EntityProcessor
     {
         if (type.IsByteArray) return DbTypeClass.ByteArray;
         if (type.IsGuid) return DbTypeClass.Guid;
+        if (type.IsDateOnly) return DbTypeClass.DateOnly;
+        if (type.IsTimeOnly) return DbTypeClass.TimeOnly;
         if (type.NonNullableDisplayName == "global::System.DateTimeOffset") return DbTypeClass.DateTimeOffset;
 
         return MapSpecialType(type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType);

@@ -30,6 +30,15 @@ source under **its own** dialect, so it exercises that engine's real SQL. Contai
 Testcontainers; tests **skip gracefully** (they do not fail) when Docker is absent, so `dotnet test` stays
 green on a machine without Docker.
 
+## First build after clone: expect IDE squiggles
+
+The analyzers are attached to consuming projects via built DLL paths in `Directory.Build.targets`
+(guarded by `Exists()`), so after a fresh clone or `git clean` the IDE cannot load the generator and
+every `partial` store method shows CS8795 until you run `dotnet build` once. This only affects
+working in this repository — NuGet consumers get the analyzer from the package and never see it.
+See the [getting-started troubleshooting section](../articles/getting-started.md#troubleshooting-red-squiggles-under-partial-methods)
+for the consumer-facing checklist.
+
 ## Code review before merge
 
 Run the code-review workflow on a feature branch before merging; fix Critical/Important findings first.

@@ -87,20 +87,16 @@
   integration path) — documentation, not a feature.
 - **DDL safety lint** *(integration research 2026-06-12)*. squawk-inspired analyzer warnings for
   risky patterns in generated DDL; small and fits the existing analyzer/diagnostic surface.
-- **Generated store interfaces + testing package** *(adoption review 2026-06-12)*. Services depend on
-  concrete generated store classes, so consumers cannot mock stores in unit tests. Add opt-in
-  interface generation (each store also emits `I{Store}` and registers it in DI) plus an
-  `Inquiry.Testing` helpers package: in-memory SQLite fixture, command-assertion interceptor, an
-  **Ecto-style SQL sandbox** (each test inside a rolled-back transaction with connection ownership,
-  enabling parallel database tests), a **Respawn**-based reset fixture, and
-  **factory_bot/Laravel-style test-data factories** (states/sequences, Bogus-compatible)
-  *(testing scope expanded by integration research 2026-06-12)*. The single biggest
-  enterprise-adoption gap.
-- **`DateOnly`/`TimeOnly` first-class mapping + `Guid` v7 keys** *(adoption review 2026-06-12)*.
-  `DbTypeMapper` has no `DateOnly`/`TimeOnly` entries: reads may survive via the `GetFieldValue<T>`
-  fallback, but parameter `DbType` stamping and generated `CREATE TABLE` DDL do not handle them —
-  and they are the default date/time choice in new .NET 8+ code. Same bucket: a sequential
-  `Guid.CreateVersion7()` key-generation default for index locality.
+- **Testing follow-ups: transaction sandbox + data factories** *(adoption review 2026-06-12)*.
+  The store interfaces and the `Inquiry.Testing` package (SQLite fixture, recording interceptor,
+  Respawn reset) shipped — see [Recently resolved](#recently-resolved) and
+  [Testing](../articles/features/testing.md). Remaining scope: an **Ecto-style SQL sandbox**
+  (each test inside a rolled-back transaction with connection ownership, enabling parallel
+  database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
+  Bogus-compatible).
+- **Sequential `Guid` v7 keys** *(adoption review 2026-06-12)*. A `Guid.CreateVersion7()`
+  key-generation default for index locality. (`DateOnly`/`TimeOnly` mapping shipped — see
+  [Recently resolved](#recently-resolved).)
 - **`TransactionScope` / `System.Transactions` interop** *(adoption review 2026-06-12)*. Inquiry has
   no documented position on ambient `TransactionScope`; per-operation connection opening means each
   operation enlists separately (risking distributed-transaction escalation). Needs a docs page and
@@ -235,6 +231,14 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Adoption round 1 (2026-06-12):** opt-in **generated store interfaces** —
+  `[InquiryGenerateInterface]` emits `I{Store}` (signatures with defaults preserved), the generated
+  partial implements it, and DI forwards the interface to the same scoped store instance, making
+  stores mockable; the **`Inquiry.Testing` package** (SQLite fixture, recording command interceptor
+  with assertion helpers, Respawn reset wrapper — see [Testing](../articles/features/testing.md));
+  and **first-class `DateOnly`/`TimeOnly` mapping** (materializer reads, `DbType.Date`/`Time`
+  stamping, `CREATE TABLE` column types on all five dialects, Oracle `TimeOnly` as
+  `INTERVAL DAY(0) TO SECOND(7)`), plus the IDE-squiggles troubleshooting docs.
 - **Production-readiness round (2026-06-12):** `InquiryOptions.DefaultCommandTimeout` applies a
   global command timeout (explicit `InquiryCommand.CommandTimeout` still wins); an ASP.NET Core
   health check (`AddHealthChecks().AddInquiry()`) opens a connection through the registered

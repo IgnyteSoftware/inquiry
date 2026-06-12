@@ -136,6 +136,8 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         DbTypeClass.Decimal => "NUMERIC(" + DecimalSpec(column, 18, 2) + ")",
         DbTypeClass.DateTime => "TIMESTAMP",
         DbTypeClass.DateTimeOffset => "TIMESTAMPTZ",
+        DbTypeClass.DateOnly => "DATE",
+        DbTypeClass.TimeOnly => "TIME",
         DbTypeClass.Guid => "UUID",
         DbTypeClass.ByteArray => "BYTEA",
         _ => column.Length > 0 ? "VARCHAR(" + column.Length + ")" : "TEXT",

@@ -219,6 +219,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         DbTypeClass.Decimal => "DECIMAL(" + DecimalSpec(column, 18, 2) + ")",
         DbTypeClass.DateTime => "DATETIME2",
         DbTypeClass.DateTimeOffset => "DATETIMEOFFSET",
+        DbTypeClass.DateOnly => "DATE",
+        DbTypeClass.TimeOnly => "TIME",
         DbTypeClass.Guid => "UNIQUEIDENTIFIER",
         DbTypeClass.ByteArray => "VARBINARY(MAX)",
         // SQL Server cannot key on NVARCHAR(MAX); a bounded Length is required for PK/FK string columns.

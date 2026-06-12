@@ -56,6 +56,13 @@ internal static class RegistrationEmitter
             // stateless after construction (all SQL is in const fields), so scoping is purely
             // about the captured IInquiry reference.
             source.AppendLine($"            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<{registration.StoreFullyQualifiedName}>(services);");
+
+            // An [InquiryGenerateInterface] store additionally registers its generated I{Store} as a
+            // scoped forward to the concrete store, so both resolutions share the one scoped instance.
+            if (registration.InterfaceFullyQualifiedName is not null)
+            {
+                source.AppendLine($"            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<{registration.InterfaceFullyQualifiedName}>(services, static sp => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{registration.StoreFullyQualifiedName}>(sp));");
+            }
         }
 
         source.AppendLine("        }");
