@@ -28,10 +28,9 @@
   and `MySqlBulkCopy` (the Dapper Plus / linq2db class of operation). Inquiry's multi-row `VALUES`
   batch insert is parameter-capped (~2k parameters); bulk copy is the 100k+-row tier. Falls back to
   the existing batch SQL where a provider has no bulk-copy API.
-- **Array parameters for `IN` + table-valued parameters.** `Compare.In` predicates rewrite the command
-  text per list cardinality, which defeats prepared-statement reuse across list lengths. PostgreSQL
-  `= ANY(@ids)` (and equivalents) would keep the SQL constant; SQL Server TVPs are the sibling
-  mechanism for passing sets to commands and stored procedures.
+- **Table-valued parameters (SQL Server).** PostgreSQL array `IN` parameters shipped (see
+  [Recently resolved](#recently-resolved)); SQL Server TVPs remain the sibling mechanism for passing
+  sets to commands and stored procedures on that engine.
 - **Single-round-trip eager loading.** Separate-query eager loading currently pays one round trip per
   relation; combining the parent + relation SELECTs into one multi-result-set command (Dapper
   `QueryMultiple`-style) keeps the design but cuts the latency to one round trip.
@@ -208,6 +207,14 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **PostgreSQL array `IN` parameters (2026-06-12):** `Compare.In` predicates, `[InquiryDeleteAll]`,
+  and IN criteria on set-based mutations now render `col = ANY(@ids)` on PostgreSQL and bind the
+  collection as one native array parameter (new `InquiryArrayParameter`; enum elements coerce to
+  their underlying type, empty lists bind an empty array). The SQL stays constant across list
+  lengths — prepared statements stay reusable and the per-element parameter cap no longer applies
+  to IN lists there. Other dialects keep sentinel expansion. A new `InListBenchmarks` harness in
+  `Inquiry.Benchmarks.PostgreSql` compares the array path against sentinel expansion across
+  cycling list cardinalities (1/5/20/100).
 - **Sequential `Guid` v7 keys (2026-06-12):** `[InquiryKey(SequentialGuid = true)]` makes
   insert/upsert/batch-insert assign a time-ordered UUID v7 via the new public
   `InquiryGuid.NewVersion7()` (delegates to `Guid.CreateVersion7()` on .NET 9+, RFC 9562 polyfill
