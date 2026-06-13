@@ -511,7 +511,10 @@ internal static class StoreProcessor
                 op = (SqlCompareOp)opValue;
             }
 
-            builder.Add(new PredicateData(field, op, GeneratorHelpers.GetNamedBool(candidate, "Or")));
+            builder.Add(new PredicateData(field, op, GeneratorHelpers.GetNamedBool(candidate, "Or"))
+            {
+                JsonPath = GeneratorHelpers.GetNamedString(candidate, "JsonPath"),
+            });
         }
 
         return builder.ToImmutable();
@@ -1679,11 +1682,31 @@ internal static class StoreProcessor
                 return false;
             }
 
+            // A JSON-path criterion ([InquiryWhere.JsonPath]) filters inside a JSON text column: the field
+            // must be a plain string column (no value converter — the comparison value binds as text, not
+            // through the column's converter) and the path must be a well-formed dotted object path. The
+            // strict path grammar keeps the value safe to embed in a single-quoted SQL literal across every
+            // dialect (no quote/escape hazard) and uniformly translatable (no array indices that PostgreSQL
+            // would mistranslate). The operator-specific parameter checks below then enforce string
+            // parameters, since the column is string-typed.
+            if (predicate.JsonPath is { } jsonPath &&
+                (column.Type.NonNullableDisplayName != "string" || column.Converter is not null ||
+                 !IsWellFormedJsonPath(jsonPath)))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.JsonPathPredicateInvalid, method.Location?.ToLocation(), method.Name, predicate.Field));
+                return false;
+            }
+
+            // Parameter names derive from the column property; a JSON-path criterion instead derives from
+            // the path's leaf segment ("$.address.city" → "city") so the generated SQL binds @city rather
+            // than @<column>, and two paths on the same column don't collide as @<column>/@<column>2.
+            var paramBase = predicate.JsonPath is { } leafPath ? JsonPathParameterBase(leafPath, column.PropertyName) : column.PropertyName;
+
             switch (predicate.Op)
             {
                 case SqlCompareOp.IsNull:
                 case SqlCompareOp.IsNotNull:
-                    predicates.Add(new SqlPredicate(column, predicate.Op, null, null, predicate.IsOr));
+                    predicates.Add(new SqlPredicate(column, predicate.Op, null, null, predicate.IsOr, predicate.JsonPath));
                     break;
 
                 case SqlCompareOp.Between:
@@ -1695,13 +1718,13 @@ internal static class StoreProcessor
                         return false;
                     }
 
-                    var lo = UniqueName(usedNames, column.PropertyName + "_lo");
-                    var hi = UniqueName(usedNames, column.PropertyName + "_hi");
+                    var lo = UniqueName(usedNames, paramBase + "_lo");
+                    var hi = UniqueName(usedNames, paramBase + "_hi");
                     // SqlPredicate carries the bare logical name; SqlBuilder.RenderPredicate applies the
                     // dialect sigil (':' on Oracle, '@' elsewhere) when emitting the SQL. The runtime
                     // PredicateBinding keeps '@' — the binder is dialect-agnostic and FinalizeCommand
                     // reconciles the sigil on Oracle.
-                    predicates.Add(new SqlPredicate(column, predicate.Op, lo, hi, predicate.IsOr));
+                    predicates.Add(new SqlPredicate(column, predicate.Op, lo, hi, predicate.IsOr, predicate.JsonPath));
                     bindings.Add(new PredicateBinding("@" + lo, paramIndex, column, isCollection: false));
                     bindings.Add(new PredicateBinding("@" + hi, paramIndex + 1, column, isCollection: false));
                     paramIndex += 2;
@@ -1719,8 +1742,8 @@ internal static class StoreProcessor
                         return false;
                     }
 
-                    var name = UniqueName(usedNames, column.PropertyName);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr));
+                    var name = UniqueName(usedNames, paramBase);
+                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr, predicate.JsonPath));
                     // Unlike scalar bindings (which keep the runtime binder's '@' form and let Oracle's
                     // FinalizeCommand reconcile the sigil), IN routes through InquiryInExpansion, which
                     // rewrites the command TEXT by locating the baked sentinel. That sentinel takes the
@@ -1742,8 +1765,8 @@ internal static class StoreProcessor
                         return false;
                     }
 
-                    var name = UniqueName(usedNames, column.PropertyName);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr));
+                    var name = UniqueName(usedNames, paramBase);
+                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr, predicate.JsonPath));
                     bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
                     paramIndex += 1;
                     break;
@@ -1757,8 +1780,8 @@ internal static class StoreProcessor
                         return false;
                     }
 
-                    var name = UniqueName(usedNames, column.PropertyName);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr));
+                    var name = UniqueName(usedNames, paramBase);
+                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr, predicate.JsonPath));
                     bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
                     paramIndex += 1;
                     break;
@@ -1795,6 +1818,74 @@ internal static class StoreProcessor
             }
         }
     }
+
+    /// <summary>
+    /// Derives a readable parameter base name from a JSON path's leaf segment (e.g. <c>$.address.city</c>
+    /// → <c>city</c>), keeping only identifier characters. Falls back to <paramref name="fallback"/> (the
+    /// column property name) when the leaf yields no usable identifier.
+    /// </summary>
+    private static string JsonPathParameterBase(string jsonPath, string fallback)
+    {
+        var lastDot = jsonPath.LastIndexOf('.');
+        var leaf = lastDot >= 0 ? jsonPath.Substring(lastDot + 1) : jsonPath;
+        var sb = new System.Text.StringBuilder(leaf.Length);
+        foreach (var ch in leaf)
+        {
+            if (char.IsLetterOrDigit(ch) || ch == '_')
+            {
+                sb.Append(ch);
+            }
+        }
+
+        var name = sb.ToString();
+        // A parameter base must start with a letter or underscore (a digit-leading leaf falls back).
+        return name.Length > 0 && (char.IsLetter(name[0]) || name[0] == '_') ? name : fallback;
+    }
+
+    /// <summary>
+    /// Validates an <c>[InquiryWhere.JsonPath]</c> value against the v1 grammar: a SQL/JSON dotted object
+    /// path <c>$.a.b</c> with one or more segments, each a run of letters, digits, <c>_</c> or <c>-</c>.
+    /// Rejecting everything else (quotes, brackets/array indices, empty or trailing segments, bare <c>$</c>)
+    /// keeps the path safe to embed in a single-quoted SQL literal on every dialect and uniformly
+    /// translatable to PostgreSQL's <c>#&gt;&gt;</c> text-path form. Array indices and quoted keys are out of
+    /// v1 scope rather than silently mis-handled.
+    /// </summary>
+    private static bool IsWellFormedJsonPath(string path)
+    {
+        // Must start with "$." and carry at least one segment character after it.
+        if (path.Length < 3 || path[0] != '$' || path[1] != '.')
+        {
+            return false;
+        }
+
+        var expectSegmentChar = true; // just consumed a '.', so a segment character must follow
+        for (var i = 2; i < path.Length; i++)
+        {
+            var ch = path[i];
+            if (ch == '.')
+            {
+                if (expectSegmentChar)
+                {
+                    return false; // empty segment ("..", trailing dot)
+                }
+
+                expectSegmentChar = true;
+            }
+            else if (IsJsonPathSegmentChar(ch))
+            {
+                expectSegmentChar = false;
+            }
+            else
+            {
+                return false; // quote, bracket, whitespace, etc.
+            }
+        }
+
+        return !expectSegmentChar; // must not end on a dangling '.'
+    }
+
+    private static bool IsJsonPathSegmentChar(char ch)
+        => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
 
     private static bool HasSupportedParameters(StoreMethodData method, EntityData entity, IReadOnlyList<ColumnData> fieldColumns)
     {

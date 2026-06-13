@@ -32,6 +32,8 @@
   href: value-converters.md
 - name: JSON columns
   href: json-columns.md
+- name: JSON-path querying
+  href: json-path-querying.md
 - name: Eager loading
   href: eager-loading.md
 - name: Transactions
