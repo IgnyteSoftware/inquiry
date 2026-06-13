@@ -1,3 +1,4 @@
+using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +23,7 @@ public static class MySqlInquiryServiceCollectionExtensions
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MySql");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MySqlInquiryConnectionFactory(connectionString));
+        services.AddSingleton<IInquiryBulkCopier, MySqlBulkCopier>();
         return services;
     }
 
@@ -48,6 +50,7 @@ public static class MySqlInquiryServiceCollectionExtensions
         configure(options);
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MySqlInquiryConnectionFactory(connectionString, options));
+        services.AddSingleton<IInquiryBulkCopier, MySqlBulkCopier>();
         return services;
     }
 

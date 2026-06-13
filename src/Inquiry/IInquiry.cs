@@ -110,6 +110,25 @@ public interface IInquiry
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
 
+    // ---- Bulk insert -------------------------------------------------------------------
+
+    /// <summary>
+    /// Streams rows into a table via the provider's native bulk-copy API (SqlBulkCopy / binary
+    /// COPY / MySqlBulkCopy). Generated <c>[InquiryBulkInsert]</c> methods on bulk-capable
+    /// dialects call this; dialects without a bulk-copy API fall back to batch SQL at compile
+    /// time and never do. Bulk insert opens a dedicated connection, does not join an ambient
+    /// Inquiry transaction, and bypasses interceptors and telemetry.
+    /// </summary>
+    /// <remarks>The default throws; <see cref="DefaultInquiry"/> resolves the provider's
+    /// registered <see cref="Inquiry.BulkCopy.IInquiryBulkCopier"/>, so existing
+    /// <see cref="IInquiry"/> implementations (e.g. test mocks) stay source-compatible.</remarks>
+    Task<long> BulkInsertAsync<TEntity>(
+        Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
+        IEnumerable<TEntity> rows,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        => throw new NotSupportedException("Bulk insert requires the built-in DefaultInquiry with a provider-registered IInquiryBulkCopier.");
+
     // ---- Execute (no materializer) ----------------------------------------------------
 
     /// <summary>Executes a SQL command and returns the affected row count.</summary>

@@ -264,6 +264,15 @@ internal static class StoreOperationEmitter
                 break;
             }
 
+            case StoreOperation.BulkInsert when sqlBuilder.SupportsBulkCopy:
+                EmitBulkInsert(source, method, parameters, entity, entityType, cancellation);
+                break;
+
+            case StoreOperation.BulkInsert:
+                // No native bulk-copy API on this dialect — compile down to the batch-insert body.
+                // The method's Task<long> return accepts the body's int expressions (implicit widening).
+                goto case StoreOperation.InsertAll;
+
             case StoreOperation.InsertAll:
             {
                 // batch insert — one multi-row INSERT built at runtime for the whole collection,
@@ -1301,6 +1310,77 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}}}");
             source.AppendLine();
         }
+    }
+
+    /// <summary>
+    /// Emits a bulk-copy-dialect <c>[InquiryBulkInsert]</c> method: a static
+    /// <c>InquiryBulkInsertDefinition&lt;T&gt;</c> field (raw table/columns + an ordinal accessor
+    /// reusing the binder's converter/enum-aware value expressions) and a body that streams the
+    /// rows through <c>IInquiry.BulkInsertAsync</c>. Sequential-GUID keys and auditing timestamps
+    /// are stamped per row by a local iterator as the stream is enumerated, so the semantics match
+    /// the batch-insert path without buffering the collection.
+    /// </summary>
+    private static void EmitBulkInsert(
+        StringBuilder source,
+        StoreMethodData method,
+        string parameters,
+        EntityData entity,
+        string entityType,
+        string cancellation)
+    {
+        var insertable = SelectMutationColumns(entity, includeKey: false);
+        var itemsParam = method.Parameters[0].Name;
+        var definitionField = $"_bulkDef_{method.Name}";
+
+        source.AppendLine($"    private static readonly global::Inquiry.BulkCopy.InquiryBulkInsertDefinition<{entityType}> {definitionField} = new(");
+        source.AppendLine($"        {GeneratorHelpers.Literal(entity.Schema)},");
+        source.AppendLine($"        {GeneratorHelpers.Literal(entity.TableName)},");
+        source.AppendLine($"        new[] {{ {string.Join(", ", insertable.Select(c => GeneratorHelpers.Literal(c.ColumnName)))} }},");
+        source.AppendLine("        static (_e, _i) => _i switch");
+        source.AppendLine("        {");
+        for (var i = 0; i < insertable.Length; i++)
+        {
+            source.AppendLine($"            {i} => {BuildParameterValueExpression(insertable[i], "_e." + insertable[i].PropertyName)},");
+        }
+
+        source.AppendLine("            _ => throw new global::System.ArgumentOutOfRangeException(nameof(_i)),");
+        source.AppendLine("        });");
+        source.AppendLine();
+
+        var hasStamps = HasSequentialGuidKey(entity);
+        if (!hasStamps)
+        {
+            foreach (var column in entity.Columns.AsImmutableArray())
+            {
+                if (column.IsCreatedAt || column.IsModifiedAt)
+                {
+                    hasStamps = true;
+                    break;
+                }
+            }
+        }
+
+        AppendHeader(source, method, parameters, isAsync: false);
+        if (hasStamps)
+        {
+            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, _Stamped({itemsParam}), {cancellation});");
+            source.AppendLine();
+            source.AppendLine($"        static global::System.Collections.Generic.IEnumerable<{entityType}> _Stamped(global::System.Collections.Generic.IEnumerable<{entityType}> _source)");
+            source.AppendLine("        {");
+            source.AppendLine("            foreach (var _e in _source)");
+            source.AppendLine("            {");
+            EmitSequentialGuidAssignment(source, entity, "_e", indent: "                ");
+            EmitAuditTimestampAssignments(source, entity, "_e", isInsert: true, indent: "                ");
+            source.AppendLine("                yield return _e;");
+            source.AppendLine("            }");
+            source.AppendLine("        }");
+        }
+        else
+        {
+            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, {itemsParam}, {cancellation});");
+        }
+
+        source.AppendLine("    }");
     }
 
     private static string UtcNowExpression(ColumnData column)

@@ -29,6 +29,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override bool SupportsFullTextSearch => true;
 
+    /// <summary>SQL Server bulk inserts ride SqlBulkCopy via the provider-registered copier.</summary>
+    public override bool SupportsBulkCopy => true;
+
     public override string BuildFullTextSearchSql(SqlBuildContext context, IReadOnlyList<IColumn> searchColumns)
     {
         // FREETEXT does natural-language matching over the searched columns (requires a full-text index).

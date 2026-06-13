@@ -49,10 +49,15 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
     }
 
     private static string WithUserVariables(string connectionString)
-        => new MySqlConnectionStringBuilder(connectionString)
-        {
-            AllowUserVariables = true,
-        }.ConnectionString;
+        => new MySqlConnectionStringBuilder(connectionString) { AllowUserVariables = true }.ConnectionString;
+
+    // AllowLoadLocalInfile is required by MySqlBulkCopy ([InquiryBulkInsert]), which streams rows
+    // via LOAD DATA LOCAL INFILE — but it also widens the blast radius of any SQL-injection bug
+    // (a malicious LOAD DATA LOCAL statement could read files off the app host). So it is NOT set
+    // on regular pipeline connections; only the dedicated bulk-insert connection opts in, and the
+    // server still rejects local data unless local_infile=1.
+    private static string WithLocalInfile(string connectionString)
+        => new MySqlConnectionStringBuilder(connectionString) { AllowLoadLocalInfile = true }.ConnectionString;
 
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
@@ -60,6 +65,19 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
         return _failoverConnectionString is { } failover
             ? FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, retryingOpener: null, cancellationToken)
             : OpenCoreAsync(_connectionString, cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens the dedicated bulk-insert connection — the regular connection string plus
+    /// <c>AllowLoadLocalInfile=true</c>, scoped to this connection only (see
+    /// <see cref="WithLocalInfile"/> for why the flag is not global). Consumed by
+    /// <see cref="MySqlBulkCopier"/>.
+    /// </summary>
+    internal ValueTask<DbConnection> OpenBulkCopyConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        return _failoverConnectionString is { } failover
+            ? FailoverConnectionOpener.OpenAsync(OpenCoreAsync, WithLocalInfile(_connectionString), WithLocalInfile(failover), retryingOpener: null, cancellationToken)
+            : OpenCoreAsync(WithLocalInfile(_connectionString), cancellationToken);
     }
 
     private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)

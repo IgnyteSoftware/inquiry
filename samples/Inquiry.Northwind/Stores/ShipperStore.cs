@@ -29,4 +29,10 @@ public partial class ShipperStore : InquiryStore<Shipper>
 
     [InquiryDeleteOneByKey]
     public partial Task<bool> DeleteByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);
+
+    [InquiryInsertAll]
+    public partial Task<int> InsertAllAsync(IEnumerable<Shipper> shippers, CancellationToken cancellationToken = default);
+
+    [InquiryBulkInsert]
+    public partial Task<long> BulkInsertAsync(IEnumerable<Shipper> shippers, CancellationToken cancellationToken = default);
 }

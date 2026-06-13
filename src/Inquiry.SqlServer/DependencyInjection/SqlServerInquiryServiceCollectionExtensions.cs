@@ -1,3 +1,4 @@
+using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +23,7 @@ public static class SqlServerInquiryServiceCollectionExtensions
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "SqlServer");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(connectionString));
+        services.AddSingleton<IInquiryBulkCopier, SqlServerBulkCopier>();
         return services;
     }
 
@@ -49,6 +51,7 @@ public static class SqlServerInquiryServiceCollectionExtensions
         configure(options);
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(connectionString, options));
+        services.AddSingleton<IInquiryBulkCopier, SqlServerBulkCopier>();
         return services;
     }
 
