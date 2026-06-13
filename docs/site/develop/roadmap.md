@@ -102,8 +102,6 @@
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
   largest onboarding lever for existing databases.
-- **View-mapped / keyless read-only entities** *(gap research 2026-06-12)*. Map a read-only store
-  over a database view or keyless projection (EF keyless entities / TypeORM `@ViewEntity`).
 - **Server-computed columns** *(gap research 2026-06-12)*. Computed-column DDL + materializer support
   for properties calculated by the database (EF `HasComputedColumnSql`, XPO persistent aliases).
 - **Many-to-many relations** *(gap research 2026-06-12)*. Auto-managed junction tables for M:N
@@ -188,6 +186,14 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **View-mapped / keyless read-only entities (2026-06-13):** `[InquiryView("v_name")]` maps a
+  read-only, keyless-permitted entity — a store over it may declare only SELECT/aggregate/count
+  operations (mutations are INQ052), no `[InquiryKey]` is required, and the schema generator skips
+  it (the view lives in the database, no DDL or FK constraints emitted). Discovered through the
+  same `EntityData`/materializer/store-linking pipeline as tables (merged in via a second syntax
+  provider), so projections, predicates, and field selects all work against the view. Live-proven
+  on SQLite (`CREATE VIEW` aggregate round-trip) plus generator snapshots. See
+  [View entities](../articles/features/view-entities.md).
 - **Stored-procedure scalar output/return (2026-06-13):** `[InquiryStoredProcedure(OutputParameter =
   "@Name")]` / `[InquiryStoredProcedure(ReturnsValue = true)]` declare the method as
   `Task<TScalar>` and surface a single OUTPUT parameter (bound `ParameterDirection.Output` with its

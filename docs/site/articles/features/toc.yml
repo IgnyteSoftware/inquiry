@@ -8,6 +8,8 @@
   href: auditing.md
 - name: Projections
   href: projections.md
+- name: View entities
+  href: view-entities.md
 - name: Ad-hoc DTOs
   href: ad-hoc-dtos.md
 - name: Aggregates

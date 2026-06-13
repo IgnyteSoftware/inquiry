@@ -43,4 +43,12 @@ internal sealed record EntityData(
     /// entity's foreign-key columns (<see cref="InquiryTableAttribute.GenerateForeignKeys"/>). Default true.
     /// </summary>
     public bool GenerateForeignKeys { get; init; } = true;
+
+    /// <summary>
+    /// Whether this entity maps a database <c>[InquiryView]</c> rather than a table: it is read-only
+    /// (a store over it may only declare SELECT/aggregate operations — mutations are rejected),
+    /// keyless-permitted (no <c>[InquiryKey]</c> required), and skipped by the schema emitter (the
+    /// view is defined in the database, not created by Inquiry).
+    /// </summary>
+    public bool IsView { get; init; }
 }

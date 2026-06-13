@@ -22,16 +22,24 @@ internal static class EntityProcessor
 {
     /// <summary>Extracts the cacheable model for one <c>[InquiryTable]</c> entity symbol.</summary>
     public static EntityData Extract(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
+        => ExtractCore(entitySymbol, isView: false, cancellationToken);
+
+    /// <summary>Extracts a <c>[InquiryView]</c> read-only, keyless-permitted entity.</summary>
+    public static EntityData ExtractView(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
+        => ExtractCore(entitySymbol, isView: true, cancellationToken);
+
+    private static EntityData ExtractCore(INamedTypeSymbol entitySymbol, bool isView, CancellationToken cancellationToken)
     {
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticData>();
         var location = entitySymbol.Locations.FirstOrDefault();
 
-        var tableAttribute = GeneratorHelpers.GetEntityAttribute(entitySymbol, "InquiryTableAttribute");
-        var tableName = (tableAttribute is not null ? GeneratorHelpers.GetConstructorString(tableAttribute) : null) ?? entitySymbol.Name;
-        var schema = tableAttribute is not null ? GeneratorHelpers.GetNamedString(tableAttribute, "Schema") : null;
-        // GenerateForeignKeys defaults to true; only an explicit `= false` named arg disables FK DDL.
-        var generateForeignKeys = tableAttribute is null ||
-            GeneratorHelpers.GetNamedBool(tableAttribute, "GenerateForeignKeys", defaultValue: true);
+        // A view reads its name/schema from [InquiryView]; a table from [InquiryTable].
+        var nameAttribute = GeneratorHelpers.GetEntityAttribute(entitySymbol, isView ? "InquiryViewAttribute" : "InquiryTableAttribute");
+        var tableName = (nameAttribute is not null ? GeneratorHelpers.GetConstructorString(nameAttribute) : null) ?? entitySymbol.Name;
+        var schema = nameAttribute is not null ? GeneratorHelpers.GetNamedString(nameAttribute, "Schema") : null;
+        // A view is read-only with no FK DDL; for a table, GenerateForeignKeys defaults true.
+        var generateForeignKeys = !isView && (nameAttribute is null ||
+            GeneratorHelpers.GetNamedBool(nameAttribute, "GenerateForeignKeys", defaultValue: true));
 
         var columns = DiscoverColumns(entitySymbol, diagnostics);
         var relations = DiscoverRelations(entitySymbol, cancellationToken);
@@ -39,7 +47,9 @@ internal static class EntityProcessor
         var keyColumns = columns.Where(static c => c.IsKey).ToImmutableArray();
         var isMapped = true;
 
-        if (keyColumns.Length == 0)
+        // A view is keyless-permitted: no key is required. (A key may still be declared to enable
+        // key-based selects over a view that exposes a unique id.) Tables require a key.
+        if (!isView && keyColumns.Length == 0)
         {
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.EntityKeyCount, location, entitySymbol.Name));
             isMapped = false;
@@ -115,6 +125,7 @@ internal static class EntityProcessor
             SoftDeleteColumn = softDeleteColumns.Length > 0 ? softDeleteColumns[0] : null,
             ConcurrencyToken = concurrencyTokens.Length > 0 ? concurrencyTokens[0] : null,
             GenerateForeignKeys = generateForeignKeys,
+            IsView = isView,
         };
     }
 
