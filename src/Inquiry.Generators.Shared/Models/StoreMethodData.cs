@@ -9,6 +9,12 @@ internal enum ProcedureReturnKind
     AsyncEnumerableOfEntity,
     TaskOfEntity,
     TaskOfInt,
+
+    /// <summary>
+    /// <c>Task&lt;TScalar&gt;</c> surfacing a single OUTPUT parameter or the RETURN value as the task
+    /// result (driven by <c>[InquiryStoredProcedure(OutputParameter=…/ReturnsValue=true)]</c>).
+    /// </summary>
+    TaskOfOutputScalar,
 }
 
 /// <summary>
@@ -82,4 +88,38 @@ internal sealed record StoreMethodData(
     /// registry at emit. Null for non-select operations.
     /// </summary>
     public string? ResultElementTypeFqn { get; init; }
+
+    /// <summary>
+    /// For <see cref="ProcedureReturnKind.TaskOfOutputScalar"/>, the normalized parameter name read
+    /// back after execution (e.g. <c>@Total</c> for an OUTPUT parameter, or the synthetic
+    /// return-value name). Passed to <c>IInquiry.ExecuteProcedureScalarAsync</c>.
+    /// </summary>
+    public string? ProcedureReadBackName { get; init; }
+
+    /// <summary>
+    /// For <see cref="ProcedureReturnKind.TaskOfOutputScalar"/>, whether the read-back parameter is
+    /// the procedure's RETURN value (<c>ParameterDirection.ReturnValue</c>) rather than an OUTPUT
+    /// parameter (<c>ParameterDirection.Output</c>).
+    /// </summary>
+    public bool ProcedureReturnsValue { get; init; }
+
+    /// <summary>
+    /// For an OUTPUT-parameter <see cref="ProcedureReturnKind.TaskOfOutputScalar"/>, the DbType
+    /// enum-member expression to stamp on the output parameter so the provider allocates the right
+    /// read-back buffer; null when no portable DbType applies (RETURN value, or unmapped type).
+    /// </summary>
+    public string? ProcedureOutputDbType { get; init; }
+
+    /// <summary>
+    /// For an OUTPUT-parameter scalar that maps to a variable-length string, whether to stamp
+    /// <c>Size = -1</c> (MAX) so providers like SqlClient allocate an output buffer.
+    /// </summary>
+    public bool ProcedureOutputIsString { get; init; }
+
+    /// <summary>
+    /// For a <see cref="decimal"/> OUTPUT parameter, whether to stamp an explicit precision/scale.
+    /// SqlClient defaults a decimal output parameter to scale 0 and rounds the read-back value
+    /// (e.g. 19.75 → 20), so a high-fidelity scale is stamped to preserve fractional digits.
+    /// </summary>
+    public bool ProcedureOutputIsDecimal { get; init; }
 }

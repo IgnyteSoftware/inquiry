@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ050.
+    //                  INQ045–INQ051.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -31,6 +31,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ047         Sequential GUID key           (SequentialGuid on non-Guid / generated / db-default key) [IN USE]
     //   INQ048         Raw-SQL injection lint        (non-constant command text passed to InquiryCommand) [IN USE]
     //   INQ049–INQ050  Auditing timestamps           (INQ049 invalid type/placement, INQ050 duplicate) [IN USE]
+    //   INQ051         Stored-procedure scalar output (OutputParameter/ReturnsValue misconfiguration) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -400,6 +401,18 @@ internal static class InquiryDiagnosticDescriptors
         "INQ050",
         "Entity declares more than one auditing timestamp of the same kind",
         "Entity '{0}' marks more than one property with the same auditing-timestamp attribute (e.g. '{1}'). At most one [InquiryCreatedAt] and one [InquiryModifiedAt] are allowed.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ051: an [InquiryStoredProcedure] with OutputParameter/ReturnsValue is misconfigured —
+    // both set at once, or a RETURN value declared as something other than Task<int>. A return
+    // shape that isn't Task<T> at all is the general unsupported-return-type error (INQ005). The
+    // scalar-output form surfaces a single read-back value as the task result.
+    public static readonly DiagnosticDescriptor StoredProcedureScalarOutputInvalid = new(
+        "INQ051",
+        "Stored-procedure scalar output is misconfigured",
+        "Stored-procedure method '{0}' has an invalid OutputParameter/ReturnsValue configuration: {1}",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

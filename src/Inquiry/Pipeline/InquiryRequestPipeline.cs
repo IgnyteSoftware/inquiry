@@ -729,6 +729,46 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
+    public async Task<T> ExecuteProcedureScalarAsync<T>(InquiryCommand command, string readBackParameterName, CancellationToken cancellationToken = default)
+    {
+        if (command is null) throw new ArgumentNullException(nameof(command));
+        if (string.IsNullOrWhiteSpace(readBackParameterName)) throw new ArgumentException("Read-back parameter name cannot be empty.", nameof(readBackParameterName));
+
+        // Normalize the lookup name the same way the binder normalizes the bound parameter's name,
+        // so a caller-supplied "Total" still matches the bound "@Total".
+        readBackParameterName = InquiryParameterBinder.NormalizeName(readBackParameterName);
+
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var dbCommand = CreateCommand(connection);
+
+        try
+        {
+            InitializeCommandSync(dbCommand, command);
+            if (HasInterceptors)
+            {
+                await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+            }
+
+            // No Prepare: a procedure call with output parameters runs once; preparing it adds a
+            // round trip with no reuse benefit.
+            var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            // ADO.NET populates output / return-value DbParameters after ExecuteNonQuery; read the
+            // named one back and convert it the same way as a scalar result.
+            var readBack = ScalarConvert.From<T>(dbCommand.Parameters[readBackParameterName].Value);
+
+            if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
+            return readBack;
+        }
+        catch (Exception exception)
+        {
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<T> ExecuteScalarAsync<T, TArgs>(
         string commandText,
         TArgs args,
