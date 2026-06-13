@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -12,7 +13,7 @@ namespace Inquiry.Generators.Tests;
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
-    private static readonly string[] EnableDdlLints = { "INQ061", "INQ062" };
+    private static readonly string[] EnableDdlLints = { "INQ061", "INQ062", "INQ064" };
 
     private const string UnindexedFkSource = """
         using Inquiry.Entities;
@@ -203,6 +204,125 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ062");
+    }
+
+    // ---- INQ064: a filtered column with no index ------------------------------------------------
+
+    private const string FilterSource = """
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("Users")]
+        public sealed class User
+        {
+            [InquiryKey(IsGenerated = true)] public long Id { get; set; }
+            [InquiryColumn("Email")] public string Email { get; set; } = string.Empty;
+            [InquiryColumn("Name")] public string Name { get; set; } = string.Empty;
+        }
+
+        public partial class UserStore : Inquiry.Stores.InquiryStore<Demo.User>
+        {
+            [InquirySelectAllByField("Email")]
+            public partial Task<IReadOnlyList<User>> ByEmailAsync(string email, CancellationToken cancellationToken = default);
+
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Name", Compare.Like)]
+            public partial Task<IReadOnlyList<User>> SearchAsync(string name, CancellationToken cancellationToken = default);
+        }
+        """;
+
+    [Fact]
+    public void UnindexedFilterColumnsReportINQ064_Sqlite()
+    {
+        var result = RunGenerator(FilterSource, enableDiagnostics: EnableDdlLints);
+
+        // Email (field select) and Name (predicate) are both filtered and unindexed.
+        var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage()).ToArray();
+        Assert.Equal(2, lints.Length);
+        Assert.Contains(lints, m => m.Contains("Email"));
+        Assert.Contains(lints, m => m.Contains("Name"));
+    }
+
+    [Fact]
+    public void FilterLintIsOffByDefaultWithoutOptIn_Sqlite()
+    {
+        var result = RunGenerator(FilterSource);
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ064");
+    }
+
+    [Fact]
+    public void SetColumnOfPredicateUpdateIsNotFlaggedAsFilter_Sqlite()
+    {
+        // An [InquiryUpdateWhere] SET column is written, not filtered — only its WHERE column is a filter.
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Users")]
+            public sealed class User
+            {
+                [InquiryKey(IsGenerated = true)] public long Id { get; set; }
+                [InquiryColumn("Status")] public string Status { get; set; } = string.Empty;
+                [InquiryColumn("LastSeen")] public string LastSeen { get; set; } = string.Empty;
+            }
+
+            public partial class UserStore : Inquiry.Stores.InquiryStore<Demo.User>
+            {
+                [InquiryUpdateWhere("LastSeen")]
+                [InquiryWhere("Status")]
+                public partial Task<int> TouchByStatusAsync(string lastSeen, string status, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+
+        var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage()).ToArray();
+        // Status (the WHERE filter) is flagged; LastSeen (the SET column) is not.
+        Assert.Contains(lints, m => m.Contains("Status"));
+        Assert.DoesNotContain(lints, m => m.Contains("LastSeen"));
+    }
+
+    [Fact]
+    public void IndexedFilterColumnDoesNotReportINQ064_Sqlite()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Users")]
+            public sealed class User
+            {
+                [InquiryKey(IsGenerated = true)] public long Id { get; set; }
+                [InquiryColumn("Email", IsIndexed = true)] public string Email { get; set; } = string.Empty;
+            }
+
+            public partial class UserStore : Inquiry.Stores.InquiryStore<Demo.User>
+            {
+                [InquirySelectAllByField("Email")]
+                public partial Task<IReadOnlyList<User>> ByEmailAsync(string email, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ064");
     }
 
     [Theory]
