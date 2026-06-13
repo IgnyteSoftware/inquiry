@@ -96,6 +96,13 @@ public interface IColumn
     /// <summary>Raw SQL default expression for the column, or null for none.</summary>
     string? DefaultExpression { get; }
 
+    /// <summary>
+    /// Raw SQL expression for a server-computed column (<c>[InquiryColumn(Computed = …)]</c>), or
+    /// null. When set, the DDL renders the dialect's computed-column form and the column is excluded
+    /// from generated INSERT/UPDATE.
+    /// </summary>
+    string? ComputedExpression { get; }
+
     /// <summary>Referenced table name when this column is a foreign key, or null.</summary>
     string? ForeignKeyTable { get; }
 

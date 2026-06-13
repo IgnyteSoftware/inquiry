@@ -345,6 +345,14 @@ public abstract class SqlBuilder
                 continue;
             }
 
+            // A server-computed column renders the dialect's computed-column form and takes no
+            // type/NOT NULL/DEFAULT/PRIMARY KEY clauses — the database owns its value.
+            if (!string.IsNullOrEmpty(column.ComputedExpression))
+            {
+                lines.Add(QuoteIdentifier(column.ColumnName) + " " + RenderComputedColumn(column));
+                continue;
+            }
+
             var def = QuoteIdentifier(column.ColumnName) + " " + ColumnType(column);
             if (!compositeKey && column.IsKey)
             {
@@ -446,6 +454,15 @@ public abstract class SqlBuilder
     /// <summary>The physical column type: the explicit <see cref="IColumn.SqlType"/> override if set, else <see cref="MapColumnType"/>.</summary>
     protected string ColumnType(IColumn column)
         => string.IsNullOrEmpty(column.SqlType) ? MapColumnType(column) : column.SqlType!;
+
+    /// <summary>
+    /// Renders a server-computed column's definition (the part after the quoted name) for a
+    /// <c>[InquiryColumn(Computed = …)]</c> column. The default is the standard expression form
+    /// <c>AS (&lt;expr&gt;)</c> (SQLite / SQL Server / Oracle); PostgreSQL and MySQL override to the
+    /// typed <c>GENERATED ALWAYS AS (&lt;expr&gt;) STORED</c> form they require.
+    /// </summary>
+    protected virtual string RenderComputedColumn(IColumn column)
+        => "AS (" + column.ComputedExpression + ")";
 
     /// <summary>
     /// Renders the <c>precision, scale</c> body for a decimal column type, using the column's declared

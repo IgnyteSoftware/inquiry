@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ056.
+    //                  INQ045–INQ057.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -36,6 +36,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ053         Key-requiring op, keyless entity (key-based select/eager on a keyless view) [IN USE]
     //   INQ054         Derived query name             (field-less [InquirySelectAllByField] name has no 'By…') [IN USE]
     //   INQ055–INQ056  Auditing user columns          (INQ055 invalid type/placement, INQ056 duplicate) [IN USE]
+    //   INQ057         Server-computed column          (Computed combined with key/default/audit/etc.) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -416,6 +417,17 @@ internal static class InquiryDiagnosticDescriptors
         "INQ052",
         "View-mapped entity is read-only",
         "Store method '{0}' is not a read-only operation but targets view-mapped entity '{1}'. An [InquiryView] entity is read-only — only SELECT, aggregate, and count operations are allowed (no mutations or stored procedures).",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ057: a [InquiryColumn(Computed = …)] server-computed column is calculated by the database,
+    // so it cannot also be a key, database-generated, database-defaulted, an auditing column, the
+    // soft-delete indicator, or a concurrency token — those all own the column's value themselves.
+    public static readonly DiagnosticDescriptor ComputedColumnInvalid = new(
+        "INQ057",
+        "Server-computed column is misconfigured",
+        "Entity '{0}' marks column '{1}' as Computed, but it also acts as a key, database-generated/defaulted column, auditing column, soft-delete indicator, or concurrency token. A computed column's value is owned by the database expression alone.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

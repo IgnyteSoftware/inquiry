@@ -139,6 +139,10 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 
     // ---- DDL --------------------------------------------------------------------------------
 
+    /// <summary>PostgreSQL computed columns must be typed and STORED.</summary>
+    protected override string RenderComputedColumn(IColumn column)
+        => ColumnType(column) + " GENERATED ALWAYS AS (" + column.ComputedExpression + ") STORED";
+
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
         DbTypeClass.Boolean => "BOOLEAN",

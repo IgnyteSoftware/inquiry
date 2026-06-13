@@ -52,6 +52,9 @@ internal sealed record ColumnData : IColumn
     public int Precision { get; init; }
     public int Scale { get; init; }
     public string? DefaultExpression { get; init; }
+
+    /// <summary>Raw SQL expression for a server-computed column ([InquiryColumn(Computed = …)]), or null.</summary>
+    public string? ComputedExpression { get; init; }
     public string? ForeignKeyTable { get; init; }
     public string? ForeignKeySchema { get; init; }
     public string? ForeignKeyColumn { get; init; }

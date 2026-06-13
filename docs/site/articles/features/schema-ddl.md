@@ -53,6 +53,19 @@ Each provider analyzer emits the right flavor:
 - **MySQL**: `` `Backticked` `` identifiers, `AUTO_INCREMENT`, `VARCHAR(N)` / `TINYINT(1)` / `DATETIME`.
 - **Oracle**: `"UPPER_CASED"` identifiers, `GENERATED ALWAYS AS IDENTITY` (12c+), `VARCHAR2(N)` / `NUMBER(1)` / `TIMESTAMP`.
 
+## Server-computed columns
+
+`[InquiryColumn(Computed = "<sql expression>")]` makes a **server-computed column** (EF `HasComputedColumnSql` / XPO persistent-alias analog) — the database calculates the value from the expression:
+
+```csharp
+[InquiryColumn("FullName", Computed = "FirstName || ' ' || LastName")]
+public string FullName { get; set; } = "";
+```
+
+- **Excluded from generated INSERT/UPDATE** (the database owns the value), but **selected and materialized** into the property on reads — and it recomputes automatically when its source columns change.
+- The DDL emits each dialect's computed-column form: `AS (<expr>)` on SQLite / SQL Server / Oracle; the typed `<type> GENERATED ALWAYS AS (<expr>) STORED` on PostgreSQL and MySQL (which require it).
+- A computed column can't also be a key, database-generated/defaulted, an auditing column, the soft-delete indicator, or a concurrency token (`INQ057`). The expression is **raw SQL** — keep untrusted input out of it.
+
 ## Indexes
 
 `[InquiryIndex]` on an entity or `[InquiryColumn(Indexed = true)]` on a column emits `CREATE INDEX` statements alongside the table DDL.

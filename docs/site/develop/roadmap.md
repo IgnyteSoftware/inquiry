@@ -95,8 +95,6 @@
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
   largest onboarding lever for existing databases.
-- **Server-computed columns** *(gap research 2026-06-12)*. Computed-column DDL + materializer support
-  for properties calculated by the database (EF `HasComputedColumnSql`, XPO persistent aliases).
 - **Many-to-many relations** *(gap research 2026-06-12)*. Auto-managed junction tables for M:N
   associations; the relation model is currently 1:N / N:1 only.
 - **CTEs and set operations** *(gap research 2026-06-12)*. `WITH` / `UNION` / `INTERSECT` / `EXCEPT`
@@ -179,6 +177,14 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Server-computed columns (2026-06-13):** `[InquiryColumn(Computed = "<expr>")]` maps a
+  database-computed column (EF `HasComputedColumnSql` analog) — excluded from generated
+  INSERT/UPDATE but selected/materialized and recomputed by the database. The `CREATE TABLE` emits
+  each dialect's form (`AS (<expr>)` on SQLite/SqlServer/Oracle via a shared base renderer; typed
+  `GENERATED ALWAYS AS (<expr>) STORED` on PostgreSQL/MySQL via overrides). Combining `Computed`
+  with a key/default/audit/soft-delete/token column is INQ057. All five dialects' DDL asserted via
+  generator snapshots; live SQLite round-trip (insert computes, update recomputes). See
+  [Schema DDL](../articles/features/schema-ddl.md).
 - **Auditing user columns `[InquiryCreatedBy]`/`[InquiryModifiedBy]` (2026-06-13):** the who-changed-it
   counterpart to the timestamp auditing — a `string` column stamped from the ambient
   `InquiryAuditContext.CurrentUser` (an `AsyncLocal` set per request via `BeginScope`). `CreatedBy`
