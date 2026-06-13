@@ -44,7 +44,8 @@ public sealed class SqlBuildContext
         GenerateForeignKeys = generateForeignKeys;
         KeyColumns = columns.Where(c => c.IsKey).ToArray();
         // A database-managed token (rowversion) is supplied by the database, so exclude it from INSERT.
-        InsertableColumns = columns.Where(c => !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken).ToArray();
+        // A server-computed column is calculated by the database expression, so exclude it too.
+        InsertableColumns = columns.Where(c => !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken && string.IsNullOrEmpty(c.ComputedExpression)).ToArray();
         Table = builder.QuoteTable(schema, tableName);
         SelectColumns = string.Join(", ", columns.Select(c => builder.QuoteIdentifier(c.ColumnName)));
         InsertColumns = string.Join(", ", InsertableColumns.Select(c => builder.QuoteIdentifier(c.ColumnName)));
@@ -54,8 +55,9 @@ public sealed class SqlBuildContext
         // A created-* auditing column ([InquiryCreatedAt]/[InquiryCreatedBy]) is never SET either:
         // it is written once by INSERT and must survive every subsequent UPDATE / upsert conflict
         // branch unchanged.
+        // A server-computed column is never SET — the database recomputes it from its expression.
         SetClauses = string.Join(", ", columns
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.IsCreatedAt && !c.IsCreatedBy)
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
             .Select(c => builder.QuoteIdentifier(c.ColumnName) + " = " + builder.ParameterName(c.PropertyName)));
         QuotedKeyColumns = KeyColumns.Select(k => builder.QuoteIdentifier(k.ColumnName)).ToArray();
         KeyParameters = KeyColumns.Select(k => builder.ParameterName(k.PropertyName)).ToArray();

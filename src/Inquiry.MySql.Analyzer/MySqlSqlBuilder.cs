@@ -220,7 +220,7 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
             // Mirror SqlBuildContext.SetClauses' exclusions: a created-* auditing column
             // ([InquiryCreatedAt]/[InquiryCreatedBy]) is written once by the insert branch and never
             // updated by the conflict branch.
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsCreatedAt && !c.IsCreatedBy)
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
             .Select(c =>
             {
                 var quoted = QuoteIdentifier(c.ColumnName);
@@ -236,6 +236,10 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
 
     // MySQL cannot index LONGTEXT without a prefix length; a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
+
+    /// <summary>MySQL computed columns are typed and STORED.</summary>
+    protected override string RenderComputedColumn(IColumn column)
+        => ColumnType(column) + " GENERATED ALWAYS AS (" + column.ComputedExpression + ") STORED";
 
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
