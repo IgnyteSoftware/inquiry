@@ -2276,8 +2276,12 @@ public sealed partial class InquiryGeneratorTests
         // via .editorconfig; mirror that opt-in here so a lint test can assert the diagnostic surfaces.
         if (enableDiagnostics is { Length: > 0 })
         {
+            // Diagnostic IDs are case-insensitive; de-dupe so a caller passing the same id twice (in any
+            // casing) doesn't throw from the dictionary build.
             compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(
-                enableDiagnostics.ToDictionary(static id => id, static _ => ReportDiagnostic.Info));
+                enableDiagnostics
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(static id => id, static _ => ReportDiagnostic.Info, StringComparer.OrdinalIgnoreCase));
         }
 
         var compilation = CSharpCompilation.Create(
