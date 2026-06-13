@@ -1094,6 +1094,13 @@ internal static class StoreOperationEmitter
         {
             args.Append(", size: -1");
         }
+        else if (method.ProcedureOutputIsDecimal)
+        {
+            // SqlClient defaults a decimal output parameter to scale 0 and rounds the read-back
+            // value (19.75 → 20). Stamp a high-fidelity precision/scale: 38/10 preserves money and
+            // typical computed decimals losslessly, with ample integer headroom.
+            args.Append(", precision: (byte)38, scale: (byte)10");
+        }
 
         return args.Append(')').ToString();
     }

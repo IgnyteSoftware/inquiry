@@ -45,9 +45,10 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // Input param, then the OUTPUT param with DbType + Output direction.
+        // Input param, then the OUTPUT param with DbType + Output direction. A decimal output
+        // stamps precision/scale so SqlClient doesn't round the read-back value to scale 0.
         Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@category\", (object?)category ?? global::System.DBNull.Value),", text);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Total\", global::System.DBNull.Value, dbType: global::System.Data.DbType.Decimal, direction: global::System.Data.ParameterDirection.Output),", text);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Total\", global::System.DBNull.Value, dbType: global::System.Data.DbType.Decimal, direction: global::System.Data.ParameterDirection.Output, precision: (byte)38, scale: (byte)10),", text);
         Assert.Contains("global::System.Data.CommandType.StoredProcedure);", text);
         Assert.Contains("Inquiry.ExecuteProcedureScalarAsync<decimal>(_cmd, \"@Total\", ", text);
     }
