@@ -28,7 +28,12 @@ internal sealed class MySqlBulkCopier : IInquiryBulkCopier
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        // The bulk connection alone carries AllowLoadLocalInfile (security-scoped — see the
+        // factory); a custom factory falls back to its regular connection, where the actionable
+        // error below explains the missing client flag.
+        await using var connection = _connectionFactory is MySqlInquiryConnectionFactory mysqlFactory
+            ? await mysqlFactory.OpenBulkCopyConnectionAsync(cancellationToken).ConfigureAwait(false)
+            : await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         var bulkCopy = new MySqlBulkCopy((MySqlConnection)connection)
         {
             DestinationTableName = QualifyTableName(definition.Schema, definition.Table),
@@ -51,9 +56,10 @@ internal sealed class MySqlBulkCopier : IInquiryBulkCopier
         catch (Exception ex) when (IsLocalInfileDisabled(ex))
         {
             throw new InvalidOperationException(
-                "MySQL bulk insert streams rows via LOAD DATA LOCAL INFILE, which is disabled. Enable it on " +
-                "both sides: set AllowLoadLocalInfile=true in the connection string (Inquiry's MySQL connection " +
-                "factory applies this automatically) and local_infile=1 on the server.",
+                "MySQL bulk insert streams rows via LOAD DATA LOCAL INFILE, which is disabled. Inquiry's MySQL " +
+                "provider enables the client side automatically on its dedicated bulk-insert connection; the " +
+                "server must allow it too (local_infile=1). With a custom connection factory, also set " +
+                "AllowLoadLocalInfile=true on the connection string used for bulk inserts.",
                 ex);
         }
     }
@@ -69,10 +75,13 @@ internal sealed class MySqlBulkCopier : IInquiryBulkCopier
         => "`" + identifier.Replace("`", "``") + "`";
 
     /// <summary>
-    /// Matches the client- and server-side errors raised when <c>LOAD DATA LOCAL INFILE</c> support
-    /// is switched off (e.g. MySQL error 3948 "Loading local data is disabled" or 1148 ER_NOT_ALLOWED_COMMAND).
+    /// Matches the errors raised when <c>LOAD DATA LOCAL INFILE</c> support is switched off:
+    /// server-side by error number — 3948 "Loading local data is disabled" and 1148
+    /// ER_NOT_ALLOWED_COMMAND — plus MySqlConnector's client-side refusal, which names the
+    /// <c>AllowLoadLocalInfile</c> setting. Keying off the number (not message text) avoids
+    /// misclassifying unrelated failures behind the actionable message.
     /// </summary>
     private static bool IsLocalInfileDisabled(Exception exception)
-        => exception.Message.Contains("local data", StringComparison.OrdinalIgnoreCase)
-            || exception.Message.Contains("LOAD DATA", StringComparison.OrdinalIgnoreCase);
+        => exception is MySqlException { Number: 1148 or 3948 }
+            || exception.Message.Contains("AllowLoadLocalInfile", StringComparison.OrdinalIgnoreCase);
 }

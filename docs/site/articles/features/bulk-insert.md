@@ -29,7 +29,7 @@ The method takes `IEnumerable<T>` (lazy sequences stream end-to-end) and returns
 - **Stamps still happen**: [sequential GUID keys](crud.md#key-generation-sequential-guids) and [auditing timestamps](auditing.md) are assigned per row as the stream is enumerated.
 - **No parameter cap** on bulk-copy dialects — that's the point. The SQLite/Oracle fallback is the batch `INSERT` and keeps its cap; chunk accordingly there.
 - **Dedicated connection, no ambient transaction**: bulk insert does **not** join an open Inquiry transaction, and interceptors/telemetry do not observe it. If you need transactional bulk loads, load into a staging table and swap inside a transaction.
-- **MySQL prerequisites**: `MySqlBulkCopy` uses `LOAD DATA LOCAL INFILE` under the hood — Inquiry's MySQL connection factory enables `AllowLoadLocalInfile` client-side, but the **server** must run with `local_infile=1`.
+- **MySQL prerequisites**: `MySqlBulkCopy` uses `LOAD DATA LOCAL INFILE` under the hood. Inquiry enables `AllowLoadLocalInfile` **only on the dedicated bulk-insert connection** (never on regular pipeline connections — the flag widens what a SQL-injection bug could do, so it stays scoped), and the **server** must run with `local_infile=1`.
 
 ## When to use which tier
 

@@ -15,8 +15,9 @@ namespace Inquiry.Stores;
 /// concurrency-token columns are omitted; sequential-GUID keys and auditing timestamps are stamped
 /// per row as the stream is enumerated. Bulk insert opens a dedicated connection and does
 /// <b>not</b> join an ambient Inquiry transaction; interceptors and telemetry do not observe it.
-/// On MySQL, <c>MySqlBulkCopy</c> requires <c>AllowLoadLocalInfile=true</c> on the connection
-/// string and <c>local_infile=1</c> on the server.
+/// On MySQL, <c>MySqlBulkCopy</c> requires <c>local_infile=1</c> on the server; the client-side
+/// <c>AllowLoadLocalInfile</c> flag is enabled automatically on the dedicated bulk-insert
+/// connection only (never on regular pipeline connections).
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryBulkInsertAttribute : Attribute

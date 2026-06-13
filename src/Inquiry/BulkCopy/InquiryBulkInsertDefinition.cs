@@ -23,11 +23,15 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
     /// </param>
     public InquiryBulkInsertDefinition(string? schema, string table, string[] columns, Func<TEntity, int, object> getValue)
     {
+        if (columns is null) throw new ArgumentNullException(nameof(columns));
+        if (columns.Length == 0) throw new ArgumentException("A bulk insert needs at least one column.", nameof(columns));
+
         Schema = schema;
         Table = table ?? throw new ArgumentNullException(nameof(table));
-        Columns = columns ?? throw new ArgumentNullException(nameof(columns));
+        // Defensive copy: definitions are cached as static fields and shared across calls, so a
+        // caller-retained array reference must not be able to mutate the column list afterwards.
+        Columns = (string[])columns.Clone();
         GetValue = getValue ?? throw new ArgumentNullException(nameof(getValue));
-        if (columns.Length == 0) throw new ArgumentException("A bulk insert needs at least one column.", nameof(columns));
     }
 
     /// <summary>Raw schema name, or null for the provider default.</summary>
