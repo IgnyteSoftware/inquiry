@@ -539,7 +539,8 @@ internal static class EntityProcessor
                 property.Name,
                 foreignKeyProperty!,
                 childEntitySymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                isCollection));
+                isCollection,
+                LocationData.From(property.Locations.FirstOrDefault())));
         }
 
         return relations;

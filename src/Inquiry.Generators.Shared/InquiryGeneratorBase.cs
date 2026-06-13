@@ -200,6 +200,11 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             }
         }
 
+        // Relation shapes are validated here, at declaration time, so a mistyped foreign key or a
+        // composite-key child is reported even when no method eager-loads the relation (the emit
+        // path no longer re-reports these).
+        ValidateRelations(context, mappedEntities);
+
         var mappedProjections = new Dictionary<string, ProjectionData>();
         foreach (var projection in projections)
         {
@@ -300,6 +305,70 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         {
             RegistrationEmitter.Emit(context, entityRegistrations.ToImmutable(), storeRegistrations.ToImmutable());
         }
+    }
+
+    /// <summary>
+    /// Reports relation-shape errors at declaration time for every mapped entity's relations,
+    /// regardless of whether any store method eager-loads them: a foreign-key property that is not a
+    /// mapped column on the side that should own it (INQ040), the same property found on the opposite
+    /// side — a reversed relation (INQ058), and a composite-key child (INQ041). A relation whose
+    /// child type isn't a mapped entity is left alone (the emit path tolerates it).
+    /// </summary>
+    private static void ValidateRelations(SourceProductionContext context, Dictionary<string, EntityData> mappedEntities)
+    {
+        foreach (var entity in mappedEntities.Values)
+        {
+            foreach (var relation in entity.Relations)
+            {
+                if (!mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var child))
+                {
+                    continue;
+                }
+
+                // A to-many (collection) relation's FK lives on the child; a to-one (reference)
+                // relation's FK lives on the parent (this entity).
+                var owner = relation.IsCollection ? child : entity;
+                var other = relation.IsCollection ? entity : child;
+                var relationKind = relation.IsCollection ? "collection" : "reference";
+                var location = relation.Location?.ToLocation();
+
+                if (FindEntityColumn(owner, relation.ForeignKeyProperty) is null)
+                {
+                    if (FindEntityColumn(other, relation.ForeignKeyProperty) is not null)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InquiryDiagnosticDescriptors.RelationForeignKeyWrongSide, location,
+                            entity.Name, relation.PropertyName, relation.ForeignKeyProperty, owner.Name, relationKind, other.Name));
+                    }
+                    else
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InquiryDiagnosticDescriptors.UnknownRelationForeignKey, location,
+                            entity.Name, relation.PropertyName, relation.ForeignKeyProperty, owner.Name));
+                    }
+                }
+
+                if (child.Keys.Count > 1)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.RelationCompositeChildKey, location,
+                        entity.Name, relation.PropertyName, child.Name, child.Keys.Count));
+                }
+            }
+        }
+    }
+
+    private static ColumnData? FindEntityColumn(EntityData entity, string propertyName)
+    {
+        foreach (var column in entity.Columns.AsImmutableArray())
+        {
+            if (column.PropertyName == propertyName)
+            {
+                return column;
+            }
+        }
+
+        return null;
     }
 
     private DialectOwnership ResolveOwnership(Compilation compilation)
