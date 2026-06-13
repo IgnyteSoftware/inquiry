@@ -859,9 +859,10 @@ internal static class StoreProcessor
         var filteredColumns = new Dictionary<string, ColumnData>(StringComparer.Ordinal);
         foreach (var (filterMethod, fieldCols, predPlan, _) in valid)
         {
-            // Full-text search columns are served by a full-text index, not the regular index this lint
-            // suggests, so they aren't "unindexed filters".
-            if (filterMethod.Operation != StoreOperation.FullTextSearch)
+            // FieldColumns are equality-filter columns only for SelectAllByField. Other operations reuse
+            // the slot for non-filter semantics — UpdateByPredicate puts its SET (written) columns there,
+            // and FullTextSearch its full-text-indexed search columns — so neither is an "unindexed filter".
+            if (filterMethod.Operation == StoreOperation.SelectAllByField)
             {
                 foreach (var fieldColumn in fieldCols)
                 {
@@ -869,6 +870,8 @@ internal static class StoreProcessor
                 }
             }
 
+            // Predicate columns are always WHERE criteria (predicate selects, existence tests, and the
+            // set-based mutations' filter), so they are genuine filters.
             if (predPlan is not null)
             {
                 foreach (var predicate in predPlan.Predicates)

@@ -258,6 +258,43 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SetColumnOfPredicateUpdateIsNotFlaggedAsFilter_Sqlite()
+    {
+        // An [InquiryUpdateWhere] SET column is written, not filtered — only its WHERE column is a filter.
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Users")]
+            public sealed class User
+            {
+                [InquiryKey(IsGenerated = true)] public long Id { get; set; }
+                [InquiryColumn("Status")] public string Status { get; set; } = string.Empty;
+                [InquiryColumn("LastSeen")] public string LastSeen { get; set; } = string.Empty;
+            }
+
+            public partial class UserStore : Inquiry.Stores.InquiryStore<Demo.User>
+            {
+                [InquiryUpdateWhere("LastSeen")]
+                [InquiryWhere("Status")]
+                public partial Task<int> TouchByStatusAsync(string lastSeen, string status, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+
+        var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage()).ToArray();
+        // Status (the WHERE filter) is flagged; LastSeen (the SET column) is not.
+        Assert.Contains(lints, m => m.Contains("Status"));
+        Assert.DoesNotContain(lints, m => m.Contains("LastSeen"));
+    }
+
+    [Fact]
     public void IndexedFilterColumnDoesNotReportINQ064_Sqlite()
     {
         const string source = """
