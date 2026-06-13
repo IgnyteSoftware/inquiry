@@ -320,6 +320,28 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         {
             foreach (var relation in entity.Relations)
             {
+                if (relation.IsManyToMany)
+                {
+                    // A many-to-many association must be a collection nav whose junction and related
+                    // entities are both mapped, the junction must carry the two named FK properties, and
+                    // the related entity must have a single-column key (we JOIN/index on it).
+                    var validJunction = relation.JunctionEntityFullyQualifiedName is { } junctionFqn &&
+                        mappedEntities.TryGetValue(junctionFqn, out var junction) &&
+                        FindEntityColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&
+                        FindEntityColumn(junction, relation.JunctionChildForeignKeyProperty ?? string.Empty) is not null;
+                    var validChild = mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var mnChild) &&
+                        mnChild.Keys.Count == 1;
+
+                    if (!relation.IsCollection || !validJunction || !validChild)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InquiryDiagnosticDescriptors.ManyToManyInvalid, relation.Location?.ToLocation(),
+                            entity.Name, relation.PropertyName));
+                    }
+
+                    continue;
+                }
+
                 if (!mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var child))
                 {
                     continue;

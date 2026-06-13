@@ -96,6 +96,43 @@ public abstract class SqlBuilder
     public abstract string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns);
 
     /// <summary>
+    /// Builds the single-parent many-to-many eager-load SELECT: the related (child) rows joined through a
+    /// junction table, filtered by the junction's parent foreign key. Dialect-uniform — child columns are
+    /// qualified with the child table (not an alias) to stay unambiguous against the junction, and the
+    /// junction takes a space alias (no <c>AS</c>, which Oracle rejects for table aliases). All names are
+    /// quoted through <see cref="QuoteIdentifier"/> / <see cref="QuoteTable"/>.
+    /// </summary>
+    public virtual string BuildManyToManySelectByParentSql(
+        SqlBuildContext childContext,
+        IReadOnlyList<IColumn> childColumns,
+        string? junctionSchema,
+        string junctionTable,
+        string junctionChildForeignKeyColumn,
+        string childKeyColumn,
+        string junctionParentForeignKeyColumn,
+        string parentParameterName)
+    {
+        const string j = "__j";
+        var junctionQuoted = QuoteTable(junctionSchema, junctionTable);
+        var childCols = new System.Text.StringBuilder();
+        for (var i = 0; i < childColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                childCols.Append(", ");
+            }
+
+            childCols.Append(childContext.Table).Append('.').Append(QuoteIdentifier(childColumns[i].ColumnName));
+        }
+
+        return "SELECT " + childCols.ToString()
+            + " FROM " + childContext.Table
+            + " INNER JOIN " + junctionQuoted + " " + j
+            + " ON " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumn) + " = " + childContext.Table + "." + QuoteIdentifier(childKeyColumn)
+            + " WHERE " + j + "." + QuoteIdentifier(junctionParentForeignKeyColumn) + " = " + ParameterName(parentParameterName);
+    }
+
+    /// <summary>
     /// Builds a SELECT whose WHERE clause is the AND/OR composition of <paramref name="predicates"/>.
     /// Dialect-uniform: the base implementation renders every operator portably (comparison, BETWEEN,
     /// IS [NOT] NULL, plus the <see cref="RenderLike"/>/<see cref="RenderIn"/> hooks). Providers only

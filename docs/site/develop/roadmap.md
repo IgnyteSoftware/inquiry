@@ -96,8 +96,10 @@
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
   largest onboarding lever for existing databases.
-- **Many-to-many relations** *(gap research 2026-06-12)*. Auto-managed junction tables for M:N
-  associations; the relation model is currently 1:N / N:1 only.
+- **Many-to-many relations — auto-managed junction** *(gap research 2026-06-12)*. Eager-loading M:N
+  through an explicitly-mapped junction shipped — see [Recently resolved](#recently-resolved). Remaining:
+  an *auto-managed* / implicit junction table (no hand-written junction entity), composite-key related
+  entities, and applying the child's soft-delete/global filters to the eager M:N collection.
 - **CTEs and set operations** *(gap research 2026-06-12)*. `WITH` / `UNION` / `INTERSECT` / `EXCEPT`
   composition in the predicate/select model (Kysely-style); ad-hoc SQL covers this today.
 - **Parameterized & named query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. The
@@ -172,6 +174,17 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **Many-to-many relations `[InquiryManyToMany]` (2026-06-13):** eager-loading a M:N association through
+  a mapped junction (link) entity. The single-parent eager load (`[InquirySelectOneByKeyEager]`) joins
+  the related rows through the junction filtered by the parent key; the all-parents load
+  (`[InquirySelectAllEager]`) assembles every parent's collection **in memory from two queries** (all
+  children + all junction rows) — no N+1 — reusing the child's and junction's existing materializers. The
+  JOIN is ANSI-uniform across all five dialects (space alias for Oracle, table-qualified child columns).
+  Misconfiguration (non-collection nav, unmapped junction/child, missing junction FK property, composite
+  child key) is **`INQ063`**. Generator snapshots across dialects + live SQLite round-trip (single-eager,
+  all-eager, empty collection). Writing associations is through the junction entity's own store. See
+  [Many-to-many relations](../articles/features/many-to-many.md).
 
 - **Negated predicate operators `Compare.NotLike` / `Compare.NotBetween` (2026-06-13):** the negations
   of the two non-trivial scalar operators — `NotLike` renders `NOT (col LIKE @p)` (reusing the LIKE hook
