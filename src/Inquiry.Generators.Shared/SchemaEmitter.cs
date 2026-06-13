@@ -130,6 +130,39 @@ internal static class SchemaEmitter
                 }
             }
         }
+
+        ReportSchemaLints(context, entities, builder);
+    }
+
+    /// <summary>
+    /// Reports advisory DDL "lints" (Info severity, so they never break a warnings-as-errors build —
+    /// raise them in <c>.editorconfig</c> to enforce). INQ061: a foreign-key column with no index. Most
+    /// engines do not auto-index foreign keys, so joins and cascades over the column scan the table;
+    /// MySQL auto-indexes FK constraints and is exempt when this entity emits them.
+    /// </summary>
+    private static void ReportSchemaLints(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
+    {
+        foreach (var entity in entities)
+        {
+            // A dialect that auto-indexes FK columns only does so when it actually emits the constraint.
+            if (builder.ForeignKeysAreAutoIndexed && entity.GenerateForeignKeys)
+            {
+                continue;
+            }
+
+            foreach (var column in entity.Columns.AsImmutableArray())
+            {
+                // A plain foreign-key column with no backing index. A key column is treated as covered by
+                // the primary-key index (a v1 simplification — strictly only the PK's leading column
+                // serves a single-column lookup, but a composite-key FK is an uncommon shape); an
+                // explicitly indexed or unique column is already indexed.
+                if (column.ForeignKeyTable is not null && !column.IsKey && !column.IsIndexed && !column.IsUnique)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.UnindexedForeignKey, location: null, entity.TableName, column.PropertyName, builder.DialectName));
+                }
+            }
+        }
     }
 
     private static bool IsIntegerClass(DbTypeClass typeClass)
