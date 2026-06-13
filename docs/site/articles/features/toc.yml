@@ -42,5 +42,7 @@
   href: observability.md
 - name: Testing
   href: testing.md
+- name: Data seeding
+  href: data-seeding.md
 - name: Resiliency & failover
   href: resiliency.md
