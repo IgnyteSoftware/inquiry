@@ -592,4 +592,12 @@ public abstract class SqlBuilder
     /// parameter cap from IN lists. Default false (per-element expansion).
     /// </summary>
     public virtual bool UseArrayInParameters => false;
+
+    /// <summary>
+    /// True when the provider has a native bulk-copy API (SqlBulkCopy / binary COPY /
+    /// MySqlBulkCopy) and registers an <c>IInquiryBulkCopier</c>. <c>[InquiryBulkInsert]</c>
+    /// methods then stream rows through it; on dialects without one the generator compiles the
+    /// method down to the multi-row batch-insert body instead. Default false.
+    /// </summary>
+    public virtual bool SupportsBulkCopy => false;
 }
