@@ -40,6 +40,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ059         Global query filter             ([InquiryGlobalFilter] on non-bool / key / generated / token / soft-delete) [IN USE]
     //   INQ060         JSON-path predicate             ([InquiryWhere(JsonPath=…)] on non-string / converter column, or malformed path) [IN USE]
     //   INQ061–INQ062  DDL safety lints (off by default) (INQ061 unindexed FK, INQ062 decimal w/o precision; opt in via .editorconfig) [IN USE]
+    //   INQ063         Many-to-many relation          ([InquiryManyToMany] misconfigured junction/child) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -318,6 +319,17 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Info,
         isEnabledByDefault: false);
+
+    // INQ063: an [InquiryManyToMany] association is misconfigured — it must be on a collection navigation
+    // (List<T>/…), its junction and related types must both be mapped Inquiry entities, the junction must
+    // carry the two named foreign-key properties, and the related entity must have a single-column key.
+    public static readonly DiagnosticDescriptor ManyToManyInvalid = new(
+        "INQ063",
+        "InquiryManyToMany association is misconfigured",
+        "Entity '{0}' relation '{1}' is marked [InquiryManyToMany], but it is not usable. It must be a collection navigation whose junction and related types are both mapped [InquiryTable] entities, the junction must declare the two named foreign-key properties, and the related entity must have a single-column key.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 
     // INQ062 (Info — a DDL "lint", off by default): a decimal column with no explicit Precision/Scale and
     // no SqlType override takes the dialect's default (e.g. DECIMAL(18,2)), which can silently round —

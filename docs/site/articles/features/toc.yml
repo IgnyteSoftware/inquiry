@@ -36,6 +36,8 @@
   href: json-path-querying.md
 - name: Eager loading
   href: eager-loading.md
+- name: Many-to-many relations
+  href: many-to-many.md
 - name: Transactions
   href: transactions.md
 - name: Stored procedures

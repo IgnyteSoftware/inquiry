@@ -544,6 +544,56 @@ internal static class EntityProcessor
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // [InquiryManyToMany(typeof(Junction), parentFkProp, childFkProp)] on a collection property:
+            // resolved through a junction entity rather than a foreign key on the child.
+            var manyToManyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryManyToManyAttribute");
+            if (manyToManyAttribute is not null)
+            {
+                if (manyToManyAttribute.ConstructorArguments.Length < 3 ||
+                    manyToManyAttribute.ConstructorArguments[0].Value is not INamedTypeSymbol junctionSymbol ||
+                    manyToManyAttribute.ConstructorArguments[1].Value is not string parentFk ||
+                    manyToManyAttribute.ConstructorArguments[2].Value is not string childFk ||
+                    !TryGetChildEntityType(property.Type, out var manyChildSymbol, out var manyIsCollection) ||
+                    !manyIsCollection)
+                {
+                    // A non-collection M:N (or malformed args) is reported by ValidateRelations (INQ063);
+                    // still record it (with whatever child type we found) so the diagnostic has a target.
+                    // This fallback record is diagnostic-only and never load-bearing: IsCollection is forced
+                    // false so every emit-time check (ValidateRelations / TryValidateForEmit) treats it as
+                    // invalid and drops it — no SQL or loader is ever generated from it.
+                    TryGetChildEntityType(property.Type, out var fallbackChild, out _);
+                    relations.Add(new RelationData(
+                        property.Name,
+                        string.Empty,
+                        fallbackChild?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? string.Empty,
+                        IsCollection: false,
+                        LocationData.From(property.Locations.FirstOrDefault()))
+                    {
+                        IsManyToMany = true,
+                        JunctionEntityFullyQualifiedName = (manyToManyAttribute.ConstructorArguments.Length > 0
+                            ? manyToManyAttribute.ConstructorArguments[0].Value as INamedTypeSymbol
+                            : null)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        JunctionParentForeignKeyProperty = manyToManyAttribute.ConstructorArguments.Length > 1 ? manyToManyAttribute.ConstructorArguments[1].Value as string : null,
+                        JunctionChildForeignKeyProperty = manyToManyAttribute.ConstructorArguments.Length > 2 ? manyToManyAttribute.ConstructorArguments[2].Value as string : null,
+                    });
+                    continue;
+                }
+
+                relations.Add(new RelationData(
+                    property.Name,
+                    string.Empty,
+                    manyChildSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    IsCollection: true,
+                    LocationData.From(property.Locations.FirstOrDefault()))
+                {
+                    IsManyToMany = true,
+                    JunctionEntityFullyQualifiedName = junctionSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    JunctionParentForeignKeyProperty = parentFk,
+                    JunctionChildForeignKeyProperty = childFk,
+                });
+                continue;
+            }
+
             var relationAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryRelationAttribute");
             if (relationAttribute is null)
             {

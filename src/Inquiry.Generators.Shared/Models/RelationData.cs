@@ -9,4 +9,23 @@ internal sealed record RelationData(
     string ForeignKeyProperty,
     string ChildEntityFullyQualifiedName,
     bool IsCollection,
-    LocationData? Location = null);
+    LocationData? Location = null)
+{
+    /// <summary>
+    /// True for an <c>[InquiryManyToMany]</c> association resolved through a junction table. When set,
+    /// <see cref="ForeignKeyProperty"/> is unused (the foreign keys live on the junction, named by
+    /// <see cref="JunctionParentForeignKeyProperty"/> / <see cref="JunctionChildForeignKeyProperty"/>),
+    /// <see cref="IsCollection"/> is always true, and <see cref="JunctionEntityFullyQualifiedName"/>
+    /// references the mapped junction entity.
+    /// </summary>
+    public bool IsManyToMany { get; init; }
+
+    /// <summary>The mapped junction (link) entity's fully-qualified name, for a many-to-many relation.</summary>
+    public string? JunctionEntityFullyQualifiedName { get; init; }
+
+    /// <summary>The junction property referencing this entity's key (many-to-many).</summary>
+    public string? JunctionParentForeignKeyProperty { get; init; }
+
+    /// <summary>The junction property referencing the related entity's key (many-to-many).</summary>
+    public string? JunctionChildForeignKeyProperty { get; init; }
+}
