@@ -270,6 +270,18 @@ public abstract class SqlBuilder
         => "SELECT COUNT(*) FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     /// <summary>
+    /// Builds an existence test (<c>[InquiryExists]</c>): <c>SELECT CASE WHEN EXISTS(SELECT 1 FROM … WHERE
+    /// …) THEN 1 ELSE 0 END</c>, returning <c>1</c>/<c>0</c> the runtime coerces to <see cref="bool"/>. The
+    /// inner query AND-composes the criteria with the active-row filter (so hidden rows don't count as
+    /// existing). The CASE form is portable across SQLite/SqlServer/PostgreSQL/MySQL; Oracle overrides to
+    /// append <c>FROM DUAL</c>. Dialect-uniform otherwise, so concrete and inherited.
+    /// </summary>
+    public virtual string BuildExistsSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+        => "SELECT CASE WHEN EXISTS(SELECT 1 FROM " + context.Table
+            + WhereSuffix(AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate))
+            + ") THEN 1 ELSE 0 END";
+
+    /// <summary>
     /// Builds a scalar aggregate (<c>SELECT SUM("col") FROM …</c>). <paramref name="function"/> is the
     /// ANSI function name (SUM/AVG/MIN/MAX) and <paramref name="quotedColumn"/> is already dialect-quoted.
     /// Dialect-uniform, so concrete and inherited; composes the soft-delete active filter.
