@@ -406,8 +406,9 @@ internal static class InquiryDiagnosticDescriptors
         isEnabledByDefault: true);
 
     // INQ051: an [InquiryStoredProcedure] with OutputParameter/ReturnsValue is misconfigured —
-    // both set at once, or the declared return shape isn't Task<TScalar> (and Task<int> for a
-    // RETURN value). The scalar-output form surfaces a single read-back value as the task result.
+    // both set at once, or a RETURN value declared as something other than Task<int>. A return
+    // shape that isn't Task<T> at all is the general unsupported-return-type error (INQ005). The
+    // scalar-output form surfaces a single read-back value as the task result.
     public static readonly DiagnosticDescriptor StoredProcedureScalarOutputInvalid = new(
         "INQ051",
         "Stored-procedure scalar output is misconfigured",
