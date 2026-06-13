@@ -263,4 +263,9 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
 
     protected override string GeneratedKeyClause(IColumn column)
         => MapColumnType(column) + " AUTO_INCREMENT PRIMARY KEY";
+
+    // MySQL extracts a JSON scalar with JSON_EXTRACT, unquoted (JSON_UNQUOTE) so it compares as text
+    // rather than a JSON-quoted string.
+    protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
+        => "JSON_UNQUOTE(JSON_EXTRACT(" + quotedColumn + ", '" + jsonPath + "'))";
 }
