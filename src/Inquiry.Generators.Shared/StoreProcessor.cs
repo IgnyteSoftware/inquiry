@@ -1710,6 +1710,7 @@ internal static class StoreProcessor
                     break;
 
                 case SqlCompareOp.Between:
+                case SqlCompareOp.NotBetween:
                 {
                     if (!ParameterMatchesColumn(method.Parameters[paramIndex], column) ||
                         !ParameterMatchesColumn(method.Parameters[paramIndex + 1], column))
@@ -1757,6 +1758,7 @@ internal static class StoreProcessor
                 }
 
                 case SqlCompareOp.Like:
+                case SqlCompareOp.NotLike:
                 {
                     if (column.Type.NonNullableDisplayName != "string" ||
                         !ParameterMatchesColumn(method.Parameters[paramIndex], column))

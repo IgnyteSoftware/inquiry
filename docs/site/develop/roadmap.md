@@ -173,6 +173,15 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Negated predicate operators `Compare.NotLike` / `Compare.NotBetween` (2026-06-13):** the negations
+  of the two non-trivial scalar operators — `NotLike` renders `NOT (col LIKE @p)` (reusing the LIKE hook
+  so any dialect ESCAPE handling stays consistent), `NotBetween` renders `col NOT BETWEEN @lo AND @hi`.
+  Both compose with AND/OR and the active-row filters like any criterion and share the Like/Between
+  parameter validation. Generator snapshots (incl. Oracle sigil) + live SQLite round-trip. **`NotIn`
+  remains open** — its empty-collection semantics differ from `In` (`x NOT IN ()` must match every row,
+  but `x NOT IN (NULL)` matches none), and a correct cross-dialect empty-set rewrite (Oracle needs
+  `FROM DUAL`) is more than the runtime IN-expansion helper does today.
+
 - **DDL safety lints — opt-in surface + first rule (2026-06-13):** advisory analyzer lints for risky
   schema shapes, **off by default** (consumers opt in per ID via `.editorconfig`, so a lint never breaks
   a build until requested). First rule **`INQ061`**: a foreign-key column with no index — most engines
