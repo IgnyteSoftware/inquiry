@@ -37,9 +37,17 @@ public sealed class AttributeTests
     }
 
     [Fact]
-    public void SelectByFieldAttributeRejectsEmptyFieldList()
+    public void SelectByFieldAttributeParameterlessIsFieldLessAndDerivesFromName()
     {
-        Assert.Throws<ArgumentException>(() => new InquirySelectAllByFieldAttribute());
+        // The field-less form is valid — the filter columns are derived from the method name.
+        var attribute = new InquirySelectAllByFieldAttribute();
+        Assert.Empty(attribute.Fields);
+    }
+
+    [Fact]
+    public void SelectByFieldAttributeRejectsExplicitEmptyFieldArray()
+    {
+        Assert.Throws<ArgumentException>(() => new InquirySelectAllByFieldAttribute(System.Array.Empty<string>()));
     }
 
     [Fact]
