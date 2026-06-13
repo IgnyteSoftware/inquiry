@@ -19,6 +19,8 @@ public enum SqlCompareOp
     Between,
     IsNull,
     IsNotNull,
+    NotLike,
+    NotBetween,
 }
 
 /// <summary>
@@ -61,7 +63,7 @@ public sealed class SqlPredicate
     public static int ParameterArity(SqlCompareOp op) => op switch
     {
         SqlCompareOp.IsNull or SqlCompareOp.IsNotNull => 0,
-        SqlCompareOp.Between => 2,
+        SqlCompareOp.Between or SqlCompareOp.NotBetween => 2,
         _ => 1,
     };
 }

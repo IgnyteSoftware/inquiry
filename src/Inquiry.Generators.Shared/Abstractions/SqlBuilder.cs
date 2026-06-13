@@ -588,9 +588,12 @@ public abstract class SqlBuilder
             case SqlCompareOp.LessThan: return column + " < " + ParameterName(predicate.ParameterName!);
             case SqlCompareOp.LessThanOrEqual: return column + " <= " + ParameterName(predicate.ParameterName!);
             case SqlCompareOp.Between: return column + " BETWEEN " + ParameterName(predicate.ParameterName!) + " AND " + ParameterName(predicate.ParameterNameHi!);
+            case SqlCompareOp.NotBetween: return column + " NOT BETWEEN " + ParameterName(predicate.ParameterName!) + " AND " + ParameterName(predicate.ParameterNameHi!);
             case SqlCompareOp.IsNull: return column + " IS NULL";
             case SqlCompareOp.IsNotNull: return column + " IS NOT NULL";
             case SqlCompareOp.Like: return RenderLike(column, ParameterName(predicate.ParameterName!));
+            // NOT LIKE reuses the LIKE hook so any dialect ESCAPE handling stays consistent.
+            case SqlCompareOp.NotLike: return "NOT (" + RenderLike(column, ParameterName(predicate.ParameterName!)) + ")";
             case SqlCompareOp.In: return RenderIn(column, ParameterName(predicate.ParameterName!));
             default: return column + " = " + ParameterName(predicate.ParameterName!);
         }
