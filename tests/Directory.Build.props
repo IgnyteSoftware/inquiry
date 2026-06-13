@@ -1,0 +1,12 @@
+<Project>
+  <!-- Inherit the repo-root props (central package management, nullable, implicit usings, …);
+       a nearer Directory.Build.props replaces rather than merges, so import it explicitly. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- Repo-wide warning gate: test projects are warnings-as-errors too (production projects
+         already are), so a new warning in test code fails the build instead of slipping through.
+         The known benchmark warning sources live under benchmarks/ and are unaffected. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
