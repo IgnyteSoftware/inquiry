@@ -839,9 +839,11 @@ internal static class StoreProcessor
             : ctx;
         SqlBuildContext CtxFor(StoreMethodData m) => hasSoftDelete && m.IncludeDeleted ? ctxIncludeDeleted : ctx;
 
-        var key = entity.Keys[0];
-        var keyMayBeDatabaseSupplied = key.IsGenerated || key.UseDatabaseDefault;
-        var nullableDatabaseSuppliedKeyUpsert = keyMayBeDatabaseSupplied && key.Type.IsNullable &&
+        // Keyless (view) entities have no key column; the database-supplied-key upsert check below is
+        // upsert-only, and views reject upserts (INQ052), so a keyless entity short-circuits to false.
+        var key = entity.Keys.Count > 0 ? entity.Keys[0] : null;
+        var keyMayBeDatabaseSupplied = key is not null && (key.IsGenerated || key.UseDatabaseDefault);
+        var nullableDatabaseSuppliedKeyUpsert = keyMayBeDatabaseSupplied && key!.Type.IsNullable &&
             valid.Any(static m => m.Method.Operation == StoreOperation.Upsert);
 
         // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so
@@ -1198,11 +1200,36 @@ internal static class StoreProcessor
         source.AppendLine("}");
     }
 
+    /// <summary>True for store operations that write — everything an [InquiryView] entity forbids.</summary>
+    private static bool IsMutatingOperation(StoreOperation operation)
+        => operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert
+            or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey
+            or StoreOperation.InsertAll or StoreOperation.BulkInsert or StoreOperation.UpdateAll
+            or StoreOperation.DeleteAll or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate;
+
     private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, IReadOnlyDictionary<string, EntityData> relationChildEntities, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
     {
         fieldColumns = Array.Empty<ColumnData>();
         predicatePlan = null;
         selectPlan = null;
+
+        // A view-mapped entity is read-only: reject any non-read operation up front (INQ052). That
+        // is every mutating operation, plus [InquiryStoredProcedure] — a procedure is arbitrary SQL
+        // not bound to the view and can write, so it must not ride a read-only view store.
+        if (entity.IsView && (IsMutatingOperation(method.Operation) || method.Operation == StoreOperation.StoredProcedure))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ViewIsReadOnly, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
+            return false;
+        }
+
+        // A key-based select or eager load needs a key. Only a keyless view can reach this (tables
+        // always have a key); reject it here so emission never dereferences a missing key (INQ053).
+        if (entity.Keys.Count == 0 &&
+            method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.SelectAllEager)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.OperationRequiresKey, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
+            return false;
+        }
 
         // restore only makes sense on a soft-delete entity. Without the indicator column the restore
         // UPDATE has nothing to clear, so reject the method (reusing the invalid-parameters diagnostic —

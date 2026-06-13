@@ -51,6 +51,21 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .WithTrackingName(EntitiesTrackingName)
             .Collect();
 
+        // Views: each [InquiryView] class is projected into an equatable EntityData with IsView=true
+        // (read-only, keyless-permitted, no DDL). Merged into the entity array below so all the
+        // materializer / store-linking / registration machinery treats a view like any other entity.
+        var views = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                KnownSymbols.EntityAttributeNamespace + ".InquiryViewAttribute",
+                predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+                transform: static (ctx, ct) => EntityProcessor.ExtractView((INamedTypeSymbol)ctx.TargetSymbol, ct))
+            .WithTrackingName(ViewsTrackingName)
+            .Collect();
+
+        // Tables and views share the EntityData model and every downstream stage, so concatenate them
+        // into one array. The Execute signature stays unchanged; IsView gates read-only behavior.
+        var allEntities = entities.Combine(views).Select(static (pair, _) => pair.Left.AddRange(pair.Right));
+
         // projections: each [InquiryProjection] class is projected into an equatable ProjectionData
         // (a keyless column subset) so its materializer caches like an entity's.
         var projections = context.SyntaxProvider
@@ -90,13 +105,14 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .Select((compilation, _) => ResolveOwnership(compilation))
             .WithTrackingName(OwnershipTrackingName);
 
-        var combined = entities.Combine(stores).Combine(projections).Combine(adHocs).Combine(ownership);
+        var combined = allEntities.Combine(stores).Combine(projections).Combine(adHocs).Combine(ownership);
 
         context.RegisterSourceOutput(combined, (spc, data) =>
             Execute(spc, data.Left.Left.Left.Left, data.Left.Left.Left.Right, data.Left.Left.Right, data.Left.Right, data.Right));
     }
 
     internal const string EntitiesTrackingName = "InquiryEntities";
+    internal const string ViewsTrackingName = "InquiryViews";
     internal const string StoresTrackingName = "InquiryStores";
     internal const string ProjectionsTrackingName = "InquiryProjections";
     internal const string AdHocTrackingName = "InquiryAdHocDtos";
@@ -275,7 +291,8 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
             // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
             // entity array (source order) filtered to mapped entities so emission is deterministic.
-            var schemaEntities = entities.Where(e => e.IsMapped).ToList();
+            // Views are defined in the database, not created by Inquiry — exclude them from DDL.
+            var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
             SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);
         }
 
