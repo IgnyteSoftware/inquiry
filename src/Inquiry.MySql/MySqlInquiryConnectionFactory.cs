@@ -42,16 +42,21 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
         // for ad-hoc SQL (the IInquiry.Query*/Execute* string overloads), a missing or misspelled @param
         // is now silently treated as a NULL user variable rather than throwing "parameter not found" —
         // callers passing raw command text must name their parameters correctly.
-        _connectionString = WithUserVariables(connectionString);
+        _connectionString = WithRequiredConnectionFlags(connectionString);
         _failoverConnectionString = options.FailoverConnectionString is { } failover
-            ? WithUserVariables(failover)
+            ? WithRequiredConnectionFlags(failover)
             : null;
     }
 
-    private static string WithUserVariables(string connectionString)
+    private static string WithRequiredConnectionFlags(string connectionString)
         => new MySqlConnectionStringBuilder(connectionString)
         {
             AllowUserVariables = true,
+            // Required by MySqlBulkCopy (the [InquiryBulkInsert] path), which streams rows via
+            // LOAD DATA LOCAL INFILE: MySqlConnector refuses to send local data unless the client
+            // opts in. Opting in here is safe — it only lets this client answer LOAD DATA LOCAL
+            // requests it issued itself, and the server still rejects them unless local_infile=1.
+            AllowLoadLocalInfile = true,
         }.ConnectionString;
 
     /// <inheritdoc />
