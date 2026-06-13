@@ -632,6 +632,7 @@ public abstract class SqlBuilder
             // NOT LIKE reuses the LIKE hook so any dialect ESCAPE handling stays consistent.
             case SqlCompareOp.NotLike: return "NOT (" + RenderLike(column, ParameterName(predicate.ParameterName!)) + ")";
             case SqlCompareOp.In: return RenderIn(column, ParameterName(predicate.ParameterName!));
+            case SqlCompareOp.NotIn: return RenderNotIn(column, ParameterName(predicate.ParameterName!));
             default: return column + " = " + ParameterName(predicate.ParameterName!);
         }
     }
@@ -652,6 +653,17 @@ public abstract class SqlBuilder
     /// </summary>
     protected virtual string RenderIn(string quotedColumn, string parameterName)
         => quotedColumn + " IN (" + parameterName + ")";
+
+    /// <summary>
+    /// Renders a NOT IN criterion as a parenthesized single-placeholder sentinel — the runtime
+    /// <c>InquiryInExpansion.ExpandNotIn</c> rewrites the sentinel into
+    /// <c>(@p0, @p1, …)</c> for a non-empty collection, or <c>(NULL) OR 1=1</c> for an empty one (an empty
+    /// NOT IN matches every row — unlike an empty IN). The outer parens keep that <c>OR 1=1</c> tautology
+    /// self-contained when the criterion AND/OR-composes with others. Dialect-uniform (always the sentinel
+    /// path, never an array parameter), so an empty collection behaves consistently everywhere.
+    /// </summary>
+    protected virtual string RenderNotIn(string quotedColumn, string parameterName)
+        => "(" + quotedColumn + " NOT IN (" + parameterName + "))";
 
     /// <summary>
     /// Renders the text extraction of a JSON path (<c>$.a.b</c>) from a JSON column, for the

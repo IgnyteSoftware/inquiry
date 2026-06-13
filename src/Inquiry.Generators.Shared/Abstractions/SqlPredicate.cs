@@ -21,6 +21,7 @@ public enum SqlCompareOp
     IsNotNull,
     NotLike,
     NotBetween,
+    NotIn,
 }
 
 /// <summary>
