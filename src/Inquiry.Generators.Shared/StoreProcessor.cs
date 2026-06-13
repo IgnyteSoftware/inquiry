@@ -122,10 +122,25 @@ internal static class StoreProcessor
             var names = GeneratorHelpers.GetConstructorStringArray(attribute);
             if (names is null || names.Length == 0)
             {
-                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.UnknownField, location, method.Name, "<none>"));
-                return null;
+                // A field-less [InquirySelectAllByField] derives its filter columns from the method
+                // name (Spring Data convention); the other operations still require explicit fields.
+                var derived = operation == StoreOperation.SelectAllByField ? DeriveFieldNamesFromMethodName(method.Name) : null;
+                if (derived is null || derived.Length == 0)
+                {
+                    diagnostics.Add(DiagnosticData.Create(
+                        operation == StoreOperation.SelectAllByField
+                            ? InquiryDiagnosticDescriptors.DerivedQueryNameInvalid
+                            : InquiryDiagnosticDescriptors.UnknownField,
+                        location, method.Name, "<none>"));
+                    return null;
+                }
+
+                fieldNames = derived.ToImmutableArray();
             }
-            fieldNames = names.ToImmutableArray();
+            else
+            {
+                fieldNames = names.ToImmutableArray();
+            }
         }
 
         var predicates = ImmutableArray<PredicateData>.Empty;
@@ -321,6 +336,65 @@ internal static class StoreProcessor
     /// <summary>Prefixes a parameter name with <c>@</c> when it carries no provider sigil already.</summary>
     private static string NormalizeParameterName(string name)
         => name.Length > 0 && name[0] is '@' or ':' or '$' or '?' ? name : "@" + name;
+
+    /// <summary>
+    /// Derives the filter-field names from a method name following the <c>…By&lt;Field&gt;[And&lt;Field&gt;…]</c>
+    /// convention (Spring Data style): strips a trailing <c>Async</c>, takes the segment after the
+    /// first PascalCase <c>By</c>, and splits it on <c>And</c> word boundaries. Returns null when the
+    /// name has no such <c>By&lt;Field&gt;</c> segment. Each segment is resolved against the entity's
+    /// columns by the normal field-resolution path (an unknown one is INQ007).
+    /// </summary>
+    private static string[]? DeriveFieldNamesFromMethodName(string methodName)
+    {
+        var name = methodName;
+        if (name.EndsWith("Async", System.StringComparison.Ordinal))
+        {
+            name = name.Substring(0, name.Length - "Async".Length);
+        }
+
+        // The delimiter is the first PascalCase "By" (capital B, 'y', then an uppercase field char),
+        // so a lowercase "by" inside a word (e.g. "Rugby") never matches.
+        var byIndex = -1;
+        for (var i = 0; i + 2 < name.Length; i++)
+        {
+            if (name[i] == 'B' && name[i + 1] == 'y' && char.IsUpper(name[i + 2]))
+            {
+                byIndex = i;
+                break;
+            }
+        }
+
+        if (byIndex < 0)
+        {
+            return null;
+        }
+
+        var fieldsPart = name.Substring(byIndex + 2);
+        if (fieldsPart.Length == 0)
+        {
+            return null;
+        }
+
+        // Split on a PascalCase "And" boundary — capital "And" followed by an uppercase letter and
+        // preceded by a lowercase letter or digit — so "CountryAndCity" splits but "Brand" (lowercase
+        // 'and') and "AndrewId" (leading "And") stay whole.
+        var segments = new List<string>();
+        var start = 0;
+        for (var i = 1; i + 3 < fieldsPart.Length; i++)
+        {
+            if (fieldsPart[i] == 'A' && fieldsPart[i + 1] == 'n' && fieldsPart[i + 2] == 'd'
+                && char.IsUpper(fieldsPart[i + 3])
+                && (char.IsLower(fieldsPart[i - 1]) || char.IsDigit(fieldsPart[i - 1])))
+            {
+                segments.Add(fieldsPart.Substring(start, i - start));
+                start = i + 3;
+                i = start; // resume scanning after the consumed "And"
+            }
+        }
+
+        segments.Add(fieldsPart.Substring(start));
+        return segments.ToArray();
+    }
 
     private static ParameterData ToParameterData(IParameterSymbol parameter) => new(
         parameter.Name,
