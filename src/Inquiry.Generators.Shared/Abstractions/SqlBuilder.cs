@@ -656,7 +656,7 @@ public abstract class SqlBuilder
 
     /// <summary>
     /// Renders a NOT IN criterion as a parenthesized single-placeholder sentinel — the runtime
-    /// <see cref="global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn"/> rewrites the sentinel into
+    /// <c>InquiryInExpansion.ExpandNotIn</c> rewrites the sentinel into
     /// <c>(@p0, @p1, …)</c> for a non-empty collection, or <c>(NULL) OR 1=1</c> for an empty one (an empty
     /// NOT IN matches every row — unlike an empty IN). The outer parens keep that <c>OR 1=1</c> tautology
     /// self-contained when the criterion AND/OR-composes with others. Dialect-uniform (always the sentinel
