@@ -50,6 +50,9 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     /// </summary>
     public override bool UseArrayInParameters => true;
 
+    /// <summary>PostgreSQL bulk inserts ride binary COPY via the provider-registered copier.</summary>
+    public override bool SupportsBulkCopy => true;
+
     /// <inheritdoc cref="UseArrayInParameters"/>
     protected override string RenderIn(string quotedColumn, string parameterName)
         => quotedColumn + " = ANY(" + parameterName + ")";

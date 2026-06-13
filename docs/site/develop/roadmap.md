@@ -24,10 +24,6 @@
 > Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact. (`DbBatch` pipeline
 > support shipped — see [Recently resolved](#recently-resolved).)
 
-- **Provider-native bulk copy.** A `BulkInsertAsync` tier riding `SqlBulkCopy`, Npgsql binary `COPY`,
-  and `MySqlBulkCopy` (the Dapper Plus / linq2db class of operation). Inquiry's multi-row `VALUES`
-  batch insert is parameter-capped (~2k parameters); bulk copy is the 100k+-row tier. Falls back to
-  the existing batch SQL where a provider has no bulk-copy API.
 - **Table-valued parameters (SQL Server).** PostgreSQL array `IN` parameters shipped (see
   [Recently resolved](#recently-resolved)); SQL Server TVPs remain the sibling mechanism for passing
   sets to commands and stored procedures on that engine.
@@ -191,6 +187,16 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Provider-native bulk copy (2026-06-13):** `[InquiryBulkInsert]` streams rows through
+  `SqlBulkCopy` / Npgsql binary `COPY` / `MySqlBulkCopy` (new `IInquiryBulkCopier` registered by
+  those provider packages; `IInquiry.BulkInsertAsync` + a generated
+  `InquiryBulkInsertDefinition<T>` with converter/enum-aware ordinal accessors), returning
+  `Task<long>` rows written with no parameter cap; SQLite/Oracle compile the method down to the
+  multi-row batch insert. Sequential-GUID keys and auditing timestamps stamp per row as the
+  stream is enumerated; bulk insert uses a dedicated connection (no ambient transaction,
+  documented). Live tests on all five dialects via the shared `BulkItem` catalog fixture, and
+  `BulkInsertBenchmarks` (PostgreSQL) compares chunked `VALUES` batches vs one binary `COPY`.
+  See [Bulk insert](../articles/features/bulk-insert.md).
 - **Inquiry.Interceptors package (2026-06-13):** opt-in companion package with
   `AddInquirySlowQueryLogging(threshold)` (warns with duration + command text — never parameter
   values — measuring the provider round trip via a `ConditionalWeakTable`-correlated

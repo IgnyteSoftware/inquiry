@@ -464,6 +464,7 @@ internal static class StoreProcessor
                 case "InquiryAggregateAttribute": attribute = candidate; return StoreOperation.Aggregate;
                 case "InquiryFullTextSearchAttribute": attribute = candidate; return StoreOperation.FullTextSearch;
                 case "InquiryInsertAllAttribute": attribute = candidate; return StoreOperation.InsertAll;
+                case "InquiryBulkInsertAttribute": attribute = candidate; return StoreOperation.BulkInsert;
                 case "InquiryDeleteAllAttribute": attribute = candidate; return StoreOperation.DeleteAll;
                 case "InquiryUpdateAllAttribute": attribute = candidate; return StoreOperation.UpdateAll;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
@@ -517,6 +518,9 @@ internal static class StoreProcessor
             StoreOperation.InsertAll or StoreOperation.DeleteAll or StoreOperation.UpdateAll or
             StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
+            // Bulk insert returns the rows-written count as long (SqlBulkCopy's RowsCopied is Int64).
+            StoreOperation.BulkInsert =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
             _ => false,
@@ -802,7 +806,10 @@ internal static class StoreProcessor
         var needsHardDeleteByKey = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.HardDelete);
         var needsRestore = valid.Any(static m => m.Method.Operation == StoreOperation.RestoreOneByKey);
         var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count);
-        var needsInsertAll = valid.Any(static m => m.Method.Operation == StoreOperation.InsertAll);
+        // A [InquiryBulkInsert] on a dialect without a native bulk-copy API compiles down to the
+        // batch-insert body, so it needs the same baked consts.
+        var needsInsertAll = valid.Any(m => m.Method.Operation == StoreOperation.InsertAll
+            || (m.Method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy));
         var needsDeleteAll = valid.Any(static m => m.Method.Operation == StoreOperation.DeleteAll);
 
         var byFieldOps = valid
@@ -1651,7 +1658,7 @@ internal static class StoreProcessor
         {
             StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count or StoreOperation.Aggregate => parameters.Count == 1,
             StoreOperation.FullTextSearch => parameters.Count == 2 && parameters[0].ComparisonDisplay == "string",
-            StoreOperation.InsertAll or StoreOperation.UpdateAll => parameters.Count == 2 && IsEnumerableOfEntity(parameters[0], entity),
+            StoreOperation.InsertAll or StoreOperation.BulkInsert or StoreOperation.UpdateAll => parameters.Count == 2 && IsEnumerableOfEntity(parameters[0], entity),
             // DeleteAll takes a collection of the single key's type; composite-key entities are unsupported.
             StoreOperation.DeleteAll => entity.Keys.Count == 1 && parameters.Count == 2 && IsEnumerableOfType(parameters[0], entity.Keys[0].Type.DisplayName),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>

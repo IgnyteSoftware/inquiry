@@ -34,6 +34,9 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
 
     public override bool SupportsFullTextSearch => true;
 
+    /// <summary>MySQL bulk inserts ride MySqlBulkCopy via the provider-registered copier.</summary>
+    public override bool SupportsBulkCopy => true;
+
     public override string BuildFullTextSearchSql(SqlBuildContext context, IReadOnlyList<IColumn> searchColumns)
     {
         // MATCH ... AGAINST natural-language search (requires a FULLTEXT index on the columns).
