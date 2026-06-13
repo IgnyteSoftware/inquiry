@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ054.
+    //                  INQ045–INQ056.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -35,6 +35,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ052         View read-only violation       (mutation op on an [InquiryView] entity) [IN USE]
     //   INQ053         Key-requiring op, keyless entity (key-based select/eager on a keyless view) [IN USE]
     //   INQ054         Derived query name             (field-less [InquirySelectAllByField] name has no 'By…') [IN USE]
+    //   INQ055–INQ056  Auditing user columns          (INQ055 invalid type/placement, INQ056 duplicate) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -415,6 +416,25 @@ internal static class InquiryDiagnosticDescriptors
         "INQ052",
         "View-mapped entity is read-only",
         "Store method '{0}' is not a read-only operation but targets view-mapped entity '{1}'. An [InquiryView] entity is read-only — only SELECT, aggregate, and count operations are allowed (no mutations or stored procedures).",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ055: an auditing user column ([InquiryCreatedBy]/[InquiryModifiedBy]) must be a writable
+    // string column the generator can stamp from the ambient user, and it cannot double as the key,
+    // a generated/db-default column, the soft-delete indicator, or the concurrency token.
+    public static readonly DiagnosticDescriptor AuditUserInvalid = new(
+        "INQ055",
+        "Auditing user column is invalid",
+        "Entity '{0}' marks property '{1}' as an auditing user column, but it is not a plain string column. Auditing user columns must be string (nullable allowed) and must not be a key, database-generated, database-defaulted, the soft-delete indicator, or a concurrency token.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DuplicateAuditUser = new(
+        "INQ056",
+        "Entity declares more than one auditing user column of the same kind",
+        "Entity '{0}' marks more than one property with the same auditing-user attribute (e.g. '{1}'). At most one [InquiryCreatedBy] and one [InquiryModifiedBy] are allowed.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

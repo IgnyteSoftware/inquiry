@@ -58,10 +58,6 @@
   identical-SQL/different-parameter executions per scope and warn with call sites; no .NET ORM has
   this) plus an `ExplainAsync` helper surfacing the database query plan for any generated method
   (Django `QuerySet.explain()` analog).
-- **`[InquiryModifiedBy]` (who-changed-it auditing)** *(integration research 2026-06-12)*.
-  Timestamp auditing shipped (see [Recently resolved](#recently-resolved)); the user/principal
-  counterpart needs an ambient current-user accessor seam and pairs naturally with the audit-trail
-  interceptor below.
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
 - **DDL safety lint** *(integration research 2026-06-12)*. squawk-inspired analyzer warnings for
@@ -183,6 +179,13 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Auditing user columns `[InquiryCreatedBy]`/`[InquiryModifiedBy]` (2026-06-13):** the who-changed-it
+  counterpart to the timestamp auditing — a `string` column stamped from the ambient
+  `InquiryAuditContext.CurrentUser` (an `AsyncLocal` set per request via `BeginScope`). `CreatedBy`
+  is written once on insert when unset (null/empty) and excluded from every UPDATE SET across all
+  five dialects (same machinery as `CreatedAt`); `ModifiedBy` advances on every insert/update/upsert
+  including batch. Invalid type/placement is INQ055, duplicates INQ056. Live SQLite + generator
+  snapshots + ambient-context unit tests. See [Auditing](../articles/features/auditing.md).
 - **Derived query methods (2026-06-13):** a field-less `[InquirySelectAllByField]` infers its filter
   columns from the method name (Spring Data convention, compile-time): the segment after the first
   PascalCase `By`, split on `And` word boundaries, names the fields (`SelectByCountryAndCityAsync` →

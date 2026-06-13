@@ -1,6 +1,6 @@
-# Auditing timestamps
+# Auditing timestamps & users
 
-Track *when* rows were created and last written without writing any plumbing: mark a `DateTime` or `DateTimeOffset` property with `[InquiryCreatedAt]` or `[InquiryModifiedAt]` and the generated store methods maintain them.
+Track *when* rows were created and last written — and *who* did it — without writing any plumbing: mark a `DateTime`/`DateTimeOffset` property with `[InquiryCreatedAt]`/`[InquiryModifiedAt]`, or a `string` property with `[InquiryCreatedBy]`/`[InquiryModifiedBy]`, and the generated store methods maintain them.
 
 ## You write
 
@@ -35,12 +35,38 @@ The SET exclusion is the load-bearing detail: updating an entity instance you *c
 UPDATE "Documents" SET "Title" = @Title, "ModifiedAt" = @ModifiedAt WHERE "Id" = @Id
 ```
 
+## Who: `[InquiryCreatedBy]` / `[InquiryModifiedBy]`
+
+The same model, for the *user* instead of the time. Mark `string` properties and the stamps come from an **ambient current-user** value you set once per request:
+
+```csharp
+[InquiryTable("Documents")]
+public sealed class Document
+{
+    [InquiryKey(IsGenerated = true)] public long Id { get; set; }
+    [InquiryColumn] public string Title { get; set; } = "";
+
+    [InquiryCreatedBy]  public string? CreatedBy  { get; set; }
+    [InquiryModifiedBy] public string? ModifiedBy { get; set; }
+}
+```
+
+```csharp
+// Set the ambient user for the unit of work (e.g. ASP.NET Core middleware).
+using (InquiryAuditContext.BeginScope(httpContext.User.Identity?.Name))
+{
+    await documents.InsertAsync(doc);   // CreatedBy + ModifiedBy stamped from the scope
+}
+```
+
+`InquiryAuditContext.CurrentUser` flows across `await` via `AsyncLocal`, so concurrent requests stay isolated; `BeginScope` returns a disposable that restores the previous value (scopes nest). The **created/modified semantics are identical to the timestamps** — `CreatedBy` is stamped on insert only when unset (null or empty) and excluded from every UPDATE SET; `ModifiedBy` is stamped on every insert/update/upsert.
+
 ## Rules and limits
 
-- Property type must be `DateTime` or `DateTimeOffset` (nullable allowed); anything else — or combining with a key, `IsGenerated`, `UseDatabaseDefault`, `[InquirySoftDelete]`, or `[InquiryConcurrencyToken]` — is a build-time error (`INQ049`). At most one of each per entity (`INQ050`).
-- Timestamps are generated **client-side in UTC** (`DateTime.UtcNow` / `DateTimeOffset.UtcNow`). If you need database-clock stamping, use `[InquiryColumn(DefaultExpression = ...)]` instead of these attributes.
-- **Set-based mutations (`[InquiryUpdateWhere]`) and soft-delete/restore do not touch auditing columns** — they update rows without materializing entities. Stamp explicitly (add `ModifiedAt` to the SET fields) when that matters.
-- A who-changed-it counterpart (`[InquiryModifiedBy]`) needs an ambient user accessor and is not part of v1; the audit-trail interceptor on the roadmap covers full change history.
+- A timestamp column must be `DateTime`/`DateTimeOffset`; a user column must be `string` (nullable allowed). Combining either with a key, `IsGenerated`, `UseDatabaseDefault`, `[InquirySoftDelete]`, or `[InquiryConcurrencyToken]` is a build-time error (`INQ049` for timestamps, `INQ055` for users). At most one of each per entity (`INQ050` / `INQ056`).
+- Timestamps are generated **client-side in UTC**; user values come from `InquiryAuditContext.CurrentUser` (null when no scope is open). For database-clock stamping use `[InquiryColumn(DefaultExpression = ...)]` instead.
+- **Set-based mutations (`[InquiryUpdateWhere]`) and soft-delete/restore do not touch auditing columns** — they update rows without materializing entities. Stamp explicitly (add the column to the SET fields) when that matters.
+- For a full who/when/what change *history*, see the audit-trail interceptor on the roadmap.
 
 ## See also
 

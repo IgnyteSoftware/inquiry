@@ -217,9 +217,10 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     // includes UseDatabaseDefault columns, so the parameter is available at the call site.
     private string OnDuplicateKeyAssignments(SqlBuildContext context)
         => string.Join(", ", context.Columns
-            // Mirror SqlBuildContext.SetClauses' exclusions: a [InquiryCreatedAt] timestamp is
-            // written once by the insert branch and never updated by the conflict branch.
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsCreatedAt)
+            // Mirror SqlBuildContext.SetClauses' exclusions: a created-* auditing column
+            // ([InquiryCreatedAt]/[InquiryCreatedBy]) is written once by the insert branch and never
+            // updated by the conflict branch.
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsCreatedAt && !c.IsCreatedBy)
             .Select(c =>
             {
                 var quoted = QuoteIdentifier(c.ColumnName);
