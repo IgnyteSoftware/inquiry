@@ -1607,8 +1607,10 @@ internal static class StoreOperationEmitter
             // [InquiryCreatedBy]): the UPDATE SET excludes them (creation metadata is immutable), so
             // binding them would leave unreferenced parameters. Upserts pass forUpdate: false — their
             // insert branch references the parameter.
+            // A server-computed column is never bound for INSERT or UPDATE (the database computes it).
             .Where(c => (includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken)
-                && !(forUpdate && c.IsCreatedAudit))
+                && !(forUpdate && c.IsCreatedAudit)
+                && string.IsNullOrEmpty(c.ComputedExpression))
             .ToArray();
 
     private static ColumnData? FindColumn(EntityData entity, string propertyName)
