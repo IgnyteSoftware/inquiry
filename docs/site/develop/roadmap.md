@@ -9,9 +9,8 @@
 ## Known issues & correctness
 
 - *No open correctness bugs are currently known.* (The relation-const generator crash previously listed
-  here is fixed — see [Recently resolved](#recently-resolved). A residual *diagnostics* gap — relation
-  typos are only reported when the relation is eager-loaded — is tracked under
-  [Planned features](#planned-features--enhancements).)
+  here is fixed, and relation-typo diagnostics now fire at declaration time regardless of eager usage —
+  both in [Recently resolved](#recently-resolved).)
 
 ## Security
 
@@ -138,11 +137,6 @@
   `db.client.operation.duration` histogram, and `ILogger` messages. Candidate follow-ups:
   a `db.collection.name` (table) span tag, sqlcommenter-style trace-context SQL comments, and
   connection-open / pool-wait instruments.
-- **Broaden relation-shape diagnostics.** `INQ040` (unknown relation foreign key) and `INQ041`
-  (composite-key child) fire only when an eager-loading method traverses the relation. A relation that is
-  mistyped but never eager-loaded is silently skipped (it no longer crashes the generator), and a foreign
-  key pointing at the wrong side has no dedicated diagnostic. Report these at declaration time regardless
-  of eager usage. *Low severity — no crash, and no wrong results unless the relation is eager-loaded.*
 
 ### Explicitly not planned
 
@@ -173,6 +167,13 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Broadened relation-shape diagnostics (2026-06-13):** `INQ040` (unknown relation foreign key)
+  and `INQ041` (composite-key child) now report at **declaration time** for every `[InquiryRelation]`,
+  so a mistyped relation is caught even when no method eager-loads it (previously silent). New
+  **`INQ058`** flags a reversed relation — the foreign-key property found on the opposite side
+  (a collection FK belongs to the child, a reference FK to the parent). The eager-emit path no
+  longer re-reports (it only drops the bad method), and the relation diagnostics carry the relation
+  property's source location. See [Eager loading](../articles/features/eager-loading.md).
 - **CI repo-wide warning gate (2026-06-13):** a `tests/Directory.Build.props` (importing the
   root props) sets `TreatWarningsAsErrors` for every test project, so a new warning in test code now
   fails the build like it already does for production projects. The known benchmark warning sources

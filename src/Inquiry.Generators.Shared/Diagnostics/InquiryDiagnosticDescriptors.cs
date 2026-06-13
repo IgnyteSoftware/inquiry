@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ057.
+    //                  INQ045–INQ058.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -331,10 +331,12 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    // Reported at relation-declaration time (regardless of whether any method eager-loads it), so a
+    // mistyped relation is caught even when never traversed.
     public static readonly DiagnosticDescriptor UnknownRelationForeignKey = new(
         "INQ040",
         "InquiryRelation references an unmapped foreign-key property",
-        "Eager-loading method '{0}': relation '{1}.{2}' references foreign-key property '{3}', which is not a mapped column on child entity '{4}'. Check the InquiryRelation attribute's foreign-key argument for typos.",
+        "Entity '{0}': relation '{1}' references foreign-key property '{2}', which is not a mapped column on '{3}'. Check the InquiryRelation attribute's foreign-key argument for typos.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -342,7 +344,18 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor RelationCompositeChildKey = new(
         "INQ041",
         "InquiryRelation child entity has a composite primary key, which is not supported",
-        "Eager-loading method '{0}': relation '{1}.{2}' targets child entity '{3}', which has a composite primary key ({4} key columns). Eager-loading via InquiryRelation only supports single-key children in v1.",
+        "Entity '{0}': relation '{1}' targets child entity '{2}', which has a composite primary key ({3} key columns). Eager-loading via InquiryRelation only supports single-key children in v1.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ058: the relation's foreign-key property exists, but on the wrong entity. A collection
+    // (to-many) relation's FK lives on the child; a reference (to-one) relation's FK lives on the
+    // parent. Finding it on the opposite side is almost always a reversed relation declaration.
+    public static readonly DiagnosticDescriptor RelationForeignKeyWrongSide = new(
+        "INQ058",
+        "InquiryRelation foreign key is on the wrong entity",
+        "Entity '{0}': relation '{1}' expects its foreign-key property '{2}' on '{3}' (a {4} relation's FK lives there), but it is a column on '{5}' instead. The relation looks reversed — a collection relation's FK belongs to the child, a reference relation's FK to the parent.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
