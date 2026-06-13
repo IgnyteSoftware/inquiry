@@ -62,7 +62,7 @@ var orgs = sp.GetRequiredService<OrganizationStore>();
 await foreach (var o in orgs.SelectAllAsync()) { /* ... */ }
 ```
 
-The method bodies, the SQL `const string`s, the materializers, and the DI wiring are all generated at build time. Beyond this core CRUD surface, Inquiry supports richer WHERE predicates, ORDER BY + offset/keyset pagination, batch & bulk operations, projections + aggregations, optimistic concurrency, soft deletes, full-text search, JSON/value-converter columns, `CREATE TABLE` schema-DDL generation, opt-in observability (OpenTelemetry tracing + metrics and `ILogger` logging via `AddInquiryTelemetry()`), and open-time resiliency (cloud transient retry + backup-server failover). See [How it works](docs/site/articles/concepts.md) and the [Architecture deep-dive](docs/site/articles/architecture.md) for the full compile-time pipeline, SQL-building, and runtime walkthrough.
+The method bodies, the SQL `const string`s, the materializers, and the DI wiring are all generated at build time. Beyond this core CRUD surface, Inquiry supports richer WHERE predicates, ORDER BY + offset/keyset pagination, batch & bulk operations, projections + aggregations, optimistic concurrency, soft deletes, global query filters, full-text search, JSON/value-converter columns, `CREATE TABLE` schema-DDL generation, opt-in observability (OpenTelemetry tracing + metrics and `ILogger` logging via `AddInquiryTelemetry()`), and open-time resiliency (cloud transient retry + backup-server failover). See [How it works](docs/site/articles/concepts.md) and the [Architecture deep-dive](docs/site/articles/architecture.md) for the full compile-time pipeline, SQL-building, and runtime walkthrough.
 
 ## Running the sample
 

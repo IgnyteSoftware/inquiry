@@ -40,6 +40,13 @@ internal sealed record ColumnData : IColumn
     public bool IsCreatedAudit => IsCreatedAt || IsCreatedBy;
     public bool UseDatabaseDefault { get; init; }
     public SoftDeleteKind SoftDelete { get; init; } = SoftDeleteKind.None;
+
+    /// <summary>[InquiryGlobalFilter]: every generated SELECT AND-composes <c>"col" = GlobalFilterKeepWhenTrue</c>.</summary>
+    public bool IsGlobalFilter { get; init; }
+
+    /// <summary>The bool value a global-filter column must equal for a row to stay visible (InquiryGlobalFilter.KeepWhen, default true).</summary>
+    public bool GlobalFilterKeepWhenTrue { get; init; } = true;
+
     public bool IsConcurrencyToken { get; init; }
     public bool IsDatabaseGeneratedToken { get; init; }
     public bool EnumAsString { get; init; }

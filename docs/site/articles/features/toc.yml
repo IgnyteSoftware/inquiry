@@ -4,6 +4,8 @@
   href: pagination.md
 - name: Soft delete
   href: soft-delete.md
+- name: Global query filters
+  href: global-filters.md
 - name: Auditing
   href: auditing.md
 - name: Projections

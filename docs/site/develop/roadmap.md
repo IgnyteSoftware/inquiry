@@ -98,9 +98,11 @@
   associations; the relation model is currently 1:N / N:1 only.
 - **CTEs and set operations** *(gap research 2026-06-12)*. `WITH` / `UNION` / `INTERSECT` / `EXCEPT`
   composition in the predicate/select model (Kysely-style); ad-hoc SQL covers this today.
-- **Tenant/global query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. Generalize the
-  soft-delete global-filter machinery to user-defined columns (EF `HasQueryFilter` / EF 10 named
-  filters), plus row-level-security session helpers for PostgreSQL (Drizzle RLS-style).
+- **Parameterized & named query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. The
+  static-column form shipped — see [Recently resolved](#recently-resolved). The remaining gaps are
+  runtime-parameterized filters (a tenant id bound from ambient context rather than a constant column),
+  EF 10 *named* filters (selectively ignore one filter by name), and row-level-security session helpers
+  for PostgreSQL (Drizzle RLS-style `SET LOCAL` around the connection).
 - **Provider-specific column types** *(gap research 2026-06-12)*. SQL Server **vector** columns first
   (EF 10 `SqlVector` parity — AI embeddings / semantic search); spatial and `hierarchyid` by demand.
 - **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 5;
@@ -167,6 +169,18 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Global query filters `[InquiryGlobalFilter]` (2026-06-13):** the EF `HasQueryFilter` parity for a
+  static column predicate, generalizing the soft-delete active-row machinery to columns you define
+  (multi-tenant isolation, `IsActive`/`IsPublished` gates). A non-nullable `bool` column marked
+  `[InquiryGlobalFilter]` makes every generated SELECT (incl. COUNT/aggregate/paged/keyset/projection)
+  AND-compose `"col" = <KeepWhen>`; `KeepWhen = false` inverts the kept value; multiple filters
+  AND-compose. The condition is baked into the `const` SQL at compile time (zero runtime cost) and uses
+  the per-dialect bool literal (PG `TRUE`/`FALSE`, others `1`/`0`). Unlike soft delete there is **no
+  per-method opt-out** — a safety boundary shouldn't be bypassable by a stray flag — so on an entity
+  with both, `IncludeDeleted = true` drops only the soft-delete term and the global filter survives.
+  Invalid placement (non-bool/nullable, or doubling as key/generated/default/soft-delete/token) is
+  **`INQ059`**. Generator snapshots across all five dialects + live SQLite round-trip (publish gate,
+  soft-delete coexistence, `KeepWhen=false`). See [Global query filters](../articles/features/global-filters.md).
 - **Broadened relation-shape diagnostics (2026-06-13):** `INQ040` (unknown relation foreign key)
   and `INQ041` (composite-key child) now report at **declaration time** for every `[InquiryRelation]`,
   so a mistyped relation is caught even when no method eager-loads it (previously silent). New

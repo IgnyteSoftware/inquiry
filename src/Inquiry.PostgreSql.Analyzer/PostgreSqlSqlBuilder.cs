@@ -12,16 +12,16 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
 
     public override string BuildSelectAllSql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     public override string BuildSelectByKeySql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.SoftDeleteActivePredicate);
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ActiveRowPredicate);
 
     public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         var where = string.Join(" AND ", filterColumns
             .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
-        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.SoftDeleteActivePredicate);
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
     }
 
     public override bool SupportsFullTextSearch => true;
@@ -31,14 +31,14 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         // Concatenate the searched columns into one tsvector and match a plain (natural-language) query.
         var vector = string.Join(" || ' ' || ", searchColumns.Select(c => "coalesce(" + QuoteIdentifier(c.ColumnName) + ", '')"));
         var predicate = "to_tsvector('simple', " + vector + ") @@ plainto_tsquery('simple', " + ParameterName("searchTerm") + ")";
-        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(predicate, context.SoftDeleteActivePredicate);
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(predicate, context.ActiveRowPredicate);
     }
 
-    /// <summary>PostgreSQL uses native boolean literals for the soft-delete flag.</summary>
-    public override string SoftDeleteFalseLiteral => "FALSE";
+    /// <summary>PostgreSQL uses native boolean literals.</summary>
+    public override string BooleanFalseLiteral => "FALSE";
 
-    /// <summary>PostgreSQL uses native boolean literals for the soft-delete flag.</summary>
-    public override string SoftDeleteTrueLiteral => "TRUE";
+    /// <summary>PostgreSQL uses native boolean literals.</summary>
+    public override string BooleanTrueLiteral => "TRUE";
 
     /// <summary>PostgreSQL stamps the soft-delete (and restore) timestamp from <c>now()</c>.</summary>
     public override string CurrentTimestampExpression => "now()";

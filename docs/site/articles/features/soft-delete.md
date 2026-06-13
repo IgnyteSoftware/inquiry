@@ -109,5 +109,6 @@ Soft delete is **not** right when:
 
 ## See also
 
+- [Global query filters](global-filters.md) — the same active-row machinery generalized to columns you define (tenancy, publish state, activation).
 - [CRUD](crud.md) — the baseline operations soft-delete extends.
 - [Optimistic concurrency](concurrency.md) — composes with soft delete.

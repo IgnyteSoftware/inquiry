@@ -104,7 +104,7 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual string BuildSelectByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
         => "SELECT " + context.SelectColumns + " FROM " + context.Table
-            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.SoftDeleteActivePredicate);
+            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
 
     // ---- Set-based predicate mutations ([InquiryUpdateWhere] / [InquiryDeleteWhere]) ----
 
@@ -132,7 +132,7 @@ public abstract class SqlBuilder
         }
 
         return "UPDATE " + context.Table + " SET " + set.ToString()
-            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.SoftDeleteActivePredicate);
+            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
     }
 
     /// <summary>
@@ -152,7 +152,7 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual string BuildSoftDeleteByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
         => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
-            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.SoftDeleteActivePredicate);
+            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
 
     public abstract string BuildInsertSql(SqlBuildContext context);
 
@@ -167,16 +167,16 @@ public abstract class SqlBuilder
     // ---- Soft delete -------------------------------------------------------------------
 
     /// <summary>
-    /// SQL literal for an active (not-deleted) boolean soft-delete flag. Default <c>0</c> (SQLite/
-    /// SqlServer/MySQL); PostgreSQL overrides with <c>FALSE</c>.
+    /// SQL literal for a boolean <c>false</c> (soft-delete "active" flag, global-filter false condition).
+    /// Default <c>0</c> (SQLite/SqlServer/MySQL); PostgreSQL overrides with <c>FALSE</c>.
     /// </summary>
-    public virtual string SoftDeleteFalseLiteral => "0";
+    public virtual string BooleanFalseLiteral => "0";
 
     /// <summary>
-    /// SQL literal for a deleted boolean soft-delete flag. Default <c>1</c> (SQLite/SqlServer/MySQL);
-    /// PostgreSQL overrides with <c>TRUE</c>.
+    /// SQL literal for a boolean <c>true</c> (soft-delete "deleted" flag, global-filter true condition).
+    /// Default <c>1</c> (SQLite/SqlServer/MySQL); PostgreSQL overrides with <c>TRUE</c>.
     /// </summary>
-    public virtual string SoftDeleteTrueLiteral => "1";
+    public virtual string BooleanTrueLiteral => "1";
 
     /// <summary>
     /// SQL expression yielding the database clock used to stamp a timestamp-form soft delete. Default
@@ -230,7 +230,7 @@ public abstract class SqlBuilder
     /// <see cref="WhereSuffix"/> so a count excludes soft-deleted rows when applicable.
     /// </summary>
     public virtual string BuildCountSql(SqlBuildContext context)
-        => "SELECT COUNT(*) FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
+        => "SELECT COUNT(*) FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     /// <summary>
     /// Builds a scalar aggregate (<c>SELECT SUM("col") FROM …</c>). <paramref name="function"/> is the
@@ -238,7 +238,7 @@ public abstract class SqlBuilder
     /// Dialect-uniform, so concrete and inherited; composes the soft-delete active filter.
     /// </summary>
     public virtual string BuildAggregateSql(SqlBuildContext context, string function, string quotedColumn)
-        => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
+        => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     /// <summary>
     /// Whether this dialect supports <c>[InquiryFullTextSearch]</c>. Default <see langword="false"/>

@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ058.
+    //                  INQ045–INQ059.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -37,6 +37,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ054         Derived query name             (field-less [InquirySelectAllByField] name has no 'By…') [IN USE]
     //   INQ055–INQ056  Auditing user columns          (INQ055 invalid type/placement, INQ056 duplicate) [IN USE]
     //   INQ057         Server-computed column          (Computed combined with key/default/audit/etc.) [IN USE]
+    //   INQ059         Global query filter             ([InquiryGlobalFilter] on non-bool / key / generated / token / soft-delete) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -516,6 +517,17 @@ internal static class InquiryDiagnosticDescriptors
         "INQ044",
         "InquiryUpdateWhere SET field is not an updatable column",
         "Store method '{0}' assigns field '{1}', which cannot be SET by a set-based update. SET fields must map to a mutable column — not a key, a database-generated column, the soft-delete indicator, or a concurrency token.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ059: an [InquiryGlobalFilter] column must be a non-nullable bool the generator can compose into
+    // every SELECT's active-row predicate, and it cannot double as the key, a generated/db-default
+    // column, the soft-delete indicator, or a concurrency token — those own the column's value.
+    public static readonly DiagnosticDescriptor GlobalFilterInvalid = new(
+        "INQ059",
+        "InquiryGlobalFilter column is invalid",
+        "Entity '{0}' marks property '{1}' with [InquiryGlobalFilter], but it is not usable as a global filter. The column must be a non-nullable bool and must not be a key, database-generated, database-defaulted, the soft-delete indicator, or a concurrency token.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
