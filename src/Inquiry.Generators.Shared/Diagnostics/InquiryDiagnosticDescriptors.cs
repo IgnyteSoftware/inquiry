@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ053.
+    //                  INQ045–INQ054.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -34,6 +34,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ051         Stored-procedure scalar output (OutputParameter/ReturnsValue misconfiguration) [IN USE]
     //   INQ052         View read-only violation       (mutation op on an [InquiryView] entity) [IN USE]
     //   INQ053         Key-requiring op, keyless entity (key-based select/eager on a keyless view) [IN USE]
+    //   INQ054         Derived query name             (field-less [InquirySelectAllByField] name has no 'By…') [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -414,6 +415,17 @@ internal static class InquiryDiagnosticDescriptors
         "INQ052",
         "View-mapped entity is read-only",
         "Store method '{0}' is not a read-only operation but targets view-mapped entity '{1}'. An [InquiryView] entity is read-only — only SELECT, aggregate, and count operations are allowed (no mutations or stored procedures).",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ054: a field-less [InquirySelectAllByField] derives its filter columns from the method name,
+    // but the name has no 'By<Field>' segment to parse. Name the method '<verb>By<Field>[And<Field>…]'
+    // (e.g. SelectByCountryAsync), or list the fields explicitly in the attribute.
+    public static readonly DiagnosticDescriptor DerivedQueryNameInvalid = new(
+        "INQ054",
+        "Cannot derive query fields from the method name",
+        "Store method '{0}' uses a field-less [InquirySelectAllByField] but its name has no 'By<Field>' segment to derive filter columns from. Name it like 'SelectByCountryAndCityAsync', or pass the field names to the attribute.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

@@ -1,3 +1,5 @@
+using System;
+
 namespace Inquiry.Stores;
 
 /// <summary>
@@ -5,9 +7,25 @@ namespace Inquiry.Stores;
 /// Multiple fields are combined with AND in the WHERE clause; method parameters must match
 /// the listed field order and types.
 /// </summary>
+/// <remarks>
+/// When no fields are supplied (<c>[InquirySelectAllByField]</c>), the filter columns are
+/// <b>derived from the method name</b> (the Spring Data convention): the segment after <c>By</c>,
+/// split on <c>And</c> word boundaries, names the fields — e.g. <c>SelectByCountryAndCityAsync</c>
+/// filters on <c>Country</c> and <c>City</c>. Each derived field is resolved against the entity's
+/// mapped properties/columns just like an explicit one (an unknown field is a compile error).
+/// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquirySelectAllByFieldAttribute : Attribute
 {
+    /// <summary>
+    /// Initializes a field-less attribute whose filter columns are derived from the method name
+    /// (see the type remarks).
+    /// </summary>
+    public InquirySelectAllByFieldAttribute()
+    {
+        Fields = Array.Empty<string>();
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="InquirySelectAllByFieldAttribute"/> class.
     /// </summary>
