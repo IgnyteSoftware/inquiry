@@ -9,9 +9,11 @@ namespace Inquiry.Interceptors;
 /// <summary>
 /// Logs a warning when a command's execution time meets or exceeds a threshold. Duration is
 /// measured from <see cref="IInquiryCommandInterceptor.CommandExecutingAsync"/> to
-/// <see cref="IInquiryCommandInterceptor.CommandExecutedAsync"/> — the provider round trip, not
-/// result enumeration. The log message carries the duration and the command text; parameter
-/// values are never logged (same posture as Inquiry's telemetry).
+/// <see cref="IInquiryCommandInterceptor.CommandExecutedAsync"/> — for queries that is the full
+/// command duration <em>including</em> result reading and materialization (the pipeline raises
+/// Executed after the reader is drained), not just the provider round trip. The log message
+/// carries the duration and the command text; parameter values are never logged (same posture
+/// as Inquiry's telemetry).
 /// </summary>
 public sealed class SlowQueryLoggingInterceptor : IInquiryCommandInterceptor
 {
@@ -34,7 +36,16 @@ public sealed class SlowQueryLoggingInterceptor : IInquiryCommandInterceptor
     public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
     {
         if (context is null) throw new ArgumentNullException(nameof(context));
-        _startTimestamps.AddOrUpdate(context.Command, new StrongBox<long>(Stopwatch.GetTimestamp()));
+        // Reuse an existing box (same DbCommand re-executing, e.g. a retry) instead of allocating.
+        if (_startTimestamps.TryGetValue(context.Command, out var existing))
+        {
+            existing.Value = Stopwatch.GetTimestamp();
+        }
+        else
+        {
+            _startTimestamps.Add(context.Command, new StrongBox<long>(Stopwatch.GetTimestamp()));
+        }
+
         return ValueTask.CompletedTask;
     }
 
