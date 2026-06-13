@@ -135,31 +135,42 @@ internal static class SchemaEmitter
     }
 
     /// <summary>
-    /// Reports advisory DDL "lints" (Info severity, so they never break a warnings-as-errors build —
-    /// raise them in <c>.editorconfig</c> to enforce). INQ061: a foreign-key column with no index. Most
-    /// engines do not auto-index foreign keys, so joins and cascades over the column scan the table;
-    /// MySQL auto-indexes FK constraints and is exempt when this entity emits them.
+    /// Reports advisory DDL "lints" (Info severity, off by default — raise them in <c>.editorconfig</c>
+    /// to enforce). INQ061: a foreign-key column with no index (most engines don't auto-index FKs, so
+    /// joins/cascades scan; MySQL is exempt when it emits the constraint). INQ062: a decimal column with
+    /// no explicit precision/scale, which silently takes the dialect default (e.g. DECIMAL(18,2)) and can
+    /// round (EF's DecimalTypeDefaultWarning analog).
     /// </summary>
     private static void ReportSchemaLints(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
     {
+        // The FK lint is suppressed on a dialect that auto-indexes FK columns, but only when the
+        // constraint is actually emitted (no constraint ⇒ no auto-index).
+        var skipForeignKeyLint = builder.ForeignKeysAreAutoIndexed;
+
         foreach (var entity in entities)
         {
-            // A dialect that auto-indexes FK columns only does so when it actually emits the constraint.
-            if (builder.ForeignKeysAreAutoIndexed && entity.GenerateForeignKeys)
-            {
-                continue;
-            }
+            var entityAutoIndexesForeignKeys = skipForeignKeyLint && entity.GenerateForeignKeys;
 
             foreach (var column in entity.Columns.AsImmutableArray())
             {
-                // A plain foreign-key column with no backing index. A key column is treated as covered by
-                // the primary-key index (a v1 simplification — strictly only the PK's leading column
-                // serves a single-column lookup, but a composite-key FK is an uncommon shape); an
+                // INQ061: a plain foreign-key column with no backing index. A key column is treated as
+                // covered by the primary-key index (a v1 simplification — strictly only the PK's leading
+                // column serves a single-column lookup, but a composite-key FK is an uncommon shape); an
                 // explicitly indexed or unique column is already indexed.
-                if (column.ForeignKeyTable is not null && !column.IsKey && !column.IsIndexed && !column.IsUnique)
+                if (!entityAutoIndexesForeignKeys &&
+                    column.ForeignKeyTable is not null && !column.IsKey && !column.IsIndexed && !column.IsUnique)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         InquiryDiagnosticDescriptors.UnindexedForeignKey, location: null, entity.TableName, column.PropertyName, builder.DialectName));
+                }
+
+                // INQ062: a decimal column with no explicit Precision/Scale and no SqlType override takes
+                // the dialect's default precision/scale, which can silently round (money columns especially).
+                if (column.TypeClass == DbTypeClass.Decimal && column.Precision == 0 && column.Scale == 0 &&
+                    string.IsNullOrEmpty(column.SqlType) && string.IsNullOrEmpty(column.ComputedExpression))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.DecimalWithoutPrecision, location: null, entity.TableName, column.PropertyName, builder.DialectName));
                 }
             }
         }

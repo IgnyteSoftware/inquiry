@@ -10,7 +10,7 @@ namespace Inquiry.Generators.Tests;
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
-    private static readonly string[] EnableDdlLints = { "INQ061" };
+    private static readonly string[] EnableDdlLints = { "INQ061", "INQ062" };
 
     private const string UnindexedFkSource = """
         using Inquiry.Entities;
@@ -131,5 +131,66 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "MySql", enableDiagnostics: EnableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ061");
+    }
+
+    // ---- INQ062: decimal column relies on the default precision/scale -----------------------------
+
+    private const string DecimalSource = """
+        using Inquiry.Entities;
+
+        namespace Demo;
+
+        [InquiryTable("Invoice")]
+        public sealed class Invoice
+        {
+            [InquiryKey(IsGenerated = true)]
+            public long Id { get; set; }
+
+            [InquiryColumn("Amount")]
+            public decimal Amount { get; set; }
+        }
+        """;
+
+    [Fact]
+    public void DecimalWithoutPrecisionReportsINQ062AsInfo_Sqlite()
+    {
+        var result = RunGenerator(DecimalSource, enableDiagnostics: EnableDdlLints);
+
+        var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ062");
+        Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
+        Assert.Contains("Amount", lint.GetMessage());
+    }
+
+    [Fact]
+    public void DecimalLintIsOffByDefaultWithoutOptIn_Sqlite()
+    {
+        var result = RunGenerator(DecimalSource);
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ062");
+    }
+
+    [Theory]
+    [InlineData("[InquiryColumn(\"Amount\", Precision = 19, Scale = 4)]")]   // explicit precision/scale
+    [InlineData("[InquiryColumn(\"Amount\", SqlType = \"NUMERIC(19,4)\")]")]  // explicit SqlType override
+    public void ExplicitDecimalStorageDoesNotReportINQ062(string columnAttribute)
+    {
+        var source = $$"""
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Invoice")]
+            public sealed class Invoice
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                {{columnAttribute}}
+                public decimal Amount { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ062");
     }
 }
