@@ -14,6 +14,7 @@ internal enum StoreOperation
     Aggregate,
     FullTextSearch,
     InsertAll,
+    BulkInsert,
     DeleteAll,
     UpdateAll,
     Insert,

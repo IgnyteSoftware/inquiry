@@ -16,6 +16,8 @@
   href: concurrency.md
 - name: Batch operations
   href: batch-operations.md
+- name: Bulk insert
+  href: bulk-insert.md
 - name: Set-based mutations
   href: set-based-mutations.md
 - name: Full-text search

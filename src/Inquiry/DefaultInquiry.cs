@@ -218,6 +218,23 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(commandText, args, bindParameters, materializer, cancellationToken);
 
     /// <inheritdoc />
+    public Task<long> BulkInsertAsync<TEntity>(
+        Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
+        IEnumerable<TEntity> rows,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+    {
+        if (definition is null) throw new ArgumentNullException(nameof(definition));
+        if (rows is null) throw new ArgumentNullException(nameof(rows));
+
+        var copier = _serviceProvider.GetService<Inquiry.BulkCopy.IInquiryBulkCopier>()
+            ?? throw new InvalidOperationException(
+                "No IInquiryBulkCopier is registered. Bulk insert needs a provider with a native bulk-copy API " +
+                "(SQL Server, PostgreSQL, MySQL); on other providers use the [InquiryInsertAll] batch insert.");
+        return copier.BulkInsertAsync(definition, rows, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<int> ExecuteAsync(
         FormattableString commandText,
         CancellationToken cancellationToken = default)
