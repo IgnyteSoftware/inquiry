@@ -115,4 +115,11 @@ internal sealed record StoreMethodData(
     /// <c>Size = -1</c> (MAX) so providers like SqlClient allocate an output buffer.
     /// </summary>
     public bool ProcedureOutputIsString { get; init; }
+
+    /// <summary>
+    /// For a <see cref="decimal"/> OUTPUT parameter, whether to stamp an explicit precision/scale.
+    /// SqlClient defaults a decimal output parameter to scale 0 and rounds the read-back value
+    /// (e.g. 19.75 → 20), so a high-fidelity scale is stamped to preserve fractional digits.
+    /// </summary>
+    public bool ProcedureOutputIsDecimal { get; init; }
 }

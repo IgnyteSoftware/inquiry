@@ -197,6 +197,7 @@ internal static class StoreProcessor
         var procReturnsValue = false;
         string? procOutputDbType = null;
         var procOutputIsString = false;
+        var procOutputIsDecimal = false;
         if (operation == StoreOperation.StoredProcedure)
         {
             if (HasScalarProcedureOutput(attribute))
@@ -232,6 +233,7 @@ internal static class StoreProcessor
                     var scalarType = TypeData.Create(scalarSymbol, scalarSymbol.NullableAnnotation);
                     procOutputDbType = DbTypeMapper.TryGetDbTypeExpression(scalarType);
                     procOutputIsString = scalarType.SpecialType == SpecialType.System_String;
+                    procOutputIsDecimal = scalarType.SpecialType == SpecialType.System_Decimal;
                 }
 
                 procedureReturn = ProcedureReturnKind.TaskOfOutputScalar;
@@ -312,6 +314,7 @@ internal static class StoreProcessor
             ProcedureReturnsValue = procReturnsValue,
             ProcedureOutputDbType = procOutputDbType,
             ProcedureOutputIsString = procOutputIsString,
+            ProcedureOutputIsDecimal = procOutputIsDecimal,
         };
     }
 
