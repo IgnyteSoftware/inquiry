@@ -164,9 +164,11 @@ internal static class SchemaEmitter
                         InquiryDiagnosticDescriptors.UnindexedForeignKey, location: null, entity.TableName, column.PropertyName, builder.DialectName));
                 }
 
-                // INQ062: a decimal column with no explicit Precision/Scale and no SqlType override takes
-                // the dialect's default precision/scale, which can silently round (money columns especially).
-                if (column.TypeClass == DbTypeClass.Decimal && column.Precision == 0 && column.Scale == 0 &&
+                // INQ062: a decimal column with no explicit precision (and no SqlType override) takes the
+                // dialect's default precision/scale, which can silently round (money columns especially).
+                // The gate is Precision == 0 to match SqlBuilder.DecimalSpec, which uses the default whenever
+                // Precision is unset — a Scale set without a Precision is itself silently ignored there.
+                if (column.TypeClass == DbTypeClass.Decimal && column.Precision == 0 &&
                     string.IsNullOrEmpty(column.SqlType) && string.IsNullOrEmpty(column.ComputedExpression))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
