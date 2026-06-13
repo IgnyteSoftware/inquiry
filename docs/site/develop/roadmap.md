@@ -70,9 +70,6 @@
   (each test inside a rolled-back transaction with connection ownership, enabling parallel
   database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
   Bogus-compatible).
-- **Column-encryption docs** *(adoption review 2026-06-12)*. JSON-path predicate querying shipped — see
-  [Recently resolved](#recently-resolved). Remaining: documentation for SQL Server Always Encrypted /
-  pgcrypto patterns over the existing value-converter seam (mostly docs, little code).
 - **Release engineering & governance** *(adoption review 2026-06-12)*. Real `RepositoryUrl`
   (currently a placeholder), SourceLink + symbol packages, package readme/icon, a pack/publish
   workflow, and a published versioning / breaking-change / support-window policy — the remaining
@@ -174,6 +171,15 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **Column-encryption docs (2026-06-13):** application-side column encryption needs no bespoke API — it
+  rides the existing [value-converter](../articles/features/value-converters.md) seam (encrypt in
+  `ToProvider`, decrypt in `FromProvider`). New [Column encryption](../articles/features/column-encryption.md)
+  article documents the pattern with a worked `AesGcm` converter (key from a static holder, since
+  converters are stateless/parameterless), the query trade-off (no filtering/indexing on the ciphertext;
+  use a keyed-HMAC lookup column), and the SQL Server Always Encrypted / PostgreSQL pgcrypto native
+  alternatives. Proven end-to-end by a live SQLite test (`ColumnEncryptionIntegrationTests`): the property
+  round-trips while the column holds ciphertext, never the plaintext.
 
 - **DDL safety lint — unindexed filtered column `INQ064` (2026-06-13):** a third opt-in lint (off by
   default, like INQ061/062). A non-key column a store method filters on — a `[InquirySelectAllByField]`
