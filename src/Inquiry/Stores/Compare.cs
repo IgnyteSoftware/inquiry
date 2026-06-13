@@ -42,4 +42,10 @@ public enum Compare
 
     /// <summary><c>column IS NOT NULL</c> (consumes no parameters).</summary>
     IsNotNull,
+
+    /// <summary><c>column NOT LIKE @param</c> (string field; caller escapes <c>%</c>/<c>_</c> wildcards).</summary>
+    NotLike,
+
+    /// <summary><c>column NOT BETWEEN @lo AND @hi</c> (consumes two parameters).</summary>
+    NotBetween,
 }
