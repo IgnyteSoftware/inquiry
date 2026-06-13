@@ -11,6 +11,7 @@ internal enum StoreOperation
     SelectAllByPredicate,
     KeysetPage,
     Count,
+    Exists,
     Aggregate,
     FullTextSearch,
     InsertAll,

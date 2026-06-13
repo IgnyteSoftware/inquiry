@@ -304,4 +304,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle 12c+ extracts a JSON scalar with JSON_VALUE (returns the value as text).
     protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
         => "JSON_VALUE(" + quotedColumn + ", '" + jsonPath + "')";
+
+    // Oracle requires a FROM clause; a CASE/EXISTS scalar selects FROM DUAL.
+    public override string BuildExistsSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+        => base.BuildExistsSql(context, predicates) + " FROM DUAL";
 }

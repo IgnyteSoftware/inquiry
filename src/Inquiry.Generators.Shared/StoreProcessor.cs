@@ -144,10 +144,12 @@ internal static class StoreProcessor
         }
 
         var predicates = ImmutableArray<PredicateData>.Empty;
-        if (operation is StoreOperation.SelectAllByPredicate or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate)
+        if (operation is StoreOperation.SelectAllByPredicate or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate or StoreOperation.Exists)
         {
             predicates = ReadWherePredicates(method);
-            if (predicates.Length == 0)
+            // [InquiryExists] is valid with no criteria (tests whether the table has any row at all);
+            // the other predicate operations require at least one criterion.
+            if (predicates.Length == 0 && operation is not StoreOperation.Exists)
             {
                 // A predicate select with no criteria is a parameter mismatch (INQ019); a set-based
                 // mutation with no criteria would touch every row, so it gets its own diagnostic (INQ023).
@@ -595,6 +597,7 @@ internal static class StoreProcessor
                 case "InquirySelectAllByPredicateAttribute": attribute = candidate; return StoreOperation.SelectAllByPredicate;
                 case "InquiryKeysetPageAttribute": attribute = candidate; return StoreOperation.KeysetPage;
                 case "InquiryCountAttribute": attribute = candidate; return StoreOperation.Count;
+                case "InquiryExistsAttribute": attribute = candidate; return StoreOperation.Exists;
                 case "InquiryAggregateAttribute": attribute = candidate; return StoreOperation.Aggregate;
                 case "InquiryFullTextSearchAttribute": attribute = candidate; return StoreOperation.FullTextSearch;
                 case "InquiryInsertAllAttribute": attribute = candidate; return StoreOperation.InsertAll;
@@ -648,6 +651,8 @@ internal static class StoreProcessor
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
             StoreOperation.Count =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
+            StoreOperation.Exists =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
             StoreOperation.Aggregate => IsTaskOfSingleTypeArgument(returnType),
             StoreOperation.InsertAll or StoreOperation.DeleteAll or StoreOperation.UpdateAll or
             StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate =>
@@ -1021,6 +1026,10 @@ internal static class StoreProcessor
             {
                 AppendConstSql(source, "_sqlPredicate_" + method.Name, sqlBuilder.BuildSelectByPredicateSql(CtxFor(method), predicatePlan.Predicates));
             }
+            else if (method.Operation == StoreOperation.Exists && predicatePlan is not null)
+            {
+                AppendConstSql(source, "_sqlExists_" + method.Name, sqlBuilder.BuildExistsSql(CtxFor(method), predicatePlan.Predicates));
+            }
         }
 
         // Per-method set-based mutation consts. UpdateByPredicate carries its SET columns in the
@@ -1390,7 +1399,7 @@ internal static class StoreProcessor
             return false;
         }
 
-        if (method.Operation == StoreOperation.SelectAllByPredicate)
+        if (method.Operation is StoreOperation.SelectAllByPredicate or StoreOperation.Exists)
         {
             if (!TryResolvePredicates(context, method, entity, sqlBuilder, out predicatePlan))
             {
