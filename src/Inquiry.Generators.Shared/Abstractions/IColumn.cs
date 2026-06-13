@@ -52,6 +52,18 @@ public interface IColumn
     /// <summary>The soft-delete role this column plays; <see cref="SoftDeleteKind.None"/> for most.</summary>
     SoftDeleteKind SoftDelete { get; }
 
+    /// <summary>
+    /// True when this column is an <c>[InquiryGlobalFilter]</c>: every generated SELECT AND-composes
+    /// <c>"col" = </c><see cref="GlobalFilterKeepWhenTrue"/> so non-matching rows are invisible to reads.
+    /// </summary>
+    bool IsGlobalFilter { get; }
+
+    /// <summary>
+    /// The bool value a <see cref="IsGlobalFilter"/> column must equal for a row to stay visible
+    /// (<c>InquiryGlobalFilter.KeepWhen</c>, default true). Ignored when <see cref="IsGlobalFilter"/> is false.
+    /// </summary>
+    bool GlobalFilterKeepWhenTrue { get; }
+
     /// <summary>True when this column is the entity's optimistic-concurrency token.</summary>
     bool IsConcurrencyToken { get; }
 

@@ -244,6 +244,31 @@ internal static class EntityProcessor
             var isDatabaseGeneratedToken = isConcurrencyToken &&
                 GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute!, "DatabaseGenerated");
 
+            // [InquiryGlobalFilter]: a non-nullable bool column whose value every SELECT filters on. It
+            // cannot double as the key, a generated/db-default column, the soft-delete indicator, or a
+            // concurrency token — those own the column's value (INQ059, flag cleared so emission stays valid).
+            var isGlobalFilter = false;
+            var globalFilterKeepWhenTrue = true;
+            var globalFilterAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryGlobalFilterAttribute");
+            if (globalFilterAttribute is not null)
+            {
+                var isBool = !typeData.IsNullable && typeData.SpecialType == SpecialType.System_Boolean;
+                if (!isBool || keyAttribute is not null || isGenerated || useDatabaseDefault ||
+                    isConcurrencyToken || softDelete != SoftDeleteKind.None)
+                {
+                    diagnostics.Add(DiagnosticData.Create(
+                        InquiryDiagnosticDescriptors.GlobalFilterInvalid,
+                        property.Locations.FirstOrDefault(),
+                        entitySymbol.Name,
+                        property.Name));
+                }
+                else
+                {
+                    isGlobalFilter = true;
+                    globalFilterKeepWhenTrue = GeneratorHelpers.GetNamedBool(globalFilterAttribute, "KeepWhen", defaultValue: true);
+                }
+            }
+
             // Auditing timestamps: a writable DateTime/DateTimeOffset column that no other
             // machinery owns (INQ049 otherwise; flags cleared so emission stays valid).
             var isCreatedAt = createdAtAttribute is not null;
@@ -352,6 +377,8 @@ internal static class EntityProcessor
                 IsSequentialGuid = isSequentialGuid,
                 UseDatabaseDefault = useDatabaseDefault,
                 SoftDelete = softDelete,
+                IsGlobalFilter = isGlobalFilter,
+                GlobalFilterKeepWhenTrue = globalFilterKeepWhenTrue,
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 IsCreatedAt = isCreatedAt,

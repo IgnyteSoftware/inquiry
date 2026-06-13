@@ -12,16 +12,16 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         => "[" + identifier.Replace("]", "]]") + "]";
 
     public override string BuildSelectAllSql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.SoftDeleteActivePredicate);
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     public override string BuildSelectByKeySql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.SoftDeleteActivePredicate);
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ActiveRowPredicate);
 
     public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         var where = string.Join(" AND ", filterColumns
             .Select(c => QuoteIdentifier(c.ColumnName) + " = " + ParameterName(c.PropertyName)));
-        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.SoftDeleteActivePredicate);
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
     }
 
     /// <summary>SQL Server uses <c>GETUTCDATE()</c> for the soft-delete (and restore) timestamp clock.</summary>
@@ -37,7 +37,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         // FREETEXT does natural-language matching over the searched columns (requires a full-text index).
         var cols = string.Join(", ", searchColumns.Select(c => QuoteIdentifier(c.ColumnName)));
         var predicate = "FREETEXT((" + cols + "), " + ParameterName("searchTerm") + ")";
-        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(predicate, context.SoftDeleteActivePredicate);
+        return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(predicate, context.ActiveRowPredicate);
     }
 
     public override string BuildInsertSql(SqlBuildContext context)
