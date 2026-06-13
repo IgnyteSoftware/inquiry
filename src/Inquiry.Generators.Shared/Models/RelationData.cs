@@ -8,4 +8,5 @@ internal sealed record RelationData(
     string PropertyName,
     string ForeignKeyProperty,
     string ChildEntityFullyQualifiedName,
-    bool IsCollection);
+    bool IsCollection,
+    LocationData? Location = null);

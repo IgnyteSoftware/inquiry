@@ -38,6 +38,14 @@ SELECT o."OrderID", o."CustomerID", ..., c."CustomerID", c."CompanyName", ...
 
 A composed materializer reads both row halves, hydrating the parent and assigning the child to the navigation property.
 
+## Relation validation
+
+`[InquiryRelation]` shapes are checked at **declaration time**, so a mistyped or reversed relation is caught even when no method eager-loads it:
+
+- **`INQ040`** — the foreign-key property isn't a mapped column on the side that should own it (a typo).
+- **`INQ058`** — the foreign-key property exists, but on the *opposite* side: a collection (to-many) relation's FK belongs to the child, a reference (to-one) relation's FK to the parent. This usually means the relation is declared backwards.
+- **`INQ041`** — the related child entity has a composite primary key (eager loading supports single-key children in v1).
+
 ## Limitations
 
 - **One level of include** in the current implementation — chained includes (`Order.OrderDetails[].Product`) are a future addition.
