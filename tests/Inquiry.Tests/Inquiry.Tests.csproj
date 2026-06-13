@@ -18,10 +18,12 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Interceptors\Inquiry.Interceptors.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Testing\Inquiry.Testing.csproj" />
     <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
   </ItemGroup>

@@ -87,13 +87,13 @@
   (currently a placeholder), SourceLink + symbol packages, package readme/icon, a pack/publish
   workflow, and a published versioning / breaking-change / support-window policy — the remaining
   pre-1.0 go-live bucket.
-- **Default interceptor library** *(gap research 2026-06-12)*. A companion package (e.g.
-  `Inquiry.Interceptors`) of ready-made `IInquiryCommandInterceptor` implementations: audit trail
-  (who/when/what changed — XPO's module as an interceptor), sqlcommenter-style trace-context SQL
-  comments / query tagging for DBA correlation (no .NET ORM ships sqlcommenter today), slow-query
-  warning logging, DataAnnotations entity validation before insert/update, the N+1 detector (see
-  *Dev-time query diagnostics* above), and a command-text assertion interceptor for tests. Keeps the
-  core dependency-free while making the interceptor seam batteries-included.
+- **Default interceptor library — remaining scope** *(gap research 2026-06-12)*. The
+  `Inquiry.Interceptors` package shipped with slow-query warning logging and sqlcommenter
+  trace-context tagging (see [Recently resolved](#recently-resolved)); the command-text assertion
+  interceptor already lives in `Inquiry.Testing`. Remaining: audit trail (who/when/what changed —
+  XPO's module as an interceptor; pairs with `[InquiryModifiedBy]`), DataAnnotations entity
+  validation before insert/update (needs an entity-level seam — the command interceptor sees SQL,
+  not entities), and the N+1 detector (see *Dev-time query diagnostics* above).
 - **Read-replica routing** *(gap research 2026-06-12)*. Route SELECTs to a read-replica pool and pin
   mutations + transactions to the primary (Drizzle `withReplicas` / Sequelize / TypeORM semantics).
   No mainstream .NET ORM ships this; Inquiry already has the connection-factory and failover chassis
@@ -191,6 +191,13 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Inquiry.Interceptors package (2026-06-13):** opt-in companion package with
+  `AddInquirySlowQueryLogging(threshold)` (warns with duration + command text — never parameter
+  values — measuring the provider round trip via a `ConditionalWeakTable`-correlated
+  executing/executed pair) and `AddInquirySqlCommenter(application)` (sqlcommenter-style
+  `application`/W3C `traceparent` SQL comments from `Activity.Current` for DBA-side trace
+  correlation; skips already-commented text, documented prepared-reuse trade-off). Core stays
+  dependency-free. See [Interceptors](../articles/features/interceptors.md).
 - **Data-seeding convention (2026-06-13):** `IInquiryDataSeeder` + `AddInquirySeeder<T>()`
   (scoped, registration-ordered, duplicate-safe via `TryAddEnumerable`) and
   `IServiceProvider.SeedInquiryAsync()` (one scope, sequential, explicit invocation only) —
