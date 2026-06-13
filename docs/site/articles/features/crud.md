@@ -11,6 +11,7 @@ This page shows the **complete, unedited generator output** for a `Shipper` stor
 | `[InquirySelectAll]` | `Task<IReadOnlyList<T>>` or `IAsyncEnumerable<T>` | `SELECT <columns> FROM <table>` |
 | `[InquirySelectOneByKey]` | `Task<T?>` | `SELECT <columns> FROM <table> WHERE <pk> = @key` |
 | `[InquirySelectAllByField("Col1", "Col2")]` | `Task<IReadOnlyList<T>>` | `SELECT … WHERE Col1 = @Col1 AND Col2 = @Col2` |
+| `[InquirySelectAllByField]` (field-less) | `Task<IReadOnlyList<T>>` | Filter columns **derived from the method name** — see below |
 | `[InquiryInsert]` | `Task<int>` (rows affected) | `INSERT INTO <table> (cols) VALUES (params)` |
 | `[InquiryInsert(ReturnEntity = true)]` | `Task<T?>` | `INSERT … RETURNING <columns>` (or per-dialect equivalent) |
 | `[InquiryUpdate]` | `Task<bool>` or `Task<int>` | `UPDATE <table> SET … WHERE <pk> = @key` |
@@ -238,6 +239,24 @@ await store.InsertAsync(doc);
 - **The entity is mutated** so you see the generated key after the call — same ergonomics as a database-generated identity.
 - **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a v7 GUID. On .NET 9+ it delegates to `Guid.CreateVersion7()`; on .NET 8 it's an RFC 9562-conformant polyfill.
 - `SequentialGuid` requires a plain client-supplied `Guid`/`Guid?` key — combining it with `IsGenerated` or `UseDatabaseDefault`, or putting it on a non-Guid key, is a build-time error (`INQ047`).
+
+## Derived query methods
+
+Leave `[InquirySelectAllByField]` **field-less** and the filter columns are inferred from the method name — the Spring Data convention, resolved at compile time:
+
+```csharp
+// No field argument — "CompanyName" comes from the method name.
+[InquirySelectAllByField]
+public partial Task<IReadOnlyList<Shipper>> SelectByCompanyNameAsync(string companyName, CancellationToken ct = default);
+
+// Multiple fields: the name splits on "And".
+[InquirySelectAllByField]
+public partial Task<IReadOnlyList<Customer>> SelectByCountryAndCityAsync(string country, string city, CancellationToken ct = default);
+```
+
+- The segment after the first PascalCase **`By`** names the fields; **`And`** word boundaries separate multiple (`SelectByCountryAndCityAsync` → `Country`, `City`). A trailing `Async` is ignored, and the leading verb (`Select`, `Find`, `Get`, …) is cosmetic.
+- Each derived field resolves against the entity's mapped properties/columns exactly like an explicit one — an unknown field is the same compile error (`INQ007`). Parameters bind in field order.
+- An explicit field list always wins; a field-less name with no `By<Field>` segment is a compile error (`INQ054`).
 
 ## Cross-dialect SQL differences
 
