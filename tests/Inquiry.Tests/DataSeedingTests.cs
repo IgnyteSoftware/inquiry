@@ -100,12 +100,12 @@ public sealed class DataSeedingTests
 
     private sealed class ScopedSeeder : IInquiryDataSeeder
     {
-        private readonly ScopeProbe _probe;
         private readonly Journal _journal;
 
         public ScopedSeeder(ScopeProbe probe, Journal journal)
         {
-            _probe = probe ?? throw new ArgumentNullException(nameof(probe));
+            // The probe parameter exists purely to prove scoped resolution succeeds.
+            _ = probe ?? throw new ArgumentNullException(nameof(probe));
             _journal = journal;
         }
 
