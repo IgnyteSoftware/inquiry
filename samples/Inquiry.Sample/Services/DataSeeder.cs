@@ -1,11 +1,13 @@
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
+using Inquiry.Seeding;
 
 namespace Inquiry.Sample.Services;
 
 /// <summary>
 /// Populates every Northwind table with a small fixture so each Blazor page has something to
-/// show. Invoked once from <c>Program.cs</c> during startup; no-ops if customers already exist.
+/// show. Registered via <c>AddInquirySeeder&lt;DataSeeder&gt;()</c> and run once from
+/// <c>Program.cs</c> through <c>SeedInquiryAsync()</c>; no-ops if customers already exist.
 /// </summary>
 /// <remarks>
 /// Seeds all 13 classic Northwind tables: Categories, Region, Territories, Suppliers,
@@ -14,7 +16,7 @@ namespace Inquiry.Sample.Services;
 /// to exercise every generated store method (CRUD, eager-load, by-field, transactional
 /// insert) without standing up the full historical fixture.
 /// </remarks>
-public sealed class DataSeeder
+public sealed class DataSeeder : IInquiryDataSeeder
 {
     private readonly CustomerStore _customers;
     private readonly EmployeeStore _employees;
