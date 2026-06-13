@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ051.
+    //                  INQ045–INQ053.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -32,6 +32,8 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ048         Raw-SQL injection lint        (non-constant command text passed to InquiryCommand) [IN USE]
     //   INQ049–INQ050  Auditing timestamps           (INQ049 invalid type/placement, INQ050 duplicate) [IN USE]
     //   INQ051         Stored-procedure scalar output (OutputParameter/ReturnsValue misconfiguration) [IN USE]
+    //   INQ052         View read-only violation       (mutation op on an [InquiryView] entity) [IN USE]
+    //   INQ053         Key-requiring op, keyless entity (key-based select/eager on a keyless view) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -401,6 +403,28 @@ internal static class InquiryDiagnosticDescriptors
         "INQ050",
         "Entity declares more than one auditing timestamp of the same kind",
         "Entity '{0}' marks more than one property with the same auditing-timestamp attribute (e.g. '{1}'). At most one [InquiryCreatedAt] and one [InquiryModifiedAt] are allowed.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ052: a store over an [InquiryView] entity is read-only — it may only declare SELECT /
+    // aggregate / count operations. Mutations (insert/update/upsert/delete/bulk/set-based) have no
+    // meaning against a view, so they are rejected at the method.
+    public static readonly DiagnosticDescriptor ViewIsReadOnly = new(
+        "INQ052",
+        "View-mapped entity is read-only",
+        "Store method '{0}' performs a mutation against view-mapped entity '{1}'. An [InquiryView] entity is read-only — only SELECT, aggregate, and count operations are allowed.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ053: a key-based select or eager-load needs a primary key the entity doesn't declare. Only
+    // a keyless [InquiryView] can reach this (tables always have a key) — give such a view a key
+    // column for point lookups, or filter with [InquirySelectAllByField] / a predicate instead.
+    public static readonly DiagnosticDescriptor OperationRequiresKey = new(
+        "INQ053",
+        "Operation requires a key the entity does not declare",
+        "Store method '{0}' uses a key-based select or eager load against keyless entity '{1}', which has no [InquiryKey]. Add a key column, or filter with [InquirySelectAllByField] / [InquirySelectAllByPredicate].",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
