@@ -65,6 +65,11 @@ runs on pushes to `main` and also on the `pull_request` event if a PR is opened:
 CI uploads TRX result artifacts (`if: always()`) so failures and skips can be inspected. There is no
 separate nightly workflow — Oracle runs in the same integration matrix as the other engines.
 
+**Warnings are errors everywhere.** Production projects set `TreatWarningsAsErrors`, and
+`tests/Directory.Build.props` extends the same gate to every test project, so a new compiler/analyzer
+warning in test code fails the build instead of slipping through. The only intentionally-warning
+projects are the DLG comparison benchmarks under `benchmarks/`, which are out of the gate.
+
 ## Adding a database
 
 See [Adding a provider](adding-a-provider.md) for the append-point checklist.
