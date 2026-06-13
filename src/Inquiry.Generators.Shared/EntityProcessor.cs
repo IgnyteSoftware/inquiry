@@ -91,6 +91,19 @@ internal static class EntityProcessor
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.DuplicateAuditTimestamp, location, entitySymbol.Name, modifiedAtColumns[1].PropertyName));
         }
 
+        // at most one [InquiryCreatedBy] and one [InquiryModifiedBy] (INQ056).
+        var createdByColumns = columns.Where(static c => c.IsCreatedBy).ToImmutableArray();
+        if (createdByColumns.Length > 1)
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.DuplicateAuditUser, location, entitySymbol.Name, createdByColumns[1].PropertyName));
+        }
+
+        var modifiedByColumns = columns.Where(static c => c.IsModifiedBy).ToImmutableArray();
+        if (modifiedByColumns.Length > 1)
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.DuplicateAuditUser, location, entitySymbol.Name, modifiedByColumns[1].PropertyName));
+        }
+
         // at most one [InquiryConcurrencyToken] (INQ028), and it must not be the key (INQ029).
         var concurrencyTokens = columns.Where(static c => c.IsConcurrencyToken).ToImmutableArray();
         if (concurrencyTokens.Length > 1)
@@ -177,11 +190,14 @@ internal static class EntityProcessor
             // [InquiryConcurrencyToken] derives InquiryColumnAttribute, so it is discovered as a
             // column (like [InquiryKey]). Probed after the key but before the plain column probe.
             var concurrencyTokenAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryConcurrencyTokenAttribute");
-            // [InquiryCreatedAt]/[InquiryModifiedAt] derive InquiryColumnAttribute, so they are
-            // discovered as columns (like [InquiryKey]/[InquiryConcurrencyToken]).
+            // [InquiryCreatedAt]/[InquiryModifiedAt]/[InquiryCreatedBy]/[InquiryModifiedBy] derive
+            // InquiryColumnAttribute, so they are discovered as columns (like [InquiryKey]).
             var createdAtAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryCreatedAtAttribute");
             var modifiedAtAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryModifiedAtAttribute");
+            var createdByAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryCreatedByAttribute");
+            var modifiedByAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryModifiedByAttribute");
             var columnAttribute = keyAttribute ?? concurrencyTokenAttribute ?? createdAtAttribute ?? modifiedAtAttribute
+                ?? createdByAttribute ?? modifiedByAttribute
                 ?? GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
             var foreignKeyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryForeignKeyAttribute");
             if (columnAttribute is null && foreignKeyAttribute is null)
@@ -250,6 +266,26 @@ internal static class EntityProcessor
                 }
             }
 
+            // Auditing user columns: a writable string column no other machinery owns (INQ055
+            // otherwise; flags cleared so emission stays valid).
+            var isCreatedBy = createdByAttribute is not null;
+            var isModifiedBy = modifiedByAttribute is not null;
+            if (isCreatedBy || isModifiedBy)
+            {
+                if (typeData.SpecialType != SpecialType.System_String || (isCreatedBy && isModifiedBy) ||
+                    keyAttribute is not null || isGenerated || useDatabaseDefault || isConcurrencyToken ||
+                    GeneratorHelpers.GetEntityAttribute(property, "InquirySoftDeleteAttribute") is not null)
+                {
+                    diagnostics.Add(DiagnosticData.Create(
+                        InquiryDiagnosticDescriptors.AuditUserInvalid,
+                        property.Locations.FirstOrDefault(),
+                        entitySymbol.Name,
+                        property.Name));
+                    isCreatedBy = false;
+                    isModifiedBy = false;
+                }
+            }
+
             // [InquiryEnumAsString] stores an enum column as its member name. Only valid on an
             // enum (or nullable enum) property; otherwise report INQ036 and leave the flag clear.
             var enumAsString = false;
@@ -302,6 +338,8 @@ internal static class EntityProcessor
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 IsCreatedAt = isCreatedAt,
                 IsModifiedAt = isModifiedAt,
+                IsCreatedBy = isCreatedBy,
+                IsModifiedBy = isModifiedBy,
                 EnumAsString = enumAsString,
                 // a converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
                 TypeClass = converter is not null ? MapSpecialType(converter.ProviderSpecialType) : MapTypeClass(typeData),
