@@ -57,6 +57,18 @@ public class InquiryColumnAttribute : Attribute
     public string? DefaultExpression { get; set; }
 
     /// <summary>
+    /// DDL generation: a raw SQL expression making this a <b>server-computed column</b> (EF
+    /// <c>HasComputedColumnSql</c> / XPO persistent-alias analog), e.g.
+    /// <c>"FirstName || ' ' || LastName"</c>. The database calculates the value, so the column is
+    /// excluded from generated INSERT/UPDATE but read normally in SELECTs and materialized into the
+    /// property. The generated <c>CREATE TABLE</c> emits the dialect's computed-column form (stored
+    /// on PostgreSQL/MySQL; the standard expression form elsewhere). A computed column cannot be a
+    /// key, database-generated, database-defaulted, an auditing column, the soft-delete indicator,
+    /// or a concurrency token. The expression is raw SQL — keep it free of untrusted input.
+    /// </summary>
+    public string? Computed { get; set; }
+
+    /// <summary>
     /// DDL generation: emit a single-column index on this column. Each flagged column produces its
     /// own index (there is no composite/multi-column index in v1). Redundant on a primary-key column
     /// (the PK already indexes it). Index DDL is idempotent (<c>IF NOT EXISTS</c>) only on SQLite and

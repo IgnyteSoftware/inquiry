@@ -318,6 +318,24 @@ internal static class EntityProcessor
             var precision = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Precision") : null) ?? 0;
             var scale = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Scale") : null) ?? 0;
             var defaultExpression = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "DefaultExpression") : null;
+
+            // A server-computed column is calculated by the database; it cannot also be a key,
+            // database-generated/defaulted, an auditing column, soft-delete, or a concurrency token
+            // (INQ057, expression cleared so emission stays valid).
+            var computedExpression = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "Computed") : null;
+            if (!string.IsNullOrEmpty(computedExpression) &&
+                (keyAttribute is not null || isGenerated || useDatabaseDefault || isConcurrencyToken ||
+                 isCreatedAt || isModifiedAt || isCreatedBy || isModifiedBy || softDelete != SoftDeleteKind.None ||
+                 !string.IsNullOrEmpty(defaultExpression)))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ComputedColumnInvalid,
+                    property.Locations.FirstOrDefault(),
+                    entitySymbol.Name,
+                    columnName));
+                computedExpression = null;
+            }
+
             var (foreignKeySchema, foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
 
             // a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
@@ -349,6 +367,7 @@ internal static class EntityProcessor
                 Precision = precision,
                 Scale = scale,
                 DefaultExpression = defaultExpression,
+                ComputedExpression = computedExpression,
                 ForeignKeyTable = foreignKeyTable,
                 ForeignKeySchema = foreignKeySchema,
                 ForeignKeyColumn = foreignKeyColumn,
