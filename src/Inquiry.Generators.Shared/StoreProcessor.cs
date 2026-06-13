@@ -853,6 +853,46 @@ internal static class StoreProcessor
             }
         }
 
+        // INQ064 (DDL lint, off by default): a non-key column the store filters on (a SelectAllByField
+        // field or an [InquiryWhere] criterion) with no index makes those queries scan. Collect every
+        // filtered column once and lint the un-indexed ones.
+        var filteredColumns = new Dictionary<string, ColumnData>(StringComparer.Ordinal);
+        foreach (var (filterMethod, fieldCols, predPlan, _) in valid)
+        {
+            // FieldColumns are equality-filter columns only for SelectAllByField. Other operations reuse
+            // the slot for non-filter semantics — UpdateByPredicate puts its SET (written) columns there,
+            // and FullTextSearch its full-text-indexed search columns — so neither is an "unindexed filter".
+            if (filterMethod.Operation == StoreOperation.SelectAllByField)
+            {
+                foreach (var fieldColumn in fieldCols)
+                {
+                    filteredColumns[fieldColumn.ColumnName] = fieldColumn;
+                }
+            }
+
+            // Predicate columns are always WHERE criteria (predicate selects, existence tests, and the
+            // set-based mutations' filter), so they are genuine filters.
+            if (predPlan is not null)
+            {
+                foreach (var predicate in predPlan.Predicates)
+                {
+                    if (predicate.Column is ColumnData predicateColumn)
+                    {
+                        filteredColumns[predicateColumn.ColumnName] = predicateColumn;
+                    }
+                }
+            }
+        }
+
+        foreach (var filtered in filteredColumns.Values)
+        {
+            if (!filtered.IsKey && !filtered.IsIndexed && !filtered.IsUnique)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.UnindexedFilterColumn, location: null, entity.TableName, filtered.PropertyName));
+            }
+        }
+
         // resolve projection-returning SelectAll methods. A select whose element type is not the
         // store's entity must be a known [InquiryProjection] of it. Soft-delete / global-filter entities
         // are supported: the projection SELECT AND-composes the entity's active-row filter (the projection
