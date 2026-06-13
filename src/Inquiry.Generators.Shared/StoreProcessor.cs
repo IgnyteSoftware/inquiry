@@ -1436,49 +1436,26 @@ internal static class StoreProcessor
             return false;
         }
 
-        // For each relation the eager-loading method will traverse, validate the relation's shape
-        // matches what the emitter can handle. The two unsupported shapes — a typo'd ForeignKey
-        // (no matching mapped column on the child) and a child with a composite primary key —
-        // previously surfaced as a null-forgive NRE at generator time or as invalid generated C#.
-        // Diagnosing them here gives the user a clean INQ error with a source location.
+        // For each relation the eager-loading method will traverse, an invalid shape (typo'd
+        // ForeignKey or composite-key child) would null-forgive into an NRE / invalid C# at emit.
+        // Those are reported once at declaration time (ValidateRelations); here we only DROP the
+        // eager method so the emitter never processes the bad relation.
         if (method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager)
         {
             foreach (var relation in entity.Relations)
             {
                 if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity))
                 {
-                    // The relation points at a type that's not [InquiryTable]-mapped; the emitter
-                    // already handles this gracefully (existing test
-                    // EagerRelationToUnmappedChildDoesNotCrashGenerator). Nothing to validate here.
+                    // Relation to a non-[InquiryTable] type; the emitter handles this gracefully.
                     continue;
                 }
 
-                if (relation.IsCollection && FindColumn(childEntity, relation.ForeignKeyProperty) is null)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InquiryDiagnosticDescriptors.UnknownRelationForeignKey,
-                        method.Location?.ToLocation(),
-                        method.Name, entity.Name, relation.PropertyName, relation.ForeignKeyProperty, childEntity.Name));
-                    return false;
-                }
+                var ownerHasFk = relation.IsCollection
+                    ? FindColumn(childEntity, relation.ForeignKeyProperty) is not null
+                    : FindColumn(entity, relation.ForeignKeyProperty) is not null;
 
-                if (!relation.IsCollection && FindColumn(entity, relation.ForeignKeyProperty) is null)
+                if (!ownerHasFk || childEntity.Keys.Count > 1)
                 {
-                    // The to-one case: the FK lives on the PARENT entity (the parent's FK column
-                    // points at the child's key). A typo here means the parent has no such column.
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InquiryDiagnosticDescriptors.UnknownRelationForeignKey,
-                        method.Location?.ToLocation(),
-                        method.Name, entity.Name, relation.PropertyName, relation.ForeignKeyProperty, entity.Name));
-                    return false;
-                }
-
-                if (childEntity.Keys.Count > 1)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InquiryDiagnosticDescriptors.RelationCompositeChildKey,
-                        method.Location?.ToLocation(),
-                        method.Name, entity.Name, relation.PropertyName, childEntity.Name, childEntity.Keys.Count));
                     return false;
                 }
             }
