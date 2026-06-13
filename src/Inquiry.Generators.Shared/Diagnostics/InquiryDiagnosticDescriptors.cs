@@ -39,7 +39,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ057         Server-computed column          (Computed combined with key/default/audit/etc.) [IN USE]
     //   INQ059         Global query filter             ([InquiryGlobalFilter] on non-bool / key / generated / token / soft-delete) [IN USE]
     //   INQ060         JSON-path predicate             ([InquiryWhere(JsonPath=…)] on non-string / converter column, or malformed path) [IN USE]
-    //   INQ061         DDL safety lint (off by default) (unindexed foreign-key column; opt in via .editorconfig) [IN USE]
+    //   INQ061–INQ062  DDL safety lints (off by default) (INQ061 unindexed FK, INQ062 decimal w/o precision; opt in via .editorconfig) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -315,6 +315,17 @@ internal static class InquiryDiagnosticDescriptors
         "INQ061",
         "Foreign-key column has no index",
         "Entity '{0}' foreign-key column '{1}' has no index. {2} does not auto-index foreign keys, so joins and cascades over it scan the table. Add IsIndexed = true to the column's [InquiryColumn]/[InquiryForeignKey] to index it.",
+        "Inquiry",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: false);
+
+    // INQ062 (Info — a DDL "lint", off by default): a decimal column with no explicit Precision/Scale and
+    // no SqlType override takes the dialect's default (e.g. DECIMAL(18,2)), which can silently round —
+    // a real hazard for money. EF Core's DecimalTypeDefaultWarning is the same advisory.
+    public static readonly DiagnosticDescriptor DecimalWithoutPrecision = new(
+        "INQ062",
+        "Decimal column relies on the default precision/scale",
+        "Entity '{0}' decimal column '{1}' has no explicit Precision/Scale, so it takes {2}'s default (e.g. DECIMAL(18,2)), which can silently round. Set [InquiryColumn(Precision = …, Scale = …)] (or SqlType) to make the storage type explicit.",
         "Inquiry",
         DiagnosticSeverity.Info,
         isEnabledByDefault: false);
