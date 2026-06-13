@@ -1,3 +1,4 @@
+using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +23,7 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(connectionString));
+        services.AddSingleton<IInquiryBulkCopier, PostgreSqlBulkCopier>();
         return services;
     }
 
@@ -49,6 +51,7 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
         configure(options);
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(connectionString, options));
+        services.AddSingleton<IInquiryBulkCopier, PostgreSqlBulkCopier>();
         return services;
     }
 
