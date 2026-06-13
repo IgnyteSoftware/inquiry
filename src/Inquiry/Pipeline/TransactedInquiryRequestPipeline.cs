@@ -912,7 +912,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     public async Task<T> ExecuteProcedureScalarAsync<T>(InquiryCommand command, string readBackParameterName, CancellationToken cancellationToken = default)
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
-        if (readBackParameterName is null) throw new ArgumentNullException(nameof(readBackParameterName));
+        if (string.IsNullOrWhiteSpace(readBackParameterName)) throw new ArgumentException("Read-back parameter name cannot be empty.", nameof(readBackParameterName));
+
+        // Match the binder's normalization so a caller-supplied "Total" finds the bound "@Total".
+        readBackParameterName = InquiryParameterBinder.NormalizeName(readBackParameterName);
 
         EnterInFlight();
         try
