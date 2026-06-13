@@ -100,7 +100,7 @@ internal static class StoreOperationEmitter
             case StoreOperation.Insert:
                 AppendHeader(source, method, parameters, isAsync: false);
                 EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ");
-                EmitAuditTimestampAssignments(source, entity, firstParameter, isInsert: true, indent: "        ");
+                EmitAuditAssignments(source, entity, firstParameter, isInsert: true, indent: "        ");
                 if (method.ReturnsEntity)
                 {
                     EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlInsertReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: false, isAwait: false);
@@ -114,7 +114,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.Update:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitModifiedAtAssignment(source, entity, firstParameter, indent: "        ");
+                EmitModifiedAuditAssignment(source, entity, firstParameter, indent: "        ");
                 if (method.ReturnsEntity)
                 {
                     EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlUpdateReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: true, emitConcurrencyGuard: true, forUpdate: true);
@@ -133,7 +133,7 @@ internal static class StoreOperationEmitter
                 EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ");
                 // CreatedAt only lands via the insert branch (the conflict-branch SET excludes it),
                 // so the unset-stamp is correct for both outcomes; ModifiedAt is set on both.
-                EmitAuditTimestampAssignments(source, entity, firstParameter, isInsert: true, indent: "        ");
+                EmitAuditAssignments(source, entity, firstParameter, isInsert: true, indent: "        ");
                 if (method.ReturnsEntity)
                 {
                     if (ShouldUseInsertWhenKeyIsNull(entity))
@@ -286,7 +286,7 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: true);
                 AppendBatchListMaterialization(source, itemsParam, entityType, insertable.Length, "insert");
                 EmitSequentialGuidBatchAssignment(source, entity, indent: "        ");
-                EmitAuditTimestampBatchAssignments(source, entity, isInsert: true, indent: "        ");
+                EmitAuditBatchAssignments(source, entity, isInsert: true, indent: "        ");
                 // Dialect-aware multi-row INSERT shape: header + per-row (rowOpen + bound params) joined by a
                 // separator + footer. Base => `INSERT INTO t (cols) VALUES (…),(…)`; Oracle => `INSERT ALL
                 // INTO t (cols) VALUES (…) INTO … SELECT 1 FROM dual`. The row-param sigil follows the dialect
@@ -351,7 +351,7 @@ internal static class StoreOperationEmitter
                 var updateColumns = SelectMutationColumns(entity, includeKey: true, forUpdate: true);
                 AppendHeader(source, method, parameters, isAsync: true);
                 AppendBatchListMaterialization(source, itemsParam, entityType, updateColumns.Length, "update", enforceParameterCap: false);
-                EmitAuditTimestampBatchAssignments(source, entity, isInsert: false, indent: "        ");
+                EmitAuditBatchAssignments(source, entity, isInsert: false, indent: "        ");
                 source.AppendLine("        return await Inquiry.ExecuteBatchAsync(");
                 source.AppendLine("            _sqlUpdate,");
                 source.AppendLine("            _list,");
@@ -1400,7 +1400,7 @@ internal static class StoreOperationEmitter
         {
             foreach (var column in entity.Columns.AsImmutableArray())
             {
-                if (column.IsCreatedAt || column.IsModifiedAt)
+                if (IsCreatedAudit(column) || IsModifiedAudit(column))
                 {
                     hasStamps = true;
                     break;
@@ -1418,7 +1418,7 @@ internal static class StoreOperationEmitter
             source.AppendLine("            foreach (var _e in _source)");
             source.AppendLine("            {");
             EmitSequentialGuidAssignment(source, entity, "_e", indent: "                ");
-            EmitAuditTimestampAssignments(source, entity, "_e", isInsert: true, indent: "                ");
+            EmitAuditAssignments(source, entity, "_e", isInsert: true, indent: "                ");
             source.AppendLine("                yield return _e;");
             source.AppendLine("            }");
             source.AppendLine("        }");
@@ -1431,52 +1431,77 @@ internal static class StoreOperationEmitter
         source.AppendLine("    }");
     }
 
-    private static string UtcNowExpression(ColumnData column)
-        => column.Type.NonNullableDisplayName == "global::System.DateTimeOffset"
+    /// <summary>The stamp value for an auditing column: <c>UtcNow</c> for a timestamp, the ambient user otherwise.</summary>
+    private static string AuditStampValue(ColumnData column)
+    {
+        if (column.IsCreatedBy || column.IsModifiedBy)
+        {
+            // CurrentUser is string?; null-forgive when assigning into a non-nullable string column
+            // so generated code stays warning-clean for warnings-as-errors consumers.
+            return column.Type.IsNullable
+                ? "global::Inquiry.InquiryAuditContext.CurrentUser"
+                : "global::Inquiry.InquiryAuditContext.CurrentUser!";
+        }
+
+        return column.Type.NonNullableDisplayName == "global::System.DateTimeOffset"
             ? "global::System.DateTimeOffset.UtcNow"
             : "global::System.DateTime.UtcNow";
+    }
+
+    /// <summary>The "unset" check for a created-* auditing column: null/empty for a string, default/null for a timestamp.</summary>
+    private static string AuditUnsetCheck(ColumnData column, string access)
+    {
+        if (column.IsCreatedBy)
+        {
+            return $"global::System.String.IsNullOrEmpty({access})";
+        }
+
+        return column.Type.IsNullable ? $"{access} is null" : $"{access} == default";
+    }
+
+    private static bool IsCreatedAudit(ColumnData column) => column.IsCreatedAt || column.IsCreatedBy;
+    private static bool IsModifiedAudit(ColumnData column) => column.IsModifiedAt || column.IsModifiedBy;
 
     /// <summary>
-    /// Emits the auditing-timestamp stamps for a single entity parameter, before binding.
-    /// Insert/upsert: <c>[InquiryCreatedAt]</c> is stamped only when unset (default/null — an
-    /// existing row keeps its stored value because the update SET excludes the column), and
-    /// <c>[InquiryModifiedAt]</c> is stamped unconditionally. Update: ModifiedAt only (see
-    /// <see cref="EmitModifiedAtAssignment"/>). The stamps mutate the caller's entity, so the
+    /// Emits the auditing stamps for a single entity parameter, before binding. Insert/upsert: a
+    /// created-* column (<c>[InquiryCreatedAt]</c>/<c>[InquiryCreatedBy]</c>) is stamped only when
+    /// unset (an existing row keeps its stored value because the update SET excludes it), and a
+    /// modified-* column is stamped unconditionally. Update: modified-* only (see
+    /// <see cref="EmitModifiedAuditAssignment"/>). The stamps mutate the caller's entity, so the
     /// written values are observable after the call.
     /// </summary>
-    private static void EmitAuditTimestampAssignments(StringBuilder source, EntityData entity, string parameter, bool isInsert, string indent)
+    private static void EmitAuditAssignments(StringBuilder source, EntityData entity, string parameter, bool isInsert, string indent)
     {
         foreach (var column in entity.Columns.AsImmutableArray())
         {
-            if (column.IsCreatedAt && isInsert)
+            var access = $"{parameter}.{column.PropertyName}";
+            if (IsCreatedAudit(column) && isInsert)
             {
-                var access = $"{parameter}.{column.PropertyName}";
-                var unset = column.Type.IsNullable ? $"{access} is null" : $"{access} == default";
-                source.AppendLine($"{indent}if ({unset})");
+                source.AppendLine($"{indent}if ({AuditUnsetCheck(column, access)})");
                 source.AppendLine($"{indent}{{");
-                source.AppendLine($"{indent}    {access} = {UtcNowExpression(column)};");
+                source.AppendLine($"{indent}    {access} = {AuditStampValue(column)};");
                 source.AppendLine($"{indent}}}");
                 source.AppendLine();
             }
-            else if (column.IsModifiedAt)
+            else if (IsModifiedAudit(column))
             {
-                source.AppendLine($"{indent}{parameter}.{column.PropertyName} = {UtcNowExpression(column)};");
+                source.AppendLine($"{indent}{access} = {AuditStampValue(column)};");
                 source.AppendLine();
             }
         }
     }
 
-    /// <summary>Update-path stamp: <c>[InquiryModifiedAt]</c> only (CreatedAt is immutable).</summary>
-    private static void EmitModifiedAtAssignment(StringBuilder source, EntityData entity, string parameter, string indent)
-        => EmitAuditTimestampAssignments(source, entity, parameter, isInsert: false, indent);
+    /// <summary>Update-path stamp: modified-* auditing columns only (created-* are immutable).</summary>
+    private static void EmitModifiedAuditAssignment(StringBuilder source, EntityData entity, string parameter, string indent)
+        => EmitAuditAssignments(source, entity, parameter, isInsert: false, indent);
 
-    /// <summary>Per-item auditing-timestamp pre-pass over the materialized batch list (<c>_list</c>).</summary>
-    private static void EmitAuditTimestampBatchAssignments(StringBuilder source, EntityData entity, bool isInsert, string indent)
+    /// <summary>Per-item auditing pre-pass over the materialized batch list (<c>_list</c>).</summary>
+    private static void EmitAuditBatchAssignments(StringBuilder source, EntityData entity, bool isInsert, string indent)
     {
         var hasStamps = false;
         foreach (var column in entity.Columns.AsImmutableArray())
         {
-            if ((column.IsCreatedAt && isInsert) || column.IsModifiedAt)
+            if ((IsCreatedAudit(column) && isInsert) || IsModifiedAudit(column))
             {
                 hasStamps = true;
                 break;
@@ -1493,17 +1518,16 @@ internal static class StoreOperationEmitter
         foreach (var column in entity.Columns.AsImmutableArray())
         {
             var access = $"_list[_a].{column.PropertyName}";
-            if (column.IsCreatedAt && isInsert)
+            if (IsCreatedAudit(column) && isInsert)
             {
-                var unset = column.Type.IsNullable ? $"{access} is null" : $"{access} == default";
-                source.AppendLine($"{indent}    if ({unset})");
+                source.AppendLine($"{indent}    if ({AuditUnsetCheck(column, access)})");
                 source.AppendLine($"{indent}    {{");
-                source.AppendLine($"{indent}        {access} = {UtcNowExpression(column)};");
+                source.AppendLine($"{indent}        {access} = {AuditStampValue(column)};");
                 source.AppendLine($"{indent}    }}");
             }
-            else if (column.IsModifiedAt)
+            else if (IsModifiedAudit(column))
             {
-                source.AppendLine($"{indent}    {access} = {UtcNowExpression(column)};");
+                source.AppendLine($"{indent}    {access} = {AuditStampValue(column)};");
             }
         }
         source.AppendLine($"{indent}}}");
@@ -1579,11 +1603,12 @@ internal static class StoreOperationEmitter
             // a database-managed token (rowversion) is supplied by the database, so it is never bound
             // for INSERT (includeKey == false). For UPDATE (includeKey == true) it stays bound — the
             // WHERE composes @token from its original value, the SET never touches it.
-            // forUpdate additionally drops [InquiryCreatedAt]: the UPDATE SET excludes it (the creation
-            // timestamp is immutable), so binding @CreatedAt would leave an unreferenced parameter.
-            // Upserts pass forUpdate: false — their insert branch references the parameter.
+            // forUpdate additionally drops created-* auditing columns ([InquiryCreatedAt]/
+            // [InquiryCreatedBy]): the UPDATE SET excludes them (creation metadata is immutable), so
+            // binding them would leave unreferenced parameters. Upserts pass forUpdate: false — their
+            // insert branch references the parameter.
             .Where(c => (includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken)
-                && !(forUpdate && c.IsCreatedAt))
+                && !(forUpdate && c.IsCreatedAudit))
             .ToArray();
 
     private static ColumnData? FindColumn(EntityData entity, string propertyName)

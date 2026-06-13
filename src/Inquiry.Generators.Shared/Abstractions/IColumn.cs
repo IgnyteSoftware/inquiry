@@ -67,6 +67,12 @@ public interface IColumn
     /// </summary>
     bool IsCreatedAt { get; }
 
+    /// <summary>
+    /// True when this column is the entity's <c>[InquiryCreatedBy]</c> auditing user column — like
+    /// <see cref="IsCreatedAt"/>, written once by INSERT and excluded from every UPDATE SET.
+    /// </summary>
+    bool IsCreatedBy { get; }
+
     // ---- DDL generation metadata ---------------------------------------------------------
 
     /// <summary>Dialect-neutral type class driving <c>SqlBuilder.MapColumnType</c>.</summary>

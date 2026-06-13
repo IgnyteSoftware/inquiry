@@ -29,6 +29,15 @@ internal sealed record ColumnData : IColumn
 
     /// <summary>[InquiryModifiedAt]: stamped on every generated insert/update/upsert before binding.</summary>
     public bool IsModifiedAt { get; init; }
+
+    /// <summary>[InquiryCreatedBy]: stamped from the ambient user on insert when unset; excluded from UPDATE.</summary>
+    public bool IsCreatedBy { get; init; }
+
+    /// <summary>[InquiryModifiedBy]: stamped from the ambient user on every generated insert/update/upsert.</summary>
+    public bool IsModifiedBy { get; init; }
+
+    /// <summary>True for any write-once-on-insert auditing column (created-at / created-by).</summary>
+    public bool IsCreatedAudit => IsCreatedAt || IsCreatedBy;
     public bool UseDatabaseDefault { get; init; }
     public SoftDeleteKind SoftDelete { get; init; } = SoftDeleteKind.None;
     public bool IsConcurrencyToken { get; init; }
