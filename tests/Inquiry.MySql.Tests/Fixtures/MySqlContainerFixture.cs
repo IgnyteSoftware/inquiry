@@ -21,7 +21,11 @@ public sealed class MySqlContainerFixture : IAsyncLifetime
     {
         try
         {
-            _container = new MySqlBuilder("mysql:8.4").Build();
+            // MySqlBulkCopy ([InquiryBulkInsert]) streams rows via LOAD DATA LOCAL INFILE, which the
+            // server rejects unless local_infile is enabled (off by default in MySQL 8.x).
+            _container = new MySqlBuilder("mysql:8.4")
+                .WithCommand("--local-infile=1")
+                .Build();
             await _container.StartAsync();
             // The container's default user is a limited app account that cannot CREATE/USE the
             // throwaway databases each harness provisions. Connect as root (Testcontainers sets the
