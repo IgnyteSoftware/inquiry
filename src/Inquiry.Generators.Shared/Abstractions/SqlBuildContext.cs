@@ -51,8 +51,10 @@ public sealed class SqlBuildContext
         InsertParameters = string.Join(", ", InsertableColumns.Select(c => builder.ParameterName(c.PropertyName)));
         // The concurrency token is never SET to a parameter — a DB-managed token is advanced by the
         // database, and an ORM-managed numeric token is advanced via ConcurrencyVersionSet (+1), not @token.
+        // A [InquiryCreatedAt] column is never SET either: the creation timestamp is written once by
+        // INSERT and must survive every subsequent UPDATE / upsert conflict branch unchanged.
         SetClauses = string.Join(", ", columns
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken)
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.IsCreatedAt)
             .Select(c => builder.QuoteIdentifier(c.ColumnName) + " = " + builder.ParameterName(c.PropertyName)));
         QuotedKeyColumns = KeyColumns.Select(k => builder.QuoteIdentifier(k.ColumnName)).ToArray();
         KeyParameters = KeyColumns.Select(k => builder.ParameterName(k.PropertyName)).ToArray();

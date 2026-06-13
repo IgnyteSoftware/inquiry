@@ -65,10 +65,10 @@
 - **Derived query methods** *(integration research 2026-06-12)*. Infer filter columns from the
   method name (`SelectByCompanyNameAsync`) so store attributes need no arguments in the common case
   — the Spring Data convention, done at compile time like Micronaut Data.
-- **Auditing timestamp columns** *(integration research 2026-06-12)*. Auto-populated
-  created/modified metadata (`[InquiryCreatedAt]`/`[InquiryModifiedBy]`-style — Spring Data's
-  `@CreatedDate`/`@LastModifiedBy`); table-stakes in the Java ecosystem and complementary to the
-  audit-trail interceptor.
+- **`[InquiryModifiedBy]` (who-changed-it auditing)** *(integration research 2026-06-12)*.
+  Timestamp auditing shipped (see [Recently resolved](#recently-resolved)); the user/principal
+  counterpart needs an ambient current-user accessor seam and pairs naturally with the audit-trail
+  interceptor below.
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
 - **DDL safety lint** *(integration research 2026-06-12)*. squawk-inspired analyzer warnings for
@@ -193,6 +193,14 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Auditing timestamp columns (2026-06-12):** `[InquiryCreatedAt]`/`[InquiryModifiedAt]` on a
+  `DateTime`/`DateTimeOffset` property — insert/upsert stamp `CreatedAt` when unset (supplied
+  values kept) and every generated insert/update/upsert (incl. batch forms) stamps `ModifiedAt`;
+  `CreatedAt` is excluded from every UPDATE SET and bind across all five dialects (incl. upsert
+  conflict branches and MySQL's `VALUES()` form), so a constructed entity can't clobber the stored
+  creation time. Invalid placement/type is INQ049, duplicates INQ050. Set-based mutations and
+  soft-delete/restore intentionally don't stamp. See
+  [Auditing timestamps](../articles/features/auditing.md).
 - **Docs round (2026-06-12):** a documented **`TransactionScope`/System.Transactions position**
   (per-operation auto-enlistment behavior, the MSDTC escalation trap, recommended patterns; the
   explicit enlistment API stays unplanned unless demanded) in

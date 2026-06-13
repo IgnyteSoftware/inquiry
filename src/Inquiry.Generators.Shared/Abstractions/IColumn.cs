@@ -61,6 +61,12 @@ public interface IColumn
     /// </summary>
     bool IsDatabaseGeneratedToken { get; }
 
+    /// <summary>
+    /// True when this column is the entity's <c>[InquiryCreatedAt]</c> auditing timestamp — written
+    /// once by INSERT and excluded from every UPDATE SET (including upsert conflict branches).
+    /// </summary>
+    bool IsCreatedAt { get; }
+
     // ---- DDL generation metadata ---------------------------------------------------------
 
     /// <summary>Dialect-neutral type class driving <c>SqlBuilder.MapColumnType</c>.</summary>

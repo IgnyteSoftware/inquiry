@@ -4,6 +4,8 @@
   href: pagination.md
 - name: Soft delete
   href: soft-delete.md
+- name: Auditing timestamps
+  href: auditing.md
 - name: Projections
   href: projections.md
 - name: Ad-hoc DTOs

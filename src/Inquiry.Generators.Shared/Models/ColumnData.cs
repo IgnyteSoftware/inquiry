@@ -23,6 +23,12 @@ internal sealed record ColumnData : IColumn
 
     /// <summary>Insert/upsert assigns a v7 GUID when this key is unset ([InquiryKey(SequentialGuid = true)]).</summary>
     public bool IsSequentialGuid { get; init; }
+
+    /// <summary>[InquiryCreatedAt]: stamped on insert when unset; excluded from UPDATE SET and bind.</summary>
+    public bool IsCreatedAt { get; init; }
+
+    /// <summary>[InquiryModifiedAt]: stamped on every generated insert/update/upsert before binding.</summary>
+    public bool IsModifiedAt { get; init; }
     public bool UseDatabaseDefault { get; init; }
     public SoftDeleteKind SoftDelete { get; init; } = SoftDeleteKind.None;
     public bool IsConcurrencyToken { get; init; }
