@@ -11,10 +11,11 @@ namespace Inquiry.Entities;
 /// <remarks>
 /// This is an orthogonal marker — the property still needs <c>[InquiryColumn]</c>. The column must be a
 /// non-nullable <see cref="bool"/> and must not double as the key, a generated/database-default column,
-/// an auditing column, the soft-delete indicator, or a concurrency token (INQ059). An entity may declare
-/// several global-filter columns; they are AND-composed. Unlike the soft-delete filter, a global filter
-/// has no per-method opt-out — it always applies — so it cannot be silently bypassed; reach for an
-/// ad-hoc query when an unfiltered read is genuinely needed.
+/// the soft-delete indicator, or a concurrency token (INQ059). (Auditing columns are timestamps/strings,
+/// so the bool requirement already precludes them.) An entity may declare several global-filter columns;
+/// they are AND-composed. Unlike the soft-delete filter, a global filter has no per-method opt-out — it
+/// always applies — so it cannot be silently bypassed; reach for an ad-hoc query when an unfiltered read
+/// is genuinely needed.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryGlobalFilterAttribute : Attribute

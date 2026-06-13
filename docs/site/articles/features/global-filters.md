@@ -103,7 +103,18 @@ A global filter composes correctly with everything else the generator emits, usi
 - **Keyset paging.** Appended after the keyset cursor predicate.
 - **Aggregates.** `SELECT COUNT(*) / SUM(…) FROM … WHERE <filter>`.
 - **Projections.** A [projection](projections.md) over a filtered entity composes the filter even though the projected column subset doesn't include the filter column.
-- **Optimistic concurrency.** Updates and deletes still check the row-version column alongside the filter.
+- **Optimistic concurrency.** A [concurrency token](concurrency.md) on a filtered entity is unaffected — key-based updates/deletes still match/advance the row-version column.
+
+## Where the filter is composed
+
+A global filter is composed into **exactly the same statements as the [soft-delete](soft-delete.md) active filter** — that invariant is the whole point of sharing the machinery:
+
+- **Composed** (the filter participates): every read (SELECT / COUNT / aggregate, including paged, keyset, and projection reads), set-based `[InquiryUpdateWhere]`, and set-based predicate soft-deletes. A set-based update therefore can't touch a row the filter hides.
+- **Not composed** (the statement targets rows by key, or deletes literally): key-based `UPDATE` / `DELETE`, key-based soft-delete / restore, and hard `[InquiryDeleteWhere]`.
+
+This mirrors [soft delete](soft-delete.md) and EF Core's `HasQueryFilter`: it's a **query** filter. So if you know a row's primary key you can still update or delete it by key even when the filter would hide it from reads.
+
+If you use `[InquiryGlobalFilter]` for **multi-tenant isolation**, treat it as read-side scoping, not write authorization. Key-based mutations aren't filtered, so enforce the boundary on by-key writes separately — at the service layer, or by routing writes through `[InquiryUpdateWhere]` / a predicate that includes the tenant column (these *are* filtered). Read-side filtering keeps other tenants' rows out of query results; it is not, on its own, a write-authorization mechanism.
 
 ## Per-dialect literal
 
@@ -113,7 +124,7 @@ A global filter composes correctly with everything else the generator emits, usi
 | SQL Server | `[IsActive] = 1` | `BIT NOT NULL` |
 | PostgreSQL | `"IsActive" = TRUE` | `BOOLEAN NOT NULL` |
 | MySQL | `` `IsActive` = 1 `` | `TINYINT(1) NOT NULL` |
-| Oracle | `"ISACTIVE" = 1` | `NUMBER(1) NOT NULL` |
+| Oracle | `IsActive = 1` (unquoted) | `NUMBER(1) NOT NULL` |
 
 ## Rules
 

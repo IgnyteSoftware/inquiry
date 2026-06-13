@@ -101,8 +101,10 @@
 - **Parameterized & named query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. The
   static-column form shipped — see [Recently resolved](#recently-resolved). The remaining gaps are
   runtime-parameterized filters (a tenant id bound from ambient context rather than a constant column),
-  EF 10 *named* filters (selectively ignore one filter by name), and row-level-security session helpers
-  for PostgreSQL (Drizzle RLS-style `SET LOCAL` around the connection).
+  EF 10 *named* filters (selectively ignore one filter by name), optional **write-side enforcement** so
+  the filter also guards key-based UPDATE/DELETE (today it is read-side only, like soft delete and EF
+  `HasQueryFilter` — see the [Global query filters](../articles/features/global-filters.md) scope note),
+  and row-level-security session helpers for PostgreSQL (Drizzle RLS-style `SET LOCAL` around the connection).
 - **Provider-specific column types** *(gap research 2026-06-12)*. SQL Server **vector** columns first
   (EF 10 `SqlVector` parity — AI embeddings / semantic search); spatial and `hierarchyid` by demand.
 - **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 5;
