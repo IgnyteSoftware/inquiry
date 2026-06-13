@@ -34,6 +34,26 @@ public static class InquiryInExpansion
     /// </summary>
     /// <typeparam name="T">The element type of the IN collection.</typeparam>
     public static void Expand<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount)
+        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL)");
+
+    /// <summary>
+    /// Expands a <c>NOT IN</c> sentinel — the negated counterpart of <see cref="Expand{T}(DbCommand, string, IEnumerable{T}?)"/>.
+    /// A non-empty collection expands identically to <c>(@name0, @name1, …)</c>; an empty (or null)
+    /// collection rewrites the sentinel to <c>(NULL) OR 1=1</c> so the predicate matches <em>every</em> row
+    /// (an empty <c>NOT IN</c> excludes nothing — the opposite of an empty <c>IN</c>). The generated SQL
+    /// wraps the criterion in parentheses (<c>(col NOT IN (sentinel))</c>) so the <c>OR 1=1</c> tautology
+    /// stays self-contained when AND/OR-composed with other criteria.
+    /// </summary>
+    /// <typeparam name="T">The element type of the NOT IN collection.</typeparam>
+    public static void ExpandNotIn<T>(DbCommand command, string parameterName, IEnumerable<T>? values)
+        => ExpandNotIn(command, parameterName, values, InquiryOptions.DefaultMaxParametersPerCommand);
+
+    /// <summary>Expands a <c>NOT IN</c> sentinel with an explicit maximum total parameter count.</summary>
+    /// <typeparam name="T">The element type of the NOT IN collection.</typeparam>
+    public static void ExpandNotIn<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount)
+        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1");
+
+    private static void ExpandCore<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, string emptyReplacement)
     {
         if (command is null) throw new System.ArgumentNullException(nameof(command));
         if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
@@ -43,7 +63,7 @@ public static class InquiryInExpansion
 
         if (values is null)
         {
-            command.CommandText = ReplaceFirst(command.CommandText, sentinel, "(NULL)");
+            command.CommandText = ReplaceFirst(command.CommandText, sentinel, emptyReplacement);
             return;
         }
 
@@ -92,7 +112,7 @@ public static class InquiryInExpansion
         command.CommandText = ReplaceFirst(
             command.CommandText,
             sentinel,
-            count == 0 ? "(NULL)" : placeholders.ToString());
+            count == 0 ? emptyReplacement : placeholders.ToString());
     }
 
     private static string ReplaceFirst(string text, string search, string replacement)

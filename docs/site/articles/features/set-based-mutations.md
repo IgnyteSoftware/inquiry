@@ -25,10 +25,10 @@ public partial class CustomerStore : InquiryStore<Customer>
 `[InquiryWhere]` works exactly as on
 [predicate selects](crud.md): repeat it per criterion, criteria combine in declaration order
 (AND by default, `Or = true` to join with OR), and parameters bind positionally —
-`Compare.Between` / `Compare.NotBetween` consume two, `Compare.In` one collection (expanded at run
-time), `IsNull`/`IsNotNull` none. The full operator set is the comparisons (`Equal`, `NotEqual`,
-`GreaterThan`, …), `Like` / `NotLike` (string fields), `In`, `Between` / `NotBetween`, and the null
-checks.
+`Compare.Between` / `Compare.NotBetween` consume two, `Compare.In` / `Compare.NotIn` one collection
+(expanded at run time; an empty `NotIn` matches every row), `IsNull`/`IsNotNull` none. The full operator
+set is the comparisons (`Equal`, `NotEqual`, `GreaterThan`, …), `Like` / `NotLike` (string fields), `In`
+/ `NotIn`, `Between` / `NotBetween`, and the null checks.
 
 ## Rules
 

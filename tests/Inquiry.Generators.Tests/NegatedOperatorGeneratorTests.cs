@@ -107,6 +107,41 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void NotInRendersParenthesizedSentinel_Sqlite()
+    {
+        var result = RunGenerator(ProductStore("""
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Qty", Compare.NotIn)]
+            public partial Task<IReadOnlyList<Product>> QtyNotInAsync(IReadOnlyList<int> qtys, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetProductStore(result);
+
+        // Parenthesized so the empty-collection "OR 1=1" tautology stays self-contained.
+        Assert.Contains("WHERE (\\\"Qty\\\" NOT IN (@Qty))", text);
+        // NOT IN always uses the sentinel ExpandNotIn (never the array bind), so the empty case is uniform.
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"@Qty\"", text);
+    }
+
+    [Fact]
+    public void PostgreSqlNotInUsesSentinelNotArray()
+    {
+        // IN uses PG's = ANY(array); NOT IN deliberately stays on the sentinel path so empty NOT IN is
+        // dialect-uniform (matches every row) — so it must NOT bind an array parameter.
+        var result = RunGenerator(ProductStore("""
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Qty", Compare.NotIn)]
+            public partial Task<IReadOnlyList<Product>> QtyNotInAsync(IReadOnlyList<int> qtys, CancellationToken cancellationToken = default);
+            """), dialect: "PostgreSql");
+        AssertNoErrors(result);
+        var text = GetProductStore(result);
+
+        Assert.Contains("WHERE (\\\"Qty\\\" NOT IN (@Qty))", text);
+        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \"@Qty\"", text);
+        Assert.DoesNotContain("InquiryArrayParameter.Bind", text);
+    }
+
+    [Fact]
     public void NotLikeOnNonStringColumnReportsDiagnostic()
     {
         // NotLike, like Like, requires a string column.

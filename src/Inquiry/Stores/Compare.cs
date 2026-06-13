@@ -48,4 +48,7 @@ public enum Compare
 
     /// <summary><c>column NOT BETWEEN @lo AND @hi</c> (consumes two parameters).</summary>
     NotBetween,
+
+    /// <summary><c>column NOT IN (…)</c> expanded at run time from a single collection parameter (an empty collection matches every row).</summary>
+    NotIn,
 }
