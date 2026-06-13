@@ -1,6 +1,6 @@
 # Many-to-many relations
 
-Model a many-to-many association through a **junction (link) table** and eager-load the related collection in a single in-memory assembly. Mark a collection navigation with `[InquiryManyToMany]`, pointing at the mapped junction entity and its two foreign-key properties.
+Model a many-to-many association through a **junction (link) table** and eager-load the related collection — a single JOIN for one parent, or an N+1-free in-memory assembly for all parents. Mark a collection navigation with `[InquiryManyToMany]`, pointing at the mapped junction entity and its two foreign-key properties.
 
 ## You write
 
