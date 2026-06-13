@@ -131,10 +131,6 @@
   service collection (now enforced — registering two providers throws a clear exception). True
   multi-provider support would require keyed/named factories or per-provider store scopes — .NET 8
   keyed DI services are the natural mechanism *(integration research 2026-06-12)*.
-- **CI: repo-wide warning gate.** Production projects are warnings-as-errors and the known warning
-  sources are scoped-suppressed; a repo-wide build-warning gate (extending coverage to the test projects)
-  would catch new warnings. *(Skip-gating and the scheduled full-TFM matrix are done — see
-  [Recently resolved](#recently-resolved).)*
 - **Optional Roslyn bump.** `Microsoft.CodeAnalysis.CSharp` is intentionally held at 4.8.0 to keep the
   analyzer's minimum-SDK floor low; revisit only if a newer Roslyn API is needed.
 - **Telemetry enrichment.** The opt-in telemetry layer (see
@@ -177,6 +173,10 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **CI repo-wide warning gate (2026-06-13):** a `tests/Directory.Build.props` (importing the
+  root props) sets `TreatWarningsAsErrors` for every test project, so a new warning in test code now
+  fails the build like it already does for production projects. The known benchmark warning sources
+  live under `benchmarks/` and are unaffected; a clean full-solution build is warning-free.
 - **Server-computed columns (2026-06-13):** `[InquiryColumn(Computed = "<expr>")]` maps a
   database-computed column (EF `HasComputedColumnSql` analog) — excluded from generated
   INSERT/UPDATE but selected/materialized and recomputed by the database. The `CREATE TABLE` emits
