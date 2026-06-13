@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -15,10 +16,11 @@ namespace Inquiry.Generators.Abstractions;
 public sealed class SqlBuildContext
 {
     /// <param name="suppressSoftDelete">
-    /// When true, the soft-delete active filter (<see cref="SoftDeleteActivePredicate"/>) is left
-    /// empty so SELECTs built from this context are unfiltered. Used for the per-statement context the
-    /// store emitter builds for an <c>IncludeDeleted = true</c> select; the SET clauses are still
-    /// computed (they are never suppressed — delete/restore always touch the indicator).
+    /// When true, the soft-delete term is dropped from <see cref="ActiveRowPredicate"/> so SELECTs built
+    /// from this context are not filtered by the soft-delete indicator (any global-filter terms still
+    /// apply). Used for the per-statement context the store emitter builds for an <c>IncludeDeleted =
+    /// true</c> select; the SET clauses are still computed (they are never suppressed — delete/restore
+    /// always touch the indicator).
     /// </param>
     /// <param name="softDeletePredicateColumn">
     /// The entity's soft-delete column, supplied only when <paramref name="columns"/> does not itself
@@ -29,6 +31,12 @@ public sealed class SqlBuildContext
     /// <paramref name="columns"/> only). Null (the default) for entity contexts, which already detect
     /// their soft-delete column from <paramref name="columns"/>.
     /// </param>
+    /// <param name="globalFilterPredicateColumns">
+    /// The entity's <c>[InquiryGlobalFilter]</c> columns, supplied for the same reason as
+    /// <paramref name="softDeletePredicateColumn"/> — a projection's subset omits them, so they are
+    /// passed explicitly to keep the active-row filter intact. Null (the default) for entity contexts,
+    /// which detect their global-filter columns from <paramref name="columns"/>.
+    /// </param>
     public SqlBuildContext(
         SqlBuilder builder,
         string? schema,
@@ -36,7 +44,8 @@ public sealed class SqlBuildContext
         IReadOnlyList<IColumn> columns,
         bool suppressSoftDelete = false,
         bool generateForeignKeys = true,
-        IColumn? softDeletePredicateColumn = null)
+        IColumn? softDeletePredicateColumn = null,
+        IReadOnlyList<IColumn>? globalFilterPredicateColumns = null)
     {
         Columns = columns;
         RawSchema = schema;
@@ -64,30 +73,45 @@ public sealed class SqlBuildContext
         KeyWhereClause = string.Join(" AND ", KeyColumns
             .Select(k => builder.QuoteIdentifier(k.ColumnName) + " = " + builder.ParameterName(k.PropertyName)));
 
-        // Soft delete. The single soft-delete column (if any) drives three precomputed fragments —
-        // the active-row filter every SELECT AND-composes (suppressed for IncludeDeleted), and the SET
-        // clauses for the soft-delete and restore UPDATEs — so providers consume strings and never
-        // reimplement the dialect literals.
-        // Entity contexts find their soft-delete column in `columns`. Projection contexts don't carry it
-        // (the projection selects a subset that omits the indicator), so fall back to the explicitly
-        // supplied entity soft-delete column — used only for the predicate, never added to SelectColumns.
+        // Active-row filter. The active-row predicate every SELECT AND-composes is built from two
+        // sources: the single soft-delete column (active = not-deleted) and any [InquiryGlobalFilter]
+        // columns (active = matches KeepWhen). Both are precomputed into one string so providers consume
+        // it and never reimplement the dialect literals.
+        // Entity contexts find these columns in `columns`. Projection contexts don't carry them (the
+        // projection selects a subset that omits indicator/filter columns), so they are supplied
+        // explicitly — used only for the predicate, never added to SelectColumns.
+        var activeRowPredicates = new List<string>();
+
+        // Soft delete. Drives the active-row filter (suppressed for IncludeDeleted) plus the SET clauses
+        // for the soft-delete and restore UPDATEs.
         var softDeleteColumn = columns.FirstOrDefault(c => c.SoftDelete != SoftDeleteKind.None) ?? softDeletePredicateColumn;
         if (softDeleteColumn is not null)
         {
             var quoted = builder.QuoteIdentifier(softDeleteColumn.ColumnName);
             if (softDeleteColumn.SoftDelete == SoftDeleteKind.BooleanFlag)
             {
-                SoftDeleteActivePredicate = suppressSoftDelete ? string.Empty : quoted + " = " + builder.SoftDeleteFalseLiteral;
-                SoftDeleteSetClause = quoted + " = " + builder.SoftDeleteTrueLiteral;
-                SoftDeleteRestoreSetClause = quoted + " = " + builder.SoftDeleteFalseLiteral;
+                if (!suppressSoftDelete) activeRowPredicates.Add(quoted + " = " + builder.BooleanFalseLiteral);
+                SoftDeleteSetClause = quoted + " = " + builder.BooleanTrueLiteral;
+                SoftDeleteRestoreSetClause = quoted + " = " + builder.BooleanFalseLiteral;
             }
             else
             {
-                SoftDeleteActivePredicate = suppressSoftDelete ? string.Empty : quoted + " IS NULL";
+                if (!suppressSoftDelete) activeRowPredicates.Add(quoted + " IS NULL");
                 SoftDeleteSetClause = quoted + " = " + builder.CurrentTimestampExpression;
                 SoftDeleteRestoreSetClause = quoted + " = NULL";
             }
         }
+
+        // Global filters. Always applied — unlike soft delete, there is no per-method opt-out, so they
+        // are not suppressed by IncludeDeleted (an "include deleted" read still respects tenant filtering).
+        var globalFilterColumns = columns.Where(c => c.IsGlobalFilter).Concat(globalFilterPredicateColumns ?? Array.Empty<IColumn>());
+        foreach (var gf in globalFilterColumns)
+        {
+            activeRowPredicates.Add(builder.QuoteIdentifier(gf.ColumnName) + " = " +
+                (gf.GlobalFilterKeepWhenTrue ? builder.BooleanTrueLiteral : builder.BooleanFalseLiteral));
+        }
+
+        ActiveRowPredicate = string.Join(" AND ", activeRowPredicates);
 
         // Optimistic concurrency. The single token column (if any) drives the WHERE predicate every
         // UPDATE/DELETE AND-composes (against the original value, @token) and — for the ORM-managed form
@@ -140,11 +164,13 @@ public sealed class SqlBuildContext
     public string KeyWhereClause { get; }
 
     /// <summary>
-    /// The active-row filter (<c>"IsDeleted" = 0</c> / <c>"DeletedAt" IS NULL</c>) every SELECT
-    /// AND-composes via <see cref="SqlBuilder.AppendWhere"/>. Empty when the entity has no soft-delete
-    /// column or this context was built with soft-delete suppressed (IncludeDeleted).
+    /// The active-row filter every SELECT AND-composes via <see cref="SqlBuilder.AppendWhere"/>: the
+    /// soft-delete active condition (<c>"IsDeleted" = 0</c> / <c>"DeletedAt" IS NULL</c>) AND every
+    /// <c>[InquiryGlobalFilter]</c> condition (<c>"IsActive" = 1</c>). Empty when the entity has neither.
+    /// The soft-delete term is dropped when this context was built with soft-delete suppressed
+    /// (IncludeDeleted); global-filter terms always remain.
     /// </summary>
-    public string SoftDeleteActivePredicate { get; } = string.Empty;
+    public string ActiveRowPredicate { get; } = string.Empty;
 
     /// <summary>The SET-clause body that marks a row deleted (<c>"IsDeleted" = 1</c> / <c>"DeletedAt" = CURRENT_TIMESTAMP</c>). Empty when no soft-delete column.</summary>
     public string SoftDeleteSetClause { get; } = string.Empty;
