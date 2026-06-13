@@ -1768,8 +1768,9 @@ internal static class StoreProcessor
                 }
 
                 case SqlCompareOp.In:
+                case SqlCompareOp.NotIn:
                 {
-                    // IN matches the collection element against the column's non-nullable type: a set
+                    // IN/NOT IN match the collection element against the column's non-nullable type: a set
                     // of values to test membership against is never itself nullable.
                     var element = method.Parameters[paramIndex].ElementComparisonDisplay;
                     if (element is null || element != column.Type.NonNullableDisplayName)
@@ -1781,12 +1782,13 @@ internal static class StoreProcessor
                     var name = UniqueName(usedNames, paramBase);
                     predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr, predicate.JsonPath));
                     // Unlike scalar bindings (which keep the runtime binder's '@' form and let Oracle's
-                    // FinalizeCommand reconcile the sigil), IN routes through InquiryInExpansion, which
+                    // FinalizeCommand reconcile the sigil), IN/NOT IN route through InquiryInExpansion, which
                     // rewrites the command TEXT by locating the baked sentinel. That sentinel takes the
-                    // dialect sigil (RenderIn → ParameterName), so the Expand name must match it exactly —
-                    // ':name' on Oracle, '@name' elsewhere. FinalizeCommand only renames parameters, not
-                    // the text, so it cannot bridge a mismatch here.
-                    bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column, isCollection: true));
+                    // dialect sigil (RenderIn/RenderNotIn → ParameterName), so the Expand name must match it
+                    // exactly — ':name' on Oracle, '@name' elsewhere. FinalizeCommand only renames
+                    // parameters, not the text, so it cannot bridge a mismatch here. NOT IN always uses the
+                    // sentinel path (isNegatedCollection) so its empty-collection rewrite is dialect-uniform.
+                    bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column, isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn));
                     paramIndex += 1;
                     hasIn = true;
                     break;

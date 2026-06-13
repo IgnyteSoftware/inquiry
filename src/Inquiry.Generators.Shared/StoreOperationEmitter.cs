@@ -679,9 +679,7 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[binding.MethodParameterIndex].Name;
             if (binding.IsCollection)
             {
-                source.AppendLine(sqlBuilder.UseArrayInParameters
-                    ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg});"
-                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg}, Inquiry.MaxParametersPerCommand);");
+                source.AppendLine(CollectionBindingExpression(sqlBuilder, binding, arg));
             }
             else
             {
@@ -750,9 +748,7 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[binding.MethodParameterIndex].Name;
             if (binding.IsCollection)
             {
-                source.AppendLine(sqlBuilder.UseArrayInParameters
-                    ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg});"
-                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\", {arg}, Inquiry.MaxParametersPerCommand);");
+                source.AppendLine(CollectionBindingExpression(sqlBuilder, binding, arg));
             }
             else
             {
@@ -1121,6 +1117,24 @@ internal static class StoreOperationEmitter
     {
         if (!type.IsNullable) return accessor;
         return type.IsValueType ? $"{accessor}.Value" : $"{accessor}!";
+    }
+
+    /// <summary>
+    /// Emits the runtime binding for a collection predicate parameter. A NOT IN collection always uses
+    /// the sentinel <c>ExpandNotIn</c> (so an empty collection is dialect-uniform); a plain IN uses the
+    /// dialect's array bind (when supported) or the sentinel <c>Expand</c>.
+    /// </summary>
+    private static string CollectionBindingExpression(SqlBuilder sqlBuilder, PredicateBinding binding, string arg)
+    {
+        var name = GeneratorHelpers.Escape(binding.SqlParameterName);
+        if (binding.IsNegatedCollection)
+        {
+            return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {arg}, Inquiry.MaxParametersPerCommand);";
+        }
+
+        return sqlBuilder.UseArrayInParameters
+            ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{name}\", {arg});"
+            : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {arg}, Inquiry.MaxParametersPerCommand);";
     }
 
     private static void EmitSelectOneByKeyEager(StringBuilder source, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)

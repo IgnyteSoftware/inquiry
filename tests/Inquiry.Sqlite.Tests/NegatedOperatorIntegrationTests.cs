@@ -33,6 +33,10 @@ public partial class NegatedProductStore : InquiryStore<NegatedProduct>
     [InquirySelectAllByPredicate]
     [InquiryWhere("Qty", Compare.NotBetween)]
     public partial Task<IReadOnlyList<NegatedProduct>> QtyNotBetweenAsync(int low, int high, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere("Qty", Compare.NotIn)]
+    public partial Task<IReadOnlyList<NegatedProduct>> QtyNotInAsync(IReadOnlyList<int> qtys, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -74,5 +78,28 @@ public sealed class NegatedOperatorIntegrationTests
         // Qty NOT BETWEEN 10 AND 20 → keeps 5 and 25, excludes 15.
         var result = await store.QtyNotBetweenAsync(10, 20);
         Assert.Equal(new[] { 5, 25 }, result.Select(p => p.Qty).OrderBy(q => q).ToArray());
+    }
+
+    [Fact]
+    public async Task NotInExcludesListedValues()
+    {
+        var (harness, store) = await SeedAsync();
+        await using var _ = harness;
+
+        // Qty NOT IN (15, 25) → keeps only 5.
+        var result = await store.QtyNotInAsync(new[] { 15, 25 });
+        var only = Assert.Single(result);
+        Assert.Equal(5, only.Qty);
+    }
+
+    [Fact]
+    public async Task EmptyNotInMatchesEveryRow()
+    {
+        var (harness, store) = await SeedAsync();
+        await using var _ = harness;
+
+        // An empty NOT IN excludes nothing — every row matches (the opposite of an empty IN).
+        var result = await store.QtyNotInAsync(System.Array.Empty<int>());
+        Assert.Equal(3, result.Count);
     }
 }

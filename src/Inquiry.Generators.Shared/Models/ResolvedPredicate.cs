@@ -10,18 +10,26 @@ namespace Inquiry.Generators.Models;
 /// </summary>
 internal readonly struct PredicateBinding
 {
-    public PredicateBinding(string sqlParameterName, int methodParameterIndex, ColumnData column, bool isCollection)
+    public PredicateBinding(string sqlParameterName, int methodParameterIndex, ColumnData column, bool isCollection, bool isNegatedCollection = false)
     {
         SqlParameterName = sqlParameterName;
         MethodParameterIndex = methodParameterIndex;
         Column = column;
         IsCollection = isCollection;
+        IsNegatedCollection = isNegatedCollection;
     }
 
     public string SqlParameterName { get; }
     public int MethodParameterIndex { get; }
     public ColumnData Column { get; }
     public bool IsCollection { get; }
+
+    /// <summary>
+    /// True for a <c>NOT IN</c> collection: the emitter expands it via
+    /// <c>InquiryInExpansion.ExpandNotIn</c> (empty ⇒ matches every row) rather than <c>Expand</c>, and
+    /// always through the sentinel path (never an array parameter) so the empty case is dialect-uniform.
+    /// </summary>
+    public bool IsNegatedCollection { get; }
 }
 
 /// <summary>
