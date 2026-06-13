@@ -40,6 +40,8 @@
   href: graphql-dataloader.md
 - name: Observability
   href: observability.md
+- name: Interceptors
+  href: interceptors.md
 - name: Testing
   href: testing.md
 - name: Data seeding
