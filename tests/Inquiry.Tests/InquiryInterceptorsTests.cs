@@ -169,4 +169,107 @@ public sealed class InquiryInterceptorsTests
         Assert.Equal(1L, count);
         Assert.DoesNotContain("/*", harness.Captured.LastCommandText);
     }
+
+    [Fact]
+    public async Task NPlusOneDetectionWarnsWhenSameSqlRepeatsInScope()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        using (Inquiry.Interceptors.InquiryNPlusOneScope.BeginScope())
+        {
+            // Same parameterized SQL, different parameter each time — the N+1 signature.
+            for (var id = 1; id <= 3; id++)
+            {
+                await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item WHERE Id = {id}");
+            }
+        }
+
+        // Exactly one warning (fired when the count first reached the threshold), naming the SQL.
+        var warning = Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+        Assert.Contains("Possible N+1", warning);
+        Assert.Contains("SELECT COUNT(*) FROM Item WHERE Id =", warning);
+    }
+
+    [Fact]
+    public async Task NPlusOneDetectionStaysSilentOutsideAScope()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        // No scope active → no detection, even though the same SQL repeats.
+        for (var id = 1; id <= 3; id++)
+        {
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item WHERE Id = {id}");
+        }
+
+        Assert.DoesNotContain(harness.Log.Messages, m => m.Contains("Possible N+1"));
+    }
+
+    [Fact]
+    public async Task NPlusOneDetectionStaysSilentBelowThreshold()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 5));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        using (Inquiry.Interceptors.InquiryNPlusOneScope.BeginScope())
+        {
+            for (var id = 1; id <= 3; id++)
+            {
+                await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item WHERE Id = {id}");
+            }
+        }
+
+        // 3 executions < threshold 5 → no warning.
+        Assert.DoesNotContain(harness.Log.Messages, m => m.Contains("Possible N+1"));
+    }
+
+    [Fact]
+    public async Task NPlusOneDetectionFingerprintsThroughSqlCommenterTag()
+    {
+        // SqlCommenter (registered first) appends a per-trace comment that varies each execution; the
+        // detector must strip it so the repeats still fingerprint together regardless of interceptor order.
+        await using var harness = await CreateHarnessAsync(s =>
+        {
+            s.AddInquirySqlCommenter("checkout-api");
+            s.AddInquiryNPlusOneDetection(threshold: 2);
+        });
+
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = static source => source.Name == "NPlusOneTest",
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var source = new ActivitySource("NPlusOneTest");
+        using var activity = source.StartActivity("op");
+        Assert.NotNull(activity);
+
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+        using (Inquiry.Interceptors.InquiryNPlusOneScope.BeginScope())
+        {
+            for (var id = 1; id <= 3; id++)
+            {
+                await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item WHERE Id = {id}");
+            }
+        }
+
+        Assert.Single(harness.Log.Messages, m => m.Contains("Possible N+1"));
+    }
+
+    [Fact]
+    public async Task NPlusOneDetectionDistinctSqlDoesNotAccumulate()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        using (Inquiry.Interceptors.InquiryNPlusOneScope.BeginScope())
+        {
+            // Two different statements, each run once — not an N+1.
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item WHERE Id = {1}");
+        }
+
+        Assert.DoesNotContain(harness.Log.Messages, m => m.Contains("Possible N+1"));
+    }
 }

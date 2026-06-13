@@ -32,6 +32,28 @@ SELECT … FROM "Orders" WHERE "OrderID" = @OrderID /*application='checkout-api'
 
 **Trade-off:** trace ids change per request, so tagged text varies per execution and defeats server-side [prepared-statement](prepared-statements.md) reuse for tagged commands. Enable it when DBA-side correlation matters more, or scope it to diagnosis sessions.
 
+## N+1 query detection
+
+A dev-time detector (Rails [bullet](https://github.com/flyerhzm/bullet) / [prosopite](https://github.com/charkost/prosopite) analog) that flags the classic N+1: one parent query followed by N child queries with the same SQL and different parameters.
+
+```csharp
+builder.Services.AddInquiryNPlusOneDetection(threshold: 2);   // warn at the 2nd repeat (default)
+```
+
+Detection is **scoped** — wrap a logical unit of work (an HTTP request, a job, a test) and the detector counts how often each distinct command text runs *within that scope*, warning once a statement reaches the threshold:
+
+```csharp
+using (InquiryNPlusOneScope.BeginScope())
+{
+    var orders = await orderStore.RecentAsync();
+    foreach (var order in orders)
+        order.Customer = await customerStore.ByIdAsync(order.CustomerId);   // same SQL each iteration
+}
+// Warning: Possible N+1: the same SQL executed 2 times within this detection scope … : SELECT … FROM "Customers" WHERE "CustomerID" = @CustomerID
+```
+
+Because Inquiry parameterizes values, the per-iteration command text is identical, so the repeats fingerprint together. Outside any scope the detector is a no-op (zero overhead in production paths you don't wrap). The fix is usually [eager loading](eager-loading.md) or a single [`In`](crud.md) query. Command text is logged; parameter values never are. Intended for development and test runs, not production hot loops.
+
 ## Writing your own
 
 ```csharp

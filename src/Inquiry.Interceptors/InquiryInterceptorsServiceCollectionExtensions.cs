@@ -41,4 +41,21 @@ public static class InquiryInterceptorsServiceCollectionExtensions
         services.AddSingleton<IInquiryCommandInterceptor>(new SqlCommenterInterceptor(applicationName));
         return services;
     }
+
+    /// <summary>
+    /// Registers a dev-time N+1 detector. Within an <see cref="Inquiry.Interceptors.InquiryNPlusOneScope"/>
+    /// (open one per request/job/test), it warns when the same command text executes at least
+    /// <paramref name="threshold"/> times (default 2) — the N+1 signature of one parent query plus N child
+    /// queries with the same SQL and different parameters. Outside a scope it is a no-op. Command text is
+    /// logged; parameter values never are. Intended for development/test, not production hot paths.
+    /// </summary>
+    public static IServiceCollection AddInquiryNPlusOneDetection(this IServiceCollection services, int threshold = 2)
+    {
+        if (services is null) throw new ArgumentNullException(nameof(services));
+
+        services.AddSingleton<IInquiryCommandInterceptor>(provider => new NPlusOneDetectionInterceptor(
+            provider.GetRequiredService<ILogger<NPlusOneDetectionInterceptor>>(),
+            threshold));
+        return services;
+    }
 }

@@ -52,11 +52,10 @@
   dev/Testcontainers database, catching schema drift at build time. No .NET ORM offers this, and
   Inquiry is uniquely positioned — the internal schema-fidelity tests already prove the approach;
   this productizes it for consumers.
-- **Dev-time query diagnostics** *(integration research 2026-06-12)*. An N+1 detector for the
-  default interceptor library (Rails bullet/prosopite model — fingerprint repeated
-  identical-SQL/different-parameter executions per scope and warn with call sites; no .NET ORM has
-  this) plus an `ExplainAsync` helper surfacing the database query plan for any generated method
-  (Django `QuerySet.explain()` analog).
+- **Dev-time query diagnostics — `ExplainAsync`** *(integration research 2026-06-12)*. The N+1 detector
+  shipped (see [Recently resolved](#recently-resolved)). Remaining: an `ExplainAsync` helper surfacing the
+  database query plan (Django `QuerySet.explain()` analog) — needs per-dialect plumbing (SQLite/PG/MySQL
+  take an `EXPLAIN` prefix; SQL Server `SHOWPLAN`, Oracle `DBMS_XPLAN` differ).
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
 - **DDL safety lint — more rules** *(integration research 2026-06-12)*. The opt-in lint surface shipped
@@ -80,7 +79,7 @@
   interceptor already lives in `Inquiry.Testing`. Remaining: audit trail (who/when/what changed —
   XPO's module as an interceptor; pairs with `[InquiryModifiedBy]`), DataAnnotations entity
   validation before insert/update (needs an entity-level seam — the command interceptor sees SQL,
-  not entities), and the N+1 detector (see *Dev-time query diagnostics* above).
+  not entities). The N+1 detector shipped (see [Recently resolved](#recently-resolved)).
 - **Read-replica routing** *(gap research 2026-06-12)*. Route SELECTs to a read-replica pool and pin
   mutations + transactions to the primary (Drizzle `withReplicas` / Sequelize / TypeORM semantics).
   No mainstream .NET ORM ships this; Inquiry already has the connection-factory and failover chassis
@@ -171,6 +170,15 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **N+1 query detector (2026-06-13):** a dev-time interceptor in `Inquiry.Interceptors` (Rails
+  bullet/prosopite analog; no other .NET ORM ships this). `AddInquiryNPlusOneDetection(threshold)` plus a
+  scoped `InquiryNPlusOneScope.BeginScope()` (per request/job/test) — the detector counts how often each
+  distinct command text runs within the scope and logs a warning once a statement reaches the threshold,
+  the N+1 signature of one parent query plus N same-SQL/different-parameter child queries (which
+  fingerprint together because Inquiry parameterizes values). No-op outside a scope; command text logged,
+  never parameter values. Unit tests (warns in scope, silent outside/below threshold, distinct SQL doesn't
+  accumulate). See [Interceptors](../articles/features/interceptors.md).
 
 - **Column-encryption docs (2026-06-13):** application-side column encryption needs no bespoke API — it
   rides the existing [value-converter](../articles/features/value-converters.md) seam (encrypt in
