@@ -60,9 +60,9 @@
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
 - **DDL safety lint — more rules** *(integration research 2026-06-12)*. The opt-in lint surface shipped
-  with INQ061 (unindexed foreign key) and INQ062 (decimal without precision/scale) — see
-  [Recently resolved](#recently-resolved). squawk-inspired follow-ups: nullable column with a default,
-  oversized/unbounded text columns, missing index on a frequently-filtered column.
+  with INQ061 (unindexed foreign key), INQ062 (decimal without precision/scale), and INQ064 (unindexed
+  filtered column) — see [Recently resolved](#recently-resolved). squawk-inspired follow-ups: nullable
+  column with a default, oversized/unbounded text columns.
 - **Testing follow-ups: transaction sandbox + data factories** *(adoption review 2026-06-12)*.
   The store interfaces and the `Inquiry.Testing` package (SQLite fixture, recording interceptor,
   Respawn reset) shipped — see [Recently resolved](#recently-resolved) and
@@ -174,6 +174,14 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **DDL safety lint — unindexed filtered column `INQ064` (2026-06-13):** a third opt-in lint (off by
+  default, like INQ061/062). A non-key column a store method filters on — a `[InquirySelectAllByField]`
+  field or an `[InquiryWhere]` criterion — with no index makes those queries scan; the lint collects every
+  filtered column and flags the un-indexed ones (suggesting `[InquiryColumn(IsIndexed = true)]`). The
+  squawk-inspired "missing index on a frequently-filtered column" rule. Generator tests (field + predicate
+  filters fire, indexed column doesn't, off without opt-in). See
+  [Schema DDL](../articles/features/schema-ddl.md#ddl-safety-lints-opt-in).
 
 - **Existence tests `[InquiryExists]` (2026-06-13):** the `EXISTS` / EF `.AnyAsync()` analog — returns
   `Task<bool>` from `SELECT CASE WHEN EXISTS(SELECT 1 FROM … WHERE …) THEN 1 ELSE 0 END`, which

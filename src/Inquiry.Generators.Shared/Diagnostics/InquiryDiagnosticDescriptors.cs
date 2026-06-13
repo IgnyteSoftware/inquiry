@@ -39,7 +39,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ057         Server-computed column          (Computed combined with key/default/audit/etc.) [IN USE]
     //   INQ059         Global query filter             ([InquiryGlobalFilter] on non-bool / key / generated / token / soft-delete) [IN USE]
     //   INQ060         JSON-path predicate             ([InquiryWhere(JsonPath=…)] on non-string / converter column, or malformed path) [IN USE]
-    //   INQ061–INQ062  DDL safety lints (off by default) (INQ061 unindexed FK, INQ062 decimal w/o precision; opt in via .editorconfig) [IN USE]
+    //   INQ061–INQ064  DDL safety lints (off by default) (INQ061 unindexed FK, INQ062 decimal w/o precision, INQ064 unindexed filter column; opt in via .editorconfig) [IN USE]
     //   INQ063         Many-to-many relation          ([InquiryManyToMany] misconfigured junction/child) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
@@ -338,6 +338,17 @@ internal static class InquiryDiagnosticDescriptors
         "INQ062",
         "Decimal column relies on the default precision/scale",
         "Entity '{0}' decimal column '{1}' has no explicit Precision/Scale, so it takes {2}'s default (e.g. DECIMAL(18,2)), which can silently round. Set [InquiryColumn(Precision = …, Scale = …)] (or SqlType) to make the storage type explicit.",
+        "Inquiry",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: false);
+
+    // INQ064 (Info — a DDL "lint", off by default): a non-key column a store method filters on (a
+    // [InquirySelectAllByField] field or an [InquiryWhere] criterion) has no index, so those queries
+    // scan the table. Opt in to find columns that would benefit from [InquiryColumn(IsIndexed = true)].
+    public static readonly DiagnosticDescriptor UnindexedFilterColumn = new(
+        "INQ064",
+        "Filtered column has no index",
+        "Entity '{0}' column '{1}' is used as a query filter but has no index, so those queries scan the table. Add [InquiryColumn(IsIndexed = true)] (or IsUnique) if it is filtered often.",
         "Inquiry",
         DiagnosticSeverity.Info,
         isEnabledByDefault: false);
