@@ -61,7 +61,11 @@ internal static class InquiryParameterBinder
         return value;
     }
 
-    private static string NormalizeName(string name)
+    /// <summary>
+    /// Adds an <c>@</c> prefix to a parameter name that carries no provider sigil. Shared so the
+    /// stored-procedure read-back lookup matches the name a bound parameter ends up with.
+    /// </summary>
+    internal static string NormalizeName(string name)
     {
         if (string.IsNullOrEmpty(name))
         {

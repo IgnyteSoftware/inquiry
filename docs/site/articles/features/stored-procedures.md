@@ -25,13 +25,32 @@ public partial class CustomerStore : InquiryStore<Customer>
 | `IAsyncEnumerable<TEntity>` | Streaming rows |
 | `Task<TEntity?>` | Single row |
 | `Task<int>` | Records affected |
+| `Task<TScalar>` + `OutputParameter`/`ReturnsValue` | Read-back scalar (see below) |
+
+## OUTPUT parameters and RETURN values
+
+To surface a single value a procedure produces — through an `OUTPUT` parameter or its integer `RETURN` value — declare the method as `Task<TScalar>` and set one of the two knobs. The read-back value becomes the task result; the other method parameters are still the IN parameters.
+
+```csharp
+public partial class OrderStore : InquiryStore<Order>
+{
+    // OUTPUT parameter: @Total is read back as the decimal result.
+    [InquiryStoredProcedure("usp_SumByCategory", OutputParameter = "Total")]
+    public partial Task<decimal> SumByCategoryAsync(string category, CancellationToken ct = default);
+
+    // RETURN value: the procedure's integer RETURN is the result.
+    [InquiryStoredProcedure("usp_CountByCategory", ReturnsValue = true)]
+    public partial Task<int> CountByCategoryAsync(string category, CancellationToken ct = default);
+}
+```
+
+- The generator binds the named parameter with `ParameterDirection.Output` (stamping its `DbType`, and `Size = -1` for `string`), or a `ParameterDirection.ReturnValue` parameter for `ReturnsValue`, then reads it back after execution.
+- A RETURN value is always an integer, so `ReturnsValue = true` requires `Task<int>`. `OutputParameter` and `ReturnsValue` are mutually exclusive. Misconfiguration is a build error (`INQ051`).
+- This scalar-output form doesn't also map a result set — use a separate method for rows. Use `Task<TScalar?>` when the OUTPUT can be `NULL`.
 
 ## Limitations (today)
 
-- **No OUT / INOUT parameters yet.** Method params bind as IN only.
-- **No scalar return** (`Task<decimal>` etc.) — use the records-affected `Task<int>` or wrap with `[InquiryAggregate]` against a `SELECT` SP.
+- **INOUT parameters** aren't surfaced — an OUTPUT parameter is read back, but a value passed *in* and mutated is not returned to the caller.
 - **No multiple result sets.** Only the first rowset is materialized.
 - **No table-valued parameters.** Pass scalars or a comma-joined string.
-- **Oracle limitation:** SPs that return rows require an `OUT REF CURSOR` parameter, which the generator doesn't yet emit. Use a function with `RETURN SYS_REFCURSOR` as a workaround until OUT-param support lands.
-
-A future "stored procedure expansion" release will add OUT/INOUT, scalar returns, multi-result-set, and Oracle ref cursor support. See the project status doc for the current plan.
+- **Oracle limitation:** SPs that return rows require an `OUT REF CURSOR` parameter, which the generator doesn't yet emit. Use a function with `RETURN SYS_REFCURSOR` as a workaround.

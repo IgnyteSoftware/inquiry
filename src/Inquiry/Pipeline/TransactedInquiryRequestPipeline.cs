@@ -909,6 +909,48 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
+    public async Task<T> ExecuteProcedureScalarAsync<T>(InquiryCommand command, string readBackParameterName, CancellationToken cancellationToken = default)
+    {
+        if (command is null) throw new ArgumentNullException(nameof(command));
+        if (string.IsNullOrWhiteSpace(readBackParameterName)) throw new ArgumentException("Read-back parameter name cannot be empty.", nameof(readBackParameterName));
+
+        // Match the binder's normalization so a caller-supplied "Total" finds the bound "@Total".
+        readBackParameterName = InquiryParameterBinder.NormalizeName(readBackParameterName);
+
+        EnterInFlight();
+        try
+        {
+            await using var dbCommand = CreateCommand();
+            dbCommand.Transaction = _transaction;
+
+            try
+            {
+                InitializeCommandSync(dbCommand, command);
+                if (HasInterceptors)
+                {
+                    await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+
+                var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                var readBack = ScalarConvert.From<T>(dbCommand.Parameters[readBackParameterName].Value);
+
+                if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
+                return readBack;
+            }
+            catch (Exception exception)
+            {
+                if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<T> ExecuteScalarAsync<T, TArgs>(
         string commandText,
         TArgs args,

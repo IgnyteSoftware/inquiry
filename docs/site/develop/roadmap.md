@@ -94,9 +94,10 @@
   mutations + transactions to the primary (Drizzle `withReplicas` / Sequelize / TypeORM semantics).
   No mainstream .NET ORM ships this; Inquiry already has the connection-factory and failover chassis
   to build on.
-- **Stored-procedure output/return parameters** *(gap research 2026-06-12)*. Surface
-  `ParameterDirection.Output`/`ReturnValue` on generated stored-procedure methods, completing the
-  sproc story (Dapper `DynamicParameters` parity).
+- **Stored-procedure INOUT parameters & multi-result-set** *(gap research 2026-06-12)*. Scalar
+  OUTPUT parameters and the integer RETURN value now surface as a `Task<TScalar>` result (see
+  [Recently resolved](#recently-resolved)); the remaining gaps are INOUT parameters (a value passed
+  in *and* read back), multiple result sets, table-valued parameters, and Oracle `OUT REF CURSOR`.
 - **Database-first scaffolding CLI** *(gap research 2026-06-12)*. A `dotnet inquiry scaffold` tool
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
@@ -187,6 +188,15 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Stored-procedure scalar output/return (2026-06-13):** `[InquiryStoredProcedure(OutputParameter =
+  "@Name")]` / `[InquiryStoredProcedure(ReturnsValue = true)]` declare the method as
+  `Task<TScalar>` and surface a single OUTPUT parameter (bound `ParameterDirection.Output` with its
+  DbType, `Size = -1` for strings) or the integer RETURN value as the task result, read back through
+  a new `IInquiry.ExecuteProcedureScalarAsync<T>` pipeline seam (both pipelines). The two knobs are
+  mutually exclusive and a RETURN value must be `Task<int>` (new INQ051). Provider-uniform via
+  `CommandType.StoredProcedure`; live-proven on SQL Server (`OUTPUT` + `RETURN` procs), plus generator
+  snapshots. INOUT/multi-result-set/TVP/Oracle ref-cursor remain open. See
+  [Stored procedures](../articles/features/stored-procedures.md).
 - **Provider-native bulk copy (2026-06-13):** `[InquiryBulkInsert]` streams rows through
   `SqlBulkCopy` / Npgsql binary `COPY` / `MySqlBulkCopy` (new `IInquiryBulkCopier` registered by
   those provider packages; `IInquiry.BulkInsertAsync` + a generated

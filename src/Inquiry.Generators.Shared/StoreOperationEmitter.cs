@@ -1018,13 +1018,16 @@ internal static class StoreOperationEmitter
         var procParams = Take(method.Parameters, method.Parameters.Count - 1).ToArray();
         var isAsyncEnum = method.ProcedureReturn == ProcedureReturnKind.AsyncEnumerableOfEntity;
         var isAsync = !isAsyncEnum;
+        var hasScalarOutput = method.ProcedureReturn == ProcedureReturnKind.TaskOfOutputScalar;
 
         AppendHeader(source, method, parameters, isAsync: isAsync);
 
         source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
         source.AppendLine($"            \"{GeneratorHelpers.Escape(method.ProcedureName!)}\",");
 
-        if (procParams.Length > 0)
+        // The scalar-output form always binds at least the read-back parameter, so it uses the array
+        // form unconditionally (input params, then the OUTPUT / RETURN-value parameter).
+        if (procParams.Length > 0 || hasScalarOutput)
         {
             source.AppendLine("            new global::Inquiry.Parameters.InquiryParameter[]");
             source.AppendLine("            {");
@@ -1032,6 +1035,12 @@ internal static class StoreOperationEmitter
             {
                 source.AppendLine($"                new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(p.Name)}\", (object?){p.Name} ?? global::System.DBNull.Value),");
             }
+
+            if (hasScalarOutput)
+            {
+                source.AppendLine($"                {BuildProcedureOutputParameter(method)},");
+            }
+
             source.AppendLine("            },");
         }
         else
@@ -1052,9 +1061,48 @@ internal static class StoreOperationEmitter
             case ProcedureReturnKind.TaskOfInt:
                 source.AppendLine($"        return await Inquiry.ExecuteAsync(_cmd, {cancellation}).ConfigureAwait(false);");
                 break;
+            case ProcedureReturnKind.TaskOfOutputScalar:
+                source.AppendLine($"        return await Inquiry.ExecuteProcedureScalarAsync<{method.ScalarResultType}>(_cmd, \"{GeneratorHelpers.Escape(method.ProcedureReadBackName!)}\", {cancellation}).ConfigureAwait(false);");
+                break;
         }
 
         source.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// Builds the OUTPUT / RETURN-value <c>InquiryParameter</c> the pipeline reads back. A RETURN
+    /// value is an integer seeded to 0 with <c>ParameterDirection.ReturnValue</c>; an OUTPUT
+    /// parameter starts as <c>DBNull</c> with its DbType (and <c>Size = -1</c> for variable-length
+    /// strings so providers allocate a read-back buffer).
+    /// </summary>
+    private static string BuildProcedureOutputParameter(StoreMethodData method)
+    {
+        var name = "\"" + GeneratorHelpers.Escape(method.ProcedureReadBackName!) + "\"";
+        if (method.ProcedureReturnsValue)
+        {
+            return $"new global::Inquiry.Parameters.InquiryParameter({name}, 0, direction: global::System.Data.ParameterDirection.ReturnValue)";
+        }
+
+        var args = new StringBuilder($"new global::Inquiry.Parameters.InquiryParameter({name}, global::System.DBNull.Value");
+        if (method.ProcedureOutputDbType is not null)
+        {
+            args.Append($", dbType: {method.ProcedureOutputDbType}");
+        }
+
+        args.Append(", direction: global::System.Data.ParameterDirection.Output");
+        if (method.ProcedureOutputIsString)
+        {
+            args.Append(", size: -1");
+        }
+        else if (method.ProcedureOutputIsDecimal)
+        {
+            // SqlClient defaults a decimal output parameter to scale 0 and rounds the read-back
+            // value (19.75 → 20). Stamp a high-fidelity precision/scale: 38/10 preserves money and
+            // typical computed decimals losslessly, with ample integer headroom.
+            args.Append(", precision: (byte)38, scale: (byte)10");
+        }
+
+        return args.Append(')').ToString();
     }
 
     /// <summary>
