@@ -845,9 +845,9 @@ internal static class StoreProcessor
         }
 
         // resolve projection-returning SelectAll methods. A select whose element type is not the
-        // store's entity must be a known [InquiryProjection] of it. Soft-delete entities are supported:
-        // the projection SELECT AND-composes the entity's soft-delete filter (the projection context is
-        // built with the entity's soft-delete column, below). Invalid ones are diagnosed and dropped.
+        // store's entity must be a known [InquiryProjection] of it. Soft-delete / global-filter entities
+        // are supported: the projection SELECT AND-composes the entity's active-row filter (the projection
+        // context is built with those columns, below). Invalid ones are diagnosed and dropped.
         var projectionMethods = new Dictionary<string, ProjectionData>(StringComparer.Ordinal);
         for (var i = valid.Count - 1; i >= 0; i--)
         {
@@ -1065,8 +1065,9 @@ internal static class StoreProcessor
             if (selectPlan is not null)
             {
                 // an ordered/paged projection method builds its plan SQL over the projection's columns,
-                // composing the entity's soft-delete filter (suppressed for IncludeDeleted) just like a
-                // non-projection select — the projection columns don't carry the indicator, so pass it.
+                // composing the entity's active-row filter (soft-delete suppressed for IncludeDeleted)
+                // just like a non-projection select — the projection columns don't carry those
+                // indicator/filter columns, so pass them explicitly.
                 var planCtx = projectionMethods.TryGetValue(method.Name, out var projForPlan)
                     ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns),
                         suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
@@ -1974,9 +1975,9 @@ internal static class StoreProcessor
                 keysetDescending: plan.OrderColumns.Count > 0 && plan.OrderColumns[0].Descending);
 
             var keysetWhere = sqlBuilder.BuildKeysetPredicate(options);
-            // keyset selects compose the soft-delete active filter onto the cursor predicate (the
-            // keyset op has no IncludeDeleted opt-out). AppendWhere is internal to SqlBuilder, so the same
-            // AND-composition is applied inline here against the precomputed fragment.
+            // keyset selects compose the active-row filter (soft-delete + global filters) onto the cursor
+            // predicate (the keyset op has no IncludeDeleted opt-out). AppendWhere is internal to
+            // SqlBuilder, so the same AND-composition is applied inline here against the precomputed fragment.
             if (ctx.ActiveRowPredicate.Length > 0)
             {
                 keysetWhere += " AND " + ctx.ActiveRowPredicate;
