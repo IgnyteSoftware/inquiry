@@ -408,12 +408,12 @@ internal static class InquiryDiagnosticDescriptors
         isEnabledByDefault: true);
 
     // INQ052: a store over an [InquiryView] entity is read-only — it may only declare SELECT /
-    // aggregate / count operations. Mutations (insert/update/upsert/delete/bulk/set-based) have no
-    // meaning against a view, so they are rejected at the method.
+    // aggregate / count operations. Mutations (insert/update/upsert/delete/bulk/set-based) and
+    // stored procedures (arbitrary SQL that can write) are rejected at the method.
     public static readonly DiagnosticDescriptor ViewIsReadOnly = new(
         "INQ052",
         "View-mapped entity is read-only",
-        "Store method '{0}' performs a mutation against view-mapped entity '{1}'. An [InquiryView] entity is read-only — only SELECT, aggregate, and count operations are allowed.",
+        "Store method '{0}' is not a read-only operation but targets view-mapped entity '{1}'. An [InquiryView] entity is read-only — only SELECT, aggregate, and count operations are allowed (no mutations or stored procedures).",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

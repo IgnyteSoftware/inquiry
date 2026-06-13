@@ -21,7 +21,6 @@ namespace Inquiry.Generators;
 internal static class EntityProcessor
 {
     /// <summary>Extracts the cacheable model for one <c>[InquiryTable]</c> entity symbol.</summary>
-    /// <summary>Extracts a <c>[InquiryTable]</c> entity.</summary>
     public static EntityData Extract(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
         => ExtractCore(entitySymbol, isView: false, cancellationToken);
 
