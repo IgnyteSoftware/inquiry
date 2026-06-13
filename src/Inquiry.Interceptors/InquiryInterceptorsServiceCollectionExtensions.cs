@@ -13,9 +13,10 @@ namespace Inquiry.DependencyInjection;
 public static class InquiryInterceptorsServiceCollectionExtensions
 {
     /// <summary>
-    /// Logs a warning whenever a command's provider round trip takes at least
-    /// <paramref name="threshold"/> (default 1 second). Command text is logged; parameter values
-    /// never are.
+    /// Logs a warning whenever a command takes at least <paramref name="threshold"/>
+    /// (default 1 second), measured executing → executed — for queries that includes result
+    /// reading and materialization, not just the provider round trip. Command text is logged;
+    /// parameter values never are.
     /// </summary>
     public static IServiceCollection AddInquirySlowQueryLogging(this IServiceCollection services, TimeSpan? threshold = null)
     {

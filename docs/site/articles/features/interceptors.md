@@ -10,7 +10,7 @@ The core ships the seam only. **`Inquiry.Interceptors`** is the opt-in companion
 builder.Services.AddInquirySlowQueryLogging(TimeSpan.FromMilliseconds(500));   // default 1s
 ```
 
-Logs a warning on the `SlowQueryLoggingInterceptor` category whenever a command's **provider round trip** (executing → executed; result enumeration excluded) meets the threshold:
+Logs a warning on the `ILogger<SlowQueryLoggingInterceptor>` category (the type's full name) whenever a command's **executing → executed window** meets the threshold. For queries that window covers the full command — provider execution *plus* result reading and materialization — which is usually what "this query is slow" means in practice:
 
 > `Inquiry command took 1240 ms (threshold 500 ms): SELECT … FROM "Orders" WHERE …`
 

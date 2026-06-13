@@ -73,6 +73,8 @@ public sealed class SqlCommenterInterceptor : IInquiryCommandInterceptor
     }
 
     private static string Escape(string value)
-        // Quotes would break the comment's value quoting; '*/' would terminate the SQL comment.
-        => value.Replace("'", "\\'").Replace("*/", string.Empty);
+        // The sqlcommenter spec URL-encodes values before single-quoting them, which is also what
+        // makes the comment safe to embed: quotes become %27 and '/' becomes %2F, so neither the
+        // value quoting nor the surrounding SQL comment can be terminated by tag content.
+        => Uri.EscapeDataString(value);
 }
