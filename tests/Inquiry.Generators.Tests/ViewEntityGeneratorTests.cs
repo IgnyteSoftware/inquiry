@@ -148,6 +148,37 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void StoredProcedureOnViewStoreReportsINQ052()
+    {
+        // A stored procedure is arbitrary SQL that can write, so it must not ride a read-only view store.
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryView("v_Summary")]
+            public sealed class Summary
+            {
+                [InquiryColumn("Id")]
+                public string Id { get; set; } = string.Empty;
+            }
+
+            public partial class SummaryStore : InquiryStore<Demo.Summary>
+            {
+                [InquiryStoredProcedure("usp_DoStuff")]
+                public partial Task<int> DoStuffAsync(int n, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ052");
+    }
+
+    [Fact]
     public void KeyBasedSelectOnKeylessViewReportsINQ053()
     {
         const string source = """

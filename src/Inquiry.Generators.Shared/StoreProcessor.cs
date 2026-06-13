@@ -1213,8 +1213,10 @@ internal static class StoreProcessor
         predicatePlan = null;
         selectPlan = null;
 
-        // A view-mapped entity is read-only: reject any mutating operation up front (INQ052).
-        if (entity.IsView && IsMutatingOperation(method.Operation))
+        // A view-mapped entity is read-only: reject any non-read operation up front (INQ052). That
+        // is every mutating operation, plus [InquiryStoredProcedure] — a procedure is arbitrary SQL
+        // not bound to the view and can write, so it must not ride a read-only view store.
+        if (entity.IsView && (IsMutatingOperation(method.Operation) || method.Operation == StoreOperation.StoredProcedure))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ViewIsReadOnly, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
             return false;
