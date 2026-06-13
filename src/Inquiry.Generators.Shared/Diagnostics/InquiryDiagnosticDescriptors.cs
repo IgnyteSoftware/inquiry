@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ059.
+    //                  INQ045–INQ060.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -38,6 +38,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ055–INQ056  Auditing user columns          (INQ055 invalid type/placement, INQ056 duplicate) [IN USE]
     //   INQ057         Server-computed column          (Computed combined with key/default/audit/etc.) [IN USE]
     //   INQ059         Global query filter             ([InquiryGlobalFilter] on non-bool / key / generated / token / soft-delete) [IN USE]
+    //   INQ060         JSON-path predicate             ([InquiryWhere(JsonPath=…)] on non-string / converter column, or malformed path) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -528,6 +529,18 @@ internal static class InquiryDiagnosticDescriptors
         "INQ059",
         "InquiryGlobalFilter column is invalid",
         "Entity '{0}' marks property '{1}' with [InquiryGlobalFilter], but it is not usable as a global filter. The column must be a non-nullable bool and must not be a key, database-generated, database-defaulted, the soft-delete indicator, or a concurrency token.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ060: an [InquiryWhere(JsonPath = …)] criterion filters inside a JSON column, so the named field
+    // must be a plain string column holding JSON text (no value converter — the comparison value binds as
+    // text, not through the column's converter) and the path must be a dotted object path whose segments
+    // are unquoted identifiers — the cross-dialect subset that needs no quoting in any engine.
+    public static readonly DiagnosticDescriptor JsonPathPredicateInvalid = new(
+        "INQ060",
+        "InquiryWhere JSON-path criterion is invalid",
+        "Store method '{0}' filters field '{1}' with a JsonPath, but it cannot. The field must be a plain string column holding JSON text (no value converter), and the path must be a dotted object path like \"$.address.city\" — each segment an unquoted identifier (letter or '_', then letters/digits/'_'); no array indices, hyphens, or quoted keys.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

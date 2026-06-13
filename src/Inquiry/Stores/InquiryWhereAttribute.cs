@@ -42,4 +42,13 @@ public sealed class InquiryWhereAttribute : Attribute
     /// (rather than the default AND). Has no effect on the first criterion.
     /// </summary>
     public bool Or { get; set; }
+
+    /// <summary>
+    /// Gets or sets a JSON path (e.g. <c>"$.address.city"</c>) to filter <em>inside</em> a JSON column.
+    /// When set, <see cref="Field"/> must name a plain <see cref="string"/> column holding JSON text (no
+    /// value converter), and the criterion compares the dialect's JSON-extraction of that path
+    /// (<c>json_extract</c> / <c>JSON_VALUE</c> / <c>#&gt;&gt;</c>) against the bound parameter as text.
+    /// Null (the default) for an ordinary column comparison. See INQ060 for the placement rules.
+    /// </summary>
+    public string? JsonPath { get; set; }
 }

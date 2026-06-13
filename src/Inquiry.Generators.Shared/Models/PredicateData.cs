@@ -12,4 +12,12 @@ namespace Inquiry.Generators.Models;
 internal sealed record PredicateData(
     string Field,
     SqlCompareOp Op,
-    bool IsOr);
+    bool IsOr)
+{
+    /// <summary>
+    /// JSON path (<c>$.a.b</c>) when this criterion filters inside a JSON column ([InquiryWhere.JsonPath]),
+    /// or null for an ordinary column comparison. When set, <see cref="Field"/> names the JSON text column
+    /// and the WHERE renders the dialect's JSON extraction of this path instead of the bare column.
+    /// </summary>
+    public string? JsonPath { get; init; }
+}

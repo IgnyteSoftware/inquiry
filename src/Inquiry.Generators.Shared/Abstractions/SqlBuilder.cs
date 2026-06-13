@@ -565,7 +565,11 @@ public abstract class SqlBuilder
     /// <summary>Renders a single criterion. Dispatches LIKE and IN to overridable hooks.</summary>
     protected string RenderPredicate(SqlPredicate predicate)
     {
-        var column = QuoteIdentifier(predicate.Column.ColumnName);
+        // A JSON-path criterion compares the dialect's extraction of the path inside the JSON column
+        // ([InquiryWhere.JsonPath]); an ordinary criterion compares the bare quoted column.
+        var column = predicate.JsonPath is { } jsonPath
+            ? RenderJsonPathExtract(QuoteIdentifier(predicate.Column.ColumnName), jsonPath)
+            : QuoteIdentifier(predicate.Column.ColumnName);
         switch (predicate.Op)
         {
             // SqlPredicate carries the bare logical parameter name; apply the dialect sigil here
@@ -601,6 +605,30 @@ public abstract class SqlBuilder
     /// </summary>
     protected virtual string RenderIn(string quotedColumn, string parameterName)
         => quotedColumn + " IN (" + parameterName + ")";
+
+    /// <summary>
+    /// Renders the text extraction of a JSON path (<c>$.a.b</c>) from a JSON column, for the
+    /// <c>[InquiryWhere(JsonPath = …)]</c> predicate. The result is compared against a bound parameter
+    /// as text. The default uses the SQL/JSON-path form (<c>json_extract(col, '$.a.b')</c>) that SQLite
+    /// uses and MySQL/SqlServer/Oracle override toward their own function; PostgreSQL overrides toward
+    /// its <c>#&gt;&gt;</c> path operator (a different path syntax). <paramref name="jsonPath"/> is a
+    /// compile-time constant attribute argument — never runtime input — so it embeds directly.
+    /// </summary>
+    protected virtual string RenderJsonPathExtract(string quotedColumn, string jsonPath)
+        => "json_extract(" + quotedColumn + ", '" + jsonPath + "')";
+
+    /// <summary>
+    /// Translates a SQL/JSON dotted path (<c>$.a.b</c>) into a PostgreSQL <c>#&gt;&gt;</c> text-path
+    /// array literal (<c>{a,b}</c>). Shared so the PostgreSQL builder can reuse it. Only dotted object
+    /// paths are supported in v1 (no array indices).
+    /// </summary>
+    protected static string JsonPathToPostgresTextPath(string jsonPath)
+    {
+        var trimmed = jsonPath.StartsWith("$.", System.StringComparison.Ordinal)
+            ? jsonPath.Substring(2)
+            : jsonPath.StartsWith("$", System.StringComparison.Ordinal) ? jsonPath.Substring(1) : jsonPath;
+        return "{" + trimmed.Replace(".", ",") + "}";
+    }
 
     /// <summary>
     /// True when this dialect binds an IN collection as a single native array parameter

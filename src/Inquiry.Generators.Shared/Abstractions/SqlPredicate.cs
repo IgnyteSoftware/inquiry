@@ -34,13 +34,14 @@ public enum SqlCompareOp
 /// </remarks>
 public sealed class SqlPredicate
 {
-    public SqlPredicate(IColumn column, SqlCompareOp op, string? parameterName, string? parameterNameHi, bool isOr)
+    public SqlPredicate(IColumn column, SqlCompareOp op, string? parameterName, string? parameterNameHi, bool isOr, string? jsonPath = null)
     {
         Column = column;
         Op = op;
         ParameterName = parameterName;
         ParameterNameHi = parameterNameHi;
         IsOr = isOr;
+        JsonPath = jsonPath;
     }
 
     public IColumn Column { get; }
@@ -48,6 +49,13 @@ public sealed class SqlPredicate
     public string? ParameterName { get; }
     public string? ParameterNameHi { get; }
     public bool IsOr { get; }
+
+    /// <summary>
+    /// A JSON path (<c>$.a.b</c>) when this criterion filters inside <see cref="Column"/> (a JSON text
+    /// column), or null for an ordinary column comparison. When set, <see cref="SqlBuilder.RenderPredicate"/>
+    /// compares the dialect's JSON extraction of this path rather than the bare column.
+    /// </summary>
+    public string? JsonPath { get; }
 
     /// <summary>Number of bound parameters the operator consumes (IN counts its single sentinel as 1).</summary>
     public static int ParameterArity(SqlCompareOp op) => op switch

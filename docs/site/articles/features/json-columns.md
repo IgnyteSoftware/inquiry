@@ -35,3 +35,7 @@ public sealed class Customer
 ## The generator emits
 
 The binder writes `System.Text.Json.JsonSerializer.Serialize(_e.Preferences)`; the materializer calls `JsonSerializer.Deserialize<CustomerPreferences>(reader.GetString(i))`. Serializer options can be customized per-property via `[InquiryJson(SerializerOptions = ...)]`.
+
+## See also
+
+- [JSON-path querying](json-path-querying.md) — filter *inside* a JSON text column from a predicate method (`[InquiryWhere(JsonPath = "$.a.b")]`).

@@ -238,4 +238,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         var name = string.IsNullOrEmpty(context.RawSchema) ? context.RawTableName : context.RawSchema + "." + context.RawTableName;
         return "IF OBJECT_ID(N'" + name.Replace("'", "''") + "', N'U') IS NULL\nBEGIN\n    CREATE TABLE " + context.Table + " (\n        " + body + "\n    );\nEND;";
     }
+
+    // SQL Server extracts a JSON scalar with JSON_VALUE (returns the value as text).
+    protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
+        => "JSON_VALUE(" + quotedColumn + ", '" + jsonPath + "')";
 }

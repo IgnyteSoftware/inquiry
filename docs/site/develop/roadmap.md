@@ -68,8 +68,8 @@
   (each test inside a rolled-back transaction with connection ownership, enabling parallel
   database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
   Bogus-compatible).
-- **JSON-path querying & column-encryption docs** *(adoption review 2026-06-12)*. Predicate support
-  for filtering into JSON columns (EF parity), and documentation for SQL Server Always Encrypted /
+- **Column-encryption docs** *(adoption review 2026-06-12)*. JSON-path predicate querying shipped — see
+  [Recently resolved](#recently-resolved). Remaining: documentation for SQL Server Always Encrypted /
   pgcrypto patterns over the existing value-converter seam (mostly docs, little code).
 - **Release engineering & governance** *(adoption review 2026-06-12)*. Real `RepositoryUrl`
   (currently a placeholder), SourceLink + symbol packages, package readme/icon, a pack/publish
@@ -171,6 +171,16 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **JSON-path predicate querying `[InquiryWhere(JsonPath = …)]` (2026-06-13):** filter inside a JSON
+  text column from a predicate method (EF JSON-query parity). A criterion compares the dialect's
+  extraction of a `$.a.b` path against the bound parameter — `json_extract` (SQLite), `JSON_VALUE`
+  (SqlServer/Oracle), `JSON_UNQUOTE(JSON_EXTRACT(…))` (MySQL), and the `#>>` text-path operator with a
+  translated `{a,b}` path (PostgreSQL). It composes with AND/OR, the other operators, and the active-row
+  filters like any criterion; the bound parameter name derives from the path leaf (`$.address.city` →
+  `@city`). v1 scope: the field must be a plain `string` JSON-text column (no value converter) and
+  comparisons are textual — invalid placement / malformed path is **`INQ060`**. Generator snapshots
+  across all five dialects + live SQLite round-trip (top-level, nested, composed). See
+  [JSON-path querying](../articles/features/json-path-querying.md).
 - **Global query filters `[InquiryGlobalFilter]` (2026-06-13):** the EF `HasQueryFilter` parity for a
   static column predicate, generalizing the soft-delete active-row machinery to columns you define
   (multi-tenant isolation, `IsActive`/`IsPublished` gates). A non-nullable `bool` column marked

@@ -167,4 +167,10 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         => (column.TypeClass == DbTypeClass.Int64 ? "BIGSERIAL" : "SERIAL") + " PRIMARY KEY";
 
     protected override bool SupportsCreateIndexIfNotExists => true;
+
+    // PostgreSQL extracts JSON text with the #>> path operator (a different path syntax than the SQL/JSON
+    // `$.a.b` form the other dialects take), so translate the path to its `{a,b}` array literal. The column
+    // is cast to jsonb so the operator applies whether it is stored as text or json/jsonb.
+    protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
+        => "(" + quotedColumn + ")::jsonb #>> '" + JsonPathToPostgresTextPath(jsonPath) + "'";
 }

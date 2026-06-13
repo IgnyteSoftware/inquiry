@@ -300,4 +300,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle has no CREATE TABLE IF NOT EXISTS; emit a plain CREATE TABLE (re-create safety is out of scope).
     protected override string WrapCreateTable(SqlBuildContext context, string body)
         => "CREATE TABLE " + context.Table + " (\n    " + body + "\n)";
+
+    // Oracle 12c+ extracts a JSON scalar with JSON_VALUE (returns the value as text).
+    protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
+        => "JSON_VALUE(" + quotedColumn + ", '" + jsonPath + "')";
 }
