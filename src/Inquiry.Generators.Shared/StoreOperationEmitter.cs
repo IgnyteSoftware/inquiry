@@ -24,6 +24,7 @@ internal static class StoreOperationEmitter
         ResolvedSelectPlan? selectPlan,
         EntityData entity,
         Dictionary<string, EntityData> relationChildEntities,
+        Dictionary<string, EntityData> relationJunctionEntities,
         SqlBuilder sqlBuilder,
         string? baseSelectField = null,
         string? resultTypeOverride = null,
@@ -70,7 +71,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.SelectAllEager:
-                EmitSelectAllEager(source, method, entityType, cancellation, entity, relationChildEntities, baseSelectField ?? "_sqlSelectAll");
+                EmitSelectAllEager(source, method, entityType, cancellation, entity, relationChildEntities, relationJunctionEntities, baseSelectField ?? "_sqlSelectAll");
                 break;
 
             case StoreOperation.SelectOneByKey:
@@ -1145,6 +1146,24 @@ internal static class StoreOperationEmitter
             var childType = childEntity.FullyQualifiedName;
             var childStructMat = childEntity.StructMaterializerFullName;
             var fieldName = $"_sql_{relation.PropertyName}";
+            if (relation.IsManyToMany)
+            {
+                // The JOIN const filters by this entity's key (bound as the parent key parameter).
+                source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
+                source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}, {childStructMat}>(");
+                source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
+                source.AppendLine($"                    {fieldName},");
+                source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
+                source.AppendLine("                    {");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", _entity.{entity.Keys[0].PropertyName}),");
+                source.AppendLine("                    }),");
+                source.AppendLine("                default,");
+                source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
+                source.AppendLine($"            _entity.{relation.PropertyName} = _{relation.PropertyName}_list;");
+                continue;
+            }
+
             if (relation.IsCollection)
             {
                 source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
@@ -1179,7 +1198,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("    }");
     }
 
-    private static void EmitSelectAllEager(StringBuilder source, StoreMethodData method, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
+    private static void EmitSelectAllEager(StringBuilder source, StoreMethodData method, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, Dictionary<string, EntityData> relationJunctionEntities, string parentSelectField)
     {
         var parametersWithAttr = GetParameterDeclaration(method.Parameters, enumeratorCancellation: true);
         var parentStructMat = entity.StructMaterializerFullName;
@@ -1197,6 +1216,51 @@ internal static class StoreOperationEmitter
             var childType = childEntity.FullyQualifiedName;
             var fieldName = $"_sql_{relation.PropertyName}";
             var childStructMat = childEntity.StructMaterializerFullName;
+            if (relation.IsManyToMany)
+            {
+                // Load all children indexed by key, then load the junction rows and group the children
+                // under each parent key — a two-query in-memory assembly (no N+1) reusing both materializers.
+                var junctionEntity = relationJunctionEntities[relation.PropertyName];
+                var junctionType = junctionEntity.FullyQualifiedName;
+                var junctionStructMat = junctionEntity.StructMaterializerFullName;
+                var childKey = childEntity.Keys[0];
+                var childKeyType = childKey.Type.NonNullableDisplayName;
+                var jParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
+                var jChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!;
+                var parentKeyType = entity.Keys[0].Type.NonNullableDisplayName;
+
+                source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>();");
+                source.AppendLine($"        await foreach (var _c in Inquiry.QueryAsync<{childType}, {childStructMat}>(new global::Inquiry.Commands.InquiryCommand({fieldName}_All), default, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine("        {");
+                if (childKey.Type.IsNullable)
+                {
+                    source.AppendLine($"            if (_c.{childKey.PropertyName} is null) continue;");
+                }
+                source.AppendLine($"            _childByKey_{relation.PropertyName}[{NonNullableValueExpression(childKey.Type, $"_c.{childKey.PropertyName}")}] = _c;");
+                source.AppendLine("        }");
+
+                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>();");
+                source.AppendLine($"        await foreach (var _j in Inquiry.QueryAsync<{junctionType}, {junctionStructMat}>(new global::Inquiry.Commands.InquiryCommand({fieldName}_Junction), default, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine("        {");
+                if (jChildFk.Type.IsNullable)
+                {
+                    source.AppendLine($"            if (_j.{jChildFk.PropertyName} is null) continue;");
+                }
+                if (jParentFk.Type.IsNullable)
+                {
+                    source.AppendLine($"            if (_j.{jParentFk.PropertyName} is null) continue;");
+                }
+                source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jChildFk.Type, $"_j.{jChildFk.PropertyName}")}, out var _child)) continue;");
+                source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}, out var _grp))");
+                source.AppendLine("            {");
+                source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
+                source.AppendLine($"                _grouped_{relation.PropertyName}[{NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}] = _grp;");
+                source.AppendLine("            }");
+                source.AppendLine("            _grp.Add(_child);");
+                source.AppendLine("        }");
+                continue;
+            }
+
             if (relation.IsCollection)
             {
                 var childFkColumn = FindColumn(childEntity, relation.ForeignKeyProperty);

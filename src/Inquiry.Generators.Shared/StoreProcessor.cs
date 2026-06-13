@@ -834,6 +834,7 @@ internal static class StoreProcessor
         // bad relations to surface as null-forgive NREs at generator time or invalid generated
         // C# with no clear diagnostic.
         var relationChildEntities = BuildRelationChildEntities(entity, entities);
+        var relationJunctionEntities = BuildRelationJunctionEntities(entity, entities);
 
         // Per-method combined validation. Successful methods carry their resolved field columns and,
         // for SelectAllByPredicate, the resolved predicate plan; ordered/paged/keyset selects also carry
@@ -841,7 +842,7 @@ internal static class StoreProcessor
         var valid = new List<(StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan)>();
         foreach (var method in store.Methods)
         {
-            if (TryValidateForEmit(context, method, entity, relationChildEntities, sqlBuilder, out var fieldColumns, out var predicatePlan, out var selectPlan))
+            if (TryValidateForEmit(context, method, entity, relationChildEntities, relationJunctionEntities, sqlBuilder, out var fieldColumns, out var predicatePlan, out var selectPlan))
             {
                 valid.Add((method, fieldColumns, predicatePlan, selectPlan));
             }
@@ -1158,6 +1159,24 @@ internal static class StoreProcessor
                 }
 
                 var childCtx = new SqlBuildContext(sqlBuilder, childEntity.Schema, childEntity.TableName, ToColumnList(childEntity.Columns));
+
+                if (relation.IsManyToMany)
+                {
+                    // M:N consts: the single-parent JOIN through the junction, plus the two batch selects
+                    // (all children + all junction rows) the all-eager loader assembles in memory.
+                    var junctionEntity = relationJunctionEntities[relation.PropertyName];
+                    var junctionParentFkColumn = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!.ColumnName;
+                    var junctionChildFkColumn = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!.ColumnName;
+                    var junctionCtx = new SqlBuildContext(sqlBuilder, junctionEntity.Schema, junctionEntity.TableName, ToColumnList(junctionEntity.Columns));
+
+                    AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildManyToManySelectByParentSql(
+                        childCtx, ToColumnList(childEntity.Columns), junctionEntity.Schema, junctionEntity.TableName,
+                        junctionChildFkColumn, childEntity.Keys[0].ColumnName, junctionParentFkColumn, entity.Keys[0].PropertyName));
+                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_All", sqlBuilder.BuildSelectAllSql(childCtx));
+                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction", sqlBuilder.BuildSelectAllSql(junctionCtx));
+                    continue;
+                }
+
                 var filterColumn = relation.IsCollection
                     ? FindColumn(childEntity, relation.ForeignKeyProperty)!
                     : childEntity.Keys[0];
@@ -1225,13 +1244,13 @@ internal static class StoreProcessor
             if (projectionMethods.TryGetValue(method.Name, out var projection))
             {
                 // Project: select the projection's columns and materialize the projection type.
-                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities,
+                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
                     sqlBuilder, "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
             }
             else
             {
                 baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
-                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, sqlBuilder, baseSelectField);
+                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities, sqlBuilder, baseSelectField);
             }
         }
 
@@ -1291,7 +1310,7 @@ internal static class StoreProcessor
             or StoreOperation.InsertAll or StoreOperation.BulkInsert or StoreOperation.UpdateAll
             or StoreOperation.DeleteAll or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate;
 
-    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, IReadOnlyDictionary<string, EntityData> relationChildEntities, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
+    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, IReadOnlyDictionary<string, EntityData> relationChildEntities, IReadOnlyDictionary<string, EntityData> relationJunctionEntities, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
     {
         fieldColumns = Array.Empty<ColumnData>();
         predicatePlan = null;
@@ -1457,6 +1476,22 @@ internal static class StoreProcessor
                 if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity))
                 {
                     // Relation to a non-[InquiryTable] type; the emitter handles this gracefully.
+                    continue;
+                }
+
+                if (relation.IsManyToMany)
+                {
+                    // M:N emit needs a resolvable junction carrying both named FK columns and a single-key
+                    // child; otherwise drop the eager method (INQ063 already reported at declaration time).
+                    var junctionOk = relation.IsCollection &&
+                        relationJunctionEntities.TryGetValue(relation.PropertyName, out var junction) &&
+                        FindColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&
+                        FindColumn(junction, relation.JunctionChildForeignKeyProperty ?? string.Empty) is not null;
+                    if (!junctionOk || childEntity.Keys.Count != 1)
+                    {
+                        return false;
+                    }
+
                     continue;
                 }
 
@@ -1961,6 +1996,21 @@ internal static class StoreProcessor
             if (entities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var child))
             {
                 result[relation.PropertyName] = child;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Maps each many-to-many relation property to its mapped junction (link) entity.</summary>
+    private static Dictionary<string, EntityData> BuildRelationJunctionEntities(EntityData entity, IReadOnlyDictionary<string, EntityData> entities)
+    {
+        var result = new Dictionary<string, EntityData>();
+        foreach (var relation in entity.Relations)
+        {
+            if (relation.IsManyToMany && relation.JunctionEntityFullyQualifiedName is { } fqn && entities.TryGetValue(fqn, out var junction))
+            {
+                result[relation.PropertyName] = junction;
             }
         }
 
