@@ -75,13 +75,15 @@ public string FullName { get; set; } = "";
 Inquiry ships advisory analyzer "lints" for risky schema shapes. They are **off by default** — turn them on in `.editorconfig` per ID when you want them:
 
 ```ini
-# Surface the unindexed-foreign-key lint as a warning (or info/error)
+# Surface a lint as a warning (or info/error) — opt in per ID
 dotnet_diagnostic.INQ061.severity = warning
+dotnet_diagnostic.INQ062.severity = warning
 ```
 
 | ID | Lints | Why |
 |---|---|---|
 | **`INQ061`** | A foreign-key column with no index. | Most engines (SQL Server, PostgreSQL, Oracle, SQLite) don't auto-index foreign keys, so joins and `ON DELETE/UPDATE` cascades over the column scan the table. Add `IsIndexed = true` to the column's `[InquiryColumn]` / `[InquiryForeignKey]`. **MySQL/InnoDB auto-indexes FK constraints and is exempt.** |
+| **`INQ062`** | A `decimal` column with no explicit precision/scale. | It silently takes the dialect default (e.g. `DECIMAL(18,2)`), which can round — a real hazard for money. Set `[InquiryColumn(Precision = …, Scale = …)]` (or `SqlType`). EF Core's `DecimalTypeDefaultWarning` is the same advisory. |
 
 Because they're off by default, the lints never break a build until you opt in — then they participate in `dotnet build` (and CI) at the severity you choose, just like any analyzer diagnostic.
 
