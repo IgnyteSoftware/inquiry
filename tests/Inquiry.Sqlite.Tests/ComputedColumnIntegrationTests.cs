@@ -40,9 +40,10 @@ public partial class ComputedPersonStore : InquiryStore<ComputedPerson>
 /// </summary>
 public sealed class ComputedColumnIntegrationTests
 {
-    // The DDL is hand-written here to mirror what InquiryGeneratedSchema would emit for the view's
-    // computed column (the SqliteTestHarness applies arbitrary DDL).
-    private const string Ddl = "CREATE TABLE ComputedPerson (Id INTEGER PRIMARY KEY AUTOINCREMENT, FirstName TEXT NOT NULL, LastName TEXT NOT NULL, FullName TEXT AS (FirstName || ' ' || LastName));";
+    // Mirrors the generated SQLite computed-column form exactly — the type-less expression form
+    // `FullName AS (…)` that SqlBuilder.RenderComputedColumn emits — so this test would catch a
+    // DDL-shape regression rather than mask it.
+    private const string Ddl = "CREATE TABLE ComputedPerson (Id INTEGER PRIMARY KEY AUTOINCREMENT, FirstName TEXT NOT NULL, LastName TEXT NOT NULL, FullName AS (FirstName || ' ' || LastName));";
 
     [Fact]
     public async Task ComputedValueIsCalculatedByDatabaseOnInsert()
