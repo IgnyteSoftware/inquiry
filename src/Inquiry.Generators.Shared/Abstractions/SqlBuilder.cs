@@ -482,6 +482,13 @@ public abstract class SqlBuilder
     public virtual bool RequiresBoundedStringKeys => false;
 
     /// <summary>
+    /// Whether the dialect automatically creates a backing index for a foreign-key column when its
+    /// constraint is generated. MySQL/InnoDB does; the others do not, so an un-indexed FK column there
+    /// gets the INQ061 lint. Default false; MySQL overrides to true.
+    /// </summary>
+    public virtual bool ForeignKeysAreAutoIndexed => false;
+
+    /// <summary>
     /// Maps a column's dialect-neutral <see cref="IColumn.TypeClass"/> (plus length/precision/scale)
     /// to a physical column type for this dialect. No leading column name. Abstract so every provider
     /// supplies its own type table — adding a dialect forces an explicit mapping rather than a silent default.

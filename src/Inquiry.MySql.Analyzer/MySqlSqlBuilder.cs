@@ -237,6 +237,10 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     // MySQL cannot index LONGTEXT without a prefix length; a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
 
+    // MySQL/InnoDB auto-creates a backing index for every foreign-key column, so the INQ061
+    // unindexed-FK lint does not apply.
+    public override bool ForeignKeysAreAutoIndexed => true;
+
     /// <summary>MySQL computed columns are typed and STORED.</summary>
     protected override string RenderComputedColumn(IColumn column)
         => ColumnType(column) + " GENERATED ALWAYS AS (" + column.ComputedExpression + ") STORED";

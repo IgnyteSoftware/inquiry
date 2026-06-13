@@ -59,8 +59,10 @@
   (Django `QuerySet.explain()` analog).
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
-- **DDL safety lint** *(integration research 2026-06-12)*. squawk-inspired analyzer warnings for
-  risky patterns in generated DDL; small and fits the existing analyzer/diagnostic surface.
+- **DDL safety lint — more rules** *(integration research 2026-06-12)*. The opt-in lint surface shipped
+  with the first rule (INQ061 unindexed foreign key) — see [Recently resolved](#recently-resolved).
+  squawk-inspired follow-ups: nullable column with a default, oversized/unbounded text columns, missing
+  index on a frequently-filtered column.
 - **Testing follow-ups: transaction sandbox + data factories** *(adoption review 2026-06-12)*.
   The store interfaces and the `Inquiry.Testing` package (SQLite fixture, recording interceptor,
   Respawn reset) shipped — see [Recently resolved](#recently-resolved) and
@@ -170,6 +172,14 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **DDL safety lints — opt-in surface + first rule (2026-06-13):** advisory analyzer lints for risky
+  schema shapes, **off by default** (consumers opt in per ID via `.editorconfig`, so a lint never breaks
+  a build until requested). First rule **`INQ061`**: a foreign-key column with no index — most engines
+  don't auto-index FKs, so joins and cascades over them scan; dialect-aware (MySQL/InnoDB auto-indexes FK
+  constraints and is exempt, unless `GenerateForeignKeys = false`). Generator tests across the
+  auto-indexing / non-auto-indexing dialects + indexed/unindexed columns. See
+  [Schema DDL](../articles/features/schema-ddl.md#ddl-safety-lints-opt-in).
 
 - **JSON-path predicate querying `[InquiryWhere(JsonPath = …)]` (2026-06-13):** filter inside a JSON
   text column from a predicate method (EF JSON-query parity). A criterion compares the dialect's

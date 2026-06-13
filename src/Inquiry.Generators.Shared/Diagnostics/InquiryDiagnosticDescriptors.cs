@@ -39,6 +39,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ057         Server-computed column          (Computed combined with key/default/audit/etc.) [IN USE]
     //   INQ059         Global query filter             ([InquiryGlobalFilter] on non-bool / key / generated / token / soft-delete) [IN USE]
     //   INQ060         JSON-path predicate             ([InquiryWhere(JsonPath=…)] on non-string / converter column, or malformed path) [IN USE]
+    //   INQ061         DDL safety lint (off by default) (unindexed foreign-key column; opt in via .editorconfig) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -304,6 +305,19 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    // INQ061 (Info — a DDL "lint"): a foreign-key column with no index. Most engines do not auto-index
+    // foreign keys, so joins and ON DELETE/UPDATE cascades over the column scan the table; an explicit
+    // index is the standard remedy. Advisory severity (Info) so it never breaks a warnings-as-errors
+    // build — opt into enforcement by raising INQ061 in .editorconfig. MySQL auto-indexes FK columns and
+    // is exempt.
+    public static readonly DiagnosticDescriptor UnindexedForeignKey = new(
+        "INQ061",
+        "Foreign-key column has no index",
+        "Entity '{0}' foreign-key column '{1}' has no index. {2} does not auto-index foreign keys, so joins and cascades over it scan the table. Add IsIndexed = true to the column's [InquiryColumn]/[InquiryForeignKey] to index it.",
+        "Inquiry",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: false);
 
     public static readonly DiagnosticDescriptor ConverterInvalid = new(
         "INQ037",

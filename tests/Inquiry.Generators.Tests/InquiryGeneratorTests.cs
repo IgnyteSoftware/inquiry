@@ -2254,7 +2254,7 @@ public sealed partial class InquiryGeneratorTests
         }
     }
 
-    private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite")
+    private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite", string[]? enableDiagnostics = null)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
         var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
@@ -2270,11 +2270,21 @@ public sealed partial class InquiryGeneratorTests
                 parseOptions));
         }
 
+        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable);
+
+        // Off-by-default diagnostics (e.g. the INQ061 DDL lint) are suppressed unless a consumer opts in
+        // via .editorconfig; mirror that opt-in here so a lint test can assert the diagnostic surfaces.
+        if (enableDiagnostics is { Length: > 0 })
+        {
+            compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(
+                enableDiagnostics.ToDictionary(static id => id, static _ => ReportDiagnostic.Info));
+        }
+
         var compilation = CSharpCompilation.Create(
             "InquiryGeneratorConsumerTests",
             trees,
             GetReferences(),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+            compilationOptions);
 
         // Each provider's analyzer ships a self-contained generator; drive all three to mirror a
         // real consumer that has referenced multiple provider packages. Each generator runs the
