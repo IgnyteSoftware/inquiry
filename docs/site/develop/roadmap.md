@@ -116,8 +116,6 @@
 - **Tenant/global query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. Generalize the
   soft-delete global-filter machinery to user-defined columns (EF `HasQueryFilter` / EF 10 named
   filters), plus row-level-security session helpers for PostgreSQL (Drizzle RLS-style).
-- **Data-seeding convention** *(gap research 2026-06-12)*. A thin first-class seeding hook
-  (EF `UseSeeding` / `prisma db seed` analog) formalizing the sample's `DataSeeder` pattern.
 - **Provider-specific column types** *(gap research 2026-06-12)*. SQL Server **vector** columns first
   (EF 10 `SqlVector` parity — AI embeddings / semantic search); spatial and `hierarchyid` by demand.
 - **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 5;
@@ -193,6 +191,11 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Data-seeding convention (2026-06-13):** `IInquiryDataSeeder` + `AddInquirySeeder<T>()`
+  (scoped, registration-ordered, duplicate-safe via `TryAddEnumerable`) and
+  `IServiceProvider.SeedInquiryAsync()` (one scope, sequential, explicit invocation only) —
+  the EF `UseSeeding`/`prisma db seed` analog. The Blazor sample's 13-table `DataSeeder` now
+  runs through the hook. See [Data seeding](../articles/features/data-seeding.md).
 - **Auditing timestamp columns (2026-06-12):** `[InquiryCreatedAt]`/`[InquiryModifiedAt]` on a
   `DateTime`/`DateTimeOffset` property — insert/upsert stamp `CreatedAt` when unset (supplied
   values kept) and every generated insert/update/upsert (incl. batch forms) stamps `ModifiedAt`;

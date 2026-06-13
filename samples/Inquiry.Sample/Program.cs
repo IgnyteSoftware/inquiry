@@ -1,6 +1,7 @@
 using Inquiry.DependencyInjection;
 using Inquiry.Sample;
 using Inquiry.Sample.Services;
+using Inquiry.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +29,7 @@ builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<DemographicsService>();
 builder.Services.AddScoped<EmployeeTerritoryService>();
 builder.Services.AddScoped<OrderTransactionService>();
-builder.Services.AddScoped<DataSeeder>();
+builder.Services.AddInquirySeeder<DataSeeder>();
 
 // Blazor Server pipeline.
 builder.Services.AddRazorPages();
@@ -36,12 +37,8 @@ builder.Services.AddServerSideBlazor();
 
 var app = builder.Build();
 
-// Seed sample data on first run.
-using (var scope = app.Services.CreateScope())
-{
-    var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
-    await seeder.SeedAsync();
-}
+// Seed sample data on first run (runs every registered IInquiryDataSeeder in one scope).
+await app.Services.SeedInquiryAsync();
 
 app.UseStaticFiles();
 app.UseRouting();
