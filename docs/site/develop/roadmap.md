@@ -175,6 +175,15 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Existence tests `[InquiryExists]` (2026-06-13):** the `EXISTS` / EF `.AnyAsync()` analog — returns
+  `Task<bool>` from `SELECT CASE WHEN EXISTS(SELECT 1 FROM … WHERE …) THEN 1 ELSE 0 END`, which
+  short-circuits at the first match (cheaper than `COUNT(*) > 0`). Takes zero or more `[InquiryWhere]`
+  criteria (reusing the predicate-select resolution/binder, including IN/NOT IN expansion); with none it
+  tests the whole table. The inner test composes the active-row filter (soft-delete / global filters). The
+  CASE form is portable across SQLite/SqlServer/PostgreSQL/MySQL (Oracle appends `FROM DUAL`); the 1/0 (or
+  PG boolean) is coerced to `bool` by the scalar path. Generator snapshots (incl. Oracle FROM DUAL,
+  active-row composition) + live SQLite round-trips (whole-table, by-criteria, soft-delete exclusion).
+
 - **Many-to-many relations `[InquiryManyToMany]` (2026-06-13):** eager-loading a M:N association through
   a mapped junction (link) entity. The single-parent eager load (`[InquirySelectOneByKeyEager]`) joins
   the related rows through the junction filtered by the parent key; the all-parents load

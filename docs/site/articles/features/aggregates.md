@@ -35,6 +35,28 @@ private const string _sqlAvgUnitPrice      = "SELECT AVG(\"UnitPrice\") FROM \"P
 
 Each aggregate routes through `ExecuteScalarAsync<T>` — the return type drives how the result is converted.
 
+## Existence checks
+
+`[InquiryExists]` returns `Task<bool>` — the `EXISTS` / EF `.AnyAsync()` analog. It short-circuits at the first match, so it's cheaper than a `COUNT(*) > 0`. Apply zero or more `[InquiryWhere]` criteria (exactly as on a predicate select); with none, it tests whether the table has any row at all.
+
+```csharp
+[InquiryExists]
+public partial Task<bool> AnyAsync(CancellationToken ct = default);
+
+[InquiryExists]
+[InquiryWhere("Name")]
+public partial Task<bool> ExistsByNameAsync(string name, CancellationToken ct = default);
+```
+
+```csharp
+private const string _sqlExists_AnyAsync =
+    "SELECT CASE WHEN EXISTS(SELECT 1 FROM \"Products\") THEN 1 ELSE 0 END";
+private const string _sqlExists_ExistsByNameAsync =
+    "SELECT CASE WHEN EXISTS(SELECT 1 FROM \"Products\" WHERE \"Name\" = @Name) THEN 1 ELSE 0 END";
+```
+
+The `CASE WHEN EXISTS(…) THEN 1 ELSE 0 END` form is portable across SQLite / SQL Server / PostgreSQL / MySQL (Oracle appends `FROM DUAL`); the `1`/`0` (or PostgreSQL's native boolean) is coerced to `bool`. Like the aggregates, the inner test composes the active-row filter — a [soft-deleted](soft-delete.md) or [globally-filtered](global-filters.md) row doesn't count as existing.
+
 ## See also
 
 - [Predicates](crud.md#crud) — `[InquiryWhere]` composition.

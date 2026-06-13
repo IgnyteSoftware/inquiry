@@ -232,6 +232,14 @@ internal static class StoreOperationEmitter
                 source.AppendLine("    }");
                 break;
 
+            case StoreOperation.Exists:
+                // EXISTS returns a 1/0 scalar the runtime coerces to bool; criteria (if any) bind through
+                // the predicate binder closure.
+                AppendHeader(source, method, parameters, isAsync: false);
+                EmitExists(source, sqlBuilder, method, predicatePlan!, cancellation);
+                source.AppendLine("    }");
+                break;
+
             case StoreOperation.Aggregate:
                 // SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
                 AppendHeader(source, method, parameters, isAsync: false);
@@ -669,8 +677,46 @@ internal static class StoreOperationEmitter
         string structMat,
         string cancellation)
     {
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlPredicate_" + method.Name);
+
+        if (method.ReturnsList)
+        {
+            source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
+        }
+        else
+        {
+            source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
+        }
+    }
+
+    /// <summary>
+    /// Emits an existence test body ([InquiryExists]): the EXISTS scalar query, returned as a
+    /// <c>Task&lt;bool&gt;</c> through the runtime scalar path (1/0 → bool). With no criteria there are no
+    /// parameters to bind, so the command is returned directly (no binder closure); otherwise the
+    /// predicate binder runs after the pipeline assigns the command text (as for predicate selects).
+    /// </summary>
+    private static void EmitExists(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string cancellation)
+    {
+        var sqlField = "_sqlExists_" + method.Name;
+        if (plan.Bindings.Count == 0)
+        {
+            source.AppendLine($"        return Inquiry.ExecuteScalarAsync<bool>(new global::Inquiry.Commands.InquiryCommand({sqlField}), {cancellation});");
+            return;
+        }
+
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField);
+        source.AppendLine($"        return Inquiry.ExecuteScalarAsync<bool>(_cmd, {cancellation});");
+    }
+
+    /// <summary>
+    /// Emits the <c>var _cmd = new InquiryCommand(sqlField, _c =&gt; { … bind predicate params … });</c>
+    /// shared by predicate selects and existence tests. The binder runs after the pipeline assigns the
+    /// command text, so <c>InquiryInExpansion</c> can rewrite an IN/NOT IN sentinel.
+    /// </summary>
+    private static void EmitPredicateBoundCommand(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string sqlField)
+    {
         source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
-        source.AppendLine($"            _sqlPredicate_{method.Name},");
+        source.AppendLine($"            {sqlField},");
         source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
         source.AppendLine("            {");
         for (var i = 0; i < plan.Bindings.Count; i++)
@@ -690,15 +736,6 @@ internal static class StoreOperationEmitter
             }
         }
         source.AppendLine("            });");
-
-        if (method.ReturnsList)
-        {
-            source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
-        }
-        else
-        {
-            source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
-        }
     }
 
     /// <summary>
