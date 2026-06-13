@@ -55,7 +55,7 @@ private const string _sqlExists_ExistsByNameAsync =
     "SELECT CASE WHEN EXISTS(SELECT 1 FROM \"Products\" WHERE \"Name\" = @Name) THEN 1 ELSE 0 END";
 ```
 
-The `CASE WHEN EXISTS(…) THEN 1 ELSE 0 END` form is portable across SQLite / SQL Server / PostgreSQL / MySQL (Oracle appends `FROM DUAL`); the `1`/`0` (or PostgreSQL's native boolean) is coerced to `bool`. Like the aggregates, the inner test composes the active-row filter — a [soft-deleted](soft-delete.md) or [globally-filtered](global-filters.md) row doesn't count as existing.
+The `CASE WHEN EXISTS(…) THEN 1 ELSE 0 END` form is portable across SQLite / SQL Server / PostgreSQL / MySQL (Oracle appends `FROM DUAL`); the resulting `1`/`0` is coerced to `bool`. Like the aggregates, the inner test composes the active-row filter — a [soft-deleted](soft-delete.md) or [globally-filtered](global-filters.md) row doesn't count as existing.
 
 ## See also
 

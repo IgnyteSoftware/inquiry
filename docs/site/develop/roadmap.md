@@ -180,8 +180,8 @@ open:
   short-circuits at the first match (cheaper than `COUNT(*) > 0`). Takes zero or more `[InquiryWhere]`
   criteria (reusing the predicate-select resolution/binder, including IN/NOT IN expansion); with none it
   tests the whole table. The inner test composes the active-row filter (soft-delete / global filters). The
-  CASE form is portable across SQLite/SqlServer/PostgreSQL/MySQL (Oracle appends `FROM DUAL`); the 1/0 (or
-  PG boolean) is coerced to `bool` by the scalar path. Generator snapshots (incl. Oracle FROM DUAL,
+  CASE form is portable across SQLite/SqlServer/PostgreSQL/MySQL (Oracle appends `FROM DUAL`); the
+  resulting 1/0 is coerced to `bool` by the scalar path. Generator snapshots (incl. Oracle FROM DUAL,
   active-row composition) + live SQLite round-trips (whole-table, by-criteria, soft-delete exclusion).
 
 - **Many-to-many relations `[InquiryManyToMany]` (2026-06-13):** eager-loading a M:N association through
