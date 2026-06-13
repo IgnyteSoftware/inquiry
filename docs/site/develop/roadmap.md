@@ -58,9 +58,6 @@
   identical-SQL/different-parameter executions per scope and warn with call sites; no .NET ORM has
   this) plus an `ExplainAsync` helper surfacing the database query plan for any generated method
   (Django `QuerySet.explain()` analog).
-- **Derived query methods** *(integration research 2026-06-12)*. Infer filter columns from the
-  method name (`SelectByCompanyNameAsync`) so store attributes need no arguments in the common case
-  — the Spring Data convention, done at compile time like Micronaut Data.
 - **`[InquiryModifiedBy]` (who-changed-it auditing)** *(integration research 2026-06-12)*.
   Timestamp auditing shipped (see [Recently resolved](#recently-resolved)); the user/principal
   counterpart needs an ambient current-user accessor seam and pairs naturally with the audit-trail
@@ -186,6 +183,13 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Derived query methods (2026-06-13):** a field-less `[InquirySelectAllByField]` infers its filter
+  columns from the method name (Spring Data convention, compile-time): the segment after the first
+  PascalCase `By`, split on `And` word boundaries, names the fields (`SelectByCountryAndCityAsync` →
+  `Country` AND `City`; a trailing `Async` is ignored). Derived fields resolve through the normal
+  column-resolution path (unknown → INQ007); an explicit field list still wins, and a name with no
+  `By<Field>` segment is INQ054. Generator snapshots + live SQLite. See the derived-query section in
+  [CRUD](../articles/features/crud.md).
 - **View-mapped / keyless read-only entities (2026-06-13):** `[InquiryView("v_name")]` maps a
   read-only, keyless-permitted entity — a store over it may declare only SELECT/aggregate/count
   operations (mutations are INQ052), no `[InquiryKey]` is required, and the schema generator skips
