@@ -345,8 +345,9 @@ public abstract class SqlBuilder
                 continue;
             }
 
-            // A server-computed column renders the dialect's computed-column form and takes no
-            // type/NOT NULL/DEFAULT/PRIMARY KEY clauses — the database owns its value.
+            // A server-computed column's whole definition is delegated to RenderComputedColumn (which
+            // itself includes a type on PostgreSQL/MySQL); it skips the normal type/NOT NULL/DEFAULT/
+            // PRIMARY KEY handling below, since the database owns its value.
             if (!string.IsNullOrEmpty(column.ComputedExpression))
             {
                 lines.Add(QuoteIdentifier(column.ColumnName) + " " + RenderComputedColumn(column));

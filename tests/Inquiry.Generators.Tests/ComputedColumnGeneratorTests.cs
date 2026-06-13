@@ -64,9 +64,10 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void ComputedColumnDdlSqliteAndSqlServerUseExpressionForm()
+    public void ComputedColumnDdlExpressionFormDialectsUseAsExpr()
     {
-        foreach (var dialect in new[] { "Sqlite", "SqlServer" })
+        // SQLite, SQL Server, and Oracle all use the base expression form `AS (<expr>)`.
+        foreach (var dialect in new[] { "Sqlite", "SqlServer", "Oracle" })
         {
             var result = RunGenerator(ComputedSource, dialect: dialect);
             AssertNoErrors(result);
