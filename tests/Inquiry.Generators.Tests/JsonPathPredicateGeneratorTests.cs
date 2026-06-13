@@ -186,6 +186,8 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("$.o'brien")]     // apostrophe — would break the single-quoted SQL literal
     [InlineData("$.items[0]")]    // array index — not uniformly translatable (PostgreSQL #>>)
     [InlineData("$.a b")]         // whitespace
+    [InlineData("$.first-name")]  // hyphen — needs quoting on SqlServer/MySQL/Oracle (out of v1 scope)
+    [InlineData("$.0name")]       // digit-leading — same quoting requirement
     public void MalformedJsonPathReportsINQ060(string path)
     {
         var result = RunGenerator(CatalogStore($$"""
@@ -197,17 +199,17 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void HyphenatedJsonPathSegmentIsAccepted_Sqlite()
+    public void UnderscoreJsonPathSegmentIsAccepted_Sqlite()
     {
-        // Kebab-case keys are common and safe; the segment grammar allows '-'.
+        // Identifier segments may contain underscores and start with one.
         var result = RunGenerator(CatalogStore("""
             [InquirySelectAllByPredicate]
-            [InquiryWhere("Data", Compare.Equal, JsonPath = "$.first-name")]
-            public partial Task<IReadOnlyList<Catalog>> ByFirstNameAsync(string firstName, CancellationToken cancellationToken = default);
+            [InquiryWhere("Data", Compare.Equal, JsonPath = "$.line_1")]
+            public partial Task<IReadOnlyList<Catalog>> ByLineAsync(string line, CancellationToken cancellationToken = default);
             """));
         AssertNoErrors(result);
         var text = GetCatalogStore(result);
 
-        Assert.Contains("WHERE json_extract(\\\"Data\\\", '$.first-name') = @firstname", text);
+        Assert.Contains("WHERE json_extract(\\\"Data\\\", '$.line_1') = @line_1", text);
     }
 }

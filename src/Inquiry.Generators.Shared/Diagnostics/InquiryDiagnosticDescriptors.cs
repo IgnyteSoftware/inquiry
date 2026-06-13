@@ -535,12 +535,12 @@ internal static class InquiryDiagnosticDescriptors
 
     // INQ060: an [InquiryWhere(JsonPath = …)] criterion filters inside a JSON column, so the named field
     // must be a plain string column holding JSON text (no value converter — the comparison value binds as
-    // text, not through the column's converter) and the path must be a well-formed dotted object path: a
-    // strict grammar that excludes quotes/array-indices so it embeds safely and translates uniformly.
+    // text, not through the column's converter) and the path must be a dotted object path whose segments
+    // are unquoted identifiers — the cross-dialect subset that needs no quoting in any engine.
     public static readonly DiagnosticDescriptor JsonPathPredicateInvalid = new(
         "INQ060",
         "InquiryWhere JSON-path criterion is invalid",
-        "Store method '{0}' filters field '{1}' with a JsonPath, but it cannot. The field must be a plain string column holding JSON text (no value converter), and the path must be a dotted object path like \"$.address.city\" (segments of letters/digits/_/-, no array indices or quotes).",
+        "Store method '{0}' filters field '{1}' with a JsonPath, but it cannot. The field must be a plain string column holding JSON text (no value converter), and the path must be a dotted object path like \"$.address.city\" — each segment an unquoted identifier (letter or '_', then letters/digits/'_'); no array indices, hyphens, or quoted keys.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

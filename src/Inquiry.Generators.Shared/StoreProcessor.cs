@@ -1843,49 +1843,59 @@ internal static class StoreProcessor
     }
 
     /// <summary>
-    /// Validates an <c>[InquiryWhere.JsonPath]</c> value against the v1 grammar: a SQL/JSON dotted object
-    /// path <c>$.a.b</c> with one or more segments, each a run of letters, digits, <c>_</c> or <c>-</c>.
-    /// Rejecting everything else (quotes, brackets/array indices, empty or trailing segments, bare <c>$</c>)
-    /// keeps the path safe to embed in a single-quoted SQL literal on every dialect and uniformly
-    /// translatable to PostgreSQL's <c>#&gt;&gt;</c> text-path form. Array indices and quoted keys are out of
-    /// v1 scope rather than silently mis-handled.
+    /// Validates an <c>[InquiryWhere.JsonPath]</c> value against the v1 grammar: a dotted object path
+    /// <c>$.a.b</c> whose segments are unquoted identifiers — each starts with a letter or <c>_</c> and
+    /// continues with letters, digits or <c>_</c>. This is the cross-dialect subset that needs no quoting
+    /// in any engine's JSON-path syntax (SQL Server / MySQL / Oracle require quoting for hyphenated or
+    /// digit-leading keys, which v1 doesn't emit). Rejecting everything else — quotes, brackets/array
+    /// indices, hyphens, digit-leading segments, empty/trailing segments, bare <c>$</c> — keeps the path
+    /// safe to embed in a single-quoted SQL literal and uniformly translatable to PostgreSQL's
+    /// <c>#&gt;&gt;</c> text-path form. Those cases are out of v1 scope rather than silently mis-handled.
     /// </summary>
     private static bool IsWellFormedJsonPath(string path)
     {
-        // Must start with "$." and carry at least one segment character after it.
+        // Must start with "$." and carry at least one segment after it.
         if (path.Length < 3 || path[0] != '$' || path[1] != '.')
         {
             return false;
         }
 
-        var expectSegmentChar = true; // just consumed a '.', so a segment character must follow
+        var atSegmentStart = true; // just consumed a '.', so the next char begins a segment
         for (var i = 2; i < path.Length; i++)
         {
             var ch = path[i];
             if (ch == '.')
             {
-                if (expectSegmentChar)
+                if (atSegmentStart)
                 {
                     return false; // empty segment ("..", trailing dot)
                 }
 
-                expectSegmentChar = true;
+                atSegmentStart = true;
             }
-            else if (IsJsonPathSegmentChar(ch))
+            else if (atSegmentStart)
             {
-                expectSegmentChar = false;
+                if (!IsJsonIdentifierStart(ch))
+                {
+                    return false; // digit-leading, hyphen, quote, bracket, whitespace, …
+                }
+
+                atSegmentStart = false;
             }
-            else
+            else if (!IsJsonIdentifierPart(ch))
             {
-                return false; // quote, bracket, whitespace, etc.
+                return false;
             }
         }
 
-        return !expectSegmentChar; // must not end on a dangling '.'
+        return !atSegmentStart; // must not end on a dangling '.'
     }
 
-    private static bool IsJsonPathSegmentChar(char ch)
-        => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
+    private static bool IsJsonIdentifierStart(char ch)
+        => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '_';
+
+    private static bool IsJsonIdentifierPart(char ch)
+        => IsJsonIdentifierStart(ch) || (ch >= '0' && ch <= '9');
 
     private static bool HasSupportedParameters(StoreMethodData method, EntityData entity, IReadOnlyList<ColumnData> fieldColumns)
     {
