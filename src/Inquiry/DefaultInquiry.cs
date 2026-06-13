@@ -275,6 +275,13 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteScalarAsync<T>(command, cancellationToken);
 
     /// <inheritdoc />
+    public Task<T> ExecuteProcedureScalarAsync<T>(
+        InquiryCommand command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteProcedureScalarAsync<T>(command, readBackParameterName, cancellationToken);
+
+    /// <inheritdoc />
     public Task<T> ExecuteScalarAsync<T, TArgs>(
         string commandText,
         TArgs args,

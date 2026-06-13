@@ -239,6 +239,20 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Scalar execution requires the built-in DefaultInquiry.");
 
+    /// <summary>
+    /// Executes a stored-procedure command and returns the post-execution value of the bound output
+    /// (or return-value) parameter named <paramref name="readBackParameterName"/>, converted to
+    /// <typeparamref name="T"/>. Generated <c>[InquiryStoredProcedure]</c> methods with an
+    /// <c>OutputParameter</c> / <c>ReturnsValue</c> use this.
+    /// </summary>
+    /// <remarks>The default throws; <see cref="DefaultInquiry"/> implements it over the pipeline, so
+    /// existing <see cref="IInquiry"/> implementations stay source-compatible.</remarks>
+    Task<T> ExecuteProcedureScalarAsync<T>(
+        InquiryCommand command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Stored-procedure output execution requires the built-in DefaultInquiry.");
+
     /// <summary>Scalar query binding parameters via a caller-supplied static delegate (fast path).</summary>
     Task<T> ExecuteScalarAsync<T, TArgs>(
         string commandText,
