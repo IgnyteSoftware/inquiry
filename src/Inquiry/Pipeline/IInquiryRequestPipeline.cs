@@ -213,6 +213,20 @@ internal interface IInquiryRequestPipeline
         => throw new NotSupportedException("Scalar execution is implemented by the built-in Inquiry pipeline.");
 
     /// <summary>
+    /// Executes a command (typically a stored procedure) and returns the post-execution value of a
+    /// bound output / return-value parameter named <paramref name="readBackParameterName"/>,
+    /// converted to <typeparamref name="T"/>. The command must register that parameter with the
+    /// appropriate <see cref="System.Data.ParameterDirection"/>.
+    /// </summary>
+    /// <remarks>A default-interface-method (throwing) so custom pipelines stay source-compatible; the
+    /// built-in pipelines provide the real implementation.</remarks>
+    Task<T> ExecuteProcedureScalarAsync<T>(
+        InquiryCommand command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Stored-procedure output execution is implemented by the built-in Inquiry pipeline.");
+
+    /// <summary>
     /// Scalar query with parameters bound by a caller-supplied static delegate (allocation-free
     /// fast path). The default routes through <c>ExecuteScalarAsync&lt;T&gt;(InquiryCommand, …)</c> so
     /// custom pipelines stay source-compatible; the built-in pipeline overrides it.

@@ -108,7 +108,7 @@ internal static class StoreProcessor
         var returnsEntity = operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert &&
             GeneratorHelpers.GetNamedBool(attribute, "ReturnEntity");
 
-        if (!HasSupportedReturnType(operation, method.ReturnType, entityType, returnsEntity))
+        if (!HasSupportedReturnType(operation, method.ReturnType, entityType, returnsEntity, attribute))
         {
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.UnsupportedReturnType, location, method.Name, method.ReturnType.ToDisplayString()));
             return null;
@@ -192,9 +192,55 @@ internal static class StoreProcessor
             returnsList = operation is StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch &&
                 IsTaskOfReadOnlyList(method.ReturnType, entityType);
         }
-        var procedureReturn = operation == StoreOperation.StoredProcedure
-            ? ClassifyProcedureReturn(method.ReturnType, entityType)
-            : ProcedureReturnKind.None;
+        var procedureReturn = ProcedureReturnKind.None;
+        string? procReadBackName = null;
+        var procReturnsValue = false;
+        string? procOutputDbType = null;
+        var procOutputIsString = false;
+        if (operation == StoreOperation.StoredProcedure)
+        {
+            if (HasScalarProcedureOutput(attribute))
+            {
+                // The return shape was already validated as Task<TScalar> by HasSupportedReturnType.
+                var scalarSymbol = ((INamedTypeSymbol)method.ReturnType).TypeArguments[0];
+                scalarResultType = scalarSymbol.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
+
+                var outputParam = GeneratorHelpers.GetNamedString(attribute, "OutputParameter");
+                var returnsValueArg = GeneratorHelpers.GetNamedBool(attribute, "ReturnsValue");
+                if (!string.IsNullOrEmpty(outputParam) && returnsValueArg)
+                {
+                    diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
+                        "OutputParameter and ReturnsValue cannot both be set."));
+                    return null;
+                }
+
+                if (returnsValueArg)
+                {
+                    if (scalarSymbol.SpecialType != SpecialType.System_Int32)
+                    {
+                        diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
+                            "a RETURN value is an integer, so the method must be declared Task<int>."));
+                        return null;
+                    }
+
+                    procReturnsValue = true;
+                    procReadBackName = "@__inquiry_return";
+                }
+                else
+                {
+                    procReadBackName = NormalizeParameterName(outputParam!);
+                    var scalarType = TypeData.Create(scalarSymbol, scalarSymbol.NullableAnnotation);
+                    procOutputDbType = DbTypeMapper.TryGetDbTypeExpression(scalarType);
+                    procOutputIsString = scalarType.SpecialType == SpecialType.System_String;
+                }
+
+                procedureReturn = ProcedureReturnKind.TaskOfOutputScalar;
+            }
+            else
+            {
+                procedureReturn = ClassifyProcedureReturn(method.ReturnType, entityType);
+            }
+        }
 
         // ORDER BY / pagination. Parsed here; order fields are resolved against the entity columns
         // (and validated) in the combined emit stage, mirroring SelectAllByField field resolution.
@@ -262,8 +308,16 @@ internal static class StoreProcessor
             AggregateColumn = aggregateColumn,
             ScalarResultType = scalarResultType,
             ResultElementTypeFqn = resultElementTypeFqn,
+            ProcedureReadBackName = procReadBackName,
+            ProcedureReturnsValue = procReturnsValue,
+            ProcedureOutputDbType = procOutputDbType,
+            ProcedureOutputIsString = procOutputIsString,
         };
     }
+
+    /// <summary>Prefixes a parameter name with <c>@</c> when it carries no provider sigil already.</summary>
+    private static string NormalizeParameterName(string name)
+        => name.Length > 0 && name[0] is '@' or ':' or '$' or '?' ? name : "@" + name;
 
     private static ParameterData ToParameterData(IParameterSymbol parameter) => new(
         parameter.Name,
@@ -486,7 +540,7 @@ internal static class StoreProcessor
         => storeSymbol.DeclaringSyntaxReferences.Any(static r =>
             r.GetSyntax() is ClassDeclarationSyntax cls && cls.Modifiers.Any(SyntaxKind.PartialKeyword));
 
-    private static bool HasSupportedReturnType(StoreOperation operation, ITypeSymbol returnType, ITypeSymbol entityType, bool returnsEntity)
+    private static bool HasSupportedReturnType(StoreOperation operation, ITypeSymbol returnType, ITypeSymbol entityType, bool returnsEntity, AttributeData attribute)
     {
         return operation switch
         {
@@ -521,11 +575,21 @@ internal static class StoreProcessor
             // Bulk insert returns the rows-written count as long (SqlBulkCopy's RowsCopied is Int64).
             StoreOperation.BulkInsert =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
+            // With OutputParameter/ReturnsValue, the method shape is Task<TScalar> for any single
+            // scalar T; the detailed validation (mutual exclusion, RETURN-must-be-int) emits INQ051
+            // in discovery. Without it, the classic IAsyncEnumerable/Task<Entity?>/Task<int> shapes.
+            StoreOperation.StoredProcedure when HasScalarProcedureOutput(attribute) =>
+                IsTaskOfSingleTypeArgument(returnType),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
             _ => false,
         };
     }
+
+    /// <summary>True when an <c>[InquiryStoredProcedure]</c> sets <c>OutputParameter</c> or <c>ReturnsValue</c>.</summary>
+    private static bool HasScalarProcedureOutput(AttributeData attribute)
+        => !string.IsNullOrEmpty(GeneratorHelpers.GetNamedString(attribute, "OutputParameter"))
+            || GeneratorHelpers.GetNamedBool(attribute, "ReturnsValue");
 
     private static bool IsEnumerableOfEntity(ParameterData parameter, EntityData entity)
         => IsEnumerableOfType(parameter, entity.FullyQualifiedName);
