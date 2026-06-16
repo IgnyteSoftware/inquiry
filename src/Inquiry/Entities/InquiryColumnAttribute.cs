@@ -76,6 +76,9 @@ public class InquiryColumnAttribute : Attribute
     /// </summary>
     public bool IsIndexed { get; set; }
 
+    /// <summary>Gets or sets a value indicating whether string columns and parameters use Unicode types.</summary>
+    public bool IsUnicode { get; set; } = true;
+
     /// <summary>DDL generation: emit a single-column UNIQUE index on this column. See <see cref="IsIndexed"/> for caveats.</summary>
     public bool IsUnique { get; set; }
 

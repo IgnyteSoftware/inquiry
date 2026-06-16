@@ -127,6 +127,9 @@ public interface IColumn
     /// <summary>Emit a single-column index on this column.</summary>
     bool IsIndexed { get; }
 
+    /// <summary>Whether string columns and parameters use Unicode types.</summary>
+    bool IsUnicode { get; }
+
     /// <summary>Emit a single-column UNIQUE index on this column.</summary>
     bool IsUnique { get; }
 

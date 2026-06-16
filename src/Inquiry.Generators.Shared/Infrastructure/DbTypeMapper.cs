@@ -18,7 +18,7 @@ namespace Inquiry.Generators.Infrastructure;
 /// </remarks>
 internal static class DbTypeMapper
 {
-    public static string? TryGetDbTypeExpression(TypeData type)
+    public static string? TryGetDbTypeExpression(TypeData type, bool isUnicode = true)
     {
         if (type.IsGuid)
         {
@@ -36,13 +36,13 @@ internal static class DbTypeMapper
         }
 
         var special = type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType;
-        return Map(special);
+        return Map(special, isUnicode);
     }
 
     /// <summary>DbType expression for a converter's provider <see cref="SpecialType"/>, or null.</summary>
     public static string? TryGetDbTypeForSpecialType(SpecialType specialType) => Map(specialType);
 
-    private static string? Map(SpecialType specialType) => specialType switch
+    private static string? Map(SpecialType specialType, bool isUnicode = true) => specialType switch
     {
         SpecialType.System_Boolean => "global::System.Data.DbType.Boolean",
         SpecialType.System_Byte => "global::System.Data.DbType.Byte",
@@ -56,8 +56,8 @@ internal static class DbTypeMapper
         SpecialType.System_Single => "global::System.Data.DbType.Single",
         SpecialType.System_Double => "global::System.Data.DbType.Double",
         SpecialType.System_Decimal => "global::System.Data.DbType.Decimal",
-        SpecialType.System_String => "global::System.Data.DbType.String",
-        SpecialType.System_Char => "global::System.Data.DbType.StringFixedLength",
+        SpecialType.System_String => isUnicode ? "global::System.Data.DbType.String" : "global::System.Data.DbType.AnsiString",
+        SpecialType.System_Char => isUnicode ? "global::System.Data.DbType.StringFixedLength" : "global::System.Data.DbType.AnsiStringFixedLength",
         // DateTime2, not DateTime: an explicit DbType is emitted on every mapped parameter even when
         // prepared statements are off, and SqlClient maps DbType.DateTime to the legacy `datetime`
         // SQL type (range 1753+, ~3.33ms precision) which can truncate/throw against modern
