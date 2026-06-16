@@ -66,6 +66,7 @@ internal sealed record ColumnData : IColumn
     public string? ForeignKeySchema { get; init; }
     public string? ForeignKeyColumn { get; init; }
     public bool IsIndexed { get; init; }
+    public bool IsUnicode { get; init; } = true;
     public bool IsUnique { get; init; }
     public string? IndexName { get; init; }
 

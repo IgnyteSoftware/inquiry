@@ -227,7 +227,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         DbTypeClass.Guid => "UNIQUEIDENTIFIER",
         DbTypeClass.ByteArray => "VARBINARY(MAX)",
         // SQL Server cannot key on NVARCHAR(MAX); a bounded Length is required for PK/FK string columns.
-        _ => column.Length > 0 ? "NVARCHAR(" + column.Length + ")" : "NVARCHAR(MAX)",
+        _ => column.Length > 0
+            ? (column.IsUnicode ? "NVARCHAR(" + column.Length + ")" : "VARCHAR(" + column.Length + ")")
+            : (column.IsUnicode ? "NVARCHAR(MAX)" : "VARCHAR(MAX)"),
     };
 
     protected override string GeneratedKeyClause(IColumn column)
