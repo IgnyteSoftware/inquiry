@@ -51,6 +51,14 @@ public sealed class InquiryGridReader : IAsyncDisposable
         if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             result = materializer.Materialize(_reader);
+            // Match QuerySingleOrDefaultAsync: a "single" read rejects a second row rather than silently
+            // truncating the set. SequentialAccess only forbids re-reading columns, not advancing rows, so
+            // the materializer has already consumed row 1's columns and this Read just probes for a second.
+            if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException(
+                    "ReadSingleOrDefaultAsync expected zero or one row, but the result set returned multiple rows.");
+            }
         }
 
         await AdvanceAsync(cancellationToken).ConfigureAwait(false);
@@ -99,20 +107,35 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
 
         _disposed = true;
+        // Attempt every dispose even if an earlier one throws, so a failing reader dispose cannot leak the
+        // command or connection — and the lease is always released. The nested finally chain guarantees each
+        // step runs; the last exception thrown propagates.
         try
         {
             await _reader.DisposeAsync().ConfigureAwait(false);
-            await _command.DisposeAsync().ConfigureAwait(false);
-            if (_ownedConnection is not null)
-            {
-                await _ownedConnection.DisposeAsync().ConfigureAwait(false);
-            }
         }
         finally
         {
-            // Transacted path: release the pipeline's in-flight lease so the shared connection is free
-            // for the next operation. Connection-per-op path: no lease (null).
-            _lease?.Dispose();
+            try
+            {
+                await _command.DisposeAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                try
+                {
+                    if (_ownedConnection is not null)
+                    {
+                        await _ownedConnection.DisposeAsync().ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    // Transacted path: release the pipeline's in-flight lease so the shared connection is
+                    // free for the next operation. Connection-per-op path: no lease (null).
+                    _lease?.Dispose();
+                }
+            }
         }
     }
 }
