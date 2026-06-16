@@ -83,9 +83,11 @@ public sealed partial class InquiryGeneratorTests
         Assert.Empty(result.GeneratorDiagnostics);
         var text = GetOrderStore(result);
 
-        // The single-eager loader binds the parent key into the JOIN query.
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", _entity.Id)", text);
-        Assert.Contains("_entity.Products = _Products_list;", text);
+        // The single-eager loader fetches parent + products in ONE round trip via the grid reader,
+        // binding the parent key (the input key) into the combined multi-result command, and reads the
+        // products result set into the navigation.
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id", text);
+        Assert.Contains("_entity.Products = await _grid.ReadListAsync<", text);
     }
 
     [Fact]
@@ -109,6 +111,22 @@ public sealed partial class InquiryGeneratorTests
         var text = GetOrderStore(result);
 
         Assert.Contains("FROM Products INNER JOIN OrderProduct __j ON __j.ProductId = Products.Id WHERE __j.OrderId = :Id", text);
+    }
+
+    [Fact]
+    public void OracleSingleEagerUsesSeparateRoundTripsNotGrid()
+    {
+        // Oracle cannot return multiple result sets from a ;-separated command (ORA-00933), so the
+        // single-eager loader must fall back to the per-relation (multi-round-trip) path, not the grid path.
+        var result = RunGenerator(OrderProductSource, dialect: "Oracle");
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetOrderStore(result);
+
+        Assert.DoesNotContain("QueryMultipleAsync", text);
+        Assert.DoesNotContain("_grid.ReadListAsync", text);
+        // Separate path: each child collection is read by its own query and assigned to the navigation.
+        Assert.Contains("await foreach (var _child in Inquiry.QueryAsync<", text);
+        Assert.Contains("_entity.Products = _Products_list;", text);
     }
 
     [Fact]

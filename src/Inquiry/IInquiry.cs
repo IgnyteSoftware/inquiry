@@ -110,6 +110,18 @@ public interface IInquiry
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
 
+    /// <summary>
+    /// Executes a command that returns multiple result sets and returns a grid reader to materialize them
+    /// in order (one round trip). Generated eager-load stores use this to fetch a parent and its
+    /// key-filterable child collections in a single round trip. Dispose the returned reader.
+    /// </summary>
+    /// <remarks>The default throws; <see cref="DefaultInquiry"/> implements it over the pipeline, so
+    /// existing <see cref="IInquiry"/> implementations (e.g. test mocks) stay source-compatible.</remarks>
+    Task<InquiryGridReader> QueryMultipleAsync(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Multi-result-set queries require the built-in DefaultInquiry.");
+
     // ---- Bulk insert -------------------------------------------------------------------
 
     /// <summary>
