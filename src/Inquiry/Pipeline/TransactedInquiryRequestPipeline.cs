@@ -181,6 +181,37 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         return default;
     }
 
+    /// <inheritdoc />
+    public async Task<InquiryGridReader> QueryMultipleAsync(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        if (command is null) throw new ArgumentNullException(nameof(command));
+
+        // Hold the in-flight lease for the grid reader's whole lifetime: it owns the shared connection
+        // across multiple reads, so no other op may touch the connection until it is disposed.
+        var lease = EnterExclusiveOperation();
+        DbCommand? dbCommand = null;
+        DbDataReader? reader = null;
+        try
+        {
+            dbCommand = CreateCommand();
+            dbCommand.Transaction = _transaction;
+            InitializeCommandSync(dbCommand, command);
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
+            // Shared connection — the grid does NOT own/dispose it; it releases the lease on dispose.
+            return new InquiryGridReader(reader, dbCommand, ownedConnection: null, lease: lease);
+        }
+        catch
+        {
+            if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
+            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
+            lease.Dispose();
+            throw;
+        }
+    }
+
     // ---- Class-materializer overloads (ad-hoc IInquiry path) -----------------------------
 
     /// <inheritdoc />

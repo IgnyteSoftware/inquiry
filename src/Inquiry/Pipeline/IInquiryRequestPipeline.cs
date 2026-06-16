@@ -68,6 +68,17 @@ internal interface IInquiryRequestPipeline
         where TMaterializer : struct, IInquiryEntityMaterializer<T>;
 
     /// <summary>
+    /// Executes a command returning multiple result sets and returns a grid reader to materialize them in
+    /// order (one round trip). Generated eager-load stores use this for parent + key-filterable children.
+    /// </summary>
+    /// <remarks>A default-interface-method (throwing) so custom pipelines stay source-compatible; the
+    /// built-in pipelines provide the real implementation.</remarks>
+    Task<InquiryGridReader> QueryMultipleAsync(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Multi-result-set queries are implemented by the built-in Inquiry pipelines.");
+
+    /// <summary>
     /// Streaming query whose parameters are bound by a caller-supplied static delegate, avoiding
     /// the <c>InquiryCommand</c> / <c>InquiryParameter[]</c> allocations of the boxed path —
     /// generated stores pass a method group / static lambda (no closure capture).
