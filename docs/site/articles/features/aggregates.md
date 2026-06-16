@@ -1,6 +1,6 @@
 # Aggregates
 
-Return a single scalar value — `COUNT`, `SUM`, `AVG`, `MIN`, `MAX` — from your store. Pairs with `[InquiryWhere]` predicates for conditional aggregates.
+Return a single scalar value — `COUNT`, `SUM`, `AVG`, `MIN`, `MAX` — from your store. A count or aggregate runs over the whole table (minus soft-deleted rows when soft-delete is declared) and takes only a `CancellationToken` — `[InquiryWhere]` is **not** honored on a count or aggregate. For a conditional yes/no test use `[InquiryExists]` with `[InquiryWhere]` (see [Existence checks](#existence-checks) below).
 
 ## You write
 
@@ -11,10 +11,6 @@ public partial class ProductStore : InquiryStore<Product>
 {
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken ct = default);
-
-    [InquiryCount]
-    [InquiryWhere("CategoryID", "=")]
-    public partial Task<long> CountByCategoryAsync(int categoryID, CancellationToken ct = default);
 
     [InquiryAggregate(AggregateFunction.Sum, "UnitsInStock")]
     public partial Task<int?> TotalStockAsync(CancellationToken ct = default);
@@ -27,10 +23,9 @@ public partial class ProductStore : InquiryStore<Product>
 ## The generator emits
 
 ```csharp
-private const string _sqlCountAll          = "SELECT COUNT(*) FROM \"Products\"";
-private const string _sqlCountByCategoryID = "SELECT COUNT(*) FROM \"Products\" WHERE \"CategoryID\" = @CategoryID";
-private const string _sqlSumUnitsInStock   = "SELECT SUM(\"UnitsInStock\") FROM \"Products\"";
-private const string _sqlAvgUnitPrice      = "SELECT AVG(\"UnitPrice\") FROM \"Products\"";
+private const string _sqlCount = "SELECT COUNT(*) FROM \"Products\"";
+private const string _sqlAgg_TotalStockAsync       = "SELECT SUM(\"UnitsInStock\") FROM \"Products\"";
+private const string _sqlAgg_AverageUnitPriceAsync = "SELECT AVG(\"UnitPrice\") FROM \"Products\"";
 ```
 
 Each aggregate routes through `ExecuteScalarAsync<T>` — the return type drives how the result is converted.

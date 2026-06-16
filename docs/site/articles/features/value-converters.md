@@ -21,8 +21,7 @@ public sealed class CustomerIDConverter : IInquiryValueConverter<CustomerID, str
 [InquiryTable("Customers")]
 public sealed class Customer
 {
-    [InquiryKey]
-    [InquiryConverter(typeof(CustomerIDConverter))]
+    [InquiryKey(Converter = typeof(CustomerIDConverter))]
     public CustomerID CustomerID { get; set; }
 
     [InquiryColumn]
@@ -32,14 +31,15 @@ public sealed class Customer
 
 ## The generator emits
 
-The binder calls `new CustomerIDConverter().ToProvider(_e.CustomerID)`; the materializer calls `new CustomerIDConverter().FromProvider(reader.GetString(0))`. Allocation is one converter struct per call (or zero if you make the converter a `readonly struct`).
+The binder writes through a cached singleton — `InquiryConverterCache<CustomerIDConverter>.Instance.ToProvider(_e.CustomerID)` — and the materializer reads via `InquiryConverterCache<CustomerIDConverter>.Instance.FromProvider(reader.GetString(0))`. The converter is allocated exactly once per converter type (`InquiryConverterCache<T>.Instance = new()`) and reused across every call and row — there is no per-call allocation, whether the converter is a `class` or a `struct` — which is safe because converters are stateless by contract.
 
 ## Enum-as-string
 
 For the common "enum stored as text" case, there's a shortcut — no converter needed:
 
 ```csharp
-[InquiryColumn(EnumAsString = true)]
+[InquiryColumn]
+[InquiryEnumAsString]
 public OrderStatus Status { get; set; }
 ```
 

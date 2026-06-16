@@ -24,11 +24,11 @@ services.AddInquiryMySql("Server=localhost;Database=app;User=app;Password=…");
 | Parameter prefix | `@name` |
 | Auto-key | `AUTO_INCREMENT` |
 | Upsert | `INSERT … ON DUPLICATE KEY UPDATE …` |
-| Insert-returning | `LAST_INSERT_ID()` round-trip (MySQL pre-8.0.21); `RETURNING` (MariaDB 10.5+) |
+| Insert-returning | Emulated two-statement batch (`INSERT …; SELECT …`) for both MySQL and MariaDB — keyed on `LAST_INSERT_ID()` for `AUTO_INCREMENT`, on the key predicate for client-supplied keys (no `RETURNING`) |
 | Pagination | `LIMIT @limit OFFSET @offset` |
 | Boolean | `TINYINT(1)` (0/1) |
 | String | `VARCHAR(N)` / `LONGTEXT` |
-| JSON | `JSON` |
+| JSON (`[InquiryJson]`) | Stored as text (`VARCHAR(N)` / `LONGTEXT`); native `JSON` only via `[InquiryColumn(SqlType = "JSON")]` |
 | Soft-delete literal | `` `IsDeleted` = 0 `` |
 | Full-text-search | `MATCH(...) AGAINST (@query IN NATURAL LANGUAGE MODE)` |
 

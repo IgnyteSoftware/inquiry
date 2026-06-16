@@ -18,10 +18,10 @@ Per dialect:
 
 | Dialect | Generated `WHERE` clause |
 |---|---|
-| SQL Server | `WHERE CONTAINS(([Title],[Body]), @query)` (requires a full-text catalog + index) |
-| PostgreSQL | `WHERE to_tsvector('english', "Title" \|\| ' ' \|\| "Body") @@ plainto_tsquery('english', @query)` |
+| SQL Server | `WHERE FREETEXT(([Title], [Body]), @query)` (requires a full-text catalog + index) |
+| PostgreSQL | `WHERE to_tsvector('simple', coalesce("Title", '') \|\| ' ' \|\| coalesce("Body", '')) @@ plainto_tsquery('simple', @query)` |
 | MySQL | `WHERE MATCH(`Title`,`Body`) AGAINST (@query IN NATURAL LANGUAGE MODE)` (requires a FULLTEXT index) |
 | SQLite | Requires the FTS5 virtual-table pattern — see SQLite notes. |
-| Oracle | `WHERE CONTAINS("Title" \|\| ' ' \|\| "Body", :query) > 0` (requires an Oracle Text index) |
+| Oracle | Not supported in v1 — `[InquiryFullTextSearch]` on an Oracle store is a compile-time error (`INQ035`). |
 
 You provide the index / catalog in your schema setup; Inquiry emits the query.

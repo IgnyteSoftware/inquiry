@@ -13,7 +13,7 @@ public partial class ShipperStore : InquiryStore<Shipper>
     [InquiryUpdateAll]
     public partial Task<int> UpdateAllAsync(IReadOnlyList<Shipper> shippers, CancellationToken ct = default);
 
-    [InquiryDeleteAllByKey]
+    [InquiryDeleteAll]
     public partial Task<int> DeleteAllByKeyAsync(IReadOnlyList<int> shipperIDs, CancellationToken ct = default);
 }
 ```

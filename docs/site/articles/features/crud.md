@@ -264,7 +264,7 @@ The same C# source produces dialect-specific SQL. A small sample:
 
 | Operation | Sqlite / PostgreSQL | SQL Server | MySQL | Oracle |
 |---|---|---|---|---|
-| Quote identifier | `"Shippers"` | `[Shippers]` | `` `Shippers` `` | `"Shippers"` (UPPER-case folded) |
+| Quote identifier | `"Shippers"` | `[Shippers]` | `` `Shippers` `` | `Shippers` (unquoted; Oracle folds the bare name to upper-case) |
 | Upsert | `ON CONFLICT (…) DO UPDATE` | `MERGE … WHEN MATCHED` | `ON DUPLICATE KEY UPDATE` | `MERGE` |
 | Insert returning | `RETURNING …` | `OUTPUT INSERTED.*` | `LAST_INSERT_ID()` round trip | `RETURNING … INTO :out_*` |
 | Parameter prefix | `@name` | `@name` | `@name` | `:name` (rewritten in factory) |
