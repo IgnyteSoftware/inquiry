@@ -71,3 +71,24 @@ may be deferred-with-reason at land if Docker is contended — the generator tes
 
 ## Codex effort
 `high` — codegen template surgery threading a flag through the shared generator + a provider DDL builder.
+
+## Cycle summary
+- **Changed (8 files, +20/-10):** `IsUnicode` flag (default `true`) on `InquiryColumnAttribute` →
+  threaded through `ColumnData`/`IColumn`/`EntityProcessor` → `DbTypeMapper` emits
+  `DbType.AnsiString`/`AnsiStringFixedLength` for non-unicode `string`/`char` → `ResolveDbType` passes
+  `column.IsUnicode` → SQL Server DDL emits `VARCHAR` instead of `NVARCHAR`. Implemented by Codex
+  (gpt-5.5, effort high) against the locked tests; diff matched the plan exactly, no review findings.
+- **Tests:** 2 new generator tests (`NonUnicodeStringColumn_BindsAnsiStringParameter` RED→GREEN;
+  `UnicodeStringColumn_StillBindsStringParameter` backward-compat guard). Full
+  `Inquiry.Generators.Tests` suite **348 passed ×3 TFMs (net8/9/10)**, 0 failures. `dotnet build
+  Inquiry.slnx -c Release` clean. Test-lock verified (Codex did not touch the test file). `ColumnData`
+  is the only `IColumn` implementer, so the interface addition broke nothing.
+- **Deferrals / follow-ups:** ANSI DDL for the non-SQL-Server dialects (the runtime `AnsiString` binding
+  is already dialect-agnostic; only the SQL Server `VARCHAR` DDL was done); inferring ANSI from
+  `SqlType = "varchar"`; the FTS search-term parameter; enum-as-string columns (still nvarchar); a
+  dedicated SQL Server round-trip integration test on an `IsUnicode=false` entity (recommended).
+- **Skipped slow gates + reason:** the Docker integration suites (SqlServer/MySql/Oracle/PostgreSql)
+  were skipped — the change is backward-compatible, emitting byte-identical code for every existing
+  (unicode) entity (confirmed by the 348 unchanged generator tests + clean full build), and no existing
+  integration test exercises an `IsUnicode=false` entity, so the Docker suites would only re-test
+  unchanged generated code.

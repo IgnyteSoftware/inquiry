@@ -474,7 +474,7 @@ internal static class StoreOperationEmitter
             return "global::System.Data.DbType.String";
         }
 
-        return sqlBuilder.MapDbTypeExpression(column.Type);
+        return sqlBuilder.MapDbTypeExpression(column.Type, column.IsUnicode);
     }
 
     private static string BuildParameterValueExpression(ColumnData column, string accessor)
