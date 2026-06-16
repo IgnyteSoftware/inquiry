@@ -304,6 +304,16 @@ public abstract class SqlBuilder
         => throw new System.NotSupportedException(DialectName + " does not support full-text search.");
 
     /// <summary>
+    /// Whether one command can return multiple result sets from a <c>;</c>-separated statement batch (read
+    /// in order via <c>DbDataReader.NextResult</c>). Gates the single-round-trip eager-load path. Default
+    /// <see langword="true"/> (SQLite / SQL Server / MySQL / PostgreSQL all batch SELECTs this way); Oracle
+    /// overrides to <see langword="false"/> — a plain <c>OracleCommand</c> rejects multiple SELECTs in one
+    /// statement (ORA-00933); multi-result requires ref cursors / <c>DBMS_SQL.RETURN_RESULT</c>. Dialects
+    /// without it fall back to the per-relation (multi-round-trip) eager-load path.
+    /// </summary>
+    public virtual bool SupportsMultiResultBatch => true;
+
+    /// <summary>
     /// Builds the ORDER BY clause body (no leading space) for the resolved terms, e.g.
     /// <c>ORDER BY "Name" ASC, "Id" DESC</c>. Dialect-uniform, so this is the single implementation all
     /// providers inherit. Returns the empty string when there are no terms.
