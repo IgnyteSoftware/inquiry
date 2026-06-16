@@ -1180,8 +1180,9 @@ internal static class StoreOperationEmitter
         // child filtered by the parent key, so it folds into one multi-result command (parent + children in
         // one round trip, the Dapper QueryMultiple / multi-result-set stored-proc shape). A belongs-to
         // (reference) relation filters by a parent column value known only after the parent materializes, so
-        // entities with one keep the multi-round-trip path.
-        var allKeyFilterable = entity.Relations.Count > 0;
+        // entities with one keep the multi-round-trip path. The grid path also requires a dialect that can
+        // return multiple result sets from one ;-separated command (every dialect but Oracle, see ORA-00933).
+        var allKeyFilterable = entity.Relations.Count > 0 && sqlBuilder.SupportsMultiResultBatch;
         foreach (var relation in entity.Relations)
         {
             if (!relationChildEntities.ContainsKey(relation.PropertyName) || !(relation.IsCollection || relation.IsManyToMany))

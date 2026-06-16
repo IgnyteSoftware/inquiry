@@ -40,6 +40,14 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     public override string DialectName => "Oracle";
 
     /// <summary>
+    /// Oracle cannot return multiple result sets from a <c>;</c>-separated batch in a plain
+    /// <c>OracleCommand</c> — a second SELECT raises ORA-00933 ("SQL command not properly ended"); the
+    /// multi-result shape needs ref cursors / <c>DBMS_SQL.RETURN_RESULT</c>, which the v1 provider does not
+    /// emit. So eager loads fall back to the per-relation (multi-round-trip) path instead of the grid path.
+    /// </summary>
+    public override bool SupportsMultiResultBatch => false;
+
+    /// <summary>
     /// Oracle bind variables use the <c>:name</c> prefix. Oracle identifiers (and so bind names) cannot
     /// begin with <c>_</c>, but the shared generator names synthetic paging parameters <c>__offset</c>
     /// etc. Leading-underscore names move into a generated-safe namespace instead of being trimmed, so
