@@ -91,7 +91,7 @@ Soft delete composes correctly with everything else the generator emits:
 | SQL Server | `[IsDeleted] = 0` | `BIT NOT NULL` |
 | PostgreSQL | `"IsDeleted" = FALSE` | `BOOLEAN NOT NULL` |
 | MySQL | `` `IsDeleted` = 0 `` | `TINYINT(1) NOT NULL` |
-| Oracle | `"ISDELETED" = 0` | `NUMBER(1) NOT NULL` |
+| Oracle | `IsDeleted = 0` (unquoted) | `NUMBER(1) NOT NULL` |
 
 ## When to soft-delete
 

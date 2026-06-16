@@ -87,10 +87,10 @@ private const string _sqlNextPage_first =
     "ORDER BY \"OrderDate\" ASC, \"OrderID\" ASC LIMIT @__pageSize";
 
 // Seek (cursor supplied): a plain, sargable comparison so the engine does an index seek.
+// The portable dialects (SQLite/PostgreSQL/MySQL) emit a row-value comparison:
 private const string _sqlNextPage =
     "SELECT \"OrderID\", \"CustomerID\", \"OrderDate\", ... FROM \"Orders\" " +
-    "WHERE (\"OrderDate\" > @__cursor0) " +
-    "   OR (\"OrderDate\" = @__cursor0 AND \"OrderID\" > @__cursor1) " +
+    "WHERE (\"OrderDate\", \"OrderID\") > (@__cursor0, @__cursor1) " +
     "ORDER BY \"OrderDate\" ASC, \"OrderID\" ASC LIMIT @__pageSize";
 
 public partial async Task<InquiryPage<Order, (DateTime, int)>> NextPageAsync(
@@ -104,7 +104,7 @@ public partial async Task<InquiryPage<Order, (DateTime, int)>> NextPageAsync(
 }
 ```
 
-The two-query split matters for performance: the seek query uses a plain `key > @cursor` predicate so the engine can use an index seek, whereas a single `(@cursor IS NULL OR key > @cursor)` form is non-sargable and forces a full scan. For a multi-column keyset the seek predicate is the cascading `(a > @a) OR (a = @a AND b > @b)` comparison.
+The two-query split matters for performance: the seek query uses a plain `key > @cursor` predicate so the engine can use an index seek, whereas a single `(@cursor IS NULL OR key > @cursor)` form is non-sargable and forces a full scan. For a multi-column keyset the portable dialects (SQLite, PostgreSQL, MySQL) emit a row-value comparison `(a, b) > (@a, @b)`; SQL Server and Oracle, which lack row-value `>`, render the equivalent cascading `(a > @a) OR (a = @a AND b > @b)` form instead.
 
 ### Walking backward
 
