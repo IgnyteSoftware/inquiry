@@ -399,6 +399,7 @@ internal static class EntityProcessor
                 ForeignKeySchema = foreignKeySchema,
                 ForeignKeyColumn = foreignKeyColumn,
                 IsIndexed = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsIndexed"),
+                IsUnicode = metadataAttribute is null || GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnicode", true),
                 IsUnique = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnique"),
                 IndexName = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "IndexName") : null,
                 Converter = converter,

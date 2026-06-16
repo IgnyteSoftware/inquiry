@@ -32,13 +32,13 @@ public abstract class SqlBuilder
     /// <see cref="DateTimeDbTypeExpression"/> — the one mapping that varies by dialect — and delegates
     /// everything else to the portable <see cref="DbTypeMapper"/>.
     /// </summary>
-    internal string? MapDbTypeExpression(TypeData type)
+    internal string? MapDbTypeExpression(TypeData type, bool isUnicode = true)
         => type.SpecialType == SpecialType.System_DateTime
             ? DateTimeDbTypeExpression
-            : DbTypeMapper.TryGetDbTypeExpression(type);
+            : DbTypeMapper.TryGetDbTypeExpression(type, isUnicode);
 
     /// <summary>
-    /// As <see cref="MapDbTypeExpression(TypeData)"/> but for a value converter's provider
+    /// As <see cref="MapDbTypeExpression"/> but for a value converter's provider
     /// <see cref="SpecialType"/>; the same dialect substitution for <see cref="System.DateTime"/>
     /// applies.
     /// </summary>
