@@ -83,9 +83,11 @@ public sealed partial class InquiryGeneratorTests
         Assert.Empty(result.GeneratorDiagnostics);
         var text = GetOrderStore(result);
 
-        // The single-eager loader binds the parent key into the JOIN query.
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", _entity.Id)", text);
-        Assert.Contains("_entity.Products = _Products_list;", text);
+        // The single-eager loader fetches parent + products in ONE round trip via the grid reader,
+        // binding the parent key (the input key) into the combined multi-result command, and reads the
+        // products result set into the navigation.
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id", text);
+        Assert.Contains("_entity.Products = await _grid.ReadListAsync<", text);
     }
 
     [Fact]

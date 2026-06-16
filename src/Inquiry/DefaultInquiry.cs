@@ -185,6 +185,12 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
 
     /// <inheritdoc />
+    public Task<InquiryGridReader> QueryMultipleAsync(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
+
+    /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
         string commandText,
         TArgs args,

@@ -292,6 +292,35 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
+    /// <inheritdoc />
+    public async Task<InquiryGridReader> QueryMultipleAsync(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        if (command is null) throw new ArgumentNullException(nameof(command));
+
+        var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        DbCommand? dbCommand = null;
+        DbDataReader? reader = null;
+        try
+        {
+            dbCommand = CreateCommand(connection);
+            InitializeCommandSync(dbCommand, command);
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            // SequentialAccess (forward-only per row) but NOT SingleResult — the grid reader needs
+            // NextResult. Interceptors are bypassed (the lifetime spans multiple reads, like bulk insert).
+            reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
+            return new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null);
+        }
+        catch
+        {
+            if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
+            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
     // ---- Struct-materializer overloads (generated-store path) -----------------------------
     //
     // Bodies mirror the class overloads but `materializer.Materialize(reader)` inlines because

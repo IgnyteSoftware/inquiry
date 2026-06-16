@@ -81,7 +81,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.SelectOneByKeyEager:
-                EmitSelectOneByKeyEager(source, method, parameters, entityType, cancellation, entity, relationChildEntities, baseSelectField ?? "_sqlSelectByKey");
+                EmitSelectOneByKeyEager(source, sqlBuilder, method, parameters, entityType, cancellation, entity, relationChildEntities, baseSelectField ?? "_sqlSelectByKey");
                 break;
 
             case StoreOperation.SelectAllByField:
@@ -1174,10 +1174,98 @@ internal static class StoreOperationEmitter
             : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {arg}, Inquiry.MaxParametersPerCommand);";
     }
 
-    private static void EmitSelectOneByKeyEager(StringBuilder source, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
+    private static void EmitSelectOneByKeyEager(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
+    {
+        // Single-round-trip (grid) path when EVERY relation is key-filterable — a collection or many-to-many
+        // child filtered by the parent key, so it folds into one multi-result command (parent + children in
+        // one round trip, the Dapper QueryMultiple / multi-result-set stored-proc shape). A belongs-to
+        // (reference) relation filters by a parent column value known only after the parent materializes, so
+        // entities with one keep the multi-round-trip path.
+        var allKeyFilterable = entity.Relations.Count > 0;
+        foreach (var relation in entity.Relations)
+        {
+            if (!relationChildEntities.ContainsKey(relation.PropertyName) || !(relation.IsCollection || relation.IsManyToMany))
+            {
+                allKeyFilterable = false;
+                break;
+            }
+        }
+
+        if (allKeyFilterable)
+        {
+            EmitSelectOneByKeyEagerGrid(source, sqlBuilder, method, parameters, entityType, cancellation, entity, relationChildEntities, parentSelectField);
+        }
+        else
+        {
+            EmitSelectOneByKeyEagerSeparate(source, sqlBuilder, method, parameters, entityType, cancellation, entity, relationChildEntities, parentSelectField);
+        }
+    }
+
+    // Single round trip: one command with the parent SELECT + each key-filterable child SELECT, read in
+    // order through an InquiryGridReader. Matches what Dapper (QueryMultiple), DLG (multi-result proc), and
+    // a hand-written two-result-set ADO command do.
+    private static void EmitSelectOneByKeyEagerGrid(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
+    {
+        var keyParamName = method.Parameters[0].Name;
+        var parentStructMat = entity.StructMaterializerFullName;
+        var keyDbType = ResolveDbType(entity.Keys[0], sqlBuilder);
+        var keyDbArg = keyDbType is null ? string.Empty : ", " + keyDbType;
+        var parentKeyProp = entity.Keys[0].PropertyName;
+        AppendHeader(source, method, parameters, isAsync: true);
+
+        // Combined command text: parent SELECT + each child SELECT, separated by ';'.
+        source.Append($"        var _sql = {parentSelectField}");
+        foreach (var relation in entity.Relations)
+        {
+            source.Append($" + \";\" + _sql_{relation.PropertyName}");
+        }
+        source.AppendLine(";");
+
+        // Deduped parameters, all bound to the input key value: the parent key, plus each collection
+        // relation's FK param. Many-to-many children filter by the parent-key param, so they add nothing.
+        var paramNames = new List<string> { parentKeyProp };
+        foreach (var relation in entity.Relations)
+        {
+            var paramName = relation.IsManyToMany ? parentKeyProp : relation.ForeignKeyProperty;
+            if (!paramNames.Contains(paramName))
+            {
+                paramNames.Add(paramName);
+            }
+        }
+
+        source.AppendLine("        await using var _grid = await Inquiry.QueryMultipleAsync(");
+        source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(");
+        source.AppendLine("                _sql,");
+        source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
+        source.AppendLine("                {");
+        foreach (var paramName in paramNames)
+        {
+            source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(paramName)}\", {keyParamName}{keyDbArg}),");
+        }
+        source.AppendLine("                }),");
+        source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+        source.AppendLine($"        var _entity = await _grid.ReadSingleOrDefaultAsync<{entityType}, {parentStructMat}>(default, {cancellation}).ConfigureAwait(false);");
+        source.AppendLine("        if (_entity is not null)");
+        source.AppendLine("        {");
+        foreach (var relation in entity.Relations)
+        {
+            var childEntity = relationChildEntities[relation.PropertyName];
+            source.AppendLine($"            _entity.{relation.PropertyName} = await _grid.ReadListAsync<{childEntity.FullyQualifiedName}, {childEntity.StructMaterializerFullName}>(default, {cancellation}).ConfigureAwait(false);");
+        }
+        source.AppendLine("        }");
+        source.AppendLine("        return _entity;");
+        source.AppendLine("    }");
+    }
+
+    private static void EmitSelectOneByKeyEagerSeparate(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
     {
         // Eager-on-composite is rejected in validation, so entity.Keys.Count == 1 here.
         var keyParamName = method.Parameters[0].Name;
+        // Bind the key/FK predicate parameters with their resolved DbType (e.g. AnsiString for a
+        // non-unicode varchar key) so the eager-load lookups SEEK the varchar index instead of scanning —
+        // mirroring the main (non-eager) param path. Without this the params default to inferred nvarchar.
+        var _keyDbType = ResolveDbType(entity.Keys[0], sqlBuilder);
+        var _keyDbArg = _keyDbType is null ? string.Empty : ", " + _keyDbType;
         var parentStructMat = entity.StructMaterializerFullName;
         AppendHeader(source, method, parameters, isAsync: true);
         source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {parentStructMat}>(");
@@ -1185,7 +1273,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"                {parentSelectField},");
         source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine("                {");
-        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {keyParamName}),");
+        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {keyParamName}{_keyDbArg}),");
         source.AppendLine("                }),");
         source.AppendLine("            default,");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -1206,7 +1294,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", _entity.{entity.Keys[0].PropertyName}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", _entity.{entity.Keys[0].PropertyName}{_keyDbArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
@@ -1223,7 +1311,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", _entity.{entity.Keys[0].PropertyName}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", _entity.{entity.Keys[0].PropertyName}{_keyDbArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
@@ -1233,12 +1321,14 @@ internal static class StoreOperationEmitter
             else
             {
                 var parentKeyPropertyName = childEntity.Keys[0].PropertyName;
+                var _childKeyDbType = ResolveDbType(childEntity.Keys[0], sqlBuilder);
+                var _childKeyDbArg = _childKeyDbType is null ? string.Empty : ", " + _childKeyDbType;
                 source.AppendLine($"            _entity.{relation.PropertyName} = await Inquiry.QuerySingleOrDefaultAsync<{childType}, {childStructMat}>(");
                 source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(parentKeyPropertyName)}\", _entity.{relation.ForeignKeyProperty}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(parentKeyPropertyName)}\", _entity.{relation.ForeignKeyProperty}{_childKeyDbArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
