@@ -114,6 +114,22 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void OracleSingleEagerUsesSeparateRoundTripsNotGrid()
+    {
+        // Oracle cannot return multiple result sets from a ;-separated command (ORA-00933), so the
+        // single-eager loader must fall back to the per-relation (multi-round-trip) path, not the grid path.
+        var result = RunGenerator(OrderProductSource, dialect: "Oracle");
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetOrderStore(result);
+
+        Assert.DoesNotContain("QueryMultipleAsync", text);
+        Assert.DoesNotContain("_grid.ReadListAsync", text);
+        // Separate path: each child collection is read by its own query and assigned to the navigation.
+        Assert.Contains("await foreach (var _child in Inquiry.QueryAsync<", text);
+        Assert.Contains("_entity.Products = _Products_list;", text);
+    }
+
+    [Fact]
     public void ManyToManyOnNonCollectionReportsINQ063()
     {
         const string source = """
