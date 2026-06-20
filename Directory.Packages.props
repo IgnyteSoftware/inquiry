@@ -1,4 +1,8 @@
 <Project>
+  <!-- Enable transitive pinning so we can override transitive package versions. -->
+  <PropertyGroup>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
@@ -29,6 +33,9 @@
     <PackageVersion Include="Testcontainers.Oracle" Version="4.12.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+    <!-- Transitive pin: overrides SQLitePCLRaw.lib.e_sqlite3 2.1.11 (CVE-2025-6965 / GHSA-2m69-gcr7-jv3q)
+         pulled by Microsoft.Data.Sqlite / EF Core Sqlite. Remove once those ship a patched SQLitePCLRaw. -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="System.Configuration.ConfigurationManager" Version="9.0.13" />
     <PackageVersion Include="System.Data.OleDb" Version="8.0.1" />
     <PackageVersion Include="System.Data.Odbc" Version="8.0.1" />
