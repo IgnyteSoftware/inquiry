@@ -175,4 +175,135 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ037");
     }
+
+    private const string ConverterInSource = """
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        public struct Money { public decimal Amount { get; set; } }
+
+        public sealed class MoneyConverter : IInquiryValueConverter<Money, decimal>
+        {
+            public decimal ToProvider(Money model) => model.Amount;
+            public Money FromProvider(decimal provider) => new Money { Amount = provider };
+        }
+
+        [InquiryTable("Account")]
+        public sealed class Account
+        {
+            [InquiryKey(IsGenerated = true)]
+            public long Id { get; set; }
+
+            [InquiryColumn("Balance", Converter = typeof(MoneyConverter))]
+            public Money Balance { get; set; }
+        }
+
+        public partial class AccountStore : Inquiry.Stores.InquiryStore<Demo.Account>
+        {
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Balance", Compare.In)]
+            public partial Task<IReadOnlyList<Account>> ByBalancesAsync(IReadOnlyList<Money> balances, CancellationToken cancellationToken = default);
+
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Balance", Compare.NotIn)]
+            public partial Task<IReadOnlyList<Account>> ExcludeBalancesAsync(IReadOnlyList<Money> balances, CancellationToken cancellationToken = default);
+        }
+        """;
+
+    [Fact]
+    public void ConverterInPredicateProjectsThroughToProvider()
+    {
+        var result = RunGenerator(ConverterInSource);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("AccountStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // The IN collection must be projected through ToProvider so the provider sees the decimal, not the Money struct.
+        Assert.Contains("global::System.Linq.Enumerable.Select(balances, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.MoneyConverter>.Instance.ToProvider(_e))", text);
+    }
+
+    [Fact]
+    public void ConverterNotInPredicateProjectsThroughToProvider()
+    {
+        var result = RunGenerator(ConverterInSource);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("AccountStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // The NOT IN collection must also be projected through ToProvider (behind a null guard).
+        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \"@Balance\", balances is null ? null : global::System.Linq.Enumerable.Select(balances, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.MoneyConverter>.Instance.ToProvider(_e))", text);
+    }
+
+    [Fact]
+    public void ConverterInPredicateProjectsThroughArrayBindOnPostgreSql()
+    {
+        // The PostgreSQL '= ANY(array)' path binds the whole collection via InquiryArrayParameter.Bind;
+        // the projection must reach it too, so the bound array carries provider decimals, not Money structs.
+        var result = RunGenerator(ConverterInSource, dialect: "PostgreSql");
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("AccountStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("InquiryArrayParameter.Bind(_c, \"@Balance\", balances is null ? null : global::System.Linq.Enumerable.Select(balances, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.MoneyConverter>.Instance.ToProvider(_e)))", text);
+    }
+
+    [Fact]
+    public void ReferenceTypeConverterInPredicateGuardsNullElements()
+    {
+        // A reference-type converter model can hold null elements; the projection must guard each so
+        // ToProvider is never called on null, binding a typed null instead (matching the scalar binder).
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public sealed class Label { public string Text { get; set; } = string.Empty; }
+
+            public sealed class LabelConverter : IInquiryValueConverter<Label, string>
+            {
+                public string ToProvider(Label model) => model.Text;
+                public Label FromProvider(string provider) => new Label { Text = provider };
+            }
+
+            [InquiryTable("Item")]
+            public sealed class Item
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Tag", Converter = typeof(LabelConverter))]
+                public Label Tag { get; set; } = new Label();
+            }
+
+            public partial class ItemStore : Inquiry.Stores.InquiryStore<Demo.Item>
+            {
+                [InquirySelectAllByPredicate]
+                [InquiryWhere("Tag", Compare.In)]
+                public partial Task<IReadOnlyList<Item>> ByTagsAsync(IReadOnlyList<Label> tags, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // Per-element null guard, binding a typed (string?)null instead of calling ToProvider(null).
+        Assert.Contains("global::System.Linq.Enumerable.Select(tags, static _e => _e is null ? (string?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.LabelConverter>.Instance.ToProvider(_e))", text);
+    }
 }
