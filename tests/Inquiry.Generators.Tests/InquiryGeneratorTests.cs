@@ -762,16 +762,16 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("Organization.InquiryEntity.g.cs", StringComparison.Ordinal));
         var text = generatedEntity.GetText().ToString();
 
-        Assert.Contains("Status = (global::Demo.Status)reader.GetInt32(1)", text);
-        Assert.Contains("NullableStatus = reader.IsDBNull(2) ? (global::Demo.Status?)null : (global::Demo.Status)reader.GetInt32(2)", text);
-        Assert.Contains("BigStatus = (global::Demo.BigStatus)reader.GetInt64(3)", text);
+        Assert.Contains("Status = unchecked((global::Demo.Status)reader.GetInt32(1))", text);
+        Assert.Contains("NullableStatus = reader.IsDBNull(2) ? (global::Demo.Status?)null : unchecked((global::Demo.Status)reader.GetInt32(2))", text);
+        Assert.Contains("BigStatus = unchecked((global::Demo.BigStatus)reader.GetInt64(3))", text);
     }
 
     [Fact]
     public void NewPrimitiveAndModernTypesAreSupported()
     {
-        // Verifies byte/char get specialized DbDataReader calls and that DateOnly/TimeOnly/
-        // TimeSpan/uint/ushort/ulong/sbyte route through GetFieldValue<T>.
+        // Verifies byte/char get specialized DbDataReader calls; DateOnly/TimeOnly/TimeSpan route
+        // through GetFieldValue<T>; and unsigned/sbyte use signed-storage read + unchecked cast (#48 fix).
         const string source = """
             using System;
             using Inquiry.Entities;
@@ -808,14 +808,95 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("Flags = reader.GetByte(", text);
         Assert.Contains("Initial = reader.GetChar(", text);
-        Assert.Contains("Signed = reader.GetFieldValue<sbyte>(", text);
-        Assert.Contains("UShortValue = reader.GetFieldValue<ushort>(", text);
-        Assert.Contains("UIntValue = reader.GetFieldValue<uint>(", text);
-        Assert.Contains("ULongValue = reader.GetFieldValue<ulong>(", text);
+        // Unsigned/sbyte types read via the signed same-width call + unchecked reinterpret cast (#48).
+        Assert.Contains("Signed = unchecked((sbyte)reader.GetByte(", text);
+        Assert.Contains("UShortValue = unchecked((ushort)reader.GetInt16(", text);
+        Assert.Contains("UIntValue = unchecked((uint)reader.GetInt32(", text);
+        Assert.Contains("ULongValue = unchecked((ulong)reader.GetInt64(", text);
         Assert.Contains("OnlyDate = reader.GetFieldValue<global::System.DateOnly>(", text);
         Assert.Contains("OnlyTime = reader.GetFieldValue<global::System.TimeOnly>(", text);
         Assert.Contains("Span = reader.GetFieldValue<global::System.TimeSpan>(", text);
         Assert.Contains("OnlyDateNullable = reader.IsDBNull(", text);
+    }
+
+    [Fact]
+    public void UnsignedEnumPropertyReadsThroughSignedStorageAndCasts()
+    {
+        // Enums with unsigned/sbyte underlyings must be read via the signed same-width GetXxx call
+        // and cast to the enum type (#48). The (EnumType)signedValue cast is an unchecked
+        // reinterpretation in C#, so values above the signed range round-trip correctly.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public enum SByteEnum  : sbyte  { Neg = -1, Zero = 0 }
+            public enum UInt16Enum : ushort { Zero = 0, High = 40000 }
+            public enum UInt32Enum : uint   { Zero = 0, High = 3000000000u }
+            public enum UInt64Enum : ulong  { Zero = 0 }
+
+            [InquiryTable("TWidget")]
+            public sealed class Widget
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn] public SByteEnum  SB  { get; set; }
+                [InquiryColumn] public UInt16Enum U16 { get; set; }
+                [InquiryColumn] public UInt32Enum U32 { get; set; }
+                [InquiryColumn] public UInt64Enum U64 { get; set; }
+            }
+
+            public partial class WidgetStore : InquiryStore<Widget>
+            {
+                [InquiryInsert]
+                public partial Task<int> InsertAsync(Widget w, CancellationToken ct = default);
+                [InquirySelectOneByKey]
+                public partial Task<Widget?> SelectByKeyAsync(int id, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+
+        // --- Read side (#48): enum cast over signed GetXxx ---
+        var entityTree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("Widget.InquiryEntity.g.cs", StringComparison.Ordinal));
+        var entityText = entityTree.GetText().ToString();
+
+        // Enum read casts are wrapped in unchecked() so reinterpreted out-of-range values don't throw
+        // OverflowException in consumers compiled with CheckForOverflowUnderflow=true.
+        Assert.Contains("SB = unchecked((global::Demo.SByteEnum)reader.GetByte(",   entityText);
+        Assert.Contains("U16 = unchecked((global::Demo.UInt16Enum)reader.GetInt16(", entityText);
+        Assert.Contains("U32 = unchecked((global::Demo.UInt32Enum)reader.GetInt32(", entityText);
+        Assert.Contains("U64 = unchecked((global::Demo.UInt64Enum)reader.GetInt64(", entityText);
+
+        // --- Write side (#49): bound via unchecked cast to signed type, DbType is signed ---
+        var storeTree = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var storeText = storeTree.GetText().ToString();
+
+        // DbType must be the signed partner (not SByte/UInt16/UInt32/UInt64).
+        Assert.DoesNotContain("DbType.SByte",  storeText);
+        Assert.DoesNotContain("DbType.UInt16", storeText);
+        Assert.DoesNotContain("DbType.UInt32", storeText);
+        Assert.DoesNotContain("DbType.UInt64", storeText);
+        Assert.Contains("DbType.Byte",  storeText);
+        Assert.Contains("DbType.Int16", storeText);
+        Assert.Contains("DbType.Int32", storeText);
+        Assert.Contains("DbType.Int64", storeText);
+
+        // Binder must emit unchecked casts to the signed partner.
+        Assert.Contains("unchecked((byte)",  storeText);
+        Assert.Contains("unchecked((short)", storeText);
+        Assert.Contains("unchecked((int)",   storeText);
+        Assert.Contains("unchecked((long)",  storeText);
     }
 
     [Fact]
