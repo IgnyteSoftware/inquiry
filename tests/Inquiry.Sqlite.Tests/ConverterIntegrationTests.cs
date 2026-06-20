@@ -41,6 +41,14 @@ public partial class WalletStore : InquiryStore<Wallet>
 
     [InquirySelectOneByKey]
     public partial Task<Wallet?> GetAsync(long id, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere(nameof(Wallet.Balance), Compare.In)]
+    public partial Task<IReadOnlyList<Wallet>> ByBalancesAsync(IReadOnlyList<Money> balances, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere(nameof(Wallet.Balance), Compare.NotIn)]
+    public partial Task<IReadOnlyList<Wallet>> ExcludeBalancesAsync(IReadOnlyList<Money> balances, CancellationToken cancellationToken = default);
 }
 
 /// <summary>End-to-end against SQLite: a custom value converter (Money↔decimal) and a JSON column
@@ -84,5 +92,40 @@ public sealed class ConverterIntegrationTests
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
         Assert.Null(loaded!.Tags);
+    }
+
+    /// <summary>Reproduces bug #51: IN over a converter column must call ToProvider on each element.</summary>
+    [Fact]
+    public async Task InPredicateFiltersConverterColumnViaToProvider()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "Converter");
+        var store = harness.GetRequiredService<WalletStore>();
+
+        await store.InsertAsync(new Wallet { Owner = "Ada", Balance = new Money { Amount = 10m } });
+        await store.InsertAsync(new Wallet { Owner = "Grace", Balance = new Money { Amount = 20m } });
+        await store.InsertAsync(new Wallet { Owner = "Alan", Balance = new Money { Amount = 30m } });
+
+        // Without the fix, the raw Money struct is passed to the driver → never matches the stored decimal → 0 rows.
+        var result = await store.ByBalancesAsync(new[] { new Money { Amount = 10m }, new Money { Amount = 30m } });
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, w => w.Owner == "Ada");
+        Assert.Contains(result, w => w.Owner == "Alan");
+    }
+
+    /// <summary>Reproduces bug #51 for NOT IN: must also call ToProvider on each element.</summary>
+    [Fact]
+    public async Task NotInPredicateFiltersConverterColumnViaToProvider()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "Converter");
+        var store = harness.GetRequiredService<WalletStore>();
+
+        await store.InsertAsync(new Wallet { Owner = "Ada", Balance = new Money { Amount = 10m } });
+        await store.InsertAsync(new Wallet { Owner = "Grace", Balance = new Money { Amount = 20m } });
+        await store.InsertAsync(new Wallet { Owner = "Alan", Balance = new Money { Amount = 30m } });
+
+        // NOT IN([10, 30]) should return only the 20m row.
+        var result = await store.ExcludeBalancesAsync(new[] { new Money { Amount = 10m }, new Money { Amount = 30m } });
+        Assert.Single(result);
+        Assert.Equal("Grace", result[0].Owner);
     }
 }

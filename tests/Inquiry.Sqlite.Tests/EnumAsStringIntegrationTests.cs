@@ -38,6 +38,14 @@ public partial class TicketStore : InquiryStore<Ticket>
 
     [InquirySelectAllByField(nameof(Ticket.Status))]
     public partial System.Collections.Generic.IAsyncEnumerable<Ticket> StreamByStatusAsync(TicketStatus status, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere(nameof(Ticket.Status), Compare.In)]
+    public partial Task<System.Collections.Generic.IReadOnlyList<Ticket>> ByStatusesAsync(System.Collections.Generic.IReadOnlyList<TicketStatus> statuses, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere(nameof(Ticket.Status), Compare.NotIn)]
+    public partial Task<System.Collections.Generic.IReadOnlyList<Ticket>> ExcludeStatusesAsync(System.Collections.Generic.IReadOnlyList<TicketStatus> statuses, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Enum-as-string end-to-end against SQLite: the column stores the member name as text,
@@ -112,5 +120,80 @@ public sealed class EnumAsStringIntegrationTests
         }
 
         Assert.Equal(2, count);
+    }
+
+    /// <summary>Reproduces bug #50: IN over an enum-as-string column must bind member names, not integers.</summary>
+    [Fact]
+    public async Task InPredicateFiltersEnumAsStringByMemberName()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "EnumAsString");
+        var store = harness.GetRequiredService<TicketStore>();
+
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Closed });
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+
+        // Without the fix, IN binds integers (0,1) against a TEXT column → 0 matches.
+        var active = await store.ByStatusesAsync(new[] { TicketStatus.Active });
+        Assert.Equal(2, active.Count);
+        Assert.All(active, t => Assert.Equal(TicketStatus.Active, t.Status));
+    }
+
+    /// <summary>Reproduces bug #50 for NOT IN: must also bind member names, not integers.</summary>
+    [Fact]
+    public async Task NotInPredicateFiltersEnumAsStringByMemberName()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "EnumAsString");
+        var store = harness.GetRequiredService<TicketStore>();
+
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Closed });
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+
+        // NOT IN([Active]) should return only Closed rows.
+        var notActive = await store.ExcludeStatusesAsync(new[] { TicketStatus.Active });
+        Assert.Single(notActive);
+        Assert.Equal(TicketStatus.Closed, notActive[0].Status);
+    }
+
+    [Fact]
+    public async Task InPredicateWithEmptyCollectionReturnsNoRows()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "EnumAsString");
+        var store = harness.GetRequiredService<TicketStore>();
+
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Closed });
+
+        var result = await store.ByStatusesAsync(System.Array.Empty<TicketStatus>());
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task NotInPredicateWithEmptyCollectionReturnsAllRows()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "EnumAsString");
+        var store = harness.GetRequiredService<TicketStore>();
+
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Closed });
+
+        // Empty NOT IN is the match-all tautology.
+        var result = await store.ExcludeStatusesAsync(System.Array.Empty<TicketStatus>());
+        Assert.Equal(2, result.Count);
+    }
+
+    /// <summary>Locks fix #1: a null collection must flow through to the helper (treated as empty),
+    /// not throw from Enumerable.Select(null, …).</summary>
+    [Fact]
+    public async Task InPredicateWithNullCollectionReturnsNoRowsAndDoesNotThrow()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "EnumAsString");
+        var store = harness.GetRequiredService<TicketStore>();
+
+        await store.InsertAsync(new Ticket { Status = TicketStatus.Active });
+
+        var result = await store.ByStatusesAsync(null!);
+        Assert.Empty(result);
     }
 }
