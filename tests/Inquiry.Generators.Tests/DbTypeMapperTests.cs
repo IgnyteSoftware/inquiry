@@ -8,23 +8,46 @@ public sealed class DbTypeMapperTests
 {
     [Theory]
     [InlineData(SpecialType.System_Boolean, "global::System.Data.DbType.Boolean")]
-    [InlineData(SpecialType.System_Byte, "global::System.Data.DbType.Byte")]
-    [InlineData(SpecialType.System_SByte, "global::System.Data.DbType.SByte")]
-    [InlineData(SpecialType.System_Int16, "global::System.Data.DbType.Int16")]
-    [InlineData(SpecialType.System_UInt16, "global::System.Data.DbType.UInt16")]
-    [InlineData(SpecialType.System_Int32, "global::System.Data.DbType.Int32")]
-    [InlineData(SpecialType.System_UInt32, "global::System.Data.DbType.UInt32")]
-    [InlineData(SpecialType.System_Int64, "global::System.Data.DbType.Int64")]
-    [InlineData(SpecialType.System_UInt64, "global::System.Data.DbType.UInt64")]
-    [InlineData(SpecialType.System_Single, "global::System.Data.DbType.Single")]
-    [InlineData(SpecialType.System_Double, "global::System.Data.DbType.Double")]
+    [InlineData(SpecialType.System_Byte,    "global::System.Data.DbType.Byte")]
+    // sbyte is reinterpreted to byte (same storage width; SqlClient rejects DbType.SByte).
+    [InlineData(SpecialType.System_SByte,   "global::System.Data.DbType.Byte")]
+    [InlineData(SpecialType.System_Int16,   "global::System.Data.DbType.Int16")]
+    // ushort/uint/ulong are reinterpreted to their signed same-width partners (#49 fix).
+    [InlineData(SpecialType.System_UInt16,  "global::System.Data.DbType.Int16")]
+    [InlineData(SpecialType.System_Int32,   "global::System.Data.DbType.Int32")]
+    [InlineData(SpecialType.System_UInt32,  "global::System.Data.DbType.Int32")]
+    [InlineData(SpecialType.System_Int64,   "global::System.Data.DbType.Int64")]
+    [InlineData(SpecialType.System_UInt64,  "global::System.Data.DbType.Int64")]
+    [InlineData(SpecialType.System_Single,  "global::System.Data.DbType.Single")]
+    [InlineData(SpecialType.System_Double,  "global::System.Data.DbType.Double")]
     [InlineData(SpecialType.System_Decimal, "global::System.Data.DbType.Decimal")]
-    [InlineData(SpecialType.System_String, "global::System.Data.DbType.String")]
-    [InlineData(SpecialType.System_Char, "global::System.Data.DbType.StringFixedLength")]
-    [InlineData(SpecialType.System_DateTime, "global::System.Data.DbType.DateTime2")]
+    [InlineData(SpecialType.System_String,  "global::System.Data.DbType.String")]
+    [InlineData(SpecialType.System_Char,    "global::System.Data.DbType.StringFixedLength")]
+    [InlineData(SpecialType.System_DateTime,"global::System.Data.DbType.DateTime2")]
     public void MapsSpecialTypesToDbType(SpecialType specialType, string expected)
     {
         var type = Type(specialType);
+        Assert.Equal(expected, DbTypeMapper.TryGetDbTypeExpression(type));
+    }
+
+    [Theory]
+    // Enum with unsigned/sbyte underlying also maps to the signed storage DbType.
+    [InlineData(SpecialType.System_SByte,  "global::System.Data.DbType.Byte")]
+    [InlineData(SpecialType.System_UInt16, "global::System.Data.DbType.Int16")]
+    [InlineData(SpecialType.System_UInt32, "global::System.Data.DbType.Int32")]
+    [InlineData(SpecialType.System_UInt64, "global::System.Data.DbType.Int64")]
+    public void MapsUnsignedEnumUnderlyingToSignedStorageDbType(SpecialType underlying, string expected)
+    {
+        var type = new TypeData(
+            DisplayName: "global::Demo.UnsignedEnum",
+            NonNullableDisplayName: "global::Demo.UnsignedEnum",
+            SpecialType: SpecialType.None,
+            EnumUnderlyingSpecialType: underlying,
+            IsNullable: false,
+            IsValueType: true,
+            IsGuid: false,
+            IsEnum: true);
+
         Assert.Equal(expected, DbTypeMapper.TryGetDbTypeExpression(type));
     }
 
