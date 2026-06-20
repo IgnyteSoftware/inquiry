@@ -38,7 +38,7 @@ internal static class MaterializerEmitter
             : enumAsString
                 ? $"global::System.Enum.Parse<{nonNullable}>(reader.GetString({index}))"
                 : type.IsEnum
-                    ? $"({nonNullable}){ReadCallForSpecialType(type.EnumUnderlyingSpecialType, index, nonNullable)}"
+                    ? EnumReadExpression(type.EnumUnderlyingSpecialType, nonNullable, index)
                     : type.IsGuid
                         ? $"reader.GetGuid({index})"
                         // DbDataReader has no GetDateOnly/GetTimeOnly; GetFieldValue<T> is the
@@ -47,7 +47,7 @@ internal static class MaterializerEmitter
                             ? $"reader.GetFieldValue<global::System.DateOnly>({index})"
                             : type.IsTimeOnly
                                 ? $"reader.GetFieldValue<global::System.TimeOnly>({index})"
-                                : ReadCallForSpecialType(type.SpecialType, index, nonNullable);
+                                : PlainReadExpression(type.SpecialType, index, nonNullable);
 
         if (!type.IsNullable)
         {
@@ -60,6 +60,42 @@ internal static class MaterializerEmitter
         }
 
         return $"reader.IsDBNull({index}) ? null : {read}";
+    }
+
+    // For enum columns: read via the signed storage GetXxx, then cast to the enum type.
+    // The cast must be wrapped in unchecked(): an enum cast from an integral applies the consumer's
+    // checked/unchecked context to the underlying conversion, so reinterpreting an out-of-range signed
+    // value (e.g. byte 255 → sbyte-backed enum, or int -1 → uint-backed enum) would throw
+    // OverflowException in a consumer compiled with CheckForOverflowUnderflow=true. unchecked() forces
+    // the lossless bit reinterpretation the binding relies on.
+    private static string EnumReadExpression(SpecialType underlying, string enumTypeName, int index)
+    {
+        var signedCall = underlying switch
+        {
+            SpecialType.System_SByte  => $"reader.GetByte({index})",   // byte storage → sbyte underlying
+            SpecialType.System_UInt16 => $"reader.GetInt16({index})",  // short storage → ushort underlying
+            SpecialType.System_UInt32 => $"reader.GetInt32({index})",  // int storage → uint underlying
+            SpecialType.System_UInt64 => $"reader.GetInt64({index})",  // long storage → ulong underlying
+            _ => null,
+        };
+        // Signed and unknown underlyings fall through to the regular typed read (also unchecked, harmless).
+        var call = signedCall ?? ReadCallForSpecialType(underlying, index, enumTypeName);
+        return $"unchecked(({enumTypeName}){call})";
+    }
+
+    // For plain (non-enum) columns: unsigned/sbyte types are stored as same-width signed values
+    // and reinterpret-cast back with unchecked() on read. Providers return the signed storage type
+    // as the boxed object; GetFieldValue<uint> would throw InvalidCastException on most providers.
+    private static string PlainReadExpression(SpecialType specialType, int index, string fallbackTypeName)
+    {
+        return specialType switch
+        {
+            SpecialType.System_SByte  => $"unchecked((sbyte)reader.GetByte({index}))",
+            SpecialType.System_UInt16 => $"unchecked((ushort)reader.GetInt16({index}))",
+            SpecialType.System_UInt32 => $"unchecked((uint)reader.GetInt32({index}))",
+            SpecialType.System_UInt64 => $"unchecked((ulong)reader.GetInt64({index}))",
+            _ => ReadCallForSpecialType(specialType, index, fallbackTypeName),
+        };
     }
 
     private static string ReadCallForSpecialType(SpecialType specialType, int index, string fallbackTypeName)

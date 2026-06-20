@@ -499,25 +499,49 @@ internal static class StoreOperationEmitter
 
         if (!column.Type.IsEnum)
         {
-            return $"(object?){accessor} ?? global::System.DBNull.Value";
+            // Unsigned/sbyte plain columns are reinterpreted to the same-width signed type.
+            // DbType.SByte/UInt16/UInt32/UInt64 are rejected by SqlClient; storing via the signed
+            // partner is lossless (same bit pattern) and the materializer reverses the cast on read.
+            var reinterpretedValue = column.Type.SpecialType switch
+            {
+                SpecialType.System_SByte  => column.Type.IsNullable
+                    ? $"{accessor}.HasValue ? (object)unchecked((byte){accessor}.Value) : global::System.DBNull.Value"
+                    : $"(object)unchecked((byte){accessor})",
+                SpecialType.System_UInt16 => column.Type.IsNullable
+                    ? $"{accessor}.HasValue ? (object)unchecked((short){accessor}.Value) : global::System.DBNull.Value"
+                    : $"(object)unchecked((short){accessor})",
+                SpecialType.System_UInt32 => column.Type.IsNullable
+                    ? $"{accessor}.HasValue ? (object)unchecked((int){accessor}.Value) : global::System.DBNull.Value"
+                    : $"(object)unchecked((int){accessor})",
+                SpecialType.System_UInt64 => column.Type.IsNullable
+                    ? $"{accessor}.HasValue ? (object)unchecked((long){accessor}.Value) : global::System.DBNull.Value"
+                    : $"(object)unchecked((long){accessor})",
+                _ => null,
+            };
+            return reinterpretedValue ?? $"(object?){accessor} ?? global::System.DBNull.Value";
         }
 
+        // Enum columns: cast to the underlying integer type. Unsigned/sbyte underlyings are bound
+        // via their signed same-width partner (matching DbTypeMapper) using unchecked() so out-of-range
+        // values (e.g. SampleEnumUInt32.AboveIntMax) are preserved as bit patterns rather than throwing.
         var underlying = column.Type.EnumUnderlyingSpecialType switch
         {
-            SpecialType.System_Byte => "byte",
-            SpecialType.System_SByte => "sbyte",
-            SpecialType.System_Int16 => "short",
-            SpecialType.System_UInt16 => "ushort",
-            SpecialType.System_Int32 => "int",
-            SpecialType.System_UInt32 => "uint",
-            SpecialType.System_Int64 => "long",
-            SpecialType.System_UInt64 => "ulong",
-            _ => "int",
+            SpecialType.System_Byte   => ("byte",  false),
+            SpecialType.System_SByte  => ("byte",  true),   // reinterpret: sbyte ↔ byte
+            SpecialType.System_Int16  => ("short", false),
+            SpecialType.System_UInt16 => ("short", true),   // reinterpret: ushort ↔ short
+            SpecialType.System_Int32  => ("int",   false),
+            SpecialType.System_UInt32 => ("int",   true),   // reinterpret: uint ↔ int
+            SpecialType.System_Int64  => ("long",  false),
+            SpecialType.System_UInt64 => ("long",  true),   // reinterpret: ulong ↔ long
+            _                         => ("int",   false),
         };
-
+        var (typeName, needsUnchecked) = underlying;
+        var castExpr      = needsUnchecked ? $"unchecked(({typeName}){accessor})"       : $"({typeName}){accessor}";
+        var castExprValue = needsUnchecked ? $"unchecked(({typeName}){accessor}.Value)" : $"({typeName}){accessor}.Value";
         return column.Type.IsNullable
-            ? $"{accessor}.HasValue ? (object)({underlying}){accessor}.Value : global::System.DBNull.Value"
-            : $"(object)({underlying}){accessor}";
+            ? $"{accessor}.HasValue ? (object){castExprValue} : global::System.DBNull.Value"
+            : $"(object){castExpr}";
     }
 
     private static void EmitFastExecuteFromKeys(

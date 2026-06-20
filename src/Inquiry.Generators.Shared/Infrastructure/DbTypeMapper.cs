@@ -42,17 +42,23 @@ internal static class DbTypeMapper
     /// <summary>DbType expression for a converter's provider <see cref="SpecialType"/>, or null.</summary>
     public static string? TryGetDbTypeForSpecialType(SpecialType specialType) => Map(specialType);
 
+    // Unsigned CLR types (sbyte/ushort/uint/ulong) are bound via the same-width signed storage type.
+    // DbType.SByte / UInt16 / UInt32 / UInt64 are rejected by Microsoft.Data.SqlClient (and several
+    // other providers) at bind time with ArgumentException. Reinterpreting the bit pattern into the
+    // signed partner is lossless — e.g. uint 3_000_000_000 ↔ int -1_294_967_296 — and the materializer
+    // reverses the cast with unchecked() on read. Enum underlyings go through this same mapping because
+    // TryGetDbTypeExpression routes enum types through EnumUnderlyingSpecialType before calling Map().
     private static string? Map(SpecialType specialType, bool isUnicode = true) => specialType switch
     {
         SpecialType.System_Boolean => "global::System.Data.DbType.Boolean",
-        SpecialType.System_Byte => "global::System.Data.DbType.Byte",
-        SpecialType.System_SByte => "global::System.Data.DbType.SByte",
-        SpecialType.System_Int16 => "global::System.Data.DbType.Int16",
-        SpecialType.System_UInt16 => "global::System.Data.DbType.UInt16",
-        SpecialType.System_Int32 => "global::System.Data.DbType.Int32",
-        SpecialType.System_UInt32 => "global::System.Data.DbType.UInt32",
-        SpecialType.System_Int64 => "global::System.Data.DbType.Int64",
-        SpecialType.System_UInt64 => "global::System.Data.DbType.UInt64",
+        SpecialType.System_Byte    => "global::System.Data.DbType.Byte",
+        SpecialType.System_SByte   => "global::System.Data.DbType.Byte",    // reinterpret: sbyte ↔ byte (unchecked)
+        SpecialType.System_Int16   => "global::System.Data.DbType.Int16",
+        SpecialType.System_UInt16  => "global::System.Data.DbType.Int16",   // reinterpret: ushort ↔ short (unchecked)
+        SpecialType.System_Int32   => "global::System.Data.DbType.Int32",
+        SpecialType.System_UInt32  => "global::System.Data.DbType.Int32",   // reinterpret: uint ↔ int (unchecked)
+        SpecialType.System_Int64   => "global::System.Data.DbType.Int64",
+        SpecialType.System_UInt64  => "global::System.Data.DbType.Int64",   // reinterpret: ulong ↔ long (unchecked)
         SpecialType.System_Single => "global::System.Data.DbType.Single",
         SpecialType.System_Double => "global::System.Data.DbType.Double",
         SpecialType.System_Decimal => "global::System.Data.DbType.Decimal",

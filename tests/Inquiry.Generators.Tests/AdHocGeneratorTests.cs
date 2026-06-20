@@ -140,7 +140,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("AlertId = reader.GetGuid(0)", text);
         Assert.Contains("Severity = global::System.Enum.Parse<global::Demo.Severity>(reader.GetString(1))", text);
-        Assert.Contains("NumericSeverity = (global::Demo.Severity)reader.GetInt32(2)", text);
+        Assert.Contains("NumericSeverity = unchecked((global::Demo.Severity)reader.GetInt32(2))", text);
         // The record's synthesized EqualityContract is get-only and must not be mapped.
         Assert.DoesNotContain("EqualityContract", text);
     }

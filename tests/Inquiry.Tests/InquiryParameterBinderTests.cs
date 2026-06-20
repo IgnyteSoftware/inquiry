@@ -96,6 +96,69 @@ public sealed class InquiryParameterBinderTests
     private enum SampleBigStatus : long { A = 1, B = 2 }
 
     [Fact]
+    public void BindReinterpretsUnsignedValueToSignedPartnerWhenDbTypeMatches()
+    {
+        // Eager-load key/FK, stored-proc, and keyset paths carry the RAW boxed unsigned value paired
+        // with its SIGNED storage DbType. The binder reinterprets to the signed partner (lossless bit
+        // cast) so SqlClient's checked Convert.ToIntNN never overflows for values past the signed max.
+        using var command = new FakeDbCommand();
+
+        InquiryParameterBinder.Bind(command, new[]
+        {
+            new InquiryParameter("U32", 3_000_000_000u, DbType.Int32),   // > int.MaxValue
+            new InquiryParameter("U16", (ushort)40000, DbType.Int16),    // > short.MaxValue
+            new InquiryParameter("U64", ulong.MaxValue, DbType.Int64),
+            new InquiryParameter("SB", (sbyte)-1, DbType.Byte),
+        });
+
+        Assert.Equal(unchecked((int)3_000_000_000u), command.Parameters[0].Value);
+        Assert.IsType<int>(command.Parameters[0].Value);
+        Assert.Equal(unchecked((short)40000), command.Parameters[1].Value);
+        Assert.IsType<short>(command.Parameters[1].Value);
+        Assert.Equal(unchecked((long)ulong.MaxValue), command.Parameters[2].Value);
+        Assert.IsType<long>(command.Parameters[2].Value);
+        Assert.Equal(unchecked((byte)(sbyte)-1), command.Parameters[3].Value);
+        Assert.IsType<byte>(command.Parameters[3].Value);
+    }
+
+    [Fact]
+    public void BindLeavesUnsignedValueUntouchedWhenDbTypeIsNotTheSignedPartner()
+    {
+        // The gate is exact: a uint with no DbType (user ad-hoc param) or a non-matching DbType is
+        // passed through unchanged so the binder-lambda path and hand-crafted params are unaffected.
+        using var command = new FakeDbCommand();
+
+        InquiryParameterBinder.Bind(command, new[]
+        {
+            new InquiryParameter("NoDbType", 3_000_000_000u),                 // no DbType → untouched
+            new InquiryParameter("StillUnsigned", 3_000_000_000u, DbType.UInt32), // not the signed partner
+        });
+
+        Assert.Equal(3_000_000_000u, command.Parameters[0].Value);
+        Assert.IsType<uint>(command.Parameters[0].Value);
+        Assert.Equal(3_000_000_000u, command.Parameters[1].Value);
+        Assert.IsType<uint>(command.Parameters[1].Value);
+    }
+
+    [Fact]
+    public void BindReinterpretsUnsignedEnumKeyToSignedPartner()
+    {
+        // An enum key with an unsigned underlying is unwrapped by CoerceValue to its underlying uint,
+        // then the reinterpret gate maps it to int for the signed DbType — covering eager enum keys.
+        using var command = new FakeDbCommand();
+
+        InquiryParameterBinder.Bind(command, new[]
+        {
+            new InquiryParameter("EnumKey", SampleUIntEnum.AboveIntMax, DbType.Int32),
+        });
+
+        Assert.Equal(unchecked((int)3_000_000_000u), command.Parameters[0].Value);
+        Assert.IsType<int>(command.Parameters[0].Value);
+    }
+
+    private enum SampleUIntEnum : uint { Zero = 0, AboveIntMax = 3_000_000_000u }
+
+    [Fact]
     public void BindLeavesOptionalsUntouchedWhenNull()
     {
         // When InquiryParameter optionals are null, the binder should never assign them on the

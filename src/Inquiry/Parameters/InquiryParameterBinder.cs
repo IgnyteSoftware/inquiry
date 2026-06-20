@@ -14,12 +14,23 @@ internal static class InquiryParameterBinder
 
             var dbParameter = command.CreateParameter();
             dbParameter.ParameterName = NormalizeName(parameter.Name);
-            dbParameter.Value = CoerceValue(parameter.Value);
 
+            var coerced = CoerceValue(parameter.Value);
             if (parameter.DbType is not null)
             {
-                dbParameter.DbType = parameter.DbType.Value;
+                var dbType = parameter.DbType.Value;
+                // Unsigned/sbyte values carried as a raw boxed primitive (eager-load key/FK, stored-proc,
+                // keyset paths) reach here paired with their SIGNED storage DbType. Without this gate,
+                // SqlClient does a CHECKED Convert.ToInt32(uint) that overflows for values > int.MaxValue.
+                // Reinterpret to the signed partner — but ONLY when the DbType is exactly that partner, so
+                // the generated binder-lambda path (already reinterpreted) and ad-hoc params with an
+                // unsigned/absent DbType are untouched. Enum keys are covered: CoerceValue already unwraps
+                // them to the underlying uint/ushort/ulong/sbyte before this runs.
+                coerced = ReinterpretUnsignedForSignedDbType(coerced, dbType);
+                dbParameter.DbType = dbType;
             }
+
+            dbParameter.Value = coerced;
 
             if (parameter.Direction is not null)
             {
@@ -60,6 +71,22 @@ internal static class InquiryParameterBinder
 
         return value;
     }
+
+    /// <summary>
+    /// Reinterprets a boxed unsigned/sbyte value to its same-width SIGNED partner when the parameter's
+    /// DbType is exactly that partner. This mirrors the compile-time reinterpretation the generated
+    /// binders apply (sbyte→byte, ushort→short, uint→int, ulong→long), keeping high/negative values
+    /// lossless instead of letting SqlClient's checked Convert.ToIntNN throw OverflowException. The
+    /// exact-DbType guard ensures only the reinterpret-mapped paths are affected.
+    /// </summary>
+    private static object ReinterpretUnsignedForSignedDbType(object value, System.Data.DbType dbType) => (value, dbType) switch
+    {
+        (uint u,   System.Data.DbType.Int32) => unchecked((int)u),
+        (ushort u, System.Data.DbType.Int16) => unchecked((short)u),
+        (ulong u,  System.Data.DbType.Int64) => unchecked((long)u),
+        (sbyte s,  System.Data.DbType.Byte)  => unchecked((byte)s),
+        _ => value,
+    };
 
     /// <summary>
     /// Adds an <c>@</c> prefix to a parameter name that carries no provider sigil. Shared so the
