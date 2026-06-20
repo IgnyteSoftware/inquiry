@@ -1160,19 +1160,63 @@ internal static class StoreOperationEmitter
     /// Emits the runtime binding for a collection predicate parameter. A NOT IN collection always uses
     /// the sentinel <c>ExpandNotIn</c> (so an empty collection is dialect-uniform); a plain IN uses the
     /// dialect's array bind (when supported) or the sentinel <c>Expand</c>.
+    /// <para>
+    /// When the column has a value transform (enum-as-string or a value converter) the raw collection
+    /// is projected through that transform before being passed to the runtime helper, mirroring what
+    /// <see cref="BuildParameterValueExpression"/> does for scalar predicates.
+    /// </para>
     /// </summary>
     private static string CollectionBindingExpression(SqlBuilder sqlBuilder, PredicateBinding binding, string arg)
     {
         var name = GeneratorHelpers.Escape(binding.SqlParameterName);
+        var projected = ProjectedCollectionExpression(binding, arg);
         if (binding.IsNegatedCollection)
         {
-            return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {arg}, Inquiry.MaxParametersPerCommand);";
+            return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand);";
         }
 
         return sqlBuilder.UseArrayInParameters
-            ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{name}\", {arg});"
-            : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {arg}, Inquiry.MaxParametersPerCommand);";
+            ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{name}\", {projected});"
+            : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand);";
     }
+
+    /// <summary>
+    /// Returns the collection expression to pass to the runtime IN/NOT IN helper. When the column
+    /// stores a transformed representation (converter or enum-as-string) the raw enumerable is wrapped
+    /// in an <c>Enumerable.Select</c> projection so every element reaches the helper in provider form —
+    /// converter first, mirroring the scalar binder and materializer. The projection preserves the two
+    /// null-handling guarantees of the scalar path: a null collection flows through unprojected (the
+    /// helpers treat null as empty, but <c>Enumerable.Select(null, …)</c> would throw), and a
+    /// reference-type converter model binds <c>null</c> rather than calling <c>ToProvider(null)</c>.
+    /// </summary>
+    private static string ProjectedCollectionExpression(PredicateBinding binding, string arg)
+    {
+        if (binding.Column.Converter is { } conv)
+        {
+            // A reference-type model can hold null elements; guard each so ToProvider is never called on
+            // null (binds null, matching BuildParameterValueExpression). A value-type model cannot be null
+            // (validation rejects nullable value-type IN elements), so it keeps the unguarded form, which
+            // also preserves a typed provider array for the PostgreSQL '= ANY' path.
+            var selector = binding.Column.Type.IsValueType
+                ? $"static _e => global::Inquiry.Entities.InquiryConverterCache<{conv.ConverterTypeDisplay}>.Instance.ToProvider(_e)"
+                : $"static _e => _e is null ? ({conv.ProviderTypeDisplay}?)null : global::Inquiry.Entities.InquiryConverterCache<{conv.ConverterTypeDisplay}>.Instance.ToProvider(_e)";
+            return NullGuardedSelect(arg, selector);
+        }
+
+        if (binding.Column.EnumAsString)
+        {
+            return NullGuardedSelect(arg, "static _e => _e.ToString()");
+        }
+
+        return arg;
+    }
+
+    /// <summary>
+    /// Wraps <paramref name="arg"/> in <c>Enumerable.Select(arg, selector)</c> behind a null guard so a
+    /// null collection still reaches the runtime helper (which treats it as empty) instead of throwing.
+    /// </summary>
+    private static string NullGuardedSelect(string arg, string selector)
+        => $"{arg} is null ? null : global::System.Linq.Enumerable.Select({arg}, {selector})";
 
     private static void EmitSelectOneByKeyEager(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
     {
