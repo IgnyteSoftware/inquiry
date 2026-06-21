@@ -420,6 +420,34 @@ public sealed class TransactionStateMachineTests
     }
 
     [Fact]
+    public async Task StreamingQueryThatThrowsCreatingTheCommandReleasesTheInFlightSlot()
+    {
+        // #46. The transacted streaming QueryAsync overloads created their command BEFORE the try whose
+        // finally releases the in-flight slot. If CreateCommand()/InitializeCommand throws, the slot
+        // leaked and every later Commit/Rollback failed with the in-flight guard — the transaction
+        // became permanently un-committable. The command must be created inside the guarded try.
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "inflight_leak");
+        var inquiry = BuildInquiryWithThrowingInitializeCommand(harness.ConnectionString);
+
+        await using var tx = await inquiry.BeginTransactionAsync();
+
+        // The streaming overload creates its command lazily at the first MoveNextAsync, where
+        // InitializeCommand throws (a faulted async iterator, before the try is entered pre-fix).
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in tx.QueryAsync<Customer>(
+                $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers"))
+            {
+            }
+        });
+        Assert.Contains("Simulated InitializeCommand failure", ex.Message);
+        Assert.DoesNotContain("in flight", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        // The in-flight slot must have been released in the finally — Commit must NOT throw 'in flight'.
+        await tx.CommitAsync();
+    }
+
+    [Fact]
     public async Task CommitAndRollbackAfterRootTransactionCloseThrowObjectDisposed()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "double_close");
@@ -535,6 +563,38 @@ public sealed class TransactionStateMachineTests
         services.AddSingleton<IInquiryConnectionFactory>(new FailingConnectionFactory(connectionString, failureMode));
 
         return services.BuildServiceProvider().GetRequiredService<IInquiry>();
+    }
+
+    /// <summary>
+    /// Builds an IInquiry whose connection factory throws from <see cref="IInquiryConnectionFactory.InitializeCommand"/>,
+    /// so every <c>CreateCommand()</c> in the pipeline faults. Reuses the harness's shared in-memory database.
+    /// </summary>
+    private static IInquiry BuildInquiryWithThrowingInitializeCommand(string connectionString)
+    {
+        var services = new ServiceCollection()
+            .AddInquiry(typeof(CustomerStore).Assembly)
+            .AddInquirySqlite(connectionString);
+
+        services.RemoveAll(typeof(IInquiryConnectionFactory));
+        services.AddSingleton<IInquiryConnectionFactory>(new ThrowingInitializeCommandFactory(connectionString));
+
+        return services.BuildServiceProvider().GetRequiredService<IInquiry>();
+    }
+
+    private sealed class ThrowingInitializeCommandFactory : IInquiryConnectionFactory
+    {
+        private readonly string _connectionString;
+        public ThrowingInitializeCommandFactory(string connectionString) => _connectionString = connectionString;
+
+        public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            var inner = new SqliteConnection(_connectionString);
+            await inner.OpenAsync(cancellationToken);
+            return inner;
+        }
+
+        public void InitializeCommand(DbCommand command)
+            => throw new InvalidOperationException("Simulated InitializeCommand failure for tests.");
     }
 
     private enum FailureMode
