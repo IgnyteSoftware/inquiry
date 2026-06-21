@@ -113,7 +113,7 @@ public sealed class PredicateSelectIntegrationTests
         "CREATE TABLE TemporalItem (Id INT IDENTITY(1,1) PRIMARY KEY, Moment DATETIME2 NOT NULL);";
 
     [SkippableFact]
-    public async Task InFilterOnDateTime2ColumnRoundTripsSubMillisecondPrecision()
+    public async Task InFilterOnDateTime2ColumnPreservesMillisecondPrecision()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, TemporalDdl, "predindt");
