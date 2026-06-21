@@ -48,8 +48,52 @@ public sealed partial class InquiryGeneratorTests
         var generatedText = GeneratedProductStoreText(result);
 
         Assert.Contains("\\\"CategoryId\\\" IN (@CategoryId)", generatedText);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@CategoryId\", categoryIds, Inquiry.MaxParametersPerCommand);", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@CategoryId\", categoryIds, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", generatedText);
         Assert.DoesNotContain("InquiryArrayParameter", generatedText);
+    }
+
+    [Fact]
+    public void SqliteDateTimeInPredicateStampsDateTime2DbTypeOnExpansion()
+    {
+        // #52: an IN element must bind with the same DbType the scalar binder resolves for the column —
+        // DateTime2, not legacy `datetime` (which truncates sub-3.33ms precision / throws pre-1753 on SQL
+        // Server). The sentinel-expansion dialects thread the DbType into the runtime Expand call.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Event")]
+            public sealed class Event
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn]
+                public DateTime OccurredAt { get; set; }
+            }
+
+            public partial class EventStore : Inquiry.Stores.InquiryStore<Demo.Event>
+            {
+                [InquirySelectAllByPredicate]
+                [InquiryWhere("OccurredAt", Compare.In)]
+                public partial Task<IReadOnlyList<Event>> OnDatesAsync(IReadOnlyList<DateTime> dates, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("EventStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@OccurredAt\", dates, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.DateTime2);", text);
     }
 
     [Fact]

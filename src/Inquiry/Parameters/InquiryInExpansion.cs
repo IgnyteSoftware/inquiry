@@ -34,7 +34,16 @@ public static class InquiryInExpansion
     /// </summary>
     /// <typeparam name="T">The element type of the IN collection.</typeparam>
     public static void Expand<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount)
-        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL)");
+        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL)", dbType: null);
+
+    /// <summary>
+    /// Expands the <c>IN</c> sentinel, stamping each element parameter with <paramref name="dbType"/> so it
+    /// binds with the same type the scalar binder uses for that column (e.g. <c>DateTime2</c> on SQL
+    /// Server, not legacy <c>datetime</c>).
+    /// </summary>
+    /// <typeparam name="T">The element type of the IN collection.</typeparam>
+    public static void Expand<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType)
+        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL)", dbType);
 
     /// <summary>
     /// Expands a <c>NOT IN</c> sentinel — the negated counterpart of <see cref="Expand{T}(DbCommand, string, IEnumerable{T}?)"/>.
@@ -51,9 +60,15 @@ public static class InquiryInExpansion
     /// <summary>Expands a <c>NOT IN</c> sentinel with an explicit maximum total parameter count.</summary>
     /// <typeparam name="T">The element type of the NOT IN collection.</typeparam>
     public static void ExpandNotIn<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount)
-        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1");
+        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1", dbType: null);
 
-    private static void ExpandCore<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, string emptyReplacement)
+    /// <summary>Expands a <c>NOT IN</c> sentinel, stamping each element parameter with
+    /// <paramref name="dbType"/> (the negated counterpart of the <c>IN</c> overload).</summary>
+    /// <typeparam name="T">The element type of the NOT IN collection.</typeparam>
+    public static void ExpandNotIn<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType)
+        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1", dbType);
+
+    private static void ExpandCore<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, string emptyReplacement, System.Data.DbType? dbType = null)
     {
         if (command is null) throw new System.ArgumentNullException(nameof(command));
         if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
@@ -99,8 +114,30 @@ public static class InquiryInExpansion
                 boxed = System.Convert.ChangeType(boxed, enumUnderlyingType, System.Globalization.CultureInfo.InvariantCulture);
             }
 
+            // Unsigned/sbyte values are persisted via the same-width storage type the provider accepts
+            // (sbyte->byte, ushort->short, uint->int, ulong->long), matching DbTypeMapper and the scalar
+            // binder: providers reject DbType.SByte/UInt16/UInt32/UInt64, and the column stores that
+            // reinterpreted bit pattern, so an IN element must reinterpret to the same pattern to compare
+            // equal — and so the value matches the dbType stamped below. This runs AFTER the enum-unwrap
+            // above, so an unsigned-backed enum (T = MyEnum : uint) arrives here as a plain uint and
+            // reinterprets correctly. Unlike InquiryParameterBinder this is not gated on dbType: ExpandCore
+            // is only reached from generated calls and the [EditorBrowsable(Never)] overloads, where the
+            // partner-type representation is always the correct one.
+            boxed = boxed switch
+            {
+                sbyte v  => (object)unchecked((byte)v),
+                ushort v => (object)unchecked((short)v),
+                uint v   => (object)unchecked((int)v),
+                ulong v  => (object)unchecked((long)v),
+                _ => boxed,
+            };
+
             var parameter = command.CreateParameter();
             parameter.ParameterName = elementName;
+            if (dbType is not null)
+            {
+                parameter.DbType = dbType.Value;
+            }
             parameter.Value = boxed ?? System.DBNull.Value;
             command.Parameters.Add(parameter);
 

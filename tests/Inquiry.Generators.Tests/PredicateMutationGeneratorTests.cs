@@ -129,7 +129,7 @@ public sealed partial class InquiryGeneratorTests
         var text = GeneratedStoreText(result, "ThingStore.InquiryStore.g.cs");
 
         Assert.Contains("private const string _sqlUpdateWhere_RepriceManyAsync = \"UPDATE \\\"TThing\\\" SET \\\"Price\\\" = @Price WHERE \\\"Id\\\" IN (@Id)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@Id\", ids, Inquiry.MaxParametersPerCommand);", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@Id\", ids, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int64);", text);
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public sealed partial class InquiryGeneratorTests
         var text = GeneratedStoreText(result, "ThingStore.InquiryStore.g.cs");
 
         Assert.Contains("private const string _sqlDeleteWhere_DeleteNamedAsync = \"DELETE FROM \\\"TThing\\\" WHERE \\\"Name\\\" IN (@Name)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@Name\", names, Inquiry.MaxParametersPerCommand);", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@Name\", names, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.String);", text);
     }
 
     [Fact]
