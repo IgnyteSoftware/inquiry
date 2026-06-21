@@ -29,6 +29,34 @@ public sealed class GeneratedKeyUpsertTests
     }
 
     [SkippableFact]
+    public async Task ExplicitNonNullKeyUpsertReturningReadsTheInsertedRow()
+    {
+        // #53: MySQL does not update LAST_INSERT_ID() for an explicit-value insert, and the ON DUPLICATE
+        // UPDATE branch never fires for a NEW row — so a returning SELECT keyed on LAST_INSERT_ID() read a
+        // stale/wrong row (or none). The returning SELECT must key on the supplied @Id instead.
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "gen_key_explicit");
+        var store = harness.GetRequiredService<GeneratedItemStore>();
+
+        // Seed an auto-generated row first; on a reused pooled connection this leaves LAST_INSERT_ID()
+        // pointing at that row, which the buggy returning SELECT would read back instead of the new row.
+        var auto = await store.UpsertReturningAsync(new GeneratedItem { Id = null, Name = "auto" });
+        Assert.NotNull(auto);
+
+        // Insert a NEW row with an explicit, non-contiguous key.
+        var inserted = await store.UpsertReturningAsync(new GeneratedItem { Id = 9999, Name = "explicit" });
+        Assert.NotNull(inserted);
+        Assert.Equal(9999L, inserted!.Id!.Value);
+        Assert.Equal("explicit", inserted.Name);
+
+        // Upserting the same explicit key again updates and returns that same row (ON DUPLICATE branch).
+        var updated = await store.UpsertReturningAsync(new GeneratedItem { Id = 9999, Name = "explicit-v2" });
+        Assert.NotNull(updated);
+        Assert.Equal(9999L, updated!.Id!.Value);
+        Assert.Equal("explicit-v2", updated.Name);
+    }
+
+    [SkippableFact]
     public async Task ConcurrentUpsertsOfSameExplicitKeyAllSucceed()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
