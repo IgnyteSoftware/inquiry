@@ -144,6 +144,63 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void ConverterWithUnsignedProviderTypeReinterpretsOnBindAndRead()
+    {
+        // #92: a converter whose PROVIDER type is unsigned/sbyte must reinterpret to the same-width
+        // storage partner on both sides (uint<->int here), exactly like a plain/enum unsigned column —
+        // providers reject DbType.UInt32 and GetFieldValue<uint> throws InvalidCastException.
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public struct Counter { public uint Value { get; set; } }
+
+            public sealed class CounterConverter : IInquiryValueConverter<Counter, uint>
+            {
+                public uint ToProvider(Counter model) => model.Value;
+                public Counter FromProvider(uint provider) => new Counter { Value = provider };
+            }
+
+            [InquiryTable("Gauge")]
+            public sealed class Gauge
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Ticks", Converter = typeof(CounterConverter))]
+                public Counter Ticks { get; set; }
+            }
+
+            public partial class GaugeStore : Inquiry.Stores.InquiryStore<Demo.Gauge>
+            {
+                [InquiryInsert]
+                public partial Task<int> InsertAsync(Gauge gauge, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var entity = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("Gauge.InquiryEntity.g.cs", StringComparison.Ordinal));
+        var entityText = entity.GetText().ToString();
+        // Read: signed storage read, reinterpreted back to uint before FromProvider (not GetFieldValue<uint>).
+        Assert.Contains("FromProvider(unchecked((uint)reader.GetInt32(1)))", entityText);
+        Assert.DoesNotContain("GetFieldValue<uint>", entityText);
+
+        var store = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("GaugeStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var storeText = store.GetText().ToString();
+        // Write: the ToProvider result is reinterpreted to int before boxing, bound with the signed DbType.
+        Assert.Contains("(object)unchecked((int)(global::Inquiry.Entities.InquiryConverterCache<global::Demo.CounterConverter>.Instance.ToProvider(", storeText);
+        Assert.Contains("global::System.Data.DbType.Int32", storeText);
+        Assert.DoesNotContain("global::System.Data.DbType.UInt32", storeText);
+    }
+
+    [Fact]
     public void ConverterNotImplementingInterfaceReportsDiagnostic()
     {
         const string source = """
