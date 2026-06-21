@@ -51,10 +51,56 @@ public partial class WalletStore : InquiryStore<Wallet>
     public partial Task<IReadOnlyList<Wallet>> ExcludeBalancesAsync(IReadOnlyList<Money> balances, CancellationToken cancellationToken = default);
 }
 
+public readonly struct Counter
+{
+    public uint Value { get; init; }
+}
+
+public sealed class CounterConverter : IInquiryValueConverter<Counter, uint>
+{
+    public uint ToProvider(Counter model) => model.Value;
+    public Counter FromProvider(uint provider) => new() { Value = provider };
+}
+
+[InquiryTable("Gauge")]
+public sealed class Gauge
+{
+    [InquiryKey(IsGenerated = true)]
+    public long Id { get; set; }
+
+    [InquiryColumn("Ticks", Converter = typeof(CounterConverter))]
+    public Counter Ticks { get; set; }
+}
+
+public partial class GaugeStore : InquiryStore<Gauge>
+{
+    [InquiryInsert]
+    public partial Task<int> InsertAsync(Gauge gauge, CancellationToken cancellationToken = default);
+
+    [InquirySelectOneByKey]
+    public partial Task<Gauge?> GetAsync(long id, CancellationToken cancellationToken = default);
+}
+
 /// <summary>End-to-end against SQLite: a custom value converter (Money↔decimal) and a JSON column
 /// (List&lt;string&gt; as text) round-trip through insert and select; a null JSON value maps to NULL.</summary>
 public sealed class ConverterIntegrationTests
 {
+    /// <summary>#92: a converter whose provider type is unsigned (uint) round-trips an edge value past
+    /// int.MaxValue — write reinterprets uint→int into the signed storage column, read reinterprets back.</summary>
+    [Fact]
+    public async Task UnsignedProviderTypeConverterRoundTripsEdgeValue()
+    {
+        const string gaugeDdl = "CREATE TABLE Gauge (Id INTEGER PRIMARY KEY AUTOINCREMENT, Ticks INTEGER NOT NULL);";
+        await using var harness = await SqliteTestHarness.CreateAsync(gaugeDdl, "GaugeConv");
+        var store = harness.GetRequiredService<GaugeStore>();
+
+        await store.InsertAsync(new Gauge { Ticks = new Counter { Value = 3_000_000_000u } }); // > int.MaxValue
+        var loaded = await store.GetAsync(1);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(3_000_000_000u, loaded!.Ticks.Value);
+    }
+
     private const string Ddl = "CREATE TABLE Wallet (Id INTEGER PRIMARY KEY AUTOINCREMENT, Owner TEXT NOT NULL, Balance NUMERIC NOT NULL, Tags TEXT NULL);";
 
     [Fact]
