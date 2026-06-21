@@ -1459,7 +1459,7 @@ public sealed partial class InquiryGeneratorTests
 
         // IN bakes a single-placeholder sentinel into the const SQL; the binder expands it at run time.
         Assert.Contains("WHERE \\\"CategoryId\\\" IN (@CategoryId)\";", generatedText);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@CategoryId\", categoryIds, Inquiry.MaxParametersPerCommand);", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@CategoryId\", categoryIds, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", generatedText);
     }
 
     [Fact]
