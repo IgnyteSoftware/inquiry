@@ -105,6 +105,35 @@ public sealed class PredicateSelectIntegrationTests
         Assert.Empty(matched);
     }
 
+    // #52: each IN element must bind as DateTime2 (like the scalar binder), not legacy `datetime`.
+    // Uses a dedicated datetime2 table (the Northwind Orders.OrderDate column is legacy `datetime`, which
+    // rounds at storage time and so cannot distinguish the bug). Before the fix the IN list binds legacy
+    // `datetime`, rounding the sub-3.33ms comparison values, so this returns 0 rows instead of 2.
+    private const string TemporalDdl =
+        "CREATE TABLE TemporalItem (Id INT IDENTITY(1,1) PRIMARY KEY, Moment DATETIME2 NOT NULL);";
+
+    [SkippableFact]
+    public async Task InFilterOnDateTime2ColumnRoundTripsSubMillisecondPrecision()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, TemporalDdl, "predindt");
+        var items = harness.GetRequiredService<TemporalItemStore>();
+
+        var d1 = new DateTime(2021, 6, 15, 10, 30, 0, 1);  // .001 -> legacy datetime rounds to .000
+        var d2 = new DateTime(2022, 3, 9, 14, 45, 0, 2);   // .002 -> legacy datetime rounds to .003
+        var decoy = new DateTime(2020, 1, 1, 0, 0, 0, 7);
+
+        await items.InsertAsync(new TemporalItem { Moment = d1 });
+        await items.InsertAsync(new TemporalItem { Moment = d2 });
+        await items.InsertAsync(new TemporalItem { Moment = decoy });
+
+        var matched = await items.OnMomentsAsync(new[] { d1, d2 });
+
+        Assert.Equal(2, matched.Count);
+        Assert.Contains(matched, i => i.Moment == d1);
+        Assert.Contains(matched, i => i.Moment == d2);
+    }
+
     [SkippableFact]
     public async Task IsNullFilterMatchesNullColumn()
     {

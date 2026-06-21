@@ -210,6 +210,11 @@ internal static class StoreOperationEmitter
                 // to match the baked SQL. Returns rows affected; for a soft-delete entity
                 // _sqlDeleteAll is the soft UPDATE form.
                 var keysParam = method.Parameters[0].Name;
+                // Stamp the key column's DbType on the expanded key parameters, same as a predicate IN
+                // (see CollectionBindingExpression) — so a DateTime key collection binds DateTime2, not
+                // legacy datetime, on SQL Server. Single-column keys only (this IN binds one column).
+                var keysDbType = entity.Keys.Count == 1 ? ResolveDbType(entity.Keys[0], sqlBuilder) : null;
+                var keysDbTypeArg = keysDbType is null ? string.Empty : $", dbType: {keysDbType}";
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine("            _sqlDeleteAll,");
@@ -217,7 +222,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("            {");
                 source.AppendLine(sqlBuilder.UseArrayInParameters
                     ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam});"
-                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand);");
+                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand{keysDbTypeArg});");
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 source.AppendLine("    }");
@@ -1194,14 +1199,19 @@ internal static class StoreOperationEmitter
     {
         var name = GeneratorHelpers.Escape(binding.SqlParameterName);
         var projected = ProjectedCollectionExpression(binding, arg);
+        // Stamp the same DbType the scalar binder resolves for this column so an IN element binds with
+        // the right type (e.g. DateTime2 on SQL Server, not legacy datetime). The array path leaves it
+        // to the provider, which infers the element type from the typed native array.
+        var dbType = ResolveDbType(binding.Column, sqlBuilder);
+        var dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
         if (binding.IsNegatedCollection)
         {
-            return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand);";
+            return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg});";
         }
 
         return sqlBuilder.UseArrayInParameters
             ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{name}\", {projected});"
-            : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand);";
+            : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg});";
     }
 
     /// <summary>
