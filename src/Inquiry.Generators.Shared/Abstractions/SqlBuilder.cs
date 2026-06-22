@@ -57,6 +57,18 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime2";
 
+    /// <summary>
+    /// Whether generated binders emit <c>Size</c> (variable-length string) and <c>Precision</c>/
+    /// <c>Scale</c> (decimal) on parameters that declare them. Only SQL Server keys its plan cache on
+    /// parameter metadata — it routes parameterized commands through <c>sp_executesql</c>, whose cache
+    /// signature includes each parameter's declared type, so an unset <c>Size</c> makes SqlClient infer
+    /// the size from the value length and a column queried with <c>'ab'</c> vs <c>'abcd'</c> produces two
+    /// plans. The other dialects key their plan cache on the SQL text, so emitting size/precision buys
+    /// them nothing; they inherit <see langword="false"/> (no emission, no snapshot churn, no behavior
+    /// change). SQL Server overrides this to <see langword="true"/>.
+    /// </summary>
+    public virtual bool EmitsParameterSizePrecision => false;
+
     // ---- Batch insert / update ---------------------------------------------------------
 
     /// <summary>
