@@ -41,6 +41,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ060         JSON-path predicate             ([InquiryWhere(JsonPath=…)] on non-string / converter column, or malformed path) [IN USE]
     //   INQ061–INQ064  DDL safety lints (off by default) (INQ061 unindexed FK, INQ062 decimal w/o precision, INQ064 unindexed filter column; opt in via .editorconfig) [IN USE]
     //   INQ063         Many-to-many relation          ([InquiryManyToMany] misconfigured junction/child) [IN USE]
+    //   INQ065         Column metadata range          ([InquiryColumn] Length/Precision/Scale out of range) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -352,6 +353,20 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Info,
         isEnabledByDefault: false);
+
+    // INQ065: an [InquiryColumn(Length/Precision/Scale = …)] value is out of range. Length/Precision/Scale
+    // are read as raw ints with no validation, so a negative Length, a Precision above the portable SQL
+    // maximum of 38 (also the ceiling of DbParameter.Precision's byte range for #56's Size emission), or a
+    // Scale exceeding its Precision produces invalid DDL (DECIMAL(99, …)) or breaks the generated binder.
+    // Reported at the property so the fix is local. Dialect-agnostic: 38 is the SQL-standard decimal max
+    // (a dialect with a larger max — MySQL 65, PostgreSQL 1000 — should use SqlType for those rare cases).
+    public static readonly DiagnosticDescriptor ColumnMetadataOutOfRange = new(
+        "INQ065",
+        "Column Length/Precision/Scale is out of range",
+        "Entity '{0}' column '{1}' has an out-of-range [InquiryColumn] metadata value: {2}.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor ConverterInvalid = new(
         "INQ037",

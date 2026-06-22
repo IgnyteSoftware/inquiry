@@ -241,8 +241,14 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         DbTypeClass.TimeOnly => "TIME",
         DbTypeClass.Guid => "UNIQUEIDENTIFIER",
         DbTypeClass.ByteArray => "VARBINARY(MAX)",
-        // SQL Server cannot key on NVARCHAR(MAX); a bounded Length is required for PK/FK string columns.
-        _ => column.Length > 0
+        // A declared Length beyond the fixed-width ceiling (nvarchar 4000 / varchar 8000) is not a legal
+        // bounded type — NVARCHAR(5000) is a DDL error — so it maps to the MAX type instead of emitting
+        // invalid SQL. For a regular column that yields valid DDL. KNOWN GAP (pre-existing, not closed
+        // here): for a string KEY or indexed column an over-ceiling Length produces a MAX type SQL Server
+        // cannot key/index, and INQ031/INQ032 don't catch it (they gate on Length == 0, not over-ceiling) —
+        // main emitted the equally-invalid NVARCHAR(5000) for that case. INQ065 rejects only negative/
+        // over-precision values, not over-length, so it doesn't cover this either.
+        _ => column.Length > 0 && column.Length <= (column.IsUnicode ? 4000 : 8000)
             ? (column.IsUnicode ? "NVARCHAR(" + column.Length + ")" : "VARCHAR(" + column.Length + ")")
             : (column.IsUnicode ? "NVARCHAR(MAX)" : "VARCHAR(MAX)"),
     };
