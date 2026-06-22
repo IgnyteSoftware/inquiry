@@ -46,7 +46,7 @@ internal static class StoreOperationEmitter
             (selectPlan.Pagination == Pagination.Offset || method.Operation == StoreOperation.SelectAllByField))
         {
             AppendHeader(source, method, parameters, isAsync: false);
-            EmitOffsetPaged(source, method, fieldColumns, selectPlan, entityType, structMat, cancellation);
+            EmitOffsetPaged(source, sqlBuilder, method, fieldColumns, selectPlan, entityType, structMat, cancellation);
             source.AppendLine("    }");
             return;
         }
@@ -182,7 +182,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine("        var _rows = await Inquiry.ExecuteAsync(");
                     source.AppendLine($"            {deleteField},");
                     source.AppendLine($"            {firstParameter},");
-                    AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "            ");
+                    AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "            ", emitSizePrecision: true);
                     source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                     AppendConcurrencyConflictGuard(source, "        ");
                     source.AppendLine("        return _rows > 0;");
@@ -482,6 +482,63 @@ internal static class StoreOperationEmitter
         return sqlBuilder.MapDbTypeExpression(column.Type, column.IsUnicode);
     }
 
+    /// <summary>
+    /// Emits <c>Size</c> (variable-length string) or <c>Precision</c>+<c>Scale</c> (decimal) on a
+    /// <b>predicate</b> parameter (a WHERE/comparison value), but only on dialects whose plan cache keys on
+    /// parameter metadata (<see cref="SqlBuilder.EmitsParameterSizePrecision"/>) and only when the column
+    /// declares the value via <c>[InquiryColumn(Length/Precision/Scale)]</c>. A declared size keeps the
+    /// emitted <c>sp_executesql</c> signature stable across value lengths so high-cardinality string/decimal
+    /// predicates don't flood the plan cache.
+    /// <para>
+    /// Deliberately NOT called on value-write parameters (INSERT/UPDATE binders): <c>Size</c> on a write
+    /// parameter makes SqlClient silently truncate an over-length value client-side, turning a loud server
+    /// truncation error into silent data loss. Undeclared-length columns keep provider inference (no invented
+    /// default). IN/NOT IN list elements are not covered here — they would need the size threaded through the
+    /// <c>InquiryInExpansion</c> runtime helper.
+    /// </para>
+    /// </summary>
+    private static void AppendSizePrecision(StringBuilder source, ColumnData column, SqlBuilder sqlBuilder, string paramVar, string indent)
+    {
+        if (!sqlBuilder.EmitsParameterSizePrecision)
+        {
+            return;
+        }
+
+        if (IsStringParameter(column))
+        {
+            // nvarchar tops out at 4000 chars, varchar at 8000; a declared length beyond that maps to a MAX
+            // column whose width isn't fixed, so leave it to inference rather than pinning a wrong Size.
+            // Length is never validated to a range upstream, so this guard also keeps Size sane.
+            var maxSize = column.IsUnicode ? 4000 : 8000;
+            if (column.Length > 0 && column.Length <= maxSize)
+            {
+                source.AppendLine($"{indent}{paramVar}.Size = {column.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
+            }
+        }
+        else if (IsDecimalParameter(column)
+            && column.Precision is > 0 and <= 38
+            && column.Scale >= 0 && column.Scale <= column.Precision)
+        {
+            // DbParameter.Precision/Scale are byte; Precision/Scale are not range-validated upstream, so the
+            // guard above (SQL Server's max decimal precision is 38) keeps the emitted literals in byte range
+            // and the scale within the precision.
+            source.AppendLine($"{indent}{paramVar}.Precision = {column.Precision.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
+            source.AppendLine($"{indent}{paramVar}.Scale = {column.Scale.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
+        }
+    }
+
+    // The parameter's effective provider type is what the plan-cache signature is built from: a converter
+    // binds its provider primitive, enum-as-string binds a string, and everything else binds its CLR type.
+    private static bool IsStringParameter(ColumnData column)
+        => column.Converter is { } converter
+            ? converter.ProviderSpecialType == SpecialType.System_String
+            : column.EnumAsString || column.Type.SpecialType == SpecialType.System_String;
+
+    private static bool IsDecimalParameter(ColumnData column)
+        => column.Converter is { } converter
+            ? converter.ProviderSpecialType == SpecialType.System_Decimal
+            : !column.Type.IsEnum && column.Type.SpecialType == SpecialType.System_Decimal;
+
     private static string BuildParameterValueExpression(ColumnData column, string accessor)
     {
         // a converter column binds ToProvider(value); a null nullable model → NULL (converter not called).
@@ -590,7 +647,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}{capture}");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {keyParamName},");
-            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ", emitSizePrecision: true);
             source.AppendLine($"{indent}    {cancellation}{tail}");
         }
         else
@@ -599,7 +656,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}{capture}");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    ({tupleArgs}),");
-            AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ", emitSizePrecision: true);
             source.AppendLine($"{indent}    {cancellation}{tail}");
         }
 
@@ -613,7 +670,11 @@ internal static class StoreOperationEmitter
     /// <summary>
     /// Emits a <c>static (_cmd, &lt;lambdaParam&gt;) =&gt; { … }</c> binder that writes one
     /// <c>DbParameter</c> per column straight into the <c>DbCommand</c>. <paramref name="accessor"/>
-    /// yields the value expression for column <c>i</c>.
+    /// yields the value expression for column <c>i</c>. <paramref name="emitSizePrecision"/> is set only
+    /// when the bound columns are <b>predicate</b> values (key/field lookups, deletes) — never write
+    /// values (insert/update/upsert) — because <c>Size</c> on a write parameter silently truncates an
+    /// over-length value (see <see cref="AppendSizePrecision"/>). It defaults to <see langword="false"/>
+    /// so a new caller that forgets to classify itself fails safe (no truncation, just no optimization).
     /// </summary>
     private static void AppendBinderLambda(
         StringBuilder source,
@@ -621,7 +682,8 @@ internal static class StoreOperationEmitter
         string lambdaParam,
         IReadOnlyList<ColumnData> columns,
         Func<int, string> accessor,
-        string indent)
+        string indent,
+        bool emitSizePrecision = false)
     {
         source.AppendLine($"{indent}static (_cmd, {lambdaParam}) =>");
         source.AppendLine($"{indent}{{");
@@ -636,6 +698,10 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"{indent}    _p{i}.DbType = {dbType};");
             }
             source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i))};");
+            if (emitSizePrecision)
+            {
+                AppendSizePrecision(source, column, sqlBuilder, $"_p{i}", indent + "    ");
+            }
             source.AppendLine($"{indent}    _cmd.Parameters.Add(_p{i});");
         }
         source.AppendLine($"{indent}}},");
@@ -658,7 +724,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {keyParam.TypeDisplay}, {structMat}>(");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {keyParam.Name},");
-            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "    ", emitSizePrecision: true);
             source.AppendLine($"{indent}    default,");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
             return;
@@ -669,7 +735,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {tupleType}, {structMat}>(");
         source.AppendLine($"{indent}    {sqlField},");
         source.AppendLine($"{indent}    ({tupleArgs}),");
-        AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ");
+        AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "    ", emitSizePrecision: true);
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
     }
@@ -694,7 +760,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}return Inquiry.{queryMethod}<{entityType}, {fieldParam.TypeDisplay}, {structMat}>(");
             source.AppendLine($"{indent}    {sqlField},");
             source.AppendLine($"{indent}    {fieldParam.Name},");
-            AppendBinderLambda(source, sqlBuilder, "_arg", fieldColumns, _ => "_arg", indent + "    ");
+            AppendBinderLambda(source, sqlBuilder, "_arg", fieldColumns, _ => "_arg", indent + "    ", emitSizePrecision: true);
             source.AppendLine($"{indent}    default,");
             source.AppendLine($"{indent}    {cancellation});");
             return;
@@ -705,7 +771,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}return Inquiry.{queryMethod}<{entityType}, {tupleType}, {structMat}>(");
         source.AppendLine($"{indent}    {sqlField},");
         source.AppendLine($"{indent}    ({tupleArgs}),");
-        AppendBinderLambda(source, sqlBuilder, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "    ");
+        AppendBinderLambda(source, sqlBuilder, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "    ", emitSizePrecision: true);
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation});");
     }
@@ -781,6 +847,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                var _p{i} = _c.CreateParameter();");
                 source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
                 source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg)};");
+                AppendSizePrecision(source, binding.Column, sqlBuilder, $"_p{i}", "                ");
                 source.AppendLine($"                _c.Parameters.Add(_p{i});");
             }
         }
@@ -841,6 +908,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
                 source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg)};");
+                AppendSizePrecision(source, binding.Column, sqlBuilder, $"_p{pi}", "                ");
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
                 pi++;
             }
@@ -857,6 +925,7 @@ internal static class StoreOperationEmitter
     /// </summary>
     private static void EmitOffsetPaged(
         StringBuilder source,
+        SqlBuilder sqlBuilder,
         StoreMethodData method,
         IReadOnlyList<ColumnData> fieldColumns,
         ResolvedSelectPlan plan,
@@ -889,6 +958,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(fieldColumns[i].PropertyName)}\";");
             source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg)};");
+            AppendSizePrecision(source, fieldColumns[i], sqlBuilder, $"_p{pi}", "                ");
             source.AppendLine($"                _c.Parameters.Add(_p{pi});");
             pi++;
         }
@@ -962,6 +1032,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"                    _p{pi}.DbType = {cursorDbType};");
                 }
                 source.AppendLine($"                    _p{pi}.Value = {valueExpr};");
+                AppendSizePrecision(source, plan.KeysetColumns[i], sqlBuilder, $"_p{pi}", "                    ");
                 source.AppendLine($"                    _c.Parameters.Add(_p{pi});");
                 pi++;
             }
