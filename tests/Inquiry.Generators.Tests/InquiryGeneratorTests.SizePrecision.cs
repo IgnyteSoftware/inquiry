@@ -276,6 +276,89 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("size: ", generatedText);
     }
 
+    // #102: Compare.In / NotIn list elements are expanded by the InquiryInExpansion runtime helper, which
+    // builds one DbParameter per element. On SQL Server a declared-length string/decimal IN column must
+    // thread its Size/Precision/Scale into those element parameters too, or `Name IN ('ab')` vs
+    // `IN ('abcd')` re-introduce the per-value-length sp_executesql signatures #56 fixed for scalars.
+    private const string InListSizeSource = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("TTag")]
+        public sealed class Tag
+        {
+            [InquiryKey] public Guid Id { get; set; }
+            [InquiryColumn(Length = 64)] public string Name { get; set; } = string.Empty;
+            [InquiryColumn(Precision = 18, Scale = 2)] public decimal Weight { get; set; }
+        }
+
+        public partial class TagStore : InquiryStore<Tag>
+        {
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Name", Compare.In)]
+            public partial Task<IReadOnlyList<Tag>> InNamesAsync(IReadOnlyList<string> name, CancellationToken cancellationToken = default);
+
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Name", Compare.NotIn)]
+            public partial Task<IReadOnlyList<Tag>> NotInNamesAsync(IReadOnlyList<string> name, CancellationToken cancellationToken = default);
+
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Weight", Compare.In)]
+            public partial Task<IReadOnlyList<Tag>> InWeightsAsync(IReadOnlyList<decimal> weight, CancellationToken cancellationToken = default);
+        }
+        """;
+
+    [Fact]
+    public void SqlServer_ThreadsSizePrecisionIntoInListElements()
+    {
+        var result = RunGenerator(InListSizeSource, dialect: "SqlServer");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
+
+        var generatedText = GetTagStoreText(result);
+
+        // The declared string IN/NOT IN columns thread Size; the declared decimal column threads Precision/Scale.
+        Assert.Contains("Expand(_c", generatedText);
+        Assert.Contains("ExpandNotIn(_c", generatedText);
+        Assert.Contains("size: 64", generatedText);
+        Assert.Contains("precision: 18, scale: 2", generatedText);
+    }
+
+    [Theory]
+    [InlineData("PostgreSql")]
+    [InlineData("Sqlite")]
+    [InlineData("MySql")]
+    public void NonSqlServerDialects_ThreadNoSizePrecisionIntoInListElements(string dialect)
+    {
+        var result = RunGenerator(InListSizeSource, dialect: dialect);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
+
+        var generatedText = GetTagStoreText(result);
+
+        Assert.DoesNotContain("size: ", generatedText);
+        Assert.DoesNotContain("precision: ", generatedText);
+    }
+
+    private static string GetTagStoreText(GeneratorTestResult result)
+    {
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("TagStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        return generatedStore.GetText().ToString();
+    }
+
     private static string GetDocStoreText(GeneratorTestResult result)
     {
         var generatedStore = Assert.Single(
