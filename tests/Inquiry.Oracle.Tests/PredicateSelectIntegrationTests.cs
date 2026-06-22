@@ -112,6 +112,29 @@ public sealed class PredicateSelectIntegrationTests
     }
 
     [SkippableFact]
+    public async Task LargeInListStaysBelowOracleInListLimit()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "predinlarge");
+        var (c1, _) = await SeedAsync(harness);
+        var products = harness.GetRequiredService<ProductStore>();
+
+        // 600 elements: the next power-of-two bucket (1024) exceeds Oracle's 1000-entry IN-list limit
+        // (ORA-01795). The expansion must leave the list at its exact length rather than padding into a
+        // runtime error. c1 plus 599 non-matching filler ids → still returns exactly c1's two products.
+        var ids = new List<int> { c1 };
+        for (var i = 0; i < 599; i++)
+        {
+            ids.Add(1_000_000 + i);
+        }
+
+        var matched = await products.InCategoriesAsync(ids);
+
+        Assert.Equal(2, matched.Count);
+        Assert.All(matched, p => Assert.Equal(c1, p.CategoryID));
+    }
+
+    [SkippableFact]
     public async Task IsNullFilterMatchesNullColumn()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
