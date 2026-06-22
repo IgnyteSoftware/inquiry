@@ -226,9 +226,14 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
         EnterInFlight();
         DbDataReader? reader = null;
-        var dbCommand = CreateCommand();
+        // Create the command INSIDE the try so a throw from CreateCommand()/InitializeCommand still runs
+        // the finally and releases the in-flight slot — otherwise the slot leaks and the transaction
+        // becomes permanently un-committable. A command that was created is disposed in the finally;
+        // matches the buffered overloads.
+        DbCommand? dbCommand = null;
         try
         {
+            dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
             InitializeCommandSync(dbCommand, command);
             if (HasInterceptors)
@@ -301,7 +306,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         finally
         {
             if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
-            await dbCommand.DisposeAsync().ConfigureAwait(false);
+            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
             ExitInFlight();
         }
     }
@@ -422,9 +427,14 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
         EnterInFlight();
         DbDataReader? reader = null;
-        var dbCommand = CreateCommand();
+        // Create the command INSIDE the try so a throw from CreateCommand()/InitializeCommand still runs
+        // the finally and releases the in-flight slot — otherwise the slot leaks and the transaction
+        // becomes permanently un-committable. A command that was created is disposed in the finally;
+        // matches the buffered overloads.
+        DbCommand? dbCommand = null;
         try
         {
+            dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
             InitializeCommandSync(dbCommand, command);
             if (HasInterceptors)
@@ -497,7 +507,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         finally
         {
             if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
-            await dbCommand.DisposeAsync().ConfigureAwait(false);
+            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
             ExitInFlight();
         }
     }
@@ -619,10 +629,18 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
         EnterInFlight();
         DbDataReader? reader = null;
-        var dbCommand = CreateCommand();
-        var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+        // Create the command INSIDE the try so a throw from CreateCommand()/InitializeCommand still runs
+        // the finally and releases the in-flight slot — otherwise the slot leaks and the transaction
+        // becomes permanently un-committable. A command that was created is disposed in the finally;
+        // matches the buffered overloads.
+        DbCommand? dbCommand = null;
         try
         {
+            // interceptorCommand is built inside the try too: new InquiryCommand(commandText) can throw
+            // (empty/whitespace SQL), and it runs after EnterInFlight() — keeping it guarded ensures the
+            // finally still releases the in-flight slot.
+            var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+            dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
             dbCommand.CommandText = commandText;
             bindParameters(dbCommand, args);
@@ -697,7 +715,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         finally
         {
             if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
-            await dbCommand.DisposeAsync().ConfigureAwait(false);
+            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
             ExitInFlight();
         }
     }
