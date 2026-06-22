@@ -46,15 +46,119 @@ public class InquiryInExpansionTests
     }
 
     [Fact]
-    public void Expand_ScalarElements_PassThroughUnchanged()
+    public void Expand_ScalarElements_BucketsToNextPowerOfTwoRepeatingLastValue()
     {
         using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c)" };
 
+        // Three real elements pad up to the next power-of-two bucket (4); the padding slot repeats the last
+        // element value (5), a no-op duplicate that doesn't change which rows match.
         InquiryInExpansion.Expand(command, "@c", new List<int> { 3, 4, 5 });
+
+        Assert.Equal("SELECT * FROM t WHERE c IN (@c0, @c1, @c2, @c3)", command.CommandText);
+        Assert.Equal(4, command.Parameters.Count);
+        Assert.Equal(3, command.Parameters[0].Value);
+        Assert.Equal(4, command.Parameters[1].Value);
+        Assert.Equal(5, command.Parameters[2].Value);
+        Assert.Equal(5, command.Parameters[3].Value); // padding repeats the last value
+    }
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 4)]
+    [InlineData(5, 8)]
+    [InlineData(9, 16)]
+    public void Expand_PadsListLengthToNextPowerOfTwoBucket(int elementCount, int expectedBucket)
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c)" };
+        var values = new List<int>();
+        for (var i = 0; i < elementCount; i++)
+        {
+            values.Add(i);
+        }
+
+        InquiryInExpansion.Expand(command, "@c", values);
+
+        Assert.Equal(expectedBucket, command.Parameters.Count);
+        var names = new string[expectedBucket];
+        for (var i = 0; i < expectedBucket; i++)
+        {
+            names[i] = "@c" + i;
+        }
+
+        var expected = "SELECT * FROM t WHERE c IN (" + string.Join(", ", names) + ")";
+        Assert.Equal(expected, command.CommandText);
+    }
+
+    [Fact]
+    public void ExpandNotIn_Buckets_AndRepeatsANonNullPaddingValue()
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE (c NOT IN (@c))" };
+
+        // 3 -> bucket 4. NOT IN must never pad with NULL (it would make the predicate UNKNOWN); padding
+        // repeats the last real value, a no-op for NOT IN (col<>v AND col<>v).
+        InquiryInExpansion.ExpandNotIn(command, "@c", new List<int> { 10, 20, 30 });
+
+        Assert.Equal("SELECT * FROM t WHERE (c NOT IN (@c0, @c1, @c2, @c3))", command.CommandText);
+        Assert.Equal(4, command.Parameters.Count);
+        Assert.Equal(30, command.Parameters[3].Value);
+    }
+
+    [Fact]
+    public void Expand_AllNullElements_DoesNotBucket()
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE p IN (@p)" };
+
+        // No non-null element to repeat, so the (degenerate) all-null list is left at its exact length
+        // rather than padded with NULL.
+        InquiryInExpansion.Expand(command, "@p", new List<Priority?> { null, null, null });
+
+        Assert.Equal("SELECT * FROM t WHERE p IN (@p0, @p1, @p2)", command.CommandText);
+        Assert.Equal(3, command.Parameters.Count);
+    }
+
+    [Fact]
+    public void Expand_BucketAboveOracleInListCeiling_LeavesListAtExactLength()
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c)" };
+        var values = new List<int>();
+        for (var i = 0; i < 600; i++) // next power of two is 1024, above the 1000 IN-list ceiling
+        {
+            values.Add(i);
+        }
+
+        InquiryInExpansion.Expand(command, "@c", values);
+
+        // Padding past 1000 would raise ORA-01795 on Oracle, so the exact list is kept instead.
+        Assert.Equal(600, command.Parameters.Count);
+    }
+
+    [Fact]
+    public void Expand_BucketAtOrBelowOracleInListCeiling_StillPads()
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c)" };
+        var values = new List<int>();
+        for (var i = 0; i < 500; i++) // next power of two is 512, within the 1000 ceiling
+        {
+            values.Add(i);
+        }
+
+        InquiryInExpansion.Expand(command, "@c", values);
+
+        Assert.Equal(512, command.Parameters.Count);
+    }
+
+    [Fact]
+    public void Expand_PaddingThatWouldExceedTheCap_LeavesListAtExactLength()
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c)" };
+
+        // 3 real elements fit a cap of 3, but the bucket (4) would exceed it — padding is skipped rather
+        // than throwing, so the exact list is emitted.
+        InquiryInExpansion.Expand(command, "@c", new List<int> { 1, 2, 3 }, maxParameterCount: 3);
 
         Assert.Equal("SELECT * FROM t WHERE c IN (@c0, @c1, @c2)", command.CommandText);
         Assert.Equal(3, command.Parameters.Count);
-        Assert.Equal(3, command.Parameters[0].Value);
     }
 
     [Fact]
