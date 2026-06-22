@@ -139,6 +139,151 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain(".Precision = ", generatedText);
     }
 
+    // #107: the eager-load key binders bind their parent/child key parameters through the
+    // InquiryParameter constructor (an inline array initializer, not a `_p` variable), so the declared
+    // Size must be threaded as a constructor argument. A string-keyed [InquirySelectOneByKeyEager] must
+    // therefore get the same stable sp_executesql signature as the plain SelectOneByKey path — not a
+    // value-inferred one that re-pollutes the plan cache for the eager variant.
+    private const string EagerKeySizeSource = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("TDoc")]
+        public sealed class Doc
+        {
+            [InquiryKey(Length = 64)]
+            public string Code { get; set; } = string.Empty;
+
+            [InquiryRelation(nameof(DocLine.DocCode))]
+            public IReadOnlyList<DocLine> Lines { get; set; } = new List<DocLine>();
+        }
+
+        [InquiryTable("TDocLine")]
+        public sealed class DocLine
+        {
+            [InquiryKey]
+            public Guid Id { get; set; }
+
+            [InquiryColumn(Length = 64)]
+            public string DocCode { get; set; } = string.Empty;
+
+            [InquiryColumn]
+            public string Text { get; set; } = string.Empty;
+        }
+
+        public partial class DocStore : InquiryStore<Doc>
+        {
+            [InquirySelectOneByKeyEager]
+            public partial Task<Doc?> GetWithLinesAsync(string code, CancellationToken cancellationToken = default);
+        }
+        """;
+
+    [Fact]
+    public void SqlServer_EmitsSizeOnEagerLoadStringKeyBinders()
+    {
+        var result = RunGenerator(EagerKeySizeSource, dialect: "SqlServer");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
+
+        var generatedText = GetDocStoreText(result);
+
+        // The eager key binders build their parameters inline, so the declared length is threaded as a
+        // constructor argument (size: 64) rather than a `.Size = 64;` statement.
+        Assert.Contains("size: 64", generatedText);
+    }
+
+    // The decimal branch of the eager-key suffix emits a bare `precision: 18, scale: 2` constructor
+    // argument (the byte-range is guaranteed by the <= 38 gate, mirroring AppendSizePrecision). A
+    // declared-decimal key on an eager load must carry it for the same plan-cache parity.
+    [Fact]
+    public void SqlServer_EmitsPrecisionScaleOnEagerLoadDecimalKeyBinders()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TInvoice")]
+            public sealed class Invoice
+            {
+                [InquiryKey(Precision = 18, Scale = 2)]
+                public decimal Number { get; set; }
+
+                [InquiryRelation(nameof(InvoiceLine.InvoiceNumber))]
+                public IReadOnlyList<InvoiceLine> Lines { get; set; } = new List<InvoiceLine>();
+            }
+
+            [InquiryTable("TInvoiceLine")]
+            public sealed class InvoiceLine
+            {
+                [InquiryKey]
+                public Guid Id { get; set; }
+
+                [InquiryColumn(Precision = 18, Scale = 2)]
+                public decimal InvoiceNumber { get; set; }
+            }
+
+            public partial class InvoiceStore : InquiryStore<Invoice>
+            {
+                [InquirySelectOneByKeyEager]
+                public partial Task<Invoice?> GetWithLinesAsync(decimal number, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("InvoiceStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        Assert.Contains("precision: 18, scale: 2", generatedText);
+    }
+
+    [Theory]
+    [InlineData("PostgreSql")]
+    [InlineData("Sqlite")]
+    [InlineData("MySql")]
+    public void NonSqlServerDialects_EmitNoSizeOnEagerLoadStringKeyBinders(string dialect)
+    {
+        var result = RunGenerator(EagerKeySizeSource, dialect: dialect);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
+
+        var generatedText = GetDocStoreText(result);
+
+        Assert.DoesNotContain("size: ", generatedText);
+    }
+
+    private static string GetDocStoreText(GeneratorTestResult result)
+    {
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        return generatedStore.GetText().ToString();
+    }
+
     private static string GetProductStoreText(GeneratorTestResult result)
     {
         var generatedStore = Assert.Single(
