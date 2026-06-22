@@ -37,13 +37,23 @@ services
 
 When the provider doesn't support persistent prepared statements, the default `PreparedStatementMode.Auto` is a silent no-op - no overhead, no harm.
 
+### PostgreSQL: single data source
+
+`PostgreSqlInquiryConnectionFactory` builds one app-lifetime `NpgsqlDataSource` (via `NpgsqlDataSourceBuilder`) in its constructor and opens every connection from it. This is Npgsql's recommended model since 6.0: the data source owns the connection pool, type mapping, and the server-side prepared-statement cache, so building it once — rather than `new NpgsqlConnection(connectionString)` per operation — is where pooled prepared state and per-connection metadata actually accrue. The factory is a DI singleton, so the data source lives for the container's lifetime and its pool is drained when the container is disposed. (A configured failover connection string gets its own data source; a failover string identical to the primary is treated as no failover.)
+
+Adopting the data-source model is also the step toward the `DbDataSource`-based `Inquiry.Aspire` integration.
+
+> **Behavior note — global type mappings.** Connections opened from an `NpgsqlDataSource` use the data source's own type mapper, not the (obsolete since Npgsql 7) global `NpgsqlConnection.GlobalTypeMapper`. If you relied on global enum/composite/plugin registrations (e.g. NodaTime), they no longer apply to Inquiry's connections. Inquiry itself registers none, so this only affects apps that configured global mappings; a per-data-source configuration hook is planned.
+
 ### PostgreSQL: two preparation policies
 
 On PostgreSQL, Inquiry's default `Auto` mode uses explicit `PrepareAsync` because Npgsql persists prepared state on pooled physical connections. If you prefer Npgsql's usage-threshold policy, opt out of Inquiry preparation and enable automatic preparation in the connection string:
 
 ```
-Host=...;Database=...;Max Auto Prepare=20;Auto Prepare Min Usages=2
+Host=...;Database=...;Max Auto Prepare=20;Auto Prepare Min Usages=2;Minimum Pool Size=2
 ```
+
+`Max Auto Prepare=N` caps how many statements Npgsql auto-prepares per physical connection (an LRU bound on server-side statement memory); `Auto Prepare Min Usages` sets how many times a statement must be seen before it is prepared. This belt-and-suspenders policy also warms statements that bypass the Inquiry pipeline (raw `NpgsqlCommand` use). Pair it with `Minimum Pool Size>0` so the pool keeps warmed physical connections — auto-prepared state is per physical connection, so it only pays off on connections that survive in the pool.
 
 Benchmark both policies against your workload before making product claims; the better fit depends on statement reuse and connection-pool behavior.
 
