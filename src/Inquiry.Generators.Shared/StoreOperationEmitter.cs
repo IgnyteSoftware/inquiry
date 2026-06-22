@@ -215,6 +215,11 @@ internal static class StoreOperationEmitter
                 // legacy datetime, on SQL Server. Single-column keys only (this IN binds one column).
                 var keysDbType = entity.Keys.Count == 1 ? ResolveDbType(entity.Keys[0], sqlBuilder) : null;
                 var keysDbTypeArg = keysDbType is null ? string.Empty : $", dbType: {keysDbType}";
+                // Also carry the key column's declared Size/Precision/Scale (SQL Server only, same gating as
+                // CollectionBindingExpression) so a batch delete/soft-delete over a declared-length string key
+                // keeps a stable sp_executesql signature across value lengths (#102/#112). A declared string/
+                // decimal key always resolves a non-null DbType, so keysDbTypeArg is present whenever this is.
+                var keysSizeArg = entity.Keys.Count == 1 ? BuildSizePrecisionArgs(entity.Keys[0], sqlBuilder) : string.Empty;
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine("            _sqlDeleteAll,");
@@ -222,7 +227,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("            {");
                 source.AppendLine(sqlBuilder.UseArrayInParameters
                     ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam});"
-                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand{keysDbTypeArg});");
+                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand{keysDbTypeArg}{keysSizeArg});");
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 source.AppendLine("    }");
