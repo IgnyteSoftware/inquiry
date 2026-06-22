@@ -8,6 +8,13 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 {
     public override string DialectName => "SqlServer";
 
+    /// <summary>
+    /// SQL Server keys its plan cache on the <c>sp_executesql</c> parameter signature, so generated
+    /// binders emit <c>Size</c>/<c>Precision</c>/<c>Scale</c> on declared string/decimal parameters to
+    /// keep that signature stable across value lengths. See <see cref="SqlBuilder.EmitsParameterSizePrecision"/>.
+    /// </summary>
+    public override bool EmitsParameterSizePrecision => true;
+
     public override string QuoteIdentifier(string identifier)
         => "[" + identifier.Replace("]", "]]") + "]";
 
