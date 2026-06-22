@@ -489,9 +489,13 @@ internal static class StoreOperationEmitter
         {
             // converters are stateless; bind through the shared cached instance instead of allocating one per bind.
             var toProvider = $"global::Inquiry.Entities.InquiryConverterCache<{converter.ConverterTypeDisplay}>.Instance.ToProvider({NonNullableValueExpression(column.Type, accessor)})";
+            // An unsigned/sbyte provider type is bound via its same-width storage partner (DbTypeMapper maps
+            // the provider DbType to that signed/byte type): SqlClient rejects DbType.UInt*/SByte and would
+            // overflow on a checked Convert past the signed max, so reinterpret the bit pattern with unchecked().
+            var providerValue = ReinterpretUnsignedProviderValue(converter.ProviderSpecialType, toProvider);
             return column.Type.IsNullable
-                ? $"{accessor} is null ? global::System.DBNull.Value : (object){toProvider}"
-                : $"(object){toProvider}";
+                ? $"{accessor} is null ? global::System.DBNull.Value : (object){providerValue}"
+                : $"(object){providerValue}";
         }
 
         // enum-as-string binds the enum's member name (a string). A null nullable-enum → NULL.
@@ -548,6 +552,22 @@ internal static class StoreOperationEmitter
             ? $"{accessor}.HasValue ? (object){castExprValue} : global::System.DBNull.Value"
             : $"(object){castExpr}";
     }
+
+    /// <summary>
+    /// Reinterprets an unsigned/sbyte converter provider value to the same-width storage type the
+    /// provider accepts (sbyte→byte, ushort→short, uint→int, ulong→long) via <c>unchecked()</c>,
+    /// matching <see cref="Infrastructure.DbTypeMapper"/>. Returns the expression unchanged for
+    /// signed and non-integer provider types.
+    /// </summary>
+    private static string ReinterpretUnsignedProviderValue(SpecialType providerSpecialType, string valueExpression)
+        => providerSpecialType switch
+        {
+            SpecialType.System_SByte  => $"unchecked((byte)({valueExpression}))",
+            SpecialType.System_UInt16 => $"unchecked((short)({valueExpression}))",
+            SpecialType.System_UInt32 => $"unchecked((int)({valueExpression}))",
+            SpecialType.System_UInt64 => $"unchecked((long)({valueExpression}))",
+            _ => valueExpression,
+        };
 
     private static void EmitFastExecuteFromKeys(
         StringBuilder source,
