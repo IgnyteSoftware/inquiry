@@ -48,6 +48,10 @@ public partial class ProductStore : InquiryStore<Product>
     public partial Task<IReadOnlyList<Product>> InCategoriesAsync(IReadOnlyList<int> categoryID, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByPredicate]
+    [InquiryWhere("CategoryID", Compare.NotIn)]
+    public partial Task<IReadOnlyList<Product>> NotInCategoriesAsync(IReadOnlyList<int> categoryID, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
     [InquiryWhere("CategoryID", Compare.IsNull)]
     public partial Task<IReadOnlyList<Product>> WithoutCategoryAsync(CancellationToken cancellationToken = default);
 
