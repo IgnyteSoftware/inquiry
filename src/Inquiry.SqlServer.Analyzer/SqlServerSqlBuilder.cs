@@ -87,7 +87,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         return
             "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
             "USING (" + BuildSourceSelect(context) + ") AS source ON " + BuildSourceJoin(context) + " " +
-            "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " " +
+            WhenMatchedSet(context) +
             "WHEN NOT MATCHED THEN INSERT (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ");";
     }
 
@@ -101,7 +101,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         return
             "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
             "USING (" + BuildSourceSelect(context) + ") AS source ON " + BuildSourceJoin(context) + " " +
-            "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " " +
+            WhenMatchedSet(context) +
             "WHEN NOT MATCHED THEN INSERT (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ") " +
             "OUTPUT " + InsertedColumns(context) + ";";
     }
@@ -153,6 +153,14 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     private string InsertedColumns(SqlBuildContext context)
         => string.Join(", ", context.Columns.Select(c => "INSERTED." + QuoteIdentifier(c.ColumnName)));
 
+    // A MERGE for an entity with no updatable non-key columns has an empty SET; omit the WHEN MATCHED
+    // clause entirely (a MERGE with only WHEN NOT MATCHED is valid — "insert if absent, do nothing on
+    // conflict") instead of the invalid `WHEN MATCHED THEN UPDATE SET ` with an empty body.
+    private static string WhenMatchedSet(SqlBuildContext context)
+        => context.SetClauses.Length == 0
+            ? string.Empty
+            : "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " ";
+
     private string BuildGeneratedKeyUpsertSql(SqlBuildContext context, bool returning)
     {
         var keyColumn = context.QuotedKeyColumns[0];
@@ -191,7 +199,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             "BEGIN " +
             "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
             "USING (SELECT " + keyParameter + " AS k0) AS source ON target." + keyColumn + " = source.k0 " +
-            "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " " +
+            WhenMatchedSet(context) +
             "WHEN NOT MATCHED THEN INSERT " + notMatchedInsert + output + "; " +
             "END";
     }
