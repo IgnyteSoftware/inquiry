@@ -89,7 +89,7 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         }
 
         return "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ") " +
-            "ON CONFLICT (" + JoinKeyColumns(context) + ") DO UPDATE SET " + context.SetClauses;
+            OnConflictClause(JoinKeyColumns(context), context.SetClauses);
     }
 
     public override string BuildUpsertReturningSql(SqlBuildContext context)
@@ -108,28 +108,44 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         var keyParameter = context.KeyParameters[0];
         var explicitInsertColumns = JoinSql(keyColumn, context.InsertColumns);
         var explicitInsertParameters = JoinSql(keyParameter, context.InsertParameters);
-        var generatedInsertColumns = " (" + context.InsertColumns + ") SELECT " + context.InsertParameters + " WHERE " + keyParameter + " IS NULL";
+        // The null-key branch inserts only the non-key columns and lets the sequence supply the key. A
+        // key-only entity has none, which would emit an invalid empty `() SELECT`. That branch is also
+        // unreachable — a nullable key routes a null value to the plain insert, and a non-nullable key can
+        // never be null — so omit it entirely when there are no insert columns.
+        var hasGeneratedBranch = context.InsertableColumns.Count > 0;
 
         if (!returning)
         {
-            return
-                "INSERT INTO " + context.Table + generatedInsertColumns + "; " +
+            var explicitInsert =
                 "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") " +
                 "SELECT " + explicitInsertParameters + " WHERE " + keyParameter + " IS NOT NULL " +
-                "ON CONFLICT (" + keyColumn + ") DO UPDATE SET " + context.SetClauses + ";";
+                OnConflictClause(keyColumn, context.SetClauses) + ";";
+            return hasGeneratedBranch
+                ? "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") SELECT " + context.InsertParameters + " WHERE " + keyParameter + " IS NULL; " + explicitInsert
+                : explicitInsert;
         }
 
-        return
-            "WITH ins_gen AS (INSERT INTO " + context.Table + " (" + context.InsertColumns + ") " +
-            "SELECT " + context.InsertParameters + " WHERE " + keyParameter + " IS NULL " +
-            "RETURNING " + context.SelectColumns + "), " +
+        var insUpsert =
             "ins_upsert AS (INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") " +
             "SELECT " + explicitInsertParameters + " WHERE " + keyParameter + " IS NOT NULL " +
-            "ON CONFLICT (" + keyColumn + ") DO UPDATE SET " + context.SetClauses + " " +
-            "RETURNING " + context.SelectColumns + ") " +
-            "SELECT " + context.SelectColumns + " FROM ins_gen UNION ALL " +
-            "SELECT " + context.SelectColumns + " FROM ins_upsert";
+            OnConflictClause(keyColumn, context.SetClauses) + " " +
+            "RETURNING " + context.SelectColumns + ")";
+        return hasGeneratedBranch
+            ? "WITH ins_gen AS (INSERT INTO " + context.Table + " (" + context.InsertColumns + ") " +
+              "SELECT " + context.InsertParameters + " WHERE " + keyParameter + " IS NULL " +
+              "RETURNING " + context.SelectColumns + "), " +
+              insUpsert + " " +
+              "SELECT " + context.SelectColumns + " FROM ins_gen UNION ALL " +
+              "SELECT " + context.SelectColumns + " FROM ins_upsert"
+            : "WITH " + insUpsert + " SELECT " + context.SelectColumns + " FROM ins_upsert";
     }
+
+    // An entity with no updatable non-key columns yields an empty SET clause; emit DO NOTHING (a conflict
+    // is a valid no-op — "insert if absent") instead of the invalid `DO UPDATE SET ` with an empty body.
+    private static string OnConflictClause(string conflictTarget, string setClauses)
+        => setClauses.Length == 0
+            ? "ON CONFLICT (" + conflictTarget + ") DO NOTHING"
+            : "ON CONFLICT (" + conflictTarget + ") DO UPDATE SET " + setClauses;
 
     private static string JoinKeyColumns(SqlBuildContext context)
         => string.Join(", ", context.QuotedKeyColumns);
