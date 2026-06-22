@@ -62,6 +62,23 @@ public class InquiryInExpansionTests
         Assert.Equal(5, command.Parameters[3].Value); // padding repeats the last value
     }
 
+    [Fact]
+    public void Expand_WithDeclaredSize_StampsEveryElementIncludingPaddedSlots()
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c)" };
+
+        // Three real elements pad to bucket 4. The declared Size (#102) must land on every element —
+        // including the padded 4th slot — so the whole expanded list renders one uniform sp_executesql
+        // signature on SQL Server. (Sqlite ignores Size at execution; this asserts the binding metadata.)
+        InquiryInExpansion.Expand(command, "@c", new List<string> { "a", "b", "c" }, 2000, System.Data.DbType.String, size: 64);
+
+        Assert.Equal(4, command.Parameters.Count);
+        for (var i = 0; i < command.Parameters.Count; i++)
+        {
+            Assert.Equal(64, command.Parameters[i].Size);
+        }
+    }
+
     [Theory]
     [InlineData(1, 1)]
     [InlineData(2, 2)]

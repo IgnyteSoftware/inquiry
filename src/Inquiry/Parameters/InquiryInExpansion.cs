@@ -57,11 +57,15 @@ public static class InquiryInExpansion
     /// <summary>
     /// Expands the <c>IN</c> sentinel, stamping each element parameter with <paramref name="dbType"/> so it
     /// binds with the same type the scalar binder uses for that column (e.g. <c>DateTime2</c> on SQL
-    /// Server, not legacy <c>datetime</c>).
+    /// Server, not legacy <c>datetime</c>), and with the declared <paramref name="size"/> /
+    /// <paramref name="precision"/> / <paramref name="scale"/> so every element renders an identical
+    /// <c>sp_executesql</c> parameter signature regardless of value length — the IN-path counterpart of the
+    /// scalar predicate Size/Precision emission (#56/#102). The generator only supplies these on SQL Server
+    /// for declared-length string/decimal columns; left null they keep provider inference.
     /// </summary>
     /// <typeparam name="T">The element type of the IN collection.</typeparam>
-    public static void Expand<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType)
-        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL)", dbType);
+    public static void Expand<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType, int? size = null, byte? precision = null, byte? scale = null)
+        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL)", dbType, size, precision, scale);
 
     /// <summary>
     /// Expands a <c>NOT IN</c> sentinel — the negated counterpart of <see cref="Expand{T}(DbCommand, string, IEnumerable{T}?)"/>.
@@ -81,12 +85,13 @@ public static class InquiryInExpansion
         => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1", dbType: null);
 
     /// <summary>Expands a <c>NOT IN</c> sentinel, stamping each element parameter with
-    /// <paramref name="dbType"/> (the negated counterpart of the <c>IN</c> overload).</summary>
+    /// <paramref name="dbType"/> and the declared <paramref name="size"/> / <paramref name="precision"/> /
+    /// <paramref name="scale"/> (the negated counterpart of the <c>IN</c> overload).</summary>
     /// <typeparam name="T">The element type of the NOT IN collection.</typeparam>
-    public static void ExpandNotIn<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType)
-        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1", dbType);
+    public static void ExpandNotIn<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType, int? size = null, byte? precision = null, byte? scale = null)
+        => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1", dbType, size, precision, scale);
 
-    private static void ExpandCore<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, string emptyReplacement, System.Data.DbType? dbType = null)
+    private static void ExpandCore<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, string emptyReplacement, System.Data.DbType? dbType = null, int? size = null, byte? precision = null, byte? scale = null)
     {
         if (command is null) throw new System.ArgumentNullException(nameof(command));
         if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
@@ -129,6 +134,21 @@ public static class InquiryInExpansion
             if (dbType is not null)
             {
                 parameter.DbType = dbType.Value;
+            }
+            // Declared Size/Precision/Scale (SQL Server only, supplied by the generator) keep every element's
+            // sp_executesql signature identical across value lengths — and the padded bucket elements added
+            // below get them too, so the whole expanded list renders one stable plan-cache signature (#102).
+            if (size is not null)
+            {
+                parameter.Size = size.Value;
+            }
+            if (precision is not null)
+            {
+                parameter.Precision = precision.Value;
+            }
+            if (scale is not null)
+            {
+                parameter.Scale = scale.Value;
             }
             parameter.Value = boxedValue ?? System.DBNull.Value;
             command.Parameters.Add(parameter);
