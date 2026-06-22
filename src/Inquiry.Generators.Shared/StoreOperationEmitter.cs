@@ -1331,14 +1331,20 @@ internal static class StoreOperationEmitter
         // to the provider, which infers the element type from the typed native array.
         var dbType = ResolveDbType(binding.Column, sqlBuilder);
         var dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
+        // Carry the declared Size/Precision/Scale of the IN column onto each element parameter so the
+        // sp_executesql signature stays stable across value lengths (SQL Server only — same gating as the
+        // scalar predicate path; #56/#102). The Expand/ExpandNotIn overload that takes these requires a
+        // dbType, but a declared string/decimal column always resolves a non-null DbType (String/AnsiString/
+        // Decimal), so dbTypeArg is non-empty whenever sizePrecisionArgs is — the call always type-checks.
+        var sizePrecisionArgs = BuildSizePrecisionArgs(binding.Column, sqlBuilder);
         if (binding.IsNegatedCollection)
         {
-            return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg});";
+            return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
         }
 
         return sqlBuilder.UseArrayInParameters
             ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{name}\", {projected});"
-            : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg});";
+            : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
     }
 
     /// <summary>
