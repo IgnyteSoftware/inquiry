@@ -4,7 +4,7 @@
 > enhancements. Resolved items are summarized at the [bottom](#recently-resolved). Nothing here blocks
 > `main`: the library builds and every test suite passes.
 >
-> **Last reconciled against the code:** 2026-06-12.
+> **Last reconciled against the code:** 2026-06-22.
 
 ## Known issues & correctness
 
@@ -45,7 +45,9 @@
   auto-wire the existing telemetry (`AddInquiryTelemetry()`) and health check so Inquiry lights up
   the Aspire dashboard. Foundation work: build provider connection factories on
   **`System.Data.Common.DbDataSource`** (the .NET 7+ pooled primitive Aspire registers) instead of
-  raw connection strings.
+  raw connection strings. *(Foundation started 2026-06-21: `PostgreSqlInquiryConnectionFactory` now
+  builds and owns one app-lifetime `NpgsqlDataSource` — a `DbDataSource` — in #54/PR #99. Remaining:
+  refactor the SQL Server, MySQL, SQLite, and Oracle factories to their native `DbDataSource` builders.)*
 - **Build-time SQL validation against a dev database** *(integration research 2026-06-12)*. The
   Rust sqlx `query!` / Go sqlc model: because Inquiry's SQL is compile-time constant, an opt-in
   build step or test helper can `PREPARE`/`EXPLAIN` every generated SQL const against a
@@ -171,6 +173,28 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **Plan-caching cluster (2026-06-21/22):** four interrelated items closed.
+  - **PostgreSQL single `NpgsqlDataSource` (#54/PR #99):** `PostgreSqlInquiryConnectionFactory` builds one
+    app-lifetime `NpgsqlDataSource` in its constructor (Npgsql's recommended model since 6.0) and implements
+    `IAsyncDisposable` to drain the pool with the container; a failover string gets its own data source. Also
+    the `DbDataSource` foundation for the Aspire item above.
+  - **Cross-dialect statement-cache story (#55/PR #100, docs-only):** measured and documented per-provider
+    behavior — Oracle's ODP.NET self-tuning already caches by default (Inquiry sets nothing), SQL Server
+    relies on the `sp_executesql` plan cache, MySQL's `IgnorePrepare=false` is already correct. The original
+    "enable Oracle statement caching" premise was empirically false. See
+    [Prepared statements](../articles/features/prepared-statements.md).
+  - **SQL Server parameter `Size`/`Precision` (#56/PR #101):** generated binders emit `Size` (declared-length
+    string) and `Precision`/`Scale` (declared decimal) on **predicate** parameters (never write binders,
+    where `Size` would truncate), keeping the `sp_executesql` plan-cache signature stable across value
+    lengths. SqlServer-only; other dialects unchanged. Proven by a live DMV test.
+  - **IN-list bucketing (#67/PR #104):** `Compare.In`/`NotIn` pads the expanded list to the next power-of-two
+    length (repeating an element), bounding distinct cached plans to ~`log2` of the parameter limit on
+    SqlServer/MySql/SQLite/Oracle (PostgreSQL uses `= ANY` and is unaffected). Capped at Oracle's 1000-entry
+    `ORA-01795` limit. Proven by live SQL Server (9 cardinalities → 5 signatures) and Oracle (600-element)
+    DMV/round-trip tests.
+  - Follow-ups tracked: #102 (Size on IN-list elements), #103 (validate `[InquiryColumn]` Length/Precision/
+    Scale ranges), plus the test/benchmark coverage issues filed alongside.
 
 - **Column-encryption docs (2026-06-13):** application-side column encryption needs no bespoke API — it
   rides the existing [value-converter](../articles/features/value-converters.md) seam (encrypt in
