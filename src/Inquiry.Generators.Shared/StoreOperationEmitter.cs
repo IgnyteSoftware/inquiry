@@ -527,6 +527,42 @@ internal static class StoreOperationEmitter
         }
     }
 
+    /// <summary>
+    /// Returns the <see cref="Inquiry.Parameters.InquiryParameter"/> constructor-argument suffix
+    /// (e.g. <c>, size: 64</c> or <c>, precision: 18, scale: 2</c>) carrying a <b>predicate</b> key
+    /// parameter's declared <c>Size</c>/<c>Precision</c>/<c>Scale</c>. Used by the eager-load key binders,
+    /// which build their parameters inline in an array initializer (no <c>_p</c> variable to set after
+    /// construction, so <see cref="AppendSizePrecision"/>'s statement form does not apply). Gating is
+    /// identical to <see cref="AppendSizePrecision"/>: SQL Server only, declared only, range-gated. Returns
+    /// <see cref="string.Empty"/> when nothing should be emitted.
+    /// </summary>
+    private static string BuildSizePrecisionArgs(ColumnData column, SqlBuilder sqlBuilder)
+    {
+        if (!sqlBuilder.EmitsParameterSizePrecision)
+        {
+            return string.Empty;
+        }
+
+        if (IsStringParameter(column))
+        {
+            var maxSize = column.IsUnicode ? 4000 : 8000;
+            if (column.Length > 0 && column.Length <= maxSize)
+            {
+                return $", size: {column.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+            }
+        }
+        else if (IsDecimalParameter(column)
+            && column.Precision is > 0 and <= 38
+            && column.Scale >= 0 && column.Scale <= column.Precision)
+        {
+            var precision = column.Precision.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var scale = column.Scale.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return $", precision: {precision}, scale: {scale}";
+        }
+
+        return string.Empty;
+    }
+
     // The parameter's effective provider type is what the plan-cache signature is built from: a converter
     // binds its provider primitive, enum-as-string binds a string, and everything else binds its CLR type.
     private static bool IsStringParameter(ColumnData column)
@@ -1380,6 +1416,9 @@ internal static class StoreOperationEmitter
         var parentStructMat = entity.StructMaterializerFullName;
         var keyDbType = ResolveDbType(entity.Keys[0], sqlBuilder);
         var keyDbArg = keyDbType is null ? string.Empty : ", " + keyDbType;
+        // All params here bind the parent key value with the parent key's DbType; carry its declared Size
+        // too so the eager-load sp_executesql signature stays stable across key lengths (SQL Server, #56/#107).
+        var keySizeArg = BuildSizePrecisionArgs(entity.Keys[0], sqlBuilder);
         var parentKeyProp = entity.Keys[0].PropertyName;
         AppendHeader(source, method, parameters, isAsync: true);
 
@@ -1410,7 +1449,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("                {");
         foreach (var paramName in paramNames)
         {
-            source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(paramName)}\", {keyParamName}{keyDbArg}),");
+            source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(paramName)}\", {keyParamName}{keyDbArg}{keySizeArg}),");
         }
         source.AppendLine("                }),");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -1436,6 +1475,9 @@ internal static class StoreOperationEmitter
         // mirroring the main (non-eager) param path. Without this the params default to inferred nvarchar.
         var _keyDbType = ResolveDbType(entity.Keys[0], sqlBuilder);
         var _keyDbArg = _keyDbType is null ? string.Empty : ", " + _keyDbType;
+        // Carry the parent key's declared Size alongside its DbType so the eager-load predicate signature
+        // stays stable across key lengths on SQL Server (#56/#107). Bound only on predicate parameters.
+        var _keySizeArg = BuildSizePrecisionArgs(entity.Keys[0], sqlBuilder);
         var parentStructMat = entity.StructMaterializerFullName;
         AppendHeader(source, method, parameters, isAsync: true);
         source.AppendLine($"        var _entity = await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {parentStructMat}>(");
@@ -1443,7 +1485,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"                {parentSelectField},");
         source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine("                {");
-        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {keyParamName}{_keyDbArg}),");
+        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {keyParamName}{_keyDbArg}{_keySizeArg}),");
         source.AppendLine("                }),");
         source.AppendLine("            default,");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -1464,7 +1506,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", _entity.{entity.Keys[0].PropertyName}{_keyDbArg}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", _entity.{entity.Keys[0].PropertyName}{_keyDbArg}{_keySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
@@ -1481,7 +1523,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", _entity.{entity.Keys[0].PropertyName}{_keyDbArg}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", _entity.{entity.Keys[0].PropertyName}{_keyDbArg}{_keySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
@@ -1493,12 +1535,13 @@ internal static class StoreOperationEmitter
                 var parentKeyPropertyName = childEntity.Keys[0].PropertyName;
                 var _childKeyDbType = ResolveDbType(childEntity.Keys[0], sqlBuilder);
                 var _childKeyDbArg = _childKeyDbType is null ? string.Empty : ", " + _childKeyDbType;
+                var _childKeySizeArg = BuildSizePrecisionArgs(childEntity.Keys[0], sqlBuilder);
                 source.AppendLine($"            _entity.{relation.PropertyName} = await Inquiry.QuerySingleOrDefaultAsync<{childType}, {childStructMat}>(");
                 source.AppendLine("                new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(parentKeyPropertyName)}\", _entity.{relation.ForeignKeyProperty}{_childKeyDbArg}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(parentKeyPropertyName)}\", _entity.{relation.ForeignKeyProperty}{_childKeyDbArg}{_childKeySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
