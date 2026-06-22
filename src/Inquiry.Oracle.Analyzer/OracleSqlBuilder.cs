@@ -273,6 +273,10 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle cannot key on CLOB (the unbounded-text fallback); a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
 
+    // Oracle's VARCHAR2 caps at 4000 bytes (standard mode); a longer declared Length maps to CLOB (see
+    // MapColumnType) rather than the illegal VARCHAR2(>4000), and cannot be keyed or indexed.
+    protected override int MaxBoundedStringLength(bool isUnicode) => 4000;
+
     // ---- Batch insert (INSERT ALL) -----------------------------------------------------------
     // Oracle has no multi-row VALUES; its set-based multi-row insert is
     //   INSERT ALL INTO t (cols) VALUES (...) INTO t (cols) VALUES (...) SELECT 1 FROM dual
@@ -307,8 +311,11 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         DbTypeClass.TimeOnly => "INTERVAL DAY(0) TO SECOND(7)",
         DbTypeClass.Guid => "RAW(16)",
         DbTypeClass.ByteArray => "BLOB",
-        // Oracle has no unbounded VARCHAR2; unbounded text falls back to CLOB.
-        _ => column.Length > 0 ? "VARCHAR2(" + column.Length + ")" : "CLOB",
+        // Oracle's VARCHAR2 caps at 4000 bytes; no Length (or one beyond that ceiling) falls back to CLOB
+        // rather than emitting the illegal VARCHAR2(>4000).
+        _ => column.Length > 0 && column.Length <= MaxBoundedStringLength(column.IsUnicode)
+            ? "VARCHAR2(" + column.Length + ")"
+            : "CLOB",
     };
 
     protected override string GeneratedKeyClause(IColumn column)

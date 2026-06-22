@@ -488,7 +488,7 @@ public abstract class SqlBuilder
             // [InquiryColumn(Length = …)] to have it indexed (the generator also reports INQ032).
             // SQLite/PostgreSQL index unbounded TEXT fine (RequiresBoundedStringKeys is false), so they
             // keep the index.
-            if (RequiresBoundedStringKeys && IsUnboundedString(column))
+            if (RequiresBoundedStringKeys && MapsToUnboundedString(column))
             {
                 continue;
             }
@@ -514,14 +514,25 @@ public abstract class SqlBuilder
     protected virtual bool SupportsCreateIndexIfNotExists => false;
 
     /// <summary>
-    /// True for a string column that maps to the dialect's unbounded text type — no explicit
-    /// <see cref="IColumn.Length"/> and no <see cref="IColumn.SqlType"/> override (TEXT / CLOB /
-    /// NVARCHAR(MAX) / LONGTEXT). On a bounded-key dialect such a column cannot be a key or index target.
+    /// The largest declared string <see cref="IColumn.Length"/> the dialect stores as a <b>bounded</b>
+    /// (keyable / indexable) type. A longer Length falls back to the dialect's unbounded text type
+    /// (NVARCHAR(MAX) / CLOB / LONGTEXT). Default <see cref="int.MaxValue"/> — no fixed ceiling
+    /// (PostgreSQL / SQLite / MySQL store any declared VARCHAR length as bounded; only SQL Server's
+    /// nvarchar(4000)/varchar(8000) and Oracle's VARCHAR2(4000) cap out).
     /// </summary>
-    protected static bool IsUnboundedString(IColumn column)
+    protected internal virtual int MaxBoundedStringLength(bool isUnicode) => int.MaxValue;
+
+    /// <summary>
+    /// True for a string column that maps to the dialect's unbounded text type (TEXT / CLOB /
+    /// NVARCHAR(MAX) / LONGTEXT): no <see cref="IColumn.SqlType"/> override and either no declared
+    /// <see cref="IColumn.Length"/> or a Length beyond the dialect's fixed-width ceiling
+    /// (<see cref="MaxBoundedStringLength"/>). On a bounded-key dialect such a column cannot be a key or
+    /// index target — the same condition that gates the INQ031/INQ032 diagnostics.
+    /// </summary>
+    internal bool MapsToUnboundedString(IColumn column)
         => column.TypeClass == DbTypeClass.String
-           && column.Length == 0
-           && string.IsNullOrEmpty(column.SqlType);
+           && string.IsNullOrEmpty(column.SqlType)
+           && (column.Length == 0 || column.Length > MaxBoundedStringLength(column.IsUnicode));
 
     /// <summary>The physical column type: the explicit <see cref="IColumn.SqlType"/> override if set, else <see cref="MapColumnType"/>.</summary>
     protected string ColumnType(IColumn column)

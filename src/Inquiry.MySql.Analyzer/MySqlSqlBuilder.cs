@@ -248,6 +248,11 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     // MySQL cannot index LONGTEXT without a prefix length; a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
 
+    // MySQL's single-column VARCHAR maxes at 65,535 bytes; under utf8mb4 (4 bytes/char) that is ~16,383
+    // chars. A longer declared Length maps to LONGTEXT (see MapColumnType) rather than an illegal
+    // VARCHAR(>16383), and cannot be keyed/indexed without a prefix length.
+    protected override int MaxBoundedStringLength(bool isUnicode) => 16383;
+
     // MySQL/InnoDB auto-creates a backing index for every foreign-key column, so the INQ061
     // unindexed-FK lint does not apply.
     public override bool ForeignKeysAreAutoIndexed => true;
@@ -272,8 +277,11 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
         DbTypeClass.TimeOnly => "TIME(6)",
         DbTypeClass.Guid => "CHAR(36)",
         DbTypeClass.ByteArray => "LONGBLOB",
-        // MySQL cannot index LONGTEXT; a bounded Length is required for PK/FK string columns.
-        _ => column.Length > 0 ? "VARCHAR(" + column.Length + ")" : "LONGTEXT",
+        // MySQL cannot index LONGTEXT; a bounded Length is required for PK/FK string columns. A Length over
+        // the VARCHAR ceiling (MaxBoundedStringLength) falls back to LONGTEXT rather than illegal DDL.
+        _ => column.Length > 0 && column.Length <= MaxBoundedStringLength(column.IsUnicode)
+            ? "VARCHAR(" + column.Length + ")"
+            : "LONGTEXT",
     };
 
     protected override string GeneratedKeyClause(IColumn column)

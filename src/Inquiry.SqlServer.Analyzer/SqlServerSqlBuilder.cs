@@ -225,6 +225,10 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // SQL Server cannot key on NVARCHAR(MAX); a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
 
+    // nvarchar tops out at 4000 chars, varchar at 8000; a longer declared Length maps to NVARCHAR(MAX) /
+    // VARCHAR(MAX), which cannot be keyed or indexed (see MapColumnType).
+    protected override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 4000 : 8000;
+
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
         DbTypeClass.Boolean => "BIT",
@@ -243,12 +247,10 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         DbTypeClass.ByteArray => "VARBINARY(MAX)",
         // A declared Length beyond the fixed-width ceiling (nvarchar 4000 / varchar 8000) is not a legal
         // bounded type — NVARCHAR(5000) is a DDL error — so it maps to the MAX type instead of emitting
-        // invalid SQL. For a regular column that yields valid DDL. KNOWN GAP (pre-existing, not closed
-        // here): for a string KEY or indexed column an over-ceiling Length produces a MAX type SQL Server
-        // cannot key/index, and INQ031/INQ032 don't catch it (they gate on Length == 0, not over-ceiling) —
-        // main emitted the equally-invalid NVARCHAR(5000) for that case. INQ065 rejects only negative/
-        // over-precision values, not over-length, so it doesn't cover this either.
-        _ => column.Length > 0 && column.Length <= (column.IsUnicode ? 4000 : 8000)
+        // invalid SQL. For a regular column that yields valid DDL; for a string KEY or indexed column the
+        // MAX type cannot be keyed/indexed, which INQ031/INQ032 now report (the over-ceiling case is folded
+        // into MapsToUnboundedString via MaxBoundedStringLength).
+        _ => column.Length > 0 && column.Length <= MaxBoundedStringLength(column.IsUnicode)
             ? (column.IsUnicode ? "NVARCHAR(" + column.Length + ")" : "VARCHAR(" + column.Length + ")")
             : (column.IsUnicode ? "NVARCHAR(MAX)" : "VARCHAR(MAX)"),
     };
