@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.Tests.Fixtures;
@@ -162,5 +163,35 @@ public sealed class PredicateSelectIntegrationTests
 
         Assert.Equal(3, matched.Count);
         Assert.All(matched, p => Assert.True(p.Discontinued || p.UnitsInStock < 15));
+    }
+
+    // #106: live bucket-boundary coverage against real Oracle. #67 pads each IN list to the next power of
+    // two by repeating an element (well under Oracle's 1000-expression IN ceiling for these cardinalities);
+    // 1,2,3,5,9 → buckets 1,2,4,8,16, all returning the same rows — the padding-is-a-no-op guarantee.
+    [SkippableFact]
+    public async Task InListBucketBoundariesReturnCorrectRows()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "inbucket");
+        var (c1, c2) = await SeedAsync(harness);
+        var products = harness.GetRequiredService<ProductStore>();
+
+        foreach (var k in new[] { 1, 2, 3, 5, 9 })
+        {
+            var ids = new List<int> { c1 };
+            for (var i = 1; i < k; i++)
+            {
+                ids.Add(c2 + 1000 + i); // filler that matches no category
+            }
+
+            var matched = await products.InCategoriesAsync(ids);
+            Assert.Equal(2, matched.Count);
+            Assert.All(matched, p => Assert.Equal(c1, p.CategoryID));
+        }
+
+        // A pure-duplicate list (bucket 4, padded by repeating the value) never widens the match set.
+        var dup = await products.InCategoriesAsync(new List<int> { c1, c1, c1 });
+        Assert.Equal(2, dup.Count);
+        Assert.All(dup, p => Assert.Equal(c1, p.CategoryID));
     }
 }
