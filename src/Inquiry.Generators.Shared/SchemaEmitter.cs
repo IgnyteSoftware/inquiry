@@ -105,7 +105,7 @@ internal static class SchemaEmitter
                     context.ReportDiagnostic(Diagnostic.Create(
                         InquiryDiagnosticDescriptors.GeneratedKeyNotInteger, location: null, entity.TableName, key.PropertyName));
                 }
-                else if (key.TypeClass == DbTypeClass.String && key.Length == 0 && string.IsNullOrEmpty(key.SqlType) && builder.RequiresBoundedStringKeys)
+                else if (builder.RequiresBoundedStringKeys && builder.MapsToUnboundedString(key))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         InquiryDiagnosticDescriptors.StringKeyRequiresLength, location: null, entity.TableName, key.PropertyName, builder.DialectName));
@@ -123,7 +123,7 @@ internal static class SchemaEmitter
 
             foreach (var column in entity.Columns.AsImmutableArray())
             {
-                if ((column.IsIndexed || column.IsUnique) && !column.IsKey && IsUnboundedAfterDerivation(column, declaredLengths))
+                if ((column.IsIndexed || column.IsUnique) && !column.IsKey && IsUnboundedAfterDerivation(column, declaredLengths, builder))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         InquiryDiagnosticDescriptors.IndexedStringRequiresLength, location: null, entity.TableName, column.PropertyName, builder.DialectName));
@@ -317,8 +317,17 @@ internal static class SchemaEmitter
     }
 
     /// <summary>True for a string column that is still unbounded (TEXT/LOB/MAX) after FK-length derivation.</summary>
-    private static bool IsUnboundedAfterDerivation(ColumnData column, Dictionary<string, int> declaredLengths)
-        => column.TypeClass == DbTypeClass.String
-           && string.IsNullOrEmpty(column.SqlType)
-           && DeriveForeignKeyLength(column, declaredLengths).Length == 0;
+    // A string column is unbounded for indexing if, after a foreign key inherits its referenced key's
+    // declared Length, the effective Length is unset (0) or beyond the dialect's fixed-width ceiling — both
+    // map to a LOB/MAX text type the dialect cannot index.
+    private static bool IsUnboundedAfterDerivation(ColumnData column, Dictionary<string, int> declaredLengths, SqlBuilder builder)
+    {
+        if (column.TypeClass != DbTypeClass.String || !string.IsNullOrEmpty(column.SqlType))
+        {
+            return false;
+        }
+
+        var effectiveLength = DeriveForeignKeyLength(column, declaredLengths).Length;
+        return effectiveLength == 0 || effectiveLength > builder.MaxBoundedStringLength(column.IsUnicode);
+    }
 }
