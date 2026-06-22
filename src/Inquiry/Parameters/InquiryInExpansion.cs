@@ -11,6 +11,15 @@ namespace Inquiry.Parameters;
 /// time, but an <c>IN</c> list's length is only known at run time. This helper rewrites that sentinel
 /// into <c>(@name0, @name1, …)</c> and adds one <see cref="DbParameter"/> per element. An empty
 /// collection rewrites to <c>(NULL)</c>, which matches no rows.
+/// <para>
+/// The expanded list is padded up to the next power-of-two length (1, 2, 4, 8, …) by repeating an
+/// existing element, so every list length within a bucket renders identical SQL text. This caps the
+/// number of distinct statements — and therefore cached plans on text-keyed engines (SQL Server's
+/// <c>sp_executesql</c> cache, SQLite/MySQL/Oracle statement caches) — at ~log2 of the parameter limit
+/// instead of one per cardinality. A duplicate value is a no-op for both <c>IN</c> and <c>NOT IN</c>, so
+/// results are unchanged. (PostgreSQL never reaches this helper — it binds the whole collection as one
+/// <c>= ANY(@ids)</c> array, already constant across list sizes.)
+/// </para>
 /// </summary>
 /// <remarks>
 /// Inherently allocating (it builds a new command text and N parameters), so it is confined to the
@@ -19,6 +28,15 @@ namespace Inquiry.Parameters;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class InquiryInExpansion
 {
+    // Padding never grows a list past this many IN-list entries. Oracle caps a parenthesized IN list at
+    // 1000 expressions (ORA-01795) — the most restrictive of the sentinel-path dialects — so a list of
+    // 501–1000 real elements, legal today, must NOT be padded up to the 1024 bucket and turned into a
+    // runtime error. Lists whose next bucket would exceed this are left at their exact length (the
+    // pre-bucketing behavior). Kept dialect-agnostic on purpose: large IN lists are rare and the
+    // plan-cache win is concentrated in small/medium lists, so a single conservative ceiling beats
+    // threading a per-dialect limit through every generated call site.
+    private const int MaxBucketableInListLength = 1000;
+
     /// <summary>
     /// Expands the <c>IN</c> sentinel <c>(<paramref name="parameterName"/>)</c> in
     /// <paramref name="command"/>'s text into one placeholder per value in <paramref name="values"/>,
@@ -88,8 +106,34 @@ public static class InquiryInExpansion
         var elementType = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
         var enumUnderlyingType = elementType.IsEnum ? System.Enum.GetUnderlyingType(elementType) : null;
 
+        // Parameters already on the command before this expansion (SET/predicate params). The cap and the
+        // bucket-padding budget are measured against the command's total, not just the IN elements.
+        var baseParameterCount = command.Parameters.Count;
+
         var placeholders = new StringBuilder("(");
         var count = 0;
+        object? lastNonNullBoxed = null;
+
+        void AddElement(int index, object? boxedValue)
+        {
+            if (index > 0)
+            {
+                placeholders.Append(", ");
+            }
+
+            var elementName = parameterName + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            placeholders.Append(elementName);
+
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = elementName;
+            if (dbType is not null)
+            {
+                parameter.DbType = dbType.Value;
+            }
+            parameter.Value = boxedValue ?? System.DBNull.Value;
+            command.Parameters.Add(parameter);
+        }
+
         foreach (var value in values)
         {
             if (command.Parameters.Count >= maxParameterCount)
@@ -99,14 +143,6 @@ public static class InquiryInExpansion
                     + maxParameterCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     + " parameters for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.");
             }
-
-            if (count > 0)
-            {
-                placeholders.Append(", ");
-            }
-
-            var elementName = parameterName + count.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            placeholders.Append(elementName);
 
             object? boxed = value;
             if (boxed is not null && enumUnderlyingType is not null)
@@ -132,24 +168,55 @@ public static class InquiryInExpansion
                 _ => boxed,
             };
 
-            var parameter = command.CreateParameter();
-            parameter.ParameterName = elementName;
-            if (dbType is not null)
+            AddElement(count, boxed);
+            if (boxed is not null)
             {
-                parameter.DbType = dbType.Value;
+                lastNonNullBoxed = boxed;
             }
-            parameter.Value = boxed ?? System.DBNull.Value;
-            command.Parameters.Add(parameter);
 
             count++;
         }
 
-        placeholders.Append(')');
+        if (count == 0)
+        {
+            command.CommandText = ReplaceFirst(command.CommandText, sentinel, emptyReplacement);
+            return;
+        }
 
-        command.CommandText = ReplaceFirst(
-            command.CommandText,
-            sentinel,
-            count == 0 ? emptyReplacement : placeholders.ToString());
+        // Plan-cache-stable bucketing: pad the list up to the next power of two (1,2,4,8,…) so every list
+        // length within a bucket renders identical SQL text — capping the number of distinct statements (and
+        // therefore cached plans) at ~log2(maxParameterCount) instead of one per cardinality. The padding
+        // repeats an existing non-null element; a duplicate value is a no-op for both IN (col=v OR col=v) and
+        // NOT IN (col<>v AND col<>v), so results are unchanged. NULL is never used to pad: a NULL in a NOT IN
+        // list makes the whole predicate UNKNOWN. If every element was NULL there is no safe pad value, so the
+        // (degenerate) list is left at its exact length. Padding is skipped when the target bucket would push
+        // the command past the parameter cap, or past the dialect IN-list ceiling (see MaxBucketableInListLength).
+        if (lastNonNullBoxed is not null)
+        {
+            var bucket = NextPowerOfTwo(count);
+            if (bucket <= MaxBucketableInListLength && baseParameterCount + bucket <= maxParameterCount)
+            {
+                for (; count < bucket; count++)
+                {
+                    AddElement(count, lastNonNullBoxed);
+                }
+            }
+        }
+
+        placeholders.Append(')');
+        command.CommandText = ReplaceFirst(command.CommandText, sentinel, placeholders.ToString());
+    }
+
+    // Smallest power of two >= n (n >= 1). Bounded by the parameter cap at the call site, so no overflow.
+    private static int NextPowerOfTwo(int n)
+    {
+        var power = 1;
+        while (power < n)
+        {
+            power <<= 1;
+        }
+
+        return power;
     }
 
     private static string ReplaceFirst(string text, string search, string replacement)
