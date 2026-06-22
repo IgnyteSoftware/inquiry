@@ -294,16 +294,16 @@ internal static class InquiryDiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor StringKeyRequiresLength = new(
         "INQ031",
-        "String key column requires an explicit Length for this dialect",
-        "Entity '{0}' has string key column '{1}' with no [InquiryColumn(Length = …)]. The '{2}' dialect cannot create a primary key over an unbounded text column, so generated DDL would fail. Set an explicit Length.",
+        "String key column requires a bounded Length for this dialect",
+        "Entity '{0}' has string key column '{1}' whose Length is unset or beyond the '{2}' dialect's fixed-width limit, so it maps to an unbounded text column the dialect cannot make a primary key — generated DDL would fail. Set a bounded [InquiryColumn(Length = …)] within the dialect's limit.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor IndexedStringRequiresLength = new(
         "INQ032",
-        "Indexed string column requires an explicit Length for this dialect",
-        "Entity '{0}' has indexed string column '{1}' with no [InquiryColumn(Length = …)]. The '{2}' dialect maps an unbounded string to a LOB/MAX text type it cannot index, so the generated index is skipped. Set an explicit Length to have the index created (or a foreign key inherits its referenced key's Length).",
+        "Indexed string column requires a bounded Length for this dialect",
+        "Entity '{0}' has indexed string column '{1}' whose Length is unset or beyond the '{2}' dialect's fixed-width limit, so it maps to a LOB/MAX text type the dialect cannot index — the generated index is skipped. Set a bounded [InquiryColumn(Length = …)] within the dialect's limit to have the index created (or a foreign key inherits its referenced key's Length).",
         "Inquiry",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
