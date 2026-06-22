@@ -344,6 +344,27 @@ internal static class EntityProcessor
             var scale = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Scale") : null) ?? 0;
             var defaultExpression = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "DefaultExpression") : null;
 
+            // INQ065: Length/Precision/Scale are read above as raw ints with no range check. A negative
+            // value, a Precision past the portable SQL maximum of 38 (also the byte ceiling for #56's Size
+            // emission), or a Scale exceeding its Precision produces invalid DDL or a broken binder. Flag the
+            // first offending value at the property. Unset metadata (all 0) is left alone.
+            var rangeError =
+                length < 0 ? "Length (" + length + ") cannot be negative"
+                : precision < 0 ? "Precision (" + precision + ") cannot be negative"
+                : scale < 0 ? "Scale (" + scale + ") cannot be negative"
+                : precision > 38 ? "Precision (" + precision + ") exceeds the maximum of 38 (use SqlType for a wider decimal)"
+                : scale > precision ? "Scale (" + scale + ") cannot exceed Precision (" + precision + ")"
+                : null;
+            if (rangeError is not null)
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ColumnMetadataOutOfRange,
+                    property.Locations.FirstOrDefault(),
+                    entitySymbol.Name,
+                    columnName,
+                    rangeError));
+            }
+
             // A server-computed column is calculated by the database; it cannot also be a key,
             // database-generated/defaulted, an auditing column, soft-delete, or a concurrency token
             // (INQ057, expression cleared so emission stays valid).
