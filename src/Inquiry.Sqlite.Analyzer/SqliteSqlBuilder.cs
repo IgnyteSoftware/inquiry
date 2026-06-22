@@ -56,7 +56,7 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
         }
 
         return "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ") " +
-            "ON CONFLICT (" + JoinKeyColumns(context) + ") DO UPDATE SET " + context.SetClauses;
+            OnConflictClause(JoinKeyColumns(context), context.SetClauses);
     }
 
     public override string BuildUpsertReturningSql(SqlBuildContext context)
@@ -78,8 +78,15 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
         var returningClause = returning ? " RETURNING " + context.SelectColumns : string.Empty;
 
         return "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") VALUES (" + explicitInsertParameters + ") " +
-            "ON CONFLICT (" + keyColumn + ") DO UPDATE SET " + context.SetClauses + returningClause;
+            OnConflictClause(keyColumn, context.SetClauses) + returningClause;
     }
+
+    // An entity with no updatable non-key columns yields an empty SET clause; emit DO NOTHING (a conflict
+    // is a valid no-op — "insert if absent") instead of the invalid `DO UPDATE SET ` with an empty body.
+    private static string OnConflictClause(string conflictTarget, string setClauses)
+        => setClauses.Length == 0
+            ? "ON CONFLICT (" + conflictTarget + ") DO NOTHING"
+            : "ON CONFLICT (" + conflictTarget + ") DO UPDATE SET " + setClauses;
 
     private static string JoinKeyColumns(SqlBuildContext context)
         => string.Join(", ", context.QuotedKeyColumns);

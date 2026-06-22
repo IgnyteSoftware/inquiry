@@ -214,7 +214,8 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     // instead; SelectMutationColumns(includeKey: true) — which drives the upsert binder — already
     // includes UseDatabaseDefault columns, so the parameter is available at the call site.
     private string OnDuplicateKeyAssignments(SqlBuildContext context)
-        => string.Join(", ", context.Columns
+    {
+        var assignments = string.Join(", ", context.Columns
             // Mirror SqlBuildContext.SetClauses' exclusions: a created-* auditing column
             // ([InquiryCreatedAt]/[InquiryCreatedBy]) is written once by the insert branch and never
             // updated by the conflict branch.
@@ -226,6 +227,18 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
                     ? quoted + " = " + ParameterName(c.PropertyName)
                     : quoted + " = VALUES(" + quoted + ")";
             }));
+
+        // ON DUPLICATE KEY UPDATE requires at least one assignment. An entity with no updatable non-key
+        // columns yields an empty list, so self-assign the key — a valid no-op that makes the conflict
+        // branch do nothing, matching the other dialects' DO NOTHING ("insert if absent") semantics.
+        if (assignments.Length == 0)
+        {
+            var key = context.QuotedKeyColumns[0];
+            return key + " = " + key;
+        }
+
+        return assignments;
+    }
 
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;

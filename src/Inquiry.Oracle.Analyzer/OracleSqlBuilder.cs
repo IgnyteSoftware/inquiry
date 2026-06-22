@@ -158,9 +158,18 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         return
             "MERGE INTO " + context.Table + " target USING (" + BuildSourceSelect(context) + ") source " +
             "ON (" + BuildSourceJoin(context) + ") " +
-            "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " " +
+            WhenMatchedSet(context) +
             "WHEN NOT MATCHED THEN INSERT (" + insertColumns + ") VALUES (" + insertParameters + ")";
     }
+
+    // A client-key MERGE for an entity with no updatable non-key columns has an empty SET; omit the
+    // WHEN MATCHED clause (an Oracle MERGE with only WHEN NOT MATCHED is valid — "insert if absent")
+    // instead of the invalid `WHEN MATCHED THEN UPDATE SET ` with an empty body. The generated-key
+    // upsert throws NotSupportedException above, so only the client-key path needs this.
+    private static string WhenMatchedSet(SqlBuildContext context)
+        => context.SetClauses.Length == 0
+            ? string.Empty
+            : "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " ";
 
     private const string GeneratedKeyUpsertUnsupportedMessage =
         "Inquiry Oracle provider (v1) does not support upsert on a database-generated key. An Oracle " +
