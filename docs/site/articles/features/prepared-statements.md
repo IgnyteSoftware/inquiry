@@ -33,7 +33,7 @@ services
 | SQL Server (Microsoft.Data.SqlClient) | ❌ | `sp_prepare` handles are scoped to the open connection and lost on dispose; the server already caches plans by parameterized text, so per-command `Prepare()` is pure overhead. Rely on the plan cache. |
 | SQLite (Microsoft.Data.Sqlite) | ❌ | In-process compile tied to the connection; Inquiry opens a connection per operation, which negates reuse. |
 | MySQL (MySqlConnector) | ❌ | Same per-operation-connection rationale; revisit if connection retention is added. |
-| Oracle (Oracle.ManagedDataAccess.Core) | ❌ | Connection-scoped; benefit depends on pooling. |
+| Oracle (Oracle.ManagedDataAccess.Core) | ❌ | No per-command `Prepare()`. ODP.NET has a pool-level statement (cursor) cache, but its **self-tuning is on by default**, so it already caches across pooled connections with no configuration (see below). |
 
 When the provider doesn't support persistent prepared statements, the default `PreparedStatementMode.Auto` is a silent no-op - no overhead, no harm.
 
@@ -56,6 +56,28 @@ Host=...;Database=...;Max Auto Prepare=20;Auto Prepare Min Usages=2;Minimum Pool
 `Max Auto Prepare=N` caps how many statements Npgsql auto-prepares per physical connection (an LRU bound on server-side statement memory); `Auto Prepare Min Usages` sets how many times a statement must be seen before it is prepared. This belt-and-suspenders policy also warms statements that bypass the Inquiry pipeline (raw `NpgsqlCommand` use). Pair it with `Minimum Pool Size>0` so the pool keeps warmed physical connections — auto-prepared state is per physical connection, so it only pays off on connections that survive in the pool.
 
 Benchmark both policies against your workload before making product claims; the better fit depends on statement reuse and connection-pool behavior.
+
+### Oracle: statement caching is already on — Inquiry sets nothing
+
+ODP.NET's managed driver caches parsed cursors at the **connection-pool** level (a cursor survives a physical connection being returned to the pool, `Statement Cache Purge=false`). The connection-string knob `Statement Cache Size` defaults to `0`, but **`Self Tuning` defaults to `true`** and self-tuning enables and sizes the cache automatically — so an unconfigured Oracle connection already reuses cursors across Inquiry's per-operation pooled connections. **Inquiry therefore changes nothing in the Oracle connection string**; the default is already the optimal configuration.
+
+This was measured, not assumed. Against a live Oracle (`gvenzl/oracle-xe:21`), running 25 open/execute/close cycles of one parameterized statement and reading the session's `v$mystat` deltas:
+
+| Connection string | `parse count (total)` Δ | SQL\*Net round-trips Δ |
+|---|---:|---:|
+| `Self Tuning=false;Statement Cache Size=0` (caching off) | 32 | 27 |
+| **default** (`Self Tuning=true`, no size) | **27** | **27** |
+| `Statement Cache Size=20` (with self-tuning on) | 25 | 27 |
+| `Self Tuning=false;Statement Cache Size=20` (forced on) | 25 | 27 |
+
+Two takeaways: the **default already does the caching** (27 vs the 32 of a hard-disabled cache), and **statement caching does not reduce round-trips at all** (27 everywhere — ODP.NET already folds parse and execute into a single round-trip). For a per-operation-connection ORM the round-trip is the dominant cost, so explicitly pinning `Statement Cache Size=20` would save only a couple of server soft-parses per 25 operations while risking *capping* the cache below what self-tuning would grow to for statement-heavy apps. So Inquiry leaves it to self-tuning. If you want a fixed, bounded cache, set `Statement Cache Size=N` yourself; it flows through untouched.
+
+### SQL Server and MySQL: keep `Prepare()` off — by design
+
+For SQL Server and MySQL the per-operation-connection model is already optimal, and turning preparation on would be a regression:
+
+- **SQL Server.** `Microsoft.Data.SqlClient` routes parameterized commands through `sp_executesql`, so the server caches and reuses a plan keyed on the exact SQL text plus parameter signature — across sessions, for free. `PrepareAsync` issues `sp_prepare`, whose handle is connection-local (lost when Inquiry disposes the connection) **and** which skips parameter sniffing, producing worse plans on skewed data. So Inquiry keeps `SupportsPersistentPreparedStatements = false`; rely on the plan cache. (This is also why issue #56's `Size`/`Precision` emission matters — it keeps the `sp_executesql` signature stable.)
+- **MySQL.** Server-side prepares are per-physical-connection with no pool-survival cache to enable, and `MySqlConnector`'s `IgnorePrepare=false` default is already correct. There is nothing to turn on; leave it as-is.
 
 ## Benchmarking
 
