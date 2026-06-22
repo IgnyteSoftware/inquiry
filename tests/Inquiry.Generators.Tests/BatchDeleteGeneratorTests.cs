@@ -49,6 +49,44 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("return Inquiry.ExecuteAsync(_cmd,", text);
     }
 
+    // #112: a batch delete over a declared-length string key must thread the key's Size onto the expanded
+    // key parameters on SQL Server, same as the predicate IN path (#102) — otherwise a DeleteAll over a
+    // varchar key splits the plan cache by value length.
+    [Fact]
+    public void DeleteAllThreadsKeySizeOnSqlServerForDeclaredStringKey()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TThing")]
+            public sealed class Thing
+            {
+                [InquiryKey("Code", Length = 64)]
+                public string Code { get; set; } = string.Empty;
+            }
+
+            public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
+            {
+                [InquiryDeleteAll]
+                public partial Task<int> DeleteAllAsync(IEnumerable<string> codes, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // The expanded key parameters carry both the DbType and the declared Size.
+        Assert.Contains("InquiryInExpansion.Expand(_c, \"@keys\", codes, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.String, size: 64);", text);
+    }
+
     [Fact]
     public void OracleDeleteAllUsesColonKeysSentinelAndExpansion()
     {
