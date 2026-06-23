@@ -47,4 +47,22 @@ internal sealed record LocationData(string FilePath, TextSpan TextSpan, LinePosi
     }
 
     public Location ToLocation() => Location.Create(FilePath, TextSpan, LineSpan);
+
+    // Equality (the incremental-generator cache key) intentionally EXCLUDES the absolute TextSpan: editing
+    // text above an entity on existing lines shifts every character offset below it but not the entity's own
+    // line/column, so keying on TextSpan would needlessly re-run the whole emit for a byte-identical entity.
+    // FilePath + LineSpan still uniquely place the diagnostic, and TextSpan remains stored for ToLocation.
+    // (Inserting/removing a NEWLINE above does shift LineSpan and still invalidates — caching that too would
+    // require reporting diagnostics from a pipeline separate from the source-emit output; tracked as a
+    // follow-up on #62.)
+    public bool Equals(LocationData? other)
+        => other is not null && FilePath == other.FilePath && LineSpan.Equals(other.LineSpan);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            return (FilePath?.GetHashCode() ?? 0) * 397 ^ LineSpan.GetHashCode();
+        }
+    }
 }
