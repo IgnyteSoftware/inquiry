@@ -195,6 +195,10 @@ open:
     line no longer busts its incremental-generator cache (cache-tracking test). A newline insert above still
     invalidates (it shifts line numbers); decoupling diagnostic reporting from source emit to cache that too
     is a tracked follow-up.
+  - **`QueryListAsync` capacity hints (#61):** the buffered read path takes an optional `capacityHint`; the
+    generated offset-paged reader passes the `limit` and the keyset reader passes `pageSize + 1`, so the
+    result list is pre-sized instead of grown-and-copied. The keyset over-fetch trim is now a single in-place
+    `RemoveAt` (no second list, no per-item copy).
 - **Plan-caching cluster (2026-06-21/22):** four interrelated items closed.
   - **PostgreSQL single `NpgsqlDataSource` (#54/PR #99):** `PostgreSqlInquiryConnectionFactory` builds one
     app-lifetime `NpgsqlDataSource` in its constructor (Npgsql's recommended model since 6.0) and implements

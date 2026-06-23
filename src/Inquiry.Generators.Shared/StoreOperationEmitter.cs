@@ -1004,16 +1004,19 @@ internal static class StoreOperationEmitter
             pi++;
         }
 
+        var pagedCapacityArg = string.Empty;
         if (paged)
         {
             var offsetArg = method.Parameters[fieldColumns.Count].Name;
             var limitArg = method.Parameters[fieldColumns.Count + 1].Name;
             AppendScalarIntParameter(source, ref pi, "@__offset", offsetArg);
             AppendScalarIntParameter(source, ref pi, "@__limit", limitArg);
+            // The limit is the exact maximum row count, so pre-size the result list (#61).
+            pagedCapacityArg = $", capacityHint: {limitArg}";
         }
 
         source.AppendLine("            });");
-        source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation});");
+        source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation}{pagedCapacityArg});");
     }
 
     /// <summary>
@@ -1083,13 +1086,12 @@ internal static class StoreOperationEmitter
         AppendScalarIntParameter(source, ref pi, "@__pageSize", pageSizeParam + " + 1");
 
         source.AppendLine("            });");
-        source.AppendLine($"        var _rows = await Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation}).ConfigureAwait(false);");
+        // Over-fetch pageSize + 1 to detect a next page; pre-size the list to that exact count (#61).
+        source.AppendLine($"        var _rows = await Inquiry.QueryListAsync<{entityType}, {structMat}>(_cmd, default, {cancellation}, capacityHint: {pageSizeParam} + 1).ConfigureAwait(false);");
         source.AppendLine($"        var _hasMore = _rows.Count > {pageSizeParam};");
-        source.AppendLine($"        var _items = _hasMore ? new global::System.Collections.Generic.List<{entityType}>(_rows.Count - 1) : _rows;");
-        source.AppendLine("        if (_hasMore)");
-        source.AppendLine("        {");
-        source.AppendLine($"            for (var _i = 0; _i < {pageSizeParam}; _i++) ((global::System.Collections.Generic.List<{entityType}>)_items).Add(_rows[_i]);");
-        source.AppendLine("        }");
+        // Trim the sentinel over-fetch row in place (no second list, no per-item copy).
+        source.AppendLine($"        if (_hasMore) ((global::System.Collections.Generic.List<{entityType}>)_rows).RemoveAt(_rows.Count - 1);");
+        source.AppendLine("        var _items = _rows;");
 
         // NextCursor from the last returned item's key column(s); null on an empty page.
         var nonNullableCursor = StripNullable(cursorType);

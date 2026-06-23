@@ -170,10 +170,11 @@ internal sealed class DefaultInquiry : IInquiry
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-        => ActivePipeline.QueryListAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
+        => ActivePipeline.QueryListAsync<TEntity, TMaterializer>(command, materializer, cancellationToken, capacityHint);
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(

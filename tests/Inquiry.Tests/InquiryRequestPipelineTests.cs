@@ -534,8 +534,8 @@ public sealed class InquiryRequestPipelineTests
         public Task<IReadOnlyList<T>> QueryListAsync<T>(InquiryCommand command, IInquiryEntityMaterializer<T> materializer, CancellationToken cancellationToken = default) where T : class
             => _inner.QueryListAsync(command, materializer, cancellationToken);
 
-        public Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default) where T : class where TMaterializer : struct, IInquiryEntityMaterializer<T>
-            => _inner.QueryListAsync<T, TMaterializer>(command, materializer, cancellationToken);
+        public Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default, int capacityHint = -1) where T : class where TMaterializer : struct, IInquiryEntityMaterializer<T>
+            => _inner.QueryListAsync<T, TMaterializer>(command, materializer, cancellationToken, capacityHint);
 
         public Task<T?> QuerySingleOrDefaultAsync<T>(InquiryCommand command, IInquiryEntityMaterializer<T> materializer, CancellationToken cancellationToken = default) where T : class
             => _inner.QuerySingleOrDefaultAsync(command, materializer, cancellationToken);

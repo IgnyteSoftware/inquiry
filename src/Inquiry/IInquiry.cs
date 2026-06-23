@@ -94,11 +94,16 @@ public interface IInquiry
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
 
-    /// <summary>Buffered list query with a struct materializer.</summary>
+    /// <summary>
+    /// Buffered list query with a struct materializer. <paramref name="capacityHint"/> (when &gt;= 0)
+    /// pre-sizes the result <c>List</c> to avoid grow-reallocations — the generated paged/keyset readers
+    /// pass the known row count (limit, or pageSize + 1).
+    /// </summary>
     Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
 
