@@ -26,9 +26,13 @@
 - **Table-valued parameters (SQL Server).** PostgreSQL array `IN` parameters shipped (see
   [Recently resolved](#recently-resolved)); SQL Server TVPs remain the sibling mechanism for passing
   sets to commands and stored procedures on that engine.
-- **Single-round-trip eager loading.** Separate-query eager loading currently pays one round trip per
-  relation; combining the parent + relation SELECTs into one multi-result-set command (Dapper
-  `QueryMultiple`-style) keeps the design but cuts the latency to one round trip.
+- **Single-round-trip eager loading.** Combining the parent + relation SELECTs into one multi-result-set
+  command (Dapper `QueryMultiple`-style) keeps the separate-query design but cuts the latency to one round
+  trip. Shipped for both eager shapes on the four dialects that can multiplex `;`-separated result sets
+  (SQLite/PostgreSQL/MySQL/SQL Server) — `[InquirySelectOneByKeyEager]` and now
+  `[InquirySelectAllEager]` (#70/PR #118) read a single command through an `InquiryGridReader`. **Remaining:**
+  Oracle, which cannot return multiple result sets from one command (ORA-00933) and keeps the per-relation
+  path until PL/SQL ref-cursor batching is added.
 
 ## Planned features & enhancements
 
@@ -174,6 +178,23 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Plan-caching follow-ups + eager/cache perf (2026-06-22):** the cluster's tracked follow-ups plus two
+  generator/perf items, each with tests.
+  - **Eager-load key `Size`/`Precision` (#107/PR #109)** and **IN-list element `Size`/`Precision`
+    (#102/PR #110):** extend the #56 SQL Server plan-cache `Size`/`Precision` emission to the eager-load key
+    binders and to `Compare.In`/`NotIn` list elements (live DMV-verified). **Batch-keys IN `Size`
+    (#112/PR #115)** closes the last expansion call site.
+  - **`[InquiryColumn]` range validation `INQ065` (#103/PR #111):** rejects out-of-range
+    `Length`/`Precision`/`Scale`, and SQL Server DDL maps an over-fixed-width `Length` to a MAX type instead
+    of an illegal `NVARCHAR(5000)`. Extended to a dialect-aware ceiling so an over-ceiling string key/indexed
+    column is diagnosed (`INQ031`/`INQ032`) and Oracle/MySQL map to `CLOB`/`LONGTEXT` (#113/PR #116).
+  - **Live cross-dialect bucket-boundary + NOT IN coverage (#106/PR #114)** and **SQL Server plan-cache
+    benchmarks (#105/PR #117)** for IN-bucketing (#67) and parameter `Size` (#56).
+  - **Single-round-trip `SelectAllEager` (#70/PR #118):** see Performance above.
+  - **`LocationData` cache key drops absolute `TextSpan` (#62):** editing text above an entity on an existing
+    line no longer busts its incremental-generator cache (cache-tracking test). A newline insert above still
+    invalidates (it shifts line numbers); decoupling diagnostic reporting from source emit to cache that too
+    is a tracked follow-up.
 - **Plan-caching cluster (2026-06-21/22):** four interrelated items closed.
   - **PostgreSQL single `NpgsqlDataSource` (#54/PR #99):** `PostgreSqlInquiryConnectionFactory` builds one
     app-lifetime `NpgsqlDataSource` in its constructor (Npgsql's recommended model since 6.0) and implements
