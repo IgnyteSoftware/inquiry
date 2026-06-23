@@ -44,11 +44,15 @@ internal interface IInquiryRequestPipeline
         CancellationToken cancellationToken = default)
         where T : class;
 
-    /// <summary>Buffered query with a struct materializer (JIT-specialized).</summary>
+    /// <summary>
+    /// Buffered query with a struct materializer (JIT-specialized). <paramref name="capacityHint"/>
+    /// (when &gt;= 0) pre-sizes the result list to the known row count.
+    /// </summary>
     Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>;
 

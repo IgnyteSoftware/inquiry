@@ -420,7 +420,8 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     public async Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
@@ -440,7 +441,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             await using var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
-            var list = new List<T>();
+            var list = capacityHint > 0 ? new List<T>(capacityHint) : new List<T>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 list.Add(materializer.Materialize(reader));
