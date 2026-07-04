@@ -21,8 +21,9 @@ shared analyzer dependency). See [Design notes](design-notes.md) for the archite
 
 ## Target frameworks
 
-The core `Inquiry` runtime and the test projects target **net8.0; net9.0; net10.0** — the floor is
-**.NET 8**. The provider runtime libraries target **net8.0**. (EOL net6.0/net7.0 were dropped.)
+All shipped packages — the core `Inquiry` runtime, the provider runtime libraries, and the companion
+packages — target **net8.0; net9.0; net10.0**, as do the test projects; the floor is **.NET 8**.
+(EOL net6.0/net7.0 were dropped.)
 
 ## Feature completeness
 
