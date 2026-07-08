@@ -205,8 +205,9 @@ public sealed partial class InquiryGeneratorTests
         // The rowversion is absent from INSERT (database supplies it); the key is client-supplied here
         // so it is insertable, but [RowVer] is not (and is not bound in the INSERT binder).
         Assert.Contains("_sqlInsert = \"INSERT INTO [TDoc] ([Id], [Name]) VALUES (@Id, @Name)\";", text);
-        // No version bump in SET (DB advances it); WHERE composes the token; OUTPUT returns the new value.
-        Assert.Contains("_sqlUpdateReturning = \"UPDATE [TDoc] SET [Name] = @Name OUTPUT INSERTED.[Id], INSERTED.[Name], INSERTED.[RowVer] WHERE [Id] = @Id AND [RowVer] = @RowVer\";", text);
+        // No version bump in SET (DB advances it); WHERE composes the token; OUTPUT INTO @_out for trigger safety.
+        Assert.Contains("OUTPUT INSERTED.[Id], INSERTED.[Name], INSERTED.[RowVer] INTO @_out WHERE [Id] = @Id AND [RowVer] = @RowVer", text);
+        Assert.Contains("SELECT [Id], [Name], [RowVer] FROM @_out", text);
         // The rowversion IS bound for the UPDATE (its WHERE compares the original value) but never SET.
         Assert.Contains("_p2.ParameterName = \"@RowVer\";", text);
     }

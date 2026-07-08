@@ -72,6 +72,9 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     public override string CurrentTimestampExpression => "SYS_EXTRACT_UTC(SYSTIMESTAMP)";
 
+    /// <summary>For <c>TIMESTAMP WITH TIME ZONE</c> columns, retain the timezone-aware form.</summary>
+    public override string CurrentTimestampOffsetExpression => "SYSTIMESTAMP AT TIME ZONE 'UTC'";
+
     /// <summary>
     /// Unquoted, uppercase-folding identifier policy. Oracle uppercases unquoted identifiers, and the
     /// provider's DDL is written unquoted to match, so valid identifiers are emitted verbatim (no quoting)
