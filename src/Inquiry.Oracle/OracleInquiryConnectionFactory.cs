@@ -124,11 +124,12 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                     : name;
             }
 
-            if (parameter.Value is bool boolValue)
+            if (parameter.DbType == System.Data.DbType.Boolean)
             {
-                // Also reset DbType: the shared binder stamps DbType.Boolean (DbType metadata), and
-                // ODP.NET honors that over the value, so converting the value alone still binds a BOOLEAN.
-                parameter.Value = boolValue ? 1 : 0;
+                if (parameter.Value is bool boolValue)
+                {
+                    parameter.Value = boolValue ? 1 : 0;
+                }
                 parameter.DbType = System.Data.DbType.Int32;
             }
         }

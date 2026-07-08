@@ -180,7 +180,7 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("private const string _sqlInsert = \"INSERT INTO TWidget VALUES (DEFAULT)\";", generatedText);
+        Assert.Contains("private const string _sqlInsert = \"INSERT INTO TWidget (Id) VALUES (DEFAULT)\";", generatedText);
         Assert.DoesNotContain("DEFAULT VALUES", generatedText);
     }
 
