@@ -11,8 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\Inquiry.MySql.Analyzer\Inquiry.MySql.Analyzer.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
-    <None Include="..\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.MySql.Analyzer.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-    <None Include="..\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
@@ -21,4 +19,18 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Inquiry.MySql.Tests" />
   </ItemGroup>
+
+  <!-- Resolve analyzer DLL paths dynamically so dotnet pack works under UseArtifactsOutput or custom OutputPath. -->
+  <Target Name="_ResolveAnalyzerDlls" BeforeTargets="_GetPackageFiles">
+    <MSBuild Projects="..\Inquiry.MySql.Analyzer\Inquiry.MySql.Analyzer.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_AnalyzerTargetPath" />
+    </MSBuild>
+    <ItemGroup>
+      <None Include="@(_AnalyzerTargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+      <None Include="$([System.IO.Path]::GetDirectoryName('%(_AnalyzerTargetPath.Identity)'))\Inquiry.Generators.Shared.dll"
+            Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+  </Target>
 </Project>
