@@ -284,7 +284,7 @@ internal static class StoreOperationEmitter
             }
 
             case StoreOperation.BulkInsert when sqlBuilder.SupportsBulkCopy:
-                EmitBulkInsert(source, method, parameters, entity, entityType, cancellation);
+                EmitBulkInsert(source, method, parameters, entity, entityType, cancellation, sqlBuilder);
                 break;
 
             case StoreOperation.BulkInsert:
@@ -1849,11 +1849,15 @@ internal static class StoreOperationEmitter
         string parameters,
         EntityData entity,
         string entityType,
-        string cancellation)
+        string cancellation,
+        SqlBuilder sqlBuilder)
     {
         var insertable = SelectMutationColumns(entity, includeKey: false);
         var itemsParam = method.Parameters[0].Name;
         var definitionField = $"_bulkDef_{method.Name}";
+
+        var dbTypeExprs = insertable.Select(c => ResolveDbType(c, sqlBuilder)).ToArray();
+        var hasColumnTypes = dbTypeExprs.All(e => e is not null);
 
         source.AppendLine($"    private static readonly global::Inquiry.BulkCopy.InquiryBulkInsertDefinition<{entityType}> {definitionField} = new(");
         source.AppendLine($"        {GeneratorHelpers.Literal(entity.Schema)},");
@@ -1867,7 +1871,15 @@ internal static class StoreOperationEmitter
         }
 
         source.AppendLine("            _ => throw new global::System.ArgumentOutOfRangeException(nameof(_i)),");
-        source.AppendLine("        });");
+        if (hasColumnTypes)
+        {
+            source.AppendLine($"        }},");
+            source.AppendLine($"        new global::System.Data.DbType[] {{ {string.Join(", ", dbTypeExprs)} }});");
+        }
+        else
+        {
+            source.AppendLine("        });");
+        }
         source.AppendLine();
 
         var hasStamps = HasSequentialGuidKey(entity);

@@ -243,6 +243,9 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
 
         if (assignments.Length == 0)
         {
+            // An entity whose only columns are keys (no updatable non-key columns) produces an
+            // empty SET. MySQL requires at least one assignment after ON DUPLICATE KEY UPDATE, so
+            // emit a no-op `key = key` that satisfies the parser without modifying data.
             var key = context.QuotedKeyColumns[0];
             return key + " = " + key;
         }
