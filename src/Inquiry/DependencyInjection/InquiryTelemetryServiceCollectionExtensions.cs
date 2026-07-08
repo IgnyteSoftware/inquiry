@@ -28,11 +28,21 @@ public static class InquiryTelemetryServiceCollectionExtensions
             throw new ArgumentNullException(nameof(services));
         }
 
+        foreach (var descriptor in services)
+        {
+            if (descriptor.ServiceType == typeof(InquiryTelemetryInterceptor))
+            {
+                return services;
+            }
+        }
+
         var options = new InquiryTelemetryOptions();
         configure?.Invoke(options);
 
-        services.AddSingleton<IInquiryCommandInterceptor>(
+        services.AddSingleton(
             provider => new InquiryTelemetryInterceptor(options, provider.GetService<ILoggerFactory>()));
+        services.AddSingleton<IInquiryCommandInterceptor>(
+            provider => provider.GetRequiredService<InquiryTelemetryInterceptor>());
         return services;
     }
 }

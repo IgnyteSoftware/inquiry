@@ -32,7 +32,8 @@ public sealed class InquiryRespawner
     /// <see cref="RespawnerOptions.DbAdapter"/>). Defaults to <see cref="RespawnerOptions"/>'s
     /// defaults (SQL Server adapter) when omitted.
     /// </param>
-    public static async Task<InquiryRespawner> CreateAsync(DbConnection openConnection, RespawnerOptions? options = null)
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public static async Task<InquiryRespawner> CreateAsync(DbConnection openConnection, RespawnerOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (openConnection is null)
         {
@@ -49,17 +50,18 @@ public sealed class InquiryRespawner
     /// </summary>
     /// <param name="factory">The Inquiry connection factory to open the connection with.</param>
     /// <param name="options">Optional Respawn options; see the <see cref="DbConnection"/> overload.</param>
-    public static async Task<InquiryRespawner> CreateAsync(IInquiryConnectionFactory factory, RespawnerOptions? options = null)
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public static async Task<InquiryRespawner> CreateAsync(IInquiryConnectionFactory factory, RespawnerOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (factory is null)
         {
             throw new ArgumentNullException(nameof(factory));
         }
 
-        var connection = await factory.OpenConnectionAsync().ConfigureAwait(false);
+        var connection = await factory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using (connection.ConfigureAwait(false))
         {
-            return await CreateAsync(connection, options).ConfigureAwait(false);
+            return await CreateAsync(connection, options, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -67,7 +69,8 @@ public sealed class InquiryRespawner
     /// Resets the database using the supplied open connection.
     /// </summary>
     /// <param name="openConnection">An open connection to the database to reset.</param>
-    public Task ResetAsync(DbConnection openConnection)
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public Task ResetAsync(DbConnection openConnection, CancellationToken cancellationToken = default)
     {
         if (openConnection is null)
         {
@@ -82,14 +85,15 @@ public sealed class InquiryRespawner
     /// disposes the connection.
     /// </summary>
     /// <param name="factory">The Inquiry connection factory to open the connection with.</param>
-    public async Task ResetAsync(IInquiryConnectionFactory factory)
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public async Task ResetAsync(IInquiryConnectionFactory factory, CancellationToken cancellationToken = default)
     {
         if (factory is null)
         {
             throw new ArgumentNullException(nameof(factory));
         }
 
-        var connection = await factory.OpenConnectionAsync().ConfigureAwait(false);
+        var connection = await factory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using (connection.ConfigureAwait(false))
         {
             await _respawner.ResetAsync(connection).ConfigureAwait(false);
