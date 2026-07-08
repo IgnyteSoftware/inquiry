@@ -142,7 +142,7 @@ public abstract class SqlBuilder
             + " FROM " + childContext.Table
             + " INNER JOIN " + junctionQuoted + " " + j
             + " ON " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumn) + " = " + childContext.Table + "." + QuoteIdentifier(childKeyColumn)
-            + " WHERE " + AppendWhere(where, childContext.ActiveRowPredicate);
+            + " WHERE " + AppendWhere(where, childContext.QualifiedActiveRowPredicate);
     }
 
     /// <summary>
