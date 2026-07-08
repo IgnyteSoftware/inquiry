@@ -1222,7 +1222,8 @@ internal static class StoreProcessor
                         childCtx, ToColumnList(childEntity.Columns), junctionEntity.Schema, junctionEntity.TableName,
                         junctionChildFkColumn, childEntity.Keys[0].ColumnName, junctionParentFkColumn, entity.Keys[0].PropertyName));
                     AppendConstSql(source, "_sql_" + relation.PropertyName + "_All", sqlBuilder.BuildSelectAllSql(childCtx));
-                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction", sqlBuilder.BuildSelectAllSql(junctionCtx));
+                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction",
+                        sqlBuilder.BuildSelectAllFilteredSql(junctionCtx, junctionParentFkColumn, ctx, entity.Keys[0].ColumnName));
                     continue;
                 }
 
@@ -1230,8 +1231,13 @@ internal static class StoreProcessor
                     ? FindColumn(childEntity, relation.ForeignKeyProperty)!
                     : childEntity.Keys[0];
 
+                var parentKeyColumn = relation.IsCollection
+                    ? entity.Keys[0].ColumnName
+                    : FindColumn(entity, relation.ForeignKeyProperty)!.ColumnName;
+
                 AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildSelectByFieldSql(childCtx, new List<IColumn> { filterColumn }));
-                AppendConstSql(source, "_sql_" + relation.PropertyName + "_All", sqlBuilder.BuildSelectAllSql(childCtx));
+                AppendConstSql(source, "_sql_" + relation.PropertyName + "_All",
+                    sqlBuilder.BuildSelectAllFilteredSql(childCtx, filterColumn.ColumnName, ctx, parentKeyColumn));
             }
         }
 

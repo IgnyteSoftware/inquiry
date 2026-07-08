@@ -103,6 +103,20 @@ public abstract class SqlBuilder
 
     public abstract string BuildSelectAllSql(SqlBuildContext context);
 
+    public string BuildSelectAllFilteredSql(
+        SqlBuildContext childContext,
+        string childFilterColumnName,
+        SqlBuildContext parentContext,
+        string parentKeyColumnName)
+    {
+        var subquery = "SELECT " + QuoteIdentifier(parentKeyColumnName)
+            + " FROM " + parentContext.Table
+            + WhereSuffix(parentContext.ActiveRowPredicate);
+        var inPredicate = QuoteIdentifier(childFilterColumnName) + " IN (" + subquery + ")";
+        return "SELECT " + childContext.SelectColumns + " FROM " + childContext.Table
+            + " WHERE " + AppendWhere(inPredicate, childContext.ActiveRowPredicate);
+    }
+
     public abstract string BuildSelectByKeySql(SqlBuildContext context);
 
     public abstract string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns);
