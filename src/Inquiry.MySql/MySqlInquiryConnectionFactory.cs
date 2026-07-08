@@ -44,8 +44,9 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory
         // callers passing raw command text must name their parameters correctly.
         _connectionString = WithUserVariables(connectionString);
         _failoverConnectionString = options.FailoverConnectionString is { } failover
-            ? WithUserVariables(failover)
-            : null;
+            && !string.Equals(failover, connectionString, StringComparison.Ordinal)
+                ? WithUserVariables(failover)
+                : null;
     }
 
     private static string WithUserVariables(string connectionString)

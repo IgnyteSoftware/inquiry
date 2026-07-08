@@ -10,6 +10,7 @@ namespace Inquiry.SqlServer;
 internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
+    private readonly string? _failoverConnectionString;
     private readonly SqlServerInquiryOptions _options;
     private readonly RetryingConnectionOpener? _retryingOpener;
 
@@ -38,6 +39,10 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
 
         _connectionString = connectionString;
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _failoverConnectionString = _options.FailoverConnectionString is { } configured
+            && !string.Equals(configured, connectionString, StringComparison.Ordinal)
+                ? configured
+                : null;
         _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
 
         if (_options.Compatibility != SqlServerCompatibility.None)
@@ -53,7 +58,7 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
-        if (_options.FailoverConnectionString is { } failover)
+        if (_failoverConnectionString is { } failover)
         {
             return FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, _retryingOpener, cancellationToken);
         }

@@ -53,7 +53,8 @@ public sealed class SqliteInquiryFixture : IAsyncDisposable
     /// Optional callback for additional registrations — e.g. the generated
     /// <c>AddInquiryGeneratedStores()</c> extension, interceptors, or logging.
     /// </param>
-    public static async Task<SqliteInquiryFixture> CreateAsync(Action<IServiceCollection>? configureServices = null)
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public static async Task<SqliteInquiryFixture> CreateAsync(Action<IServiceCollection>? configureServices = null, CancellationToken cancellationToken = default)
     {
         var builder = new SqliteConnectionStringBuilder
         {
@@ -64,14 +65,22 @@ public sealed class SqliteInquiryFixture : IAsyncDisposable
         var connectionString = builder.ToString();
 
         var keeper = new SqliteConnection(connectionString);
-        await keeper.OpenAsync().ConfigureAwait(false);
+        await keeper.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-        var services = new ServiceCollection();
-        services.AddInquiry();
-        services.AddInquirySqlite(connectionString);
-        configureServices?.Invoke(services);
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddInquiry();
+            services.AddInquirySqlite(connectionString);
+            configureServices?.Invoke(services);
 
-        return new SqliteInquiryFixture(connectionString, keeper, services.BuildServiceProvider());
+            return new SqliteInquiryFixture(connectionString, keeper, services.BuildServiceProvider());
+        }
+        catch
+        {
+            await keeper.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <summary>
@@ -84,7 +93,9 @@ public sealed class SqliteInquiryFixture : IAsyncDisposable
     /// Executes DDL (or any non-query SQL) against the fixture database through the keeper
     /// connection. Intended for per-test schema setup such as <c>CREATE TABLE</c>.
     /// </summary>
-    public async Task ExecuteDdlAsync(string ddl)
+    /// <param name="ddl">The DDL statement to execute.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public async Task ExecuteDdlAsync(string ddl, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(ddl))
         {
@@ -95,7 +106,7 @@ public sealed class SqliteInquiryFixture : IAsyncDisposable
         await using (command.ConfigureAwait(false))
         {
             command.CommandText = ddl;
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 
