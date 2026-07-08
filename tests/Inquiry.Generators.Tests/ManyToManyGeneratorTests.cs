@@ -73,7 +73,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sql_Products = \"SELECT \\\"Products\\\".\\\"Id\\\", \\\"Products\\\".\\\"Title\\\" FROM \\\"Products\\\" INNER JOIN \\\"OrderProduct\\\" \\\"__j\\\" ON \\\"__j\\\".\\\"ProductId\\\" = \\\"Products\\\".\\\"Id\\\" WHERE \\\"__j\\\".\\\"OrderId\\\" = @Id\";", text);
         // Batch consts: all children + all junction rows (assembled in memory).
         Assert.Contains("_sql_Products_All = \"SELECT \\\"Id\\\", \\\"Title\\\" FROM \\\"Products\\\"\";", text);
-        Assert.Contains("_sql_Products_Junction = \"SELECT \\\"OrderId\\\", \\\"ProductId\\\" FROM \\\"OrderProduct\\\"\";", text);
+        Assert.Contains("_sql_Products_Junction = \"SELECT \\\"OrderId\\\", \\\"ProductId\\\" FROM \\\"OrderProduct\\\" WHERE \\\"OrderId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\")\";", text);
     }
 
     [Fact]

@@ -1597,9 +1597,8 @@ internal static class StoreOperationEmitter
         source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
         if (useGrid)
         {
-            // The combined command is parameterless: SelectAllEager's parent (_sqlSelectAll) and the child
-            // _All / _Junction selects are all unfiltered SELECTs, so there is nothing to bind. (The separate
-            // path makes the same assumption; a future filtered parent select would need params threaded here.)
+            // The combined command is parameterless: the child _All / _Junction selects use subquery
+            // filters (no @-parameters), so there is nothing to bind.
             source.Append($"        var _sql = {parentSelectField}");
             foreach (var relation in emittedRelations)
             {
