@@ -1181,10 +1181,11 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        // Bracket-quoted identifiers, OUTPUT INSERTED.* for returning mutations, and MERGE upsert.
+        // Bracket-quoted identifiers, OUTPUT INTO @_out for trigger-safe returning, and MERGE upsert.
         Assert.Contains("private const string _sqlSelectAll = \"SELECT [Key], [Name] FROM [TOrganization]\";", generatedText);
-        Assert.Contains("[Key], [Name]) OUTPUT INSERTED.[Key], INSERTED.[Name] VALUES (@Key, @Name)", generatedText);
-        Assert.Contains("OUTPUT INSERTED.[Key], INSERTED.[Name] WHERE [Key] = @Key", generatedText);
+        Assert.Contains("OUTPUT INSERTED.[Key], INSERTED.[Name] INTO @_out VALUES (@Key, @Name)", generatedText);
+        Assert.Contains("OUTPUT INSERTED.[Key], INSERTED.[Name] INTO @_out WHERE [Key] = @Key", generatedText);
+        Assert.Contains("SELECT [Key], [Name] FROM @_out", generatedText);
         Assert.Contains("MERGE INTO [TOrganization] WITH (HOLDLOCK) AS target", generatedText);
         Assert.Contains("WHEN MATCHED THEN UPDATE SET [Name] = @Name", generatedText);
     }
