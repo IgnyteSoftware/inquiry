@@ -274,7 +274,7 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
         DbTypeClass.Single => "FLOAT",
         DbTypeClass.Double => "DOUBLE",
         DbTypeClass.Decimal => "DECIMAL(" + DecimalSpec(column, 18, 2) + ")",
-        DbTypeClass.DateTime or DbTypeClass.DateTimeOffset => "DATETIME",
+        DbTypeClass.DateTime or DbTypeClass.DateTimeOffset => "DATETIME(6)",
         DbTypeClass.DateOnly => "DATE",
         // TIME(6) keeps the microsecond precision a TimeOnly carries (plain TIME truncates to seconds).
         DbTypeClass.TimeOnly => "TIME(6)",

@@ -1,6 +1,7 @@
 using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using MySqlConnector;
+using System.Linq;
 
 namespace Inquiry.MySql;
 
@@ -51,6 +52,12 @@ internal sealed class MySqlBulkCopier : IInquiryBulkCopier
         try
         {
             var result = await bulkCopy.WriteToServerAsync(reader, cancellationToken).ConfigureAwait(false);
+            if (result.Warnings.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "MySQL bulk insert completed with warnings (rows were written but may contain truncated data): " +
+                    string.Join("; ", result.Warnings.Select(w => w.Message)));
+            }
             return result.RowsInserted;
         }
         catch (Exception ex) when (IsLocalInfileDisabled(ex))

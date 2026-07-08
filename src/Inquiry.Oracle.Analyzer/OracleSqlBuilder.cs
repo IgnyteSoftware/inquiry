@@ -86,8 +86,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     /// <summary>
     /// True when <paramref name="identifier"/> is not a legal unquoted Oracle identifier and must be
-    /// double-quoted: empty, not starting with an ASCII letter, or containing a character outside
-    /// <c>[A-Za-z0-9_$#]</c> (most commonly an embedded space).
+    /// double-quoted: empty, not starting with an ASCII letter, containing a character outside
+    /// <c>[A-Za-z0-9_$#]</c>, or an Oracle reserved word.
     /// </summary>
     private static bool RequiresQuoting(string identifier)
     {
@@ -104,8 +104,32 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             }
         }
 
-        return false;
+        return s_reservedWords.Contains(identifier);
     }
+
+    // Oracle 23c V$RESERVED_WORDS WHERE RESERVED = 'Y' — the keywords that cause ORA-00903 / ORA-01747
+    // when used unquoted as an identifier. Only the reserved subset is listed; non-reserved keywords
+    // (COMMIT, ROLLBACK, etc.) work unquoted.
+    private static readonly HashSet<string> s_reservedWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ACCESS", "ADD", "ALL", "ALTER", "AND", "ANY", "AS", "ASC",
+        "AUDIT", "BETWEEN", "BY", "CHAR", "CHECK", "CLUSTER", "COLUMN",
+        "COLUMN_VALUE", "COMMENT", "COMPRESS", "CONNECT", "CREATE", "CURRENT",
+        "DATE", "DECIMAL", "DEFAULT", "DELETE", "DESC", "DISTINCT", "DROP",
+        "ELSE", "EXCLUSIVE", "EXISTS", "FILE", "FLOAT", "FOR", "FROM",
+        "GRANT", "GROUP", "HAVING", "IDENTIFIED", "IMMEDIATE", "IN",
+        "INCREMENT", "INDEX", "INITIAL", "INSERT", "INTEGER", "INTERSECT",
+        "INTO", "IS", "LEVEL", "LIKE", "LOCK", "LONG", "MAXEXTENTS",
+        "MINUS", "MLSLABEL", "MODE", "MODIFY", "NESTED_TABLE_ID", "NOAUDIT",
+        "NOCOMPRESS", "NOT", "NOWAIT", "NULL", "NUMBER", "OF", "OFFLINE",
+        "ON", "ONLINE", "OPTION", "OR", "ORDER", "PCTFREE", "PRIOR",
+        "PRIVILEGES", "PUBLIC", "RAW", "RENAME", "RESOURCE", "REVOKE", "ROW", "ROWID",
+        "ROWNUM", "ROWS", "SELECT", "SESSION", "SET", "SHARE", "SIZE",
+        "SMALLINT", "START", "SUCCESSFUL", "SYNONYM", "SYSDATE", "TABLE",
+        "THEN", "TO", "TRIGGER", "UID", "UNION", "UNIQUE", "UPDATE",
+        "USER", "VALIDATE", "VALUES", "VARCHAR", "VARCHAR2", "VIEW",
+        "WHENEVER", "WHERE", "WITH",
+    };
 
     private static bool IsLetter(char c) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 
@@ -275,9 +299,9 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle cannot key on CLOB (the unbounded-text fallback); a string key needs an explicit Length.
     public override bool RequiresBoundedStringKeys => true;
 
-    // Oracle's VARCHAR2 caps at 4000 bytes (standard mode); a longer declared Length maps to CLOB (see
-    // MapColumnType) rather than the illegal VARCHAR2(>4000), and cannot be keyed or indexed.
-    protected override int MaxBoundedStringLength(bool isUnicode) => 4000;
+    // Oracle's VARCHAR2 caps at 4000 bytes; NVARCHAR2 caps at 2000 characters under the default
+    // AL16UTF16 national charset (2 bytes/char × 2000 = 4000 bytes internal limit).
+    protected override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 2000 : 4000;
 
     // ---- Batch insert (INSERT ALL) -----------------------------------------------------------
     // Oracle has no multi-row VALUES; its set-based multi-row insert is
@@ -316,8 +340,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         // Oracle's VARCHAR2 caps at 4000 bytes; no Length (or one beyond that ceiling) falls back to CLOB
         // rather than emitting the illegal VARCHAR2(>4000).
         _ => column.Length > 0 && column.Length <= MaxBoundedStringLength(column.IsUnicode)
-            ? "VARCHAR2(" + column.Length + ")"
-            : "CLOB",
+            ? (column.IsUnicode ? "NVARCHAR2(" + column.Length + ")" : "VARCHAR2(" + column.Length + ")")
+            : (column.IsUnicode ? "NCLOB" : "CLOB"),
     };
 
     protected override string GeneratedKeyClause(IColumn column)
