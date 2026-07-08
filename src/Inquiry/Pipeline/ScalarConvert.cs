@@ -25,6 +25,11 @@ internal static class ScalarConvert
         }
 
         var target = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        if (target.IsEnum)
+        {
+            return (T)Enum.ToObject(target, value);
+        }
+
         return (T)Convert.ChangeType(value, target, CultureInfo.InvariantCulture);
     }
 }
