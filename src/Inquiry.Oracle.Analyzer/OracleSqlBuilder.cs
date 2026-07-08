@@ -128,7 +128,7 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     {
         if (context.InsertableColumns.Count == 0)
         {
-            var col = QuoteIdentifier(context.Columns[0].ColumnName);
+            var col = QuoteIdentifier(context.KeyColumns[0].ColumnName);
             return "INSERT INTO " + context.Table + " (" + col + ") VALUES (DEFAULT)";
         }
 
