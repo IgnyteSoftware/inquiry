@@ -8,25 +8,8 @@
 
 ## Known issues & correctness
 
-- **PostgreSQL bulk COPY writes untyped values (#122).** The binary copier uses `NpgsqlBinaryImporter`
-  but calls the untyped `WriteAsync(value)` overload with no explicit `NpgsqlDbType`. Npgsql's type
-  inference fails on `timestamptz` columns (when `DateTime.Kind` is not UTC), `jsonb`/`json` columns
-  (value-converter-produced strings), and native PostgreSQL enum columns. Fix: thread the destination
-  column's `NpgsqlDbType` through `InquiryBulkInsertDefinition` and use the typed `WriteAsync` overload.
-- **Bulk copiers hard-cast `DbConnection` to concrete provider type (#159).** SQL Server, PostgreSQL,
-  and MySQL bulk copiers all direct-cast `DbConnection` → `SqlConnection`/`NpgsqlConnection`/
-  `MySqlConnection`. A profiling wrapper (MiniProfiler) or decorated connection throws
-  `InvalidCastException` with no actionable message. Fix: type-test with `is` and throw a clear error.
-- **Cross-dialect consistency gaps (#157).** Oracle defaults decimal to `(19,4)` vs `(18,2)` everywhere
-  else; MySQL empty-SET upsert-returning returns the matched row while others return null; Oracle has no
-  `CREATE TABLE IF NOT EXISTS` guard (`ORA-00955`); Oracle MERGE upsert race condition is undocumented.
-- **SqlServer `AccessTokenProvider` used for failover server (#130).** The token provider is applied to
-  both primary and failover connections. If the backup is a different Entra tenant/resource, the primary's
-  token is wrong. Same-tenant AG replicas (the common case) are fine. Fix: document the assumption or let
-  the callback distinguish targets.
-- **Analyzer DLL pack paths hardcode bin directory (#159).** The provider `.csproj` files reference
-  analyzer DLLs via `bin\$(Configuration)\netstandard2.0\` — the `bin\` prefix and TFM are hardcoded
-  strings rather than property-driven paths, breaking under `UseArtifactsOutput` or custom `OutputPath`.
+- *No open correctness issues are currently known.* All previously tracked items (#122, #130, #157, #159)
+  are resolved — see [Recently resolved](#recently-resolved).
 
 ## Security
 
@@ -252,6 +235,26 @@ open:
   eager-loading consts now use a subquery filter (`WHERE fk IN (SELECT pk FROM parent)`) to scope child
   rows to the parent result set at the SQL level — no runtime parameters needed, preserves the grid path.
   Turns an O(child-table) scan into an indexed range read on all five dialects.
+- **PostgreSQL bulk COPY typed writes (#122, 2026-07-08).** The binary copier now threads
+  `System.Data.DbType` through `InquiryBulkInsertDefinition.ColumnTypes` (populated at compile time by
+  the source generator), maps them to `NpgsqlDbType` in `PostgreSqlBulkCopier.MapColumnTypes`, and calls
+  the typed `WriteAsync(value, NpgsqlDbType)` overload. The untyped fallback is retained only when column
+  types are not resolvable at compile time.
+- **Bulk copiers safe-cast DbConnection (#159, 2026-07-08).** All three provider bulk copiers (SQL Server,
+  PostgreSQL, MySQL) now use `is` pattern matching instead of a direct cast and throw
+  `InvalidOperationException` with an actionable message naming the actual connection type received.
+- **Cross-dialect consistency gaps resolved (#157, 2026-07-08).** Oracle decimal default aligned to
+  `(18,2)` matching all other dialects. Oracle MERGE upsert race condition documented in code and
+  user-facing docs (`crud.md`) with retry guidance. MySQL empty-SET upsert-returning behavioral difference
+  (returns matched row vs null) documented in user-facing docs with live MySQL integration test coverage.
+  Oracle `CREATE TABLE` lacks `IF NOT EXISTS`; workaround documented in schema DDL docs.
+- **SqlServer AccessTokenProvider failover assumption documented (#130, 2026-07-08).** XML doc remarks on
+  both `AccessTokenProvider` and `FailoverConnectionString` warn that the same token is used for both
+  connections; the failover server must accept tokens from the same Entra tenant.
+- **Analyzer DLL pack paths use resolved output paths (#159, 2026-07-08).** Provider `.csproj` files now
+  resolve analyzer DLL paths via MSBuild `GetTargetPath` instead of hardcoding
+  `bin\$(Configuration)\netstandard2.0\`, fixing `dotnet pack` under `UseArtifactsOutput` or custom
+  `OutputPath`.
 
 - **Plan-caching follow-ups + eager/cache perf (2026-06-22):** the cluster's tracked follow-ups plus two
   generator/perf items, each with tests.

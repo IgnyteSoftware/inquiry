@@ -265,7 +265,7 @@ The same C# source produces dialect-specific SQL. A small sample:
 | Operation | Sqlite / PostgreSQL | SQL Server | MySQL | Oracle |
 |---|---|---|---|---|
 | Quote identifier | `"Shippers"` | `[Shippers]` | `` `Shippers` `` | `Shippers` (unquoted; Oracle folds the bare name to upper-case) |
-| Upsert | `ON CONFLICT (…) DO UPDATE` | `MERGE … WHEN MATCHED` | `ON DUPLICATE KEY UPDATE` | `MERGE` |
+| Upsert | `ON CONFLICT (…) DO UPDATE` | `UPDATE … IF @@ROWCOUNT = 0 INSERT` | `ON DUPLICATE KEY UPDATE` | `MERGE` |
 | Insert returning | `RETURNING …` | `OUTPUT INSERTED.*` | `LAST_INSERT_ID()` round trip | `RETURNING … INTO :out_*` |
 | Parameter prefix | `@name` | `@name` | `@name` | `:name` (rewritten in factory) |
 
@@ -280,18 +280,24 @@ Upsert atomicity differs per dialect; the table below pins what each provider do
 | SQLite | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` (the key is included in the INSERT) — single statement, atomic |
 | PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` on the explicit-key branch — atomic (the explicit key is supplied, so no sequence value is consumed) |
 | MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Integer `AUTO_INCREMENT` key: same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic. GUID key (`UseDatabaseDefault`): generated server-side via `COALESCE(@key, UUID())`, captured in a `@_inquiry_genkey` user variable so the emulated returning can read it back — atomic. |
-| SQL Server | `MERGE ... WITH (HOLDLOCK)` (`WHEN MATCHED THEN UPDATE` / `WHEN NOT MATCHED THEN INSERT`) — the `HOLDLOCK` hint serializes concurrent same-key upserts, so the statement is atomic with no duplicate-key race | `MERGE ... WITH (HOLDLOCK)` on the explicit-key branch — single atomic statement (the null/generate branch is a plain INSERT) |
+| SQL Server | `UPDATE … IF @@ROWCOUNT = 0 INSERT` inside `BEGIN/COMMIT TRANSACTION` with `UPDLOCK, SERIALIZABLE` table hints — serializes concurrent same-key upserts, atomic with no duplicate-key race | Same update-first pattern on the explicit-key branch — atomic (the null/generate branch is a plain INSERT) |
 | Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ039` warning + throwing stub): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead |
 
 What the contract guarantees, on every dialect: **N concurrent upserts of the same key always end with exactly one row whose state matches one of the inputs**. The integration test `UpsertConcurrencyTests.ConcurrentUpsertsOfSameKeyEndInOneRowMatchingOneInput` pins this against each live provider.
 
-What it does **not** guarantee on every dialect: that every parallel upsert succeeds. On Oracle, a duplicate-key failure on one parallel call is a known engine-level race and surfaces as an exception (SQL Server is now hardened with `HOLDLOCK`, so all parallel upserts succeed). If your app must serialize on Oracle, wrap the upsert in an explicit transaction with an appropriate isolation level (`SERIALIZABLE`, or `READ COMMITTED` plus an advisory lock).
+What it does **not** guarantee on every dialect: that every parallel upsert succeeds. On Oracle, a duplicate-key failure on one parallel call is a known engine-level race and surfaces as an exception (SQL Server uses an update-first pattern with `UPDLOCK, SERIALIZABLE` hints, so all parallel upserts succeed). If your app must serialize on Oracle, wrap the upsert in an explicit transaction with an appropriate isolation level (`SERIALIZABLE`, or `READ COMMITTED` plus an advisory lock).
 
 On **MySQL**, a database-generated GUID key (a `Guid?` property with `UseDatabaseDefault = true`, e.g. a
 `CHAR(36) DEFAULT (UUID())` column) is supported: because MySQL has no `RETURNING` and `LAST_INSERT_ID()`
 only tracks `AUTO_INCREMENT`, Inquiry generates the value server-side with `UUID()`, captures it in a
 `@_inquiry_genkey` user variable, and selects the row back by it. Inquiry therefore enables
 `AllowUserVariables=true` on MySQL connections automatically.
+
+On **MySQL**, an empty-SET upsert (an entity with only key columns and nothing to update) uses
+`ON DUPLICATE KEY UPDATE key = key` — a no-op — because MySQL has no `DO NOTHING` equivalent.
+The returning variant (`ReturnEntity = true`) therefore returns the matched row on conflict rather
+than `null`, unlike PostgreSQL, SQLite, and SQL Server which return `null` when no columns are
+modified. Design for this if your code branches on the returning upsert's null/non-null result.
 
 ## See also
 
