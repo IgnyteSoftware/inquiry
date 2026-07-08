@@ -106,7 +106,10 @@ public sealed class SqlBuildContext
                     activeRowPredicates.Add(quoted + " IS NULL");
                     qualifiedActiveRowPredicates.Add(Table + "." + quoted + " IS NULL");
                 }
-                SoftDeleteSetClause = quoted + " = " + builder.CurrentTimestampExpression;
+                var timestampExpr = softDeleteColumn.TypeClass == DbTypeClass.DateTimeOffset
+                    ? builder.CurrentTimestampOffsetExpression
+                    : builder.CurrentTimestampExpression;
+                SoftDeleteSetClause = quoted + " = " + timestampExpr;
                 SoftDeleteRestoreSetClause = quoted + " = NULL";
             }
         }

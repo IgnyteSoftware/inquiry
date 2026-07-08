@@ -235,6 +235,13 @@ public abstract class SqlBuilder
     public virtual string CurrentTimestampExpression => "CURRENT_TIMESTAMP";
 
     /// <summary>
+    /// SQL expression yielding a timezone-aware timestamp for <see cref="DbTypeClass.DateTimeOffset"/>
+    /// soft-delete columns. Returns <see cref="CurrentTimestampExpression"/> by default; PostgreSQL and
+    /// Oracle override to avoid naive-timestamp reinterpretation on non-UTC sessions.
+    /// </summary>
+    public virtual string CurrentTimestampOffsetExpression => CurrentTimestampExpression;
+
+    /// <summary>
     /// Builds the soft-delete UPDATE (set the indicator to deleted) by key. Dialect-uniform once the
     /// indicator literals are abstracted, so this is concrete and every provider inherits it. Only
     /// emitted when the entity has a soft-delete column; callers pick this over
