@@ -97,11 +97,20 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             return BuildGeneratedKeyUpsertSql(context, returning: false);
         }
 
+        if (context.SetClauses.Length == 0)
+        {
+            return "BEGIN TRANSACTION; " +
+                "IF NOT EXISTS (SELECT 1 FROM " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) WHERE " + context.KeyWhereClause + ") " +
+                "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + "); " +
+                "COMMIT TRANSACTION;";
+        }
+
         return
-            "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
-            "USING (" + BuildSourceSelect(context) + ") AS source ON " + BuildSourceJoin(context) + " " +
-            WhenMatchedSet(context) +
-            "WHEN NOT MATCHED THEN INSERT (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ");";
+            "BEGIN TRANSACTION; " +
+            "UPDATE " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) SET " + context.SetClauses + " WHERE " + context.KeyWhereClause + "; " +
+            "IF @@ROWCOUNT = 0 " +
+            "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + "); " +
+            "COMMIT TRANSACTION;";
     }
 
     public override string BuildUpsertReturningSql(SqlBuildContext context)
@@ -111,13 +120,29 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             return BuildGeneratedKeyUpsertSql(context, returning: true);
         }
 
+        if (context.SetClauses.Length == 0)
+        {
+            return DeclareOutputTable(context) + " " +
+                "BEGIN TRANSACTION; " +
+                "IF NOT EXISTS (SELECT 1 FROM " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) WHERE " + context.KeyWhereClause + ") " +
+                "INSERT INTO " + context.Table + " (" + context.InsertColumns + ")" +
+                " OUTPUT " + InsertedColumns(context) + " INTO @_out" +
+                " VALUES (" + context.InsertParameters + "); " +
+                "COMMIT TRANSACTION; " +
+                SelectFromOutput(context);
+        }
+
         return
             DeclareOutputTable(context) + " " +
-            "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
-            "USING (" + BuildSourceSelect(context) + ") AS source ON " + BuildSourceJoin(context) + " " +
-            WhenMatchedSet(context) +
-            "WHEN NOT MATCHED THEN INSERT (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ") " +
-            "OUTPUT " + InsertedColumns(context) + " INTO @_out; " +
+            "BEGIN TRANSACTION; " +
+            "UPDATE " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) SET " + context.SetClauses +
+            " OUTPUT " + InsertedColumns(context) + " INTO @_out" +
+            " WHERE " + context.KeyWhereClause + "; " +
+            "IF @@ROWCOUNT = 0 " +
+            "INSERT INTO " + context.Table + " (" + context.InsertColumns + ")" +
+            " OUTPUT " + InsertedColumns(context) + " INTO @_out" +
+            " VALUES (" + context.InsertParameters + "); " +
+            "COMMIT TRANSACTION; " +
             SelectFromOutput(context);
     }
 
@@ -178,33 +203,22 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     private string SelectFromOutput(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM @_out";
 
-    // A MERGE for an entity with no updatable non-key columns has an empty SET; omit the WHEN MATCHED
-    // clause entirely (a MERGE with only WHEN NOT MATCHED is valid — "insert if absent, do nothing on
-    // conflict") instead of the invalid `WHEN MATCHED THEN UPDATE SET ` with an empty body.
-    private static string WhenMatchedSet(SqlBuildContext context)
-        => context.SetClauses.Length == 0
-            ? string.Empty
-            : "WHEN MATCHED THEN UPDATE SET " + context.SetClauses + " ";
-
     private string BuildGeneratedKeyUpsertSql(SqlBuildContext context, bool returning)
     {
         var keyColumn = context.QuotedKeyColumns[0];
         var keyParameter = context.KeyParameters[0];
         var output = returning ? " OUTPUT " + InsertedColumns(context) + " INTO @_out" : string.Empty;
 
-        // The null-key fast path always omits the key and lets the database supply it (IDENTITY assigns;
-        // a GUID DEFAULT fires).
         var generatedInsert = context.InsertableColumns.Count == 0
             ? "INSERT INTO " + context.Table + output + " DEFAULT VALUES; "
             : "INSERT INTO " + context.Table + " (" + context.InsertColumns + ")" + output + " VALUES (" + context.InsertParameters + "); ";
 
-        // The MERGE's NOT MATCHED INSERT handles a supplied (non-null) key. Both GUID and identity keys
-        // include the explicit key in the INSERT. For identity keys, SET IDENTITY_INSERT ON allows the
-        // explicit value to be written; without it SQL Server raises error 544 and the key would be
-        // assigned by IDENTITY, diverging from the caller's value.
-        var notMatchedInsert = context.InsertableColumns.Count == 0
-            ? "(" + keyColumn + ") VALUES (" + keyParameter + ")"
-            : "(" + JoinSql(keyColumn, context.InsertColumns) + ") VALUES (" + JoinSql(keyParameter, context.InsertParameters) + ")";
+        var explicitInsertCols = context.InsertableColumns.Count == 0
+            ? keyColumn
+            : JoinSql(keyColumn, context.InsertColumns);
+        var explicitInsertParams = context.InsertableColumns.Count == 0
+            ? keyParameter
+            : JoinSql(keyParameter, context.InsertParameters);
 
         var isIdentity = context.KeyColumns[0].IsGenerated && context.KeyColumns[0].TypeClass != DbTypeClass.Guid;
         var identityOn = isIdentity ? "SET IDENTITY_INSERT " + context.Table + " ON; " : string.Empty;
@@ -212,6 +226,25 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
         var declare = returning ? DeclareOutputTable(context) + " " : string.Empty;
         var trailing = returning ? " " + SelectFromOutput(context) : string.Empty;
+
+        string elseBranch;
+        if (context.SetClauses.Length == 0)
+        {
+            elseBranch =
+                "BEGIN TRANSACTION; " +
+                "IF NOT EXISTS (SELECT 1 FROM " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) WHERE " + keyColumn + " = " + keyParameter + ") " +
+                "INSERT INTO " + context.Table + " (" + explicitInsertCols + ")" + output + " VALUES (" + explicitInsertParams + "); " +
+                "COMMIT TRANSACTION; ";
+        }
+        else
+        {
+            elseBranch =
+                "BEGIN TRANSACTION; " +
+                "UPDATE " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) SET " + context.SetClauses + output + " WHERE " + keyColumn + " = " + keyParameter + "; " +
+                "IF @@ROWCOUNT = 0 " +
+                "INSERT INTO " + context.Table + " (" + explicitInsertCols + ")" + output + " VALUES (" + explicitInsertParams + "); " +
+                "COMMIT TRANSACTION; ";
+        }
 
         return
             declare +
@@ -222,20 +255,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             "ELSE " +
             "BEGIN " +
             identityOn +
-            "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
-            "USING (SELECT " + keyParameter + " AS k0) AS source ON target." + keyColumn + " = source.k0 " +
-            WhenMatchedSet(context) +
-            "WHEN NOT MATCHED THEN INSERT " + notMatchedInsert + output + "; " +
+            elseBranch +
             identityOff +
             "END" +
             trailing;
     }
-
-    private static string BuildSourceSelect(SqlBuildContext context)
-        => "SELECT " + string.Join(", ", context.KeyParameters.Select((p, i) => p + " AS k" + i));
-
-    private static string BuildSourceJoin(SqlBuildContext context)
-        => string.Join(" AND ", context.QuotedKeyColumns.Select((q, i) => "target." + q + " = source.k" + i));
 
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;

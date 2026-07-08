@@ -1128,10 +1128,10 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void SqlServerDialectEmitsBracketedIdentifiersAndMergeUpsert()
+    public void SqlServerDialectEmitsBracketedIdentifiersAndUpdateFirstUpsert()
     {
         // Spot-checks the SqlServerSqlBuilder output by exercising the full CRUD surface
-        // including INSERT/UPDATE returning (OUTPUT INSERTED.*) and the MERGE-style upsert.
+        // including INSERT/UPDATE returning (OUTPUT INSERTED.*) and the update-first upsert.
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -1181,21 +1181,22 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        // Bracket-quoted identifiers, OUTPUT INTO @_out for trigger-safe returning, and MERGE upsert.
+        // Bracket-quoted identifiers, OUTPUT INTO @_out for trigger-safe returning, and update-first upsert.
         Assert.Contains("private const string _sqlSelectAll = \"SELECT [Key], [Name] FROM [TOrganization]\";", generatedText);
         Assert.Contains("OUTPUT INSERTED.[Key], INSERTED.[Name] INTO @_out VALUES (@Key, @Name)", generatedText);
         Assert.Contains("OUTPUT INSERTED.[Key], INSERTED.[Name] INTO @_out WHERE [Key] = @Key", generatedText);
         Assert.Contains("SELECT [Key], [Name] FROM @_out", generatedText);
-        Assert.Contains("MERGE INTO [TOrganization] WITH (HOLDLOCK) AS target", generatedText);
-        Assert.Contains("WHEN MATCHED THEN UPDATE SET [Name] = @Name", generatedText);
+        Assert.DoesNotContain("MERGE", generatedText);
+        Assert.Contains("UPDATE [TOrganization] WITH (UPDLOCK, SERIALIZABLE) SET [Name] = @Name WHERE [Key] = @Key", generatedText);
+        Assert.Contains("IF @@ROWCOUNT = 0", generatedText);
     }
 
     [Fact]
-    public void SqlServerGeneratedKeyUpsertUsesAtomicMergeWithHoldlock()
+    public void SqlServerGeneratedKeyUpsertUsesUpdateFirstPattern()
     {
-        // A generated (IDENTITY) key upsert must NOT do a racy check-then-act; when the caller
-        // supplies a key it goes through an atomic MERGE ... WITH (HOLDLOCK), with the NULL-key
-        // branch still emitting a plain INSERT to let the database assign the identity.
+        // A generated (IDENTITY) key upsert branches on the key parameter: NULL → plain INSERT
+        // (database assigns the identity); non-NULL → update-first upsert with the explicit key,
+        // wrapped in SET IDENTITY_INSERT ON/OFF.
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -1236,15 +1237,15 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        // Atomic MERGE for the supplied-key branch; the legacy check-then-act EXISTS probe is gone.
-        Assert.Contains("MERGE INTO [TWidget] WITH (HOLDLOCK) AS target", generatedText);
-        Assert.DoesNotContain("ELSE IF EXISTS", generatedText);
+        Assert.DoesNotContain("MERGE", generatedText);
         Assert.Contains("IF @Id IS NULL", generatedText);
 
-        // The MERGE's NOT MATCHED INSERT includes the explicit key, wrapped in SET IDENTITY_INSERT
-        // ON/OFF so the caller's supplied key value is preserved (#146).
+        // The supplied-key branch uses update-first with IDENTITY_INSERT ON/OFF so the caller's
+        // supplied key value is preserved (#146).
         Assert.Contains("SET IDENTITY_INSERT [TWidget] ON", generatedText);
-        Assert.Contains("WHEN NOT MATCHED THEN INSERT ([Id], [Name]) VALUES (@Id, @Name)", generatedText);
+        Assert.Contains("UPDATE [TWidget] WITH (UPDLOCK, SERIALIZABLE) SET [Name] = @Name", generatedText);
+        Assert.Contains("IF @@ROWCOUNT = 0", generatedText);
+        Assert.Contains("INSERT INTO [TWidget] ([Id], [Name])", generatedText);
         Assert.Contains("SET IDENTITY_INSERT [TWidget] OFF", generatedText);
     }
 

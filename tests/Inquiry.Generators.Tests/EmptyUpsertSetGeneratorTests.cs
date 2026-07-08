@@ -4,8 +4,8 @@ namespace Inquiry.Generators.Tests;
 
 /// <summary>
 /// #47: a generated-key upsert on an entity with no updatable non-key columns (the SET clause resolves
-/// to empty) must still emit syntactically valid SQL — DO NOTHING / a no-op self-assign / an omitted
-/// WHEN MATCHED — instead of an empty <c>DO UPDATE SET </c> (and, on PostgreSQL, an empty <c>() SELECT</c>).
+/// to empty) must still emit syntactically valid SQL — DO NOTHING / a no-op self-assign / IF NOT EXISTS —
+/// instead of an empty <c>DO UPDATE SET </c> (and, on PostgreSQL, an empty <c>() SELECT</c>).
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
@@ -65,11 +65,11 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void EmptySetUpsertOmitsWhenMatchedOnSqlServer()
+    public void EmptySetUpsertEmitsIfNotExistsOnSqlServer()
     {
         var text = LedgerUpsertSql("SqlServer");
-        Assert.DoesNotContain("WHEN MATCHED", text);
-        Assert.Contains("WHEN NOT MATCHED THEN INSERT", text);
+        Assert.DoesNotContain("MERGE", text);
+        Assert.Contains("IF NOT EXISTS", text);
     }
 
     [Fact]
