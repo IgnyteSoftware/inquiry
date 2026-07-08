@@ -32,6 +32,8 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
         return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
     }
 
+    public override string CurrentTimestampExpression => "UTC_TIMESTAMP(6)";
+
     public override bool SupportsFullTextSearch => true;
 
     /// <summary>MySQL bulk inserts ride MySqlBulkCopy via the provider-registered copier.</summary>

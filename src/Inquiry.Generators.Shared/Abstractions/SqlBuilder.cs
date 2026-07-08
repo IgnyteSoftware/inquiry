@@ -124,7 +124,7 @@ public abstract class SqlBuilder
         string junctionParentForeignKeyColumn,
         string parentParameterName)
     {
-        const string j = "__j";
+        var j = QuoteIdentifier("__j");
         var junctionQuoted = QuoteTable(junctionSchema, junctionTable);
         var childCols = new System.Text.StringBuilder();
         for (var i = 0; i < childColumns.Count; i++)
@@ -137,11 +137,12 @@ public abstract class SqlBuilder
             childCols.Append(childContext.Table).Append('.').Append(QuoteIdentifier(childColumns[i].ColumnName));
         }
 
+        var where = j + "." + QuoteIdentifier(junctionParentForeignKeyColumn) + " = " + ParameterName(parentParameterName);
         return "SELECT " + childCols.ToString()
             + " FROM " + childContext.Table
             + " INNER JOIN " + junctionQuoted + " " + j
             + " ON " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumn) + " = " + childContext.Table + "." + QuoteIdentifier(childKeyColumn)
-            + " WHERE " + j + "." + QuoteIdentifier(junctionParentForeignKeyColumn) + " = " + ParameterName(parentParameterName);
+            + " WHERE " + AppendWhere(where, childContext.ActiveRowPredicate);
     }
 
     /// <summary>
