@@ -1,4 +1,5 @@
 using Inquiry.Commands;
+using System.Data;
 using System.Diagnostics;
 using System.Text;
 
@@ -39,9 +40,10 @@ public sealed class SqlCommenterInterceptor : IInquiryCommandInterceptor
         if (context is null) throw new ArgumentNullException(nameof(context));
 
         var text = context.Command.CommandText;
-        if (text.Length == 0 || text.Contains("/*", StringComparison.Ordinal))
+        if (text.Length == 0
+            || text.Contains("/*", StringComparison.Ordinal)
+            || context.Command.CommandType == CommandType.StoredProcedure)
         {
-            // Already tagged (retry through the same interceptor chain) or hand-tagged — skip.
             return ValueTask.CompletedTask;
         }
 

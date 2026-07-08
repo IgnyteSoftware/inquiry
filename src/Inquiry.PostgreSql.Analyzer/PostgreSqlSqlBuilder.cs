@@ -40,8 +40,8 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     /// <summary>PostgreSQL uses native boolean literals.</summary>
     public override string BooleanTrueLiteral => "TRUE";
 
-    /// <summary>PostgreSQL stamps the soft-delete (and restore) timestamp from <c>now()</c>.</summary>
-    public override string CurrentTimestampExpression => "now()";
+    /// <summary>PostgreSQL stamps the soft-delete timestamp in UTC via <c>now() AT TIME ZONE 'utc'</c>.</summary>
+    public override string CurrentTimestampExpression => "now() AT TIME ZONE 'utc'";
 
     /// <summary>
     /// PostgreSQL binds IN collections as a single native array parameter: the SQL stays
