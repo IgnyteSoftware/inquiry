@@ -39,10 +39,6 @@
 > Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact. (`DbBatch` pipeline
 > support shipped — see [Recently resolved](#recently-resolved).)
 
-- **Filter `SelectAllEager` children by parent keys (#57).** The all-parents eager load fetches the
-  *entire* child table via `SELECT * FROM children` and groups in memory. On a 10-parent page against a
-  1M-row child table, all 1M child rows are streamed. Fix: emit `WHERE fk IN (@keys)` on the child
-  SELECT (PostgreSQL: `= ANY(@keys)`), turning an O(child-table) scan into an indexed range read.
 - **Table-valued parameters (SQL Server) (#69).** PostgreSQL array `IN` parameters shipped (see
   [Recently resolved](#recently-resolved)); SQL Server TVPs remain the sibling mechanism for passing
   sets to commands and stored procedures on that engine.
@@ -53,16 +49,10 @@
   `[InquirySelectAllEager]` (#70/PR #118) read a single command through an `InquiryGridReader`.
   **Remaining:** Oracle, which cannot return multiple result sets from one command (ORA-00933) and keeps
   the per-relation path until PL/SQL ref-cursor batching is added.
-- **Evaluate replacing SQL Server MERGE upsert with conditional UPDATE/INSERT (#59).** Single-row MERGE
-  carries ~28% higher CPU than conditional `UPDATE…IF @@ROWCOUNT=0 INSERT` and has a history of
-  concurrency bugs. Correctness-sensitive — must be measured and concurrency-tested before shipping.
 - **MariaDB-native INSERT/DELETE RETURNING (#58).** MariaDB 10.5+ supports `INSERT…RETURNING` and
   `DELETE…RETURNING` natively (halving round trips), but the MySQL builder targets the 5.7 LCD.
   A compatibility flag or MariaDB dialect would enable the native path and eliminate the
   `AllowUserVariables` dependency for GUID keys.
-- **PostgreSQL PG17 MERGE…RETURNING for generated-key upsert (#60).** The current dual-CTE `UNION ALL`
-  upsert-returning is correct but complex. PG17 `MERGE…RETURNING merge_action()` could express it as a
-  single statement. Low priority (correctness win, not perf); gated behind a PG17 minimum.
 
 ## Planned features & enhancements
 
@@ -223,6 +213,9 @@
 
 ### Explicitly not planned
 
+- **PostgreSQL PG17 MERGE…RETURNING for generated-key upsert (#60).** Closed — the existing dual-CTE
+  `INSERT … ON CONFLICT` approach is correct, performant, and avoids the PG17 minimum-version gate.
+  MERGE adds no benefit here.
 - **Migrations Phase B** (schema diff / `ALTER` / versioning) — delegate to DbUp or FluentMigrator;
   Inquiry emits initial `CREATE TABLE` DDL only (`InquiryGeneratedSchema.Ddl`).
 - **NoSQL / document engines** (Cosmos DB, MongoDB) — they don't fit a SQL-generating, schema-bound,
@@ -249,6 +242,16 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **SQL Server MERGE upsert replaced with update-first pattern (#59, 2026-07-08).** All MERGE-based upsert
+  SQL replaced with `UPDATE … IF @@ROWCOUNT = 0 INSERT` wrapped in `BEGIN/COMMIT TRANSACTION` with
+  `UPDLOCK, SERIALIZABLE` table hints. Eliminates MERGE's plan-cache bloat and deadlock risks while
+  maintaining atomicity via key-range locks. All three upsert variants (standard, empty-SET, generated-key)
+  converted; concurrency-tested.
+- **SelectAllEager child table full scan eliminated (#57, 2026-07-08).** The `_All` and M:N `_Junction`
+  eager-loading consts now use a subquery filter (`WHERE fk IN (SELECT pk FROM parent)`) to scope child
+  rows to the parent result set at the SQL level — no runtime parameters needed, preserves the grid path.
+  Turns an O(child-table) scan into an indexed range read on all five dialects.
 
 - **Plan-caching follow-ups + eager/cache perf (2026-06-22):** the cluster's tracked follow-ups plus two
   generator/perf items, each with tests.
@@ -557,8 +560,9 @@ open:
   diagnosed (`INQ042`); projections are allowed on soft-delete entities and compose the active-row filter
   (`INQ027` retired).
 - **Upsert atomicity & generated-key parity (all relational engines except Oracle):** generated-key upserts
-  are atomic — SQL Server uses `MERGE … WITH (HOLDLOCK)` (client and generated key), PostgreSQL uses
-  `INSERT … ON CONFLICT` — so concurrent same-key upserts no longer throw a spurious duplicate-key error;
+  are atomic — SQL Server uses `UPDATE … IF @@ROWCOUNT = 0 INSERT` with `UPDLOCK, SERIALIZABLE` (client
+  and generated key; upgraded from MERGE in #59), PostgreSQL uses `INSERT … ON CONFLICT` — so concurrent
+  same-key upserts no longer throw a spurious duplicate-key error;
   covered by live concurrency + `uniqueidentifier`/`gen_random_uuid()` key tests. SQLite + MySQL parity is
   now **test-proven** (live generate + concurrency tests). MySQL additionally supports a **database-generated
   GUID key**: a `Guid?` `UseDatabaseDefault` key is generated server-side via `UUID()` (captured in a
