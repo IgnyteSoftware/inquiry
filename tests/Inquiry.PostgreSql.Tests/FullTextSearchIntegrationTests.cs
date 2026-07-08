@@ -6,8 +6,8 @@ namespace Inquiry.PostgreSql.Tests;
 
 /// <summary>
 /// Full-text search against real PostgreSQL via the shared <see cref="Article"/> catalog entity. The
-/// generated predicate is <c>to_tsvector('simple', …) @@ plainto_tsquery('simple', @searchTerm)</c>, so
-/// matching is exact-lexeme (the 'simple' config does not stem). This is the first live execution of
+/// generated predicate is <c>to_tsvector('english', …) @@ plainto_tsquery('english', @searchTerm)</c>, so
+/// matching uses English stemming (matching the behavior of SQL Server FREETEXT and MySQL NATURAL LANGUAGE MODE). This is the first live execution of
 /// Inquiry's FTS path.
 /// </summary>
 [Collection(PostgreSqlCollection.Name)]

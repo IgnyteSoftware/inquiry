@@ -56,8 +56,8 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetDocStore(result);
 
-        Assert.Contains("to_tsvector('simple', coalesce(", text);
-        Assert.Contains("@@ plainto_tsquery('simple', @searchTerm)", text);
+        Assert.Contains("to_tsvector('english', coalesce(", text);
+        Assert.Contains("@@ plainto_tsquery('english', @searchTerm)", text);
         Assert.Contains("_p.ParameterName = \"@searchTerm\";", text);
     }
 
