@@ -60,16 +60,20 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string BuildInsertReturningSql(SqlBuildContext context)
     {
+        var declare = DeclareOutputTable(context);
+        var outputInto = " OUTPUT " + InsertedColumns(context) + " INTO @_out";
+        var trailing = SelectFromOutput(context);
+
         if (context.InsertableColumns.Count == 0)
         {
-            return "INSERT INTO " + context.Table
-                + " OUTPUT " + InsertedColumns(context)
-                + " DEFAULT VALUES";
+            return declare + " INSERT INTO " + context.Table
+                + outputInto
+                + " DEFAULT VALUES; " + trailing;
         }
 
-        return "INSERT INTO " + context.Table
-            + " (" + context.InsertColumns + ") OUTPUT " + InsertedColumns(context)
-            + " VALUES (" + context.InsertParameters + ")";
+        return declare + " INSERT INTO " + context.Table
+            + " (" + context.InsertColumns + ")" + outputInto
+            + " VALUES (" + context.InsertParameters + "); " + trailing;
     }
 
     public override string BuildUpdateSql(SqlBuildContext context)
@@ -77,9 +81,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " OUTPUT " + InsertedColumns(context)
-            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+        => DeclareOutputTable(context)
+            + " UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
+            + " OUTPUT " + InsertedColumns(context) + " INTO @_out"
+            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause)
+            + "; " + SelectFromOutput(context);
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
@@ -106,11 +112,13 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         }
 
         return
+            DeclareOutputTable(context) + " " +
             "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
             "USING (" + BuildSourceSelect(context) + ") AS source ON " + BuildSourceJoin(context) + " " +
             WhenMatchedSet(context) +
             "WHEN NOT MATCHED THEN INSERT (" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ") " +
-            "OUTPUT " + InsertedColumns(context) + ";";
+            "OUTPUT " + InsertedColumns(context) + " INTO @_out; " +
+            SelectFromOutput(context);
     }
 
     /// <summary>
@@ -160,6 +168,16 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     private string InsertedColumns(SqlBuildContext context)
         => string.Join(", ", context.Columns.Select(c => "INSERTED." + QuoteIdentifier(c.ColumnName)));
 
+    // OUTPUT INTO @_out requires a typed table variable. Declare it with the entity's column types so the
+    // OUTPUT clause works on tables with DML triggers (bare OUTPUT without INTO raises error 334 on
+    // triggered tables).
+    private string DeclareOutputTable(SqlBuildContext context)
+        => "DECLARE @_out TABLE (" + string.Join(", ", context.Columns.Select(c =>
+            QuoteIdentifier(c.ColumnName) + " " + MapColumnType(c))) + ");";
+
+    private string SelectFromOutput(SqlBuildContext context)
+        => "SELECT " + context.SelectColumns + " FROM @_out";
+
     // A MERGE for an entity with no updatable non-key columns has an empty SET; omit the WHEN MATCHED
     // clause entirely (a MERGE with only WHEN NOT MATCHED is valid — "insert if absent, do nothing on
     // conflict") instead of the invalid `WHEN MATCHED THEN UPDATE SET ` with an empty body.
@@ -172,7 +190,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     {
         var keyColumn = context.QuotedKeyColumns[0];
         var keyParameter = context.KeyParameters[0];
-        var output = returning ? " OUTPUT " + InsertedColumns(context) : string.Empty;
+        var output = returning ? " OUTPUT " + InsertedColumns(context) + " INTO @_out" : string.Empty;
 
         // The null-key fast path always omits the key and lets the database supply it (IDENTITY assigns;
         // a GUID DEFAULT fires).
@@ -192,7 +210,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         var identityOn = isIdentity ? "SET IDENTITY_INSERT " + context.Table + " ON; " : string.Empty;
         var identityOff = isIdentity ? " SET IDENTITY_INSERT " + context.Table + " OFF;" : string.Empty;
 
+        var declare = returning ? DeclareOutputTable(context) + " " : string.Empty;
+        var trailing = returning ? " " + SelectFromOutput(context) : string.Empty;
+
         return
+            declare +
             "IF " + keyParameter + " IS NULL " +
             "BEGIN " +
             generatedInsert +
@@ -205,7 +227,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             WhenMatchedSet(context) +
             "WHEN NOT MATCHED THEN INSERT " + notMatchedInsert + output + "; " +
             identityOff +
-            "END";
+            "END" +
+            trailing;
     }
 
     private static string BuildSourceSelect(SqlBuildContext context)

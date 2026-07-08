@@ -43,6 +43,9 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     /// <summary>PostgreSQL stamps the soft-delete timestamp in UTC via <c>now() AT TIME ZONE 'utc'</c>.</summary>
     public override string CurrentTimestampExpression => "now() AT TIME ZONE 'utc'";
 
+    /// <summary>For <c>timestamptz</c> columns, <c>now()</c> returns a TZ-aware value that stores correctly.</summary>
+    public override string CurrentTimestampOffsetExpression => "now()";
+
     /// <summary>
     /// PostgreSQL binds IN collections as a single native array parameter: the SQL stays
     /// <c>col = ANY(@name)</c> for every list length, so server-side prepared statements remain
