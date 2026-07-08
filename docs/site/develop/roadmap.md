@@ -79,10 +79,10 @@
   (each test inside a rolled-back transaction with connection ownership, enabling parallel
   database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
   Bogus-compatible).
-- **Release engineering & governance** *(adoption review 2026-06-12)*. Real `RepositoryUrl`
-  (currently a placeholder), SourceLink + symbol packages, package readme/icon, a pack/publish
-  workflow, and a published versioning / breaking-change / support-window policy — the remaining
-  pre-1.0 go-live bucket.
+- **Release engineering & governance — remaining scope** *(adoption review 2026-06-12)*. Package
+  icon and a published versioning / breaking-change / support-window policy document. (RepositoryUrl,
+  SourceLink, symbol packages, package readme, MinVer tag-based versioning, and the pack/publish
+  workflow shipped — see [Recently resolved](#recently-resolved).)
 - **Default interceptor library — remaining scope** *(gap research 2026-06-12)*. The
   `Inquiry.Interceptors` package shipped with slow-query warning logging and sqlcommenter
   trace-context tagging (see [Recently resolved](#recently-resolved)); the command-text assertion
@@ -235,6 +235,13 @@ open:
   eager-loading consts now use a subquery filter (`WHERE fk IN (SELECT pk FROM parent)`) to scope child
   rows to the parent result set at the SQL level — no runtime parameters needed, preserves the grid path.
   Turns an O(child-table) scan into an indexed range read on all five dialects.
+- **Release engineering — packaging infrastructure (2026-07-08).** `RepositoryUrl` placeholder replaced
+  with the real GitHub URL; `RepositoryType`, `PackageProjectUrl` added. SourceLink
+  (`Microsoft.SourceLink.GitHub`) embeds commit metadata and the `.snupkg` symbol packages enable
+  step-through debugging. Root `README.md` wired as the NuGet package readme for all 8 shippable
+  packages. MinVer tag-based versioning (`v8.0.0` tag → version `8.0.0`) with
+  `MinVerMinimumMajorMinor=8.0`. Tag-triggered `release.yml` workflow packs and pushes to NuGet.org.
+  Benchmark and sample projects marked non-packable.
 - **PostgreSQL bulk COPY typed writes (#122, 2026-07-08).** The binary copier now threads
   `System.Data.DbType` through `InquiryBulkInsertDefinition.ColumnTypes` (populated at compile time by
   the source generator), maps them to `NpgsqlDbType` in `PostgreSqlBulkCopier.MapColumnTypes`, and calls
