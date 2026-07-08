@@ -28,7 +28,14 @@ internal sealed class SqlServerBulkCopier : IInquiryBulkCopier
     {
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-        using var bulk = new SqlBulkCopy((SqlConnection)connection)
+        if (connection is not SqlConnection sqlConnection)
+        {
+            throw new InvalidOperationException(
+                $"SQL Server bulk insert requires a SqlConnection but received {connection.GetType().Name}. " +
+                "If using a connection wrapper, unwrap the inner connection first.");
+        }
+
+        using var bulk = new SqlBulkCopy(sqlConnection)
         {
             DestinationTableName = QualifiedTableName(definition.Schema, definition.Table),
             EnableStreaming = true,

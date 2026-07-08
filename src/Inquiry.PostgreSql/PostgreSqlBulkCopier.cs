@@ -1,6 +1,8 @@
 using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using Npgsql;
+using NpgsqlTypes;
+using System.Data;
 
 namespace Inquiry.PostgreSql;
 
@@ -27,31 +29,81 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
     {
         var columnCount = definition.Columns.Count;
         var sql = BuildCopyCommand(definition);
+        var npgsqlTypes = MapColumnTypes(definition);
 
-        await using var connection = (NpgsqlConnection)await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var writer = await connection.BeginBinaryImportAsync(sql, cancellationToken).ConfigureAwait(false);
-
-        foreach (var row in rows)
+        var rawConnection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        if (rawConnection is not NpgsqlConnection connection)
         {
-            await writer.StartRowAsync(cancellationToken).ConfigureAwait(false);
-            for (var ordinal = 0; ordinal < columnCount; ordinal++)
-            {
-                var value = definition.GetValue(row, ordinal);
-                if (value is DBNull)
-                {
-                    await writer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    // Untyped write: the definition supplies provider primitives (long, string,
-                    // decimal, Guid, DateTime, ...), so Npgsql infers the handler per value.
-                    await writer.WriteAsync(value, cancellationToken).ConfigureAwait(false);
-                }
-            }
+            await rawConnection.DisposeAsync().ConfigureAwait(false);
+            throw new InvalidOperationException(
+                $"PostgreSQL bulk insert requires an NpgsqlConnection but received {rawConnection.GetType().Name}. " +
+                "If using a connection wrapper, unwrap the inner connection first.");
         }
 
-        var written = await writer.CompleteAsync(cancellationToken).ConfigureAwait(false);
-        return (long)written;
+        await using (connection)
+        await using (var writer = await connection.BeginBinaryImportAsync(sql, cancellationToken).ConfigureAwait(false))
+        {
+            foreach (var row in rows)
+            {
+                await writer.StartRowAsync(cancellationToken).ConfigureAwait(false);
+                for (var ordinal = 0; ordinal < columnCount; ordinal++)
+                {
+                    var value = definition.GetValue(row, ordinal);
+                    if (value is DBNull)
+                    {
+                        await writer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    else if (npgsqlTypes is not null)
+                    {
+                        await writer.WriteAsync(value, npgsqlTypes[ordinal], cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await writer.WriteAsync(value, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+            }
+
+            var written = await writer.CompleteAsync(cancellationToken).ConfigureAwait(false);
+            return (long)written;
+        }
+    }
+
+    private static NpgsqlDbType[]? MapColumnTypes<TEntity>(InquiryBulkInsertDefinition<TEntity> definition)
+        where TEntity : class
+    {
+        if (definition.ColumnTypes is not { } dbTypes)
+            return null;
+
+        var result = new NpgsqlDbType[dbTypes.Count];
+        for (var i = 0; i < dbTypes.Count; i++)
+        {
+            result[i] = dbTypes[i] switch
+            {
+                DbType.Boolean => NpgsqlDbType.Boolean,
+                DbType.Byte => NpgsqlDbType.Smallint,
+                DbType.Int16 => NpgsqlDbType.Smallint,
+                DbType.Int32 => NpgsqlDbType.Integer,
+                DbType.Int64 => NpgsqlDbType.Bigint,
+                DbType.Single => NpgsqlDbType.Real,
+                DbType.Double => NpgsqlDbType.Double,
+                DbType.Decimal => NpgsqlDbType.Numeric,
+                DbType.Currency => NpgsqlDbType.Money,
+                DbType.String => NpgsqlDbType.Text,
+                DbType.AnsiString => NpgsqlDbType.Text,
+                DbType.StringFixedLength => NpgsqlDbType.Text,
+                DbType.AnsiStringFixedLength => NpgsqlDbType.Text,
+                DbType.DateTime => NpgsqlDbType.Timestamp,
+                DbType.DateTime2 => NpgsqlDbType.Timestamp,
+                DbType.DateTimeOffset => NpgsqlDbType.TimestampTz,
+                DbType.Date => NpgsqlDbType.Date,
+                DbType.Time => NpgsqlDbType.Time,
+                DbType.Guid => NpgsqlDbType.Uuid,
+                DbType.Binary => NpgsqlDbType.Bytea,
+                _ => NpgsqlDbType.Unknown,
+            };
+        }
+        return result;
     }
 
     private static string BuildCopyCommand<TEntity>(InquiryBulkInsertDefinition<TEntity> definition)

@@ -35,7 +35,15 @@ internal sealed class MySqlBulkCopier : IInquiryBulkCopier
         await using var connection = _connectionFactory is MySqlInquiryConnectionFactory mysqlFactory
             ? await mysqlFactory.OpenBulkCopyConnectionAsync(cancellationToken).ConfigureAwait(false)
             : await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        var bulkCopy = new MySqlBulkCopy((MySqlConnection)connection)
+        if (connection is not MySqlConnection mysqlConnection)
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw new InvalidOperationException(
+                $"MySQL bulk insert requires a MySqlConnection but received {connection.GetType().Name}. " +
+                "If using a connection wrapper, unwrap the inner connection first.");
+        }
+
+        var bulkCopy = new MySqlBulkCopy(mysqlConnection)
         {
             DestinationTableName = QualifyTableName(definition.Schema, definition.Table),
         };

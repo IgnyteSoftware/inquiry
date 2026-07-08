@@ -42,6 +42,12 @@ public sealed class SqlServerInquiryOptions
     /// <see langword="null"/> when authentication is handled entirely by the connection string
     /// (e.g. <c>Authentication=Active Directory Default</c>).
     /// </summary>
+    /// <remarks>
+    /// The same token is applied to both primary and failover connections. If
+    /// <see cref="FailoverConnectionString"/> targets a server in a different Entra tenant or
+    /// resource, the token will be rejected — supply a custom
+    /// <see cref="Inquiry.Connections.IInquiryConnectionFactory"/> instead.
+    /// </remarks>
     public Func<CancellationToken, ValueTask<string>>? AccessTokenProvider { get; set; }
 
     /// <summary>
@@ -50,5 +56,10 @@ public sealed class SqlServerInquiryOptions
     /// connection string instead. Every open tries the primary first, so traffic returns to the
     /// primary automatically once it recovers. Defaults to <see langword="null"/> (no failover).
     /// </summary>
+    /// <remarks>
+    /// When <see cref="AccessTokenProvider"/> is set, the same token is used for both the primary
+    /// and failover connections, so the failover server must accept tokens from the same Entra
+    /// tenant and resource.
+    /// </remarks>
     public string? FailoverConnectionString { get; set; }
 }

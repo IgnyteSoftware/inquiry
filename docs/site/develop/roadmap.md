@@ -4,13 +4,29 @@
 > enhancements. Resolved items are summarized at the [bottom](#recently-resolved). Nothing here blocks
 > `main`: the library builds and every test suite passes.
 >
-> **Last reconciled against the code:** 2026-06-22.
+> **Last reconciled against the code:** 2026-07-08.
 
 ## Known issues & correctness
 
-- *No open correctness bugs are currently known.* (The relation-const generator crash previously listed
-  here is fixed, and relation-typo diagnostics now fire at declaration time regardless of eager usage —
-  both in [Recently resolved](#recently-resolved).)
+- **PostgreSQL bulk COPY writes untyped values (#122).** The binary copier uses `NpgsqlBinaryImporter`
+  but calls the untyped `WriteAsync(value)` overload with no explicit `NpgsqlDbType`. Npgsql's type
+  inference fails on `timestamptz` columns (when `DateTime.Kind` is not UTC), `jsonb`/`json` columns
+  (value-converter-produced strings), and native PostgreSQL enum columns. Fix: thread the destination
+  column's `NpgsqlDbType` through `InquiryBulkInsertDefinition` and use the typed `WriteAsync` overload.
+- **Bulk copiers hard-cast `DbConnection` to concrete provider type (#159).** SQL Server, PostgreSQL,
+  and MySQL bulk copiers all direct-cast `DbConnection` → `SqlConnection`/`NpgsqlConnection`/
+  `MySqlConnection`. A profiling wrapper (MiniProfiler) or decorated connection throws
+  `InvalidCastException` with no actionable message. Fix: type-test with `is` and throw a clear error.
+- **Cross-dialect consistency gaps (#157).** Oracle defaults decimal to `(19,4)` vs `(18,2)` everywhere
+  else; MySQL empty-SET upsert-returning returns the matched row while others return null; Oracle has no
+  `CREATE TABLE IF NOT EXISTS` guard (`ORA-00955`); Oracle MERGE upsert race condition is undocumented.
+- **SqlServer `AccessTokenProvider` used for failover server (#130).** The token provider is applied to
+  both primary and failover connections. If the backup is a different Entra tenant/resource, the primary's
+  token is wrong. Same-tenant AG replicas (the common case) are fine. Fix: document the assumption or let
+  the callback distinguish targets.
+- **Analyzer DLL pack paths hardcode bin directory (#159).** The provider `.csproj` files reference
+  analyzer DLLs via `bin\$(Configuration)\netstandard2.0\` — the `bin\` prefix and TFM are hardcoded
+  strings rather than property-driven paths, breaking under `UseArtifactsOutput` or custom `OutputPath`.
 
 ## Security
 
@@ -23,16 +39,30 @@
 > Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact. (`DbBatch` pipeline
 > support shipped — see [Recently resolved](#recently-resolved).)
 
-- **Table-valued parameters (SQL Server).** PostgreSQL array `IN` parameters shipped (see
+- **Filter `SelectAllEager` children by parent keys (#57).** The all-parents eager load fetches the
+  *entire* child table via `SELECT * FROM children` and groups in memory. On a 10-parent page against a
+  1M-row child table, all 1M child rows are streamed. Fix: emit `WHERE fk IN (@keys)` on the child
+  SELECT (PostgreSQL: `= ANY(@keys)`), turning an O(child-table) scan into an indexed range read.
+- **Table-valued parameters (SQL Server) (#69).** PostgreSQL array `IN` parameters shipped (see
   [Recently resolved](#recently-resolved)); SQL Server TVPs remain the sibling mechanism for passing
   sets to commands and stored procedures on that engine.
-- **Single-round-trip eager loading.** Combining the parent + relation SELECTs into one multi-result-set
-  command (Dapper `QueryMultiple`-style) keeps the separate-query design but cuts the latency to one round
-  trip. Shipped for both eager shapes on the four dialects that can multiplex `;`-separated result sets
-  (SQLite/PostgreSQL/MySQL/SQL Server) — `[InquirySelectOneByKeyEager]` and now
-  `[InquirySelectAllEager]` (#70/PR #118) read a single command through an `InquiryGridReader`. **Remaining:**
-  Oracle, which cannot return multiple result sets from one command (ORA-00933) and keeps the per-relation
-  path until PL/SQL ref-cursor batching is added.
+- **Single-round-trip eager loading (#70).** Combining the parent + relation SELECTs into one
+  multi-result-set command (Dapper `QueryMultiple`-style) keeps the separate-query design but cuts the
+  latency to one round trip. Shipped for both eager shapes on the four dialects that can multiplex
+  `;`-separated result sets (SQLite/PostgreSQL/MySQL/SQL Server) — `[InquirySelectOneByKeyEager]` and now
+  `[InquirySelectAllEager]` (#70/PR #118) read a single command through an `InquiryGridReader`.
+  **Remaining:** Oracle, which cannot return multiple result sets from one command (ORA-00933) and keeps
+  the per-relation path until PL/SQL ref-cursor batching is added.
+- **Evaluate replacing SQL Server MERGE upsert with conditional UPDATE/INSERT (#59).** Single-row MERGE
+  carries ~28% higher CPU than conditional `UPDATE…IF @@ROWCOUNT=0 INSERT` and has a history of
+  concurrency bugs. Correctness-sensitive — must be measured and concurrency-tested before shipping.
+- **MariaDB-native INSERT/DELETE RETURNING (#58).** MariaDB 10.5+ supports `INSERT…RETURNING` and
+  `DELETE…RETURNING` natively (halving round trips), but the MySQL builder targets the 5.7 LCD.
+  A compatibility flag or MariaDB dialect would enable the native path and eliminate the
+  `AllowUserVariables` dependency for GUID keys.
+- **PostgreSQL PG17 MERGE…RETURNING for generated-key upsert (#60).** The current dual-CTE `UNION ALL`
+  upsert-returning is correct but complex. PG17 `MERGE…RETURNING merge_action()` could express it as a
+  single statement. Low priority (correctness win, not perf); gated behind a PG17 minimum.
 
 ## Planned features & enhancements
 
@@ -143,11 +173,53 @@
   keyed DI services are the natural mechanism *(integration research 2026-06-12)*.
 - **Optional Roslyn bump.** `Microsoft.CodeAnalysis.CSharp` is intentionally held at 4.8.0 to keep the
   analyzer's minimum-SDK floor low; revisit only if a newer Roslyn API is needed.
-- **Telemetry enrichment.** The opt-in telemetry layer (see
+- **Telemetry enrichment (#86).** The opt-in telemetry layer (see
   [Observability](../articles/features/observability.md)) emits OTel-conventional spans, a
   `db.client.operation.duration` histogram, and `ILogger` messages. Candidate follow-ups:
   a `db.collection.name` (table) span tag, sqlcommenter-style trace-context SQL comments, and
   connection-open / pool-wait instruments.
+- **DISTINCT support on select/projection read shapes (#66).** A `Distinct = true` knob on
+  `[InquirySelectAll]` and the projection attribute rendering `SELECT DISTINCT` in the const SQL.
+  Most valuable on column-subset projections (distinct `Country` values). Currently requires an ad-hoc
+  SQL escape.
+- **Grouped aggregate read shape (#65).** A `[InquiryGroupCount]` / `[InquiryGroupAggregate]` attribute
+  emitting `SELECT <groupCol>, COUNT(*) FROM t GROUP BY <groupCol>` — the "counts by status" / "orders
+  per customer" dashboard primitive. Today it requires hand-written SQL + `[InquiryAdHoc]`.
+- **Top-1-by-order read shape (#64).** A `[InquirySelectTopByOrder]` attribute returning `Task<T?>` —
+  the row with the extreme value of a column (`SELECT … ORDER BY col LIMIT 1`). EF Core 11
+  `MaxByAsync`/`MinByAsync` parity.
+
+## Test coverage & hardening
+
+- **Port SQLite-only integration tests to server dialects (#154).** ManyToMany, GlobalFilter, audit
+  columns, ComputedColumn, JsonPath, and InquiryView have live tests only on SQLite. GlobalFilter is
+  highest priority (tenant isolation — a dialect-specific bug is a security issue).
+- **Oracle has zero test coverage for `[InquiryBulkInsert]` (#155).** Oracle's bulk insert path (which
+  compiles down to multi-row batch insert) is completely unverified.
+- **CancellationToken propagation never verified against real MySQL/PostgreSQL (#156).** Pipeline-level
+  unit tests thread the token through the API surface, but no integration test verifies that a cancelled
+  token actually cancels an in-flight database operation on these providers.
+- **Single-row all-types bulk-insert test matrix (#134).** No test covers bulk insert of every
+  provider-primitive type (int, decimal, bool, Guid, DateTime, string, byte[], enum, converter columns)
+  in a minimal batch per bulk-copy provider.
+- **Guard Oracle `:rc` ref-cursor finalize-once invariant (#136).** `FinalizeCommand` unconditionally
+  adds the `:rc` OUT ref-cursor parameter. A second finalize of the same command would bind a duplicate.
+  Not a live bug (every call site creates a fresh command), but an unstated invariant a cheap guard would
+  remove.
+- **Generator polish (#135).** Analyzer release tracking is suppressed (`RS2008`); the diagnostic-ID
+  registry comment implies INQ038 exists (it's only reserved); `ProjectionProcessor.Extract` and
+  `AdHocProcessor.Extract` take no `CancellationToken`.
+
+## Documentation gaps
+
+- **MySQL `AllowUserVariables` makes misspelled raw-SQL parameters silently NULL (#133).** The forced
+  `AllowUserVariables=true` means a misspelled `@param` in user SQL is treated as a NULL user variable
+  instead of throwing.
+- **Per-provider capability table for retry/failover knobs (#132).** Retry options exist only on SQL
+  Server and PostgreSQL; MySQL and Oracle expose failover only. The top-level docs imply parity.
+- **SqlServer `SqlBulkCopy` defaults (#131).** `BulkCopyTimeout` stays at its 30-second default (a
+  footgun on large loads); no `TableLock` option is exposed, so bulk inserts take row locks and aren't
+  minimally logged.
 
 ### Explicitly not planned
 
