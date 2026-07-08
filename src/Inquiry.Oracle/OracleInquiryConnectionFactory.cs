@@ -37,7 +37,10 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         }
 
         _connectionString = connectionString;
-        _failoverConnectionString = options.FailoverConnectionString;
+        _failoverConnectionString = options.FailoverConnectionString is { } configured
+            && !string.Equals(configured, connectionString, StringComparison.Ordinal)
+                ? configured
+                : null;
     }
 
     /// <inheritdoc />
