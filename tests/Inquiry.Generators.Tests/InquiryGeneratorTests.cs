@@ -1240,12 +1240,11 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("ELSE IF EXISTS", generatedText);
         Assert.Contains("IF @Id IS NULL", generatedText);
 
-        // Regression (SQL Server error 544): the MERGE's NOT MATCHED INSERT must NOT list the
-        // IDENTITY key column — it inserts only the non-key columns and lets the database assign the
-        // key, exactly like the NULL-key branch. SQL Server rejects an explicit identity insert even
-        // on a MERGE branch that is never taken.
-        Assert.Contains("WHEN NOT MATCHED THEN INSERT ([Name]) VALUES (@Name)", generatedText);
-        Assert.DoesNotContain("INSERT ([Id], [Name]) VALUES (@Id, @Name)", generatedText);
+        // The MERGE's NOT MATCHED INSERT includes the explicit key, wrapped in SET IDENTITY_INSERT
+        // ON/OFF so the caller's supplied key value is preserved (#146).
+        Assert.Contains("SET IDENTITY_INSERT [TWidget] ON", generatedText);
+        Assert.Contains("WHEN NOT MATCHED THEN INSERT ([Id], [Name]) VALUES (@Id, @Name)", generatedText);
+        Assert.Contains("SET IDENTITY_INSERT [TWidget] OFF", generatedText);
     }
 
     [Fact]
@@ -1690,9 +1689,10 @@ public sealed partial class InquiryGeneratorTests
 
         // Generated key omitted from the INSERT column list; returning SELECT keyed on LAST_INSERT_ID().
         Assert.Contains("private const string _sqlInsertReturning = \"INSERT INTO `Categories` (`Name`) VALUES (@Name); SELECT `CategoryID`, `Name` FROM `Categories` WHERE `CategoryID` = LAST_INSERT_ID()\";", generatedText);
-        // Generated-key upsert-returning: native ON DUPLICATE KEY UPDATE; the returning SELECT reads back
-        // by the explicit key, falling back to LAST_INSERT_ID() only for the 0/auto-generated case (#53).
-        Assert.Contains("private const string _sqlUpsertReturning = \"INSERT INTO `Categories` (`CategoryID`, `Name`) VALUES (@CategoryID, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `CategoryID`, `Name` FROM `Categories` WHERE `CategoryID` = IF(@CategoryID, @CategoryID, LAST_INSERT_ID())\";", generatedText);
+        // Generated-key upsert-returning: native ON DUPLICATE KEY UPDATE with key = LAST_INSERT_ID(key)
+        // so the trailing SELECT finds the row even on secondary-unique conflicts (#148).
+        Assert.Contains("ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`), `CategoryID` = LAST_INSERT_ID(`CategoryID`)", generatedText);
+        Assert.Contains("WHERE `CategoryID` = IF(@CategoryID, @CategoryID, LAST_INSERT_ID())", generatedText);
     }
 
     [Fact]

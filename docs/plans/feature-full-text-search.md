@@ -10,7 +10,7 @@ public partial Task<IReadOnlyList<Article>> SearchAsync(string searchTerm, Cance
 ```
 **Recommended scope (Tier-3, single-term, no ranking):** PostgreSQL + SQL Server (+ MySQL at the abstraction level once that provider exists). **SQLite FTS5 documented-only** (different schema model — virtual table, not the base table → diagnostic). **Index/schema DDL documented-only, not generated** (clean handoff to W7).
 Per-engine WHERE (cols `Title,Body`, param `@searchTerm`):
-- PostgreSQL: `WHERE to_tsvector('simple', coalesce("Title",'') || ' ' || coalesce("Body",'')) @@ plainto_tsquery('simple', @searchTerm)`
+- PostgreSQL: `WHERE to_tsvector('english', coalesce("Title",'') || ' ' || coalesce("Body",'')) @@ plainto_tsquery('english', @searchTerm)`
 - SQL Server: `WHERE FREETEXT(([Title],[Body]), @searchTerm)` (natural-language, injection-safe; `CONTAINS` later via option)
 - MySQL (future): `WHERE MATCH(\`Title\`,\`Body\`) AGAINST (@searchTerm IN NATURAL LANGUAGE MODE)`
 - SQLite: unsupported → diagnostic.
