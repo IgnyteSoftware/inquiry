@@ -44,10 +44,34 @@ public static class InquirySql
         {
             var name = i < CachedNames.Length ? CachedNames[i] : "@p" + i.ToString(CultureInfo.InvariantCulture);
             placeholders[i] = name;
-            parameters[i] = new InquiryParameter(name, args[i]);
+            parameters[i] = new InquiryParameter(name, CoerceAdHocValue(args[i]));
         }
 
         var sql = string.Format(CultureInfo.InvariantCulture, commandText.Format, placeholders);
         return new InquiryCommand(sql, parameters, commandType, commandTimeout);
+    }
+
+    private static object? CoerceAdHocValue(object? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var type = value.GetType();
+        if (type.IsEnum)
+        {
+            value = System.Convert.ChangeType(value, Enum.GetUnderlyingType(type), CultureInfo.InvariantCulture);
+            type = value.GetType();
+        }
+
+        return value switch
+        {
+            sbyte v  => unchecked((byte)v),
+            ushort v => unchecked((short)v),
+            uint v   => unchecked((int)v),
+            ulong v  => unchecked((long)v),
+            _ => value,
+        };
     }
 }
