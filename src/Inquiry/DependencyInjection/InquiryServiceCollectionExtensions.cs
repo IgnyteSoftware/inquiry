@@ -96,21 +96,19 @@ public static class InquiryServiceCollectionExtensions
 
     private static void AddOrConfigureOptions(IServiceCollection services, Action<InquiryOptions>? configureOptions)
     {
-        var descriptor = services.LastOrDefault(static service => service.ServiceType == typeof(InquiryOptions));
-        if (descriptor?.ImplementationInstance is InquiryOptions existingOptions)
+        for (var i = services.Count - 1; i >= 0; i--)
         {
-            configureOptions?.Invoke(existingOptions);
-            return;
-        }
-
-        if (descriptor is not null)
-        {
-            services.RemoveAll<InquiryOptions>();
+            if (services[i].ServiceType == typeof(InquiryOptions)
+                && services[i].ImplementationInstance is InquiryOptions existingOptions)
+            {
+                configureOptions?.Invoke(existingOptions);
+                return;
+            }
         }
 
         var options = new InquiryOptions();
         configureOptions?.Invoke(options);
-        services.AddSingleton(options);
+        services.Replace(ServiceDescriptor.Singleton(options));
     }
 
     [RequiresUnreferencedCode(AssemblyScanRequiresUnreferencedCode)]
