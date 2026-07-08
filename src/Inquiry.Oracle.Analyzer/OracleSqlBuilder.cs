@@ -128,8 +128,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     {
         if (context.InsertableColumns.Count == 0)
         {
-            // Oracle has no DEFAULT VALUES clause; VALUES (DEFAULT) inserts an all-defaults row.
-            return "INSERT INTO " + context.Table + " VALUES (DEFAULT)";
+            var col = QuoteIdentifier(context.Columns[0].ColumnName);
+            return "INSERT INTO " + context.Table + " (" + col + ") VALUES (DEFAULT)";
         }
 
         return "INSERT INTO " + context.Table
