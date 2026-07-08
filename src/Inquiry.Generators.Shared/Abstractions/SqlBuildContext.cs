@@ -81,6 +81,7 @@ public sealed class SqlBuildContext
         // projection selects a subset that omits indicator/filter columns), so they are supplied
         // explicitly — used only for the predicate, never added to SelectColumns.
         var activeRowPredicates = new List<string>();
+        var qualifiedActiveRowPredicates = new List<string>();
 
         // Soft delete. Drives the active-row filter (suppressed for IncludeDeleted) plus the SET clauses
         // for the soft-delete and restore UPDATEs.
@@ -90,13 +91,21 @@ public sealed class SqlBuildContext
             var quoted = builder.QuoteIdentifier(softDeleteColumn.ColumnName);
             if (softDeleteColumn.SoftDelete == SoftDeleteKind.BooleanFlag)
             {
-                if (!suppressSoftDelete) activeRowPredicates.Add(quoted + " = " + builder.BooleanFalseLiteral);
+                if (!suppressSoftDelete)
+                {
+                    activeRowPredicates.Add(quoted + " = " + builder.BooleanFalseLiteral);
+                    qualifiedActiveRowPredicates.Add(Table + "." + quoted + " = " + builder.BooleanFalseLiteral);
+                }
                 SoftDeleteSetClause = quoted + " = " + builder.BooleanTrueLiteral;
                 SoftDeleteRestoreSetClause = quoted + " = " + builder.BooleanFalseLiteral;
             }
             else
             {
-                if (!suppressSoftDelete) activeRowPredicates.Add(quoted + " IS NULL");
+                if (!suppressSoftDelete)
+                {
+                    activeRowPredicates.Add(quoted + " IS NULL");
+                    qualifiedActiveRowPredicates.Add(Table + "." + quoted + " IS NULL");
+                }
                 SoftDeleteSetClause = quoted + " = " + builder.CurrentTimestampExpression;
                 SoftDeleteRestoreSetClause = quoted + " = NULL";
             }
@@ -107,11 +116,14 @@ public sealed class SqlBuildContext
         var globalFilterColumns = columns.Where(c => c.IsGlobalFilter).Concat(globalFilterPredicateColumns ?? Array.Empty<IColumn>());
         foreach (var gf in globalFilterColumns)
         {
-            activeRowPredicates.Add(builder.QuoteIdentifier(gf.ColumnName) + " = " +
-                (gf.GlobalFilterKeepWhenTrue ? builder.BooleanTrueLiteral : builder.BooleanFalseLiteral));
+            var gfQuoted = builder.QuoteIdentifier(gf.ColumnName);
+            var gfValue = gf.GlobalFilterKeepWhenTrue ? builder.BooleanTrueLiteral : builder.BooleanFalseLiteral;
+            activeRowPredicates.Add(gfQuoted + " = " + gfValue);
+            qualifiedActiveRowPredicates.Add(Table + "." + gfQuoted + " = " + gfValue);
         }
 
         ActiveRowPredicate = string.Join(" AND ", activeRowPredicates);
+        QualifiedActiveRowPredicate = string.Join(" AND ", qualifiedActiveRowPredicates);
 
         // Optimistic concurrency. The single token column (if any) drives the WHERE predicate every
         // UPDATE/DELETE AND-composes (against the original value, @token) and — for the ORM-managed form
@@ -171,6 +183,12 @@ public sealed class SqlBuildContext
     /// (IncludeDeleted); global-filter terms always remain.
     /// </summary>
     public string ActiveRowPredicate { get; } = string.Empty;
+
+    /// <summary>
+    /// Table-qualified variant of <see cref="ActiveRowPredicate"/> for use in multi-table queries
+    /// (e.g. many-to-many JOINs) where an unqualified column name would be ambiguous.
+    /// </summary>
+    public string QualifiedActiveRowPredicate { get; } = string.Empty;
 
     /// <summary>The SET-clause body that marks a row deleted (<c>"IsDeleted" = 1</c> / <c>"DeletedAt" = CURRENT_TIMESTAMP</c>). Empty when no soft-delete column.</summary>
     public string SoftDeleteSetClause { get; } = string.Empty;
