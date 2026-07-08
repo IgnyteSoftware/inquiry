@@ -180,22 +180,17 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             ? "INSERT INTO " + context.Table + output + " DEFAULT VALUES; "
             : "INSERT INTO " + context.Table + " (" + context.InsertColumns + ")" + output + " VALUES (" + context.InsertParameters + "); ";
 
-        // The MERGE's NOT MATCHED INSERT handles a supplied (non-null) key. A database-supplied GUID key
-        // (DEFAULT NEWSEQUENTIALID) accepts an explicit value, so the supplied key is written through. An
-        // IDENTITY (integer) key cannot — SQL Server rejects an explicit identity insert (error 544) even
-        // on a MERGE branch that is never taken — so it inserts only the non-key columns, like the
-        // null-key path, and lets the database assign the key.
-        string notMatchedInsert;
-        if (context.KeyColumns[0].TypeClass == DbTypeClass.Guid)
-        {
-            notMatchedInsert = "(" + JoinSql(keyColumn, context.InsertColumns) + ") VALUES (" + JoinSql(keyParameter, context.InsertParameters) + ")";
-        }
-        else
-        {
-            notMatchedInsert = context.InsertableColumns.Count == 0
-                ? "DEFAULT VALUES"
-                : "(" + context.InsertColumns + ") VALUES (" + context.InsertParameters + ")";
-        }
+        // The MERGE's NOT MATCHED INSERT handles a supplied (non-null) key. Both GUID and identity keys
+        // include the explicit key in the INSERT. For identity keys, SET IDENTITY_INSERT ON allows the
+        // explicit value to be written; without it SQL Server raises error 544 and the key would be
+        // assigned by IDENTITY, diverging from the caller's value.
+        var notMatchedInsert = context.InsertableColumns.Count == 0
+            ? "(" + keyColumn + ") VALUES (" + keyParameter + ")"
+            : "(" + JoinSql(keyColumn, context.InsertColumns) + ") VALUES (" + JoinSql(keyParameter, context.InsertParameters) + ")";
+
+        var isIdentity = context.KeyColumns[0].IsGenerated && context.KeyColumns[0].TypeClass != DbTypeClass.Guid;
+        var identityOn = isIdentity ? "SET IDENTITY_INSERT " + context.Table + " ON; " : string.Empty;
+        var identityOff = isIdentity ? " SET IDENTITY_INSERT " + context.Table + " OFF;" : string.Empty;
 
         return
             "IF " + keyParameter + " IS NULL " +
@@ -204,10 +199,12 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             "END " +
             "ELSE " +
             "BEGIN " +
+            identityOn +
             "MERGE INTO " + context.Table + " WITH (HOLDLOCK) AS target " +
             "USING (SELECT " + keyParameter + " AS k0) AS source ON target." + keyColumn + " = source.k0 " +
             WhenMatchedSet(context) +
             "WHEN NOT MATCHED THEN INSERT " + notMatchedInsert + output + "; " +
+            identityOff +
             "END";
     }
 
@@ -260,7 +257,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     protected override string WrapCreateTable(SqlBuildContext context, string body)
     {
-        var name = string.IsNullOrEmpty(context.RawSchema) ? context.RawTableName : context.RawSchema + "." + context.RawTableName;
+        var name = string.IsNullOrEmpty(context.RawSchema)
+            ? QuoteIdentifier(context.RawTableName)
+            : QuoteIdentifier(context.RawSchema!) + "." + QuoteIdentifier(context.RawTableName);
         return "IF OBJECT_ID(N'" + name.Replace("'", "''") + "', N'U') IS NULL\nBEGIN\n    CREATE TABLE " + context.Table + " (\n        " + body + "\n    );\nEND;";
     }
 

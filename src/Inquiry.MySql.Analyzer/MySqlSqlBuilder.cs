@@ -133,8 +133,15 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
         var explicitInsertColumns = JoinSql(keyColumn, context.InsertColumns);
         var explicitInsertParameters = JoinSql(keyParameter, context.InsertParameters);
 
+        // Append key = LAST_INSERT_ID(key) so the trailing SELECT can locate the row even when
+        // ON DUPLICATE KEY fires on a secondary unique constraint (where LAST_INSERT_ID() is not
+        // automatically set to the conflicting row's primary key).
+        var assignments = OnDuplicateKeyAssignments(context);
+        var withKey = keyColumn + " = LAST_INSERT_ID(" + keyColumn + ")";
+        assignments = string.IsNullOrEmpty(assignments) ? withKey : assignments + ", " + withKey;
+
         return "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") VALUES (" + explicitInsertParameters + ") " +
-            "ON DUPLICATE KEY UPDATE " + OnDuplicateKeyAssignments(context);
+            "ON DUPLICATE KEY UPDATE " + assignments;
     }
 
     /// <summary>

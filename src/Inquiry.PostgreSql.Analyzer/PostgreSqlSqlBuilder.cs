@@ -30,7 +30,7 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     {
         // Concatenate the searched columns into one tsvector and match a plain (natural-language) query.
         var vector = string.Join(" || ' ' || ", searchColumns.Select(c => "coalesce(" + QuoteIdentifier(c.ColumnName) + ", '')"));
-        var predicate = "to_tsvector('simple', " + vector + ") @@ plainto_tsquery('simple', " + ParameterName("searchTerm") + ")";
+        var predicate = "to_tsvector('english', " + vector + ") @@ plainto_tsquery('english', " + ParameterName("searchTerm") + ")";
         return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(predicate, context.ActiveRowPredicate);
     }
 
