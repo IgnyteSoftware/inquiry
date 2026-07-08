@@ -231,7 +231,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var ddl = ExtractSchemaDdl(result);
 
-        Assert.Contains("IF OBJECT_ID(N'Widget', N'U') IS NULL", ddl);
+        Assert.Contains("IF OBJECT_ID(N'[Widget]', N'U') IS NULL", ddl);
         Assert.Contains("[Id] BIGINT IDENTITY(1,1) PRIMARY KEY", ddl);
         Assert.Contains("[Code] NVARCHAR(16) NOT NULL", ddl);
     }

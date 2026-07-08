@@ -19,7 +19,7 @@ Per dialect:
 | Dialect | Generated `WHERE` clause |
 |---|---|
 | SQL Server | `WHERE FREETEXT(([Title], [Body]), @query)` (requires a full-text catalog + index) |
-| PostgreSQL | `WHERE to_tsvector('simple', coalesce("Title", '') \|\| ' ' \|\| coalesce("Body", '')) @@ plainto_tsquery('simple', @query)` |
+| PostgreSQL | `WHERE to_tsvector('english', coalesce("Title", '') \|\| ' ' \|\| coalesce("Body", '')) @@ plainto_tsquery('english', @query)` |
 | MySQL | `WHERE MATCH(`Title`,`Body`) AGAINST (@query IN NATURAL LANGUAGE MODE)` (requires a FULLTEXT index) |
 | SQLite | Requires the FTS5 virtual-table pattern — see SQLite notes. |
 | Oracle | Not supported in v1 — `[InquiryFullTextSearch]` on an Oracle store is a compile-time error (`INQ035`). |
