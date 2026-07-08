@@ -70,7 +70,7 @@ public sealed partial class InquiryGeneratorTests
         var text = GetOrderStore(result);
 
         // Single-parent JOIN through the junction, filtered by the junction's parent FK.
-        Assert.Contains("_sql_Products = \"SELECT \\\"Products\\\".\\\"Id\\\", \\\"Products\\\".\\\"Title\\\" FROM \\\"Products\\\" INNER JOIN \\\"OrderProduct\\\" __j ON __j.\\\"ProductId\\\" = \\\"Products\\\".\\\"Id\\\" WHERE __j.\\\"OrderId\\\" = @Id\";", text);
+        Assert.Contains("_sql_Products = \"SELECT \\\"Products\\\".\\\"Id\\\", \\\"Products\\\".\\\"Title\\\" FROM \\\"Products\\\" INNER JOIN \\\"OrderProduct\\\" \\\"__j\\\" ON \\\"__j\\\".\\\"ProductId\\\" = \\\"Products\\\".\\\"Id\\\" WHERE \\\"__j\\\".\\\"OrderId\\\" = @Id\";", text);
         // Batch consts: all children + all junction rows (assembled in memory).
         Assert.Contains("_sql_Products_All = \"SELECT \\\"Id\\\", \\\"Title\\\" FROM \\\"Products\\\"\";", text);
         Assert.Contains("_sql_Products_Junction = \"SELECT \\\"OrderId\\\", \\\"ProductId\\\" FROM \\\"OrderProduct\\\"\";", text);
@@ -104,13 +104,13 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void OracleManyToManyJoinUsesUnquotedIdentifiers()
+    public void OracleManyToManyJoinQuotesJunctionAlias()
     {
         var result = RunGenerator(OrderProductSource, dialect: "Oracle");
         Assert.Empty(result.GeneratorDiagnostics);
         var text = GetOrderStore(result);
 
-        Assert.Contains("FROM Products INNER JOIN OrderProduct __j ON __j.ProductId = Products.Id WHERE __j.OrderId = :Id", text);
+        Assert.Contains("FROM Products INNER JOIN OrderProduct \\\"__j\\\" ON \\\"__j\\\".ProductId = Products.Id WHERE \\\"__j\\\".OrderId = :Id", text);
     }
 
     [Fact]
