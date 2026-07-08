@@ -180,7 +180,12 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     // PostgreSQL identity uses SERIAL / BIGSERIAL (which create the backing sequence) rather than an
     // explicit type + IDENTITY clause, matching the conventional Northwind mapping.
     protected override string GeneratedKeyClause(IColumn column)
-        => (column.TypeClass == DbTypeClass.Int64 ? "BIGSERIAL" : "SERIAL") + " PRIMARY KEY";
+        => (column.TypeClass switch
+        {
+            DbTypeClass.Int64 => "BIGSERIAL",
+            DbTypeClass.Int16 or DbTypeClass.Byte => "SMALLSERIAL",
+            _ => "SERIAL",
+        }) + " PRIMARY KEY";
 
     protected override bool SupportsCreateIndexIfNotExists => true;
 

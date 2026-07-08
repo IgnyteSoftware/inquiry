@@ -218,10 +218,7 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
     private string OnDuplicateKeyAssignments(SqlBuildContext context)
     {
         var assignments = string.Join(", ", context.Columns
-            // Mirror SqlBuildContext.SetClauses' exclusions: a created-* auditing column
-            // ([InquiryCreatedAt]/[InquiryCreatedBy]) is written once by the insert branch and never
-            // updated by the conflict branch.
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
             .Select(c =>
             {
                 var quoted = QuoteIdentifier(c.ColumnName);
@@ -230,9 +227,13 @@ internal sealed class MySqlSqlBuilder : SqlBuilder
                     : quoted + " = VALUES(" + quoted + ")";
             }));
 
-        // ON DUPLICATE KEY UPDATE requires at least one assignment. An entity with no updatable non-key
-        // columns yields an empty list, so self-assign the key — a valid no-op that makes the conflict
-        // branch do nothing, matching the other dialects' DO NOTHING ("insert if absent") semantics.
+        if (!string.IsNullOrEmpty(context.ConcurrencyVersionSet))
+        {
+            assignments = string.IsNullOrEmpty(assignments)
+                ? context.ConcurrencyVersionSet
+                : assignments + ", " + context.ConcurrencyVersionSet;
+        }
+
         if (assignments.Length == 0)
         {
             var key = context.QuotedKeyColumns[0];
