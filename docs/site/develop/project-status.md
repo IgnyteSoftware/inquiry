@@ -3,7 +3,7 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code:** 2026-06-11.
+**Last reconciled against the code:** 2026-07-08.
 
 ## Supported database engines (5, all live-tested)
 
@@ -42,6 +42,14 @@ retry and per-provider backup-server failover; see
 
 Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roadmap](roadmap.md).
 
+## Release engineering
+
+Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags (`v8.0.0` → version
+`8.0.0`). Every package embeds SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg`
+symbol package. A tag-triggered [`release.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/release.yml)
+workflow packs all 8 shippable packages and pushes to NuGet.org. See
+[Contributing — Releasing](contributing.md#releasing) for the full process.
+
 ## Security status
 
 A formal Codex Security repository scan was completed during pre-release hardening. The validated findings
@@ -65,6 +73,7 @@ Testcontainers. Local provider runs **skip gracefully when Docker is unavailable
 | `Inquiry.MySql.Tests` | live Northwind + generated-DDL + feature-matrix | yes |
 | `Inquiry.Oracle.Tests` | live Northwind + generated-DDL + feature-matrix | yes |
 | `Inquiry.IntegrationTesting` | shared schema-fidelity comparator + introspection support | n/a (library) |
+| `Inquiry.FeatureCatalog` | shared feature-catalog entities, stores, and helpers linked into each provider suite | n/a (library) |
 
 Every live dialect exercises the full supported feature set via a shared, linked feature catalog
 (versioned/soft-delete/JSON/full-text entities) plus aggregate/projection and batch methods on the
@@ -73,3 +82,9 @@ Northwind stores.
 **For current test counts**, run the whole suite (`dotnet test`) or a single project
 (e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). All suites are green on `main`; Docker-gated
 suites skip (not fail) without Docker.
+
+CI runs three jobs on every push to `main` (and on `pull_request`): **build-and-unit** (generator,
+runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and runs the NativeAOT smoke app),
+and an **integration** matrix (PostgreSQL, MySQL, SQL Server, Oracle × net8.0/net9.0 via
+Testcontainers). A separate **scheduled weekly workflow** (`scheduled.yml`) runs the full provider ×
+net8.0/net9.0/net10.0 matrix every Monday.

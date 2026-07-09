@@ -58,12 +58,18 @@ approach is the convention.)
 [`.github/workflows/ci.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/ci.yml)
 runs on pushes to `main` and also on the `pull_request` event if a PR is opened:
 
-- a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker); and
+- a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker);
+- an **aot-smoke** job — publishes the `Inquiry.AotSmoke` sample as a native binary and executes it,
+  verifying the NativeAOT story end-to-end; and
 - an **integration** job — a matrix of **PostgreSQL, MySQL, SQL Server, and Oracle** live suites, each on
   **net8.0** and **net9.0**, provisioned with Testcontainers.
 
-CI uploads TRX result artifacts (`if: always()`) so failures and skips can be inspected. There is no
-separate nightly workflow — Oracle runs in the same integration matrix as the other engines.
+CI uploads TRX result artifacts (`if: always()`) so failures and skips can be inspected.
+
+A separate **scheduled weekly workflow**
+([`scheduled.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/scheduled.yml))
+runs every Monday and extends the integration matrix to **net10.0**, re-verifying every provider against
+current container images.
 
 **Warnings are errors everywhere.** Production projects set `TreatWarningsAsErrors`, and
 `tests/Directory.Build.props` extends the same gate to every test project, so a new compiler/analyzer

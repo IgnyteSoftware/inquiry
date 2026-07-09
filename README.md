@@ -16,9 +16,12 @@ Inquiry is an experimental **.NET 8+** source-generated micro-ORM. You write att
 | `src/Inquiry.Generators.Shared` | Roslyn incremental source-generator framework. Discovers entities and stores; emits materializers, generated stores, the DI registration class, and `InquiryGeneratedSchema.Ddl`. Owns the per-dialect `SqlBuilder` hierarchy. Bundled privately into each provider analyzer. |
 | `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,Oracle}.Analyzer` | Per-dialect Roslyn analyzers — each a `[Generator]` that bundles the shared framework and emits only when its dialect matches the resolved `[InquiryDialect]`. |
 | `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,Oracle}` | Per-dialect runtime providers: `AddInquiry<Dialect>(...)` DI extension, provider options, internal connection factory, and the `[assembly: InquiryDialect("...")]` marker. |
-| `tests/…` | Core runtime tests, source-generator tests, the shared `Inquiry.IntegrationTesting` support library, and per-dialect end-to-end suites (SQLite in-process; the rest via Testcontainers). |
+| `src/Inquiry.Interceptors` | Opt-in companion: slow-query warning logging and sqlcommenter trace-context tagging. |
+| `src/Inquiry.Testing` | Test helpers: SQLite fixture, recording command interceptor with assertion helpers, and Respawn reset wrapper. |
+| `tests/…` | Core runtime tests, source-generator tests, the shared `Inquiry.IntegrationTesting` and `Inquiry.FeatureCatalog` support libraries, and per-dialect end-to-end suites (SQLite in-process; the rest via Testcontainers). |
 | `samples/Inquiry.Northwind` | Shared classic-Northwind entities, stores, and per-provider DDL consumed by the samples and integration tests. |
 | `samples/Inquiry.Sample` | Runnable ASP.NET Core sample exercising CRUD, upsert, transactions, and eager loading on SQLite. |
+| `samples/Inquiry.AotSmoke` | NativeAOT verification app — published and executed by the `aot-smoke` CI job. |
 
 ## Quickstart
 
