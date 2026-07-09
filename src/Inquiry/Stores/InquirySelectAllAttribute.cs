@@ -28,4 +28,13 @@ public sealed class InquirySelectAllAttribute : Attribute
     /// query is emitted unfiltered so soft-deleted rows are returned.
     /// </summary>
     public bool IncludeDeleted { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the generated query uses <c>SELECT DISTINCT</c> instead
+    /// of <c>SELECT</c>. Most valuable on projection-returning methods (distinct <c>Country</c> values)
+    /// and on column-subset field selects. On an entity with a key column, a full-column select is
+    /// already unique per row, so <c>Distinct</c> is redundant there — the database still deduplicates,
+    /// just without effect.
+    /// </summary>
+    public bool Distinct { get; set; }
 }

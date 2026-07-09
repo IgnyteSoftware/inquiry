@@ -15,4 +15,10 @@ public sealed class InquirySelectAllByPredicateAttribute : Attribute
     /// query is emitted with only the predicate WHERE so soft-deleted rows are returned.
     /// </summary>
     public bool IncludeDeleted { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the generated query uses <c>SELECT DISTINCT</c> instead
+    /// of <c>SELECT</c>.
+    /// </summary>
+    public bool Distinct { get; set; }
 }

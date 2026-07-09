@@ -301,6 +301,9 @@ internal static class StoreProcessor
             or StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager
             or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate &&
             GeneratorHelpers.GetNamedBool(attribute, "IncludeDeleted");
+        var distinct = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField
+            or StoreOperation.SelectAllByPredicate &&
+            GeneratorHelpers.GetNamedBool(attribute, "Distinct");
         var hardDelete = operation is StoreOperation.DeleteOneByKey or StoreOperation.DeleteByPredicate &&
             GeneratorHelpers.GetNamedBool(attribute, "HardDelete");
 
@@ -322,6 +325,7 @@ internal static class StoreProcessor
             KeysetFields = new EquatableArray<string>(keysetFields),
             KeysetDescending = keysetDescending,
             IncludeDeleted = includeDeleted,
+            Distinct = distinct,
             HardDelete = hardDelete,
             AggregateFunction = aggregateFunction,
             AggregateColumn = aggregateColumn,
@@ -977,7 +981,7 @@ internal static class StoreProcessor
         // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. A method that
         // opts into IncludeDeleted gets its own unfiltered per-method const instead of the shared one.
         bool UsesSharedSelect((StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan) m)
-            => !(hasSoftDelete && m.Method.IncludeDeleted);
+            => !(hasSoftDelete && m.Method.IncludeDeleted) && !m.Method.Distinct;
 
         var needsSelectAll = valid.Any(m => UsesSharedSelect(m) &&
             ((m.Method.Operation == StoreOperation.SelectAll && m.SelectPlan is null) ||
@@ -1064,7 +1068,7 @@ internal static class StoreProcessor
         {
             if (method.Operation == StoreOperation.SelectAllByPredicate && predicatePlan is not null)
             {
-                AppendConstSql(source, "_sqlPredicate_" + method.Name, sqlBuilder.BuildSelectByPredicateSql(CtxFor(method), predicatePlan.Predicates));
+                AppendConstSql(source, "_sqlPredicate_" + method.Name, sqlBuilder.BuildSelectByPredicateSql(CtxFor(method), predicatePlan.Predicates, method.Distinct));
             }
             else if (method.Operation == StoreOperation.Exists && predicatePlan is not null)
             {
@@ -1127,26 +1131,29 @@ internal static class StoreProcessor
                         softDeletePredicateColumn: entity.SoftDeleteColumn,
                         globalFilterPredicateColumns: entityGlobalFilters)
                     : CtxFor(method);
-                AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan));
+                AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan, method.Distinct));
 
                 // Keyset paging emits a second const: the first-page (null-cursor) query has no cursor
                 // predicate, so the seek query above can use the plain sargable `key > @cursor` (index seek)
                 // instead of a non-sargable (@cursor IS NULL OR …) guard. The emitter picks between them.
                 if (selectPlan.Pagination == Pagination.Keyset)
                 {
-                    AppendConstSql(source, selectPlan.SqlFieldName + "_first", BuildKeysetFirstPageSql(sqlBuilder, planCtx, selectPlan));
+                    AppendConstSql(source, selectPlan.SqlFieldName + "_first", BuildKeysetFirstPageSql(sqlBuilder, planCtx, selectPlan, method.Distinct));
                 }
             }
         }
 
-        // emit an unfiltered per-method base SELECT const for each non-plan IncludeDeleted select on
-        // a soft-delete entity, and record the field name the emitter should use for that method.
+        // emit a per-method base SELECT const for each non-plan select that needs one: IncludeDeleted
+        // on a soft-delete entity (unfiltered), Distinct (SELECT DISTINCT), or both.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
-            if (!(hasSoftDelete && method.IncludeDeleted) || selectPlan is not null)
+            var needsPerMethodSql = (hasSoftDelete && method.IncludeDeleted) || method.Distinct;
+            if (!needsPerMethodSql || selectPlan is not null)
             {
                 continue;
             }
+
+            var methodCtx = hasSoftDelete && method.IncludeDeleted ? ctxIncludeDeleted : ctx;
 
             switch (method.Operation)
             {
@@ -1154,7 +1161,7 @@ internal static class StoreProcessor
                 case StoreOperation.SelectAllEager:
                 {
                     var field = "_sqlSelectAll_" + method.Name;
-                    AppendConstSql(source, field, sqlBuilder.BuildSelectAllSql(ctxIncludeDeleted));
+                    AppendConstSql(source, field, sqlBuilder.BuildSelectAllSql(methodCtx, method.Distinct));
                     baseSelectFields[method.Name] = field;
                     break;
                 }
@@ -1163,7 +1170,7 @@ internal static class StoreProcessor
                 case StoreOperation.SelectOneByKeyEager:
                 {
                     var field = "_sqlSelectByKey_" + method.Name;
-                    AppendConstSql(source, field, sqlBuilder.BuildSelectByKeySql(ctxIncludeDeleted));
+                    AppendConstSql(source, field, sqlBuilder.BuildSelectByKeySql(methodCtx));
                     baseSelectFields[method.Name] = field;
                     break;
                 }
@@ -1171,7 +1178,7 @@ internal static class StoreProcessor
                 case StoreOperation.SelectAllByField when fieldColumns.Count > 0:
                 {
                     var field = "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns) + "_" + method.Name;
-                    AppendConstSql(source, field, sqlBuilder.BuildSelectByFieldSql(ctxIncludeDeleted, ToColumnList(fieldColumns)));
+                    AppendConstSql(source, field, sqlBuilder.BuildSelectByFieldSql(methodCtx, ToColumnList(fieldColumns), method.Distinct));
                     baseSelectFields[method.Name] = field;
                     break;
                 }
@@ -1259,8 +1266,8 @@ internal static class StoreProcessor
                 softDeletePredicateColumn: entity.SoftDeleteColumn,
                 globalFilterPredicateColumns: entityGlobalFilters);
             var projSql = method.Operation == StoreOperation.SelectAllByField
-                ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns))
-                : sqlBuilder.BuildSelectAllSql(projCtx);
+                ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct)
+                : sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct);
             AppendConstSql(source, "_sqlProj_" + method.Name, projSql);
         }
 
@@ -2153,7 +2160,7 @@ internal static class StoreProcessor
     /// base SELECT (with WHERE for SelectAllByField or the keyset cursor predicate), a uniform ORDER BY,
     /// and the dialect-specific pagination tail.
     /// </summary>
-    private static string BuildSelectPlanSql(SqlBuilder sqlBuilder, SqlBuildContext ctx, IReadOnlyList<ColumnData> fieldColumns, ResolvedSelectPlan plan)
+    private static string BuildSelectPlanSql(SqlBuilder sqlBuilder, SqlBuildContext ctx, IReadOnlyList<ColumnData> fieldColumns, ResolvedSelectPlan plan, bool distinct = false)
     {
         var orderTerms = new List<OrderByTerm>(plan.OrderColumns.Count);
         foreach (var (column, descending) in plan.OrderColumns)
@@ -2192,7 +2199,7 @@ internal static class StoreProcessor
             {
                 keysetWhere += " AND " + ctx.ActiveRowPredicate;
             }
-            baseSql = "SELECT " + ctx.SelectColumns + " FROM " + ctx.Table + " WHERE " + keysetWhere;
+            baseSql = (distinct ? "SELECT DISTINCT " : "SELECT ") + ctx.SelectColumns + " FROM " + ctx.Table + " WHERE " + keysetWhere;
         }
         else
         {
@@ -2201,8 +2208,8 @@ internal static class StoreProcessor
                 : new SqlSelectOptions(orderTerms);
 
             baseSql = fieldColumns.Count > 0
-                ? sqlBuilder.BuildSelectByFieldSql(ctx, ToColumnList(fieldColumns))
-                : sqlBuilder.BuildSelectAllSql(ctx);
+                ? sqlBuilder.BuildSelectByFieldSql(ctx, ToColumnList(fieldColumns), distinct)
+                : sqlBuilder.BuildSelectAllSql(ctx, distinct);
         }
 
         var orderByClause = sqlBuilder.BuildOrderByClause(options);
@@ -2223,7 +2230,7 @@ internal static class StoreProcessor
     /// predicate is non-sargable and defeats the index seek (see <see cref="SqlBuilder.BuildKeysetPredicate"/>),
     /// while binding <c>key &gt; NULL</c> on the seek query would match no rows.
     /// </summary>
-    private static string BuildKeysetFirstPageSql(SqlBuilder sqlBuilder, SqlBuildContext ctx, ResolvedSelectPlan plan)
+    private static string BuildKeysetFirstPageSql(SqlBuilder sqlBuilder, SqlBuildContext ctx, ResolvedSelectPlan plan, bool distinct = false)
     {
         var orderTerms = new List<OrderByTerm>(plan.OrderColumns.Count);
         foreach (var (column, descending) in plan.OrderColumns)
@@ -2239,7 +2246,7 @@ internal static class StoreProcessor
 
         // a soft-delete entity still filters deleted rows on the first page (no cursor predicate to AND with).
         var where = ctx.ActiveRowPredicate;
-        var baseSql = "SELECT " + ctx.SelectColumns + " FROM " + ctx.Table
+        var baseSql = (distinct ? "SELECT DISTINCT " : "SELECT ") + ctx.SelectColumns + " FROM " + ctx.Table
             + (where.Length > 0 ? " WHERE " + where : string.Empty);
 
         var orderByClause = sqlBuilder.BuildOrderByClause(options);

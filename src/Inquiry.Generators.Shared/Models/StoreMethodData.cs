@@ -63,6 +63,12 @@ internal sealed record StoreMethodData(
     public bool IncludeDeleted { get; init; }
 
     /// <summary>
+    /// For a select operation, whether <c>Distinct = true</c> was set so the generated query
+    /// emits <c>SELECT DISTINCT</c> instead of <c>SELECT</c>.
+    /// </summary>
+    public bool Distinct { get; init; }
+
+    /// <summary>
     /// For <see cref="StoreOperation.DeleteOneByKey"/>, whether <c>HardDelete = true</c> was set so
     /// a literal <c>DELETE</c> is emitted even when the entity declares a soft-delete column.
     /// </summary>
