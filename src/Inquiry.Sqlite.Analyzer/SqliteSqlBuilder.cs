@@ -84,6 +84,13 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
     private static string JoinSql(string first, string rest)
         => string.IsNullOrEmpty(rest) ? first : first + ", " + rest;
 
+    public override bool UseArrayInParameters => true;
+
+    protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
+        => quotedColumn + " IN (SELECT value FROM json_each(" + parameterName + "))";
+
+    public override string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryJsonArrayParameter";
+
     // ---- DDL --------------------------------------------------------------------------------
     // SQLite has dynamic typing; these affinities match the conventional Northwind mapping.
 

@@ -52,5 +52,5 @@ public partial class OrderStore : InquiryStore<Order>
 
 - **INOUT parameters** aren't surfaced — an OUTPUT parameter is read back, but a value passed *in* and mutated is not returned to the caller.
 - **No multiple result sets.** Only the first rowset is materialized.
-- **No table-valued parameters.** Pass scalars or a comma-joined string.
+- **No table-valued parameters in stored procedure calls.** TVPs are used internally for SQL Server `Compare.In` and `[InquiryDeleteAll]` collections, but stored procedure methods cannot yet accept TVP parameters directly.
 - **Oracle limitation:** SPs that return rows require an `OUT REF CURSOR` parameter, which the generator doesn't yet emit. Use a function with `RETURN SYS_REFCURSOR` as a workaround.

@@ -226,7 +226,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
                 source.AppendLine("            {");
                 source.AppendLine(sqlBuilder.UseArrayInParameters
-                    ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam});"
+                    ? $"                {sqlBuilder.ArrayParameterBinderFqn}.Bind(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam});"
                     : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand{keysDbTypeArg}{keysSizeArg});");
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
@@ -1382,7 +1382,7 @@ internal static class StoreOperationEmitter
         }
 
         return sqlBuilder.UseArrayInParameters
-            ? $"                global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"{name}\", {projected});"
+            ? $"                {sqlBuilder.ArrayParameterBinderFqn}.Bind(_c, \"{name}\", {projected});"
             : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
     }
 

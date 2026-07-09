@@ -10,7 +10,7 @@ namespace Inquiry.Generators.Tests;
 public sealed partial class InquiryGeneratorTests
 {
     [Fact]
-    public void DeleteAllEmitsKeyInClauseAndExpansionBinder()
+    public void DeleteAllEmitsKeyInClauseAndJsonArrayBinder()
     {
         const string source = """
             using System.Collections.Generic;
@@ -44,16 +44,15 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM \\\"TThing\\\" WHERE \\\"Id\\\" IN (@keys)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@keys\", ids, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int64);", text);
+        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM \\\"TThing\\\" WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@keys))\";", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@keys\", ids);", text);
         Assert.Contains("return Inquiry.ExecuteAsync(_cmd,", text);
     }
 
-    // #112: a batch delete over a declared-length string key must thread the key's Size onto the expanded
-    // key parameters on SQL Server, same as the predicate IN path (#102) — otherwise a DeleteAll over a
-    // varchar key splits the plan cache by value length.
+    // #69: SQL Server now uses TVPs for batch deletes — the SQL is constant and no per-element expansion is
+    // needed, so the declared-length Size threading (#112) is superseded by the TVP binder.
     [Fact]
-    public void DeleteAllThreadsKeySizeOnSqlServerForDeclaredStringKey()
+    public void DeleteAllOnSqlServerUsesTvpBinderNotExpansion()
     {
         const string source = """
             using System.Collections.Generic;
@@ -83,12 +82,13 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // The expanded key parameters carry both the DbType and the declared Size.
-        Assert.Contains("InquiryInExpansion.Expand(_c, \"@keys\", codes, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.String, size: 64);", text);
+        Assert.Contains("[Code] IN (SELECT [Value] FROM @keys)", text);
+        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@keys\", codes);", text);
+        Assert.DoesNotContain("InquiryInExpansion", text);
     }
 
     [Fact]
-    public void OracleDeleteAllUsesColonKeysSentinelAndExpansion()
+    public void OracleDeleteAllUsesJsonTableAndBindsJsonArray()
     {
         const string source = """
             using System.Collections.Generic;
@@ -122,11 +122,8 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // Oracle: unquoted identifiers and the ':' bind sigil on the IN-expansion sentinel; the Expand call
-        // passes the same ':keys' so its runtime text-rewrite finds the baked sentinel (FinalizeCommand
-        // reconciles the per-element params under BindByName).
-        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM TThing WHERE Id IN (:keys)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \":keys\", ids, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int64);", text);
+        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM TThing WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:keys, '$[*]' COLUMNS(val NUMBER(19) PATH '$')) jt)\";", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \":keys\", ids);", text);
     }
 
     [Fact]
@@ -165,6 +162,6 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("_sqlDeleteAll = \"UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"Id\\\" IN (@keys)\";", text);
+        Assert.Contains("_sqlDeleteAll = \"UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@keys))\";", text);
     }
 }

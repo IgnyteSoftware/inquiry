@@ -316,7 +316,7 @@ public sealed partial class InquiryGeneratorTests
         """;
 
     [Fact]
-    public void SqlServer_ThreadsSizePrecisionIntoInListElements()
+    public void SqlServer_ThreadsSizePrecisionIntoNotInListElements()
     {
         var result = RunGenerator(InListSizeSource, dialect: "SqlServer");
         var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
@@ -326,11 +326,11 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GetTagStoreText(result);
 
-        // The declared string IN/NOT IN columns thread Size; the declared decimal column threads Precision/Scale.
-        Assert.Contains("Expand(_c", generatedText);
+        // #69: IN predicates now use TVP binding (no expansion, no Size threading needed).
+        Assert.Contains("InquiryTvpParameter.Bind(_c", generatedText);
+        // NOT IN still uses sentinel expansion with Size/Precision threading.
         Assert.Contains("ExpandNotIn(_c", generatedText);
         Assert.Contains("size: 64", generatedText);
-        Assert.Contains("precision: 18, scale: 2", generatedText);
     }
 
     [Theory]

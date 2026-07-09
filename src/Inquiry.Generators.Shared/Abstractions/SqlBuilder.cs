@@ -290,14 +290,14 @@ public abstract class SqlBuilder
     /// Dialect-uniform (single key guaranteed by validation), so concrete and inherited by every provider.
     /// </summary>
     public virtual string BuildDeleteAllByKeysSql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"));
+        => "DELETE FROM " + context.Table + " WHERE " + RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"), context.KeyColumns[0].TypeClass);
 
     /// <summary>
     /// The soft-delete form of <see cref="BuildDeleteAllByKeysSql"/> — sets the soft-delete indicator
     /// on every row whose key is in the collection instead of physically removing it.
     /// </summary>
     public virtual string BuildSoftDeleteAllByKeysSql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"));
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"), context.KeyColumns[0].TypeClass);
 
     public abstract string BuildUpsertSql(SqlBuildContext context);
 
@@ -728,7 +728,7 @@ public abstract class SqlBuilder
             case SqlCompareOp.Like: return RenderLike(column, ParameterName(predicate.ParameterName!));
             // NOT LIKE reuses the LIKE hook so any dialect ESCAPE handling stays consistent.
             case SqlCompareOp.NotLike: return "NOT (" + RenderLike(column, ParameterName(predicate.ParameterName!)) + ")";
-            case SqlCompareOp.In: return RenderIn(column, ParameterName(predicate.ParameterName!));
+            case SqlCompareOp.In: return RenderIn(column, ParameterName(predicate.ParameterName!), predicate.Column.TypeClass);
             case SqlCompareOp.NotIn: return RenderNotIn(column, ParameterName(predicate.ParameterName!));
             default: return column + " = " + ParameterName(predicate.ParameterName!);
         }
@@ -748,7 +748,7 @@ public abstract class SqlBuilder
     /// <see cref="UseArrayInParameters"/> in lockstep so the emitter binds the collection as a single
     /// array parameter instead of rewriting the command text.
     /// </summary>
-    protected virtual string RenderIn(string quotedColumn, string parameterName)
+    protected virtual string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
         => quotedColumn + " IN (" + parameterName + ")";
 
     /// <summary>
@@ -794,6 +794,14 @@ public abstract class SqlBuilder
     /// parameter cap from IN lists. Default false (per-element expansion).
     /// </summary>
     public virtual bool UseArrayInParameters => false;
+
+    /// <summary>
+    /// Fully-qualified type name of the static helper that binds an IN collection as one parameter
+    /// when <see cref="UseArrayInParameters"/> is true. The emitter calls
+    /// <c>{ArrayParameterBinderFqn}.Bind(_c, name, collection)</c>. PostgreSQL uses the shared
+    /// <c>InquiryArrayParameter</c> (native array); SQL Server overrides to its TVP binder.
+    /// </summary>
+    public virtual string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryArrayParameter";
 
     /// <summary>
     /// True when the provider has a native bulk-copy API (SqlBulkCopy / binary COPY /

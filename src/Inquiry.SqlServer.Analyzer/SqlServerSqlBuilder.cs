@@ -15,6 +15,21 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     /// </summary>
     public override bool EmitsParameterSizePrecision => true;
 
+    /// <summary>
+    /// SQL Server binds IN collections as table-valued parameters (TVPs): the SQL stays
+    /// <c>col IN (SELECT [Value] FROM @name)</c> for every list length, so prepared statements stay
+    /// reusable and the per-element parameter cap does not apply to IN lists — the SQL Server
+    /// counterpart of PostgreSQL's <c>= ANY(@array)</c>.
+    /// </summary>
+    public override bool UseArrayInParameters => true;
+
+    /// <inheritdoc cref="UseArrayInParameters"/>
+    protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
+        => quotedColumn + " IN (SELECT [Value] FROM " + parameterName + ")";
+
+    /// <inheritdoc />
+    public override string ArrayParameterBinderFqn => "global::Inquiry.SqlServer.Parameters.InquiryTvpParameter";
+
     public override string QuoteIdentifier(string identifier)
         => "[" + identifier.Replace("]", "]]") + "]";
 

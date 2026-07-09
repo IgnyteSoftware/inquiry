@@ -262,15 +262,8 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void OracleDialectEmitsInSentinelWithColonParameterAndExpansion()
+    public void OracleDialectEmitsJsonTableInAndBindsJsonArray()
     {
-        // The IN sentinel takes Oracle's ':' sigil (via SqlBuilder.ParameterName), and the emitted
-        // InquiryInExpansion.Expand call must pass the SAME ':'-prefixed name so its runtime command-text
-        // rewrite finds the baked sentinel. (A hardcoded '@CategoryId' would never match the ':CategoryId'
-        // sentinel on Oracle, leaving the placeholder unbound — ORA-00936.) The per-element parameters the
-        // expansion creates (:CategoryId0, …) are reconciled to bare names by
-        // OracleInquiryConnectionFactory.FinalizeCommand under BindByName. Verified live by
-        // Inquiry.Oracle.Tests.PredicateSelectIntegrationTests.
         var source = PredicateSource("""
             [InquirySelectAllByPredicate]
                 [InquiryWhere("CategoryId", Compare.In)]
@@ -282,9 +275,8 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        // Unquoted identifiers (Oracle uppercase-folds) and the ':' bind sigil on the IN sentinel.
-        Assert.Contains("WHERE CategoryId IN (:CategoryId)\";", generatedText);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \":CategoryId\", categoryIds, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", generatedText);
+        Assert.Contains("WHERE CategoryId IN (SELECT jt.val FROM JSON_TABLE(:CategoryId, '$[*]' COLUMNS(val NUMBER(10) PATH '$')) jt)\";", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \":CategoryId\", categoryIds);", generatedText);
     }
 
     [Fact]
