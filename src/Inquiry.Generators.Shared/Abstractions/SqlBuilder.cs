@@ -101,7 +101,8 @@ public abstract class SqlBuilder
 
     public abstract string QuoteIdentifier(string identifier);
 
-    public abstract string BuildSelectAllSql(SqlBuildContext context);
+    public virtual string BuildSelectAllSql(SqlBuildContext context, bool distinct = false)
+        => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     public string BuildSelectAllFilteredSql(
         SqlBuildContext childContext,
@@ -119,7 +120,14 @@ public abstract class SqlBuilder
 
     public abstract string BuildSelectByKeySql(SqlBuildContext context);
 
-    public abstract string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns);
+    public virtual string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns, bool distinct = false)
+    {
+        var parts = new string[filterColumns.Count];
+        for (var i = 0; i < filterColumns.Count; i++)
+            parts[i] = QuoteIdentifier(filterColumns[i].ColumnName) + " = " + ParameterName(filterColumns[i].PropertyName);
+        var where = string.Join(" AND ", parts);
+        return (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
+    }
 
     /// <summary>
     /// Builds the single-parent many-to-many eager-load SELECT: the related (child) rows joined through a
@@ -166,8 +174,8 @@ public abstract class SqlBuilder
     /// override a hook when their LIKE/IN syntax differs. The composed predicate body is routed through
     /// <see cref="AppendWhere"/> so it stays consistent with key/field WHERE shaping.
     /// </summary>
-    public virtual string BuildSelectByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table
+    public virtual string BuildSelectByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates, bool distinct = false)
+        => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table
             + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
 
     // ---- Set-based predicate mutations ([InquiryUpdateWhere] / [InquiryDeleteWhere]) ----

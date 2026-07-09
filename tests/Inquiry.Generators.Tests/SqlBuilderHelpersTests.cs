@@ -14,9 +14,7 @@ public class SqlBuilderHelpersTests
     {
         public override string DialectName => "Test";
         public override string QuoteIdentifier(string identifier) => "\"" + identifier + "\"";
-        public override string BuildSelectAllSql(SqlBuildContext context) => string.Empty;
         public override string BuildSelectByKeySql(SqlBuildContext context) => string.Empty;
-        public override string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns) => string.Empty;
         public override string BuildInsertSql(SqlBuildContext context) => string.Empty;
         public override string BuildInsertReturningSql(SqlBuildContext context) => string.Empty;
         public override string BuildUpdateSql(SqlBuildContext context) => string.Empty;

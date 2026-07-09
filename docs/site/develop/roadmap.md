@@ -151,10 +151,6 @@
   `db.client.operation.duration` histogram, and `ILogger` messages. Candidate follow-ups:
   a `db.collection.name` (table) span tag, sqlcommenter-style trace-context SQL comments, and
   connection-open / pool-wait instruments.
-- **DISTINCT support on select/projection read shapes (#66).** A `Distinct = true` knob on
-  `[InquirySelectAll]` and the projection attribute rendering `SELECT DISTINCT` in the const SQL.
-  Most valuable on column-subset projections (distinct `Country` values). Currently requires an ad-hoc
-  SQL escape.
 - **Grouped aggregate read shape (#65).** A `[InquiryGroupCount]` / `[InquiryGroupAggregate]` attribute
   emitting `SELECT <groupCol>, COUNT(*) FROM t GROUP BY <groupCol>` — the "counts by status" / "orders
   per customer" dashboard primitive. Today it requires hand-written SQL + `[InquiryAdHoc]`.
@@ -226,6 +222,11 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **DISTINCT support on select and projection read shapes (#66, 2026-07-08).** `Distinct = true` on
+  `[InquirySelectAll]`, `[InquirySelectAllByField]`, and `[InquirySelectAllByPredicate]` emits
+  `SELECT DISTINCT` in the const SQL. Works on all five dialects, composes with soft-delete filters,
+  predicates, and projections. Most valuable on column-subset projections (e.g. distinct categories).
+  Per-method const emission follows the same pattern as `IncludeDeleted`.
 - **SQL Server MERGE upsert replaced with update-first pattern (#59, 2026-07-08).** All MERGE-based upsert
   SQL replaced with `UPDATE … IF @@ROWCOUNT = 0 INSERT` wrapped in `BEGIN/COMMIT TRANSACTION` with
   `UPDLOCK, SERIALIZABLE` table hints. Eliminates MERGE's plan-cache bloat and deadlock risks while

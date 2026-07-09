@@ -75,4 +75,10 @@ public sealed class InquirySelectAllByFieldAttribute : Attribute
     /// query is emitted unfiltered so soft-deleted rows are returned.
     /// </summary>
     public bool IncludeDeleted { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the generated query uses <c>SELECT DISTINCT</c> instead
+    /// of <c>SELECT</c>.
+    /// </summary>
+    public bool Distinct { get; set; }
 }
