@@ -11,6 +11,7 @@ dotnet add package Inquiry.Sqlite        # — or —
 dotnet add package Inquiry.SqlServer
 dotnet add package Inquiry.PostgreSql
 dotnet add package Inquiry.MySql
+dotnet add package Inquiry.MariaDb
 dotnet add package Inquiry.Oracle
 ```
 

@@ -16,6 +16,10 @@
     <_InquiryMySqlAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.MySql.Analyzer.dll'))</_InquiryMySqlAnalyzerPath>
     <_InquiryMySqlSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryMySqlSharedPath>
 
+    <_InquiryMariaDbProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MariaDb\Inquiry.MariaDb.csproj'))</_InquiryMariaDbProjectPath>
+    <_InquiryMariaDbAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MariaDb.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.MariaDb.Analyzer.dll'))</_InquiryMariaDbAnalyzerPath>
+    <_InquiryMariaDbSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MariaDb.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryMariaDbSharedPath>
+
     <_InquiryOracleProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle\Inquiry.Oracle.csproj'))</_InquiryOracleProjectPath>
     <_InquiryOracleAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Oracle.Analyzer.dll'))</_InquiryOracleAnalyzerPath>
     <_InquiryOracleSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryOracleSharedPath>
@@ -43,6 +47,10 @@
       <_InquiryMySqlProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryMySqlProjectPath)'" />
       <Analyzer Include="$(_InquiryMySqlAnalyzerPath)" Condition="'@(_InquiryMySqlProjectReference)' != '' and Exists('$(_InquiryMySqlAnalyzerPath)')" />
       <Analyzer Include="$(_InquiryMySqlSharedPath)" Condition="'@(_InquiryMySqlProjectReference)' != '' and Exists('$(_InquiryMySqlSharedPath)')" />
+
+      <_InquiryMariaDbProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryMariaDbProjectPath)'" />
+      <Analyzer Include="$(_InquiryMariaDbAnalyzerPath)" Condition="'@(_InquiryMariaDbProjectReference)' != '' and Exists('$(_InquiryMariaDbAnalyzerPath)')" />
+      <Analyzer Include="$(_InquiryMariaDbSharedPath)" Condition="'@(_InquiryMariaDbProjectReference)' != '' and Exists('$(_InquiryMariaDbSharedPath)')" />
 
       <_InquiryOracleProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryOracleProjectPath)'" />
       <Analyzer Include="$(_InquiryOracleAnalyzerPath)" Condition="'@(_InquiryOracleProjectReference)' != '' and Exists('$(_InquiryOracleAnalyzerPath)')" />

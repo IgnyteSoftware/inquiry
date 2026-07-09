@@ -5,7 +5,7 @@ statement as a `const string` at build time. The runtime ships zero SQL.
 
 **Last reconciled against the code:** 2026-07-08.
 
-## Supported database engines (5, all live-tested)
+## Supported database engines (6, all live-tested)
 
 | Dialect (`[assembly: InquiryDialect("…")]`) | Runtime package | Analyzer (source generator) | Live test status |
 |---|---|---|---|
@@ -13,6 +13,7 @@ statement as a `const string` at build time. The runtime ships zero SQL.
 | `SqlServer` | `Inquiry.SqlServer` | `Inquiry.SqlServer.Analyzer` | Testcontainers (CI integration matrix) |
 | `PostgreSql` | `Inquiry.PostgreSql` | `Inquiry.PostgreSql.Analyzer` | Testcontainers (CI integration matrix) |
 | `MySql` | `Inquiry.MySql` | `Inquiry.MySql.Analyzer` | Testcontainers (CI integration matrix) |
+| `MariaDb` | `Inquiry.MariaDb` | `Inquiry.MariaDb.Analyzer` | Testcontainers (CI integration matrix) |
 | `Oracle` | `Inquiry.Oracle` | `Inquiry.Oracle.Analyzer` | Testcontainers (CI integration matrix) |
 
 The shared generator framework lives in `Inquiry.Generators.Shared` and is bundled privately into each
@@ -47,7 +48,7 @@ Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roa
 Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags (`v8.0.0` → version
 `8.0.0`). Every package embeds SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg`
 symbol package. A tag-triggered [`release.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/release.yml)
-workflow packs all 8 shippable packages and pushes to NuGet.org. See
+workflow packs all 9 shippable packages and pushes to NuGet.org. See
 [Contributing — Releasing](contributing.md#releasing) for the full process.
 
 ## Security status
@@ -71,6 +72,7 @@ Testcontainers. Local provider runs **skip gracefully when Docker is unavailable
 | `Inquiry.PostgreSql.Tests` | live Northwind + generated-DDL + feature-matrix | yes |
 | `Inquiry.SqlServer.Tests` | live Northwind + generated-DDL + feature-matrix | yes |
 | `Inquiry.MySql.Tests` | live Northwind + generated-DDL + feature-matrix | yes |
+| `Inquiry.MariaDb.Tests` | live Northwind + generated-DDL + feature-matrix | yes |
 | `Inquiry.Oracle.Tests` | live Northwind + generated-DDL + feature-matrix | yes |
 | `Inquiry.IntegrationTesting` | shared schema-fidelity comparator + introspection support | n/a (library) |
 | `Inquiry.FeatureCatalog` | shared feature-catalog entities, stores, and helpers linked into each provider suite | n/a (library) |
@@ -85,6 +87,6 @@ suites skip (not fail) without Docker.
 
 CI runs three jobs on every push to `main` (and on `pull_request`): **build-and-unit** (generator,
 runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and runs the NativeAOT smoke app),
-and an **integration** matrix (PostgreSQL, MySQL, SQL Server, Oracle × net8.0/net9.0 via
+and an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle × net8.0/net9.0 via
 Testcontainers). A separate **scheduled weekly workflow** (`scheduled.yml`) runs the full provider ×
 net8.0/net9.0/net10.0 matrix every Monday.

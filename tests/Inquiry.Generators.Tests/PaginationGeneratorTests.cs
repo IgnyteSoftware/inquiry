@@ -74,6 +74,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("Sqlite", "LIMIT @__limit OFFSET @__offset")]
     [InlineData("PostgreSql", "LIMIT @__limit OFFSET @__offset")]
     [InlineData("MySql", "LIMIT @__limit OFFSET @__offset")]
+    [InlineData("MariaDb", "LIMIT @__limit OFFSET @__offset")]
     [InlineData("SqlServer", "OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY")]
     public void OffsetPagingEmitsDialectClause(string dialect, string tail)
     {

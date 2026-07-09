@@ -46,6 +46,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("SqlServer")]
     [InlineData("PostgreSql")]
     [InlineData("MySql")]
+    [InlineData("MariaDb")]
     public void SelectAllEager_UsesOneGridCommand_OnMultiResultDialects(string dialect)
     {
         var result = RunGenerator(SelectAllEagerSource, dialect: dialect);

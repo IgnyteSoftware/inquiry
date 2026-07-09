@@ -16,12 +16,14 @@
     <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.MySql\Inquiry.MySql.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.MariaDb\Inquiry.MariaDb.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Oracle\Inquiry.Oracle.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Generators.Shared\Inquiry.Generators.Shared.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Sqlite.Analyzer\Inquiry.Sqlite.Analyzer.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.SqlServer.Analyzer\Inquiry.SqlServer.Analyzer.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.PostgreSql.Analyzer\Inquiry.PostgreSql.Analyzer.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.MySql.Analyzer\Inquiry.MySql.Analyzer.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.MariaDb.Analyzer\Inquiry.MariaDb.Analyzer.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Oracle.Analyzer\Inquiry.Oracle.Analyzer.csproj" />
   </ItemGroup>
 

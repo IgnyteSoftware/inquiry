@@ -14,6 +14,8 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Inquiry.Generators.Shared/Inquiry.Generators.Shared.csproj" />
+    <Project Path="src/Inquiry.MariaDb.Analyzer/Inquiry.MariaDb.Analyzer.csproj" />
+    <Project Path="src/Inquiry.MariaDb/Inquiry.MariaDb.csproj" />
     <Project Path="src/Inquiry.MySql.Analyzer/Inquiry.MySql.Analyzer.csproj" />
     <Project Path="src/Inquiry.MySql/Inquiry.MySql.csproj" />
     <Project Path="src/Inquiry.Oracle.Analyzer/Inquiry.Oracle.Analyzer.csproj" />
@@ -30,6 +32,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj" />
+    <Project Path="tests/Inquiry.MariaDb.Tests/Inquiry.MariaDb.Tests.csproj" />
     <Project Path="tests/Inquiry.MySql.Tests/Inquiry.MySql.Tests.csproj" />
     <Project Path="tests/Inquiry.Oracle.Tests/Inquiry.Oracle.Tests.csproj" />
     <Project Path="tests/Inquiry.PostgreSql.Tests/Inquiry.PostgreSql.Tests.csproj" />

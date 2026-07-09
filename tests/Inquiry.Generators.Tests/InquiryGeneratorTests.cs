@@ -1757,6 +1757,76 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void MariaDbDialectEmitsIdenticalStoreToMySql()
+    {
+        // #168: the MariaDB dialect starts as a pure split of the MySQL builder — both derive from
+        // MySqlFamilySqlBuilder with no overrides — so for the same store the two dialects must emit
+        // byte-identical code (modulo the dialect name itself, which the IN-expansion call sites embed).
+        // This pin breaks the moment the builders intentionally diverge (#58/#169/#170), at which point
+        // it should be replaced with shape-specific assertions.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOrganization")]
+            public sealed class Organization
+            {
+                [InquiryKey]
+                public Guid Key { get; set; }
+
+                [InquiryColumn("Name")]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class OrganizationStore : InquiryStore<Organization>
+            {
+                [InquirySelectAll]
+                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectAllByPredicate]
+                [InquiryWhere("Name", Compare.In)]
+                public partial Task<IReadOnlyList<Organization>> ByNamesAsync(IReadOnlyList<string> name, CancellationToken cancellationToken = default);
+
+                [InquiryInsert(ReturnEntity = true)]
+                public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
+
+                [InquiryUpdate(ReturnEntity = true)]
+                public partial Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken cancellationToken = default);
+
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(Organization o, CancellationToken cancellationToken = default);
+
+                [InquiryDeleteOneByKey]
+                public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        static string StoreText(GeneratorTestResult result)
+        {
+            var generatedStore = Assert.Single(
+                result.RunResult.GeneratedTrees,
+                static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
+            return generatedStore.GetText().ToString();
+        }
+
+        var mysql = RunGenerator(source, dialect: "MySql");
+        var mariadb = RunGenerator(source, dialect: "MariaDb");
+
+        Assert.Empty(mysql.GeneratorDiagnostics);
+        Assert.Empty(mariadb.GeneratorDiagnostics);
+        Assert.Empty(mariadb.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        Assert.Equal(StoreText(mysql), StoreText(mariadb).Replace("MariaDb", "MySql"));
+    }
+
+    [Fact]
     public void ReportsAmbiguousDialectWhenMultipleProvidersAreReferenced()
     {
         // The test compilation references all three Inquiry provider assemblies (Sqlite,
@@ -2382,6 +2452,7 @@ public sealed partial class InquiryGeneratorTests
             new global::Inquiry.SqlServer.Analyzer.InquirySqlServerGenerator().AsSourceGenerator(),
             new global::Inquiry.PostgreSql.Analyzer.InquiryPostgreSqlGenerator().AsSourceGenerator(),
             new global::Inquiry.MySql.Analyzer.InquiryMySqlGenerator().AsSourceGenerator(),
+            new global::Inquiry.MariaDb.Analyzer.InquiryMariaDbGenerator().AsSourceGenerator(),
             new global::Inquiry.Oracle.Analyzer.InquiryOracleGenerator().AsSourceGenerator(),
         };
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions);
@@ -2411,6 +2482,7 @@ public sealed partial class InquiryGeneratorTests
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.SqlServer.DependencyInjection.SqlServerInquiryServiceCollectionExtensions).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.PostgreSql.DependencyInjection.PostgreSqlInquiryServiceCollectionExtensions).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.MySql.DependencyInjection.MySqlInquiryServiceCollectionExtensions).Assembly.Location));
+        references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.MariaDb.DependencyInjection.MariaDbInquiryServiceCollectionExtensions).Assembly.Location));
         references.Add(MetadataReference.CreateFromFile(typeof(global::Inquiry.Oracle.DependencyInjection.OracleInquiryServiceCollectionExtensions).Assembly.Location));
 
         return references;
