@@ -176,17 +176,6 @@
   registry comment implies INQ038 exists (it's only reserved); `ProjectionProcessor.Extract` and
   `AdHocProcessor.Extract` take no `CancellationToken`.
 
-## Documentation gaps
-
-- **MySQL `AllowUserVariables` makes misspelled raw-SQL parameters silently NULL (#133).** The forced
-  `AllowUserVariables=true` means a misspelled `@param` in user SQL is treated as a NULL user variable
-  instead of throwing.
-- **Per-provider capability table for retry/failover knobs (#132).** Retry options exist only on SQL
-  Server and PostgreSQL; MySQL and Oracle expose failover only. The top-level docs imply parity.
-- **SqlServer `SqlBulkCopy` defaults (#131).** `BulkCopyTimeout` stays at its 30-second default (a
-  footgun on large loads); no `TableLock` option is exposed, so bulk inserts take row locks and aren't
-  minimally logged.
-
 ### Explicitly not planned
 
 - **PostgreSQL PG17 MERGE…RETURNING for generated-key upsert (#60).** Closed — the existing dual-CTE
@@ -343,6 +332,16 @@ open:
   MySQL, and Oracle via Testcontainers. Shared entity/store definitions live in `Inquiry.FeatureCatalog`;
   per-dialect DDL constants in `FeatureSchema`. 17 tests × 5 dialects = 85 total integration test methods
   across the matrix.
+
+- **Documentation gaps resolved (2026-07-09).** Three documentation-only gaps closed:
+  **MySQL `AllowUserVariables` silent-NULL caveat (#133)** — documented in the
+  [MySQL provider](../articles/providers/mysql.md) notes and a new
+  [Security § MySQL user-variables caveat](../articles/security.md#mysql-user-variables-caveat) section.
+  **Per-provider retry/failover capability table (#132)** — a provider capability matrix added to
+  [Resiliency](../articles/features/resiliency.md#provider-capability-matrix); misleading retry-parity
+  language corrected.
+  **SqlServer `SqlBulkCopy` defaults (#131)** — timeout and `TableLock` limitations documented in a new
+  [Bulk insert § SQL Server tuning notes](../articles/features/bulk-insert.md#sql-server-tuning-notes) section.
 
 - **DDL safety lint — nullable + default `INQ066`, unbounded string `INQ067` (2026-07-09):** two more
   opt-in lints extending the DDL safety surface. **`INQ066`**: a nullable column with a `DefaultExpression`
