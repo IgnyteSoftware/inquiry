@@ -368,14 +368,33 @@ public abstract class SqlBuilder
         => throw new System.NotSupportedException(DialectName + " does not support full-text search.");
 
     /// <summary>
-    /// Whether one command can return multiple result sets from a <c>;</c>-separated statement batch (read
-    /// in order via <c>DbDataReader.NextResult</c>). Gates the single-round-trip eager-load path. Default
-    /// <see langword="true"/> (SQLite / SQL Server / MySQL / PostgreSQL all batch SELECTs this way); Oracle
-    /// overrides to <see langword="false"/> — a plain <c>OracleCommand</c> rejects multiple SELECTs in one
-    /// statement (ORA-00933); multi-result requires ref cursors / <c>DBMS_SQL.RETURN_RESULT</c>. Dialects
-    /// without it fall back to the per-relation (multi-round-trip) eager-load path.
+    /// Whether one command can return multiple result sets (read in order via
+    /// <c>DbDataReader.NextResult</c>). Gates the single-round-trip eager-load path. Default
+    /// <see langword="true"/>: SQLite / SQL Server / MySQL / PostgreSQL batch <c>;</c>-separated SELECTs
+    /// directly, and Oracle wraps the batch in a <c>DBMS_SQL.RETURN_RESULT</c> PL/SQL block via the
+    /// <c>MultiResultBatch*</c> hooks below. A dialect without any multi-result shape would override to
+    /// <see langword="false"/> and fall back to the per-relation (multi-round-trip) eager-load path.
     /// </summary>
     public virtual bool SupportsMultiResultBatch => true;
+
+    /// <summary>
+    /// Text prepended to the combined multi-result eager-load command, before the first SELECT.
+    /// Default empty (a <c>;</c>-separated batch needs no wrapper); Oracle opens a PL/SQL block and a
+    /// ref cursor over the first SELECT.
+    /// </summary>
+    public virtual string MultiResultBatchPrefix => "";
+
+    /// <summary>
+    /// Separator placed between the batched SELECTs. Default <c>;</c>; Oracle returns the finished
+    /// cursor to the client with <c>DBMS_SQL.RETURN_RESULT</c> and re-opens it for the next SELECT.
+    /// </summary>
+    public virtual string MultiResultBatchSeparator => ";";
+
+    /// <summary>
+    /// Text appended after the last SELECT. Default empty; Oracle returns the last cursor and closes
+    /// the PL/SQL block.
+    /// </summary>
+    public virtual string MultiResultBatchSuffix => "";
 
     /// <summary>
     /// Builds the ORDER BY clause body (no leading space) for the resolved terms, e.g.

@@ -41,11 +41,22 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     /// <summary>
     /// Oracle cannot return multiple result sets from a <c>;</c>-separated batch in a plain
-    /// <c>OracleCommand</c> — a second SELECT raises ORA-00933 ("SQL command not properly ended"); the
-    /// multi-result shape needs ref cursors / <c>DBMS_SQL.RETURN_RESULT</c>, which the v1 provider does not
-    /// emit. So eager loads fall back to the per-relation (multi-round-trip) path instead of the grid path.
+    /// <c>OracleCommand</c> — a second SELECT raises ORA-00933 ("SQL command not properly ended") — so the
+    /// eager-load grid command is wrapped in an anonymous PL/SQL block that OPENs each SELECT into a ref
+    /// cursor and hands it to the client with <c>DBMS_SQL.RETURN_RESULT</c> (12c+ implicit result sets).
+    /// ODP.NET surfaces implicit results through the ordinary <c>ExecuteReader</c>/<c>NextResult</c>
+    /// protocol, so the shared grid reader consumes them unchanged. Reusing the single cursor variable is
+    /// legal — <c>RETURN_RESULT</c> transfers ownership of the open cursor to the client. The block never
+    /// references <c>:rc</c>, so <c>OracleInquiryConnectionFactory.FinalizeCommand</c>'s returning-block
+    /// detection does not bind a stray OUT ref cursor onto it.
     /// </summary>
-    public override bool SupportsMultiResultBatch => false;
+    public override string MultiResultBatchPrefix => "DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR ";
+
+    /// <inheritdoc cref="MultiResultBatchPrefix"/>
+    public override string MultiResultBatchSeparator => "; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR ";
+
+    /// <inheritdoc cref="MultiResultBatchPrefix"/>
+    public override string MultiResultBatchSuffix => "; DBMS_SQL.RETURN_RESULT(c); END;";
 
     /// <summary>
     /// Oracle bind variables use the <c>:name</c> prefix. Oracle identifiers (and so bind names) cannot

@@ -5,8 +5,8 @@ namespace Inquiry.Generators.Tests;
 
 /// <summary>
 /// #70: <c>[InquirySelectAllEager]</c> issues one multi-result-set command (parent SELECT + each relation
-/// SELECT, read through an InquiryGridReader) instead of one round trip per relation — on every dialect that
-/// can return multiple result sets from one command. Oracle (ORA-00933) keeps the per-relation fallback.
+/// SELECT, read through an InquiryGridReader) instead of one round trip per relation — a <c>;</c>-separated
+/// batch on SQLite/SqlServer/PostgreSql/MySql, a <c>DBMS_SQL.RETURN_RESULT</c> PL/SQL block on Oracle.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
@@ -65,21 +65,22 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void SelectAllEager_UsesSeparateRoundTrips_OnOracle()
+    public void SelectAllEager_UsesOnePlSqlGridCommand_OnOracle()
     {
         var result = RunGenerator(SelectAllEagerSource, dialect: "Oracle");
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
         Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
 
         var text = GetRegionStoreText(result);
 
-        // Oracle cannot multiplex result sets, so it keeps the per-relation query path.
-        Assert.DoesNotContain("QueryMultipleAsync", text);
-        Assert.DoesNotContain("_grid.ReadListAsync", text);
-        Assert.Contains("await foreach (var _c in Inquiry.QueryAsync<", text);
-        // (The separate-path `await foreach (…).ConfigureAwait(false)` resolves the
-        // IAsyncEnumerable.ConfigureAwait extension via the consumer's global usings — present in real
-        // projects (ImplicitUsings) and verified by the Oracle integration tests + the full solution build,
-        // but not by this bare generator compilation. The grid dialects above compile clean here.)
+        // Oracle multiplexes result sets through a DBMS_SQL.RETURN_RESULT PL/SQL block (implicit result
+        // sets), read through the same grid reader as the ;-batching dialects.
+        Assert.Contains("Inquiry.QueryMultipleAsync(", text);
+        Assert.Contains("_grid.ReadListAsync<", text);
+        Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sqlSelectAll + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Territories_All + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
+        // No per-relation streaming query for the child collection on the grid path.
+        Assert.DoesNotContain("await foreach (var _c in Inquiry.QueryAsync<", text);
     }
 
     private static string GetRegionStoreText(GeneratorTestResult result)
