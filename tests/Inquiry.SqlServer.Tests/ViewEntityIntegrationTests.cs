@@ -1,20 +1,24 @@
 using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.SqlServer.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// <c>[InquiryView]</c> end-to-end: a read-only store selects from a real SQLite VIEW (no DDL emitted
-/// by Inquiry for it), materializing the aggregated keyless rows.
+/// <c>[InquiryView]</c> end-to-end against real SQL Server: a read-only store selects from a real VIEW
+/// (no DDL emitted by Inquiry for it), materializing the aggregated keyless rows.
 /// </summary>
+[Collection(SqlServerCollection.Name)]
 public sealed class ViewEntityIntegrationTests
 {
-    [Fact]
+    private readonly SqlServerContainerFixture _fixture;
+    public ViewEntityIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task ViewStoreMaterializesAggregatedRows()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ViewEntitySqliteDdl, "View");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ViewEntitySqlServerDdl, "view");
         var sales = harness.GetRequiredService<SaleRowStore>();
         var totals = harness.GetRequiredService<CategoryTotalStore>();
 
@@ -34,10 +38,11 @@ public sealed class ViewEntityIntegrationTests
         Assert.Equal(4.00m, all[1].TotalAmount);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ViewStoreFiltersByField()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ViewEntitySqliteDdl, "View");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ViewEntitySqlServerDdl, "view");
         var sales = harness.GetRequiredService<SaleRowStore>();
         var totals = harness.GetRequiredService<CategoryTotalStore>();
 

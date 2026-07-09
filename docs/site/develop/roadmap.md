@@ -4,7 +4,7 @@
 > enhancements. Resolved items are summarized at the [bottom](#recently-resolved). Nothing here blocks
 > `main`: the library builds and every test suite passes.
 >
-> **Last reconciled against the code:** 2026-07-08.
+> **Last reconciled against the code:** 2026-07-09.
 
 ## Known issues & correctness
 
@@ -158,11 +158,8 @@
   connection-open / pool-wait instruments.
 ## Test coverage & hardening
 
-- **Port SQLite-only integration tests to server dialects (#154).** ManyToMany, ~~GlobalFilter~~, audit
-  columns, ComputedColumn, JsonPath, and InquiryView have live tests only on SQLite. ~~GlobalFilter is
-  highest priority (tenant isolation — a dialect-specific bug is a security issue)~~ — GlobalFilter
-  ported to all five dialects (2026-07-09). Remaining: ManyToMany, audit columns, ComputedColumn,
-  JsonPath, InquiryView.
+- **~~Port SQLite-only integration tests to server dialects (#154)~~** *(resolved 2026-07-09)*. See
+  [Recently resolved](#recently-resolved).
 - **Oracle has zero test coverage for `[InquiryBulkInsert]` (#155).** Oracle's bulk insert path (which
   compiles down to multi-row batch insert) is completely unverified.
 - **CancellationToken propagation never verified against real MySQL/PostgreSQL (#156).** Pipeline-level
@@ -339,6 +336,13 @@ open:
   use a keyed-HMAC lookup column), and the SQL Server Always Encrypted / PostgreSQL pgcrypto native
   alternatives. Proven end-to-end by a live SQLite test (`ColumnEncryptionIntegrationTests`): the property
   round-trips while the column holds ciphertext, never the plaintext.
+
+- **Port SQLite-only integration tests to all server dialects (#154, 2026-07-09).** ManyToMany,
+  GlobalFilter, AuditTimestamp, AuditUser, ComputedColumn, JsonPathPredicate, and ViewEntity — all 7
+  feature areas that had live integration tests only on SQLite — now run against SQL Server, PostgreSQL,
+  MySQL, and Oracle via Testcontainers. Shared entity/store definitions live in `Inquiry.FeatureCatalog`;
+  per-dialect DDL constants in `FeatureSchema`. 17 tests × 5 dialects = 85 total integration test methods
+  across the matrix.
 
 - **DDL safety lint — nullable + default `INQ066`, unbounded string `INQ067` (2026-07-09):** two more
   opt-in lints extending the DDL safety surface. **`INQ066`**: a nullable column with a `DefaultExpression`

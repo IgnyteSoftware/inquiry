@@ -1,20 +1,22 @@
 using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.Oracle.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.Oracle.Tests;
 
-/// <summary>
-/// <c>[InquiryView]</c> end-to-end: a read-only store selects from a real SQLite VIEW (no DDL emitted
-/// by Inquiry for it), materializing the aggregated keyless rows.
-/// </summary>
+[Collection(OracleCollection.Name)]
 public sealed class ViewEntityIntegrationTests
 {
-    [Fact]
+    private readonly OracleContainerFixture _fixture;
+    public ViewEntityIntegrationTests(OracleContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task ViewStoreMaterializesAggregatedRows()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ViewEntitySqliteDdl, "View");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, FeatureSchema.ViewEntityOracleDdl, "view");
+
         var sales = harness.GetRequiredService<SaleRowStore>();
         var totals = harness.GetRequiredService<CategoryTotalStore>();
 
@@ -23,30 +25,33 @@ public sealed class ViewEntityIntegrationTests
         await sales.InsertAsync(new SaleRow { Category = "tea", Amount = 4.00m });
 
         var all = (await totals.AllAsync()).OrderBy(t => t.Category).ToList();
-        Assert.Equal(2, all.Count);
 
+        Assert.Equal(2, all.Count);
         Assert.Equal("coffee", all[0].Category);
         Assert.Equal(2, all[0].SaleCount);
         Assert.Equal(19.75m, all[0].TotalAmount);
-
         Assert.Equal("tea", all[1].Category);
         Assert.Equal(1, all[1].SaleCount);
         Assert.Equal(4.00m, all[1].TotalAmount);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ViewStoreFiltersByField()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ViewEntitySqliteDdl, "View");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, FeatureSchema.ViewEntityOracleDdl, "view");
+
         var sales = harness.GetRequiredService<SaleRowStore>();
         var totals = harness.GetRequiredService<CategoryTotalStore>();
 
         await sales.InsertAsync(new SaleRow { Category = "coffee", Amount = 10m });
         await sales.InsertAsync(new SaleRow { Category = "tea", Amount = 4m });
 
-        var coffee = Assert.Single(await totals.ByCategoryAsync("coffee"));
-        Assert.Equal("coffee", coffee.Category);
-        Assert.Equal(1, coffee.SaleCount);
-        Assert.Equal(10m, coffee.TotalAmount);
+        var result = await totals.ByCategoryAsync("coffee");
+
+        Assert.Single(result);
+        Assert.Equal(1, result[0].SaleCount);
+        Assert.Equal(10m, result[0].TotalAmount);
     }
 }

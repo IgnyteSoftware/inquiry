@@ -1,20 +1,24 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.MySql.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.MySql.Tests;
 
 /// <summary>
-/// End-to-end [InquiryWhere(JsonPath = …)] behaviour against real SQLite: a criterion filters inside a
-/// JSON text column via the dialect's json_extract, supports nested paths, and AND-composes with an
-/// ordinary criterion.
+/// End-to-end <c>[InquiryWhere(JsonPath = ...)]</c> behaviour against real MySQL: a criterion filters
+/// inside a JSON text column via the dialect's JSON_EXTRACT, supports nested paths, and AND-composes
+/// with an ordinary criterion.
 /// </summary>
+[Collection(MySqlCollection.Name)]
 public sealed class JsonPathPredicateIntegrationTests
 {
-    private static async Task<(SqliteTestHarness Harness, JsonPathDocStore Store)> SeedAsync()
+    private readonly MySqlContainerFixture _fixture;
+    public JsonPathPredicateIntegrationTests(MySqlContainerFixture fixture) => _fixture = fixture;
+
+    private async Task<(MySqlTestHarness Harness, JsonPathDocStore Store)> SeedAsync()
     {
-        var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.JsonPathSqliteDdl, "JsonPath");
+        var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.JsonPathMySqlDdl, "jsonpath");
         var store = harness.GetRequiredService<JsonPathDocStore>();
         await store.InsertAsync(new JsonPathDoc { Name = "Alpha", Data = """{"status":"active","address":{"city":"Boston"}}""" });
         await store.InsertAsync(new JsonPathDoc { Name = "Beta", Data = """{"status":"archived","address":{"city":"Boston"}}""" });
@@ -22,9 +26,10 @@ public sealed class JsonPathPredicateIntegrationTests
         return (harness, store);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task FiltersByTopLevelJsonField()
     {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         var (harness, store) = await SeedAsync();
         await using var _ = harness;
 
@@ -32,9 +37,10 @@ public sealed class JsonPathPredicateIntegrationTests
         Assert.Equal(new[] { "Alpha", "Gamma" }, active.Select(d => d.Name).OrderBy(n => n).ToArray());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task FiltersByNestedJsonPath()
     {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         var (harness, store) = await SeedAsync();
         await using var _ = harness;
 
@@ -42,9 +48,10 @@ public sealed class JsonPathPredicateIntegrationTests
         Assert.Equal(new[] { "Alpha", "Beta" }, boston.Select(d => d.Name).OrderBy(n => n).ToArray());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ComposesJsonPathWithOrdinaryCriterion()
     {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         var (harness, store) = await SeedAsync();
         await using var _ = harness;
 

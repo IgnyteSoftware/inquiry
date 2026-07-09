@@ -1,21 +1,27 @@
 using System.Threading.Tasks;
 using Inquiry;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.MySql.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.MySql.Tests;
 
 /// <summary>
-/// <c>[InquiryCreatedBy]</c>/<c>[InquiryModifiedBy]</c> end-to-end: insert stamps both from the
-/// ambient <see cref="InquiryAuditContext"/>; update advances ModifiedBy under a new user while the
-/// stored CreatedBy survives — even when the updated instance carries a default CreatedBy.
+/// <c>[InquiryCreatedBy]</c>/<c>[InquiryModifiedBy]</c> end-to-end against real MySQL: insert stamps
+/// both from the ambient <see cref="InquiryAuditContext"/>; update advances ModifiedBy under a new
+/// user while the stored CreatedBy survives — even when the updated instance carries a default
+/// CreatedBy.
 /// </summary>
+[Collection(MySqlCollection.Name)]
 public sealed class AuditUserIntegrationTests
 {
-    [Fact]
+    private readonly MySqlContainerFixture _fixture;
+    public AuditUserIntegrationTests(MySqlContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task InsertStampsBothFromAmbientUser()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditUserSqliteDdl, "AuditUser");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditUserMySqlDdl, "audituser");
         var store = harness.GetRequiredService<AuditUserDocStore>();
 
         AuditUserDoc inserted;
@@ -28,10 +34,11 @@ public sealed class AuditUserIntegrationTests
         Assert.Equal("alice", inserted.ModifiedBy);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UpdateAdvancesModifiedByAndCannotClobberCreatedBy()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditUserSqliteDdl, "AuditUser");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditUserMySqlDdl, "audituser");
         var store = harness.GetRequiredService<AuditUserDocStore>();
 
         long id;
@@ -51,10 +58,11 @@ public sealed class AuditUserIntegrationTests
         Assert.Equal("bob", after.ModifiedBy);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SuppliedCreatedByIsPreserved()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditUserSqliteDdl, "AuditUser");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditUserMySqlDdl, "audituser");
         var store = harness.GetRequiredService<AuditUserDocStore>();
 
         using (InquiryAuditContext.BeginScope("alice"))

@@ -1,21 +1,24 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.SqlServer.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// End-to-end many-to-many eager loading against real SQLite: a single-parent eager load joins the
+/// End-to-end many-to-many eager loading against real SQL Server: a single-parent eager load joins the
 /// related rows through the junction, and the all-eager load assembles every parent's collection in
 /// memory from two queries.
 /// </summary>
+[Collection(SqlServerCollection.Name)]
 public sealed class ManyToManyIntegrationTests
 {
-    private static async Task<(SqliteTestHarness Harness, M2MOrderStore Orders, long Order1, long Order2)> SeedAsync()
+    private readonly SqlServerContainerFixture _fixture;
+    public ManyToManyIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
+
+    private async Task<(SqlServerTestHarness Harness, M2MOrderStore Orders, long Order1, long Order2)> SeedAsync()
     {
-        var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ManyToManySqliteDdl, "ManyToMany");
+        var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ManyToManySqlServerDdl, "m2m");
         var orders = harness.GetRequiredService<M2MOrderStore>();
         var products = harness.GetRequiredService<M2MProductStore>();
         var links = harness.GetRequiredService<M2MOrderProductStore>();
@@ -26,7 +29,7 @@ public sealed class ManyToManyIntegrationTests
         var banana = (await products.InsertAsync(new M2MProduct { Title = "Banana" }))!.Id;
         var cherry = (await products.InsertAsync(new M2MProduct { Title = "Cherry" }))!.Id;
 
-        // Order1 → Apple, Banana; Order2 → Banana, Cherry.
+        // Order1 -> Apple, Banana; Order2 -> Banana, Cherry.
         await links.LinkAsync(new M2MOrderProduct { OrderId = order1, ProductId = apple });
         await links.LinkAsync(new M2MOrderProduct { OrderId = order1, ProductId = banana });
         await links.LinkAsync(new M2MOrderProduct { OrderId = order2, ProductId = banana });
@@ -35,9 +38,10 @@ public sealed class ManyToManyIntegrationTests
         return (harness, orders, order1, order2);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SingleEagerLoadsRelatedRowsThroughJunction()
     {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         var (harness, orders, order1, _) = await SeedAsync();
         await using var _ = harness;
 
@@ -47,9 +51,10 @@ public sealed class ManyToManyIntegrationTests
         Assert.Equal(new[] { "Apple", "Banana" }, loaded.Products.Select(p => p.Title).OrderBy(t => t).ToArray());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task AllEagerAssemblesEveryParentsCollection()
     {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         var (harness, orders, _, _) = await SeedAsync();
         await using var _ = harness;
 
@@ -66,11 +71,11 @@ public sealed class ManyToManyIntegrationTests
         Assert.Equal(new[] { "Banana", "Cherry" }, second.Products.Select(p => p.Title).OrderBy(t => t).ToArray());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task EagerCollectionIsEmptyWhenNoAssociations()
     {
-        var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ManyToManySqliteDdl, "ManyToMany");
-        await using var _ = harness;
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ManyToManySqlServerDdl, "m2m");
         var orders = harness.GetRequiredService<M2MOrderStore>();
         var lonely = (await orders.InsertAsync(new M2MOrder { Name = "Lonely" }))!.Id;
 
