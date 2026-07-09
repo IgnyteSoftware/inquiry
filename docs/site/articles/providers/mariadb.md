@@ -50,6 +50,13 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
 - **No `AllowUserVariables` required:** unlike the MySQL provider, MariaDB's native `RETURNING`
   eliminates the `@_inquiry_genkey` user variable that the emulated path needs for database-supplied
   GUID keys, so `AllowUserVariables` is not forced on the connection string.
+- **Connection pooling:** the factory builds an app-lifetime `MySqlDataSource` (MySqlConnector's
+  recommended pooled primitive) and opens connections from it — the foundation for future Aspire
+  integration. The data source is disposed when the DI container shuts down.
+- **Cloud transient-fault retry:** set `Compatibility = MariaDbCompatibility.CloudHosted` in the
+  options overload to enable exponential-backoff retry on transient connection-open errors (too many
+  connections, server gone away, connection reset). Tunable via `MaxAttempts`, `RetryBaseDelay`, and
+  `RetryMaxDelay`. Disabled by default (`MariaDbCompatibility.None`).
 - **Prepared statements:** server-side, per-connection. Inquiry's default `PreparedStatementMode.Auto` is currently a no-op for MariaDB because the provider does not advertise persistent prepared-state reuse across the per-operation connection lifecycle.
 - **`max_allowed_packet`:** bulk inserts and updates respect server-side packet limits — chunk your batches if you exceed the default 64 MB.
 - **Case sensitivity:** identifier case-sensitivity depends on the server's `lower_case_table_names` setting and OS. Inquiry always emits backticked identifiers matching your C# property casing.

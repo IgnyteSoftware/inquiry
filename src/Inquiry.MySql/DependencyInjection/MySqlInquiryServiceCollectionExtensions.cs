@@ -28,7 +28,8 @@ public static class MySqlInquiryServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the MySQL/MariaDB connection factory with provider-specific options (failover).
+    /// Registers the MySQL connection factory with provider-specific options (cloud
+    /// compatibility, transient-fault retry, and failover).
     /// </summary>
     public static IServiceCollection AddInquiryMySql(
         this IServiceCollection services,
