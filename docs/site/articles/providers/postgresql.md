@@ -31,6 +31,9 @@ services.AddInquiryPostgreSql("Host=localhost;Database=app;Username=app;Password
 | JSON (`[InquiryJson]`) | Stored as `TEXT` (serialized via the JSON value converter); native `JSONB` only via `[InquiryColumn(SqlType = "JSONB")]` |
 | Soft-delete literal | `"IsDeleted" = FALSE` |
 | Full-text-search | `to_tsvector(...) @@ plainto_tsquery(@query)` |
+| IN binding | `col = ANY(@ids)` (native array parameter — constant SQL, no per-element cap) |
+| Update-returning | `UPDATE … RETURNING <columns>` |
+| Upsert-returning | `INSERT … ON CONFLICT (pk) DO UPDATE SET … RETURNING <columns>` |
 
 ## Notes
 

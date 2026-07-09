@@ -29,6 +29,11 @@ services.AddInquirySqlite("Data Source=app.db");
 | Boolean | `INTEGER` (0/1) |
 | String | `TEXT` |
 | Soft-delete literal | `IsDeleted = 0` |
+| JSON (`[InquiryJson]`) | Stored as `TEXT` (serialized text); JSON-path querying renders `json_extract("col", '$.path')` |
+| IN binding | `col IN (SELECT value FROM json_each(@param))` (SQLite 3.38+) |
+| Full-text-search | Not supported — `[InquiryFullTextSearch]` is a compile-time error (`INQ035`) |
+| Update-returning | `UPDATE … RETURNING …` (SQLite 3.35+) |
+| Upsert-returning | `INSERT … ON CONFLICT (…) DO UPDATE SET … RETURNING …` |
 
 ## Notes
 
@@ -37,6 +42,7 @@ services.AddInquirySqlite("Data Source=app.db");
 - **Prepared statements:** the default `PreparedStatementMode.Auto` is a silent no-op for SQLite because prepared state is tied to the open connection and Inquiry opens a connection per operation.
 - **No stored-procedure runtime:** SQLite has no native SP engine. SP-feature *generation* is exercised in `Inquiry.Generators.Tests`, but runtime SP integration tests run on the server dialects only.
 - **Concurrency:** SQLite's default journal mode serializes writes. For high-concurrency tests, set `PRAGMA journal_mode = WAL;` on connection open.
+- **No options overload or retry/failover:** SQLite is an embedded engine with no network layer — transient connection failures, backup-server failover, and connection pooling via `DbDataSource` do not apply. The `AddInquirySqlite` registration takes only a connection string (or `IConfiguration`); there is no options-lambda overload.
 
 ## Testing
 

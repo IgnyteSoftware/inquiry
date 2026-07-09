@@ -24,16 +24,21 @@ services.AddInquirySqlServer(
 | Identifier quoting | `[Bracketed]` |
 | Parameter prefix | `@name` |
 | Auto-key | `IDENTITY(1,1)` |
-| Upsert | `MERGE … WHEN MATCHED … WHEN NOT MATCHED THEN INSERT (excluding IDENTITY column)` |
-| Insert-returning | `OUTPUT INSERTED.*` |
+| Upsert | `UPDATE … IF @@ROWCOUNT = 0 INSERT` (with `UPDLOCK, SERIALIZABLE` table hints; excludes IDENTITY column from INSERT) |
+| Insert-returning | `OUTPUT … INTO @_out; SELECT … FROM @_out` (trigger-safe) |
 | Pagination | `OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY` |
 | Boolean | `BIT` |
 | String | `NVARCHAR(MAX)` (or sized per `[InquiryColumn(Length = N)]`) |
 | Soft-delete literal | `[IsDeleted] = 0` |
+| IN binding | `col IN (SELECT [Value] FROM @param)` (table-valued parameters) |
+| Full-text search | `WHERE FREETEXT(([col1], [col2]), @query)` (requires a full-text catalog + index) |
+| JSON (`[InquiryJson]`) | Stored as `NVARCHAR(MAX)` (serialized text); native JSON only via explicit `[InquiryColumn(SqlType = "...")]` override. JSON-path querying renders `JSON_VALUE([col], '$.path')` |
+| Update-returning | `OUTPUT … INTO @_out; SELECT … FROM @_out` (trigger-safe) |
+| Upsert-returning | `OUTPUT … INTO @_out; SELECT … FROM @_out` (trigger-safe) |
 
 ## Notes
 
-- **`MERGE` and IDENTITY columns:** the generator omits the IDENTITY column from the `INSERT` clause of the `MERGE` — SQL Server rejects an explicit value for an IDENTITY column even in a not-taken branch. (PostgreSQL and MySQL are lenient here; Oracle's MERGE syntax also omits it.)
+- **Upsert and IDENTITY columns:** the generator uses an `UPDATE … IF @@ROWCOUNT = 0 INSERT` pattern with `UPDLOCK, SERIALIZABLE` table hints. The IDENTITY column is excluded from the `INSERT` clause — SQL Server rejects an explicit value for an IDENTITY column.
 - **Azure SQL retry policy (opt-in):** off by default (`Compatibility = None`). Configure it with `AddInquirySqlServer(cs, o => o.Compatibility = SqlServerCompatibility.AzureSql)`, and the connection factory then retries connection opens on known transient codes (40613, 40197, etc.) with exponential backoff. The default registration applies no open-time retry.
 - **Encryption is mandatory by default** (Microsoft.Data.SqlClient defaults `Encrypt=Mandatory`; Inquiry ships SqlClient 7.0.1 and passes your connection string through unchanged). For LocalDB, a self-signed cert, or a non-TLS dev server, add `Encrypt=False` or `TrustServerCertificate=True` to your connection string, or supply a trusted certificate.
 - **Prepared statements:** SQL Server's plan cache is automatic; the default `PreparedStatementMode.Auto` is a silent no-op.

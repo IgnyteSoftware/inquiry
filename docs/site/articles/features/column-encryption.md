@@ -67,7 +67,7 @@ Because each row's ciphertext is opaque (and randomized by the nonce), the datab
 
 ## Database-native alternatives
 
-Application-side conversion is portable across all five providers and keeps keys out of the database, but two engines offer native options worth knowing:
+Application-side conversion is portable across all six providers and keeps keys out of the database, but two engines offer native options worth knowing:
 
 - **SQL Server — Always Encrypted.** Encryption happens *client-side in the SQL Server driver*, transparently, keyed by a Column Master Key in your key store. Map the column as the plaintext CLR type and enable Always Encrypted on the connection (`Column Encryption Setting=Enabled`) — no converter needed. Deterministic encryption supports equality lookups; randomized does not.
 - **PostgreSQL — pgcrypto.** Encryption happens *in the database* via `pgp_sym_encrypt` / `pgp_sym_decrypt`. Store the column as `bytea` and wrap reads/writes in those functions — most naturally through an [ad-hoc query](ad-hoc-dtos.md) or a server-computed expression, since the key travels with the SQL.
