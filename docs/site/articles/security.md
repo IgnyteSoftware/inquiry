@@ -42,6 +42,12 @@ Plain string facade overloads such as `ExecuteAsync(string)` and `QueryListAsync
 
 The escape hatch is linted: passing a **non-constant** string as `InquiryCommand`'s command text raises analyzer warning **`INQ048`** at the call site (concatenations, interpolated strings, and variables all trigger it; literals, `const` fields, `nameof`, and constant concatenation stay silent). Dynamic SQL composed from trusted fragments is sometimes legitimate — review the call site and suppress the warning there (`#pragma warning disable INQ048` or `.editorconfig`) once you're satisfied no user input can reach the text. Generated code is excluded from the lint.
 
+## MySQL user-variables caveat
+
+Inquiry enables `AllowUserVariables=true` on every MySQL connection (the generated-key upsert path needs it for the `@_inquiry_genkey` user variable). This has one important consequence for **ad-hoc SQL**: if you misspell a `@parameter` name in hand-written SQL, MySqlConnector treats the unrecognized name as a MySQL user variable and evaluates it as `NULL` — silently, with no error.
+
+Generated store methods are unaffected (their SQL and parameters are compile-time constants), and the `FormattableString` facade path auto-names its parameters (`@p0`, `@p1`, …), so the risk is limited to explicitly constructed `InquiryCommand` instances where you author parameter names by hand. If a query unexpectedly returns no rows or null columns on MySQL, verify that every `@name` in the command text matches a parameter in the collection.
+
 ## Credentials and connection strings
 
 Connection strings, and the credentials in them, are the host application's responsibility. Inquiry takes a connection string at DI-registration time (`AddInquirySqlServer(connectionString)`, ...) and hands it to the provider's `DbConnection`; it never logs it. Keep real credentials out of source control: load them from environment variables, a secrets manager, or your platform's configuration provider. The bundled sample demonstrates this with its `INQUIRY_SAMPLE_DB` environment-variable override; see [`samples/Inquiry.Sample/README.md`](https://github.com/JakeOverstreet/inquiry/blob/main/samples/Inquiry.Sample/README.md).

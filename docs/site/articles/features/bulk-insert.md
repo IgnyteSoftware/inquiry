@@ -31,6 +31,15 @@ The method takes `IEnumerable<T>` (lazy sequences stream end-to-end) and returns
 - **Dedicated connection, no ambient transaction**: bulk insert does **not** join an open Inquiry transaction, and interceptors/telemetry do not observe it. If you need transactional bulk loads, load into a staging table and swap inside a transaction.
 - **MySQL prerequisites**: `MySqlBulkCopy` uses `LOAD DATA LOCAL INFILE` under the hood. Inquiry enables `AllowLoadLocalInfile` **only on the dedicated bulk-insert connection** (never on regular pipeline connections — the flag widens what a SQL-injection bug could do, so it stays scoped), and the **server** must run with `local_infile=1`.
 
+## SQL Server tuning notes
+
+`SqlBulkCopy` ships with defaults that are fine for small loads but can bite on large ones:
+
+- **`BulkCopyTimeout` defaults to 30 seconds.** A bulk insert that exceeds this will throw a timeout exception. Inquiry does not override this default. If you're loading large datasets, consider chunking into smaller batches or increasing the server-side timeout at the connection/command level.
+- **No `TableLock` option is exposed.** Without `SqlBulkCopyOptions.TableLock`, SQL Server acquires row-level locks and the insert is not minimally logged (even under the `SIMPLE` or `BULK_LOGGED` recovery model). For maximum throughput on an empty or dedicated table, a direct `SqlBulkCopy` call with `TableLock` will outperform the Inquiry path — use `[InquiryBulkInsert]` for convenience and type safety on moderate loads, and drop to raw ADO.NET when you need full control.
+
+PostgreSQL binary `COPY` and `MySqlBulkCopy` do not have analogous timeout/locking knobs at the client API level.
+
 ## When to use which tier
 
 - 1–~2k rows: [`[InquiryInsertAll]`](batch-operations.md) — one multi-row `INSERT`, joins transactions and interceptors.
