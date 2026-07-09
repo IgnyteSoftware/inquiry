@@ -76,6 +76,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("PostgreSql")]
     [InlineData("Sqlite")]
     [InlineData("MySql")]
+    [InlineData("MariaDb")]
     public void NonSqlServerDialects_EmitNoSizeOrPrecision(string dialect)
     {
         var result = RunGenerator(SizePrecisionSource, dialect: dialect);
@@ -263,6 +264,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("PostgreSql")]
     [InlineData("Sqlite")]
     [InlineData("MySql")]
+    [InlineData("MariaDb")]
     public void NonSqlServerDialects_EmitNoSizeOnEagerLoadStringKeyBinders(string dialect)
     {
         var result = RunGenerator(EagerKeySizeSource, dialect: dialect);
@@ -337,6 +339,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("PostgreSql")]
     [InlineData("Sqlite")]
     [InlineData("MySql")]
+    [InlineData("MariaDb")]
     public void NonSqlServerDialects_ThreadNoSizePrecisionIntoInListElements(string dialect)
     {
         var result = RunGenerator(InListSizeSource, dialect: dialect);

@@ -25,6 +25,8 @@
     <InternalsVisibleTo Include="Inquiry.PostgreSql.Tests" />
     <InternalsVisibleTo Include="Inquiry.MySql" />
     <InternalsVisibleTo Include="Inquiry.MySql.Tests" />
+    <InternalsVisibleTo Include="Inquiry.MariaDb" />
+    <InternalsVisibleTo Include="Inquiry.MariaDb.Tests" />
     <InternalsVisibleTo Include="Inquiry.Oracle" />
     <InternalsVisibleTo Include="Inquiry.Oracle.Tests" />
   </ItemGroup>

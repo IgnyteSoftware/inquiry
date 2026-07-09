@@ -29,21 +29,15 @@
   `[InquirySelectAllEager]` (#70/PR #118) read a single command through an `InquiryGridReader`.
   **Remaining:** Oracle, which cannot return multiple result sets from one command (ORA-00933) and keeps
   the per-relation path until PL/SQL ref-cursor batching is added.
-- **MariaDB-native INSERT/DELETE RETURNING (#58).** MariaDB 10.5+ supports `INSERT…RETURNING` and
-  `DELETE…RETURNING` natively (halving round trips), but the MySQL builder targets the 5.7 LCD.
-  A compatibility flag or MariaDB dialect would enable the native path and eliminate the
-  `AllowUserVariables` dependency for GUID keys.
-- **Split MySQL and MariaDB into independent dialect providers (#168).** The shared MySQL builder
-  targets the MySQL 5.7 / MariaDB 10.x LCD, blocking features both engines support independently:
-  MariaDB 10.5+ `RETURNING`, MySQL 8.0+ / MariaDB 10.6+ `JSON_TABLE` for IN-collection binding, and
-  MariaDB's cleaner GUID handling. Splitting into separate `Inquiry.MySql` and `Inquiry.MariaDb`
-  analyzer packages lets each evolve at its own pace. Prerequisite for #58, #169, and #170.
-- **MySQL `JSON_TABLE` IN optimization (#169, blocked on #168).** After the SQLite `json_each` and
+- **MariaDB-native INSERT/DELETE RETURNING (#58, unblocked by #168).** MariaDB 10.5+ supports
+  `INSERT…RETURNING` and `DELETE…RETURNING` natively (halving round trips). The dedicated
+  `MariaDbSqlBuilder` (from the #168 split) can now override the emulated-returning paths to the
+  native form and eliminate the `AllowUserVariables` dependency for GUID keys.
+- **MySQL `JSON_TABLE` IN optimization (#169, unblocked by #168).** After the SQLite `json_each` and
   Oracle `JSON_TABLE` IN optimizations shipped, MySQL 8.0+ can adopt the same
-  `InquiryJsonArrayParameter` + `JSON_TABLE` path — but enabling it today would break MariaDB and
-  MySQL 5.7 compatibility.
-- **MariaDB `JSON_TABLE` IN optimization (#170, blocked on #168).** MariaDB 10.6+ supports
-  `JSON_TABLE`; same approach as MySQL once the split lands.
+  `InquiryJsonArrayParameter` + `JSON_TABLE` path in the now-independent `MySqlSqlBuilder`.
+- **MariaDB `JSON_TABLE` IN optimization (#170, unblocked by #168).** MariaDB 10.6+ supports
+  `JSON_TABLE`; same approach as MySQL, landing in `MariaDbSqlBuilder`.
 
 ## Planned features & enhancements
 
@@ -208,6 +202,14 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Split MySQL and MariaDB into independent dialect providers (#168, 2026-07-09).** The MySQL builder
+  body moved to a shared `MySqlFamilySqlBuilder` in `Inquiry.Generators.Shared`; `MySqlSqlBuilder` and a
+  new `MariaDbSqlBuilder` both derive from it with only `DialectName` overridden, so the two dialects
+  currently emit identical SQL (pinned by a generator parity test). New `Inquiry.MariaDb` runtime +
+  `Inquiry.MariaDb.Analyzer` packages mirror the MySQL pair (MySqlConnector-based factory/bulk copier,
+  `AddInquiryMariaDb` DI overloads, `[assembly: InquiryDialect("MariaDb")]`). The full MySQL integration
+  suite is cloned to `tests/Inquiry.MariaDb.Tests` against a Testcontainers `mariadb:11.4` image, and
+  MariaDb joined the CI provider matrix. Unblocks #58, #169, and #170.
 - **Table-valued parameters for SQL Server (#69, 2026-07-09).** SQL Server IN collections
   (`Compare.In` predicates and `[InquiryDeleteAll]`) now bind as table-valued parameters (TVPs)
   instead of per-element sentinel expansion. The SQL stays constant across list lengths

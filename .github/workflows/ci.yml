@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: [PostgreSql, MySql, SqlServer, Oracle]
+        provider: [PostgreSql, MySql, MariaDb, SqlServer, Oracle]
         # net8.0 is the LTS baseline every provider supports; net9.0 catches regressions on the
         # current STS. net10.0 builds in the unit job; no point spinning a Testcontainer per
         # provider × per extra TFM (audit P2 #10).
