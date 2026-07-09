@@ -1445,7 +1445,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void SelectAllByPredicateEmitsInSentinelAndRuntimeExpansion()
+    public void SelectAllByPredicateEmitsJsonEachInAndBindsJsonArray()
     {
         var source = PredicateSource("""
             [InquirySelectAllByPredicate]
@@ -1458,9 +1458,8 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        // IN bakes a single-placeholder sentinel into the const SQL; the binder expands it at run time.
-        Assert.Contains("WHERE \\\"CategoryId\\\" IN (@CategoryId)\";", generatedText);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@CategoryId\", categoryIds, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", generatedText);
+        Assert.Contains("WHERE \\\"CategoryId\\\" IN (SELECT value FROM json_each(@CategoryId))\";", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
     }
 
     [Fact]
@@ -1517,7 +1516,7 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        Assert.Contains("WHERE [UnitPrice] >= @UnitPrice AND [CategoryId] IN (@CategoryId)", generatedText);
+        Assert.Contains("WHERE [UnitPrice] >= @UnitPrice AND [CategoryId] IN (SELECT [Value] FROM @CategoryId)", generatedText);
     }
 
     [Fact]

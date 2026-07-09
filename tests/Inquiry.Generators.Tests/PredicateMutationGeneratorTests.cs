@@ -119,7 +119,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void UpdateWhereWithInPredicateUsesSentinelAndExpansion()
+    public void UpdateWhereWithInPredicateUsesJsonEachAndJsonArrayBinding()
     {
         var result = RunGenerator(ThingStore("""
             [InquiryUpdateWhere("Price")]
@@ -128,12 +128,12 @@ public sealed partial class InquiryGeneratorTests
             """));
         var text = GeneratedStoreText(result, "ThingStore.InquiryStore.g.cs");
 
-        Assert.Contains("private const string _sqlUpdateWhere_RepriceManyAsync = \"UPDATE \\\"TThing\\\" SET \\\"Price\\\" = @Price WHERE \\\"Id\\\" IN (@Id)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@Id\", ids, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int64);", text);
+        Assert.Contains("private const string _sqlUpdateWhere_RepriceManyAsync = \"UPDATE \\\"TThing\\\" SET \\\"Price\\\" = @Price WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@Id))\";", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@Id\", ids);", text);
     }
 
     [Fact]
-    public void DeleteWhereWithInPredicateUsesSentinelAndExpansion()
+    public void DeleteWhereWithInPredicateUsesJsonEachAndJsonArrayBinding()
     {
         var result = RunGenerator(ThingStore("""
             [InquiryDeleteWhere]
@@ -142,8 +142,8 @@ public sealed partial class InquiryGeneratorTests
             """));
         var text = GeneratedStoreText(result, "ThingStore.InquiryStore.g.cs");
 
-        Assert.Contains("private const string _sqlDeleteWhere_DeleteNamedAsync = \"DELETE FROM \\\"TThing\\\" WHERE \\\"Name\\\" IN (@Name)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@Name\", names, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.String);", text);
+        Assert.Contains("private const string _sqlDeleteWhere_DeleteNamedAsync = \"DELETE FROM \\\"TThing\\\" WHERE \\\"Name\\\" IN (SELECT value FROM json_each(@Name))\";", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@Name\", names);", text);
     }
 
     [Fact]

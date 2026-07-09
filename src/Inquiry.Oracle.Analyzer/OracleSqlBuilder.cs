@@ -355,6 +355,28 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     protected override string WrapCreateTable(SqlBuildContext context, string body)
         => "CREATE TABLE " + context.Table + " (\n    " + body + "\n)";
 
+    public override bool UseArrayInParameters => true;
+
+    protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
+    {
+        var (colType, selectExpr) = elementType switch
+        {
+            DbTypeClass.Guid => ("VARCHAR2(36)", "HEXTORAW(REPLACE(jt.val, '-', ''))"),
+            DbTypeClass.Boolean => ("NUMBER(1)", "jt.val"),
+            DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 => ("NUMBER(10)", "jt.val"),
+            DbTypeClass.Int64 => ("NUMBER(19)", "jt.val"),
+            DbTypeClass.Single => ("BINARY_FLOAT", "jt.val"),
+            DbTypeClass.Double => ("BINARY_DOUBLE", "jt.val"),
+            DbTypeClass.Decimal => ("NUMBER", "jt.val"),
+            _ => ("VARCHAR2(4000)", "jt.val"),
+        };
+
+        return quotedColumn + " IN (SELECT " + selectExpr + " FROM JSON_TABLE(" + parameterName
+            + ", '$[*]' COLUMNS(val " + colType + " PATH '$')) jt)";
+    }
+
+    public override string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryJsonArrayParameter";
+
     // Oracle 12c+ extracts a JSON scalar with JSON_VALUE (returns the value as text).
     protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
         => "JSON_VALUE(" + quotedColumn + ", '" + jsonPath + "')";

@@ -47,7 +47,7 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     public override bool SupportsBulkCopy => true;
 
     /// <inheritdoc cref="UseArrayInParameters"/>
-    protected override string RenderIn(string quotedColumn, string parameterName)
+    protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
         => quotedColumn + " = ANY(" + parameterName + ")";
 
     public override string BuildInsertSql(SqlBuildContext context)

@@ -3,10 +3,10 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// PostgreSQL array IN parameters: <c>Compare.In</c> renders <c>col = ANY(@name)</c> and binds the
-/// collection as one native array parameter (constant SQL across list lengths, prepared-statement
-/// reuse, no per-element parameter cap). Other dialects keep the <c>IN (@name)</c> sentinel +
-/// runtime expansion.
+/// Array IN parameter tests across dialects: PostgreSQL uses <c>= ANY(@name)</c> with native arrays,
+/// SQLite uses <c>json_each(@name)</c>, SQL Server uses TVPs, Oracle uses <c>JSON_TABLE</c> — all
+/// bind the collection as a single parameter (constant SQL, no per-element cap). MySQL keeps the
+/// <c>IN (@name)</c> sentinel + runtime expansion.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
@@ -34,7 +34,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void SqliteInPredicateKeepsSentinelExpansion()
+    public void SqliteInPredicateUsesJsonEachAndJsonArrayBinding()
     {
         var source = PredicateSource("""
             [InquirySelectAllByPredicate]
@@ -47,17 +47,14 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        Assert.Contains("\\\"CategoryId\\\" IN (@CategoryId)", generatedText);
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@CategoryId\", categoryIds, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", generatedText);
-        Assert.DoesNotContain("InquiryArrayParameter", generatedText);
+        Assert.Contains("\\\"CategoryId\\\" IN (SELECT value FROM json_each(@CategoryId))", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
+        Assert.DoesNotContain("InquiryInExpansion", generatedText);
     }
 
     [Fact]
-    public void SqliteDateTimeInPredicateStampsDateTime2DbTypeOnExpansion()
+    public void SqliteDateTimeInPredicateUsesJsonArrayBinding()
     {
-        // #52: an IN element must bind with the same DbType the scalar binder resolves for the column —
-        // DateTime2, not legacy `datetime` (which truncates sub-3.33ms precision / throws pre-1753 on SQL
-        // Server). The sentinel-expansion dialects thread the DbType into the runtime Expand call.
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -93,7 +90,7 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("EventStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"@OccurredAt\", dates, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.DateTime2);", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@OccurredAt\", dates);", text);
     }
 
     [Fact]

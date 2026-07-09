@@ -22,9 +22,6 @@
 > Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact. (`DbBatch` pipeline
 > support shipped — see [Recently resolved](#recently-resolved).)
 
-- **Table-valued parameters (SQL Server) (#69).** PostgreSQL array `IN` parameters shipped (see
-  [Recently resolved](#recently-resolved)); SQL Server TVPs remain the sibling mechanism for passing
-  sets to commands and stored procedures on that engine.
 - **Single-round-trip eager loading (#70).** Combining the parent + relation SELECTs into one
   multi-result-set command (Dapper `QueryMultiple`-style) keeps the separate-query design but cuts the
   latency to one round trip. Shipped for both eager shapes on the four dialects that can multiplex
@@ -36,6 +33,17 @@
   `DELETE…RETURNING` natively (halving round trips), but the MySQL builder targets the 5.7 LCD.
   A compatibility flag or MariaDB dialect would enable the native path and eliminate the
   `AllowUserVariables` dependency for GUID keys.
+- **Split MySQL and MariaDB into independent dialect providers (#168).** The shared MySQL builder
+  targets the MySQL 5.7 / MariaDB 10.x LCD, blocking features both engines support independently:
+  MariaDB 10.5+ `RETURNING`, MySQL 8.0+ / MariaDB 10.6+ `JSON_TABLE` for IN-collection binding, and
+  MariaDB's cleaner GUID handling. Splitting into separate `Inquiry.MySql` and `Inquiry.MariaDb`
+  analyzer packages lets each evolve at its own pace. Prerequisite for #58, #169, and #170.
+- **MySQL `JSON_TABLE` IN optimization (#169, blocked on #168).** After the SQLite `json_each` and
+  Oracle `JSON_TABLE` IN optimizations shipped, MySQL 8.0+ can adopt the same
+  `InquiryJsonArrayParameter` + `JSON_TABLE` path — but enabling it today would break MariaDB and
+  MySQL 5.7 compatibility.
+- **MariaDB `JSON_TABLE` IN optimization (#170, blocked on #168).** MariaDB 10.6+ supports
+  `JSON_TABLE`; same approach as MySQL once the split lands.
 
 ## Planned features & enhancements
 
@@ -97,7 +105,7 @@
 - **Stored-procedure INOUT parameters & multi-result-set** *(gap research 2026-06-12)*. Scalar
   OUTPUT parameters and the integer RETURN value now surface as a `Task<TScalar>` result (see
   [Recently resolved](#recently-resolved)); the remaining gaps are INOUT parameters (a value passed
-  in *and* read back), multiple result sets, table-valued parameters, and Oracle `OUT REF CURSOR`.
+  in *and* read back), multiple result sets, stored-procedure TVP parameters, and Oracle `OUT REF CURSOR`.
 - **Database-first scaffolding CLI** *(gap research 2026-06-12)*. A `dotnet inquiry scaffold` tool
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
@@ -215,6 +223,22 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Table-valued parameters for SQL Server (#69, 2026-07-09).** SQL Server IN collections
+  (`Compare.In` predicates and `[InquiryDeleteAll]`) now bind as table-valued parameters (TVPs)
+  instead of per-element sentinel expansion. The SQL stays constant across list lengths
+  (`col IN (SELECT [Value] FROM @param)`) — one cached plan for all cardinalities, no per-element
+  parameter cap, and no power-of-two bucketing overhead. TVP table types (`Inquiry_IntList`,
+  `Inquiry_BigIntList`, etc.) are auto-created on first use. The SQL Server counterpart of
+  PostgreSQL's `= ANY(@array)` shipped earlier.
+- **SQLite `json_each` and Oracle `JSON_TABLE` IN optimization (2026-07-09).** Extends the #69 IN
+  collection optimization to the remaining viable engines. SQLite uses
+  `col IN (SELECT value FROM json_each(@param))` (available since SQLite 3.38.0); Oracle uses
+  `col IN (SELECT jt.val FROM JSON_TABLE(:param, '$[*]' COLUMNS(val TYPE PATH '$')) jt)` with
+  type-specific COLUMNS (available since Oracle 12c R2). Both share the new
+  `InquiryJsonArrayParameter` binder which serializes the collection as a JSON array string — constant
+  SQL, no per-element parameter cap, and for Oracle specifically eliminates the ORA-01795 1000-element
+  ceiling. MySQL stays on per-element expansion pending the MariaDB dialect split. NOT IN remains on
+  the sentinel expansion path across all dialects for consistent empty-collection semantics.
 - **Top-1-by-order read shape (#64, 2026-07-09).** `[InquirySelectTopByOrder("Column")]` returns
   `Task<T?>` — the row with the extreme value of a column via `ORDER BY col [ASC|DESC] LIMIT 1`
   (or `OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY` on SQL Server/Oracle). Supports ascending/descending
@@ -436,7 +460,9 @@ open:
   a new `IInquiry.ExecuteProcedureScalarAsync<T>` pipeline seam (both pipelines). The two knobs are
   mutually exclusive and a RETURN value must be `Task<int>` (new INQ051). Provider-uniform via
   `CommandType.StoredProcedure`; live-proven on SQL Server (`OUTPUT` + `RETURN` procs), plus generator
-  snapshots. INOUT/multi-result-set/TVP/Oracle ref-cursor remain open. See
+  snapshots. INOUT/multi-result-set/Oracle ref-cursor remain open (TVPs shipped for IN-collection
+  binding — see [Recently resolved](#recently-resolved) — but stored-procedure TVP parameters are not
+  yet supported). See
   [Stored procedures](../articles/features/stored-procedures.md).
 - **Provider-native bulk copy (2026-06-13):** `[InquiryBulkInsert]` streams rows through
   `SqlBulkCopy` / Npgsql binary `COPY` / `MySqlBulkCopy` (new `IInquiryBulkCopier` registered by
