@@ -12,6 +12,9 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 {
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;
+    private readonly RetryingConnectionOpener? _retryingOpener;
+
+    private readonly Func<CancellationToken, ValueTask<DbConnection>> _openPrimary;
 
     /// <summary>
     /// Initializes a new instance of <see cref="OracleInquiryConnectionFactory"/> with default options.
@@ -41,14 +44,29 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             && !string.Equals(configured, connectionString, StringComparison.Ordinal)
                 ? configured
                 : null;
+        _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
+
+        if (options.Compatibility != OracleCompatibility.None)
+        {
+            _retryingOpener = new RetryingConnectionOpener(
+                new OracleTransientErrorDetector(),
+                options.MaxAttempts,
+                options.RetryBaseDelay,
+                maxDelay: options.RetryMaxDelay);
+        }
     }
 
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
-        return _failoverConnectionString is { } failover
-            ? FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, retryingOpener: null, cancellationToken)
-            : OpenCoreAsync(_connectionString, cancellationToken);
+        if (_failoverConnectionString is { } failover)
+        {
+            return FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, _retryingOpener, cancellationToken);
+        }
+
+        return _retryingOpener is null
+            ? OpenCoreAsync(_connectionString, cancellationToken)
+            : _retryingOpener.OpenAsync(_openPrimary, cancellationToken);
     }
 
     private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)

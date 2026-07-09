@@ -47,8 +47,10 @@
   the Aspire dashboard. Foundation work: build provider connection factories on
   **`System.Data.Common.DbDataSource`** (the .NET 7+ pooled primitive Aspire registers) instead of
   raw connection strings. *(Foundation started 2026-06-21: `PostgreSqlInquiryConnectionFactory` now
-  builds and owns one app-lifetime `NpgsqlDataSource` — a `DbDataSource` — in #54/PR #99. Remaining:
-  refactor the SQL Server, MySQL, SQLite, and Oracle factories to their native `DbDataSource` builders.)*
+  builds and owns one app-lifetime `NpgsqlDataSource` — a `DbDataSource` — in #54/PR #99.
+  MySQL and MariaDB refactored to `MySqlDataSource` on 2026-07-09. Remaining: SQL Server
+  (`Microsoft.Data.SqlClient` does not yet ship a public `DbDataSource`), SQLite
+  (`Microsoft.Data.Sqlite` has no `DbDataSource`), Oracle (ODP.NET has no `DbDataSource`).)*
 - **Build-time SQL validation against a dev database** *(integration research 2026-06-12)*. The
   Rust sqlx `query!` / Go sqlc model: because Inquiry's SQL is compile-time constant, an opt-in
   build step or test helper can `PREPARE`/`EXPLAIN` every generated SQL const against a
@@ -148,9 +150,8 @@
   [Recently resolved](#recently-resolved).
 - **Oracle has zero test coverage for `[InquiryBulkInsert]` (#155).** Oracle's bulk insert path (which
   compiles down to multi-row batch insert) is completely unverified.
-- **CancellationToken propagation never verified against real MySQL/PostgreSQL (#156).** Pipeline-level
-  unit tests thread the token through the API surface, but no integration test verifies that a cancelled
-  token actually cancels an in-flight database operation on these providers.
+- **~~CancellationToken propagation never verified against real databases (#156)~~** *(resolved
+  2026-07-09)*. See [Recently resolved](#recently-resolved).
 - **Single-row all-types bulk-insert test matrix (#134).** No test covers bulk insert of every
   provider-primitive type (int, decimal, bool, Guid, DateTime, string, byte[], enum, converter columns)
   in a minimal batch per bulk-copy provider.
@@ -193,6 +194,30 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **CancellationToken propagation integration tests (#156, 2026-07-09).** Added
+  `CancellationTokenPropagationTests` to all five server-backed providers (PostgreSQL, SQL Server,
+  MySQL, MariaDB, Oracle). Each test opens a connection via `IInquiryConnectionFactory`, starts a
+  long-running operation (`pg_sleep` / `WAITFOR DELAY` / `SLEEP` / `DBMS_SESSION.SLEEP`), cancels
+  the token after 500ms, and asserts the provider throws `OperationCanceledException` (or Oracle's
+  `ORA-01013`). Closes the gap where pipeline-level unit tests verified token threading but no
+  integration test verified actual provider-level cancellation.
+
+- **MySQL and MariaDB `DbDataSource` refactor (2026-07-09).** `MySqlInquiryConnectionFactory` and
+  `MariaDbInquiryConnectionFactory` now build and own one app-lifetime `MySqlDataSource` (a
+  `DbDataSource`) per connection string, matching the PostgreSQL factory's `NpgsqlDataSource` model.
+  Both implement `IAsyncDisposable` / `IDisposable` to drain connection pools on container disposal.
+  Bulk-copy connections remain outside the data source pool (intentional pool isolation for the
+  `AllowLoadLocalInfile` security posture). SQL Server, SQLite, and Oracle stay on raw connection
+  strings — their ADO.NET providers do not yet ship a native `DbDataSource`.
+
+- **Transient-fault retry for MySQL, MariaDB, and Oracle (2026-07-09).** All three factories now
+  wire the `RetryingConnectionOpener` infrastructure that PostgreSQL and SQL Server already had.
+  New `MySqlCompatibility.CloudHosted`, `MariaDbCompatibility.CloudHosted`, and
+  `OracleCompatibility.CloudHosted` enum values enable exponential-backoff retry over documented
+  transient error codes (MySQL/MariaDB: 1040/2003/2006/2013 etc.; Oracle: ORA-01033/03113/12541
+  etc.). Options classes gain `MaxAttempts`, `RetryBaseDelay`, and `RetryMaxDelay` properties
+  matching the PostgreSQL/SQL Server pattern. All six providers now have retry + failover parity.
 
 - **Oracle single-round-trip eager loading (#70, 2026-07-09).** Shipped for all five dialects.
   Oracle wraps the batched parent + child SELECTs in a PL/SQL anonymous block using

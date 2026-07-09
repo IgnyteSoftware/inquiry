@@ -28,7 +28,8 @@ public static class MariaDbInquiryServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the MariaDB connection factory with provider-specific options (failover).
+    /// Registers the MariaDB connection factory with provider-specific options (cloud
+    /// compatibility, transient-fault retry, and failover).
     /// </summary>
     public static IServiceCollection AddInquiryMariaDb(
         this IServiceCollection services,

@@ -26,7 +26,8 @@ public static class OracleInquiryServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the Oracle connection factory with provider-specific options (failover).
+    /// Registers the Oracle connection factory with provider-specific options (cloud
+    /// compatibility, transient-fault retry, and failover).
     /// </summary>
     public static IServiceCollection AddInquiryOracle(
         this IServiceCollection services,
