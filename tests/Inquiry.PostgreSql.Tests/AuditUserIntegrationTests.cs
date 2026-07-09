@@ -1,21 +1,25 @@
-using System.Threading.Tasks;
 using Inquiry;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.PostgreSql.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.PostgreSql.Tests;
 
 /// <summary>
-/// <c>[InquiryCreatedBy]</c>/<c>[InquiryModifiedBy]</c> end-to-end: insert stamps both from the
-/// ambient <see cref="InquiryAuditContext"/>; update advances ModifiedBy under a new user while the
-/// stored CreatedBy survives — even when the updated instance carries a default CreatedBy.
+/// <c>[InquiryCreatedBy]</c>/<c>[InquiryModifiedBy]</c> end-to-end against real PostgreSQL: insert
+/// stamps both from the ambient <see cref="InquiryAuditContext"/>; update advances ModifiedBy under a
+/// new user while the stored CreatedBy survives.
 /// </summary>
+[Collection(PostgreSqlCollection.Name)]
 public sealed class AuditUserIntegrationTests
 {
-    [Fact]
+    private readonly PostgreSqlContainerFixture _fixture;
+    public AuditUserIntegrationTests(PostgreSqlContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task InsertStampsBothFromAmbientUser()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditUserSqliteDdl, "AuditUser");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditUserPostgreSqlDdl, "audituser");
         var store = harness.GetRequiredService<AuditUserDocStore>();
 
         AuditUserDoc inserted;
@@ -28,10 +32,11 @@ public sealed class AuditUserIntegrationTests
         Assert.Equal("alice", inserted.ModifiedBy);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UpdateAdvancesModifiedByAndCannotClobberCreatedBy()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditUserSqliteDdl, "AuditUser");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditUserPostgreSqlDdl, "audituser");
         var store = harness.GetRequiredService<AuditUserDocStore>();
 
         long id;
@@ -51,10 +56,11 @@ public sealed class AuditUserIntegrationTests
         Assert.Equal("bob", after.ModifiedBy);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SuppliedCreatedByIsPreserved()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditUserSqliteDdl, "AuditUser");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditUserPostgreSqlDdl, "audituser");
         var store = harness.GetRequiredService<AuditUserDocStore>();
 
         using (InquiryAuditContext.BeginScope("alice"))

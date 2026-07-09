@@ -1,21 +1,25 @@
 using System;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.SqlServer.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// Auditing timestamps end-to-end: insert stamps both columns (caller-observable), update advances
-/// ModifiedAt while the stored CreatedAt survives — even when the updated entity instance carries a
-/// default CreatedAt, proving the column is excluded from the UPDATE SET rather than re-written.
+/// Auditing timestamps end-to-end against real SQL Server: insert stamps both columns (caller-observable),
+/// update advances ModifiedAt while the stored CreatedAt survives — even when the updated entity instance
+/// carries a default CreatedAt, proving the column is excluded from the UPDATE SET rather than re-written.
 /// </summary>
+[Collection(SqlServerCollection.Name)]
 public sealed class AuditTimestampIntegrationTests
 {
-    [Fact]
+    private readonly SqlServerContainerFixture _fixture;
+    public AuditTimestampIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task InsertStampsBothTimestamps()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditTimestampSqliteDdl, "Audit");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditTimestampSqlServerDdl, "audit");
         var store = harness.GetRequiredService<AuditDocStore>();
 
         var before = DateTime.UtcNow.AddSeconds(-1);
@@ -27,10 +31,11 @@ public sealed class AuditTimestampIntegrationTests
         Assert.InRange(doc.ModifiedAt, before, after);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SuppliedCreatedAtIsPreservedOnInsert()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditTimestampSqliteDdl, "Audit");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditTimestampSqlServerDdl, "audit");
         var store = harness.GetRequiredService<AuditDocStore>();
 
         var imported = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
@@ -41,10 +46,11 @@ public sealed class AuditTimestampIntegrationTests
         Assert.Equal(imported, (await store.SelectByKeyAsync(inserted.Id))!.CreatedAt);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UpdateAdvancesModifiedAtAndCannotClobberCreatedAt()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditTimestampSqliteDdl, "Audit");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditTimestampSqlServerDdl, "audit");
         var store = harness.GetRequiredService<AuditDocStore>();
 
         var stored = (await store.InsertReturningAsync(new AuditDoc { Title = "v1" }))!;
@@ -61,10 +67,11 @@ public sealed class AuditTimestampIntegrationTests
         Assert.Equal(after.ModifiedAt, reconstructed.ModifiedAt);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BatchUpdateStampsEachItem()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.AuditTimestampSqliteDdl, "Audit");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.AuditTimestampSqlServerDdl, "audit");
         var store = harness.GetRequiredService<AuditDocStore>();
 
         var a = (await store.InsertReturningAsync(new AuditDoc { Title = "a" }))!;

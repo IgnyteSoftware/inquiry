@@ -1,19 +1,23 @@
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.SqlServer.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// Server-computed column end-to-end against SQLite: the database computes <c>FullName</c> from the
+/// Server-computed column end-to-end against real SQL Server: the database computes <c>FullName</c> from the
 /// stored DDL expression; insert/update never write it, and reads materialize the computed value.
 /// </summary>
+[Collection(SqlServerCollection.Name)]
 public sealed class ComputedColumnIntegrationTests
 {
-    [Fact]
+    private readonly SqlServerContainerFixture _fixture;
+    public ComputedColumnIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
     public async Task ComputedValueIsCalculatedByDatabaseOnInsert()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ComputedColumnSqliteDdl, "Computed");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ComputedColumnSqlServerDdl, "computed");
         var store = harness.GetRequiredService<ComputedPersonStore>();
 
         var inserted = (await store.InsertReturningAsync(new ComputedPerson { FirstName = "Ada", LastName = "Lovelace" }))!;
@@ -23,10 +27,11 @@ public sealed class ComputedColumnIntegrationTests
         Assert.Equal("Ada Lovelace", loaded.FullName);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ComputedValueTracksUpdatesToSourceColumns()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ComputedColumnSqliteDdl, "Computed");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ComputedColumnSqlServerDdl, "computed");
         var store = harness.GetRequiredService<ComputedPersonStore>();
 
         var doc = (await store.InsertReturningAsync(new ComputedPerson { FirstName = "Grace", LastName = "Hopper" }))!;

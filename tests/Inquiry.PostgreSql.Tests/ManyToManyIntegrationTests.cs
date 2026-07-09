@@ -1,21 +1,26 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
-using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.PostgreSql.Tests.Fixtures;
 
-namespace Inquiry.Sqlite.Tests;
+namespace Inquiry.PostgreSql.Tests;
 
 /// <summary>
-/// End-to-end many-to-many eager loading against real SQLite: a single-parent eager load joins the
+/// End-to-end many-to-many eager loading against real PostgreSQL: a single-parent eager load joins the
 /// related rows through the junction, and the all-eager load assembles every parent's collection in
 /// memory from two queries.
 /// </summary>
+[Collection(PostgreSqlCollection.Name)]
 public sealed class ManyToManyIntegrationTests
 {
-    private static async Task<(SqliteTestHarness Harness, M2MOrderStore Orders, long Order1, long Order2)> SeedAsync()
+    private readonly PostgreSqlContainerFixture _fixture;
+    public ManyToManyIntegrationTests(PostgreSqlContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
+    public async Task SingleEagerLoadsRelatedRowsThroughJunction()
     {
-        var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ManyToManySqliteDdl, "ManyToMany");
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ManyToManyPostgreSqlDdl, "m2m");
         var orders = harness.GetRequiredService<M2MOrderStore>();
         var products = harness.GetRequiredService<M2MProductStore>();
         var links = harness.GetRequiredService<M2MOrderProductStore>();
@@ -26,20 +31,10 @@ public sealed class ManyToManyIntegrationTests
         var banana = (await products.InsertAsync(new M2MProduct { Title = "Banana" }))!.Id;
         var cherry = (await products.InsertAsync(new M2MProduct { Title = "Cherry" }))!.Id;
 
-        // Order1 → Apple, Banana; Order2 → Banana, Cherry.
         await links.LinkAsync(new M2MOrderProduct { OrderId = order1, ProductId = apple });
         await links.LinkAsync(new M2MOrderProduct { OrderId = order1, ProductId = banana });
         await links.LinkAsync(new M2MOrderProduct { OrderId = order2, ProductId = banana });
         await links.LinkAsync(new M2MOrderProduct { OrderId = order2, ProductId = cherry });
-
-        return (harness, orders, order1, order2);
-    }
-
-    [Fact]
-    public async Task SingleEagerLoadsRelatedRowsThroughJunction()
-    {
-        var (harness, orders, order1, _) = await SeedAsync();
-        await using var _ = harness;
 
         var loaded = await orders.GetWithProductsAsync(order1);
         Assert.NotNull(loaded);
@@ -47,17 +42,27 @@ public sealed class ManyToManyIntegrationTests
         Assert.Equal(new[] { "Apple", "Banana" }, loaded.Products.Select(p => p.Title).OrderBy(t => t).ToArray());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task AllEagerAssemblesEveryParentsCollection()
     {
-        var (harness, orders, _, _) = await SeedAsync();
-        await using var _ = harness;
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ManyToManyPostgreSqlDdl, "m2m");
+        var orders = harness.GetRequiredService<M2MOrderStore>();
+        var products = harness.GetRequiredService<M2MProductStore>();
+        var links = harness.GetRequiredService<M2MOrderProductStore>();
 
-        var all = new List<M2MOrder>();
-        await foreach (var order in orders.AllWithProductsAsync())
-        {
-            all.Add(order);
-        }
+        var order1 = (await orders.InsertAsync(new M2MOrder { Name = "First" }))!.Id;
+        var order2 = (await orders.InsertAsync(new M2MOrder { Name = "Second" }))!.Id;
+        var apple = (await products.InsertAsync(new M2MProduct { Title = "Apple" }))!.Id;
+        var banana = (await products.InsertAsync(new M2MProduct { Title = "Banana" }))!.Id;
+        var cherry = (await products.InsertAsync(new M2MProduct { Title = "Cherry" }))!.Id;
+
+        await links.LinkAsync(new M2MOrderProduct { OrderId = order1, ProductId = apple });
+        await links.LinkAsync(new M2MOrderProduct { OrderId = order1, ProductId = banana });
+        await links.LinkAsync(new M2MOrderProduct { OrderId = order2, ProductId = banana });
+        await links.LinkAsync(new M2MOrderProduct { OrderId = order2, ProductId = cherry });
+
+        var all = await orders.AllWithProductsAsync().ToListAsync();
 
         Assert.Equal(2, all.Count);
         var first = all.Single(o => o.Name == "First");
@@ -66,11 +71,11 @@ public sealed class ManyToManyIntegrationTests
         Assert.Equal(new[] { "Banana", "Cherry" }, second.Products.Select(p => p.Title).OrderBy(t => t).ToArray());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task EagerCollectionIsEmptyWhenNoAssociations()
     {
-        var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.ManyToManySqliteDdl, "ManyToMany");
-        await using var _ = harness;
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.ManyToManyPostgreSqlDdl, "m2m");
         var orders = harness.GetRequiredService<M2MOrderStore>();
         var lonely = (await orders.InsertAsync(new M2MOrder { Name = "Lonely" }))!.Id;
 
