@@ -51,9 +51,6 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
         var connectionString = new MySqlConnectionStringBuilder(adminConnectionString)
         {
             Database = databaseName,
-            // Keep MySqlConnector's multi-statement support on for the emulated
-            // INSERT ...; SELECT returning batches.
-            AllowUserVariables = true,
         }.ToString();
 
         await using (var db = new MySqlConnection(connectionString))

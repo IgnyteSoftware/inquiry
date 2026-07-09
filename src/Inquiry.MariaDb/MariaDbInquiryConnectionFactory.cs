@@ -36,22 +36,12 @@ internal sealed class MariaDbInquiryConnectionFactory : IInquiryConnectionFactor
             throw new ArgumentNullException(nameof(options));
         }
 
-        // Inquiry's emulated RETURNING for a database-generated GUID key captures the value in a
-        // @_inquiry_genkey user variable; MySqlConnector only treats an unmatched @name as a user
-        // variable when AllowUserVariables is enabled (otherwise it throws). Generator-emitted store SQL
-        // is compile-time-constant with bound parameters, so this is safe for generated stores. Caveat:
-        // for ad-hoc SQL (the IInquiry.Query*/Execute* string overloads), a missing or misspelled @param
-        // is now silently treated as a NULL user variable rather than throwing "parameter not found" —
-        // callers passing raw command text must name their parameters correctly.
-        _connectionString = WithUserVariables(connectionString);
+        _connectionString = connectionString;
         _failoverConnectionString = options.FailoverConnectionString is { } failover
             && !string.Equals(failover, connectionString, StringComparison.Ordinal)
-                ? WithUserVariables(failover)
+                ? failover
                 : null;
     }
-
-    private static string WithUserVariables(string connectionString)
-        => new MySqlConnectionStringBuilder(connectionString) { AllowUserVariables = true }.ConnectionString;
 
     // AllowLoadLocalInfile is required by MySqlBulkCopy ([InquiryBulkInsert]), which streams rows
     // via LOAD DATA LOCAL INFILE — but it also widens the blast radius of any SQL-injection bug

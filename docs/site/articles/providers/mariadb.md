@@ -4,9 +4,9 @@ Package: `Inquiry.MariaDb`. Built on `MySqlConnector` (wire-compatible with Mari
 
 > MariaDB users previously running on `Inquiry.MySql` should migrate to this package: swap the
 > package reference, change `[assembly: InquiryDialect("MySql")]` to `"MariaDb"`, and replace
-> `AddInquiryMySql(...)` with `AddInquiryMariaDb(...)`. The generated SQL is currently identical
-> (the dialect split, #168, is behavioral-parity re-plumbing), but MariaDB-specific improvements —
-> native `INSERT…RETURNING` (#58), the `JSON_TABLE` IN optimization (#170) — land only here.
+> `AddInquiryMySql(...)` with `AddInquiryMariaDb(...)`. The MariaDB builder uses native
+> `INSERT…RETURNING` (halving round trips for insert-returning and upsert-returning operations)
+> and does not require `AllowUserVariables` on the connection string.
 
 ## Install
 
@@ -30,7 +30,9 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
 | Parameter prefix | `@name` |
 | Auto-key | `AUTO_INCREMENT` |
 | Upsert | `INSERT … ON DUPLICATE KEY UPDATE …` |
-| Insert-returning | Emulated two-statement batch (`INSERT …; SELECT …`) — keyed on `LAST_INSERT_ID()` for `AUTO_INCREMENT`, on the key predicate for client-supplied keys (native `RETURNING` is tracked as #58) |
+| Insert-returning | Native `INSERT … RETURNING` (MariaDB 10.5+) |
+| Upsert-returning | Native `INSERT … ON DUPLICATE KEY UPDATE … RETURNING` |
+| Update-returning | Emulated two-statement batch (`UPDATE …; SELECT …`) — MariaDB lacks `UPDATE…RETURNING` |
 | Pagination | `LIMIT @limit OFFSET @offset` |
 | Boolean | `TINYINT(1)` (0/1) |
 | String | `VARCHAR(N)` / `LONGTEXT` |
@@ -40,9 +42,13 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
 
 ## Notes
 
-- **Behavioral parity with MySQL:** the MariaDB builder currently emits SQL identical to the MySQL
-  builder (both derive from the shared MySQL-family builder). MariaDB-specific extensions (e.g.
-  `RETURNING`) will diverge in follow-up work (#58, #170).
+- **Native `RETURNING`:** the MariaDB builder uses MariaDB 10.5+ native `INSERT…RETURNING` and
+  `INSERT…ON DUPLICATE KEY UPDATE…RETURNING` for insert-returning and upsert-returning operations.
+  This halves round trips compared to the emulated two-statement batch that MySQL requires.
+  `UPDATE…RETURNING` is not supported by MariaDB, so update-returning stays emulated.
+- **No `AllowUserVariables` required:** unlike the MySQL provider, MariaDB's native `RETURNING`
+  eliminates the `@_inquiry_genkey` user variable that the emulated path needs for database-supplied
+  GUID keys, so `AllowUserVariables` is not forced on the connection string.
 - **Prepared statements:** server-side, per-connection. Inquiry's default `PreparedStatementMode.Auto` is currently a no-op for MariaDB because the provider does not advertise persistent prepared-state reuse across the per-operation connection lifecycle.
 - **`max_allowed_packet`:** bulk inserts and updates respect server-side packet limits — chunk your batches if you exceed the default 64 MB.
 - **Case sensitivity:** identifier case-sensitivity depends on the server's `lower_case_table_names` setting and OS. Inquiry always emits backticked identifiers matching your C# property casing.

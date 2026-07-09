@@ -198,8 +198,7 @@ public sealed class NorthwindCoverageIntegrationTests
 
     /// <summary>
     /// Generated-key upsert-returning INSERT branch (<c>ProductStore.UpsertReturningAsync</c> with no
-    /// key supplied) surfaces the freshly generated key — the emulated returning <c>SELECT</c> keyed off
-    /// <c>LAST_INSERT_ID()</c> reads back the inserted row.
+    /// key supplied) surfaces the freshly generated key via native <c>RETURNING</c>.
     /// </summary>
     [SkippableFact]
     public async Task ProductUpsertReturningInsertBranchSurfacesGeneratedKey()

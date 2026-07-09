@@ -1757,13 +1757,11 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void MariaDbDialectEmitsIdenticalStoreToMySql()
+    public void MariaDbDialectEmitsNativeReturning()
     {
-        // #168: the MariaDB dialect starts as a pure split of the MySQL builder — both derive from
-        // MySqlFamilySqlBuilder with no overrides — so for the same store the two dialects must emit
-        // byte-identical code (modulo the dialect name itself, which the IN-expansion call sites embed).
-        // This pin breaks the moment the builders intentionally diverge (#58/#169/#170), at which point
-        // it should be replaced with shape-specific assertions.
+        // #58: MariaDB 10.5+ supports native INSERT...RETURNING. The MariaDB builder uses it
+        // instead of the emulated two-statement batch (INSERT; SELECT) that MySQL requires.
+        // UPDATE...RETURNING is not supported by MariaDB, so the update path stays emulated.
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -1787,43 +1785,87 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class OrganizationStore : InquiryStore<Organization>
             {
-                [InquirySelectAll]
-                public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
-
-                [InquirySelectAllByPredicate]
-                [InquiryWhere("Name", Compare.In)]
-                public partial Task<IReadOnlyList<Organization>> ByNamesAsync(IReadOnlyList<string> name, CancellationToken cancellationToken = default);
-
                 [InquiryInsert(ReturnEntity = true)]
                 public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
                 [InquiryUpdate(ReturnEntity = true)]
                 public partial Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
-                [InquiryUpsert]
-                public partial Task<int> UpsertAsync(Organization o, CancellationToken cancellationToken = default);
-
-                [InquiryDeleteOneByKey]
-                public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
+                [InquiryUpsert(ReturnEntity = true)]
+                public partial Task<Organization?> UpsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
             }
             """;
 
-        static string StoreText(GeneratorTestResult result)
-        {
-            var generatedStore = Assert.Single(
-                result.RunResult.GeneratedTrees,
-                static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
-            return generatedStore.GetText().ToString();
-        }
+        var result = RunGenerator(source, dialect: "MariaDb");
 
-        var mysql = RunGenerator(source, dialect: "MySql");
-        var mariadb = RunGenerator(source, dialect: "MariaDb");
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
 
-        Assert.Empty(mysql.GeneratorDiagnostics);
-        Assert.Empty(mariadb.GeneratorDiagnostics);
-        Assert.Empty(mariadb.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Equal(StoreText(mysql), StoreText(mariadb).Replace("MariaDb", "MySql"));
+        Assert.Contains("_sqlInsertReturning = \"INSERT INTO `TOrganization` (`Key`, `Name`) VALUES (@Key, @Name) RETURNING `Key`, `Name`\"", generatedText);
+        Assert.Contains("_sqlUpdateReturning = \"UPDATE `TOrganization` SET `Name` = @Name WHERE `Key` = @Key; SELECT `Key`, `Name` FROM `TOrganization` WHERE `Key` = @Key\"", generatedText);
+        Assert.Contains("_sqlUpsertReturning = \"INSERT INTO `TOrganization` (`Key`, `Name`) VALUES (@Key, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`) RETURNING `Key`, `Name`\"", generatedText);
+    }
+
+    [Fact]
+    public void MariaDbGuidKeyReturningEliminatesUserVariable()
+    {
+        // #58: MariaDB's native RETURNING eliminates the @_inquiry_genkey user variable
+        // that MySQL needs for emulated GUID-key returning (and the AllowUserVariables dependency).
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TGuidItem")]
+            public sealed class GuidItem
+            {
+                [InquiryKey("Id", UseDatabaseDefault = true)]
+                public Guid? Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class GuidItemStore : InquiryStore<GuidItem>
+            {
+                [InquiryInsert(ReturnEntity = true)]
+                public partial Task<GuidItem?> InsertReturningAsync(GuidItem g, CancellationToken cancellationToken = default);
+
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(GuidItem g, CancellationToken cancellationToken = default);
+
+                [InquiryUpsert(ReturnEntity = true)]
+                public partial Task<GuidItem?> UpsertReturningAsync(GuidItem g, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "MariaDb");
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("GuidItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        Assert.Contains("_sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\"", generatedText);
+        Assert.Contains("_sqlUpsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`) RETURNING `Id`, `Name`\"", generatedText);
+        Assert.Contains("_sqlInsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) RETURNING `Id`, `Name`\"", generatedText);
+        Assert.DoesNotContain("@_inquiry_genkey", generatedText);
+        Assert.DoesNotContain("LAST_INSERT_ID", generatedText);
     }
 
     [Fact]

@@ -24,10 +24,8 @@
 
 - **~~Single-round-trip eager loading (#70)~~** *(resolved 2026-07-09)*. See
   [Recently resolved](#recently-resolved).
-- **MariaDB-native INSERT/DELETE RETURNING (#58, unblocked by #168).** MariaDB 10.5+ supports
-  `INSERT…RETURNING` and `DELETE…RETURNING` natively (halving round trips). The dedicated
-  `MariaDbSqlBuilder` (from the #168 split) can now override the emulated-returning paths to the
-  native form and eliminate the `AllowUserVariables` dependency for GUID keys.
+- **~~MariaDB-native INSERT RETURNING (#58)~~** *(resolved 2026-07-09)*. See
+  [Recently resolved](#recently-resolved).
 - **MySQL `JSON_TABLE` IN optimization (#169, unblocked by #168).** After the SQLite `json_each` and
   Oracle `JSON_TABLE` IN optimizations shipped, MySQL 8.0+ can adopt the same
   `InquiryJsonArrayParameter` + `JSON_TABLE` path in the now-independent `MySqlSqlBuilder`.
@@ -207,14 +205,22 @@ open:
   `MultiResultBatchSuffix`) let Oracle inject the wrapper while the other four dialects keep the
   default `;`-separated batch unchanged.
 
+- **MariaDB-native INSERT RETURNING (#58, 2026-07-09).** `MariaDbSqlBuilder` now overrides
+  `BuildInsertReturningSql` and `BuildUpsertReturningSql` with MariaDB 10.5+ native
+  `INSERT…RETURNING` / `INSERT…ON DUPLICATE KEY UPDATE…RETURNING`, halving round trips for these
+  operations. `UPDATE…RETURNING` is not supported by MariaDB, so the update path keeps the emulated
+  two-statement batch from `MySqlFamilySqlBuilder`. Database-supplied GUID keys use inline
+  `COALESCE(@key, UUID())` in the insert values, letting `RETURNING` capture the generated key
+  directly — eliminating the `@_inquiry_genkey` user variable and the `AllowUserVariables`
+  connection-string requirement that the MySQL emulated path needs.
+
 - **Split MySQL and MariaDB into independent dialect providers (#168, 2026-07-09).** The MySQL builder
-  body moved to a shared `MySqlFamilySqlBuilder` in `Inquiry.Generators.Shared`; `MySqlSqlBuilder` and a
-  new `MariaDbSqlBuilder` both derive from it with only `DialectName` overridden, so the two dialects
-  currently emit identical SQL (pinned by a generator parity test). New `Inquiry.MariaDb` runtime +
+  body moved to a shared `MySqlFamilySqlBuilder` in `Inquiry.Generators.Shared`; `MySqlSqlBuilder` and
+  `MariaDbSqlBuilder` both derive from it. New `Inquiry.MariaDb` runtime +
   `Inquiry.MariaDb.Analyzer` packages mirror the MySQL pair (MySqlConnector-based factory/bulk copier,
   `AddInquiryMariaDb` DI overloads, `[assembly: InquiryDialect("MariaDb")]`). The full MySQL integration
   suite is cloned to `tests/Inquiry.MariaDb.Tests` against a Testcontainers `mariadb:11.4` image, and
-  MariaDb joined the CI provider matrix. Unblocks #58, #169, and #170.
+  MariaDb joined the CI provider matrix. Unblocked #58, #169, and #170.
 - **Table-valued parameters for SQL Server (#69, 2026-07-09).** SQL Server IN collections
   (`Compare.In` predicates and `[InquiryDeleteAll]`) now bind as table-valued parameters (TVPs)
   instead of per-element sentinel expansion. The SQL stays constant across list lengths
@@ -229,7 +235,8 @@ open:
   type-specific COLUMNS (available since Oracle 12c R2). Both share the new
   `InquiryJsonArrayParameter` binder which serializes the collection as a JSON array string — constant
   SQL, no per-element parameter cap, and for Oracle specifically eliminates the ORA-01795 1000-element
-  ceiling. MySQL stays on per-element expansion pending the MariaDB dialect split. NOT IN remains on
+  ceiling. MySQL and MariaDB stay on per-element expansion pending the `JSON_TABLE` IN optimization
+  (#169, #170). NOT IN remains on
   the sentinel expansion path across all dialects for consistent empty-collection semantics.
 - **Top-1-by-order read shape (#64, 2026-07-09).** `[InquirySelectTopByOrder("Column")]` returns
   `Task<T?>` — the row with the extreme value of a column via `ORDER BY col [ASC|DESC] LIMIT 1`
