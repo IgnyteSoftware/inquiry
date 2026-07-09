@@ -42,6 +42,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ061–INQ064  DDL safety lints (off by default) (INQ061 unindexed FK, INQ062 decimal w/o precision, INQ064 unindexed filter column; opt in via .editorconfig) [IN USE]
     //   INQ063         Many-to-many relation          ([InquiryManyToMany] misconfigured junction/child) [IN USE]
     //   INQ065         Column metadata range          ([InquiryColumn] Length/Precision/Scale out of range) [IN USE]
+    //   INQ066–INQ067  DDL safety lints (off by default) (INQ066 nullable column with default, INQ067 unbounded string column; opt in via .editorconfig) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -367,6 +368,30 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    // INQ066 (Info — a DDL "lint", off by default): a nullable column that also carries a non-null
+    // DEFAULT expression. New rows always receive the default, so NULL is unreachable via INSERT —
+    // keeping the column nullable adds ambiguity (does NULL mean "never set" or "explicitly cleared"?)
+    // without serving a purpose. Either drop the default or make the column NOT NULL.
+    public static readonly DiagnosticDescriptor NullableColumnWithDefault = new(
+        "INQ066",
+        "Nullable column has a default value",
+        "Entity '{0}' column '{1}' is nullable but carries a DEFAULT expression. New rows will never be NULL — consider making it NOT NULL, or remove the default if NULL is intentional.",
+        "Inquiry",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: false);
+
+    // INQ067 (Info — a DDL "lint", off by default): a string column with no explicit Length and no
+    // SqlType override takes the dialect's unbounded text type (TEXT, NVARCHAR(MAX), CLOB, etc.),
+    // which may inhibit indexing, bloat row storage, or mask a missing constraint. Suppressed for
+    // key columns (INQ031 already covers them) and for indexed/unique columns (INQ032 covers them).
+    public static readonly DiagnosticDescriptor UnboundedStringColumn = new(
+        "INQ067",
+        "String column has no explicit length",
+        "Entity '{0}' column '{1}' is a string with no Length or SqlType, so it takes the dialect's unbounded type (e.g. TEXT / NVARCHAR(MAX)). Set [InquiryColumn(Length = …)] (or SqlType) if a bounded type is more appropriate.",
+        "Inquiry",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: false);
 
     public static readonly DiagnosticDescriptor ConverterInvalid = new(
         "INQ037",

@@ -88,6 +88,8 @@ Inquiry ships advisory analyzer "lints" for risky schema shapes. They are **off 
 dotnet_diagnostic.INQ061.severity = warning
 dotnet_diagnostic.INQ062.severity = warning
 dotnet_diagnostic.INQ064.severity = warning
+dotnet_diagnostic.INQ066.severity = warning
+dotnet_diagnostic.INQ067.severity = warning
 ```
 
 | ID | Lints | Why |
@@ -95,6 +97,8 @@ dotnet_diagnostic.INQ064.severity = warning
 | **`INQ061`** | A foreign-key column with no index. | Most engines (SQL Server, PostgreSQL, Oracle, SQLite) don't auto-index foreign keys, so joins and `ON DELETE/UPDATE` cascades over the column scan the table. Add `IsIndexed = true` to the column's `[InquiryColumn]` / `[InquiryForeignKey]`. **MySQL/InnoDB auto-indexes FK constraints and is exempt.** |
 | **`INQ062`** | A `decimal` column with no explicit precision/scale. | It silently takes the dialect default (e.g. `DECIMAL(18,2)`), which can round — a real hazard for money. Set `[InquiryColumn(Precision = …, Scale = …)]` (or `SqlType`). EF Core's `DecimalTypeDefaultWarning` is the same advisory. |
 | **`INQ064`** | A column a store method filters on (a `[InquirySelectAllByField]` field or an `[InquiryWhere]` criterion) with no index. | Those queries scan the table. Add `[InquiryColumn(IsIndexed = true)]` (or `IsUnique`) to a column you filter often. |
+| **`INQ066`** | A nullable column with a `DefaultExpression`. | New rows always receive the default, so `NULL` is unreachable via `INSERT` — the nullable + default pairing is usually unintentional. Either make the column `NOT NULL`, or remove the default if `NULL` is meaningful. |
+| **`INQ067`** | A `string` column with no explicit `Length` or `SqlType`. | It takes the dialect's unbounded text type (`TEXT`, `NVARCHAR(MAX)`, `CLOB`, etc.), which may inhibit indexing or bloat row storage. Set `[InquiryColumn(Length = …)]` (or `SqlType`) for a bounded type. |
 
 Because they're off by default, the lints never break a build until you opt in — then they participate in `dotnet build` (and CI) at the severity you choose, just like any analyzer diagnostic.
 

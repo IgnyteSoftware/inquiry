@@ -76,10 +76,7 @@
   (Django `QuerySet.explain()` analog).
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
-- **DDL safety lint — more rules** *(integration research 2026-06-12)*. The opt-in lint surface shipped
-  with INQ061 (unindexed foreign key), INQ062 (decimal without precision/scale), and INQ064 (unindexed
-  filtered column) — see [Recently resolved](#recently-resolved). squawk-inspired follow-ups: nullable
-  column with a default, oversized/unbounded text columns.
+- **~~DDL safety lint — more rules~~** *(resolved 2026-07-09)*. See [Recently resolved](#recently-resolved).
 - **Testing follow-ups: transaction sandbox + data factories** *(adoption review 2026-06-12)*.
   The store interfaces and the `Inquiry.Testing` package (SQLite fixture, recording interceptor,
   Respawn reset) shipped — see [Recently resolved](#recently-resolved) and
@@ -161,9 +158,11 @@
   connection-open / pool-wait instruments.
 ## Test coverage & hardening
 
-- **Port SQLite-only integration tests to server dialects (#154).** ManyToMany, GlobalFilter, audit
-  columns, ComputedColumn, JsonPath, and InquiryView have live tests only on SQLite. GlobalFilter is
-  highest priority (tenant isolation — a dialect-specific bug is a security issue).
+- **Port SQLite-only integration tests to server dialects (#154).** ManyToMany, ~~GlobalFilter~~, audit
+  columns, ComputedColumn, JsonPath, and InquiryView have live tests only on SQLite. ~~GlobalFilter is
+  highest priority (tenant isolation — a dialect-specific bug is a security issue)~~ — GlobalFilter
+  ported to all five dialects (2026-07-09). Remaining: ManyToMany, audit columns, ComputedColumn,
+  JsonPath, InquiryView.
 - **Oracle has zero test coverage for `[InquiryBulkInsert]` (#155).** Oracle's bulk insert path (which
   compiles down to multi-row batch insert) is completely unverified.
 - **CancellationToken propagation never verified against real MySQL/PostgreSQL (#156).** Pipeline-level
@@ -340,6 +339,15 @@ open:
   use a keyed-HMAC lookup column), and the SQL Server Always Encrypted / PostgreSQL pgcrypto native
   alternatives. Proven end-to-end by a live SQLite test (`ColumnEncryptionIntegrationTests`): the property
   round-trips while the column holds ciphertext, never the plaintext.
+
+- **DDL safety lint — nullable + default `INQ066`, unbounded string `INQ067` (2026-07-09):** two more
+  opt-in lints extending the DDL safety surface. **`INQ066`**: a nullable column with a `DefaultExpression`
+  — new rows always receive the default, so `NULL` is unreachable via `INSERT`; the nullable + default
+  pairing is usually unintentional. **`INQ067`**: a `string` column with no explicit `Length` or `SqlType`
+  takes the dialect's unbounded text type (`TEXT` / `NVARCHAR(MAX)` / `CLOB`), which may inhibit indexing
+  or bloat row storage. Key columns are excluded (covered by `INQ031`) and indexed/unique columns are
+  excluded (covered by `INQ032`). Both are dialect-agnostic. See
+  [Schema DDL](../articles/features/schema-ddl.md#ddl-safety-lints-opt-in).
 
 - **DDL safety lint — unindexed filtered column `INQ064` (2026-06-13):** a third opt-in lint (off by
   default, like INQ061/062). A non-key column a store method filters on — a `[InquirySelectAllByField]`

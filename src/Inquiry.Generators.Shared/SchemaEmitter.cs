@@ -136,10 +136,8 @@ internal static class SchemaEmitter
 
     /// <summary>
     /// Reports advisory DDL "lints" (Info severity, off by default — raise them in <c>.editorconfig</c>
-    /// to enforce). INQ061: a foreign-key column with no index (most engines don't auto-index FKs, so
-    /// joins/cascades scan; MySQL is exempt when it emits the constraint). INQ062: a decimal column with
-    /// no explicit precision/scale, which silently takes the dialect default (e.g. DECIMAL(18,2)) and can
-    /// round (EF's DecimalTypeDefaultWarning analog).
+    /// to enforce). INQ061: unindexed FK column. INQ062: decimal without explicit precision. INQ066:
+    /// nullable column with a DEFAULT expression. INQ067: unbounded string column (no Length or SqlType).
     /// </summary>
     private static void ReportSchemaLints(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
     {
@@ -173,6 +171,27 @@ internal static class SchemaEmitter
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         InquiryDiagnosticDescriptors.DecimalWithoutPrecision, location: null, entity.TableName, column.PropertyName, builder.DialectName));
+                }
+
+                // INQ066: a nullable column with a DEFAULT expression — new rows always receive the
+                // default, so NULL is unreachable via INSERT and the nullable + default pairing is
+                // likely unintentional. Computed columns are excluded (their value is always derived).
+                if (column.IsNullable && column.DefaultExpression is not null &&
+                    !column.IsKey && string.IsNullOrEmpty(column.ComputedExpression))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.NullableColumnWithDefault, location: null, entity.TableName, column.PropertyName));
+                }
+
+                // INQ067: a string column with no Length and no SqlType override — it takes the
+                // dialect's unbounded type (TEXT / NVARCHAR(MAX) / CLOB). Key columns are covered
+                // by INQ031 and indexed/unique columns by INQ032, so those are excluded here.
+                if (column.TypeClass == DbTypeClass.String && column.Length == 0 &&
+                    string.IsNullOrEmpty(column.SqlType) && string.IsNullOrEmpty(column.ComputedExpression) &&
+                    !column.IsKey && !column.IsIndexed && !column.IsUnique)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.UnboundedStringColumn, location: null, entity.TableName, column.PropertyName));
                 }
             }
         }
