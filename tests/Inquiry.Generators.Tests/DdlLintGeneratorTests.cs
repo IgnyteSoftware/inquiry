@@ -13,7 +13,7 @@ namespace Inquiry.Generators.Tests;
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
-    private static readonly string[] EnableDdlLints = { "INQ061", "INQ062", "INQ064" };
+    private static readonly string[] EnableDdlLints = { "INQ061", "INQ062", "INQ064", "INQ066", "INQ067" };
 
     private const string UnindexedFkSource = """
         using Inquiry.Entities;
@@ -349,5 +349,198 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ062");
+    }
+
+    // ---- INQ066: nullable column with a default value ------------------------------------------
+
+    private const string NullableWithDefaultSource = """
+        using Inquiry.Entities;
+
+        namespace Demo;
+
+        [InquiryTable("Config")]
+        public sealed class Config
+        {
+            [InquiryKey(IsGenerated = true)]
+            public long Id { get; set; }
+
+            [InquiryColumn("Locale", DefaultExpression = "'en-US'")]
+            public string? Locale { get; set; }
+        }
+        """;
+
+    [Fact]
+    public void NullableColumnWithDefaultReportsINQ066AsInfo()
+    {
+        var result = RunGenerator(NullableWithDefaultSource, enableDiagnostics: EnableDdlLints);
+
+        var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ066");
+        Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
+        Assert.Contains("Locale", lint.GetMessage());
+    }
+
+    [Fact]
+    public void NullableColumnWithDefaultLintIsOffByDefault()
+    {
+        var result = RunGenerator(NullableWithDefaultSource);
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ066");
+    }
+
+    [Fact]
+    public void NonNullableColumnWithDefaultDoesNotReportINQ066()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Config")]
+            public sealed class Config
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Locale", DefaultExpression = "'en-US'")]
+                public string Locale { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ066");
+    }
+
+    [Fact]
+    public void NullableColumnWithoutDefaultDoesNotReportINQ066()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Config")]
+            public sealed class Config
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Locale")]
+                public string? Locale { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ066");
+    }
+
+    [Fact]
+    public void NullableColumnWithDefaultIsDialectAgnostic()
+    {
+        var result = RunGenerator(NullableWithDefaultSource, dialect: "PostgreSql", enableDiagnostics: EnableDdlLints);
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ066");
+    }
+
+    // ---- INQ067: string column with no explicit length -----------------------------------------
+
+    private const string UnboundedStringSource = """
+        using Inquiry.Entities;
+
+        namespace Demo;
+
+        [InquiryTable("Article")]
+        public sealed class Article
+        {
+            [InquiryKey(IsGenerated = true)]
+            public long Id { get; set; }
+
+            [InquiryColumn("Body")]
+            public string Body { get; set; } = string.Empty;
+        }
+        """;
+
+    [Fact]
+    public void UnboundedStringColumnReportsINQ067AsInfo()
+    {
+        var result = RunGenerator(UnboundedStringSource, enableDiagnostics: EnableDdlLints);
+
+        var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ067");
+        Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
+        Assert.Contains("Body", lint.GetMessage());
+    }
+
+    [Fact]
+    public void UnboundedStringLintIsOffByDefault()
+    {
+        var result = RunGenerator(UnboundedStringSource);
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ067");
+    }
+
+    [Theory]
+    [InlineData("[InquiryColumn(\"Body\", Length = 4000)]")]
+    [InlineData("[InquiryColumn(\"Body\", SqlType = \"TEXT\")]")]
+    public void ExplicitStringStorageDoesNotReportINQ067(string columnAttribute)
+    {
+        var source = $$"""
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Article")]
+            public sealed class Article
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                {{columnAttribute}}
+                public string Body { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ067");
+    }
+
+    [Fact]
+    public void IndexedStringWithoutLengthDoesNotReportINQ067()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Article")]
+            public sealed class Article
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn("Slug", IsIndexed = true)]
+                public string Slug { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ067");
+    }
+
+    [Fact]
+    public void StringKeyDoesNotReportINQ067()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Article")]
+            public sealed class Article
+            {
+                [InquiryKey]
+                public string Code { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ067");
     }
 }
