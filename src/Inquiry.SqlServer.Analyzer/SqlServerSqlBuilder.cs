@@ -143,6 +143,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     public override string BuildPaginationClause(SqlSelectOptions options)
         => "OFFSET " + options.OffsetParameter + " ROWS FETCH NEXT " + options.LimitParameter + " ROWS ONLY";
 
+    protected override string TopOneSuffix => "OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY";
+
     /// <summary>
     /// SQL Server lacks the row-value <c>(a, b) &gt; (@c0, @c1)</c> comparison, so a multi-column keyset
     /// renders the lexicographic OR-form <c>(a &gt; @c0) OR (a = @c0 AND b &gt; @c1)</c>. Single-column

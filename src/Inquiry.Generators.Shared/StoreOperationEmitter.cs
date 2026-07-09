@@ -257,6 +257,38 @@ internal static class StoreOperationEmitter
                 source.AppendLine("    }");
                 break;
 
+            case StoreOperation.SelectTopByOrder:
+                // Top-1-by-order: parameterless single-row select with ORDER BY + LIMIT 1.
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine($"        return Inquiry.QuerySingleOrDefaultAsync<{entityType}, {structMat}>(");
+                source.AppendLine($"            new global::Inquiry.Commands.InquiryCommand(_sqlTop_{method.Name}),");
+                source.AppendLine("            default,");
+                source.AppendLine($"            {cancellation});");
+                source.AppendLine("    }");
+                break;
+
+            case StoreOperation.GroupCount:
+            {
+                var keyType = method.GroupCountKeyTypeFqn!;
+                var gcType = $"global::Inquiry.GroupCount<{keyType}>";
+                var matName = "_GroupCountMat_" + method.Name;
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine($"        return Inquiry.QueryListAsync<{gcType}, {matName}>(");
+                source.AppendLine($"            new global::Inquiry.Commands.InquiryCommand(_sqlGroupCount_{method.Name}),");
+                source.AppendLine("            default,");
+                source.AppendLine($"            {cancellation});");
+                source.AppendLine("    }");
+                // Emit the inline struct materializer for this GroupCount method.
+                source.AppendLine();
+                source.AppendLine($"    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
+                source.AppendLine($"    internal readonly struct {matName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{gcType}>");
+                source.AppendLine("    {");
+                source.AppendLine($"        public {gcType} Materialize(global::System.Data.Common.DbDataReader reader)");
+                source.AppendLine($"            => new {gcType}(reader.GetFieldValue<{keyType}>(0), reader.GetInt64(1));");
+                source.AppendLine("    }");
+                break;
+            }
+
             case StoreOperation.FullTextSearch:
             {
                 // one string search-term parameter bound to @searchTerm; the SQL is the dialect's
