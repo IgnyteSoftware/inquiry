@@ -114,19 +114,20 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void OracleSingleEagerUsesSeparateRoundTripsNotGrid()
+    public void OracleEagerUsesReturnResultPlSqlGrid()
     {
-        // Oracle cannot return multiple result sets from a ;-separated command (ORA-00933), so the
-        // single-eager loader must fall back to the per-relation (multi-round-trip) path, not the grid path.
+        // Oracle cannot return multiple result sets from a ;-separated command (ORA-00933), so the grid
+        // command is wrapped in a DBMS_SQL.RETURN_RESULT PL/SQL block (implicit result sets) instead —
+        // single eager (parent + JOIN) and batch eager (parent + children + junction) alike.
         var result = RunGenerator(OrderProductSource, dialect: "Oracle");
         Assert.Empty(result.GeneratorDiagnostics);
         var text = GetOrderStore(result);
 
-        Assert.DoesNotContain("QueryMultipleAsync", text);
-        Assert.DoesNotContain("_grid.ReadListAsync", text);
-        // Separate path: each child collection is read by its own query and assigned to the navigation.
-        Assert.Contains("await foreach (var _child in Inquiry.QueryAsync<", text);
-        Assert.Contains("_entity.Products = _Products_list;", text);
+        Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sqlSelectByKey + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Products + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
+        Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sqlSelectAll + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Products_All + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Products_Junction + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
+        Assert.Contains("_entity.Products = await _grid.ReadListAsync<", text);
+        // No per-relation streaming query on the grid path.
+        Assert.DoesNotContain("await foreach (var _child in Inquiry.QueryAsync<", text);
     }
 
     [Fact]

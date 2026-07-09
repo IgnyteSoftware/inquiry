@@ -1431,7 +1431,8 @@ internal static class StoreOperationEmitter
         // one round trip, the Dapper QueryMultiple / multi-result-set stored-proc shape). A belongs-to
         // (reference) relation filters by a parent column value known only after the parent materializes, so
         // entities with one keep the multi-round-trip path. The grid path also requires a dialect that can
-        // return multiple result sets from one ;-separated command (every dialect but Oracle, see ORA-00933).
+        // return multiple result sets from one command — a ;-separated batch on most dialects, Oracle's
+        // DBMS_SQL.RETURN_RESULT PL/SQL wrapper via the MultiResultBatch* hooks.
         var allKeyFilterable = entity.Relations.Count > 0 && sqlBuilder.SupportsMultiResultBatch;
         foreach (var relation in entity.Relations)
         {
@@ -1452,6 +1453,36 @@ internal static class StoreOperationEmitter
         }
     }
 
+    // Appends the combined multi-result command text: each SELECT const joined through the dialect's
+    // MultiResultBatch hooks — "" / ";" / "" on the ;-batching dialects (unchanged shape), Oracle's
+    // DBMS_SQL.RETURN_RESULT PL/SQL wrapper otherwise. The hooks are emitted as string literals between
+    // the const fields, so csc folds the whole expression at compile time.
+    private static void AppendGridCommandText(StringBuilder source, SqlBuilder sqlBuilder, List<string> sqlFields)
+    {
+        source.Append("        var _sql = ");
+        if (sqlBuilder.MultiResultBatchPrefix.Length > 0)
+        {
+            source.Append($"\"{GeneratorHelpers.Escape(sqlBuilder.MultiResultBatchPrefix)}\" + ");
+        }
+
+        for (var i = 0; i < sqlFields.Count; i++)
+        {
+            if (i > 0)
+            {
+                source.Append($" + \"{GeneratorHelpers.Escape(sqlBuilder.MultiResultBatchSeparator)}\" + ");
+            }
+
+            source.Append(sqlFields[i]);
+        }
+
+        if (sqlBuilder.MultiResultBatchSuffix.Length > 0)
+        {
+            source.Append($" + \"{GeneratorHelpers.Escape(sqlBuilder.MultiResultBatchSuffix)}\"");
+        }
+
+        source.AppendLine(";");
+    }
+
     // Single round trip: one command with the parent SELECT + each key-filterable child SELECT, read in
     // order through an InquiryGridReader. Matches what Dapper (QueryMultiple), DLG (multi-result proc), and
     // a hand-written two-result-set ADO command do.
@@ -1467,13 +1498,13 @@ internal static class StoreOperationEmitter
         var parentKeyProp = entity.Keys[0].PropertyName;
         AppendHeader(source, method, parameters, isAsync: true);
 
-        // Combined command text: parent SELECT + each child SELECT, separated by ';'.
-        source.Append($"        var _sql = {parentSelectField}");
+        // Combined command text: parent SELECT + each child SELECT, joined via the dialect's batch hooks.
+        var sqlFields = new List<string> { parentSelectField };
         foreach (var relation in entity.Relations)
         {
-            source.Append($" + \";\" + _sql_{relation.PropertyName}");
+            sqlFields.Add($"_sql_{relation.PropertyName}");
         }
-        source.AppendLine(";");
+        AppendGridCommandText(source, sqlBuilder, sqlFields);
 
         // Deduped parameters, all bound to the input key value: the parent key, plus each collection
         // relation's FK param. Many-to-many children filter by the parent-key param, so they add nothing.
@@ -1613,10 +1644,11 @@ internal static class StoreOperationEmitter
             }
         }
 
-        // Single-round-trip (grid) path: one ;-separated command — the parent SELECT plus each relation's
+        // Single-round-trip (grid) path: one multi-result command — the parent SELECT plus each relation's
         // child (and junction) SELECT — read in order through an InquiryGridReader, instead of one round trip
-        // per relation (#70). Requires a dialect that returns multiple result sets from one command (every
-        // dialect but Oracle, which raises ORA-00933 and keeps the per-relation path via SupportsMultiResultBatch).
+        // per relation (#70). Requires a dialect that returns multiple result sets from one command: a
+        // ;-separated batch on most dialects, Oracle's DBMS_SQL.RETURN_RESULT PL/SQL wrapper via the
+        // MultiResultBatch* hooks.
         var useGrid = sqlBuilder.SupportsMultiResultBatch && emittedRelations.Count > 0;
 
         // Emits the opener for iterating one relation's rows: from the grid (the next pre-read result set) on
@@ -1631,16 +1663,16 @@ internal static class StoreOperationEmitter
         {
             // The combined command is parameterless: the child _All / _Junction selects use subquery
             // filters (no @-parameters), so there is nothing to bind.
-            source.Append($"        var _sql = {parentSelectField}");
+            var sqlFields = new List<string> { parentSelectField };
             foreach (var relation in emittedRelations)
             {
-                source.Append($" + \";\" + _sql_{relation.PropertyName}_All");
+                sqlFields.Add($"_sql_{relation.PropertyName}_All");
                 if (relation.IsManyToMany)
                 {
-                    source.Append($" + \";\" + _sql_{relation.PropertyName}_Junction");
+                    sqlFields.Add($"_sql_{relation.PropertyName}_Junction");
                 }
             }
-            source.AppendLine(";");
+            AppendGridCommandText(source, sqlBuilder, sqlFields);
             source.AppendLine("        await using var _grid = await Inquiry.QueryMultipleAsync(");
             source.AppendLine("            new global::Inquiry.Commands.InquiryCommand(_sql),");
             source.AppendLine($"            {cancellation}).ConfigureAwait(false);");

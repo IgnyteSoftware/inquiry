@@ -22,13 +22,8 @@
 > Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact. (`DbBatch` pipeline
 > support shipped — see [Recently resolved](#recently-resolved).)
 
-- **Single-round-trip eager loading (#70).** Combining the parent + relation SELECTs into one
-  multi-result-set command (Dapper `QueryMultiple`-style) keeps the separate-query design but cuts the
-  latency to one round trip. Shipped for both eager shapes on the four dialects that can multiplex
-  `;`-separated result sets (SQLite/PostgreSQL/MySQL/SQL Server) — `[InquirySelectOneByKeyEager]` and now
-  `[InquirySelectAllEager]` (#70/PR #118) read a single command through an `InquiryGridReader`.
-  **Remaining:** Oracle, which cannot return multiple result sets from one command (ORA-00933) and keeps
-  the per-relation path until PL/SQL ref-cursor batching is added.
+- **~~Single-round-trip eager loading (#70)~~** *(resolved 2026-07-09)*. See
+  [Recently resolved](#recently-resolved).
 - **MariaDB-native INSERT/DELETE RETURNING (#58, unblocked by #168).** MariaDB 10.5+ supports
   `INSERT…RETURNING` and `DELETE…RETURNING` natively (halving round trips). The dedicated
   `MariaDbSqlBuilder` (from the #168 split) can now override the emulated-returning paths to the
@@ -201,6 +196,16 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **Oracle single-round-trip eager loading (#70, 2026-07-09).** Shipped for all five dialects.
+  Oracle wraps the batched parent + child SELECTs in a PL/SQL anonymous block using
+  `DBMS_SQL.RETURN_RESULT` (12c+ implicit result sets): `DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR
+  <parent>; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR <child>; DBMS_SQL.RETURN_RESULT(c); END;`. ODP.NET
+  surfaces implicit results through the ordinary `ExecuteReader`/`NextResult` protocol, so the shared
+  `InquiryGridReader` runtime is unchanged — the entire change is in the generator layer. Three
+  virtual hooks on `SqlBuilder` (`MultiResultBatchPrefix`, `MultiResultBatchSeparator`,
+  `MultiResultBatchSuffix`) let Oracle inject the wrapper while the other four dialects keep the
+  default `;`-separated batch unchanged.
 
 - **Split MySQL and MariaDB into independent dialect providers (#168, 2026-07-09).** The MySQL builder
   body moved to a shared `MySqlFamilySqlBuilder` in `Inquiry.Generators.Shared`; `MySqlSqlBuilder` and a

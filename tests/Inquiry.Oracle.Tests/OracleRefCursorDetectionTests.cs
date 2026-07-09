@@ -83,6 +83,23 @@ public sealed class OracleRefCursorDetectionTests
     }
 
     [Fact]
+    public void EagerGridReturnResultBlockDoesNotGainRefCursorOut()
+    {
+        // The eager-load grid command (#70) is a DECLARE block too, but it hands its cursors to the
+        // client via DBMS_SQL.RETURN_RESULT and never references :rc — it must not gain the OUT
+        // ref-cursor parameter that returning blocks get.
+        var factory = new OracleInquiryConnectionFactory("User Id=x;Password=x;Data Source=x");
+        using var command = new OracleCommand(
+            "DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR SELECT Id FROM Orders WHERE Id = :Id; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR SELECT ProductId FROM OrderProduct WHERE OrderId = :Id; DBMS_SQL.RETURN_RESULT(c); END;");
+        command.Parameters.Add(new OracleParameter("@Id", 1));
+
+        factory.FinalizeCommand(command);
+
+        var parameter = Assert.Single(command.Parameters.Cast<OracleParameter>());
+        Assert.Equal("Id", parameter.ParameterName);
+    }
+
+    [Fact]
     public void UserAuthoredDeclareBlockWithoutRcDoesNotGainAnyParameter()
     {
         var factory = new OracleInquiryConnectionFactory("User Id=x;Password=x;Data Source=x");
