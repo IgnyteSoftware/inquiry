@@ -280,6 +280,7 @@ Upsert atomicity differs per dialect; the table below pins what each provider do
 | SQLite | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` (the key is included in the INSERT) — single statement, atomic |
 | PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` on the explicit-key branch — atomic (the explicit key is supplied, so no sequence value is consumed) |
 | MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Integer `AUTO_INCREMENT` key: same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic. GUID key (`UseDatabaseDefault`): generated server-side via `COALESCE(@key, UUID())`, captured in a `@_inquiry_genkey` user variable so the emulated returning can read it back — atomic. |
+| MariaDB | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Same `ON DUPLICATE KEY UPDATE` with `COALESCE(@key, UUID())` — atomic. Native `RETURNING` reads the row back directly (no user variable or trailing SELECT needed). |
 | SQL Server | `UPDATE … IF @@ROWCOUNT = 0 INSERT` inside `BEGIN/COMMIT TRANSACTION` with `UPDLOCK, SERIALIZABLE` table hints — serializes concurrent same-key upserts, atomic with no duplicate-key race | Same update-first pattern on the explicit-key branch — atomic (the null/generate branch is a plain INSERT) |
 | Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ039` warning + throwing stub): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead |
 
@@ -291,9 +292,10 @@ On **MySQL**, a database-generated GUID key (a `Guid?` property with `UseDatabas
 `CHAR(36) DEFAULT (UUID())` column) is supported: because MySQL has no `RETURNING` and `LAST_INSERT_ID()`
 only tracks `AUTO_INCREMENT`, Inquiry generates the value server-side with `UUID()`, captures it in a
 `@_inquiry_genkey` user variable, and selects the row back by it. Inquiry therefore enables
-`AllowUserVariables=true` on MySQL connections automatically.
+`AllowUserVariables=true` on MySQL connections automatically. **MariaDB** uses native
+`INSERT…RETURNING` instead, so it does not need the user variable or `AllowUserVariables`.
 
-On **MySQL**, an empty-SET upsert (an entity with only key columns and nothing to update) uses
+On **MySQL** and **MariaDB**, an empty-SET upsert (an entity with only key columns and nothing to update) uses
 `ON DUPLICATE KEY UPDATE key = key` — a no-op — because MySQL has no `DO NOTHING` equivalent.
 The returning variant (`ReturnEntity = true`) therefore returns the matched row on conflict rather
 than `null`, unlike PostgreSQL, SQLite, and SQL Server which return `null` when no columns are
