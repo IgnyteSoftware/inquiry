@@ -33,6 +33,7 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
 | Insert-returning | Native `INSERT … RETURNING` (MariaDB 10.5+) |
 | Upsert-returning | Native `INSERT … ON DUPLICATE KEY UPDATE … RETURNING` |
 | Update-returning | Emulated two-statement batch (`UPDATE …; SELECT …`) — MariaDB lacks `UPDATE…RETURNING` |
+| IN binding | `JSON_TABLE` subquery (MariaDB 10.6+): `col IN (SELECT jt.val FROM JSON_TABLE(@param, …) jt)` — constant SQL, single parameter |
 | Pagination | `LIMIT @limit OFFSET @offset` |
 | Boolean | `TINYINT(1)` (0/1) |
 | String | `VARCHAR(N)` / `LONGTEXT` |

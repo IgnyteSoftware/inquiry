@@ -2,9 +2,9 @@
 
 Package: `Inquiry.MySql`. Built on `MySqlConnector`.
 
-> **MariaDB users:** use the dedicated [`Inquiry.MariaDb` package](mariadb.md) instead. The two
-> dialects were split in #168 — today they emit identical SQL, but MariaDB-specific features
-> (native `RETURNING`, `JSON_TABLE` IN binding) will only land in the MariaDB provider.
+> **MariaDB users:** use the dedicated [`Inquiry.MariaDb` package](mariadb.md) instead. The MariaDB
+> provider uses native `INSERT…RETURNING` (halving round trips) and does not require
+> `AllowUserVariables` on the connection string.
 
 ## Install
 
@@ -29,6 +29,7 @@ services.AddInquiryMySql("Server=localhost;Database=app;User=app;Password=…");
 | Auto-key | `AUTO_INCREMENT` |
 | Upsert | `INSERT … ON DUPLICATE KEY UPDATE …` |
 | Insert-returning | Emulated two-statement batch (`INSERT …; SELECT …`) — keyed on `LAST_INSERT_ID()` for `AUTO_INCREMENT`, on the key predicate for client-supplied keys (no `RETURNING`) |
+| IN binding | `JSON_TABLE` subquery (MySQL 8.0+): `col IN (SELECT jt.val FROM JSON_TABLE(@param, …) jt)` — constant SQL, single parameter |
 | Pagination | `LIMIT @limit OFFSET @offset` |
 | Boolean | `TINYINT(1)` (0/1) |
 | String | `VARCHAR(N)` / `LONGTEXT` |
