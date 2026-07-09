@@ -36,6 +36,8 @@ services.AddInquiryMySql("Server=localhost;Database=app;User=app;Password=…");
 | JSON (`[InquiryJson]`) | Stored as text (`VARCHAR(N)` / `LONGTEXT`); native `JSON` only via `[InquiryColumn(SqlType = "JSON")]` |
 | Soft-delete literal | `` `IsDeleted` = 0 `` |
 | Full-text-search | `MATCH(...) AGAINST (@query IN NATURAL LANGUAGE MODE)` |
+| Update-returning | Emulated two-statement batch (`UPDATE …; SELECT …`) |
+| Upsert-returning | Emulated two-statement batch (`INSERT … ON DUPLICATE KEY UPDATE …; SELECT …`) |
 
 ## Notes
 

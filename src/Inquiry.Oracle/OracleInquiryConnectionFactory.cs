@@ -156,7 +156,7 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         // mutation and OPENs a ref cursor (:rc) over the affected row. ExecuteReader on such a block returns
         // that cursor's reader, so the shared reader pipeline materializes it unchanged — but the OUT ref
         // cursor must be bound here, since the dialect-agnostic binder cannot create an OracleDbType.RefCursor.
-        if (command is OracleCommand oracleCommand && IsReturningBlock(oracleCommand.CommandText))
+        if (command is OracleCommand oracleCommand && IsReturningBlock(oracleCommand.CommandText) && !oracleCommand.Parameters.Contains("rc"))
         {
             oracleCommand.Parameters.Add(new OracleParameter("rc", OracleDbType.RefCursor) { Direction = System.Data.ParameterDirection.Output });
         }

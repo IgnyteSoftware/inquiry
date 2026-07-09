@@ -110,8 +110,8 @@
   and row-level-security session helpers for PostgreSQL (Drizzle RLS-style `SET LOCAL` around the connection).
 - **Provider-specific column types** *(gap research 2026-06-12)*. SQL Server **vector** columns first
   (EF 10 `SqlVector` parity — AI embeddings / semantic search); spatial and `hierarchyid` by demand.
-- **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 5;
-  add engines (Firebird, DB2, MariaDB-specific, …) demand-driven — the provider + analyzer split makes
+- **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 6;
+  add engines (Firebird, DB2, …) demand-driven — the provider + analyzer split makes
   each one mechanical.
 - **Verified cloud-platform compatibility matrix** *(post-1.0 — deferred to a later release)*. Most
   popular hosted databases are wire-compatible with engines Inquiry already ships, so this is
@@ -130,7 +130,7 @@
   - Where feasible, a scheduled CI leg per platform (Supabase local Docker stack, Vitess image) so
     "works with Supabase" stays test-proven rather than asserted.
 - **Full-Northwind test & benchmark coverage.** The suites exercise a representative subset across the
-  five engines; replicate the full Northwind entity/relationship surface (all tables, all CRUD + read
+  six engines; replicate the full Northwind entity/relationship surface (all tables, all CRUD + read
   shapes) across ADO.NET / Inquiry / Dapper / EF Core in both tests and benchmarks, so every feature is
   compared apples-to-apples on every entity.
 - **Multi-database in one container.** Inquiry binds a single global `IInquiryConnectionFactory` per
@@ -155,10 +155,8 @@
 - **Single-row all-types bulk-insert test matrix (#134).** No test covers bulk insert of every
   provider-primitive type (int, decimal, bool, Guid, DateTime, string, byte[], enum, converter columns)
   in a minimal batch per bulk-copy provider.
-- **Guard Oracle `:rc` ref-cursor finalize-once invariant (#136).** `FinalizeCommand` unconditionally
-  adds the `:rc` OUT ref-cursor parameter. A second finalize of the same command would bind a duplicate.
-  Not a live bug (every call site creates a fresh command), but an unstated invariant a cheap guard would
-  remove.
+- **~~Guard Oracle `:rc` ref-cursor finalize-once invariant (#136)~~** *(resolved 2026-07-09)*. See
+  [Recently resolved](#recently-resolved).
 - **Generator polish (#135).** Analyzer release tracking is suppressed (`RS2008`); the diagnostic-ID
   registry comment implies INQ038 exists (it's only reserved); `ProjectionProcessor.Extract` and
   `AdHocProcessor.Extract` take no `CancellationToken`.
@@ -194,6 +192,10 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **Guard Oracle `:rc` ref-cursor finalize-once invariant (#136, 2026-07-09).** `FinalizeCommand` now
+  checks `oracleCommand.Parameters.Contains("rc")` before adding the `:rc` OUT ref-cursor parameter,
+  preventing a duplicate bind if the method is called twice on the same command.
 
 - **CancellationToken propagation integration tests (#156, 2026-07-09).** Added
   `CancellationTokenPropagationTests` to all five server-backed providers (PostgreSQL, SQL Server,

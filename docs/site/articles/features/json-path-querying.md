@@ -34,17 +34,18 @@ public partial class CatalogStore : InquiryStore<CatalogItem>
 
 ## The generator emits
 
-The extraction is per-dialect — the path you write (`$.a.b`) is the SQL/JSON-path form that four of the five dialects take verbatim; PostgreSQL uses its `#>>` text-path operator, so the path is translated to `{a,b}` and the column cast to `jsonb`.
+The extraction is per-dialect — the path you write (`$.a.b`) is the SQL/JSON-path form that four of the six dialects take verbatim; PostgreSQL uses its `#>>` text-path operator, so the path is translated to `{a,b}` and the column cast to `jsonb`.
 
 | Dialect | Emitted extraction |
 |---|---|
 | Sqlite | `json_extract("Data", '$.status')` |
 | SQL Server | `JSON_VALUE([Data], '$.status')` |
 | MySQL | `JSON_UNQUOTE(JSON_EXTRACT(\`Data\`, '$.status'))` |
+| MariaDB | `JSON_UNQUOTE(JSON_EXTRACT(\`Data\`, '$.status'))` |
 | Oracle | `JSON_VALUE(Data, '$.status')` |
 | PostgreSQL | `("Data")::jsonb #>> '{address,city}'` |
 
-All five extract the value **as text**, so the comparison is textual and the bound parameter is a `string`.
+All six extract the value **as text**, so the comparison is textual and the bound parameter is a `string`.
 
 ## Rules & scope (v1)
 

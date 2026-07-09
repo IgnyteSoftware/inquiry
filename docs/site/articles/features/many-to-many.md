@@ -61,7 +61,7 @@ The related rows are never carried on the child entity (the foreign keys live on
 
 - **All parents** (`[InquirySelectAllEager]`) — two queries assembled in memory, **no N+1**: every child (`SELECT * FROM Products`) is indexed by key, every junction row (`SELECT * FROM OrderProduct`) groups its child under the parent key, and each parent's collection is handed out from the grouping. Both queries reuse the child's and the junction's existing materializers.
 
-The JOIN is ANSI-standard, so the SQL is dialect-uniform across all five providers (the junction takes a space alias — Oracle rejects `AS` for table aliases — and child columns are table-qualified to stay unambiguous).
+The JOIN is ANSI-standard, so the SQL is dialect-uniform across all six providers (the junction takes a space alias — Oracle rejects `AS` for table aliases — and child columns are table-qualified to stay unambiguous).
 
 ## Writing associations
 
