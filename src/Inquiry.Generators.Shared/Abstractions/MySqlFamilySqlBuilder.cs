@@ -5,14 +5,13 @@ namespace Inquiry.Generators.Abstractions;
 
 /// <summary>
 /// Shared SQL builder for the MySQL family of engines (MySQL, MariaDB). Backtick identifier quoting,
-/// <c>ON DUPLICATE KEY UPDATE</c> upsert, and — because neither MySQL nor MariaDB supports
-/// <c>RETURNING</c> on DML in the common baseline — an emulated returning path: a two-statement batch
-/// ending in a <c>SELECT</c>. The trailing <c>SELECT</c> is the first (and only) row-returning result
-/// set, so the existing pipeline (which reads result set #1 under <c>CommandBehavior.SingleResult</c>)
-/// consumes it with zero runtime changes — the same shape SqlServer's IF/INSERT/SELECT upsert and
-/// PostgreSQL's CTE returning already rely on. The MySQL and MariaDB dialect builders both derive from
-/// this class; engine-specific divergence (MariaDB-native <c>RETURNING</c>, per-engine
-/// <c>JSON_TABLE</c> IN binding) lands as overrides in the concrete subclasses.
+/// <c>ON DUPLICATE KEY UPDATE</c> upsert, and — because MySQL does not support <c>RETURNING</c> on
+/// DML — an emulated returning path: a two-statement batch ending in a <c>SELECT</c>. The trailing
+/// <c>SELECT</c> is the first (and only) row-returning result set, so the existing pipeline (which
+/// reads result set #1 under <c>CommandBehavior.SingleResult</c>) consumes it with zero runtime
+/// changes. The MySQL and MariaDB dialect builders both derive from this class; engine-specific
+/// divergence (MariaDB-native <c>RETURNING</c>, per-engine <c>JSON_TABLE</c> IN binding) lands as
+/// overrides in the concrete subclasses.
 /// </summary>
 public abstract class MySqlFamilySqlBuilder : SqlBuilder
 {

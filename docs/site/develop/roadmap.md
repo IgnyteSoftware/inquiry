@@ -26,11 +26,10 @@
   [Recently resolved](#recently-resolved).
 - **~~MariaDB-native INSERT RETURNING (#58)~~** *(resolved 2026-07-09)*. See
   [Recently resolved](#recently-resolved).
-- **MySQL `JSON_TABLE` IN optimization (#169, unblocked by #168).** After the SQLite `json_each` and
-  Oracle `JSON_TABLE` IN optimizations shipped, MySQL 8.0+ can adopt the same
-  `InquiryJsonArrayParameter` + `JSON_TABLE` path in the now-independent `MySqlSqlBuilder`.
-- **MariaDB `JSON_TABLE` IN optimization (#170, unblocked by #168).** MariaDB 10.6+ supports
-  `JSON_TABLE`; same approach as MySQL, landing in `MariaDbSqlBuilder`.
+- **~~MySQL `JSON_TABLE` IN optimization (#169)~~** *(resolved 2026-07-09)*. See
+  [Recently resolved](#recently-resolved).
+- **~~MariaDB `JSON_TABLE` IN optimization (#170)~~** *(resolved 2026-07-09)*. See
+  [Recently resolved](#recently-resolved).
 
 ## Planned features & enhancements
 
@@ -205,6 +204,17 @@ open:
   `MultiResultBatchSuffix`) let Oracle inject the wrapper while the other four dialects keep the
   default `;`-separated batch unchanged.
 
+- **MySQL and MariaDB `JSON_TABLE` IN optimization (#169, #170, 2026-07-09).** `MySqlSqlBuilder`
+  and `MariaDbSqlBuilder` now override `UseArrayInParameters`, `ArrayParameterBinderFqn`, and
+  `RenderIn` with MySQL 8.0+ / MariaDB 10.6+ `JSON_TABLE`: IN collections bind as a single JSON
+  array parameter (`InquiryJsonArrayParameter`) and the SQL uses
+  `col IN (SELECT jt.val FROM JSON_TABLE(@param, '$[*]' COLUMNS(val TYPE PATH '$')) jt)` — constant
+  SQL, no per-element parameter cap, one cached plan for all cardinalities. Type-specific COLUMNS
+  (`SIGNED` for integers, `DOUBLE` for floats, `DECIMAL(65,30)` for decimals, `CHAR(36)` for GUIDs,
+  `CHAR(255)` for strings) ensure correct comparison semantics. All five server dialects now use
+  array-style IN binding (PostgreSQL `= ANY`, SQL Server TVPs, SQLite `json_each`, Oracle/MySQL/MariaDB
+  `JSON_TABLE`). NOT IN remains on per-element sentinel expansion across all dialects.
+
 - **MariaDB-native INSERT RETURNING (#58, 2026-07-09).** `MariaDbSqlBuilder` now overrides
   `BuildInsertReturningSql` and `BuildUpsertReturningSql` with MariaDB 10.5+ native
   `INSERT…RETURNING` / `INSERT…ON DUPLICATE KEY UPDATE…RETURNING`, halving round trips for these
@@ -235,8 +245,7 @@ open:
   type-specific COLUMNS (available since Oracle 12c R2). Both share the new
   `InquiryJsonArrayParameter` binder which serializes the collection as a JSON array string — constant
   SQL, no per-element parameter cap, and for Oracle specifically eliminates the ORA-01795 1000-element
-  ceiling. MySQL and MariaDB stay on per-element expansion pending the `JSON_TABLE` IN optimization
-  (#169, #170). NOT IN remains on
+  ceiling. MySQL and MariaDB adopted the same `JSON_TABLE` path in #169/#170. NOT IN remains on
   the sentinel expansion path across all dialects for consistent empty-collection semantics.
 - **Top-1-by-order read shape (#64, 2026-07-09).** `[InquirySelectTopByOrder("Column")]` returns
   `Task<T?>` — the row with the extreme value of a column via `ORDER BY col [ASC|DESC] LIMIT 1`

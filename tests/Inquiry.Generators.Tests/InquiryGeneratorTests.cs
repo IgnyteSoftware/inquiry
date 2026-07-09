@@ -1869,6 +1869,92 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void MySqlDialectEmitsJsonTableInBinding()
+    {
+        // #169: MySQL 8.0+ IN collections bind as a single JSON array parameter via JSON_TABLE
+        // instead of per-element sentinel expansion.
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> InCategoriesAsync(IReadOnlyList<int> categoryIds, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source, dialect: "MySql");
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val SIGNED PATH '$')) jt)\"", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
+        Assert.DoesNotContain("InquiryInExpansion", generatedText);
+    }
+
+    [Fact]
+    public void MariaDbDialectEmitsJsonTableInBinding()
+    {
+        // #170: MariaDB 10.6+ IN collections use the same JSON_TABLE path as MySQL.
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> InCategoriesAsync(IReadOnlyList<int> categoryIds, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source, dialect: "MariaDb");
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val SIGNED PATH '$')) jt)\"", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
+        Assert.DoesNotContain("InquiryInExpansion", generatedText);
+    }
+
+    [Fact]
+    public void MySqlJsonTableInUsesCorrectTypeForGuidColumn()
+    {
+        // GUID columns use CHAR(36) in JSON_TABLE (MySQL stores GUIDs as 36-char strings).
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Items")]
+            public sealed class Item
+            {
+                [InquiryKey]
+                public Guid Id { get; set; }
+
+                [InquiryColumn]
+                public Guid CategoryId { get; set; }
+            }
+
+            public partial class ItemStore : InquiryStore<Item>
+            {
+                [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Item>> ByCategoriesAsync(IReadOnlyList<Guid> categoryIds, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "MySql");
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var generatedText = generatedStore.GetText().ToString();
+
+        Assert.Contains("JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val CHAR(36) PATH '$')) jt)", generatedText);
+    }
+
+    [Fact]
     public void ReportsAmbiguousDialectWhenMultipleProvidersAreReferenced()
     {
         // The test compilation references all three Inquiry provider assemblies (Sqlite,
