@@ -26,4 +26,6 @@ internal enum StoreOperation
     UpdateByPredicate,
     DeleteByPredicate,
     StoredProcedure,
+    SelectTopByOrder,
+    GroupCount,
 }

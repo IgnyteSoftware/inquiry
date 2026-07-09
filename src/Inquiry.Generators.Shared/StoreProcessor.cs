@@ -173,6 +173,25 @@ internal static class StoreProcessor
             }
         }
 
+        string? topByOrderColumn = null;
+        var topByOrderDescending = false;
+        if (operation == StoreOperation.SelectTopByOrder)
+        {
+            topByOrderColumn = GeneratorHelpers.GetConstructorString(attribute);
+            topByOrderDescending = GeneratorHelpers.GetNamedBool(attribute, "Descending");
+        }
+
+        string? groupCountColumn = null;
+        string? groupCountKeyTypeFqn = null;
+        if (operation == StoreOperation.GroupCount)
+        {
+            groupCountColumn = GeneratorHelpers.GetConstructorString(attribute);
+            if (TryGetSelectElementType(method.ReturnType, out var gcElement, out _) && gcElement.IsGenericType && gcElement.TypeArguments.Length == 1)
+            {
+                groupCountKeyTypeFqn = gcElement.TypeArguments[0].ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
+            }
+        }
+
         string? aggregateFunction = null;
         string? aggregateColumn = null;
         string? scalarResultType = null;
@@ -299,7 +318,8 @@ internal static class StoreProcessor
         // argument is absent) — routing decides where they matter.
         var includeDeleted = operation is StoreOperation.SelectAll or StoreOperation.SelectAllEager
             or StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager
-            or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate &&
+            or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
+            or StoreOperation.SelectTopByOrder or StoreOperation.GroupCount &&
             GeneratorHelpers.GetNamedBool(attribute, "IncludeDeleted");
         var distinct = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField
             or StoreOperation.SelectAllByPredicate &&
@@ -327,6 +347,10 @@ internal static class StoreProcessor
             IncludeDeleted = includeDeleted,
             Distinct = distinct,
             HardDelete = hardDelete,
+            TopByOrderColumn = topByOrderColumn,
+            TopByOrderDescending = topByOrderDescending,
+            GroupCountColumn = groupCountColumn,
+            GroupCountKeyTypeFqn = groupCountKeyTypeFqn,
             AggregateFunction = aggregateFunction,
             AggregateColumn = aggregateColumn,
             ScalarResultType = scalarResultType,
@@ -616,6 +640,8 @@ internal static class StoreProcessor
                 case "InquiryDeleteWhereAttribute": attribute = candidate; return StoreOperation.DeleteByPredicate;
                 case "InquiryRestoreOneByKeyAttribute": attribute = candidate; return StoreOperation.RestoreOneByKey;
                 case "InquiryStoredProcedureAttribute": attribute = candidate; return StoreOperation.StoredProcedure;
+                case "InquirySelectTopByOrderAttribute": attribute = candidate; return StoreOperation.SelectTopByOrder;
+                case "InquiryGroupCountAttribute": attribute = candidate; return StoreOperation.GroupCount;
             }
         }
 
@@ -643,7 +669,7 @@ internal static class StoreProcessor
                 IsTaskOfInquiryPage(returnType, entityType),
             StoreOperation.SelectAllEager =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType),
-            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager =>
+            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.SelectTopByOrder =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
             StoreOperation.Insert or StoreOperation.Upsert when returnsEntity =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
@@ -657,6 +683,8 @@ internal static class StoreProcessor
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int64),
             StoreOperation.Exists =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
+            StoreOperation.GroupCount =>
+                TryGetSelectElementType(returnType, out _, out var isGroupList) && isGroupList,
             StoreOperation.Aggregate => IsTaskOfSingleTypeArgument(returnType),
             StoreOperation.InsertAll or StoreOperation.DeleteAll or StoreOperation.UpdateAll or
             StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate =>
@@ -1104,6 +1132,16 @@ internal static class StoreProcessor
             {
                 var aggColumn = FindColumn(entity, method.AggregateColumn!)!;
                 AppendConstSql(source, "_sqlAgg_" + method.Name, sqlBuilder.BuildAggregateSql(ctx, method.AggregateFunction!, sqlBuilder.QuoteIdentifier(aggColumn.ColumnName)));
+            }
+            else if (method.Operation == StoreOperation.SelectTopByOrder)
+            {
+                var orderColumn = FindColumn(entity, method.TopByOrderColumn!)!;
+                AppendConstSql(source, "_sqlTop_" + method.Name, sqlBuilder.BuildSelectTopByOrderSql(CtxFor(method), sqlBuilder.QuoteIdentifier(orderColumn.ColumnName), method.TopByOrderDescending));
+            }
+            else if (method.Operation == StoreOperation.GroupCount)
+            {
+                var groupColumn = FindColumn(entity, method.GroupCountColumn!)!;
+                AppendConstSql(source, "_sqlGroupCount_" + method.Name, sqlBuilder.BuildGroupCountSql(CtxFor(method), sqlBuilder.QuoteIdentifier(groupColumn.ColumnName)));
             }
         }
 
@@ -2010,7 +2048,8 @@ internal static class StoreProcessor
 
         return method.Operation switch
         {
-            StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count or StoreOperation.Aggregate => parameters.Count == 1,
+            StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count or StoreOperation.Aggregate
+                or StoreOperation.SelectTopByOrder or StoreOperation.GroupCount => parameters.Count == 1,
             StoreOperation.FullTextSearch => parameters.Count == 2 && parameters[0].ComparisonDisplay == "string",
             StoreOperation.InsertAll or StoreOperation.BulkInsert or StoreOperation.UpdateAll => parameters.Count == 2 && IsEnumerableOfEntity(parameters[0], entity),
             // DeleteAll takes a collection of the single key's type; composite-key entities are unsupported.

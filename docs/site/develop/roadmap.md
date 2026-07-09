@@ -151,13 +151,6 @@
   `db.client.operation.duration` histogram, and `ILogger` messages. Candidate follow-ups:
   a `db.collection.name` (table) span tag, sqlcommenter-style trace-context SQL comments, and
   connection-open / pool-wait instruments.
-- **Grouped aggregate read shape (#65).** A `[InquiryGroupCount]` / `[InquiryGroupAggregate]` attribute
-  emitting `SELECT <groupCol>, COUNT(*) FROM t GROUP BY <groupCol>` — the "counts by status" / "orders
-  per customer" dashboard primitive. Today it requires hand-written SQL + `[InquiryAdHoc]`.
-- **Top-1-by-order read shape (#64).** A `[InquirySelectTopByOrder]` attribute returning `Task<T?>` —
-  the row with the extreme value of a column (`SELECT … ORDER BY col LIMIT 1`). EF Core 11
-  `MaxByAsync`/`MinByAsync` parity.
-
 ## Test coverage & hardening
 
 - **Port SQLite-only integration tests to server dialects (#154).** ManyToMany, GlobalFilter, audit
@@ -222,6 +215,14 @@
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
 
+- **Top-1-by-order read shape (#64, 2026-07-09).** `[InquirySelectTopByOrder("Column")]` returns
+  `Task<T?>` — the row with the extreme value of a column via `ORDER BY col [ASC|DESC] LIMIT 1`
+  (or `OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY` on SQL Server/Oracle). Supports ascending/descending
+  and composes with soft-delete filters. EF Core 11 `MaxByAsync`/`MinByAsync` parity.
+- **Grouped aggregate read shape (#65, 2026-07-09).** `[InquiryGroupCount("Column")]` emits
+  `SELECT col, COUNT(*) FROM t GROUP BY col` and returns `Task<IReadOnlyList<GroupCount<TKey>>>`.
+  The "counts by status" / "orders per customer" dashboard primitive. Per-method inline materializer
+  generated for type-safe key reading. Composes with soft-delete filters.
 - **DISTINCT support on select and projection read shapes (#66, 2026-07-08).** `Distinct = true` on
   `[InquirySelectAll]`, `[InquirySelectAllByField]`, and `[InquirySelectAllByPredicate]` emits
   `SELECT DISTINCT` in the const SQL. Works on all five dialects, composes with soft-delete filters,

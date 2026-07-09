@@ -74,6 +74,18 @@ internal sealed record StoreMethodData(
     /// </summary>
     public bool HardDelete { get; init; }
 
+    /// <summary>For <see cref="StoreOperation.SelectTopByOrder"/>, the raw column name (resolved at emit).</summary>
+    public string? TopByOrderColumn { get; init; }
+
+    /// <summary>For <see cref="StoreOperation.SelectTopByOrder"/>, whether to order descending.</summary>
+    public bool TopByOrderDescending { get; init; }
+
+    /// <summary>For <see cref="StoreOperation.GroupCount"/>, the raw column name to GROUP BY (resolved at emit).</summary>
+    public string? GroupCountColumn { get; init; }
+
+    /// <summary>For <see cref="StoreOperation.GroupCount"/>, the fully-qualified TKey type in <c>GroupCount&lt;TKey&gt;</c>.</summary>
+    public string? GroupCountKeyTypeFqn { get; init; }
+
     /// <summary>For <see cref="StoreOperation.Aggregate"/>, the SQL function (SUM/AVG/MIN/MAX).</summary>
     public string? AggregateFunction { get; init; }
 

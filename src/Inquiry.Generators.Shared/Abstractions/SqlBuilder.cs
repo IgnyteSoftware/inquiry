@@ -332,6 +332,28 @@ public abstract class SqlBuilder
         => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     /// <summary>
+    /// Builds a top-1-by-order SELECT: all columns, optional active-row filter, ORDER BY, and a
+    /// dialect-specific LIMIT 1 tail. Returns at most one row.
+    /// </summary>
+    public virtual string BuildSelectTopByOrderSql(SqlBuildContext context, string quotedColumn, bool descending)
+        => "SELECT " + context.SelectColumns + " FROM " + context.Table
+            + WhereSuffix(context.ActiveRowPredicate)
+            + " ORDER BY " + quotedColumn + (descending ? " DESC" : " ASC")
+            + " " + TopOneSuffix;
+
+    /// <summary>
+    /// Builds a grouped COUNT: <c>SELECT col, COUNT(*) FROM t GROUP BY col</c>, with the active-row
+    /// filter composed when the entity has soft delete.
+    /// </summary>
+    public virtual string BuildGroupCountSql(SqlBuildContext context, string quotedColumn)
+        => "SELECT " + quotedColumn + ", COUNT(*) FROM " + context.Table
+            + WhereSuffix(context.ActiveRowPredicate)
+            + " GROUP BY " + quotedColumn;
+
+    /// <summary>The LIMIT 1 clause for this dialect. Default is <c>LIMIT 1</c> (SQLite/PostgreSQL/MySQL).</summary>
+    protected virtual string TopOneSuffix => "LIMIT 1";
+
+    /// <summary>
     /// Whether this dialect supports <c>[InquiryFullTextSearch]</c>. Default <see langword="false"/>
     /// (SQLite/Oracle in v1); PostgreSQL, SQL Server, and MySQL override to <see langword="true"/>.
     /// </summary>
