@@ -72,7 +72,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryProjectionAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-                transform: static (ctx, _) => ProjectionProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol))
+                transform: static (ctx, ct) => ProjectionProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
             .WithTrackingName(ProjectionsTrackingName)
             .Collect();
 
@@ -83,7 +83,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryAdHocAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-                transform: static (ctx, _) => AdHocProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol))
+                transform: static (ctx, ct) => AdHocProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
             .WithTrackingName(AdHocTrackingName)
             .Collect();
 

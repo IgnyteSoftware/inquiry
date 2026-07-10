@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace Inquiry.Generators;
 
@@ -19,12 +20,12 @@ namespace Inquiry.Generators;
 /// </summary>
 internal static class AdHocProcessor
 {
-    public static AdHocData Extract(INamedTypeSymbol symbol)
+    public static AdHocData Extract(INamedTypeSymbol symbol, CancellationToken cancellationToken)
     {
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticData>();
         var location = symbol.Locations.FirstOrDefault();
 
-        var columns = DiscoverColumns(symbol);
+        var columns = DiscoverColumns(symbol, cancellationToken);
         var isMapped = true;
 
         if (columns.Count == 0)
@@ -89,12 +90,13 @@ internal static class AdHocProcessor
         return new EntityRegistration(adHocType, adHoc.ClassMaterializerFullName);
     }
 
-    private static List<ColumnData> DiscoverColumns(INamedTypeSymbol symbol)
+    private static List<ColumnData> DiscoverColumns(INamedTypeSymbol symbol, CancellationToken cancellationToken)
     {
         var columns = new List<ColumnData>();
 
         foreach (var property in symbol.GetMembers().OfType<IPropertySymbol>())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Ordinal mapping needs no per-property attributes: every public instance property
             // with a public/internal setter (set or init) maps, in declaration order. Get-only
             // (computed), static, indexer, and privately-settable properties are skipped and do
