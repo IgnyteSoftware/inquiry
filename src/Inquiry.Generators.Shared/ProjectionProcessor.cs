@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace Inquiry.Generators;
 
@@ -18,7 +19,7 @@ namespace Inquiry.Generators;
 /// </summary>
 internal static class ProjectionProcessor
 {
-    public static ProjectionData Extract(INamedTypeSymbol symbol)
+    public static ProjectionData Extract(INamedTypeSymbol symbol, CancellationToken cancellationToken)
     {
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticData>();
         var location = symbol.Locations.FirstOrDefault();
@@ -29,7 +30,7 @@ internal static class ProjectionProcessor
             ? entitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             : string.Empty;
 
-        var columns = DiscoverColumns(symbol);
+        var columns = DiscoverColumns(symbol, cancellationToken);
         var isMapped = columns.Count > 0;
         if (!isMapped)
         {
@@ -85,12 +86,13 @@ internal static class ProjectionProcessor
         return new EntityRegistration(projectionType, projection.ClassMaterializerFullName);
     }
 
-    private static List<ColumnData> DiscoverColumns(INamedTypeSymbol symbol)
+    private static List<ColumnData> DiscoverColumns(INamedTypeSymbol symbol, CancellationToken cancellationToken)
     {
         var columns = new List<ColumnData>();
 
         foreach (var property in symbol.GetMembers().OfType<IPropertySymbol>())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var columnAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
             if (columnAttribute is null)
             {

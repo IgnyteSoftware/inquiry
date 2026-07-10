@@ -156,9 +156,7 @@
   [Recently resolved](#recently-resolved).
 - **~~Guard Oracle `:rc` ref-cursor finalize-once invariant (#136)~~** *(resolved 2026-07-09)*. See
   [Recently resolved](#recently-resolved).
-- **Generator polish (#135).** Analyzer release tracking is suppressed (`RS2008`); the diagnostic-ID
-  registry comment implies INQ038 exists (it's only reserved); `ProjectionProcessor.Extract` and
-  `AdHocProcessor.Extract` take no `CancellationToken`.
+- **~~Generator polish (#135)~~** *(resolved 2026-07-10)*. See [Recently resolved](#recently-resolved).
 
 ### Explicitly not planned
 
@@ -191,6 +189,12 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **Generator polish (#135, 2026-07-10).** `ProjectionProcessor.Extract` and `AdHocProcessor.Extract`
+  now accept `CancellationToken` (matching `EntityProcessor.Extract`) and call
+  `ThrowIfCancellationRequested()` in their column-discovery loops. The diagnostic-ID registry
+  comment corrected: INQ036–INQ037 are in use; INQ038 is reserved, not assigned. RS2008 suppression
+  retained — these are bundled source generators, not standalone diagnostic analyzers.
 
 - **Single-row all-types bulk-insert test matrix (#134, 2026-07-10).** Added
   `BulkAllTypesItem` entity to the shared FeatureCatalog with one column per provider-primitive
