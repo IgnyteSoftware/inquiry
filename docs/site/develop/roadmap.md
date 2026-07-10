@@ -152,9 +152,8 @@
   [Recently resolved](#recently-resolved).
 - **~~CancellationToken propagation never verified against real databases (#156)~~** *(resolved
   2026-07-09)*. See [Recently resolved](#recently-resolved).
-- **Single-row all-types bulk-insert test matrix (#134).** No test covers bulk insert of every
-  provider-primitive type (int, decimal, bool, Guid, DateTime, string, byte[], enum, converter columns)
-  in a minimal batch per bulk-copy provider.
+- **~~Single-row all-types bulk-insert test matrix (#134)~~** *(resolved 2026-07-10)*. See
+  [Recently resolved](#recently-resolved).
 - **~~Guard Oracle `:rc` ref-cursor finalize-once invariant (#136)~~** *(resolved 2026-07-09)*. See
   [Recently resolved](#recently-resolved).
 - **Generator polish (#135).** Analyzer release tracking is suppressed (`RS2008`); the diagnostic-ID
@@ -192,6 +191,13 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **Single-row all-types bulk-insert test matrix (#134, 2026-07-10).** Added
+  `BulkAllTypesItem` entity to the shared FeatureCatalog with one column per provider-primitive
+  category (int, decimal, bool, Guid, DateTime, string, string?, byte[], enum, converter) and
+  `BulkAllTypesIntegrationTests` to all six providers. Each test bulk-inserts a single row and
+  asserts every type round-trips through the provider's bulk-copy path (native copier on PG/SS/MySQL/
+  MariaDB, batch-INSERT fallback on SQLite/Oracle).
 
 - **Oracle `[InquiryBulkInsert]` fallback test coverage (#155, 2026-07-10).** Added
   `BulkInsertFallbackIntegrationTests` to the Oracle test project, verifying the multi-row batch
