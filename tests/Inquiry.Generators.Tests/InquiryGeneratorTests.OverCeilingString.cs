@@ -157,8 +157,10 @@ public sealed partial class InquiryGeneratorTests
     }
 
     // MySQL's VARCHAR ceiling (~16383 utf8mb4 chars): an over-ceiling key maps to LONGTEXT and fires INQ031.
-    [Fact]
-    public void MySql_OverCeilingStringKey_MapsToLongTextAndReportsInq031()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySql_OverCeilingStringKey_MapsToLongTextAndReportsInq031(string dialect)
     {
         const string source = """
             using Inquiry.Entities;
@@ -173,7 +175,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "MySql");
+        var result = RunGenerator(source, dialect: dialect);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ031");
 
         var ddl = ExtractSchemaDdl(result);

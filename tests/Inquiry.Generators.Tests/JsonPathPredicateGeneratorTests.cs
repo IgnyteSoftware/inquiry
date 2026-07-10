@@ -117,10 +117,12 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("WHERE JSON_VALUE(Data, '$.status') = :status", text);
     }
 
-    [Fact]
-    public void MySqlUsesJsonUnquoteExtract()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySqlUsesJsonUnquoteExtract(string dialect)
     {
-        var result = RunGenerator(CatalogStore(ByStatus), dialect: "MySql");
+        var result = RunGenerator(CatalogStore(ByStatus), dialect: dialect);
         AssertNoErrors(result);
         var text = GetCatalogStore(result);
 

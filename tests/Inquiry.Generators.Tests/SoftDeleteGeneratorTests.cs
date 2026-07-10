@@ -204,10 +204,12 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("SET \\\"IsDeleted\\\" = TRUE WHERE", text);
     }
 
-    [Fact]
-    public void MySqlUsesBacktickIdentifiers()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySqlUsesBacktickIdentifiers(string dialect)
     {
-        var result = RunGenerator(WidgetStore(CrudMethods), dialect: "MySql");
+        var result = RunGenerator(WidgetStore(CrudMethods), dialect: dialect);
         AssertNoErrors(result);
         var text = GetWidgetStore(result);
 

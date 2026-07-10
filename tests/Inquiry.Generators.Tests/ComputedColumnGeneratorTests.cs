@@ -90,6 +90,11 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(mysql);
         var mysqlDdl = Assert.Single(mysql.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Contains("GENERATED ALWAYS AS (FirstName || ' ' || LastName) STORED", mysqlDdl);
+
+        var mariadb = RunGenerator(ComputedSource, dialect: "MariaDb");
+        AssertNoErrors(mariadb);
+        var mariadbDdl = Assert.Single(mariadb.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        Assert.Contains("GENERATED ALWAYS AS (FirstName || ' ' || LastName) STORED", mariadbDdl);
     }
 
     [Fact]

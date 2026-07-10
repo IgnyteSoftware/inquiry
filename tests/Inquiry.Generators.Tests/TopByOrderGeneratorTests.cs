@@ -125,13 +125,15 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("LIMIT 1", text);
     }
 
-    [Fact]
-    public void TopByOrder_MySql()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void TopByOrder_MySql(string dialect)
     {
         var result = RunGenerator(SaleStore("""
             [InquirySelectTopByOrder("Amount")]
             public partial Task<Sale?> GetCheapestAsync(CancellationToken cancellationToken = default);
-            """), dialect: "MySql");
+            """), dialect: dialect);
         AssertNoErrors(result);
         var text = GetSaleStore(result);
 

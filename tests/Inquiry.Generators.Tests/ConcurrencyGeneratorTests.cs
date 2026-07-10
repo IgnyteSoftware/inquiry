@@ -86,18 +86,20 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sqlUpdateReturning = \"UPDATE \\\"TWidget\\\" SET \\\"Name\\\" = @Name, \\\"Version\\\" = \\\"Version\\\" + 1 WHERE \\\"Id\\\" = @Id AND \\\"Version\\\" = @Version RETURNING \\\"Id\\\", \\\"Name\\\", \\\"Version\\\"\";", text);
     }
 
-    [Fact]
-    public void OrmTokenUpdateReturningRequiresAffectedRow_MySql()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void OrmTokenUpdateReturningRequiresAffectedRow_MySql(string dialect)
     {
         var result = RunGenerator(TokenStore("""
             [InquiryUpdate(ReturnEntity = true)]
             public partial Task<Widget?> UpdateAsync(Widget widget, CancellationToken cancellationToken = default);
-            """), dialect: "MySql");
+            """), dialect: dialect);
         AssertNoErrors(result);
         var text = GetTokenStore(result);
 
-        // MySQL emulates RETURNING with UPDATE; SELECT. For token entities the trailing SELECT must be
-        // gated by the previous UPDATE, otherwise a stale token returns the current row and bypasses the
+        // MySQL/MariaDb emulate RETURNING with UPDATE; SELECT. For token entities the trailing SELECT must
+        // be gated by the previous UPDATE, otherwise a stale token returns the current row and bypasses the
         // generated null-result concurrency guard.
         Assert.Contains("_sqlUpdateReturning = \"UPDATE `TWidget` SET `Name` = @Name, `Version` = `Version` + 1 WHERE `Id` = @Id AND `Version` = @Version; SELECT `Id`, `Name`, `Version` FROM `TWidget` WHERE `Id` = @Id AND ROW_COUNT() > 0\";", text);
     }
@@ -342,6 +344,10 @@ public sealed partial class InquiryGeneratorTests
         var mysql = GetTokenStore(RunGenerator(TokenStore(TokenCrud), dialect: "MySql"));
         Assert.Contains("SET `Name` = @Name, `Version` = `Version` + 1 WHERE `Id` = @Id AND `Version` = @Version", mysql);
         Assert.Contains("DELETE FROM `TWidget` WHERE `Id` = @Id AND `Version` = @Version", mysql);
+
+        var mariadb = GetTokenStore(RunGenerator(TokenStore(TokenCrud), dialect: "MariaDb"));
+        Assert.Contains("SET `Name` = @Name, `Version` = `Version` + 1 WHERE `Id` = @Id AND `Version` = @Version", mariadb);
+        Assert.Contains("DELETE FROM `TWidget` WHERE `Id` = @Id AND `Version` = @Version", mariadb);
 
         var oracle = GetTokenStore(RunGenerator(TokenStore(TokenCrud), dialect: "Oracle"));
         Assert.Contains("SET Name = :Name, Version = Version + 1 WHERE Id = :Id AND Version = :Version", oracle);

@@ -71,10 +71,12 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("FREETEXT(([Title], [Body]), @searchTerm)", text);
     }
 
-    [Fact]
-    public void MySqlFullTextSearchUsesMatchAgainst()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySqlFullTextSearchUsesMatchAgainst(string dialect)
     {
-        var result = RunGenerator(FtsStore(SearchMethod), dialect: "MySql");
+        var result = RunGenerator(FtsStore(SearchMethod), dialect: dialect);
         AssertNoErrors(result);
         var text = GetDocStore(result);
 

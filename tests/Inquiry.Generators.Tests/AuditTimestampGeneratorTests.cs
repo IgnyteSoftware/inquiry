@@ -127,8 +127,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("DO UPDATE SET \\\"Title\\\" = @Title, \\\"ModifiedAt\\\" = @ModifiedAt\";", text);
     }
 
-    [Fact]
-    public void MySqlAuditedUpsertExcludesCreatedAtFromOnDuplicateKeyBranch()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySqlAuditedUpsertExcludesCreatedAtFromOnDuplicateKeyBranch(string dialect)
     {
         const string source = """
             using System;
@@ -163,13 +165,13 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "MySql");
+        var result = RunGenerator(source, dialect: dialect);
         AssertNoErrors(result);
 
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // MySQL's conflict branch uses VALUES(col) assignments built by its own enumerator —
+        // MySQL/MariaDb conflict branch uses VALUES(col) assignments built by its own enumerator —
         // CreatedAt must be excluded there too, while the insert list still writes it.
         Assert.Contains("ON DUPLICATE KEY UPDATE `Title` = VALUES(`Title`), `ModifiedAt` = VALUES(`ModifiedAt`)", text);
         Assert.Contains("INSERT INTO `Doc` (`Id`, `Title`, `CreatedAt`, `ModifiedAt`)", text);
