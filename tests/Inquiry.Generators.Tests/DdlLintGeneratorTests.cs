@@ -97,18 +97,22 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ061");
     }
 
-    [Fact]
-    public void MySqlIsExemptBecauseItAutoIndexesForeignKeys()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySqlIsExemptBecauseItAutoIndexesForeignKeys(string dialect)
     {
-        // MySQL/InnoDB creates a backing index for every FK constraint, so the lint must not fire.
-        var result = RunGenerator(UnindexedFkSource, dialect: "MySql", enableDiagnostics: EnableDdlLints);
+        // MySQL/MariaDB InnoDB creates a backing index for every FK constraint, so the lint must not fire.
+        var result = RunGenerator(UnindexedFkSource, dialect: dialect, enableDiagnostics: EnableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ061");
     }
 
-    [Fact]
-    public void MySqlStillLintsWhenForeignKeyConstraintsAreSuppressed()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySqlStillLintsWhenForeignKeyConstraintsAreSuppressed(string dialect)
     {
-        // With GenerateForeignKeys = false there is no constraint, so MySQL does not auto-index — lint applies.
+        // With GenerateForeignKeys = false there is no constraint, so MySQL/MariaDB does not auto-index — lint applies.
         const string source = """
             using Inquiry.Entities;
 
@@ -132,7 +136,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "MySql", enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, dialect: dialect, enableDiagnostics: EnableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ061");
     }
 
@@ -172,12 +176,14 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ062");
     }
 
-    [Fact]
-    public void DecimalLintIsDialectAgnostic_FiresOnMySql()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void DecimalLintIsDialectAgnostic_FiresOnMySql(string dialect)
     {
         // INQ062 has no dialect exemption (unlike INQ061's MySQL FK case); the FK-auto-index restructure
         // must not accidentally suppress it.
-        var result = RunGenerator(DecimalSource, dialect: "MySql", enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(DecimalSource, dialect: dialect, enableDiagnostics: EnableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ062");
     }
 

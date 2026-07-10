@@ -1909,10 +1909,12 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("InquiryInExpansion", generatedText);
     }
 
-    [Fact]
-    public void MySqlJsonTableInUsesCorrectTypeForGuidColumn()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySqlJsonTableInUsesCorrectTypeForGuidColumn(string dialect)
     {
-        // GUID columns use CHAR(36) in JSON_TABLE (MySQL stores GUIDs as 36-char strings).
+        // GUID columns use CHAR(36) in JSON_TABLE (MySQL/MariaDB store GUIDs as 36-char strings).
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -1942,7 +1944,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "MySql");
+        var result = RunGenerator(source, dialect: dialect);
         Assert.Empty(result.RunResult.Diagnostics);
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
 

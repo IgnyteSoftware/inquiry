@@ -116,10 +116,12 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("\"EndDate\" DATE,", ddl);
     }
 
-    [Fact]
-    public void MySqlSchemaMapsDateOnlyTimeOnlyToDateAndTime6()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void MySqlSchemaMapsDateOnlyTimeOnlyToDateAndTime6(string dialect)
     {
-        var result = RunGenerator(DateTimeOnlySource, dialect: "MySql");
+        var result = RunGenerator(DateTimeOnlySource, dialect: dialect);
         AssertNoErrors(result);
         var ddl = ExtractSchemaDdl(result);
 

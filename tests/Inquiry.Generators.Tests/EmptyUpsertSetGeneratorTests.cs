@@ -72,10 +72,12 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("IF NOT EXISTS", text);
     }
 
-    [Fact]
-    public void EmptySetUpsertEmitsKeySelfAssignNoOpOnMySql()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void EmptySetUpsertEmitsKeySelfAssignNoOpOnMySql(string dialect)
     {
-        var text = LedgerUpsertSql("MySql");
+        var text = LedgerUpsertSql(dialect);
         // ON DUPLICATE KEY UPDATE requires an assignment; a key-only update set self-assigns the key.
         Assert.Contains("ON DUPLICATE KEY UPDATE `Id` = `Id`", text);
         Assert.DoesNotContain("ON DUPLICATE KEY UPDATE ;", text);

@@ -127,13 +127,15 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("SELECT DISTINCT", text);
     }
 
-    [Fact]
-    public void DistinctSelectAll_MySql()
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void DistinctSelectAll_MySql(string dialect)
     {
         var result = RunGenerator(DistinctProductStore("""
             [InquirySelectAll(Distinct = true)]
             public partial Task<IReadOnlyList<Product>> SelectDistinctAsync(CancellationToken cancellationToken = default);
-            """), dialect: "MySql");
+            """), dialect: dialect);
         AssertNoErrors(result);
         var text = GetDistinctProductStore(result);
 
