@@ -104,6 +104,66 @@ public static class FeatureSchema
         );
         """;
 
+    /// <summary>PostgreSQL DDL for the <see cref="UnsignedTypesItem"/> repro table.</summary>
+    public const string UnsignedTypesPostgreSqlDdl = """
+        CREATE TABLE "UnsignedTypesItem" (
+            "Id"            INTEGER NOT NULL PRIMARY KEY,
+            "ByteVal"       SMALLINT NOT NULL,
+            "Int16Val"      SMALLINT NOT NULL,
+            "Int32Val"      INTEGER NOT NULL,
+            "Int64Val"      BIGINT NOT NULL,
+            "SByteVal"      SMALLINT NOT NULL,
+            "UInt16Val"     SMALLINT NOT NULL,
+            "UInt32Val"     INTEGER NOT NULL,
+            "UInt64Val"     BIGINT NOT NULL,
+            "EnumInt32Val"  INTEGER NOT NULL,
+            "EnumSByteVal"  SMALLINT NOT NULL,
+            "EnumUInt16Val" SMALLINT NOT NULL,
+            "EnumUInt32Val" INTEGER NOT NULL,
+            "EnumUInt64Val" BIGINT NOT NULL
+        );
+        """;
+
+    /// <summary>MySQL / MariaDB DDL for the <see cref="UnsignedTypesItem"/> repro table.</summary>
+    public const string UnsignedTypesMySqlDdl = """
+        CREATE TABLE UnsignedTypesItem (
+            Id            INT NOT NULL PRIMARY KEY,
+            ByteVal       SMALLINT NOT NULL,
+            Int16Val      SMALLINT NOT NULL,
+            Int32Val      INT NOT NULL,
+            Int64Val      BIGINT NOT NULL,
+            SByteVal      SMALLINT NOT NULL,
+            UInt16Val     SMALLINT NOT NULL,
+            UInt32Val     INT NOT NULL,
+            UInt64Val     BIGINT NOT NULL,
+            EnumInt32Val  INT NOT NULL,
+            EnumSByteVal  SMALLINT NOT NULL,
+            EnumUInt16Val SMALLINT NOT NULL,
+            EnumUInt32Val INT NOT NULL,
+            EnumUInt64Val BIGINT NOT NULL
+        );
+        """;
+
+    /// <summary>Oracle DDL for the <see cref="UnsignedTypesItem"/> repro table.</summary>
+    public const string UnsignedTypesOracleDdl = """
+        CREATE TABLE UnsignedTypesItem (
+            Id            NUMBER(10) NOT NULL PRIMARY KEY,
+            ByteVal       NUMBER(3) NOT NULL,
+            Int16Val      NUMBER(5) NOT NULL,
+            Int32Val      NUMBER(10) NOT NULL,
+            Int64Val      NUMBER(19) NOT NULL,
+            SByteVal      NUMBER(3) NOT NULL,
+            UInt16Val     NUMBER(5) NOT NULL,
+            UInt32Val     NUMBER(10) NOT NULL,
+            UInt64Val     NUMBER(19) NOT NULL,
+            EnumInt32Val  NUMBER(10) NOT NULL,
+            EnumSByteVal  NUMBER(3) NOT NULL,
+            EnumUInt16Val NUMBER(5) NOT NULL,
+            EnumUInt32Val NUMBER(10) NOT NULL,
+            EnumUInt64Val NUMBER(19) NOT NULL
+        )
+        """;
+
     // ---------------------------------------------------------------------------
     // Repro schema for the eager-load sibling of #49: a uint KEY above int.MaxValue.
     // uint → INT (SQL Server) / INTEGER (SQLite); the eager-load binder passes the raw
@@ -134,6 +194,45 @@ public static class FeatureSchema
             ParentId INTEGER NOT NULL,
             Label    TEXT    NOT NULL
         );
+        """;
+
+    /// <summary>PostgreSQL DDL for the <see cref="UnsignedKeyParent"/> / <see cref="UnsignedKeyChild"/> repro tables.</summary>
+    public const string UnsignedKeyEagerPostgreSqlDdl = """
+        CREATE TABLE "UnsignedKeyParent" (
+            "Id"   INTEGER NOT NULL PRIMARY KEY,
+            "Name" TEXT NOT NULL
+        );
+        CREATE TABLE "UnsignedKeyChild" (
+            "Id"       INTEGER NOT NULL PRIMARY KEY,
+            "ParentId" INTEGER NOT NULL,
+            "Label"    TEXT NOT NULL
+        );
+        """;
+
+    /// <summary>MySQL / MariaDB DDL for the <see cref="UnsignedKeyParent"/> / <see cref="UnsignedKeyChild"/> repro tables.</summary>
+    public const string UnsignedKeyEagerMySqlDdl = """
+        CREATE TABLE UnsignedKeyParent (
+            Id   INT NOT NULL PRIMARY KEY,
+            Name VARCHAR(100) NOT NULL
+        );
+        CREATE TABLE UnsignedKeyChild (
+            Id       INT NOT NULL PRIMARY KEY,
+            ParentId INT NOT NULL,
+            Label    VARCHAR(100) NOT NULL
+        );
+        """;
+
+    /// <summary>Oracle DDL for the <see cref="UnsignedKeyParent"/> / <see cref="UnsignedKeyChild"/> repro tables.</summary>
+    public const string UnsignedKeyEagerOracleDdl = """
+        CREATE TABLE UnsignedKeyParent (
+            Id   NUMBER(10) NOT NULL PRIMARY KEY,
+            Name VARCHAR2(100) NOT NULL
+        );
+        CREATE TABLE UnsignedKeyChild (
+            Id       NUMBER(10) NOT NULL PRIMARY KEY,
+            ParentId NUMBER(10) NOT NULL,
+            Label    VARCHAR2(100) NOT NULL
+        )
         """;
 
     // ---------------------------------------------------------------------------
