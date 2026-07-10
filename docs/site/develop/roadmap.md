@@ -148,8 +148,8 @@
 
 - **~~Port SQLite-only integration tests to server dialects (#154)~~** *(resolved 2026-07-09)*. See
   [Recently resolved](#recently-resolved).
-- **Oracle has zero test coverage for `[InquiryBulkInsert]` (#155).** Oracle's bulk insert path (which
-  compiles down to multi-row batch insert) is completely unverified.
+- **~~Oracle has zero test coverage for `[InquiryBulkInsert]` (#155)~~** *(resolved 2026-07-10)*. See
+  [Recently resolved](#recently-resolved).
 - **~~CancellationToken propagation never verified against real databases (#156)~~** *(resolved
   2026-07-09)*. See [Recently resolved](#recently-resolved).
 - **Single-row all-types bulk-insert test matrix (#134).** No test covers bulk insert of every
@@ -192,6 +192,13 @@
 
 Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
 open:
+
+- **Oracle `[InquiryBulkInsert]` fallback test coverage (#155, 2026-07-10).** Added
+  `BulkInsertFallbackIntegrationTests` to the Oracle test project, verifying the multi-row batch
+  insert (`INSERT ALL ... SELECT 1 FROM dual`) fallback path that the generator compiles
+  `[InquiryBulkInsert]` to on dialects without a native bulk-copy API. Also added Northwind-based
+  `BatchIntegrationTests` (InsertAll, UpdateAll, DeleteAll over `Region`) to close the last
+  cross-provider test parity gap.
 
 - **Guard Oracle `:rc` ref-cursor finalize-once invariant (#136, 2026-07-09).** `FinalizeCommand` now
   checks `oracleCommand.Parameters.Contains("rc")` before adding the `:rc` OUT ref-cursor parameter,
