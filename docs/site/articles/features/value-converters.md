@@ -33,6 +33,10 @@ public sealed class Customer
 
 The binder writes through a cached singleton — `InquiryConverterCache<CustomerIDConverter>.Instance.ToProvider(_e.CustomerID)` — and the materializer reads via `InquiryConverterCache<CustomerIDConverter>.Instance.FromProvider(reader.GetString(0))`. The converter is allocated exactly once per converter type (`InquiryConverterCache<T>.Instance = new()`) and reused across every call and row — there is no per-call allocation, whether the converter is a `class` or a `struct` — which is safe because converters are stateless by contract.
 
+`TProvider` must be a supported non-null scalar type. Database nullability belongs to the model property: use a nullable `TModel` property with a non-null `TProvider`. A nullable or otherwise unsupported provider type reports `INQ038`.
+
+Collection predicates and `[InquiryDeleteAll]` accept model values and project each non-null element through the cached converter exactly once before binding. Null collections retain the operation's empty/no-op behavior. Null elements do not invoke `ToProvider`; they bind as NULL and cannot match a non-null key. The projection is deferred and uses a static selector, so it adds no captured closure or intermediate list.
+
 ## Enum-as-string
 
 For the common "enum stored as text" case, there's a shortcut — no converter needed:

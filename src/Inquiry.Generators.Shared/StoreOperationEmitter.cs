@@ -236,24 +236,17 @@ internal static class StoreOperationEmitter
                 // to match the baked SQL. Returns rows affected; for a soft-delete entity
                 // _sqlDeleteAll is the soft UPDATE form.
                 var keysParam = method.Parameters[0].Name;
-                // Stamp the key column's DbType on the expanded key parameters, same as a predicate IN
-                // (see CollectionBindingExpression) — so a DateTime key collection binds DateTime2, not
-                // legacy datetime, on SQL Server. Single-column keys only (this IN binds one column).
-                var keysDbType = entity.Keys.Count == 1 ? ResolveDbType(entity.Keys[0], sqlBuilder) : null;
-                var keysDbTypeArg = keysDbType is null ? string.Empty : $", dbType: {keysDbType}";
-                // Also carry the key column's declared Size/Precision/Scale (SQL Server only, same gating as
-                // CollectionBindingExpression) so a batch delete/soft-delete over a declared-length string key
-                // keeps a stable sp_executesql signature across value lengths (#102/#112). A declared string/
-                // decimal key always resolves a non-null DbType, so keysDbTypeArg is present whenever this is.
-                var keysSizeArg = entity.Keys.Count == 1 ? BuildSizePrecisionArgs(entity.Keys[0], sqlBuilder) : string.Empty;
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
                 source.AppendLine("            _sqlDeleteAll,");
                 source.AppendLine("            (global::System.Data.Common.DbCommand _c) =>");
                 source.AppendLine("            {");
-                source.AppendLine(sqlBuilder.UseArrayInParameters
-                    ? $"                {sqlBuilder.ArrayParameterBinderFqn}.Bind(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam});"
-                    : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{GeneratorHelpers.Escape(sqlBuilder.ParameterName("keys"))}\", {keysParam}, Inquiry.MaxParametersPerCommand{keysDbTypeArg}{keysSizeArg});");
+                source.AppendLine(CollectionBindingExpression(
+                    sqlBuilder,
+                    entity.Keys[0],
+                    sqlBuilder.ParameterName("keys"),
+                    keysParam,
+                    isNegatedCollection: false));
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 source.AppendLine("    }");
@@ -982,7 +975,12 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[binding.MethodParameterIndex].Name;
             if (binding.IsCollection)
             {
-                source.AppendLine(CollectionBindingExpression(sqlBuilder, binding, arg));
+                source.AppendLine(CollectionBindingExpression(
+                    sqlBuilder,
+                    binding.Column,
+                    binding.SqlParameterName,
+                    arg,
+                    binding.IsNegatedCollection));
             }
             else
             {
@@ -1039,7 +1037,12 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[binding.MethodParameterIndex].Name;
             if (binding.IsCollection)
             {
-                source.AppendLine(CollectionBindingExpression(sqlBuilder, binding, arg));
+                source.AppendLine(CollectionBindingExpression(
+                    sqlBuilder,
+                    binding.Column,
+                    binding.SqlParameterName,
+                    arg,
+                    binding.IsNegatedCollection));
             }
             else
             {
@@ -1427,31 +1430,37 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>
-    /// Emits the runtime binding for a collection predicate parameter. A NOT IN collection always uses
-    /// the sentinel <c>ExpandNotIn</c> (so an empty collection is dialect-uniform); a plain IN uses the
-    /// dialect's array bind (when supported) or the sentinel <c>Expand</c>.
+    /// Emits runtime binding for a column-backed collection used by IN/NOT IN predicates and DeleteAll.
+    /// A NOT IN collection always uses the sentinel <c>ExpandNotIn</c> (so an empty collection is
+    /// dialect-uniform); a plain IN/DeleteAll uses the dialect's array bind (when supported) or the
+    /// sentinel <c>Expand</c>.
     /// <para>
     /// When the column has a value transform (enum-as-string or a value converter) the raw collection
     /// is projected through that transform before being passed to the runtime helper, mirroring what
     /// <see cref="BuildParameterValueExpression"/> does for scalar predicates.
     /// </para>
     /// </summary>
-    private static string CollectionBindingExpression(SqlBuilder sqlBuilder, PredicateBinding binding, string arg)
+    private static string CollectionBindingExpression(
+        SqlBuilder sqlBuilder,
+        ColumnData column,
+        string sqlParameterName,
+        string arg,
+        bool isNegatedCollection)
     {
-        var name = GeneratorHelpers.Escape(binding.SqlParameterName);
-        var projected = ProjectedCollectionExpression(binding, arg);
+        var name = GeneratorHelpers.Escape(sqlParameterName);
+        var projected = ProjectedCollectionExpression(column, arg);
         // Stamp the same DbType the scalar binder resolves for this column so an IN element binds with
         // the right type (e.g. DateTime2 on SQL Server, not legacy datetime). The array path leaves it
         // to the provider, which infers the element type from the typed native array.
-        var dbType = ResolveDbType(binding.Column, sqlBuilder);
+        var dbType = ResolveDbType(column, sqlBuilder);
         var dbTypeArg = dbType is null ? string.Empty : $", dbType: {dbType}";
         // Carry the declared Size/Precision/Scale of the IN column onto each element parameter so the
         // sp_executesql signature stays stable across value lengths (SQL Server only — same gating as the
         // scalar predicate path; #56/#102). The Expand/ExpandNotIn overload that takes these requires a
         // dbType, but a declared string/decimal column always resolves a non-null DbType (String/AnsiString/
         // Decimal), so dbTypeArg is non-empty whenever sizePrecisionArgs is — the call always type-checks.
-        var sizePrecisionArgs = BuildSizePrecisionArgs(binding.Column, sqlBuilder);
-        if (binding.IsNegatedCollection)
+        var sizePrecisionArgs = BuildSizePrecisionArgs(column, sqlBuilder);
+        if (isNegatedCollection)
         {
             return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
         }
@@ -1468,23 +1477,26 @@ internal static class StoreOperationEmitter
     /// converter first, mirroring the scalar binder and materializer. The projection preserves the two
     /// null-handling guarantees of the scalar path: a null collection flows through unprojected (the
     /// helpers treat null as empty, but <c>Enumerable.Select(null, …)</c> would throw), and a
-    /// reference-type converter model binds <c>null</c> rather than calling <c>ToProvider(null)</c>.
+    /// nullable value/reference converter model binds <c>null</c> rather than calling
+    /// <c>ToProvider</c> for that element.
     /// </summary>
-    private static string ProjectedCollectionExpression(PredicateBinding binding, string arg)
+    private static string ProjectedCollectionExpression(ColumnData column, string arg)
     {
-        if (binding.Column.Converter is { } conv)
+        if (column.Converter is { } conv)
         {
-            // A reference-type model can hold null elements; guard each so ToProvider is never called on
-            // null (binds null, matching BuildParameterValueExpression). A value-type model cannot be null
-            // (validation rejects nullable value-type IN elements), so it keeps the unguarded form, which
-            // also preserves a typed provider array for the PostgreSQL '= ANY' path.
-            var selector = binding.Column.Type.IsValueType
-                ? $"static _e => global::Inquiry.Entities.InquiryConverterCache<{conv.ConverterTypeDisplay}>.Instance.ToProvider(_e)"
-                : $"static _e => _e is null ? ({conv.ProviderTypeDisplay}?)null : global::Inquiry.Entities.InquiryConverterCache<{conv.ConverterTypeDisplay}>.Instance.ToProvider(_e)";
+            var converter = $"global::Inquiry.Entities.InquiryConverterCache<{conv.ConverterTypeDisplay}>.Instance";
+            var nullableProvider = conv.ProviderType?.IsValueType == true
+                ? conv.ProviderType.NonNullableDisplayName + "?"
+                : conv.ProviderTypeDisplay + "?";
+            var selector = column.Type.IsValueType
+                ? column.Type.IsNullable
+                    ? $"static _e => _e.HasValue ? ({nullableProvider}){converter}.ToProvider(_e.Value) : null"
+                    : $"static _e => {converter}.ToProvider(_e)"
+                : $"static _e => _e is null ? ({nullableProvider})null : {converter}.ToProvider(_e)";
             return NullGuardedSelect(arg, selector);
         }
 
-        if (binding.Column.EnumAsString)
+        if (column.EnumAsString)
         {
             return NullGuardedSelect(arg, "static _e => _e.ToString()");
         }
