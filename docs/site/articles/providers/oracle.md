@@ -49,6 +49,10 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 - **Prepared statements:** the default `PreparedStatementMode.Auto` is a silent no-op for Oracle (no per-command `Prepare()`). It isn't needed: ODP.NET has a pool-level statement (cursor) cache whose **self-tuning is on by default**, so cursors already survive across Inquiry's per-operation pooled connections with no configuration. Inquiry sets no `Statement Cache Size` in the connection string — the default is already optimal (measured; see [Prepared statements](../features/prepared-statements.md)).
 - **Stored-procedure result sets** (today) require an OUT `SYS_REFCURSOR` parameter, which the generator doesn't yet emit. Either use a `FUNCTION` that `RETURN SYS_REFCURSOR`, or wait for the planned stored-procedure expansion.
 
+## Temporal values
+
+`DateOnly` binds as a midnight `DateTime` with `DbType.Date`. `TimeOnly` binds as `TimeSpan` without an explicit `DbType`, allowing ODP.NET to infer `INTERVAL DAY TO SECOND`. `DateTimeOffset` binds unchanged as `TIMESTAMP WITH TIME ZONE`. Generated readers reverse these bridges. ODP.NET normalizes interval fractions to microsecond precision (10 .NET ticks), while numeric offsets such as `-04:30` are preserved.
+
 ## Testing
 
 `tests/Inquiry.Oracle.Tests` runs against a Testcontainers-managed `gvenzl/oracle-xe:21-slim-faststart` image, in the CI integration matrix alongside the other engines (~3 min container warm-up).
