@@ -44,7 +44,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     // Whole seconds from InquiryOptions.DefaultCommandTimeout; 0 = not configured (provider default).
     private readonly int _defaultCommandTimeoutSeconds;
-    private int _inFlight; // 0 = idle, 1 = busy
+    // One atomic lifecycle: 0=open/idle, 1=open/busy, 2=terminal owner, 3=closed.
+    private int _state;
 
     internal TransactedInquiryRequestPipeline(
         DbConnection connection,
@@ -85,11 +86,9 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     /// consult this so their members — including the Connection/Transaction interop surface —
     /// fail fast after the outer transaction is gone instead of handing out a disposed pair.
     /// </summary>
-    internal bool IsClosed => _isClosed;
+    internal bool IsClosed => System.Threading.Volatile.Read(ref _state) >= 2;
 
-    internal void MarkClosed() => _isClosed = true;
-
-    private volatile bool _isClosed;
+    internal void MarkClosed() => System.Threading.Interlocked.Exchange(ref _state, 3);
 
     internal InFlightLease EnterExclusiveOperation()
     {
@@ -97,22 +96,38 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         return new InFlightLease(this);
     }
 
+    internal InFlightLease EnterTerminalOperation()
+    {
+        var observed = System.Threading.Interlocked.CompareExchange(ref _state, 2, 0);
+        if (observed == 0) return new InFlightLease(this, terminal: true);
+        ThrowForUnavailableState(observed);
+        throw new System.InvalidOperationException();
+    }
+
     internal readonly struct InFlightLease : IDisposable
     {
         private readonly TransactedInquiryRequestPipeline _pipeline;
+        private readonly bool _terminal;
 
-        internal InFlightLease(TransactedInquiryRequestPipeline pipeline)
-            => _pipeline = pipeline;
+        internal InFlightLease(TransactedInquiryRequestPipeline pipeline, bool terminal = false)
+        {
+            _pipeline = pipeline;
+            _terminal = terminal;
+        }
 
-        public void Dispose() => _pipeline.ExitInFlight();
+        public void Dispose()
+        {
+            if (_terminal) _pipeline.MarkClosed();
+            else _pipeline.ExitInFlight();
+        }
     }
 
     // ---- Savepoint primitives ------------------------------------------------------------
     //
     // Wrap DbTransaction.SaveAsync / RollbackAsync(name) / ReleaseAsync(name) with the same
-    // _inFlight guard as data operations: a savepoint is a SQL statement on the connection, so it
+    // atomic operation gate as data operations: a savepoint is a SQL statement on the connection, so it
     // would corrupt an in-flight reader / writer if two ops touched the connection at once. The
-    // try/finally ensures _inFlight is always released even if the provider throws.
+    // try/finally ensures the lease is always released even if the provider throws.
 
     internal async Task SaveSavepointAsync(string savepointName, CancellationToken cancellationToken)
     {
@@ -129,28 +144,24 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     internal async Task ReleaseSavepointAsync(string savepointName, CancellationToken cancellationToken)
     {
-        EnterInFlight();
-        try
-        {
-            await _transaction.ReleaseAsync(savepointName, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            ExitInFlight();
-        }
+        var lease = EnterExclusiveOperation();
+        using (lease) await ReleaseSavepointAsync(savepointName, lease, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task ReleaseSavepointAsync(string savepointName, InFlightLease lease, CancellationToken cancellationToken)
+    {
+        await _transaction.ReleaseAsync(savepointName, cancellationToken).ConfigureAwait(false);
     }
 
     internal async Task RollbackToSavepointAsync(string savepointName, CancellationToken cancellationToken)
     {
-        EnterInFlight();
-        try
-        {
-            await _transaction.RollbackAsync(savepointName, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            ExitInFlight();
-        }
+        var lease = EnterExclusiveOperation();
+        using (lease) await RollbackToSavepointAsync(savepointName, lease, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task RollbackToSavepointAsync(string savepointName, InFlightLease lease, CancellationToken cancellationToken)
+    {
+        await _transaction.RollbackAsync(savepointName, cancellationToken).ConfigureAwait(false);
     }
 
     private bool HasInterceptors => _interceptors.Length > 0;
@@ -205,9 +216,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch
         {
-            if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
-            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
-            lease.Dispose();
+            try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
+            finally { lease.Dispose(); }
             throw;
         }
     }
@@ -305,9 +315,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
-            if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
-            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
-            ExitInFlight();
+            try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
+            finally { ExitInFlight(); }
         }
     }
 
@@ -506,9 +515,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
-            if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
-            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
-            ExitInFlight();
+            try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
+            finally { ExitInFlight(); }
         }
     }
 
@@ -715,9 +723,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
-            if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
-            if (dbCommand is not null) await dbCommand.DisposeAsync().ConfigureAwait(false);
-            ExitInFlight();
+            try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
+            finally { ExitInFlight(); }
         }
     }
 
@@ -1141,17 +1148,35 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     // ---- Shared helpers --------------------------------------------------------------
 
-    private void EnterInFlight()
+    private static async ValueTask DisposeReaderAndCommandAsync(DbDataReader? reader, DbCommand? command)
     {
-        if (System.Threading.Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0)
+        try
         {
-            throw new InvalidOperationException(
-                "Cannot start a new Inquiry operation while another operation is in flight on the same transaction. " +
-                "DbConnection is not thread-safe; serialize operations within a single transaction (no Task.WhenAll, no concurrent foreach).");
+            if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            if (command is not null) await command.DisposeAsync().ConfigureAwait(false);
         }
     }
 
-    private void ExitInFlight() => System.Threading.Interlocked.Exchange(ref _inFlight, 0);
+    private void EnterInFlight()
+    {
+        var observed = System.Threading.Interlocked.CompareExchange(ref _state, 1, 0);
+        if (observed != 0) ThrowForUnavailableState(observed);
+    }
+
+    private void ExitInFlight() => System.Threading.Interlocked.CompareExchange(ref _state, 0, 1);
+
+    private static void ThrowForUnavailableState(int state)
+    {
+        if (state >= 2)
+            throw new ObjectDisposedException(nameof(TransactedInquiryRequestPipeline), "This Inquiry transaction is closing or closed.");
+
+        throw new InvalidOperationException(
+            "Cannot start a new Inquiry operation while another operation is in flight on the same transaction. " +
+            "DbConnection is not thread-safe; serialize operations within a single transaction (no Task.WhenAll, no concurrent foreach).");
+    }
 
     private void InitializeCommandSync(DbCommand dbCommand, InquiryCommand command)
     {
