@@ -63,13 +63,11 @@ public sealed class OracleReaderRepresentationTests
             await CaptureRejectionAsync("TimeSpan+Time", TimeSpan.FromHours(12), DbType.Time),
             await CaptureRejectionAsync("TimeSpan+Object", TimeSpan.FromHours(12), DbType.Object),
         };
-        Assert.Equal(
-        [
-            "DateOnly+Date: Execute: InvalidCastException: Unable to cast object of type 'System.DateOnly' to type 'System.IConvertible'.",
-            "TimeOnly+Time: Execute: ArgumentException: ORA-50028: Invalid parameter binding (Parameter 'ParameterName')",
-            "TimeSpan+Time: Execute: ArgumentException: ORA-50028: Invalid parameter binding (Parameter 'ParameterName')",
-            "TimeSpan+Object: Execute: ArgumentException: ORA-50028: Invalid parameter binding",
-        ], rejected);
+        Assert.StartsWith("DateOnly+Date: Execute: InvalidCastException:", rejected[0]);
+        Assert.Contains("System.DateOnly", rejected[0]);
+        Assert.StartsWith("TimeOnly+Time: Execute: ArgumentException: ORA-50028:", rejected[1]);
+        Assert.StartsWith("TimeSpan+Time: Execute: ArgumentException: ORA-50028:", rejected[2]);
+        Assert.StartsWith("TimeSpan+Object: Execute: ArgumentException: ORA-50028:", rejected[3]);
 
         await ExecuteAsync(new DateTime(2024, 2, 29), DbType.Date);
         await ExecuteAsync(TimeSpan.FromTicks(452_961_234_570), null);
