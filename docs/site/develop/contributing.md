@@ -82,15 +82,15 @@ Inquiry uses **MinVer** for tag-based versioning. The version is derived from th
 
 | State | Example version |
 |---|---|
-| Tagged commit `v8.0.0` | `8.0.0` |
-| Tagged commit `v8.0.0-preview.1` | `8.0.0-preview.1` |
-| 3 commits after `v8.0.0` | `8.0.1-alpha.0.3` |
-| No tag (floor is 8.0) | `8.0.0-alpha.0.N` |
+| Tagged commit `v1.0.0` | `1.0.0` |
+| Tagged commit `v1.0.0-preview.1` | `1.0.0-preview.1` |
+| 3 commits after `v1.0.0` | `1.0.1-alpha.0.3` |
+| No tag (floor is 1.0) | `1.0.0-alpha.0.N` |
 
 ### How to release
 
 1. Ensure `main` is green — CI must pass.
-2. Tag the release commit: `git tag v8.0.0`
+2. Tag the release commit: `git tag v1.0.0`
 3. Push the tag: `git push --tags`
 
 The [`release.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/release.yml)
@@ -99,7 +99,7 @@ workflow triggers on any `v*` tag push and:
 - Checks out with full history (MinVer needs tags to derive the version).
 - Builds in Release configuration.
 - Runs generator, runtime, and SQLite tests as a gate.
-- Packs all 8 shippable packages (+ `.snupkg` symbol packages).
+- Packs all 9 shippable packages (+ `.snupkg` symbol packages).
 - Pushes to NuGet.org using the `NUGET_API_KEY` repository secret.
 
 ### Prerequisites
@@ -115,7 +115,8 @@ A `NUGET_API_KEY` secret must be configured in the repository's GitHub Actions s
 | `Inquiry` | Core runtime — attributes, pipeline, DI |
 | `Inquiry.SqlServer` | SQL Server provider + bundled analyzer |
 | `Inquiry.PostgreSql` | PostgreSQL provider + bundled analyzer |
-| `Inquiry.MySql` | MySQL/MariaDB provider + bundled analyzer |
+| `Inquiry.MySql` | MySQL provider + bundled analyzer |
+| `Inquiry.MariaDb` | MariaDB provider + bundled analyzer |
 | `Inquiry.Oracle` | Oracle provider + bundled analyzer |
 | `Inquiry.Sqlite` | SQLite provider + bundled analyzer |
 | `Inquiry.Interceptors` | Opt-in slow-query logging + sqlcommenter |

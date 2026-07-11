@@ -23,8 +23,8 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
-    <!-- MinVer: version derived from nearest git tag (v8.0.0 → 8.0.0) -->
-    <MinVerMinimumMajorMinor>8.0</MinVerMinimumMajorMinor>
+    <!-- MinVer: version derived from nearest git tag (v1.0.0 → 1.0.0) -->
+    <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
   <ItemGroup>
