@@ -398,14 +398,10 @@ internal static class StoreOperationEmitter
                 for (var _c = 0; _c < insertable.Length; _c++)
                 {
                     var col = insertable[_c];
-                    var dbType = ResolveDbType(col, sqlBuilder);
                     source.AppendLine("                    {");
                     source.AppendLine("                        var _p = _cmd.CreateParameter();");
                     source.AppendLine($"                        _p.ParameterName = \"@p\" + _r + \"_{_c}\";");
-                    if (dbType is not null)
-                    {
-                        source.AppendLine($"                        _p.DbType = {dbType};");
-                    }
+                    AppendColumnParameterMetadata(source, col, sqlBuilder, "_p", "                        ", predicate: false);
                     source.AppendLine($"                        _p.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName)};");
                     source.AppendLine("                        _cmd.Parameters.Add(_p);");
                     source.AppendLine("                    }");
@@ -437,13 +433,9 @@ internal static class StoreOperationEmitter
                 for (var _c = 0; _c < updateColumns.Length; _c++)
                 {
                     var col = updateColumns[_c];
-                    var dbType = ResolveDbType(col, sqlBuilder);
                     source.AppendLine($"                var _p{_c} = _t.CreateParameter();");
                     source.AppendLine($"                _p{_c}.ParameterName = \"@{GeneratorHelpers.Escape(col.PropertyName)}\";");
-                    if (dbType is not null)
-                    {
-                        source.AppendLine($"                _p{_c}.DbType = {dbType};");
-                    }
+                    AppendColumnParameterMetadata(source, col, sqlBuilder, $"_p{_c}", "                ", predicate: false);
                     source.AppendLine($"                _p{_c}.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName)};");
                     source.AppendLine($"                _t.AddParameter(_p{_c});");
                 }
@@ -534,12 +526,16 @@ internal static class StoreOperationEmitter
     {
         if (column.Converter is { } converter)
         {
-            return sqlBuilder.MapDbTypeExpressionForSpecialType(converter.ProviderSpecialType);
+            return converter.ProviderType is { } providerType
+                ? sqlBuilder.MapDbTypeExpression(providerType, column.IsUnicode)
+                : sqlBuilder.MapDbTypeExpressionForSpecialType(converter.ProviderSpecialType, column.IsUnicode);
         }
 
         if (column.EnumAsString)
         {
-            return "global::System.Data.DbType.String";
+            return column.IsUnicode
+                ? "global::System.Data.DbType.String"
+                : "global::System.Data.DbType.AnsiString";
         }
 
         return sqlBuilder.MapDbTypeExpression(column.Type, column.IsUnicode);
@@ -587,6 +583,27 @@ internal static class StoreOperationEmitter
             // and the scale within the precision.
             source.AppendLine($"{indent}{paramVar}.Precision = {column.Precision.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
             source.AppendLine($"{indent}{paramVar}.Scale = {column.Scale.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
+        }
+    }
+
+    /// <summary>Emits provider type metadata shared by every column-backed parameter.</summary>
+    private static void AppendColumnParameterMetadata(
+        StringBuilder source,
+        ColumnData column,
+        SqlBuilder sqlBuilder,
+        string paramVar,
+        string indent,
+        bool predicate)
+    {
+        var dbType = ResolveDbType(column, sqlBuilder);
+        if (dbType is not null)
+        {
+            source.AppendLine($"{indent}{paramVar}.DbType = {dbType};");
+        }
+
+        if (predicate)
+        {
+            AppendSizePrecision(source, column, sqlBuilder, paramVar, indent);
         }
     }
 
@@ -791,16 +808,8 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
-            var dbType = ResolveDbType(column, sqlBuilder);
-            if (dbType is not null)
-            {
-                source.AppendLine($"{indent}    _p{i}.DbType = {dbType};");
-            }
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent + "    ", emitSizePrecision);
             source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i))};");
-            if (emitSizePrecision)
-            {
-                AppendSizePrecision(source, column, sqlBuilder, $"_p{i}", indent + "    ");
-            }
             source.AppendLine($"{indent}    _cmd.Parameters.Add(_p{i});");
         }
         source.AppendLine($"{indent}}},");
@@ -945,8 +954,8 @@ internal static class StoreOperationEmitter
             {
                 source.AppendLine($"                var _p{i} = _c.CreateParameter();");
                 source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
+                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{i}", "                ", predicate: true);
                 source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg)};");
-                AppendSizePrecision(source, binding.Column, sqlBuilder, $"_p{i}", "                ");
                 source.AppendLine($"                _c.Parameters.Add(_p{i});");
             }
         }
@@ -983,11 +992,7 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[i].Name;
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
-            var dbType = ResolveDbType(column, sqlBuilder);
-            if (dbType is not null)
-            {
-                source.AppendLine($"                _p{pi}.DbType = {dbType};");
-            }
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
             source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(column, arg)};");
             source.AppendLine($"                _c.Parameters.Add(_p{pi});");
             pi++;
@@ -1006,8 +1011,8 @@ internal static class StoreOperationEmitter
             {
                 source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
+                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: true);
                 source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg)};");
-                AppendSizePrecision(source, binding.Column, sqlBuilder, $"_p{pi}", "                ");
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
                 pi++;
             }
@@ -1056,8 +1061,8 @@ internal static class StoreOperationEmitter
             var arg = method.Parameters[i].Name;
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(fieldColumns[i].PropertyName)}\";");
+            AppendColumnParameterMetadata(source, fieldColumns[i], sqlBuilder, $"_p{pi}", "                ", predicate: true);
             source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg)};");
-            AppendSizePrecision(source, fieldColumns[i], sqlBuilder, $"_p{pi}", "                ");
             source.AppendLine($"                _c.Parameters.Add(_p{pi});");
             pi++;
         }
@@ -1126,15 +1131,10 @@ internal static class StoreOperationEmitter
                 var valueExpr = single
                     ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
                     : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
-                var cursorDbType = ResolveDbType(plan.KeysetColumns[i], sqlBuilder);
                 source.AppendLine($"                    var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                    _p{pi}.ParameterName = \"@__cursor{i}\";");
-                if (cursorDbType is not null)
-                {
-                    source.AppendLine($"                    _p{pi}.DbType = {cursorDbType};");
-                }
+                AppendColumnParameterMetadata(source, plan.KeysetColumns[i], sqlBuilder, $"_p{pi}", "                    ", predicate: true);
                 source.AppendLine($"                    _p{pi}.Value = {valueExpr};");
-                AppendSizePrecision(source, plan.KeysetColumns[i], sqlBuilder, $"_p{pi}", "                    ");
                 source.AppendLine($"                    _c.Parameters.Add(_p{pi});");
                 pi++;
             }
