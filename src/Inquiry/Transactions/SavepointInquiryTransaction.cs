@@ -37,9 +37,12 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     private readonly TransactedInquiryRequestPipeline _outerPipeline;
     private readonly string _savepointName;
     private readonly IsolationLevel _isolationLevel;
+    private readonly object _lifecycleLock = new();
     private bool _closed;
-    private bool _committed;
-    private bool _disposed;
+    private bool _terminalSucceeded;
+    private bool _cleanupAttempted;
+    private Task? _terminalTask;
+    private Task? _disposeTask;
 
     internal SavepointInquiryTransaction(
         IInquiry inquiry,
@@ -79,13 +82,10 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     /// <inheritdoc />
     public override void ThrowIfClosed()
     {
-        // _closed is set after a successful Commit or Rollback; _committed implies _closed
-        // (kept separately so Dispose can distinguish "released" from "rolled back at exit").
-        // _disposed is set by DisposeAsync. The outer pipeline's IsClosed covers out-of-order
-        // teardown (outer committed/rolled back/disposed while this savepoint handle is still
-        // held) — without it the Connection/Transaction interop getters would hand out a
-        // disposed pair instead of failing fast. Any of these terminal states blocks forwarding.
-        if (_closed || _committed || _disposed || _outerPipeline.IsClosed)
+        // _closed is set as soon as this handle accepts commit, rollback, or disposal. The outer
+        // pipeline's IsClosed covers out-of-order teardown while this savepoint is still held;
+        // without it the interop getters could expose a closing or disposed provider pair.
+        if (_closed || _outerPipeline.IsClosed)
         {
             throw new ObjectDisposedException(
                 nameof(SavepointInquiryTransaction),
@@ -95,70 +95,120 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     }
 
     /// <inheritdoc />
-    public override async Task CommitAsync(CancellationToken cancellationToken = default)
+    public override Task CommitAsync(CancellationToken cancellationToken = default)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(SavepointInquiryTransaction));
-        if (_closed) return;
+        lock (_lifecycleLock)
+        {
+            ThrowIfClosed();
+            var lease = _outerPipeline.EnterExclusiveOperation();
+            _closed = true;
+            return _terminalTask = CommitCoreAsync(lease, cancellationToken);
+        }
+    }
 
+    /// <inheritdoc />
+    public override Task RollbackAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_lifecycleLock)
+        {
+            ThrowIfClosed();
+            var lease = _outerPipeline.EnterExclusiveOperation();
+            _closed = true;
+            return _terminalTask = RollbackCoreAsync(lease, cancellationToken);
+        }
+    }
+
+    /// <inheritdoc />
+    public override ValueTask DisposeAsync()
+    {
+        lock (_lifecycleLock)
+        {
+            if (_disposeTask is not null) return new ValueTask(_disposeTask);
+            if (_outerPipeline.IsClosed)
+            {
+                _closed = true;
+                _disposeTask = Task.CompletedTask;
+                return new ValueTask(_disposeTask);
+            }
+            if (_terminalTask is null)
+            {
+                var lease = _outerPipeline.EnterExclusiveOperation(); // acquire before mutation: busy is retryable
+                _closed = true;
+                _disposeTask = DisposeActiveCoreAsync(lease);
+            }
+            else
+            {
+                _disposeTask = DisposeAfterTerminalAsync(_terminalTask);
+            }
+            return new ValueTask(_disposeTask);
+        }
+    }
+
+    private async Task CommitCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease, CancellationToken cancellationToken)
+    {
         try
         {
             try
             {
-                await _outerPipeline.ReleaseSavepointAsync(_savepointName, cancellationToken).ConfigureAwait(false);
-                _committed = true;
+                await _outerPipeline.ReleaseSavepointAsync(_savepointName, lease, cancellationToken).ConfigureAwait(false);
+                _terminalSucceeded = true;
             }
             catch (NotSupportedException)
             {
-                // Oracle: savepoints cannot be explicitly released. They are released implicitly
-                // when the outer transaction commits / rolls back. Treat as committed locally so
-                // Dispose doesn't attempt a rollback.
-                _committed = true;
+                _terminalSucceeded = true;
+            }
+            catch
+            {
+                await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false);
+                throw;
             }
         }
-        finally
-        {
-            // Even if ReleaseSavepointAsync threw something other than NotSupportedException
-            // (e.g. the outer transaction was rolled back externally, or the savepoint name is
-            // gone), the handle is finished. Marking _closed fails-fast subsequent forwarding
-            // calls and stops DisposeAsync from attempting another rollback-to-savepoint.
-            _closed = true;
-        }
+        finally { lease.Dispose(); }
     }
 
-    /// <inheritdoc />
-    public override async Task RollbackAsync(CancellationToken cancellationToken = default)
+    private async Task RollbackCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease, CancellationToken cancellationToken)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(SavepointInquiryTransaction));
-        if (_closed) return;
-
         try
         {
-            await _outerPipeline.RollbackToSavepointAsync(_savepointName, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _outerPipeline.RollbackToSavepointAsync(_savepointName, lease, cancellationToken).ConfigureAwait(false);
+                _terminalSucceeded = true;
+            }
+            catch
+            {
+                await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false);
+                throw;
+            }
         }
-        finally
-        {
-            // Same finally-Close pattern as CommitAsync: even on failure the handle is done.
-            _closed = true;
-        }
+        finally { lease.Dispose(); }
     }
 
-    /// <inheritdoc />
-    public override async ValueTask DisposeAsync()
+    private async Task DisposeActiveCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease)
     {
-        if (_disposed) return;
-        _disposed = true;
+        try { await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false); }
+        finally { lease.Dispose(); }
+    }
 
-        if (_closed || _committed) return;
-
+    private async Task DisposeAfterTerminalAsync(Task terminalTask)
+    {
+        try { await terminalTask.ConfigureAwait(false); } catch { }
+        if (_terminalSucceeded || _cleanupAttempted || _outerPipeline.IsClosed) return;
         try
         {
-            await _outerPipeline.RollbackToSavepointAsync(_savepointName, CancellationToken.None).ConfigureAwait(false);
+            using var lease = _outerPipeline.EnterExclusiveOperation();
+            await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false);
         }
-        catch
+        catch { }
+    }
+
+    private async Task CleanupWithOwnedLeaseAsync(TransactedInquiryRequestPipeline.InFlightLease lease)
+    {
+        _cleanupAttempted = true;
+        try
         {
-            // Best-effort: the outer transaction may already be closed, the savepoint may
-            // have been auto-released, or another operation may be in flight. Swallow so
-            // we don't mask a real exception from the user's using-block.
+            await _outerPipeline.RollbackToSavepointAsync(_savepointName, lease, CancellationToken.None).ConfigureAwait(false);
         }
+        catch { }
     }
 }
