@@ -28,10 +28,12 @@ packages — target **net8.0; net9.0; net10.0**, as do the test projects; the fl
 
 ## Feature completeness
 
-The original 13-workstream feature roadmap — MySQL & Oracle providers, cloud-compat modes, richer WHERE
+The original 13-workstream implementation roadmap — MySQL & Oracle providers, cloud-compat modes, richer WHERE
 predicates, ORDER BY + offset/keyset pagination, batch & bulk operations, automatic prepared-statement
 reuse, projections + aggregations, optimistic concurrency, schema-DDL generation, soft deletes, full-text
-search, and JSON/array/value-converter columns — is **implemented and merged to `main`**. The per-workstream
+search, and JSON/array/value-converter columns — has an initial implementation merged to `main`. That does
+**not** mean the library is 1.0-complete: live integration coverage has exposed correctness and performance
+follow-ups, and the first-release gates are tracked on the [Roadmap](roadmap.md). The per-workstream
 design record is in [Design notes](design-notes.md); user-facing docs for each feature are under
 [Features](../articles/features/crud.md).
 
@@ -45,18 +47,21 @@ Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roa
 
 ## Release engineering
 
-Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags (`v8.0.0` → version
-`8.0.0`). Every package embeds SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg`
+Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags. No public release has
+shipped yet; the first release will use the `v1.0.0` tag and package version `1.0.0`. Every package embeds
+SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg`
 symbol package. A tag-triggered [`release.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/release.yml)
 workflow packs all 9 shippable packages and pushes to NuGet.org. See
 [Contributing — Releasing](contributing.md#releasing) for the full process.
 
 ## Security status
 
-A formal Codex Security repository scan was completed during pre-release hardening. The validated findings
+A formal Codex Security repository scan was completed during early pre-release hardening. The validated findings
 were fixed on `main` in `318ee5f` (`Fix security scan findings`): lazy batch materialization now enforces
 the parameter cap while enumerating, MySQL update-returning on concurrency-token rows no longer returns stale
 rows after a failed update, and Oracle generated bind names no longer collapse leading-underscore parameters.
+The codebase has changed substantially since that scan; a fresh release-candidate scan and threat-model review
+are required by [#89](https://github.com/JakeOverstreet/inquiry/issues/89).
 
 ## Test status
 
@@ -82,11 +87,16 @@ Every live dialect exercises the full supported feature set via a shared, linked
 Northwind stores.
 
 **For current test counts**, run the whole suite (`dotnet test`) or a single project
-(e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). All suites are green on `main`; Docker-gated
-suites skip (not fail) without Docker.
+(e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). At the 2026-07-10 review snapshot, build/unit,
+SQLite, and NativeAOT jobs pass, but every server-provider integration leg fails on `net8.0` and `net9.0`.
+The current release gate and reviewed run are tracked in
+[#171](https://github.com/JakeOverstreet/inquiry/issues/171). Docker-gated suites skip locally (not in CI)
+when Docker is unavailable.
 
-CI runs three jobs on every push to `main` (and on `pull_request`): **build-and-unit** (generator,
-runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and runs the NativeAOT smoke app),
-and an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle × net8.0/net9.0 via
-Testcontainers). A separate **scheduled weekly workflow** (`scheduled.yml`) runs the full provider ×
-net8.0/net9.0/net10.0 matrix every Monday.
+As of `da0353c`, the normal CI workflow runs on pull requests targeting `main`: **build-and-unit**
+(generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and runs the NativeAOT
+smoke app), and an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle ×
+net8.0/net9.0 via Testcontainers). Direct pushes to `main` currently do not trigger that workflow,
+which conflicts with the documented direct-merge process and must be resolved under
+[#89](https://github.com/JakeOverstreet/inquiry/issues/89). A separate **scheduled weekly workflow**
+(`scheduled.yml`) runs the full provider × net8.0/net9.0/net10.0 matrix every Monday.

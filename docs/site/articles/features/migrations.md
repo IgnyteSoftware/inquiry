@@ -46,7 +46,7 @@ Two practices make this setup self-policing:
 
 ## What stays out of scope
 
-Diff-based migration generation, `ALTER` emission, versioning, and rollback are explicitly not planned ([roadmap](../../develop/roadmap.md#explicitly-not-planned)) — DbUp/FluentMigrator/Flyway own that lifecycle. Inquiry's contribution is a always-correct, dependency-ordered baseline for free.
+Diff-based migration generation, `ALTER` emission, versioning, and rollback are explicitly not planned ([roadmap](../../develop/roadmap.md#explicitly-out-of-scope-for-10)) — DbUp/FluentMigrator/Flyway own that lifecycle. Inquiry's contribution is an always-correct, dependency-ordered baseline for free.
 
 ## See also
 
