@@ -127,6 +127,12 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
         lock (_lifecycleLock)
         {
             if (_disposeTask is not null) return new ValueTask(_disposeTask);
+            if (_outerPipeline.IsClosed)
+            {
+                _closed = true;
+                _disposeTask = Task.CompletedTask;
+                return new ValueTask(_disposeTask);
+            }
             if (_terminalTask is null)
             {
                 var lease = _outerPipeline.EnterExclusiveOperation(); // acquire before mutation: busy is retryable
