@@ -38,20 +38,11 @@ internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
     // ---- Native RETURNING (#58) -------------------------------------------------------------
 
     public override string BuildInsertReturningSql(SqlBuildContext context)
-    {
-        if (DatabaseMaySupplyKey(context) && context.KeyColumns[0].TypeClass == DbTypeClass.Guid)
-        {
-            var keyColumn = context.QuotedKeyColumns[0];
-            var keyValue = "COALESCE(" + context.KeyParameters[0] + ", UUID())";
-            var cols = string.IsNullOrEmpty(context.InsertColumns) ? keyColumn : keyColumn + ", " + context.InsertColumns;
-            var vals = string.IsNullOrEmpty(context.InsertParameters) ? keyValue : keyValue + ", " + context.InsertParameters;
-
-            return "INSERT INTO " + context.Table + " (" + cols + ") VALUES (" + vals + ") RETURNING " + context.SelectColumns;
-        }
-
-        return BuildInsertSql(context) + " RETURNING " + context.SelectColumns;
-    }
+        => BuildInsertSql(context) + " RETURNING " + context.SelectColumns;
 
     public override string BuildUpsertReturningSql(SqlBuildContext context)
         => BuildUpsertSql(context) + " RETURNING " + context.SelectColumns;
+
+    public override string BuildDeleteByKeyReturningSql(SqlBuildContext context)
+        => BuildDeleteByKeySql(context) + " RETURNING " + context.SelectColumns;
 }

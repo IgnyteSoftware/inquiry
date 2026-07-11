@@ -186,7 +186,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     }
 
     // Returning GUID-key INSERT: like the upsert form but without ON DUPLICATE KEY UPDATE — capture the
-    // (generated or explicit) key in a user variable so the trailing SELECT can read the inserted row back.
+    // generated UUID in a user variable so the trailing SELECT can read the inserted row back.
     // Needed because MySQL has no RETURNING and LAST_INSERT_ID() cannot read back a server-generated UUID.
     private string BuildGuidKeyInsertReturningSql(SqlBuildContext context)
     {
@@ -194,7 +194,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
         var insertColumns = JoinSql(keyColumn, context.InsertColumns);
         var insertValues = JoinSql(GeneratedGuidKeyVariable, context.InsertParameters);
 
-        return "SET " + GeneratedGuidKeyVariable + " = COALESCE(" + context.KeyParameters[0] + ", UUID()); " +
+        return "SET " + GeneratedGuidKeyVariable + " = UUID(); " +
             "INSERT INTO " + context.Table + " (" + insertColumns + ") VALUES (" + insertValues + "); " +
             "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + keyColumn + " = " + GeneratedGuidKeyVariable;
     }
