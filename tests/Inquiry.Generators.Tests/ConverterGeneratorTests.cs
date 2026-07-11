@@ -342,6 +342,106 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void NullableAndUnsupportedProviderTypesReportOneINQ038AndAreDiscarded()
+    {
+        const string source = """
+            #nullable enable
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+
+            public readonly record struct Token(int Value);
+            public sealed class Provider { }
+            public sealed class NullableGuidConverter : IInquiryValueConverter<Token, Guid?>
+            { public Guid? ToProvider(Token value) => null; public Token FromProvider(Guid? value) => default; }
+            public sealed class NullableBoolConverter : IInquiryValueConverter<Token, bool?>
+            { public bool? ToProvider(Token value) => null; public Token FromProvider(bool? value) => default; }
+            public sealed class NullableStringConverter : IInquiryValueConverter<Token, string?>
+            { public string? ToProvider(Token value) => null; public Token FromProvider(string? value) => default; }
+            public sealed class UnsupportedConverter : IInquiryValueConverter<Token, Provider>
+            { public Provider ToProvider(Token value) => new(); public Token FromProvider(Provider value) => default; }
+
+            [InquiryTable("BadProviders")]
+            public sealed class BadProviders
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(NullableGuidConverter))] public Token GuidValue { get; set; }
+                [InquiryColumn(Converter = typeof(NullableBoolConverter))] public Token BoolValue { get; set; }
+                [InquiryColumn(Converter = typeof(NullableStringConverter))] public Token StringValue { get; set; }
+                [InquiryColumn(Converter = typeof(UnsupportedConverter))] public Token CustomValue { get; set; }
+            }
+            public partial class BadProvidersStore : InquiryStore<BadProviders>
+            {
+                [InquiryInsert] public partial Task<int> InsertAsync(BadProviders value, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        var activeResult = Assert.Single(result.RunResult.Results, static generator => generator.GeneratedSources.Length > 0);
+        var diagnostics = activeResult.Diagnostics.Where(static d => d.Id == "INQ038").ToArray();
+        Assert.Equal(4, diagnostics.Length);
+        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("Guid?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("bool?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("string?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("Provider", StringComparison.Ordinal));
+
+        var generated = string.Join("\n", result.RunResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+        Assert.DoesNotContain("NullableGuidConverter", generated);
+        Assert.DoesNotContain("NullableBoolConverter", generated);
+        Assert.DoesNotContain("NullableStringConverter", generated);
+        Assert.DoesNotContain("UnsupportedConverter", generated);
+        Assert.DoesNotContain(result.Compilation.GetDiagnostics(),
+            static d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error && d.Id.StartsWith("CS", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NullableModelsWithNonNullableProvidersGuardConversionExactlyOnce()
+    {
+        const string source = """
+            #nullable enable
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            public readonly record struct Amount(decimal Value);
+            public sealed class Label { public string Value { get; set; } = string.Empty; }
+            public sealed class AmountConverter : IInquiryValueConverter<Amount, decimal>
+            { public decimal ToProvider(Amount value) => value.Value; public Amount FromProvider(decimal value) => new(value); }
+            public sealed class LabelConverter : IInquiryValueConverter<Label, string>
+            { public string ToProvider(Label value) => value.Value; public Label FromProvider(string value) => new() { Value = value }; }
+            [InquiryTable("NullableModels")]
+            public sealed class NullableModels
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(AmountConverter))] public Amount? Amount { get; set; }
+                [InquiryColumn(Converter = typeof(LabelConverter))] public Label? Label { get; set; }
+            }
+            public partial class NullableModelsStore : InquiryStore<NullableModels>
+            {
+                [InquiryInsert] public partial Task<int> InsertAsync(NullableModels value, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var entity = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("NullableModels.InquiryEntity.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        var store = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("NullableModelsStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Contains("reader.IsDBNull(1) ? (global::Demo.Amount?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.AmountConverter>.Instance.FromProvider(reader.GetDecimal(1))", entity);
+        Assert.Contains("reader.IsDBNull(2) ? null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.LabelConverter>.Instance.FromProvider(reader.GetString(2))", entity);
+        Assert.Contains("_e.Amount is null ? global::System.DBNull.Value", store);
+        Assert.Contains("_e.Label is null ? global::System.DBNull.Value", store);
+        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(store, "AmountConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(store, "LabelConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
+    }
+
+    [Fact]
     public void GuidProviderConverterInUsesGuidJsonTableType()
     {
         const string source = """
