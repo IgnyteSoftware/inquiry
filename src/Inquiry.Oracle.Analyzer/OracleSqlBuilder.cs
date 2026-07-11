@@ -39,6 +39,21 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 {
     public override string DialectName => "Oracle";
 
+    public override string BuildReaderExpression(ReaderExpressionContext context)
+    {
+        if (context.ProviderIsDateOnly)
+        {
+            return $"global::System.DateOnly.FromDateTime(reader.GetDateTime({context.Ordinal}))";
+        }
+
+        if (context.ProviderIsTimeOnly)
+        {
+            return $"global::System.TimeOnly.FromTimeSpan(reader.GetFieldValue<global::System.TimeSpan>({context.Ordinal}))";
+        }
+
+        return base.BuildReaderExpression(context);
+    }
+
     /// <summary>
     /// Oracle cannot return multiple result sets from a <c>;</c>-separated batch in a plain
     /// <c>OracleCommand</c> — a second SELECT raises ORA-00933 ("SQL command not properly ended") — so the

@@ -245,17 +245,27 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             return;
         }
 
+        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.DialectAmbiguous,
+                location: null,
+                ownership.AmbiguousDialects));
+            return;
+        }
+
+        var sqlBuilder = CreateSqlBuilder();
         var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistration>();
         foreach (var entity in mappedEntities.Values)
         {
-            entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity));
+            entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity, sqlBuilder));
         }
 
         // projection materializers register and emit exactly like entity materializers (same
         // IInquiryEntityMaterializer<T> contract), so they share the registration set.
         foreach (var projection in mappedProjections.Values)
         {
-            entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection));
+            entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection, sqlBuilder));
         }
 
         // ad-hoc DTO materializers share the registration set too. They are dialect-independent
@@ -263,7 +273,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         // the other materializers.
         foreach (var adHoc in mappedAdHocs.Values)
         {
-            entityRegistrations.Add(AdHocProcessor.EmitMaterializer(context, adHoc));
+            entityRegistrations.Add(AdHocProcessor.EmitMaterializer(context, adHoc, sqlBuilder));
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
@@ -277,7 +287,6 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         }
         else
         {
-            var sqlBuilder = CreateSqlBuilder();
             foreach (var store in stores)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();

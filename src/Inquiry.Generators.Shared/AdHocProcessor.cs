@@ -1,3 +1,4 @@
+using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
@@ -58,7 +59,7 @@ internal static class AdHocProcessor
             Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()));
     }
 
-    public static EntityRegistration EmitMaterializer(SourceProductionContext context, AdHocData adHoc)
+    public static EntityRegistration EmitMaterializer(SourceProductionContext context, AdHocData adHoc, SqlBuilder sqlBuilder)
     {
         var adHocType = adHoc.FullyQualifiedName;
 
@@ -71,7 +72,7 @@ internal static class AdHocProcessor
         source.AppendLine("{");
         source.AppendLine($"    public {adHocType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, adHoc.Columns, adHocType, indent: "        ");
+        MaterializerEmitter.EmitMaterializeBody(source, adHoc.Columns, adHocType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
         source.AppendLine();
@@ -80,7 +81,7 @@ internal static class AdHocProcessor
         source.AppendLine("{");
         source.AppendLine($"    public {adHocType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, adHoc.Columns, adHocType, indent: "        ");
+        MaterializerEmitter.EmitMaterializeBody(source, adHoc.Columns, adHocType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
 
