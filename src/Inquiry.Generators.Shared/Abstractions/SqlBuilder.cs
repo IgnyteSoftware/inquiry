@@ -51,6 +51,10 @@ public abstract class SqlBuilder
         };
     }
 
+    /// <summary>Transforms a provider value expression at generation time. The portable default is identity.</summary>
+    public virtual string BuildParameterValueExpression(ParameterValueExpressionContext context)
+        => context.ValueExpression;
+
     /// <summary>
     /// The fully-qualified <c>System.Data.DbType</c> expression bound onto a generated parameter for a
     /// column of the given <paramref name="type"/>, or <c>null</c> when no portable DbType applies (the
@@ -59,9 +63,13 @@ public abstract class SqlBuilder
     /// everything else to the portable <see cref="DbTypeMapper"/>.
     /// </summary>
     internal string? MapDbTypeExpression(TypeData type, bool isUnicode = true)
-        => type.SpecialType == SpecialType.System_DateTime
-            ? DateTimeDbTypeExpression
-            : DbTypeMapper.TryGetDbTypeExpression(type, isUnicode);
+    {
+        if (type.SpecialType == SpecialType.System_DateTime) return DateTimeDbTypeExpression;
+        if (type.IsDateOnly) return DateOnlyDbTypeExpression;
+        if (type.IsTimeOnly) return TimeOnlyDbTypeExpression;
+        if (type.NonNullableDisplayName == "global::System.DateTimeOffset") return DateTimeOffsetDbTypeExpression;
+        return DbTypeMapper.TryGetDbTypeExpression(type, isUnicode);
+    }
 
     /// <summary>
     /// As <see cref="MapDbTypeExpression"/> but for a value converter's provider
@@ -82,6 +90,9 @@ public abstract class SqlBuilder
     /// range").
     /// </summary>
     public virtual string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime2";
+    public virtual string? DateOnlyDbTypeExpression => "global::System.Data.DbType.Date";
+    public virtual string? TimeOnlyDbTypeExpression => "global::System.Data.DbType.Time";
+    public virtual string? DateTimeOffsetDbTypeExpression => "global::System.Data.DbType.DateTimeOffset";
 
     /// <summary>
     /// Whether generated binders emit <c>Size</c> (variable-length string) and <c>Precision</c>/
