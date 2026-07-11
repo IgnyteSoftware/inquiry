@@ -53,6 +53,12 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 
 `DateOnly` binds as a midnight `DateTime` with `DbType.Date`. `TimeOnly` binds as `TimeSpan` without an explicit `DbType`, allowing ODP.NET to infer `INTERVAL DAY TO SECOND`. `DateTimeOffset` binds unchanged as `TIMESTAMP WITH TIME ZONE`. Generated readers reverse these bridges. ODP.NET normalizes interval fractions to microsecond precision (10 .NET ticks), while numeric offsets such as `-04:30` are preserved.
 
+## GUID and boolean values
+
+Oracle stores `Guid` columns as `RAW(16)` and boolean columns as `NUMBER(1)`. Generated binders set `DbType.Binary` for GUIDs and `DbType.Int32` for booleans before assigning the original CLR value. ODP.NET then preserves `Guid` identity and writes `false`/`true` as `0`/`1`; generated readers return them through `GetGuid` and `GetBoolean`. The generator does not allocate a GUID byte array or replace a boolean with an integer value. Nullable and value-converted columns use the same provider metadata.
+
+`IN` predicates retain the single-JSON-parameter path. The generated `JSON_TABLE` projection converts canonical GUID strings to ODP.NET's `RAW(16)` byte order and JSON booleans to `0`/`1`; `NOT IN` expands elements with the same `DbType.Binary`/`DbType.Int32` metadata used by scalar predicates.
+
 ## Testing
 
 `tests/Inquiry.Oracle.Tests` runs against a Testcontainers-managed `gvenzl/oracle-xe:21-slim-faststart` image, in the CI integration matrix alongside the other engines (~3 min container warm-up).

@@ -58,12 +58,13 @@ public abstract class SqlBuilder
     /// <summary>
     /// The fully-qualified <c>System.Data.DbType</c> expression bound onto a generated parameter for a
     /// column of the given <paramref name="type"/>, or <c>null</c> when no portable DbType applies (the
-    /// provider then infers it). Routes <see cref="System.DateTime"/> through
-    /// <see cref="DateTimeDbTypeExpression"/> — the one mapping that varies by dialect — and delegates
-    /// everything else to the portable <see cref="DbTypeMapper"/>.
+    /// provider then infers it). Routes provider-sensitive mappings through their virtual expression
+    /// properties and delegates everything else to the portable <see cref="DbTypeMapper"/>.
     /// </summary>
     internal string? MapDbTypeExpression(TypeData type, bool isUnicode = true)
     {
+        if (type.IsGuid) return GuidDbTypeExpression;
+        if (type.SpecialType == SpecialType.System_Boolean) return BooleanDbTypeExpression;
         if (type.SpecialType == SpecialType.System_DateTime) return DateTimeDbTypeExpression;
         if (type.IsDateOnly) return DateOnlyDbTypeExpression;
         if (type.IsTimeOnly) return TimeOnlyDbTypeExpression;
@@ -73,13 +74,16 @@ public abstract class SqlBuilder
 
     /// <summary>
     /// As <see cref="MapDbTypeExpression"/> but for a value converter's provider
-    /// <see cref="SpecialType"/>; the same dialect substitution for <see cref="System.DateTime"/>
-    /// applies.
+    /// <see cref="SpecialType"/>; the same dialect substitutions for <see cref="System.Boolean"/> and
+    /// <see cref="System.DateTime"/> apply.
     /// </summary>
     internal string? MapDbTypeExpressionForSpecialType(SpecialType specialType, bool isUnicode = true)
-        => specialType == SpecialType.System_DateTime
-            ? DateTimeDbTypeExpression
-            : DbTypeMapper.TryGetDbTypeForSpecialType(specialType, isUnicode);
+        => specialType switch
+        {
+            SpecialType.System_Boolean => BooleanDbTypeExpression,
+            SpecialType.System_DateTime => DateTimeDbTypeExpression,
+            _ => DbTypeMapper.TryGetDbTypeForSpecialType(specialType, isUnicode),
+        };
 
     /// <summary>
     /// The DbType expression emitted for a <see cref="System.DateTime"/> parameter. Default
@@ -90,6 +94,12 @@ public abstract class SqlBuilder
     /// range").
     /// </summary>
     public virtual string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime2";
+
+    /// <summary>The DbType expression emitted for a <see cref="System.Guid"/> parameter.</summary>
+    public virtual string GuidDbTypeExpression => "global::System.Data.DbType.Guid";
+
+    /// <summary>The DbType expression emitted for a <see cref="System.Boolean"/> parameter.</summary>
+    public virtual string BooleanDbTypeExpression => "global::System.Data.DbType.Boolean";
     public virtual string? DateOnlyDbTypeExpression => "global::System.Data.DbType.Date";
     public virtual string? TimeOnlyDbTypeExpression => "global::System.Data.DbType.Time";
     public virtual string? DateTimeOffsetDbTypeExpression => "global::System.Data.DbType.DateTimeOffset";
