@@ -105,7 +105,7 @@ internal static class StoreProcessor
             return null;
         }
 
-        var returnsEntity = operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert &&
+        var returnsEntity = operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert or StoreOperation.DeleteOneByKey &&
             GeneratorHelpers.GetNamedBool(attribute, "ReturnEntity");
 
         if (!HasSupportedReturnType(operation, method.ReturnType, entityType, returnsEntity, attribute))
@@ -677,6 +677,8 @@ internal static class StoreProcessor
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             StoreOperation.Update when returnsEntity =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
+            StoreOperation.DeleteOneByKey when returnsEntity =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
             StoreOperation.Update or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
             StoreOperation.Count =>
@@ -1030,8 +1032,10 @@ internal static class StoreProcessor
         // delete routing. The shared _sqlDeleteByKey is the "default" delete statement: a literal
         // DELETE for an ordinary entity, or the soft UPDATE for a soft-delete entity. A HardDelete method
         // on a soft-delete entity additionally needs a separate literal-DELETE const so both can coexist.
-        var needsDeleteByKey = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && !(m.Method.HardDelete && hasSoftDelete));
-        var needsHardDeleteByKey = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.HardDelete);
+        var needsDeleteByKey = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && !m.Method.ReturnsEntity && !(m.Method.HardDelete && hasSoftDelete));
+        var needsHardDeleteByKey = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && !m.Method.ReturnsEntity && m.Method.HardDelete);
+        var needsDeleteReturning = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.ReturnsEntity && (!hasSoftDelete || m.Method.HardDelete));
+        var needsSoftDeleteReturning = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.ReturnsEntity && !m.Method.HardDelete);
         var needsRestore = valid.Any(static m => m.Method.Operation == StoreOperation.RestoreOneByKey);
         var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count);
         // A [InquiryBulkInsert] on a dialect without a native bulk-copy API compiles down to the
@@ -1073,6 +1077,8 @@ internal static class StoreProcessor
         var insertReturningError = TryBuildDegradableConst(source, "_sqlInsertReturning", needsInsertReturning, () => sqlBuilder.BuildInsertReturningSql(ctx));
         var updateReturningError = TryBuildDegradableConst(source, "_sqlUpdateReturning", needsUpdateReturning, () => sqlBuilder.BuildUpdateReturningSql(ctx));
         var upsertReturningError = TryBuildDegradableConst(source, "_sqlUpsertReturning", needsUpsertReturning, () => sqlBuilder.BuildUpsertReturningSql(ctx));
+        var deleteReturningError = TryBuildDegradableConst(source, "_sqlDeleteReturning", needsDeleteReturning, () => sqlBuilder.BuildDeleteByKeyReturningSql(ctx));
+        var softDeleteReturningError = TryBuildDegradableConst(source, "_sqlSoftDeleteReturning", needsSoftDeleteReturning, () => sqlBuilder.BuildSoftDeleteByKeyReturningSql(ctx));
         if (needsDeleteByKey) AppendConstSql(source, "_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsHardDeleteByKey) AppendConstSql(source, "_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
@@ -1327,6 +1333,8 @@ internal static class StoreProcessor
                 StoreOperation.Update when method.ReturnsEntity => updateReturningError,
                 // Returning upsert uses _sqlUpsertReturning, or _sqlInsertReturning on the null-key path.
                 StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ?? insertReturningError,
+                StoreOperation.DeleteOneByKey when method.ReturnsEntity && hasSoftDelete && !method.HardDelete => softDeleteReturningError,
+                StoreOperation.DeleteOneByKey when method.ReturnsEntity => deleteReturningError,
                 // Non-returning upsert uses _sqlUpsert (throws for a generated-key MERGE on Oracle).
                 StoreOperation.Upsert => upsertError,
                 _ => null,

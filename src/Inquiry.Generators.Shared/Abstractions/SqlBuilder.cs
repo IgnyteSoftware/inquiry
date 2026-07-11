@@ -236,6 +236,10 @@ public abstract class SqlBuilder
 
     public abstract string BuildDeleteByKeySql(SqlBuildContext context);
 
+    /// <summary>Builds a single-row delete that returns the deleted entity.</summary>
+    public virtual string BuildDeleteByKeyReturningSql(SqlBuildContext context)
+        => throw new System.NotSupportedException("DELETE RETURNING is not supported by this dialect.");
+
     // ---- Soft delete -------------------------------------------------------------------
 
     /// <summary>
@@ -272,6 +276,13 @@ public abstract class SqlBuilder
     public virtual string BuildSoftDeleteByKeySql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
             + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+
+    /// <summary>
+    /// Builds a soft-delete update that returns the affected entity. Dialects must opt in because
+    /// support for UPDATE RETURNING differs independently from DELETE RETURNING.
+    /// </summary>
+    public virtual string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
+        => throw new System.NotSupportedException("Soft-delete returning requires UPDATE RETURNING, which is not supported by this dialect.");
 
     /// <summary>
     /// Builds the restore UPDATE (clear the soft-delete indicator) by key. Concrete and inherited by
