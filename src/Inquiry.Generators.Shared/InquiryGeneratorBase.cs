@@ -278,37 +278,27 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
 
-        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
+        foreach (var store in stores)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.DialectAmbiguous,
-                location: null,
-                ownership.AmbiguousDialects));
-        }
-        else
-        {
-            foreach (var store in stores)
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            foreach (var diagnostic in store.Diagnostics)
             {
-                context.CancellationToken.ThrowIfCancellationRequested();
-
-                foreach (var diagnostic in store.Diagnostics)
-                {
-                    context.ReportDiagnostic(diagnostic.ToDiagnostic());
-                }
-
-                var registration = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
-                if (registration is not null)
-                {
-                    storeRegistrations.Add(registration);
-                }
+                context.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
 
-            // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
-            // entity array (source order) filtered to mapped entities so emission is deterministic.
-            // Views are defined in the database, not created by Inquiry — exclude them from DDL.
-            var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
-            SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);
+            var registration = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
+            if (registration is not null)
+            {
+                storeRegistrations.Add(registration);
+            }
         }
+
+        // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
+        // entity array (source order) filtered to mapped entities so emission is deterministic.
+        // Views are defined in the database, not created by Inquiry — exclude them from DDL.
+        var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
+        SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)
         {
