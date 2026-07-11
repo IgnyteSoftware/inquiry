@@ -85,7 +85,7 @@ public sealed partial class InquiryGeneratorTests
         var text = GetOrder2Store(result);
 
         Assert.Contains("SELECT \\\"Priority\\\", COUNT(*) FROM \\\"TOrder\\\" GROUP BY \\\"Priority\\\"", text);
-        Assert.Contains("GetFieldValue<int>(0)", text);
+        Assert.Contains("reader.GetInt32(0)", text);
     }
 
     [Fact]
@@ -98,7 +98,32 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetOrder2Store(result);
 
-        Assert.Contains("SELECT [Status], COUNT(*) FROM [TOrder] GROUP BY [Status]", text);
+        Assert.Contains("SELECT [Status], COUNT_BIG(*) FROM [TOrder] GROUP BY [Status]", text);
+        Assert.Contains("reader.GetString(0)", text);
+        Assert.Contains("reader.GetInt64(1)", text);
+    }
+
+    [Theory]
+    [InlineData("Sqlite", "COUNT(*)")]
+    [InlineData("PostgreSql", "COUNT(*)")]
+    [InlineData("MySql", "COUNT(*)")]
+    [InlineData("MariaDb", "COUNT(*)")]
+    [InlineData("Oracle", "COUNT(*)")]
+    [InlineData("SqlServer", "COUNT_BIG(*)")]
+    public void GroupCountUsesProviderCountAndTypedMaterializer(string dialect, string countExpression)
+    {
+        var result = RunGenerator(Order2Store("""
+            [InquiryGroupCount("Priority")]
+            public partial Task<IReadOnlyList<GroupCount<int>>> CountByPriorityAsync(CancellationToken cancellationToken = default);
+            """), dialect: dialect);
+        AssertNoErrors(result);
+        var text = GetOrder2Store(result);
+
+        Assert.Contains(countExpression, text);
+        Assert.Contains("reader.GetInt32(0)", text);
+        Assert.Contains("reader.GetInt64(1)", text);
+        Assert.DoesNotContain("GetValue(", text);
+        Assert.DoesNotContain("Convert.ChangeType", text);
     }
 
     [Fact]

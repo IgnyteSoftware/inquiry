@@ -1995,8 +1995,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
-        // Materializers don't depend on the dialect and should still be emitted.
-        Assert.Contains(
+        // Provider-aware materializers must not be emitted from an arbitrarily elected generator.
+        Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("Organization.InquiryEntity.g.cs", StringComparison.Ordinal));
     }

@@ -245,17 +245,27 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             return;
         }
 
+        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.DialectAmbiguous,
+                location: null,
+                ownership.AmbiguousDialects));
+            return;
+        }
+
+        var sqlBuilder = CreateSqlBuilder();
         var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistration>();
         foreach (var entity in mappedEntities.Values)
         {
-            entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity));
+            entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity, sqlBuilder));
         }
 
         // projection materializers register and emit exactly like entity materializers (same
         // IInquiryEntityMaterializer<T> contract), so they share the registration set.
         foreach (var projection in mappedProjections.Values)
         {
-            entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection));
+            entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection, sqlBuilder));
         }
 
         // ad-hoc DTO materializers share the registration set too. They are dialect-independent
@@ -263,43 +273,32 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         // the other materializers.
         foreach (var adHoc in mappedAdHocs.Values)
         {
-            entityRegistrations.Add(AdHocProcessor.EmitMaterializer(context, adHoc));
+            entityRegistrations.Add(AdHocProcessor.EmitMaterializer(context, adHoc, sqlBuilder));
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
 
-        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
+        foreach (var store in stores)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.DialectAmbiguous,
-                location: null,
-                ownership.AmbiguousDialects));
-        }
-        else
-        {
-            var sqlBuilder = CreateSqlBuilder();
-            foreach (var store in stores)
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            foreach (var diagnostic in store.Diagnostics)
             {
-                context.CancellationToken.ThrowIfCancellationRequested();
-
-                foreach (var diagnostic in store.Diagnostics)
-                {
-                    context.ReportDiagnostic(diagnostic.ToDiagnostic());
-                }
-
-                var registration = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
-                if (registration is not null)
-                {
-                    storeRegistrations.Add(registration);
-                }
+                context.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
 
-            // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
-            // entity array (source order) filtered to mapped entities so emission is deterministic.
-            // Views are defined in the database, not created by Inquiry — exclude them from DDL.
-            var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
-            SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);
+            var registration = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
+            if (registration is not null)
+            {
+                storeRegistrations.Add(registration);
+            }
         }
+
+        // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
+        // entity array (source order) filtered to mapped entities so emission is deterministic.
+        // Views are defined in the database, not created by Inquiry — exclude them from DDL.
+        var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
+        SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)
         {

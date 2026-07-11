@@ -25,6 +25,32 @@ public abstract class SqlBuilder
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
 
+    /// <summary>Returns the direct typed reader expression for one provider primitive.</summary>
+    public virtual string BuildReaderExpression(ReaderExpressionContext context)
+    {
+        var ordinal = context.Ordinal;
+        if (context.ProviderIsGuid) return $"reader.GetGuid({ordinal})";
+        if (context.ProviderIsDateOnly) return $"reader.GetFieldValue<global::System.DateOnly>({ordinal})";
+        if (context.ProviderIsTimeOnly) return $"reader.GetFieldValue<global::System.TimeOnly>({ordinal})";
+        if (context.ProviderIsByteArray) return $"reader.GetFieldValue<global::System.Byte[]>({ordinal})";
+
+        return context.ProviderSpecialType switch
+        {
+            SpecialType.System_String => $"reader.GetString({ordinal})",
+            SpecialType.System_Boolean => $"reader.GetBoolean({ordinal})",
+            SpecialType.System_Byte => $"reader.GetByte({ordinal})",
+            SpecialType.System_Char => $"reader.GetChar({ordinal})",
+            SpecialType.System_Int16 => $"reader.GetInt16({ordinal})",
+            SpecialType.System_Int32 => $"reader.GetInt32({ordinal})",
+            SpecialType.System_Int64 => $"reader.GetInt64({ordinal})",
+            SpecialType.System_Single => $"reader.GetFloat({ordinal})",
+            SpecialType.System_Double => $"reader.GetDouble({ordinal})",
+            SpecialType.System_Decimal => $"reader.GetDecimal({ordinal})",
+            SpecialType.System_DateTime => $"reader.GetDateTime({ordinal})",
+            _ => $"reader.GetFieldValue<{context.ProviderTypeName}>({ordinal})",
+        };
+    }
+
     /// <summary>
     /// The fully-qualified <c>System.Data.DbType</c> expression bound onto a generated parameter for a
     /// column of the given <paramref name="type"/>, or <c>null</c> when no portable DbType applies (the
@@ -319,8 +345,10 @@ public abstract class SqlBuilder
     /// concrete and inherited by every provider; it composes the soft-delete active filter via
     /// <see cref="WhereSuffix"/> so a count excludes soft-deleted rows when applicable.
     /// </summary>
+    protected virtual string CountExpression => "COUNT(*)";
+
     public virtual string BuildCountSql(SqlBuildContext context)
-        => "SELECT COUNT(*) FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
+        => "SELECT " + CountExpression + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     /// <summary>
     /// Builds an existence test (<c>[InquiryExists]</c>): <c>SELECT CASE WHEN EXISTS(SELECT 1 FROM … WHERE
@@ -357,7 +385,7 @@ public abstract class SqlBuilder
     /// filter composed when the entity has soft delete.
     /// </summary>
     public virtual string BuildGroupCountSql(SqlBuildContext context, string quotedColumn)
-        => "SELECT " + quotedColumn + ", COUNT(*) FROM " + context.Table
+        => "SELECT " + quotedColumn + ", " + CountExpression + " FROM " + context.Table
             + WhereSuffix(context.ActiveRowPredicate)
             + " GROUP BY " + quotedColumn;
 
