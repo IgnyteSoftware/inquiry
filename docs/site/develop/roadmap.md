@@ -267,8 +267,13 @@ new or reframed issue.
 - **Generator polish foundation (#135, 2026-07-10).** `ProjectionProcessor.Extract` and `AdHocProcessor.Extract`
   now accept `CancellationToken` (matching `EntityProcessor.Extract`) and call
   `ThrowIfCancellationRequested()` in their column-discovery loops. The diagnostic-ID registry
-  comment corrected: INQ036–INQ037 are in use; INQ038 is reserved, not assigned. Analyzer release
+  comment corrected: INQ036–INQ037 were in use and INQ038 was reserved at that point. Analyzer release
   tracking remains open in [#135](https://github.com/JakeOverstreet/inquiry/issues/135).
+
+- **MySQL-family type-correct JSON collections (#169, 2026-07-10).** MySQL and MariaDB now share
+  one `JSON_TABLE` mapping, the runtime writes AOT-safe invariant JSON for supported scalars,
+  nullable elements are retained, binary values use base64, enum/converter collections use their
+  provider representation, and INQ038 rejects unsupported converter provider types.
 
 - **Single-row all-types bulk-insert test matrix introduced (#134, 2026-07-10).** Added
   `BulkAllTypesItem` entity to the shared FeatureCatalog with one column per provider-primitive
@@ -324,16 +329,13 @@ new or reframed issue.
   default `;`-separated batch unchanged. Reference-relation fallbacks, allocation work, exact command-count
   tests, and representative benchmarks remain in [#70](https://github.com/JakeOverstreet/inquiry/issues/70).
 
-- **MySQL and MariaDB `JSON_TABLE` IN foundation (#169, #170, 2026-07-09).** `MySqlSqlBuilder`
-  and `MariaDbSqlBuilder` now override `UseArrayInParameters`, `ArrayParameterBinderFqn`, and
-  `RenderIn` with MySQL 8.0+ / MariaDB 10.6+ `JSON_TABLE`: IN collections bind as a single JSON
+- **MySQL and MariaDB `JSON_TABLE` IN optimization (#169, #170, 2026-07-09).** The shared
+  `MySqlFamilySqlBuilder` uses MySQL 8.0+ / MariaDB 10.6+ `JSON_TABLE`: IN collections bind as a single JSON
   array parameter (`InquiryJsonArrayParameter`) and the SQL uses
   `col IN (SELECT jt.val FROM JSON_TABLE(@param, '$[*]' COLUMNS(val TYPE PATH '$')) jt)` — constant
   SQL, no per-element parameter cap, one cached plan for all cardinalities. Type-specific COLUMNS
-  (`SIGNED` for integers, `DOUBLE` for floats, `DECIMAL(65,30)` for decimals, `CHAR(36)` for GUIDs,
-  `CHAR(255)` for strings) were introduced. Live CI exposed invalid integer declarations and shared
-  serialization gaps; both providers are consolidated under
-  [#169](https://github.com/JakeOverstreet/inquiry/issues/169). All five server dialects now use
+  (matching integer/float/decimal/temporal types, `CHAR(36)` for GUIDs, non-truncating text, and
+  base64 decoding for binary) ensure correct comparison semantics. All five server dialects now use
   array-style IN binding (PostgreSQL `= ANY`, SQL Server TVPs, SQLite `json_each`, Oracle/MySQL/MariaDB
   `JSON_TABLE`). NOT IN remains on per-element sentinel expansion across all dialects.
 

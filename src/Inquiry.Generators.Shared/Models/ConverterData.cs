@@ -11,4 +11,8 @@ namespace Inquiry.Generators.Models;
 internal sealed record ConverterData(
     string ConverterTypeDisplay,
     string ProviderTypeDisplay,
-    SpecialType ProviderSpecialType);
+    SpecialType ProviderSpecialType)
+{
+    /// <summary>Provider-side type facts, when resolved from an explicit converter.</summary>
+    public TypeData? ProviderType { get; init; }
+}

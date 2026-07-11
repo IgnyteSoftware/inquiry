@@ -166,6 +166,32 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.DeleteOneByKey:
             {
+                if (method.ReturnsEntity)
+                {
+                    var returningField = entity.SoftDeleteColumn is not null && !method.HardDelete
+                        ? "_sqlSoftDeleteReturning"
+                        : "_sqlDeleteReturning";
+                    AppendHeader(source, method, parameters, isAsync: true);
+                    if (entity.ConcurrencyToken is not null)
+                    {
+                        var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
+                        source.AppendLine($"        var _result = await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
+                        source.AppendLine($"            {returningField},");
+                        source.AppendLine($"            {firstParameter},");
+                        AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "            ", emitSizePrecision: true);
+                        source.AppendLine("            default,");
+                        source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                        source.AppendLine("        if (_result is null && Inquiry.ThrowOnConcurrencyConflict) throw new global::Inquiry.InquiryConcurrencyException();");
+                        source.AppendLine("        return _result;");
+                    }
+                    else
+                    {
+                        EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, returningField, entity.Keys, method.Parameters, cancellation, indent: "        ");
+                    }
+                    source.AppendLine("    }");
+                    break;
+                }
+
                 // the shared _sqlDeleteByKey is the soft UPDATE for a soft-delete entity (or the literal
                 // DELETE otherwise). A HardDelete method on a soft-delete entity uses the separate literal
                 // const. Either way it is a rows-affected ExecuteAsync, so binder/return are unchanged.
