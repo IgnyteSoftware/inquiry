@@ -315,8 +315,10 @@ public sealed partial class InquiryGeneratorTests
         const string guidFromJson = "HEXTORAW(SUBSTR(jt.val, 7, 2) || SUBSTR(jt.val, 5, 2) || SUBSTR(jt.val, 3, 2) || SUBSTR(jt.val, 1, 2) || SUBSTR(jt.val, 12, 2) || SUBSTR(jt.val, 10, 2) || SUBSTR(jt.val, 17, 2) || SUBSTR(jt.val, 15, 2) || SUBSTR(jt.val, 20, 4) || SUBSTR(jt.val, 25, 12))";
 
         var directIn = Method(text, "InDirectAsync");
-        Assert.Contains($"Id IN (SELECT {guidFromJson} FROM JSON_TABLE(:Id, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)", text);
-        Assert.Contains("Enabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:Enabled, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", text);
+        var directGuidSql = $"Id IN (SELECT {guidFromJson} FROM JSON_TABLE(:Id, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)";
+        var directInSql = SqlConstantContaining(text, directGuidSql);
+        Assert.Contains(directInSql.Name, directIn);
+        Assert.Contains("Enabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:Enabled, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", directInSql.Declaration);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":Id\", ids);", directIn);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":Enabled\", enabled);", directIn);
         Assert.DoesNotContain("InquiryInExpansion", directIn);
@@ -324,8 +326,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("DbType.Int32", directIn);
 
         var convertedIn = Method(text, "InConvertedAsync");
-        Assert.Contains($"ConvertedToken IN (SELECT {guidFromJson} FROM JSON_TABLE(:ConvertedToken, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)", text);
-        Assert.Contains("ConvertedEnabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:ConvertedEnabled, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", text);
+        var convertedGuidSql = $"ConvertedToken IN (SELECT {guidFromJson} FROM JSON_TABLE(:ConvertedToken, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)";
+        var convertedInSql = SqlConstantContaining(text, convertedGuidSql);
+        Assert.Contains(convertedInSql.Name, convertedIn);
+        Assert.Contains("ConvertedEnabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:ConvertedEnabled, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", convertedInSql.Declaration);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":ConvertedToken\", tokens is null ? null : global::System.Linq.Enumerable.Select(tokens, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(_e)));", convertedIn);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":ConvertedEnabled\", enabled is null ? null : global::System.Linq.Enumerable.Select(enabled, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(_e)));", convertedIn);
         Assert.DoesNotContain("InquiryInExpansion", convertedIn);
@@ -430,6 +434,22 @@ public sealed partial class InquiryGeneratorTests
                 $"{storeName}.InquiryStore.g.cs",
                 StringComparison.Ordinal));
         return tree.GetText().ToString();
+    }
+
+    private static (string Name, string Declaration) SqlConstantContaining(string generated, string sqlFragment)
+    {
+        var fragment = generated.IndexOf(sqlFragment, StringComparison.Ordinal);
+        Assert.True(fragment >= 0, $"Generated SQL fragment '{sqlFragment}' was not found.");
+        const string marker = "private const string ";
+        var start = generated.LastIndexOf(marker, fragment, StringComparison.Ordinal);
+        Assert.True(start >= 0, "Generated SQL constant declaration was not found.");
+        var nameStart = start + marker.Length;
+        var nameEnd = generated.IndexOf(' ', nameStart);
+        Assert.True(nameEnd > nameStart, "Generated SQL constant name was not terminated.");
+        var name = generated[nameStart..nameEnd];
+        var end = generated.IndexOf(';', start);
+        Assert.True(end > fragment, $"Generated SQL constant '{name}' was not terminated.");
+        return (name, generated[start..(end + 1)]);
     }
 
     private static void AssertOracleScalarMetadataPrecedesValue(string method)
