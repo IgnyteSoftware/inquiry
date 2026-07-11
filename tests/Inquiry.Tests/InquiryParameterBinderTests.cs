@@ -55,6 +55,44 @@ public sealed class InquiryParameterBinderTests
     }
 
     [Fact]
+    public void BindAssignsDbTypeBeforeGuidAndBooleanValues()
+    {
+        using var command = new FakeDbCommand();
+
+        InquiryParameterBinder.Bind(command, new[]
+        {
+            new InquiryParameter("Token", Guid.Empty, DbType.Binary),
+            new InquiryParameter("Enabled", true, DbType.Int32),
+        });
+
+        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[0]!);
+        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[1]!);
+    }
+
+    [Fact]
+    public void NotInExpansionAssignsDbTypeBeforeGuidAndBooleanValues()
+    {
+        using var guidCommand = new FakeDbCommand { CommandText = "Token NOT IN (@Token)" };
+        InquiryInExpansion.ExpandNotIn(
+            guidCommand,
+            "@Token",
+            new[] { Guid.Empty },
+            maxParameterCount: 10,
+            dbType: DbType.Binary);
+
+        using var boolCommand = new FakeDbCommand { CommandText = "Enabled NOT IN (@Enabled)" };
+        InquiryInExpansion.ExpandNotIn(
+            boolCommand,
+            "@Enabled",
+            new[] { true },
+            maxParameterCount: 10,
+            dbType: DbType.Int32);
+
+        AssertMetadataPrecedesValue((FakeDbParameter)guidCommand.Parameters[0]!);
+        AssertMetadataPrecedesValue((FakeDbParameter)boolCommand.Parameters[0]!);
+    }
+
+    [Fact]
     public void BindAppendsMultipleParametersInOrder()
     {
         using var command = new FakeDbCommand();
@@ -158,6 +196,13 @@ public sealed class InquiryParameterBinderTests
 
     private enum SampleUIntEnum : uint { Zero = 0, AboveIntMax = 3_000_000_000u }
 
+    private static void AssertMetadataPrecedesValue(FakeDbParameter parameter)
+    {
+        var metadata = parameter.AssignmentOrder.IndexOf(nameof(DbParameter.DbType));
+        var value = parameter.AssignmentOrder.IndexOf(nameof(DbParameter.Value));
+        Assert.True(metadata >= 0 && value > metadata, "DbType must be assigned before Value.");
+    }
+
     [Fact]
     public void BindLeavesOptionalsUntouchedWhenNull()
     {
@@ -235,21 +280,23 @@ public sealed class InquiryParameterBinderTests
         private int _size;
         private byte _precision;
         private byte _scale;
+        private object? _value;
 
+        public List<string> AssignmentOrder { get; } = new();
         public bool DbTypeAssigned { get; private set; }
         public bool DirectionAssigned { get; private set; }
         public bool SizeAssigned { get; private set; }
         public bool PrecisionAssigned { get; private set; }
         public bool ScaleAssigned { get; private set; }
 
-        public override DbType DbType { get => _dbType; set { _dbType = value; DbTypeAssigned = true; } }
+        public override DbType DbType { get => _dbType; set { _dbType = value; DbTypeAssigned = true; AssignmentOrder.Add(nameof(DbType)); } }
         public override ParameterDirection Direction { get => _direction; set { _direction = value; DirectionAssigned = true; } }
         public override bool IsNullable { get; set; }
         public override string ParameterName { get; set; } = string.Empty;
         public override int Size { get => _size; set { _size = value; SizeAssigned = true; } }
         public override string SourceColumn { get; set; } = string.Empty;
         public override bool SourceColumnNullMapping { get; set; }
-        public override object? Value { get; set; }
+        public override object? Value { get => _value; set { _value = value; AssignmentOrder.Add(nameof(Value)); } }
         public override byte Precision { get => _precision; set { _precision = value; PrecisionAssigned = true; } }
         public override byte Scale { get => _scale; set { _scale = value; ScaleAssigned = true; } }
         public override void ResetDbType() { _dbType = default; DbTypeAssigned = false; }
