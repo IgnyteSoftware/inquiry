@@ -79,6 +79,89 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("is null ? global::System.DBNull.Value", text);
     }
 
+    [Theory]
+    [InlineData("SqlServer", "global::System.Data.DbType.DateTime2")]
+    [InlineData("Oracle", "global::System.Data.DbType.DateTime")]
+    public void ConverterMetadataUsesFullProviderType(string dialect, string dateTimeDbType)
+    {
+        const string source = """
+            using System;
+            using System.Threading;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            public readonly struct Token { }
+            public sealed class GuidConverter : IInquiryValueConverter<Token, Guid> { public Guid ToProvider(Token value) => default; public Token FromProvider(Guid value) => default; }
+            public sealed class BinaryConverter : IInquiryValueConverter<Token, byte[]> { public byte[] ToProvider(Token value) => Array.Empty<byte>(); public Token FromProvider(byte[] value) => default; }
+            public sealed class OffsetConverter : IInquiryValueConverter<Token, DateTimeOffset> { public DateTimeOffset ToProvider(Token value) => default; public Token FromProvider(DateTimeOffset value) => default; }
+            public sealed class DateConverter : IInquiryValueConverter<Token, DateTime> { public DateTime ToProvider(Token value) => default; public Token FromProvider(DateTime value) => default; }
+            [InquiryTable("Converted")]
+            public sealed class Converted
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(GuidConverter))] public Token GuidValue { get; set; }
+                [InquiryColumn(Converter = typeof(BinaryConverter))] public Token BinaryValue { get; set; }
+                [InquiryColumn(Converter = typeof(OffsetConverter))] public Token OffsetValue { get; set; }
+                [InquiryColumn(Converter = typeof(DateConverter))] public Token DateValue { get; set; }
+            }
+            public partial class ConvertedStore : InquiryStore<Converted>
+            {
+                [InquiryInsert] public partial Task<int> InsertAsync(Converted value, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: dialect);
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("ConvertedStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("global::System.Data.DbType.Guid", text);
+        Assert.Contains("global::System.Data.DbType.Binary", text);
+        Assert.Contains("global::System.Data.DbType.DateTimeOffset", text);
+        Assert.Contains(dateTimeDbType, text);
+    }
+
+    [Fact]
+    public void NonUnicodeConverterStringProviderBindsAnsiString()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            public readonly struct Code { }
+            public sealed class CodeConverter : IInquiryValueConverter<Code, string>
+            {
+                public string ToProvider(Code value) => string.Empty;
+                public Code FromProvider(string value) => default;
+            }
+            [InquiryTable("ConvertedCode")]
+            public sealed class ConvertedCode
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(IsUnicode = false, Converter = typeof(CodeConverter))] public Code Value { get; set; }
+            }
+            public partial class ConvertedCodeStore : InquiryStore<ConvertedCode>
+            {
+                [InquirySelectAllByField("Value")] public partial Task<IReadOnlyList<ConvertedCode>> SelectAsync(Code value, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("ConvertedCodeStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+        Assert.Contains("DbType.AnsiString", text);
+        Assert.DoesNotContain("DbType.String;", text);
+    }
+
     [Fact]
     public void ConverterColumnDdlUsesProviderType()
     {

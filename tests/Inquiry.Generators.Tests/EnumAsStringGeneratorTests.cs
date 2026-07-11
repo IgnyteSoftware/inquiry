@@ -72,6 +72,22 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void NonUnicodeEnumAsStringBindsAnsiString()
+    {
+        var source = EnumAsStringSource.Replace(
+            "[InquiryColumn(\"Status\"), InquiryEnumAsString]",
+            "[InquiryColumn(\"Status\", IsUnicode = false), InquiryEnumAsString]",
+            StringComparison.Ordinal);
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("TicketStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("DbType.AnsiString", text);
+    }
+
+    [Fact]
     public void EnumAsStringOnNonEnumReportsDiagnostic()
     {
         const string source = """

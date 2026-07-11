@@ -13,13 +13,18 @@ namespace Inquiry.Generators.Infrastructure;
 /// <see cref="TypeData.SpecialType"/> and <see cref="TypeData.EnumUnderlyingSpecialType"/> are
 /// already the non-nullable type's classification, so nullable value types map like their
 /// underlying type. Enums coerce to their underlying integer (matching the binder's value
-/// expression). Types with no portable DbType (custom value converters, byte[], unknown) return
+/// expression). Types with no portable DbType (unknown custom types) return
 /// <c>null</c> so no assignment is emitted and the provider falls back to its own inference.
 /// </remarks>
 internal static class DbTypeMapper
 {
     public static string? TryGetDbTypeExpression(TypeData type, bool isUnicode = true)
     {
+        if (type.IsByteArray)
+        {
+            return "global::System.Data.DbType.Binary";
+        }
+
         if (type.IsGuid)
         {
             return "global::System.Data.DbType.Guid";
@@ -35,12 +40,17 @@ internal static class DbTypeMapper
             return "global::System.Data.DbType.Time";
         }
 
+        if (type.NonNullableDisplayName == "global::System.DateTimeOffset")
+        {
+            return "global::System.Data.DbType.DateTimeOffset";
+        }
+
         var special = type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType;
         return Map(special, isUnicode);
     }
 
     /// <summary>DbType expression for a converter's provider <see cref="SpecialType"/>, or null.</summary>
-    public static string? TryGetDbTypeForSpecialType(SpecialType specialType) => Map(specialType);
+    public static string? TryGetDbTypeForSpecialType(SpecialType specialType, bool isUnicode = true) => Map(specialType, isUnicode);
 
     // Unsigned CLR types (sbyte/ushort/uint/ulong) are bound via the same-width signed storage type.
     // DbType.SByte / UInt16 / UInt32 / UInt64 are rejected by Microsoft.Data.SqlClient (and several

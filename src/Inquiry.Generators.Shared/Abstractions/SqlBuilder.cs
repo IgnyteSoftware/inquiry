@@ -42,10 +42,10 @@ public abstract class SqlBuilder
     /// <see cref="SpecialType"/>; the same dialect substitution for <see cref="System.DateTime"/>
     /// applies.
     /// </summary>
-    internal string? MapDbTypeExpressionForSpecialType(SpecialType specialType)
+    internal string? MapDbTypeExpressionForSpecialType(SpecialType specialType, bool isUnicode = true)
         => specialType == SpecialType.System_DateTime
             ? DateTimeDbTypeExpression
-            : DbTypeMapper.TryGetDbTypeForSpecialType(specialType);
+            : DbTypeMapper.TryGetDbTypeForSpecialType(specialType, isUnicode);
 
     /// <summary>
     /// The DbType expression emitted for a <see cref="System.DateTime"/> parameter. Default
