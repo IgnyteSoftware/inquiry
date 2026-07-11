@@ -1,5 +1,6 @@
 using Inquiry.Oracle.Tests.Fixtures;
 using Oracle.ManagedDataAccess.Client;
+using System.Data;
 
 namespace Inquiry.Oracle.Tests;
 
@@ -49,4 +50,62 @@ public sealed class OracleReaderRepresentationTests
         _ = reader.GetFieldValue<DateTimeOffset>(11);
         Assert.Equal(1L, reader.GetInt64(12));
     }
+
+    [SkippableFact]
+    public async Task CharacterizesTemporalParameterPairs()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+
+        var rejected = new[]
+        {
+            await CaptureRejectionAsync("DateOnly+Date", new DateOnly(2024, 2, 29), DbType.Date),
+            await CaptureRejectionAsync("TimeOnly+Time", new TimeOnly(12, 34, 56), DbType.Time),
+            await CaptureRejectionAsync("TimeSpan+Time", TimeSpan.FromHours(12), DbType.Time),
+            await CaptureRejectionAsync("TimeSpan+Object", TimeSpan.FromHours(12), DbType.Object),
+        };
+        Assert.Equal(
+        [
+            "DateOnly+Date: Execute: InvalidCastException: Unable to cast object of type 'System.DateOnly' to type 'System.IConvertible'.",
+            "TimeOnly+Time: Execute: ArgumentException: ORA-50028: Invalid parameter binding (Parameter 'ParameterName')",
+            "TimeSpan+Time: Execute: ArgumentException: ORA-50028: Invalid parameter binding (Parameter 'ParameterName')",
+            "TimeSpan+Object: Execute: ArgumentException: ORA-50028: Invalid parameter binding",
+        ], rejected);
+
+        await ExecuteAsync(new DateTime(2024, 2, 29), DbType.Date);
+        await ExecuteAsync(TimeSpan.FromTicks(452_961_234_570), null);
+        await ExecuteAsync(new DateTimeOffset(2024, 2, 29, 12, 34, 56, TimeSpan.FromMinutes(-270)), DbType.DateTimeOffset);
+
+        async Task ExecuteAsync(object value, DbType? dbType)
+        {
+            await using var connection = new OracleConnection(_fixture.AdminConnectionString);
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT :p FROM dual";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "p";
+            if (dbType.HasValue) parameter.DbType = dbType.Value;
+            parameter.Value = value;
+            command.Parameters.Add(parameter);
+            await command.ExecuteScalarAsync();
+        }
+
+        async Task<string> CaptureRejectionAsync(string name, object value, DbType dbType)
+        {
+            await using var connection = new OracleConnection(_fixture.AdminConnectionString);
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT :p FROM dual";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "p";
+            try { parameter.DbType = dbType; }
+            catch (Exception exception) { return $"{name}: DbType: {exception.GetType().Name}: {exception.Message}"; }
+            try { parameter.Value = value; }
+            catch (Exception exception) { return $"{name}: Value: {exception.GetType().Name}: {exception.Message}"; }
+            command.Parameters.Add(parameter);
+            try { await command.ExecuteScalarAsync(); }
+            catch (Exception exception) { return $"{name}: Execute: {exception.GetType().Name}: {exception.Message}"; }
+            return $"{name}: accepted unexpectedly";
+        }
+    }
+
 }

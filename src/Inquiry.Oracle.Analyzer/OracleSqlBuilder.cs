@@ -95,6 +95,22 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     /// <c>Order.OrderDate</c>) throws.
     /// </summary>
     public override string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime";
+    public override string? TimeOnlyDbTypeExpression => null;
+
+    public override string BuildParameterValueExpression(ParameterValueExpressionContext context)
+    {
+        if (context.ProviderIsDateOnly)
+        {
+            return $"{context.ValueExpression}.ToDateTime(global::System.TimeOnly.MinValue)";
+        }
+
+        if (context.ProviderIsTimeOnly)
+        {
+            return $"{context.ValueExpression}.ToTimeSpan()";
+        }
+
+        return base.BuildParameterValueExpression(context);
+    }
 
     public override string CurrentTimestampExpression => "SYS_EXTRACT_UTC(SYSTIMESTAMP)";
 

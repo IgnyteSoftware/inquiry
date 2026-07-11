@@ -410,7 +410,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine("                        var _p = _cmd.CreateParameter();");
                     source.AppendLine($"                        _p.ParameterName = \"@p\" + _r + \"_{_c}\";");
                     AppendColumnParameterMetadata(source, col, sqlBuilder, "_p", "                        ", predicate: false);
-                    source.AppendLine($"                        _p.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName)};");
+                    source.AppendLine($"                        _p.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName, sqlBuilder)};");
                     source.AppendLine("                        _cmd.Parameters.Add(_p);");
                     source.AppendLine("                    }");
                 }
@@ -444,7 +444,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"                var _p{_c} = _t.CreateParameter();");
                     source.AppendLine($"                _p{_c}.ParameterName = \"@{GeneratorHelpers.Escape(col.PropertyName)}\";");
                     AppendColumnParameterMetadata(source, col, sqlBuilder, $"_p{_c}", "                ", predicate: false);
-                    source.AppendLine($"                _p{_c}.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName)};");
+                    source.AppendLine($"                _p{_c}.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName, sqlBuilder)};");
                     source.AppendLine($"                _t.AddParameter(_p{_c});");
                 }
                 source.AppendLine("            },");
@@ -663,7 +663,7 @@ internal static class StoreOperationEmitter
             ? converter.ProviderSpecialType == SpecialType.System_Decimal
             : !column.Type.IsEnum && column.Type.SpecialType == SpecialType.System_Decimal;
 
-    private static string BuildParameterValueExpression(ColumnData column, string accessor)
+    private static string BuildParameterValueExpression(ColumnData column, string accessor, SqlBuilder sqlBuilder)
     {
         // a converter column binds ToProvider(value); a null nullable model → NULL (converter not called).
         if (column.Converter is { } converter)
@@ -673,7 +673,8 @@ internal static class StoreOperationEmitter
             // An unsigned/sbyte provider type is bound via its same-width storage partner (DbTypeMapper maps
             // the provider DbType to that signed/byte type): SqlClient rejects DbType.UInt*/SByte and would
             // overflow on a checked Convert past the signed max, so reinterpret the bit pattern with unchecked().
-            var providerValue = ReinterpretUnsignedProviderValue(converter.ProviderSpecialType, toProvider);
+            var bridged = BridgeProviderValue(sqlBuilder, converter.ProviderType, converter.ProviderSpecialType, converter.ProviderTypeDisplay, toProvider);
+            var providerValue = ReinterpretUnsignedProviderValue(converter.ProviderSpecialType, bridged);
             return column.Type.IsNullable
                 ? $"{accessor} is null ? global::System.DBNull.Value : (object){providerValue}"
                 : $"(object){providerValue}";
@@ -708,7 +709,14 @@ internal static class StoreOperationEmitter
                     : $"(object)unchecked((long){accessor})",
                 _ => null,
             };
-            return reinterpretedValue ?? $"(object?){accessor} ?? global::System.DBNull.Value";
+            if (reinterpretedValue is not null) return reinterpretedValue;
+
+            var nonNullable = NonNullableValueExpression(column.Type, accessor);
+            var bridged = BridgeProviderValue(sqlBuilder, column.Type, column.Type.SpecialType, column.Type.NonNullableDisplayName, nonNullable);
+            if (bridged == nonNullable) return $"(object?){accessor} ?? global::System.DBNull.Value";
+            return column.Type.IsNullable
+                ? $"{accessor}.HasValue ? (object){bridged} : global::System.DBNull.Value"
+                : $"(object){bridged}";
         }
 
         // Enum columns: cast to the underlying integer type. Unsigned/sbyte underlyings are bound
@@ -732,6 +740,24 @@ internal static class StoreOperationEmitter
         return column.Type.IsNullable
             ? $"{accessor}.HasValue ? (object){castExprValue} : global::System.DBNull.Value"
             : $"(object){castExpr}";
+    }
+
+    private static string BridgeProviderValue(SqlBuilder sqlBuilder, TypeData? providerType, SpecialType specialType, string providerTypeName, string valueExpression)
+        => sqlBuilder.BuildParameterValueExpression(new ParameterValueExpressionContext(
+            valueExpression,
+            providerTypeName,
+            specialType,
+            ProviderIsDateOnly: providerType?.IsDateOnly == true,
+            ProviderIsTimeOnly: providerType?.IsTimeOnly == true,
+            ProviderIsDateTimeOffset: providerType?.NonNullableDisplayName == "global::System.DateTimeOffset"));
+
+    private static string BuildInlineParameterValueExpression(ColumnData column, string accessor, SqlBuilder sqlBuilder)
+    {
+        var nonNullable = NonNullableValueExpression(column.Type, accessor);
+        var bridged = BridgeProviderValue(sqlBuilder, column.Type, column.Type.SpecialType, column.Type.NonNullableDisplayName, nonNullable);
+        return column.Converter is null && bridged == nonNullable
+            ? accessor
+            : BuildParameterValueExpression(column, accessor, sqlBuilder);
     }
 
     /// <summary>
@@ -817,7 +843,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent + "    ", emitSizePrecision);
-            source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i))};");
+            source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i), sqlBuilder)};");
             source.AppendLine($"{indent}    _cmd.Parameters.Add(_p{i});");
         }
         source.AppendLine($"{indent}}},");
@@ -963,7 +989,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                var _p{i} = _c.CreateParameter();");
                 source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
                 AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{i}", "                ", predicate: true);
-                source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg)};");
+                source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{i});");
             }
         }
@@ -1001,7 +1027,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
-            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(column, arg)};");
+            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(column, arg, sqlBuilder)};");
             source.AppendLine($"                _c.Parameters.Add(_p{pi});");
             pi++;
         }
@@ -1020,7 +1046,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
                 AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: true);
-                source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg)};");
+                source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
                 pi++;
             }
@@ -1070,7 +1096,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(fieldColumns[i].PropertyName)}\";");
             AppendColumnParameterMetadata(source, fieldColumns[i], sqlBuilder, $"_p{pi}", "                ", predicate: true);
-            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg)};");
+            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg, sqlBuilder)};");
             source.AppendLine($"                _c.Parameters.Add(_p{pi});");
             pi++;
         }
@@ -1136,9 +1162,24 @@ internal static class StoreOperationEmitter
             for (var i = 0; i < plan.KeysetColumns.Count; i++)
             {
                 // On the seek path the cursor is non-null; for a multi-column cursor read its tuple element.
-                var valueExpr = single
-                    ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
-                    : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
+                var singleReference = single && !plan.KeysetColumns[i].Type.IsValueType;
+                var rawCursorValue = singleReference
+                    ? $"{cursorParam}!"
+                    : single ? $"{cursorParam}.Value" : $"{cursorParam}.Value.Item{i + 1}";
+                var bridgedCursorValue = BridgeProviderValue(
+                    sqlBuilder,
+                    plan.KeysetColumns[i].Type,
+                    plan.KeysetColumns[i].Type.SpecialType,
+                    plan.KeysetColumns[i].Type.NonNullableDisplayName,
+                    rawCursorValue);
+                var needsProviderTransform = plan.KeysetColumns[i].Converter is not null || bridgedCursorValue != rawCursorValue;
+                var valueExpr = needsProviderTransform
+                    ? (singleReference
+                        ? $"{cursorParam} is not null ? {BuildParameterValueExpression(plan.KeysetColumns[i], rawCursorValue, sqlBuilder)} : global::System.DBNull.Value"
+                        : $"{cursorParam}.HasValue ? {BuildParameterValueExpression(plan.KeysetColumns[i], rawCursorValue, sqlBuilder)} : global::System.DBNull.Value")
+                    : single
+                        ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
+                        : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
                 source.AppendLine($"                    var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                    _p{pi}.ParameterName = \"@__cursor{i}\";");
                 AppendColumnParameterMetadata(source, plan.KeysetColumns[i], sqlBuilder, $"_p{pi}", "                    ", predicate: true);
@@ -1559,7 +1600,8 @@ internal static class StoreOperationEmitter
         source.AppendLine("                {");
         foreach (var paramName in paramNames)
         {
-            source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(paramName)}\", {keyParamName}{keyDbArg}{keySizeArg}),");
+            var keyValue = BuildInlineParameterValueExpression(entity.Keys[0], keyParamName, sqlBuilder);
+            source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(paramName)}\", {keyValue}{keyDbArg}{keySizeArg}),");
         }
         source.AppendLine("                }),");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -1595,7 +1637,8 @@ internal static class StoreOperationEmitter
         source.AppendLine($"                {parentSelectField},");
         source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine("                {");
-        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {keyParamName}{_keyDbArg}{_keySizeArg}),");
+        var inputKeyValue = BuildInlineParameterValueExpression(entity.Keys[0], keyParamName, sqlBuilder);
+        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {inputKeyValue}{_keyDbArg}{_keySizeArg}),");
         source.AppendLine("                }),");
         source.AppendLine("            default,");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -1616,7 +1659,8 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", _entity.{entity.Keys[0].PropertyName}{_keyDbArg}{_keySizeArg}),");
+                var entityKeyValue = BuildInlineParameterValueExpression(entity.Keys[0], "_entity." + entity.Keys[0].PropertyName, sqlBuilder);
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {entityKeyValue}{_keyDbArg}{_keySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
@@ -1633,7 +1677,8 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", _entity.{entity.Keys[0].PropertyName}{_keyDbArg}{_keySizeArg}),");
+                var relationKeyValue = BuildInlineParameterValueExpression(entity.Keys[0], "_entity." + entity.Keys[0].PropertyName, sqlBuilder);
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", {relationKeyValue}{_keyDbArg}{_keySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
@@ -1651,7 +1696,8 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                    {fieldName},");
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(parentKeyPropertyName)}\", _entity.{relation.ForeignKeyProperty}{_childKeyDbArg}{_childKeySizeArg}),");
+                var childKeyValue = BuildInlineParameterValueExpression(childEntity.Keys[0], "_entity." + relation.ForeignKeyProperty, sqlBuilder);
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(parentKeyPropertyName)}\", {childKeyValue}{_childKeyDbArg}{_childKeySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false);");
@@ -1964,7 +2010,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("        {");
         for (var i = 0; i < insertable.Length; i++)
         {
-            source.AppendLine($"            {i} => {BuildParameterValueExpression(insertable[i], "_e." + insertable[i].PropertyName)},");
+            source.AppendLine($"            {i} => {BuildParameterValueExpression(insertable[i], "_e." + insertable[i].PropertyName, sqlBuilder)},");
         }
 
         source.AppendLine("            _ => throw new global::System.ArgumentOutOfRangeException(nameof(_i)),");
