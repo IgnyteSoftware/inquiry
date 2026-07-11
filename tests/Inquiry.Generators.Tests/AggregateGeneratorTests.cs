@@ -9,6 +9,27 @@ namespace Inquiry.Generators.Tests;
 public sealed partial class InquiryGeneratorTests
 {
     [Fact]
+    public void SqlServerCountUsesCountBig()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            [InquiryTable("TOrg")] public sealed class Org { [InquiryKey] public long Id { get; set; } }
+            public partial class OrgStore : InquiryStore<Org>
+            {
+                [InquiryCount] public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("OrgStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        Assert.Contains("SELECT COUNT_BIG(*)", tree.GetText().ToString());
+    }
+    [Fact]
     public void CountEmitsScalarCountSql()
     {
         const string source = """

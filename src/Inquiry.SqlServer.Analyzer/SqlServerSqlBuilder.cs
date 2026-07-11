@@ -8,6 +8,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 {
     public override string DialectName => "SqlServer";
 
+    protected override string CountExpression => "COUNT_BIG(*)";
+
     /// <summary>
     /// SQL Server keys its plan cache on the <c>sp_executesql</c> parameter signature, so generated
     /// binders emit <c>Size</c>/<c>Precision</c>/<c>Scale</c> on declared string/decimal parameters to

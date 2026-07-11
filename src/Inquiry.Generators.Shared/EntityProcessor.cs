@@ -142,7 +142,7 @@ internal static class EntityProcessor
         };
     }
 
-    public static EntityRegistration EmitMaterializer(SourceProductionContext context, EntityData entity)
+    public static EntityRegistration EmitMaterializer(SourceProductionContext context, EntityData entity, SqlBuilder sqlBuilder)
     {
         var entityType = entity.FullyQualifiedName;
 
@@ -157,7 +157,7 @@ internal static class EntityProcessor
         source.AppendLine("{");
         source.AppendLine($"    public {entityType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, indent: "        ");
+        MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
         source.AppendLine();
@@ -170,7 +170,7 @@ internal static class EntityProcessor
         source.AppendLine("{");
         source.AppendLine($"    public {entityType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, indent: "        ");
+        MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
 

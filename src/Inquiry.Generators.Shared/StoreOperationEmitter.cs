@@ -295,6 +295,9 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.GroupCount:
             {
+                var groupColumn = entity.Columns.AsImmutableArray().First(column =>
+                    string.Equals(column.PropertyName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(column.ColumnName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase));
                 var keyType = method.GroupCountKeyTypeFqn!;
                 var gcType = $"global::Inquiry.GroupCount<{keyType}>";
                 var matName = "_GroupCountMat_" + method.Name;
@@ -310,7 +313,12 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"    internal readonly struct {matName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{gcType}>");
                 source.AppendLine("    {");
                 source.AppendLine($"        public {gcType} Materialize(global::System.Data.Common.DbDataReader reader)");
-                source.AppendLine($"            => new {gcType}(reader.GetFieldValue<{keyType}>(0), reader.GetInt64(1));");
+                var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter);
+                var countType = new TypeData(
+                    "global::System.Int64", "global::System.Int64", SpecialType.System_Int64,
+                    SpecialType.None, false, true, false, false);
+                var countRead = MaterializerEmitter.ReadExpression(countType, 1, sqlBuilder, role: ReaderResultRole.Count);
+                source.AppendLine($"            => new {gcType}({keyRead}, {countRead});");
                 source.AppendLine("    }");
                 break;
             }
