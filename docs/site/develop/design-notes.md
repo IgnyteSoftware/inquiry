@@ -71,4 +71,4 @@ and the diagnostic registry. Naive parallelism collides there. The project's ans
 - **JOIN-based or lazy eager loading** — the separate-query model is the recommended high-performance
   pattern; it is not considered a gap.
 
-See the [Roadmap](roadmap.md#explicitly-not-planned) for the same not-planned list in context.
+See the [Roadmap](roadmap.md#explicitly-out-of-scope-for-10) for the same not-planned list in context.
