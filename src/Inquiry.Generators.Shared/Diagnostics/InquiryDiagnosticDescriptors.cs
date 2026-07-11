@@ -404,7 +404,7 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor ConverterProviderTypeUnsupported = new(
         "INQ038",
         "Converter provider type is not supported",
-        "Entity '{0}' converter '{1}' on property '{2}' uses provider type '{3}', which is not a supported Inquiry scalar provider type.",
+        "Entity '{0}' converter '{1}' on property '{2}' uses provider type '{3}', which is not a supported non-null Inquiry scalar provider type. Model-property nullability controls database NULL.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

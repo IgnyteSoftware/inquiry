@@ -511,6 +511,7 @@ internal static class EntityProcessor
                     converterType.Name,
                     property.Name,
                     providerType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                return null;
             }
 
             return new ConverterData(
@@ -534,13 +535,14 @@ internal static class EntityProcessor
     }
 
     private static bool IsSupportedConverterProviderType(TypeData type)
-        => type.IsByteArray || type.IsGuid || type.IsDateOnly || type.IsTimeOnly ||
-           type.NonNullableDisplayName == "global::System.DateTimeOffset" ||
-           type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte
-               or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32
-               or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64
-               or SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal
-               or SpecialType.System_Char or SpecialType.System_String or SpecialType.System_DateTime;
+        => !type.IsNullable &&
+           (type.IsByteArray || type.IsGuid || type.IsDateOnly || type.IsTimeOnly ||
+            type.NonNullableDisplayName == "global::System.DateTimeOffset" ||
+            type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte
+                or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32
+                or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64
+                or SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal
+                or SpecialType.System_Char or SpecialType.System_String or SpecialType.System_DateTime);
 
     /// <summary>Returns the <c>TProvider</c> of the converter's <c>IInquiryValueConverter&lt;TModel, TProvider&gt;</c> interface, or null.</summary>
     private static ITypeSymbol? FindConverterProviderType(INamedTypeSymbol converterType)

@@ -29,6 +29,10 @@ The SQL is **assembled at run time** per batch (the row count is unknown at comp
 
 This is the one place Inquiry builds SQL at run time — necessarily, since the row count varies — but the column list and parameter shape come straight from the compile-time generator output.
 
+## Converter-backed keys
+
+`[InquiryDeleteAll]` takes key values in the entity's model type, including strongly typed IDs. Inquiry projects every non-null key through its configured value converter once, then passes the provider values to the dialect's existing collection transport (JSON table, native array, TVP, or expanded parameters). A null key element is not converted and cannot match a non-null primary key; empty and null collections remain zero-row no-ops. Converters use their cached singleton and a deferred static selector, with no intermediate collection allocation.
+
 ## How `UpdateAll` executes (ADO.NET `DbBatch`)
 
 Batch update does **not** concatenate statements: each item runs the ordinary single-row
