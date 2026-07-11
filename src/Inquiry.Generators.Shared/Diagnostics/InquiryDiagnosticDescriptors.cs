@@ -25,7 +25,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ030–INQ032  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length, INQ032 indexed string needs Length) [IN USE]
     //   INQ033–INQ034  Soft deletes
     //   INQ035         Full-text search              (unsupported by dialect)
-    //   INQ036–INQ037  JSON/array/value-converter column types   (INQ038 reserved, not yet assigned)
+    //   INQ036–INQ038  JSON/array/value-converter column types
     //   INQ039         Graceful degradation: operation unsupported by the active dialect (stub + warning) [IN USE]
     //   INQ045–INQ046  Ad-hoc DTO materialization    (INQ045 no mappable properties, INQ046 not constructible) [IN USE]
     //   INQ047         Sequential GUID key           (SequentialGuid on non-Guid / generated / db-default key) [IN USE]
@@ -397,6 +397,14 @@ internal static class InquiryDiagnosticDescriptors
         "INQ037",
         "Converter type does not implement IInquiryValueConverter<,>",
         "Entity '{0}' sets Converter = typeof({1}) on property '{2}', but '{1}' does not implement IInquiryValueConverter<TModel, TProvider>.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConverterProviderTypeUnsupported = new(
+        "INQ038",
+        "Converter provider type is not supported",
+        "Entity '{0}' converter '{1}' on property '{2}' uses provider type '{3}', which is not a supported Inquiry scalar provider type.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
