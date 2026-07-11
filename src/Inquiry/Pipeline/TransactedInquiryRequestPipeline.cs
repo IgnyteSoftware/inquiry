@@ -81,8 +81,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     internal DbConnection Connection => _connection;
 
     /// <summary>
-    /// True once the owning transaction has been committed, rolled back, or disposed (set by
-    /// <see cref="Inquiry.Transactions.InquiryTransaction"/> when it closes). Savepoint handles
+    /// True once a terminal operation owns the transaction, including while provider commit,
+    /// rollback, or disposal is still completing. Savepoint handles
     /// consult this so their members — including the Connection/Transaction interop surface —
     /// fail fast after the outer transaction is gone instead of handing out a disposed pair.
     /// </summary>

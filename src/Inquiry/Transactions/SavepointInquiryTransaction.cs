@@ -82,12 +82,9 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     /// <inheritdoc />
     public override void ThrowIfClosed()
     {
-        // _closed is set after a successful Commit or Rollback; _committed implies _closed
-        // (kept separately so Dispose can distinguish "released" from "rolled back at exit").
-        // _disposed is set by DisposeAsync. The outer pipeline's IsClosed covers out-of-order
-        // teardown (outer committed/rolled back/disposed while this savepoint handle is still
-        // held) — without it the Connection/Transaction interop getters would hand out a
-        // disposed pair instead of failing fast. Any of these terminal states blocks forwarding.
+        // _closed is set as soon as this handle accepts commit, rollback, or disposal. The outer
+        // pipeline's IsClosed covers out-of-order teardown while this savepoint is still held;
+        // without it the interop getters could expose a closing or disposed provider pair.
         if (_closed || _outerPipeline.IsClosed)
         {
             throw new ObjectDisposedException(
