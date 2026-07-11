@@ -408,7 +408,9 @@ internal static class EntityProcessor
                 IsModifiedBy = isModifiedBy,
                 EnumAsString = enumAsString,
                 // a converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
-                TypeClass = converter is not null ? MapSpecialType(converter.ProviderSpecialType) : MapTypeClass(typeData),
+                TypeClass = converter is not null
+                    ? converter.ProviderType is not null ? MapTypeClass(converter.ProviderType) : MapSpecialType(converter.ProviderSpecialType)
+                    : enumAsString ? DbTypeClass.String : MapTypeClass(typeData),
                 IsNullable = !isKey && typeData.IsNullable,
                 SqlType = sqlType,
                 Length = length,
@@ -499,10 +501,25 @@ internal static class EntityProcessor
                 return null;
             }
 
+            var providerTypeData = TypeData.Create(providerType, providerType.NullableAnnotation);
+            if (!IsSupportedConverterProviderType(providerTypeData))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterProviderTypeUnsupported,
+                    property.Locations.FirstOrDefault(),
+                    entitySymbol.Name,
+                    converterType.Name,
+                    property.Name,
+                    providerType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            }
+
             return new ConverterData(
                 converterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 providerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                providerType.SpecialType);
+                providerType.SpecialType)
+            {
+                ProviderType = providerTypeData,
+            };
         }
 
         if (GeneratorHelpers.GetEntityAttribute(property, "InquiryJsonAttribute") is not null)
@@ -515,6 +532,15 @@ internal static class EntityProcessor
 
         return null;
     }
+
+    private static bool IsSupportedConverterProviderType(TypeData type)
+        => type.IsByteArray || type.IsGuid || type.IsDateOnly || type.IsTimeOnly ||
+           type.NonNullableDisplayName == "global::System.DateTimeOffset" ||
+           type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte
+               or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32
+               or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64
+               or SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal
+               or SpecialType.System_Char or SpecialType.System_String or SpecialType.System_DateTime;
 
     /// <summary>Returns the <c>TProvider</c> of the converter's <c>IInquiryValueConverter&lt;TModel, TProvider&gt;</c> interface, or null.</summary>
     private static ITypeSymbol? FindConverterProviderType(INamedTypeSymbol converterType)

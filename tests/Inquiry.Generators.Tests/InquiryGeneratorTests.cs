@@ -1751,7 +1751,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("private const string _sqlUpsertReturning = \"SET @_inquiry_genkey = COALESCE(@Id, UUID()); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
         // Insert-returning (the null-key upsert branch + any explicit InsertReturning) uses the same
         // user-variable capture, without ON DUPLICATE KEY UPDATE — so it can read back the generated GUID.
-        Assert.Contains("private const string _sqlInsertReturning = \"SET @_inquiry_genkey = COALESCE(@Id, UUID()); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
+        Assert.Contains("private const string _sqlInsertReturning = \"SET @_inquiry_genkey = UUID(); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
         // LAST_INSERT_ID() is only for AUTO_INCREMENT — it must NOT appear for a GUID key.
         Assert.DoesNotContain("LAST_INSERT_ID", generatedText);
     }
@@ -1863,7 +1863,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("_sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\"", generatedText);
         Assert.Contains("_sqlUpsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`) RETURNING `Id`, `Name`\"", generatedText);
-        Assert.Contains("_sqlInsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) RETURNING `Id`, `Name`\"", generatedText);
+        Assert.Contains("_sqlInsertReturning = \"INSERT INTO `TGuidItem` (`Name`) VALUES (@Name) RETURNING `Id`, `Name`\"", generatedText);
         Assert.DoesNotContain("@_inquiry_genkey", generatedText);
         Assert.DoesNotContain("LAST_INSERT_ID", generatedText);
     }
@@ -1884,7 +1884,7 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val SIGNED PATH '$')) jt)\"", generatedText);
+        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val INT PATH '$')) jt)\"", generatedText);
         Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
         Assert.DoesNotContain("InquiryInExpansion", generatedText);
     }
@@ -1904,7 +1904,7 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val SIGNED PATH '$')) jt)\"", generatedText);
+        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val INT PATH '$')) jt)\"", generatedText);
         Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
         Assert.DoesNotContain("InquiryInExpansion", generatedText);
     }

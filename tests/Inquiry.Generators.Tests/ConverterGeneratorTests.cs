@@ -233,6 +233,71 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ037");
     }
 
+    [Fact]
+    public void ConverterWithUnsupportedProviderTypeReportsINQ038()
+    {
+        const string source = """
+            using Inquiry.Entities;
+            namespace Demo;
+            public sealed class Model { }
+            public sealed class Provider { }
+            public sealed class BadConverter : IInquiryValueConverter<Model, Provider>
+            {
+                public Provider ToProvider(Model model) => new();
+                public Model FromProvider(Provider provider) => new();
+            }
+            [InquiryTable("Bad")]
+            public sealed class Bad
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(BadConverter))] public Model Value { get; set; } = new();
+            }
+            """;
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ038");
+    }
+
+    [Fact]
+    public void GuidProviderConverterInUsesGuidJsonTableType()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            public readonly struct ExternalId { public ExternalId(Guid value) => Value = value; public Guid Value { get; } }
+            public sealed class ExternalIdConverter : IInquiryValueConverter<ExternalId, Guid>
+            {
+                public Guid ToProvider(ExternalId model) => model.Value;
+                public ExternalId FromProvider(Guid provider) => new ExternalId(provider);
+            }
+            [InquiryTable("Thing")]
+            public sealed class Thing
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(ExternalIdConverter))] public ExternalId ExternalId { get; set; }
+            }
+            public partial class ThingStore : InquiryStore<Thing>
+            {
+                [InquirySelectAllByPredicate]
+                [InquiryWhere("ExternalId", Compare.In)]
+                public partial Task<IReadOnlyList<Thing>> ByIds(IReadOnlyList<ExternalId> ids, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "MySql");
+        AssertNoErrors(result);
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        Assert.Contains("COLUMNS(val CHAR(36) PATH '$')", text);
+        Assert.Contains("ExternalIdConverter>.Instance.ToProvider(_e)", text);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ038");
+    }
+
     private const string ConverterInSource = """
         using System.Collections.Generic;
         using System.Threading;

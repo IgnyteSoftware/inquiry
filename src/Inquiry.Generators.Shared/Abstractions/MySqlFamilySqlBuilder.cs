@@ -10,11 +10,40 @@ namespace Inquiry.Generators.Abstractions;
 /// <c>SELECT</c> is the first (and only) row-returning result set, so the existing pipeline (which
 /// reads result set #1 under <c>CommandBehavior.SingleResult</c>) consumes it with zero runtime
 /// changes. The MySQL and MariaDB dialect builders both derive from this class; engine-specific
-/// divergence (MariaDB-native <c>RETURNING</c>, per-engine <c>JSON_TABLE</c> IN binding) lands as
-/// overrides in the concrete subclasses.
+/// divergence (such as MariaDB-native <c>RETURNING</c>) lands in the concrete subclass. JSON_TABLE
+/// collection binding is shared here so both engines use one type mapping and extraction contract.
 /// </summary>
 public abstract class MySqlFamilySqlBuilder : SqlBuilder
 {
+    public override bool UseArrayInParameters => true;
+
+    public override string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryJsonArrayParameter";
+
+    protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
+    {
+        var (columnType, valueExpression) = elementType switch
+        {
+            DbTypeClass.Boolean => ("BOOLEAN", "jt.val"),
+            DbTypeClass.Byte => ("TINYINT UNSIGNED", "jt.val"),
+            DbTypeClass.Int16 => ("SMALLINT", "jt.val"),
+            DbTypeClass.Int32 => ("INT", "jt.val"),
+            DbTypeClass.Int64 => ("BIGINT", "jt.val"),
+            DbTypeClass.Single => ("FLOAT", "jt.val"),
+            DbTypeClass.Double => ("DOUBLE", "jt.val"),
+            DbTypeClass.Decimal => ("DECIMAL(65,30)", "jt.val"),
+            DbTypeClass.DateTime => ("DATETIME(6)", "jt.val"),
+            DbTypeClass.DateTimeOffset => ("VARCHAR(40)", "jt.val"),
+            DbTypeClass.DateOnly => ("DATE", "jt.val"),
+            DbTypeClass.TimeOnly => ("TIME(6)", "jt.val"),
+            DbTypeClass.Guid => ("CHAR(36)", "jt.val"),
+            DbTypeClass.ByteArray => ("LONGTEXT", "FROM_BASE64(jt.val)"),
+            _ => ("LONGTEXT", "jt.val"),
+        };
+
+        return quotedColumn + " IN (SELECT " + valueExpression + " FROM JSON_TABLE(" + parameterName
+            + ", '$[*]' COLUMNS(val " + columnType + " PATH '$')) jt)";
+    }
+
     public override string QuoteIdentifier(string identifier)
         => "`" + identifier.Replace("`", "``") + "`";
 
@@ -186,7 +215,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     }
 
     // Returning GUID-key INSERT: like the upsert form but without ON DUPLICATE KEY UPDATE — capture the
-    // (generated or explicit) key in a user variable so the trailing SELECT can read the inserted row back.
+    // generated UUID in a user variable so the trailing SELECT can read the inserted row back.
     // Needed because MySQL has no RETURNING and LAST_INSERT_ID() cannot read back a server-generated UUID.
     private string BuildGuidKeyInsertReturningSql(SqlBuildContext context)
     {
@@ -194,7 +223,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
         var insertColumns = JoinSql(keyColumn, context.InsertColumns);
         var insertValues = JoinSql(GeneratedGuidKeyVariable, context.InsertParameters);
 
-        return "SET " + GeneratedGuidKeyVariable + " = COALESCE(" + context.KeyParameters[0] + ", UUID()); " +
+        return "SET " + GeneratedGuidKeyVariable + " = UUID(); " +
             "INSERT INTO " + context.Table + " (" + insertColumns + ") VALUES (" + insertValues + "); " +
             "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + keyColumn + " = " + GeneratedGuidKeyVariable;
     }
