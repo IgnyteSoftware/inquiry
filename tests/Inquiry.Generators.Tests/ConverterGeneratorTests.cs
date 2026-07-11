@@ -87,7 +87,6 @@ public sealed partial class InquiryGeneratorTests
         const string source = """
             using System;
             using System.Threading;
-            using System.Threading;
             using System.Threading.Tasks;
             using System.Collections.Generic;
             using Inquiry.Entities;
