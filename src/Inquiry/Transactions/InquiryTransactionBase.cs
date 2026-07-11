@@ -42,7 +42,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         where TEntity : class
     {
         ThrowIfClosed();
-        return _inner.QueryAsync<TEntity>(commandText, cancellationToken);
+        return QueryChecked<TEntity>(_inner.QueryAsync<TEntity>(commandText, cancellationToken), cancellationToken);
     }
 
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -51,7 +51,19 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         where TEntity : class
     {
         ThrowIfClosed();
-        return _inner.QueryAsync<TEntity>(command, cancellationToken);
+        return QueryChecked<TEntity>(_inner.QueryAsync<TEntity>(command, cancellationToken), cancellationToken);
+    }
+
+    private async IAsyncEnumerable<TEntity> QueryChecked<TEntity>(
+        IAsyncEnumerable<TEntity> source,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        where TEntity : class
+    {
+        // QueryAsync is deferred: re-check at first enumeration so a sequence captured before a
+        // commit/rollback/dispose cannot reach the provider after its handle closes.
+        ThrowIfClosed();
+        await foreach (var item in source.WithCancellation(cancellationToken).ConfigureAwait(false))
+            yield return item;
     }
 
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(

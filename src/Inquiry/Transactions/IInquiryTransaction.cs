@@ -24,6 +24,13 @@ namespace Inquiry.Transactions;
 /// transaction. The savepoint can be selectively rolled back without affecting the outer
 /// transaction's other work. Nesting is unbounded.
 /// </para>
+/// <para>
+/// A transaction connection permits one operation at a time. Commit, rollback, and disposal fail
+/// fast with <see cref="InvalidOperationException"/> while a command, stream, or grid reader is in
+/// flight; rejected disposal remains retryable after that operation is released. Once a terminal
+/// operation is accepted, new operations fail with <see cref="ObjectDisposedException"/>. Concurrent
+/// disposal calls share the same exactly-once provider cleanup.
+/// </para>
 /// </remarks>
 public interface IInquiryTransaction : IAsyncDisposable
 {
