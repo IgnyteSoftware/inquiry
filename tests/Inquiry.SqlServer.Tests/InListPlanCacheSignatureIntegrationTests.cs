@@ -11,6 +11,7 @@ namespace Inquiry.SqlServer.Tests;
 /// <c>sp_executesql</c> signature is the element's declared size — one cached plan for all lengths instead
 /// of one per length, the IN-path counterpart of <see cref="PlanCacheSignatureIntegrationTests"/>.
 /// </summary>
+/// <remarks>#199 replaces scalar expansion with one pre-provisioned, schema-qualified TVP signature.</remarks>
 [Collection(SqlServerCollection.Name)]
 public sealed class InListPlanCacheSignatureIntegrationTests
 {
@@ -36,7 +37,7 @@ public sealed class InListPlanCacheSignatureIntegrationTests
         var (distinctSignatures, sampleText) = await QueryInListPlanCacheAsync(harness.ConnectionString);
 
         Assert.Equal(1, distinctSignatures);
-        Assert.Contains("nvarchar(64)", sampleText);
+        Assert.Contains("Inquiry_Tvp_474f2ebbdd781f2c0331853ca09837a0aa4613f2bf445089eafda2b033abe95c", sampleText);
     }
 
     // Distinct parameterized IN statement texts cached for THIS database (isolated by the dbid plan
@@ -54,7 +55,7 @@ public sealed class InListPlanCacheSignatureIntegrationTests
             CROSS APPLY sys.dm_exec_plan_attributes(cp.plan_handle) pa
             WHERE pa.attribute = 'dbid' AND pa.value = DB_ID()
               AND st.text LIKE '%TPlanCacheItem%'
-              AND st.text LIKE '%@name0%'
+              AND st.text LIKE '%Inquiry_Tvp_474f2ebbdd781f2c0331853ca09837a0aa4613f2bf445089eafda2b033abe95c%'
               AND st.text NOT LIKE '%dm_exec%';
             """;
         await using var reader = await cmd.ExecuteReaderAsync();

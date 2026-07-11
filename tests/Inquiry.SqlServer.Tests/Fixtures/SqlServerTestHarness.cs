@@ -35,7 +35,11 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
     public static Task<SqlServerTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
         => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.SqlServerDdl, namePrefix);
 
-    public static async Task<SqlServerTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    public static async Task<SqlServerTestHarness> CreateFromDdlAsync(
+        string adminConnectionString,
+        string ddl,
+        string? namePrefix = null,
+        bool provisionProviderArtifacts = true)
     {
         var prefix = namePrefix ?? "Inquiry";
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
@@ -56,6 +60,13 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
         await using (var db = new SqlConnection(connectionString))
         {
             await db.OpenAsync();
+            if (provisionProviderArtifacts)
+            {
+                await using var artifacts = db.CreateCommand();
+                artifacts.CommandText = global::Inquiry.Generated.InquiryGeneratedSchema.ProviderArtifactsDdl;
+                await artifacts.ExecuteNonQueryAsync();
+            }
+
             await using var cmd = db.CreateCommand();
             cmd.CommandText = ddl;
             await cmd.ExecuteNonQueryAsync();

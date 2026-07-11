@@ -25,6 +25,10 @@ public abstract class SqlBuilder
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
 
+    /// <summary>Returns a deployment artifact required to bind this collection column, if any.</summary>
+    public virtual CollectionParameterArtifact? BuildCollectionParameterArtifact(string? owningSchema, IColumn column)
+        => null;
+
     /// <summary>Returns the direct typed reader expression for one provider primitive.</summary>
     public virtual string BuildReaderExpression(ReaderExpressionContext context)
     {

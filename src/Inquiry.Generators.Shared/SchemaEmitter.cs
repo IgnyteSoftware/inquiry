@@ -26,9 +26,13 @@ internal static class SchemaEmitter
     public const string GeneratedClassName = "InquiryGeneratedSchema";
     private const string GeneratedNamespace = "Inquiry.Generated";
 
-    public static void Emit(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
+    public static void Emit(
+        SourceProductionContext context,
+        IReadOnlyList<EntityData> entities,
+        SqlBuilder builder,
+        IReadOnlyList<CollectionParameterArtifact> providerArtifacts)
     {
-        if (entities.Count == 0)
+        if (entities.Count == 0 && providerArtifacts.Count == 0)
         {
             return;
         }
@@ -82,8 +86,30 @@ internal static class SchemaEmitter
         // uses Inquiry does not collide on a single public Inquiry.Generated.InquiryGeneratedSchema type.
         source.AppendLine($"internal static class {GeneratedClassName}");
         source.AppendLine("{");
-        source.AppendLine("    /// <summary>The full schema DDL, tables ordered so referenced tables precede their dependents.</summary>");
-        source.AppendLine($"    public const string Ddl = @\"{ddl.ToString().Replace("\"", "\"\"")}\";");
+        if (providerArtifacts.Count > 0)
+        {
+            var schemaDdl = providerArtifacts
+                .Where(static artifact => artifact.SchemaDdl.Length > 0)
+                .GroupBy(static artifact => artifact.Schema, System.StringComparer.Ordinal)
+                .OrderBy(static group => group.Key, System.StringComparer.Ordinal)
+                .Select(static group => group.First().SchemaDdl);
+            var artifactDdl = string.Join("", schemaDdl)
+                + string.Join("\n\n", providerArtifacts.Select(static artifact => artifact.CreateDdl));
+            if (ddl.Length > 0) artifactDdl += "\n\n";
+            var validationSql = string.Join("\nUNION ALL\n", providerArtifacts.Select(static artifact =>
+                $"SELECT N'{artifact.ValidationName.Replace("'", "''")}' AS [ArtifactName], N'{artifact.ElementSignature.Replace("'", "''")}' AS [ExpectedElementSignature] WHERE TYPE_ID(N'{artifact.ValidationName.Replace("'", "''")}') IS NULL"));
+            source.AppendLine("    /// <summary>Additive setup DDL for provider-owned schema artifacts.</summary>");
+            source.AppendLine($"    public const string ProviderArtifactsDdl = @\"{artifactDdl.Replace("\"", "\"\"")}\";");
+            source.AppendLine("    /// <summary>Read-only validation query returning one row per missing provider artifact.</summary>");
+            source.AppendLine($"    public const string ProviderArtifactsValidationSql = @\"{validationSql.Replace("\"", "\"\"")}\";");
+            source.AppendLine("    /// <summary>The full provider-artifact and table/index schema DDL.</summary>");
+            source.AppendLine($"    public const string Ddl = ProviderArtifactsDdl + @\"{ddl.ToString().Replace("\"", "\"\"")}\";");
+        }
+        else
+        {
+            source.AppendLine("    /// <summary>The full schema DDL, tables ordered so referenced tables precede their dependents.</summary>");
+            source.AppendLine($"    public const string Ddl = @\"{ddl.ToString().Replace("\"", "\"\"")}\";");
+        }
         source.AppendLine("}");
 
         context.AddSource($"{GeneratedClassName}.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));

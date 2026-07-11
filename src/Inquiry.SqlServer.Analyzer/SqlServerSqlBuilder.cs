@@ -1,6 +1,8 @@
 using Inquiry.Generators.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Inquiry.SqlServer.Analyzer;
 
@@ -31,6 +33,61 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     /// <inheritdoc />
     public override string ArrayParameterBinderFqn => "global::Inquiry.SqlServer.Parameters.InquiryTvpParameter";
+
+    public override CollectionParameterArtifact? BuildCollectionParameterArtifact(string? owningSchema, IColumn column)
+    {
+        var elementSignature = column.TypeClass switch
+        {
+            DbTypeClass.Boolean => "bit",
+            DbTypeClass.Byte => "tinyint",
+            DbTypeClass.Int16 => "smallint",
+            DbTypeClass.Int32 => "int",
+            DbTypeClass.Int64 => "bigint",
+            DbTypeClass.Single => "real",
+            DbTypeClass.Double => "float",
+            DbTypeClass.Decimal => "decimal(18,2)",
+            DbTypeClass.String => "nvarchar(max)",
+            DbTypeClass.Guid => "uniqueidentifier",
+            DbTypeClass.DateTime => "datetime2",
+            DbTypeClass.DateTimeOffset => "datetimeoffset",
+            _ => null,
+        };
+        if (elementSignature is null) return null;
+
+        var schema = string.IsNullOrWhiteSpace(owningSchema) ? "dbo" : owningSchema!;
+        var canonicalSignature = "sqlserver-tvp-v1|element=" + elementSignature;
+        string hash;
+        using (var sha = SHA256.Create())
+        {
+            var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(canonicalSignature));
+            var hex = new StringBuilder(bytes.Length * 2);
+            foreach (var value in bytes) hex.Append(value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
+            hash = hex.ToString();
+        }
+
+        var name = "Inquiry_Tvp_" + hash;
+        var quotedSchema = QuoteIdentifier(schema);
+        var quotedName = QuoteIdentifier(name);
+        var qualified = quotedSchema + "." + quotedName;
+        var validationName = qualified;
+        var escapedValidation = validationName.Replace("'", "''");
+        var createType = $"CREATE TYPE {qualified} AS TABLE ([Value] {elementSignature.ToUpperInvariant()} NOT NULL)";
+        var escapedCreateType = createType.Replace("'", "''");
+        var schemaDdl = string.IsNullOrWhiteSpace(owningSchema)
+            ? string.Empty
+            : $"IF SCHEMA_ID(N'{schema.Replace("'", "''")}') IS NULL EXEC(N'CREATE SCHEMA {quotedSchema.Replace("'", "''")}');\n";
+        var ddl = $"IF TYPE_ID(N'{escapedValidation}') IS NULL EXEC(N'{escapedCreateType}');";
+
+        return new CollectionParameterArtifact(
+            "sqlserver-tvp-v1|schema=" + schema + "|element=" + elementSignature,
+            schema,
+            name,
+            qualified,
+            schemaDdl,
+            ddl,
+            validationName,
+            elementSignature);
+    }
 
     public override string QuoteIdentifier(string identifier)
         => "[" + identifier.Replace("]", "]]") + "]";
@@ -310,6 +367,92 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     protected override string GeneratedKeyClause(IColumn column)
         => MapColumnType(column) + " IDENTITY(1,1) PRIMARY KEY";
+
+    // The shared feature catalog uses the ANSI concatenation operator in computed expressions.
+    // SQL Server spells string concatenation with +.
+    protected override string RenderComputedColumn(IColumn column)
+        => "AS (" + TranslateConcatenationOperators(column.ComputedExpression!) + ")";
+
+    private static string TranslateConcatenationOperators(string expression)
+    {
+        var result = new StringBuilder(expression.Length);
+        var state = SqlLexicalState.Normal;
+        for (var index = 0; index < expression.Length; index++)
+        {
+            var current = expression[index];
+            var next = index + 1 < expression.Length ? expression[index + 1] : '\0';
+            switch (state)
+            {
+                case SqlLexicalState.Normal:
+                    if (current == '\'' || current == '"' || current == '[')
+                    {
+                        state = current == '\'' ? SqlLexicalState.SingleQuoted
+                            : current == '"' ? SqlLexicalState.DoubleQuoted
+                            : SqlLexicalState.Bracketed;
+                        result.Append(current);
+                    }
+                    else if (current == '-' && next == '-')
+                    {
+                        state = SqlLexicalState.LineComment;
+                        result.Append("--");
+                        index++;
+                    }
+                    else if (current == '/' && next == '*')
+                    {
+                        state = SqlLexicalState.BlockComment;
+                        result.Append("/*");
+                        index++;
+                    }
+                    else if (current == '|' && next == '|')
+                    {
+                        result.Append('+');
+                        index++;
+                    }
+                    else result.Append(current);
+                    break;
+
+                case SqlLexicalState.SingleQuoted:
+                    result.Append(current);
+                    if (current == '\'' && next == '\'') { result.Append(next); index++; }
+                    else if (current == '\'') state = SqlLexicalState.Normal;
+                    break;
+
+                case SqlLexicalState.DoubleQuoted:
+                    result.Append(current);
+                    if (current == '"' && next == '"') { result.Append(next); index++; }
+                    else if (current == '"') state = SqlLexicalState.Normal;
+                    break;
+
+                case SqlLexicalState.Bracketed:
+                    result.Append(current);
+                    if (current == ']' && next == ']') { result.Append(next); index++; }
+                    else if (current == ']') state = SqlLexicalState.Normal;
+                    break;
+
+                case SqlLexicalState.LineComment:
+                    result.Append(current);
+                    if (current is '\r' or '\n') state = SqlLexicalState.Normal;
+                    break;
+
+                case SqlLexicalState.BlockComment:
+                    result.Append(current);
+                    if (current == '*' && next == '/') { result.Append(next); index++; state = SqlLexicalState.Normal; }
+                    break;
+            }
+        }
+
+        return result.ToString();
+    }
+
+    private enum SqlLexicalState
+    {
+        Normal,
+        SingleQuoted,
+        DoubleQuoted,
+        Bracketed,
+        LineComment,
+        BlockComment,
+    }
 
     protected override string WrapCreateTable(SqlBuildContext context, string body)
     {

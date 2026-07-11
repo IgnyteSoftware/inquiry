@@ -23,7 +23,7 @@ public sealed class GeneratedDdlIntegrationTests
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, InquiryGeneratedSchema.Ddl, "gends");
+            _fixture.AdminConnectionString, InquiryGeneratedSchema.Ddl, "gends", provisionProviderArtifacts: false);
 
         var categories = harness.GetRequiredService<CategoryStore>();
         var inserted = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
@@ -33,6 +33,12 @@ public sealed class GeneratedDdlIntegrationTests
 
         await using var conn = new SqlConnection(harness.ConnectionString);
         await conn.OpenAsync();
+        await using (var validation = conn.CreateCommand())
+        {
+            validation.CommandText = InquiryGeneratedSchema.ProviderArtifactsValidationSql;
+            await using var reader = await validation.ExecuteReaderAsync();
+            Assert.False(await reader.ReadAsync());
+        }
         var actual = await new SqlServerSchemaIntrospector().ReadAsync(conn);
         SchemaFidelity.AssertStructure(ExpectedNorthwindSchema.Schema, actual);
     }
