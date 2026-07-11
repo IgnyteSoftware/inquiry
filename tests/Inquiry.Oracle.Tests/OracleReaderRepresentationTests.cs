@@ -106,4 +106,105 @@ public sealed class OracleReaderRepresentationTests
         }
     }
 
+    [SkippableFact]
+    public async Task CharacterizesGuidAndBooleanParameterPairs()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString,
+            "CREATE TABLE ParameterPairs (Id NUMBER(10) PRIMARY KEY, Token RAW(16), Enabled NUMBER(1))",
+            "paramrepr");
+        await using var connection = new OracleConnection(harness.ConnectionString);
+        await connection.OpenAsync();
+
+        var token = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+
+        var inferredGuid = await CaptureRejectionAsync(101, "Token", token, null);
+        Assert.Equal("Value", inferredGuid.Stage);
+        Assert.NotNull(inferredGuid.Error);
+
+        var explicitGuid = await CaptureRejectionAsync(102, "Token", token, DbType.Guid);
+        Assert.Equal("DbType", explicitGuid.Stage);
+        Assert.NotNull(explicitGuid.Error);
+
+        var inferredBoolean = await CaptureRejectionAsync(103, "Enabled", false, null);
+        Assert.Equal("Execute", inferredBoolean.Stage);
+        Assert.Contains("ORA-00932", inferredBoolean.Error!.Message);
+
+        var explicitBoolean = await CaptureRejectionAsync(104, "Enabled", true, DbType.Boolean);
+        Assert.Equal("Execute", explicitBoolean.Stage);
+        Assert.Contains("ORA-00932", explicitBoolean.Error!.Message);
+
+        await InsertAcceptedPairAsync(1, false, metadataBeforeValue: true);
+        await InsertAcceptedPairAsync(2, true, metadataBeforeValue: false);
+
+        await using var select = connection.CreateCommand();
+        select.CommandText = "SELECT Token, RAWTOHEX(Token), Enabled FROM ParameterPairs ORDER BY Id";
+        await using var reader = await select.ExecuteReaderAsync();
+
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(token, reader.GetGuid(0));
+        Assert.Equal("33221100554477668899AABBCCDDEEFF", reader.GetString(1));
+        Assert.Equal((short)0, reader.GetInt16(2));
+        Assert.False(reader.GetBoolean(2));
+
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(token, reader.GetGuid(0));
+        Assert.Equal("33221100554477668899AABBCCDDEEFF", reader.GetString(1));
+        Assert.Equal((short)1, reader.GetInt16(2));
+        Assert.True(reader.GetBoolean(2));
+        Assert.False(await reader.ReadAsync());
+
+        async Task<(string Stage, Exception? Error)> CaptureRejectionAsync(
+            int id,
+            string column,
+            object value,
+            DbType? dbType)
+        {
+            await using var command = connection.CreateCommand();
+            command.BindByName = true;
+            command.CommandText = $"INSERT INTO ParameterPairs (Id, {column}) VALUES ({id}, :p)";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "p";
+
+            if (dbType.HasValue)
+            {
+                try { parameter.DbType = dbType.Value; }
+                catch (Exception exception) { return ("DbType", exception); }
+            }
+
+            try { parameter.Value = value; }
+            catch (Exception exception) { return ("Value", exception); }
+
+            command.Parameters.Add(parameter);
+            try { await command.ExecuteNonQueryAsync(); }
+            catch (Exception exception) { return ("Execute", exception); }
+            return ("Accepted", null);
+        }
+
+        async Task InsertAcceptedPairAsync(int id, bool enabled, bool metadataBeforeValue)
+        {
+            await using var command = connection.CreateCommand();
+            command.BindByName = true;
+            command.CommandText = $"INSERT INTO ParameterPairs (Id, Token, Enabled) VALUES ({id}, :token, :enabled)";
+
+            var tokenParameter = command.CreateParameter();
+            tokenParameter.ParameterName = "token";
+            tokenParameter.DbType = DbType.Binary;
+            tokenParameter.Value = token;
+            Assert.Equal(token, Assert.IsType<Guid>(tokenParameter.Value));
+            command.Parameters.Add(tokenParameter);
+
+            var enabledParameter = command.CreateParameter();
+            enabledParameter.ParameterName = "enabled";
+            if (metadataBeforeValue) enabledParameter.DbType = DbType.Int32;
+            enabledParameter.Value = enabled;
+            if (!metadataBeforeValue) enabledParameter.DbType = DbType.Int32;
+            Assert.Equal(enabled, Assert.IsType<bool>(enabledParameter.Value));
+            command.Parameters.Add(enabledParameter);
+
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+    }
+
 }

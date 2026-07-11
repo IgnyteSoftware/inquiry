@@ -80,9 +80,9 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Theory]
-    [InlineData("SqlServer", "global::System.Data.DbType.DateTime2")]
-    [InlineData("Oracle", "global::System.Data.DbType.DateTime")]
-    public void ConverterMetadataUsesFullProviderType(string dialect, string dateTimeDbType)
+    [InlineData("SqlServer", "global::System.Data.DbType.DateTime2", "global::System.Data.DbType.Guid")]
+    [InlineData("Oracle", "global::System.Data.DbType.DateTime", "global::System.Data.DbType.Binary")]
+    public void ConverterMetadataUsesFullProviderType(string dialect, string dateTimeDbType, string guidDbType)
     {
         const string source = """
             using System;
@@ -118,7 +118,8 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("ConvertedStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("global::System.Data.DbType.Guid", text);
+        Assert.Contains(guidDbType, text);
+        if (dialect == "Oracle") Assert.DoesNotContain("global::System.Data.DbType.Guid", text);
         Assert.Contains("global::System.Data.DbType.Binary", text);
         Assert.Contains("global::System.Data.DbType.DateTimeOffset", text);
         Assert.Contains(dateTimeDbType, text);

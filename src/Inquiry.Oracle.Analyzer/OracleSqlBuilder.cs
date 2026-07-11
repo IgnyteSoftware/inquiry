@@ -95,6 +95,10 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     /// <c>Order.OrderDate</c>) throws.
     /// </summary>
     public override string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime";
+
+    // ODP.NET accepts the original CLR values when their metadata matches RAW(16)/NUMBER(1).
+    public override string GuidDbTypeExpression => "global::System.Data.DbType.Binary";
+    public override string BooleanDbTypeExpression => "global::System.Data.DbType.Int32";
     public override string? TimeOnlyDbTypeExpression => null;
 
     public override string BuildParameterValueExpression(ParameterValueExpressionContext context)
@@ -403,8 +407,13 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     {
         var (colType, selectExpr) = elementType switch
         {
-            DbTypeClass.Guid => ("VARCHAR2(36)", "HEXTORAW(REPLACE(jt.val, '-', ''))"),
-            DbTypeClass.Boolean => ("NUMBER(1)", "jt.val"),
+            // ODP.NET stores a CLR Guid in .NET's mixed-endian byte layout: reverse the byte order of
+            // the first 4/2/2-byte fields from the canonical JSON string, leaving the final 8 bytes as-is.
+            DbTypeClass.Guid => ("VARCHAR2(36)", "HEXTORAW(SUBSTR(jt.val, 7, 2) || SUBSTR(jt.val, 5, 2) || SUBSTR(jt.val, 3, 2) || SUBSTR(jt.val, 1, 2) || SUBSTR(jt.val, 12, 2) || SUBSTR(jt.val, 10, 2) || SUBSTR(jt.val, 17, 2) || SUBSTR(jt.val, 15, 2) || SUBSTR(jt.val, 20, 4) || SUBSTR(jt.val, 25, 12))"),
+            // Project JSON true/false as text, then map it explicitly. This works on the advertised
+            // Oracle 12c+ range; the newer ALLOW BOOLEAN TO NUMBER CONVERSION clause is not portable
+            // across that full range.
+            DbTypeClass.Boolean => ("VARCHAR2(5)", "CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END"),
             DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 => ("NUMBER(10)", "jt.val"),
             DbTypeClass.Int64 => ("NUMBER(19)", "jt.val"),
             DbTypeClass.Single => ("BINARY_FLOAT", "jt.val"),
