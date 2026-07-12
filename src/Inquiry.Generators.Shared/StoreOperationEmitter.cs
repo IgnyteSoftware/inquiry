@@ -94,7 +94,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectAllByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, entityType, structMat, cancellation);
+                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, entityType, structMat, cancellation, entity.Schema);
                 source.AppendLine("    }");
                 break;
 
@@ -244,6 +244,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine(CollectionBindingExpression(
                     sqlBuilder,
                     entity.Keys[0],
+                    entity.Schema,
                     sqlBuilder.ParameterName("keys"),
                     keysParam,
                     isNegatedCollection: false));
@@ -265,7 +266,7 @@ internal static class StoreOperationEmitter
                 // EXISTS returns a 1/0 scalar the runtime coerces to bool; criteria (if any) bind through
                 // the predicate binder closure.
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitExists(source, sqlBuilder, method, predicatePlan!, cancellation);
+                EmitExists(source, sqlBuilder, method, predicatePlan!, cancellation, entity.Schema);
                 source.AppendLine("    }");
                 break;
 
@@ -448,13 +449,13 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.UpdateByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.Name, cancellation);
+                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.Name, cancellation, entity.Schema);
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.DeleteByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitMutationByPredicate(source, sqlBuilder, method, Array.Empty<ColumnData>(), predicatePlan!, "_sqlDeleteWhere_" + method.Name, cancellation);
+                EmitMutationByPredicate(source, sqlBuilder, method, Array.Empty<ColumnData>(), predicatePlan!, "_sqlDeleteWhere_" + method.Name, cancellation, entity.Schema);
                 source.AppendLine("    }");
                 break;
 
@@ -925,9 +926,10 @@ internal static class StoreOperationEmitter
         ResolvedPredicatePlan plan,
         string entityType,
         string structMat,
-        string cancellation)
+        string cancellation,
+        string? owningSchema)
     {
-        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlPredicate_" + method.Name);
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlPredicate_" + method.Name, owningSchema);
 
         if (method.ReturnsList)
         {
@@ -945,7 +947,7 @@ internal static class StoreOperationEmitter
     /// parameters to bind, so the command is returned directly (no binder closure); otherwise the
     /// predicate binder runs after the pipeline assigns the command text (as for predicate selects).
     /// </summary>
-    private static void EmitExists(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string cancellation)
+    private static void EmitExists(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string cancellation, string? owningSchema)
     {
         var sqlField = "_sqlExists_" + method.Name;
         if (plan.Bindings.Count == 0)
@@ -954,7 +956,7 @@ internal static class StoreOperationEmitter
             return;
         }
 
-        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField);
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, owningSchema);
         source.AppendLine($"        return Inquiry.ExecuteScalarAsync<bool>(_cmd, {cancellation});");
     }
 
@@ -963,7 +965,7 @@ internal static class StoreOperationEmitter
     /// shared by predicate selects and existence tests. The binder runs after the pipeline assigns the
     /// command text, so <c>InquiryInExpansion</c> can rewrite an IN/NOT IN sentinel.
     /// </summary>
-    private static void EmitPredicateBoundCommand(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string sqlField)
+    private static void EmitPredicateBoundCommand(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string sqlField, string? owningSchema)
     {
         source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
         source.AppendLine($"            {sqlField},");
@@ -978,6 +980,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine(CollectionBindingExpression(
                     sqlBuilder,
                     binding.Column,
+                    owningSchema,
                     binding.SqlParameterName,
                     arg,
                     binding.IsNegatedCollection));
@@ -1010,7 +1013,8 @@ internal static class StoreOperationEmitter
         IReadOnlyList<ColumnData> setColumns,
         ResolvedPredicatePlan plan,
         string sqlField,
-        string cancellation)
+        string cancellation,
+        string? owningSchema)
     {
         source.AppendLine("        var _cmd = new global::Inquiry.Commands.InquiryCommand(");
         source.AppendLine($"            {sqlField},");
@@ -1040,6 +1044,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine(CollectionBindingExpression(
                     sqlBuilder,
                     binding.Column,
+                    owningSchema,
                     binding.SqlParameterName,
                     arg,
                     binding.IsNegatedCollection));
@@ -1443,6 +1448,7 @@ internal static class StoreOperationEmitter
     private static string CollectionBindingExpression(
         SqlBuilder sqlBuilder,
         ColumnData column,
+        string? owningSchema,
         string sqlParameterName,
         string arg,
         bool isNegatedCollection)
@@ -1465,9 +1471,19 @@ internal static class StoreOperationEmitter
             return $"                global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
         }
 
-        return sqlBuilder.UseArrayInParameters
-            ? $"                {sqlBuilder.ArrayParameterBinderFqn}.Bind(_c, \"{name}\", {projected});"
-            : $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
+        if (sqlBuilder.UseArrayInParameters)
+        {
+            var artifact = sqlBuilder.BuildCollectionParameterArtifact(owningSchema, column);
+            if (artifact is null)
+            {
+                var method = sqlBuilder.DialectName == "SqlServer" ? "BindUnsupported" : "Bind";
+                return $"                {sqlBuilder.ArrayParameterBinderFqn}.{method}(_c, \"{name}\", {projected});";
+            }
+
+            return $"                {sqlBuilder.ArrayParameterBinderFqn}.Bind(_c, \"{name}\", {projected}, \"{GeneratorHelpers.Escape(artifact.RuntimeTypeName)}\");";
+        }
+
+        return $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
     }
 
     /// <summary>

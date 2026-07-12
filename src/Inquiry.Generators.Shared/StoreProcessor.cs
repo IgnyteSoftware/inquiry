@@ -845,7 +845,7 @@ internal static class StoreProcessor
 
     // ---- Emit (combined output stage) ----------------------------------------------------
 
-    public static StoreRegistration? Emit(
+    public static StoreEmissionResult? Emit(
         SourceProductionContext context,
         StoreData store,
         IReadOnlyDictionary<string, EntityData> entities,
@@ -986,6 +986,24 @@ internal static class StoreProcessor
 
         var entityColumns = ToColumnList(entity.Columns);
         var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns);
+
+        var collectionArtifacts = ImmutableArray.CreateBuilder<CollectionParameterArtifact>();
+        foreach (var item in valid)
+        {
+            if (item.Method.Operation == StoreOperation.DeleteAll)
+            {
+                var artifact = sqlBuilder.BuildCollectionParameterArtifact(entity.Schema, entity.Keys[0]);
+                if (artifact is not null) collectionArtifacts.Add(artifact);
+            }
+
+            if (item.PredicatePlan is null) continue;
+            foreach (var binding in item.PredicatePlan.Bindings)
+            {
+                if (!binding.IsCollection || binding.IsNegatedCollection) continue;
+                var artifact = sqlBuilder.BuildCollectionParameterArtifact(entity.Schema, binding.Column);
+                if (artifact is not null) collectionArtifacts.Add(artifact);
+            }
+        }
 
         // [InquiryGlobalFilter] columns: a projection's column subset omits them, so they must be passed
         // explicitly to projection contexts (like the soft-delete column) to keep the active-row filter intact.
@@ -1376,7 +1394,9 @@ internal static class StoreProcessor
         GeneratorHelpers.AppendNamespaceEnd(source, store.Namespace);
 
         context.AddSource($"{store.Name}.InquiryStore.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
-        return new StoreRegistration(store.FullyQualifiedName, interfaceFullyQualifiedName);
+        return new StoreEmissionResult(
+            new StoreRegistration(store.FullyQualifiedName, interfaceFullyQualifiedName),
+            collectionArtifacts.ToImmutable());
     }
 
     /// <summary>

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -18,7 +17,17 @@ namespace Inquiry.SqlServer.Parameters;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class InquiryTvpParameter
 {
-    private static readonly ConcurrentDictionary<string, byte> EnsuredTypes = new();
+    /// <summary>
+    /// Compatibility path for collection element categories that do not yet have a generated
+    /// SQL Server TVP artifact. Supported generated calls use the explicit-type-name overload.
+    /// </summary>
+    public static void BindUnsupported<T>(DbCommand command, string parameterName, IEnumerable<T>? values)
+    {
+        _ = command ?? throw new System.ArgumentNullException(nameof(command));
+        _ = parameterName ?? throw new System.ArgumentNullException(nameof(parameterName));
+        _ = values;
+        throw new System.NotSupportedException($"No TVP type mapping for {typeof(T).FullName}.");
+    }
 
     /// <summary>
     /// Binds <paramref name="values"/> as a table-valued parameter named
@@ -26,16 +35,16 @@ public static class InquiryTvpParameter
     /// matches no rows under <c>IN (SELECT …)</c> — the same semantics as an empty IN list.
     /// Enum elements are coerced to their underlying integral type (matching the scalar binder).
     /// </summary>
-    public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values)
+    public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values, string typeName)
     {
         if (command is null) throw new System.ArgumentNullException(nameof(command));
         if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
+        if (typeName is null) throw new System.ArgumentNullException(nameof(typeName));
+        ValidateTypeName(typeName);
 
         var elementType = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
         var storageType = elementType.IsEnum ? System.Enum.GetUnderlyingType(elementType) : elementType;
-        var (typeName, sqlDbType, metaData) = ResolveTypeInfo(storageType);
-
-        EnsureType(command.Connection!, typeName, storageType);
+        var metaData = ResolveTypeInfo(storageType);
 
         var records = new List<SqlDataRecord>();
 
@@ -77,55 +86,60 @@ public static class InquiryTvpParameter
         command.Parameters.Add(parameter);
     }
 
-    private static (string TypeName, SqlDbType SqlDbType, SqlMetaData MetaData) ResolveTypeInfo(System.Type storageType)
+    private static SqlMetaData ResolveTypeInfo(System.Type storageType)
     {
         return System.Type.GetTypeCode(storageType) switch
         {
-            System.TypeCode.Boolean => ("Inquiry_BitList", SqlDbType.Bit, new SqlMetaData("Value", SqlDbType.Bit)),
-            System.TypeCode.Byte    => ("Inquiry_TinyIntList", SqlDbType.TinyInt, new SqlMetaData("Value", SqlDbType.TinyInt)),
-            System.TypeCode.Int16   => ("Inquiry_SmallIntList", SqlDbType.SmallInt, new SqlMetaData("Value", SqlDbType.SmallInt)),
-            System.TypeCode.Int32   => ("Inquiry_IntList", SqlDbType.Int, new SqlMetaData("Value", SqlDbType.Int)),
-            System.TypeCode.Int64   => ("Inquiry_BigIntList", SqlDbType.BigInt, new SqlMetaData("Value", SqlDbType.BigInt)),
-            System.TypeCode.Single  => ("Inquiry_RealList", SqlDbType.Real, new SqlMetaData("Value", SqlDbType.Real)),
-            System.TypeCode.Double  => ("Inquiry_FloatList", SqlDbType.Float, new SqlMetaData("Value", SqlDbType.Float)),
-            System.TypeCode.Decimal => ("Inquiry_DecimalList", SqlDbType.Decimal, new SqlMetaData("Value", SqlDbType.Decimal, 18, 2)),
-            System.TypeCode.String  => ("Inquiry_NVarCharList", SqlDbType.NVarChar, new SqlMetaData("Value", SqlDbType.NVarChar, SqlMetaData.Max)),
-            _ when storageType == typeof(System.Guid) => ("Inquiry_UniqueIdentifierList", SqlDbType.UniqueIdentifier, new SqlMetaData("Value", SqlDbType.UniqueIdentifier)),
-            _ when storageType == typeof(System.DateTime) => ("Inquiry_DateTime2List", SqlDbType.DateTime2, new SqlMetaData("Value", SqlDbType.DateTime2)),
-            _ when storageType == typeof(System.DateTimeOffset) => ("Inquiry_DateTimeOffsetList", SqlDbType.DateTimeOffset, new SqlMetaData("Value", SqlDbType.DateTimeOffset)),
+            System.TypeCode.Boolean => new SqlMetaData("Value", SqlDbType.Bit),
+            System.TypeCode.Byte    => new SqlMetaData("Value", SqlDbType.TinyInt),
+            System.TypeCode.Int16   => new SqlMetaData("Value", SqlDbType.SmallInt),
+            System.TypeCode.Int32   => new SqlMetaData("Value", SqlDbType.Int),
+            System.TypeCode.Int64   => new SqlMetaData("Value", SqlDbType.BigInt),
+            System.TypeCode.Single  => new SqlMetaData("Value", SqlDbType.Real),
+            System.TypeCode.Double  => new SqlMetaData("Value", SqlDbType.Float),
+            System.TypeCode.Decimal => new SqlMetaData("Value", SqlDbType.Decimal, 18, 2),
+            System.TypeCode.String  => new SqlMetaData("Value", SqlDbType.NVarChar, SqlMetaData.Max),
+            _ when storageType == typeof(System.Guid) => new SqlMetaData("Value", SqlDbType.UniqueIdentifier),
+            _ when storageType == typeof(System.DateTime) => new SqlMetaData("Value", SqlDbType.DateTime2),
+            _ when storageType == typeof(System.DateTimeOffset) => new SqlMetaData("Value", SqlDbType.DateTimeOffset),
             _ => throw new System.NotSupportedException($"No TVP type mapping for {storageType.FullName}."),
         };
     }
 
-    private static string ResolveSqlType(System.Type storageType)
+    private static void ValidateTypeName(string typeName)
     {
-        return System.Type.GetTypeCode(storageType) switch
-        {
-            System.TypeCode.Boolean => "BIT",
-            System.TypeCode.Byte    => "TINYINT",
-            System.TypeCode.Int16   => "SMALLINT",
-            System.TypeCode.Int32   => "INT",
-            System.TypeCode.Int64   => "BIGINT",
-            System.TypeCode.Single  => "REAL",
-            System.TypeCode.Double  => "FLOAT",
-            System.TypeCode.Decimal => "DECIMAL(18,2)",
-            System.TypeCode.String  => "NVARCHAR(MAX)",
-            _ when storageType == typeof(System.Guid) => "UNIQUEIDENTIFIER",
-            _ when storageType == typeof(System.DateTime) => "DATETIME2",
-            _ when storageType == typeof(System.DateTimeOffset) => "DATETIMEOFFSET",
-            _ => throw new System.NotSupportedException($"No SQL type mapping for {storageType.FullName}."),
-        };
+        var index = 0;
+        if (!ConsumeBracketedIdentifier(typeName, ref index)
+            || index >= typeName.Length || typeName[index++] != '.'
+            || !ConsumeBracketedIdentifier(typeName, ref index)
+            || index != typeName.Length)
+            throw new System.ArgumentException("TVP type name must be a generated [schema].[type] name.", nameof(typeName));
     }
 
-    private static void EnsureType(DbConnection connection, string typeName, System.Type storageType)
+    private static bool ConsumeBracketedIdentifier(string value, ref int index)
     {
-        if (EnsuredTypes.ContainsKey(typeName)) return;
+        if (index >= value.Length || value[index++] != '[') return false;
+        var contentLength = 0;
+        while (index < value.Length)
+        {
+            if (value[index] != ']')
+            {
+                index++;
+                contentLength++;
+                continue;
+            }
 
-        var sqlType = ResolveSqlType(storageType);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"IF TYPE_ID(N'{typeName}') IS NULL CREATE TYPE [{typeName}] AS TABLE ([Value] {sqlType});";
-        cmd.ExecuteNonQuery();
+            if (index + 1 < value.Length && value[index + 1] == ']')
+            {
+                index += 2;
+                contentLength++;
+                continue;
+            }
 
-        EnsuredTypes.TryAdd(typeName, 0);
+            index++;
+            return contentLength is > 0 and <= 128;
+        }
+
+        return false;
     }
 }

@@ -42,6 +42,8 @@ services.AddInquirySqlServer(
 - **Azure SQL retry policy (opt-in):** off by default (`Compatibility = None`). Configure it with `AddInquirySqlServer(cs, o => o.Compatibility = SqlServerCompatibility.AzureSql)`, and the connection factory then retries connection opens on known transient codes (40613, 40197, etc.) with exponential backoff. The default registration applies no open-time retry.
 - **Encryption is mandatory by default** (Microsoft.Data.SqlClient defaults `Encrypt=Mandatory`; Inquiry ships SqlClient 7.0.1 and passes your connection string through unchanged). For LocalDB, a self-signed cert, or a non-TLS dev server, add `Encrypt=False` or `TrustServerCertificate=True` to your connection string, or supply a trusted certificate.
 - **Prepared statements:** SQL Server's plan cache is automatic; the default `PreparedStatementMode.Auto` is a silent no-op.
+- **TVP artifacts are migration-owned:** generated `Compare.In` and `[InquiryDeleteAll]` methods bind deterministic, schema-qualified table-valued parameter types. Binding performs no catalog query, cache lookup, DDL, or connection open. Apply `InquiryGeneratedSchema.ProviderArtifactsDdl` during deployment. `ProviderArtifactsValidationSql` reports missing types without changing the database.
+- **Schemas are part of artifact identity:** an entity in schema `tenant` gets a `tenant.Inquiry_Tvp_...` type, distinct from the same element type in `dbo`. The additive setup DDL creates a missing custom schema before its types.
 
 ## Testing
 
