@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Inquiry.Generators.Models;
 
 namespace Inquiry.Generators.Abstractions;
 
@@ -16,6 +17,9 @@ namespace Inquiry.Generators.Abstractions;
 public sealed class SqlBuildContext
 {
     internal ISet<string>? SuppressedForeignKeyColumns { get; init; }
+    internal IReadOnlyList<ForeignKeyConstraintData>? NormalizedForeignKeys { get; init; }
+    internal IReadOnlyList<IndexData>? NormalizedIndexes { get; init; }
+    internal IReadOnlyList<CheckConstraintData>? NormalizedChecks { get; init; }
     /// <param name="suppressSoftDelete">
     /// When true, the soft-delete term is dropped from <see cref="ActiveRowPredicate"/> so SELECTs built
     /// from this context are not filtered by the soft-delete indicator (any global-filter terms still

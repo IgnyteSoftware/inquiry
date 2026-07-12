@@ -6,7 +6,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.Sqlite.Tests;
 
-[InquiryTable("Sale")]
+[InquiryTable("Sale", GenerateDdl = false)]
 public sealed class Sale
 {
     [InquiryKey(IsGenerated = true)]

@@ -44,9 +44,12 @@ public sealed class Shipper
 }
 ```
 
-- `[InquiryTable("...")]` — the database table name.
+- `[InquiryTable("...")]` — the database table name. Set `GenerateDdl = false` when migrations or another mapping own that table's schema; queries, stores, and materialization still work normally.
 - `[InquiryKey]` — the primary key. `IsGenerated = true` means the database fills it in (`IDENTITY`, `SERIAL`, `AUTOINCREMENT`, etc.).
 - `[InquiryColumn]` — a mapped column. The column name defaults to the property name.
+- `[InquiryIndex]` — a repeatable class-level composite/unique index; SQL Server and PostgreSQL also support covering `Include` columns.
+- `[InquiryCheck]` — a repeatable class-level raw SQL check constraint.
+- `[InquiryForeignKey]` — a mapped FK column with optional deterministic `ConstraintName` and delete/update actions.
 
 ## 4. Declare a store
 

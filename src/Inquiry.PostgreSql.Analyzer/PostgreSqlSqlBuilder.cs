@@ -22,6 +22,11 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     public override string DialectName => "PostgreSql";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+    public override bool SupportsIndexIncludeColumns => true;
+    public override bool SupportsCheckConstraints => true;
+    public override ConstraintNameScope ForeignKeyConstraintNameScope => ConstraintNameScope.Table;
+    public override ConstraintNameScope CheckConstraintNameScope => ConstraintNameScope.Table;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is >= ReferentialActionKind.NoAction and <= ReferentialActionKind.SetDefault;
 
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
