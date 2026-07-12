@@ -42,6 +42,8 @@ internal static class SchemaEmitter
         // unkeyable LOB. Indexed by (schema, table, column) across every entity (the referenced table may be any).
         var declaredLengths = BuildColumnLengthIndex(entities);
 
+        ReportDatabaseGeneratedTokenDiagnostics(context, entities, builder);
+
         ReportKeyDiagnostics(context, entities, builder, declaredLengths);
 
         var ordered = OrderByForeignKeyDependencies(entities);
@@ -113,6 +115,35 @@ internal static class SchemaEmitter
         source.AppendLine("}");
 
         context.AddSource($"{GeneratedClassName}.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+    }
+
+    private static void ReportDatabaseGeneratedTokenDiagnostics(
+        SourceProductionContext context,
+        IReadOnlyList<EntityData> entities,
+        SqlBuilder builder)
+    {
+        if (builder.SupportsDatabaseGeneratedConcurrencyToken)
+        {
+            return;
+        }
+
+        foreach (var entity in entities)
+        {
+            foreach (var column in entity.Columns.AsImmutableArray())
+            {
+                if (!column.IsDatabaseGeneratedToken)
+                {
+                    continue;
+                }
+
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.DatabaseGeneratedConcurrencyTokenInvalid,
+                    column.Location?.ToLocation(),
+                    entity.Name,
+                    column.PropertyName,
+                    "Provider '" + builder.DialectName + "' does not support database-generated concurrency tokens; use an ORM-managed numeric token instead."));
+            }
+        }
     }
 
     /// <summary>

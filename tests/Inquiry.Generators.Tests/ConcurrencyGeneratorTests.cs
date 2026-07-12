@@ -209,10 +209,102 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sqlInsert = \"INSERT INTO [TDoc] ([Id], [Name]) VALUES (@Id, @Name)\";", text);
         // No version bump in SET (DB advances it); WHERE composes the token; OUTPUT INTO @_out for trigger safety.
         Assert.Contains("OUTPUT INSERTED.[Id], INSERTED.[Name], INSERTED.[RowVer] INTO @_out WHERE [Id] = @Id AND [RowVer] = @RowVer", text);
+        Assert.Contains("DECLARE @_out TABLE ([Id] BIGINT, [Name] NVARCHAR(MAX), [RowVer] BINARY(8));", text);
         Assert.Contains("SELECT [Id], [Name], [RowVer] FROM @_out", text);
         // The rowversion IS bound for the UPDATE (its WHERE compares the original value) but never SET.
         Assert.Contains("_p2.ParameterName = \"@RowVer\";", text);
     }
+
+    [Theory]
+    [InlineData("int", "")]
+    [InlineData("byte[]?", "")]
+    [InlineData("byte[]", ", SqlType = \"BINARY(8)\"")]
+    [InlineData("byte[]", ", Length = 8")]
+    [InlineData("byte[]", ", DefaultExpression = \"0x00\"")]
+    [InlineData("byte[]", ", Computed = \"0x00\"")]
+    public void InvalidDatabaseGeneratedTokenShapeReportsInq068(string propertyType, string metadata)
+    {
+        var source = $$"""
+            #nullable enable
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TBad")]
+            public sealed class Bad
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryConcurrencyToken(DatabaseGenerated = true{{metadata}})]
+                public {{propertyType}} Version { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ068");
+    }
+
+    [Fact]
+    public void SchemaOnlyDatabaseGeneratedTokenOnUnsupportedProviderReportsPropertyDiagnostic()
+    {
+        const string source = """
+            using Inquiry.Entities;
+            namespace Demo;
+
+            [InquiryTable("TDoc")]
+            public sealed class Doc
+            {
+                [InquiryKey] public long Id { get; set; }
+                [InquiryConcurrencyToken(DatabaseGenerated = true)]
+                public byte[] Version { get; set; } = System.Array.Empty<byte>();
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "PostgreSql");
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ068");
+        Assert.Contains("Provider 'PostgreSql'", diagnostic.GetMessage());
+        Assert.NotEqual(Location.None, diagnostic.Location);
+        Assert.Equal(8, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
+    }
+
+    [Fact]
+    public void InvalidBinaryTokenShapeLowersToPlainColumnWithoutConcurrencySql()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+
+            [InquiryTable("TDoc")]
+            public sealed class Doc
+            {
+                [InquiryKey] public long Id { get; set; }
+                [InquiryConcurrencyToken(DatabaseGenerated = true, Length = 8)]
+                public byte[] Version { get; set; } = System.Array.Empty<byte>();
+            }
+
+            public partial class DocStore : InquiryStore<Doc>
+            {
+                [InquiryUpdate]
+                public partial Task<bool> UpdateAsync(Doc doc, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ068");
+        var text = GetTokenStoreFromNamedEntity(result, "DocStore.InquiryStore.g.cs");
+        Assert.DoesNotContain("[Version] = [Version] + 1", text);
+        Assert.DoesNotContain("AND [Version] = @Version", text);
+        Assert.DoesNotContain("InquiryConcurrencyException", text);
+        Assert.Contains("SET [Version] = @Version", text);
+        Assert.DoesNotContain("ROWVERSION", ExtractSchemaDdl(result));
+    }
+
+    private static string GetTokenStoreFromNamedEntity(GeneratorTestResult result, string fileName)
+        => Assert.Single(result.RunResult.GeneratedTrees, t => t.FilePath.EndsWith(fileName, StringComparison.Ordinal)).GetText().ToString();
 
     [Fact]
     public void MultipleTokensReportsInq028()
@@ -271,7 +363,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void DatabaseGeneratedTokenOnSqliteIsRejected()
+    public void DatabaseGeneratedTokenOnSqliteReportsSinglePropertyDiagnostic()
     {
         const string source = """
             using System;
@@ -301,7 +393,10 @@ public sealed partial class InquiryGeneratorTests
             """;
 
         var result = RunGenerator(source);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ006");
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ068");
+        Assert.Contains("Provider 'Sqlite'", diagnostic.GetMessage());
+        Assert.NotEqual(Location.None, diagnostic.Location);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ006");
     }
 
     [Fact]

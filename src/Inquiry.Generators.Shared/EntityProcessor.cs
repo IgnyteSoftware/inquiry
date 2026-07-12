@@ -369,6 +369,7 @@ internal static class EntityProcessor
             // database-generated/defaulted, an auditing column, soft-delete, or a concurrency token
             // (INQ057, expression cleared so emission stays valid).
             var computedExpression = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "Computed") : null;
+            var hasComputedMetadata = !string.IsNullOrEmpty(computedExpression);
             if (!string.IsNullOrEmpty(computedExpression) &&
                 (keyAttribute is not null || isGenerated || useDatabaseDefault || isConcurrencyToken ||
                  isCreatedAt || isModifiedAt || isCreatedBy || isModifiedBy || softDelete != SoftDeleteKind.None ||
@@ -388,8 +389,24 @@ internal static class EntityProcessor
             // converter) maps a non-primitive property to/from a provider primitive.
             var converter = ResolveConverter(property, columnAttribute, typeData, entitySymbol, diagnostics);
 
+            if (isDatabaseGeneratedToken &&
+                (!typeData.IsByteArray || typeData.IsNullable || keyAttribute is not null || isGenerated || useDatabaseDefault ||
+                 !string.IsNullOrEmpty(sqlType) || length != 0 || precision != 0 || scale != 0 ||
+                 !string.IsNullOrEmpty(defaultExpression) || hasComputedMetadata || converter is not null))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.DatabaseGeneratedConcurrencyTokenInvalid,
+                    property.Locations.FirstOrDefault(),
+                    entitySymbol.Name,
+                    property.Name,
+                    "Use a non-nullable byte[] and remove conflicting column metadata."));
+                isDatabaseGeneratedToken = false;
+                isConcurrencyToken = false;
+            }
+
             columns.Add(new ColumnData
             {
+                Location = LocationData.From(property.Locations.FirstOrDefault()),
                 PropertyName = property.Name,
                 ColumnName = columnName,
                 Type = typeData,

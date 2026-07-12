@@ -15,6 +15,7 @@ namespace Inquiry.Generators.Models;
 /// </remarks>
 internal sealed record ColumnData : IColumn
 {
+    public LocationData? Location { get; init; }
     public required string PropertyName { get; init; }
     public required string ColumnName { get; init; }
     public required TypeData Type { get; init; }
