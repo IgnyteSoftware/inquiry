@@ -67,7 +67,7 @@ public sealed class TvpArtifactIntegrationTests
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(
             _fixture.AdminConnectionString,
-            InquiryGeneratedSchema.ProviderArtifactsDdl + TenantTableDdl,
+            TenantTableDdl,
             "tvptenant");
         var store = harness.GetRequiredService<TenantGadgetStore>();
         await store.InsertAsync(new TenantGadget { Name = "tenant", IsActive = true });
@@ -92,9 +92,8 @@ public sealed class TvpArtifactIntegrationTests
     public async Task ProvisionedArtifactsAreDatabaseLocalAndSupportConcurrentUse()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        var ddl = InquiryGeneratedSchema.ProviderArtifactsDdl + GadgetTableDdl;
-        await using var first = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, ddl, "tvpdb1");
-        await using var second = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, ddl, "tvpdb2");
+        await using var first = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, GadgetTableDdl, "tvpdb1");
+        await using var second = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, GadgetTableDdl, "tvpdb2");
         var firstStore = first.GetRequiredService<GadgetStore>();
         var secondStore = second.GetRequiredService<GadgetStore>();
 
