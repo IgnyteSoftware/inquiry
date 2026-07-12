@@ -63,6 +63,8 @@ internal sealed record ColumnData : IColumn
 
     /// <summary>Raw SQL expression for a server-computed column ([InquiryColumn(Computed = …)]), or null.</summary>
     public string? ComputedExpression { get; init; }
+    public LocationData? ComputedExpressionLocation { get; init; }
+    public Inquiry.Generators.Infrastructure.EquatableArray<ComputedExpressionOverrideData> ComputedExpressionOverrides { get; init; }
     public string? ForeignKeyTable { get; init; }
     public string? ForeignKeySchema { get; init; }
     public string? ForeignKeyColumn { get; init; }

@@ -35,6 +35,13 @@ public enum IdentifierComparison { Ordinal, OrdinalIgnoreCase }
 public abstract class SqlBuilder
 {
     public abstract string DialectName { get; }
+    public abstract string ProviderId { get; }
+    protected virtual SqlExpressionCommentPolicy ComputedExpressionCommentPolicy => SqlExpressionCommentPolicy.Standard;
+
+    public virtual IReadOnlyList<string> ValidateComputedExpression(string expression)
+        => SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false).Failures;
+
+    public virtual string RenderComputedExpression(string expression) => expression;
 
     /// <summary>Whether this provider has a native database-generated concurrency-token contract.</summary>
     public virtual bool SupportsDatabaseGeneratedConcurrencyToken => false;
@@ -604,7 +611,7 @@ public abstract class SqlBuilder
 
             if (!string.IsNullOrEmpty(column.DefaultExpression))
             {
-                def += " DEFAULT " + column.DefaultExpression;
+                def += " DEFAULT " + RenderDefaultExpression(column.DefaultExpression!);
             }
 
             lines.Add(def);
@@ -618,7 +625,7 @@ public abstract class SqlBuilder
         if (context.NormalizedChecks is not null)
         {
             foreach (var check in context.NormalizedChecks)
-                lines.Add("CONSTRAINT " + QuoteIdentifier(check.EmittedName ?? check.RequestedName!) + " CHECK (" + check.Expression + ")");
+                lines.Add("CONSTRAINT " + QuoteIdentifier(check.EmittedName ?? check.RequestedName!) + " CHECK (" + RenderCheckExpression(check.Expression) + ")");
         }
 
         if (context.GenerateForeignKeys && context.NormalizedForeignKeys is not null)
@@ -769,6 +776,9 @@ public abstract class SqlBuilder
     /// </summary>
     protected virtual string RenderComputedColumn(IColumn column)
         => "AS (" + column.ComputedExpression + ")";
+
+    protected virtual string RenderDefaultExpression(string expression) => expression;
+    protected virtual string RenderCheckExpression(string expression) => expression;
 
     /// <summary>
     /// Renders the <c>precision, scale</c> body for a decimal column type, using the column's declared

@@ -1,4 +1,6 @@
 using Inquiry.Generators.Abstractions;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Inquiry.MariaDb.Analyzer;
 
@@ -11,7 +13,15 @@ namespace Inquiry.MariaDb.Analyzer;
 /// </summary>
 internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
 {
+    protected override SqlExpressionCommentPolicy ComputedExpressionCommentPolicy => SqlExpressionCommentPolicy.MariaDb;
+    public override IReadOnlyList<string> ValidateComputedExpression(string expression)
+    {
+        var analysis = SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false);
+        if (!analysis.HasConcatenationOperator) return analysis.Failures;
+        return analysis.Failures.Concat(new[] { "contains ambiguous '||'; use CONCAT(...), OR, or a mariadb override" }).ToArray();
+    }
     public override string DialectName => "MariaDb";
+    public override string ProviderId => "mariadb";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsCheckConstraints => true;

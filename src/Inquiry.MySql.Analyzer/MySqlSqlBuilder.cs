@@ -1,4 +1,6 @@
 using Inquiry.Generators.Abstractions;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Inquiry.MySql.Analyzer;
 
@@ -9,7 +11,15 @@ namespace Inquiry.MySql.Analyzer;
 /// </summary>
 internal sealed class MySqlSqlBuilder : MySqlFamilySqlBuilder
 {
+    protected override SqlExpressionCommentPolicy ComputedExpressionCommentPolicy => SqlExpressionCommentPolicy.MySql;
+    public override IReadOnlyList<string> ValidateComputedExpression(string expression)
+    {
+        var analysis = SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false);
+        if (!analysis.HasConcatenationOperator) return analysis.Failures;
+        return analysis.Failures.Concat(new[] { "contains ambiguous '||'; use CONCAT(...), OR, or a mysql override" }).ToArray();
+    }
     public override string DialectName => "MySql";
+    public override string ProviderId => "mysql";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsCheckConstraints => true;

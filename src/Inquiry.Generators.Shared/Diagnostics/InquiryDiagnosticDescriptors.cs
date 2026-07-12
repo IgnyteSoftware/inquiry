@@ -675,4 +675,12 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ComputedExpressionInvalid = new(
+        "INQ072",
+        "Computed expression is invalid for the provider",
+        "Computed expression on '{0}' is invalid for provider '{1}': {2}",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
