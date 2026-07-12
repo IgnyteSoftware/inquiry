@@ -1,5 +1,9 @@
 # SQLite
 
+SQLite schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck]`, and every
+`InquiryReferentialAction` value. Covering `Include` columns are rejected because SQLite has no
+equivalent non-key include syntax.
+
 Package: `Inquiry.Sqlite`. Built on `Microsoft.Data.Sqlite`.
 
 ## Install

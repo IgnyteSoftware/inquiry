@@ -1,5 +1,9 @@
 # SQL Server
 
+SQL Server schema DDL supports composite and unique `[InquiryIndex]` declarations, covering `Include`
+columns, `[InquiryCheck]`, and named foreign keys with `Cascade`, `SetNull`, and `SetDefault` actions.
+`Restrict` is rejected rather than rewritten to `NoAction`.
+
 Package: `Inquiry.SqlServer`. Built on `Microsoft.Data.SqlClient`.
 
 ## Install

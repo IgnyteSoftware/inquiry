@@ -186,7 +186,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void DuplicateCyclicForeignKeyDeclarationsAreDiagnosedAndFullySuppressed()
+    public void IdenticalDuplicateMappingsParticipateInCyclicForeignKeysOnce()
     {
         const string source = """
             using Inquiry.Entities;
@@ -200,14 +200,11 @@ public sealed partial class InquiryGeneratorTests
             """;
 
         var result = RunGenerator(source, dialect: "SqlServer");
-        var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ070").ToArray();
-        Assert.Equal(2, diagnostics.Length);
-        Assert.All(diagnostics, diagnostic => Assert.NotEqual(Microsoft.CodeAnalysis.Location.None, diagnostic.Location));
-        Assert.All(diagnostics, diagnostic => Assert.Contains("CycleA.BId -> CycleB.Id", diagnostic.GetMessage()));
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ070");
         var ddl = ExtractSchemaDdl(result);
-        Assert.DoesNotContain("ALTER TABLE", ddl);
-        Assert.DoesNotContain("FOREIGN KEY ([BId])", ddl);
-        Assert.DoesNotContain("FOREIGN KEY ([AId])", ddl);
+        Assert.Equal(2, ddl.Split("CREATE TABLE [CycleA]").Length);
+        Assert.Equal(2, ddl.Split("FOREIGN KEY ([BId])").Length);
+        Assert.Equal(2, ddl.Split("FOREIGN KEY ([AId])").Length);
     }
 
     [Fact]

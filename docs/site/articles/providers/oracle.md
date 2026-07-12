@@ -1,5 +1,9 @@
 # Oracle
 
+Oracle schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck]`, and named foreign keys
+with delete `Cascade` or `SetNull`. Covering `Include`, update actions, `Restrict`, and `SetDefault` are
+rejected because Oracle cannot represent them faithfully.
+
 Package: `Inquiry.Oracle`. Built on `Oracle.ManagedDataAccess.Core`.
 
 ## Install
