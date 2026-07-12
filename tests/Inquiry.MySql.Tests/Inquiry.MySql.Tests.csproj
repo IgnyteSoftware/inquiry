@@ -22,6 +22,7 @@
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
 
     <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
+    <Compile Include="..\Inquiry.UpdateActionCatalog\*.cs" LinkBase="UpdateActionCatalog" />
     <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" />
   </ItemGroup>
 

@@ -37,9 +37,15 @@ namespace Inquiry.Oracle.Analyzer;
 /// </summary>
 internal sealed class OracleSqlBuilder : SqlBuilder
 {
+    public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override string DialectName => "Oracle";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+    public override bool SupportsCheckConstraints => true;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event)
+        => @event == ReferentialActionEvent.Update ? action == ReferentialActionKind.NoAction : action is ReferentialActionKind.NoAction or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
 
     public override string BuildReaderExpression(ReaderExpressionContext context)
     {

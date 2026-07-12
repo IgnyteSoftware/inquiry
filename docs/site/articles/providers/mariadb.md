@@ -1,5 +1,8 @@
 # MariaDB
 
+MariaDB schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck]`, and named foreign-key
+actions except `SetDefault`. Covering `Include` columns are rejected instead of being appended to the key.
+
 Package: `Inquiry.MariaDb`. Built on `MySqlConnector` (wire-compatible with MariaDB). Targets MariaDB 10.6+.
 
 > MariaDB users previously running on `Inquiry.MySql` should migrate to this package: swap the

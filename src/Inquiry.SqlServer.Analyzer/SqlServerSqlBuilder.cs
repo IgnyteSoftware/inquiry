@@ -21,6 +21,13 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     public override string DialectName => "SqlServer";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+    public override bool SupportsIndexIncludeColumns => true;
+    public override bool SupportsCheckConstraints => true;
+    public override ConstraintNameScope IndexNameScope => ConstraintNameScope.Table;
+    public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull or ReferentialActionKind.SetDefault;
 
     public override bool SupportsDatabaseGeneratedConcurrencyToken => true;
 
