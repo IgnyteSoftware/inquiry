@@ -667,4 +667,12 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor SchemaPrimitiveInvalid = new(
+        "INQ071",
+        "Schema primitive is invalid for the provider",
+        "Schema declaration on '{0}' is invalid for provider '{1}': {2}",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

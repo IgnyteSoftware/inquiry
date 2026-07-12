@@ -64,6 +64,13 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
 
     private string? _referencedSchema;
 
+    /// <summary>Gets or sets the physical foreign-key constraint name.</summary>
+    public string? ConstraintName { get; set; }
+    /// <summary>Gets or sets the action applied when the referenced row is deleted.</summary>
+    public InquiryReferentialAction OnDelete { get; set; }
+    /// <summary>Gets or sets the action applied when the referenced key is updated.</summary>
+    public InquiryReferentialAction OnUpdate { get; set; }
+
     private static void ValidateReference(string referencedTable, string referencedColumn)
     {
         if (string.IsNullOrWhiteSpace(referencedTable))

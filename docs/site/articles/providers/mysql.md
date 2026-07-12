@@ -1,5 +1,8 @@
 # MySQL
 
+MySQL schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck]`, and named foreign-key
+actions except `SetDefault`. Covering `Include` columns are rejected instead of being appended to the key.
+
 Package: `Inquiry.MySql`. Built on `MySqlConnector`.
 
 > **MariaDB users:** use the dedicated [`Inquiry.MariaDb` package](mariadb.md) instead. The MariaDB

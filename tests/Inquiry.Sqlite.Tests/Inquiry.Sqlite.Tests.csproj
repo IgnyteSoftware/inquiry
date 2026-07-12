@@ -20,6 +20,7 @@
 
     <!-- Shared feature catalog (W6/W8/W10). FullText (W9) is excluded: SQLite rejects FTS (INQ035). -->
     <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
+    <Compile Include="..\Inquiry.UpdateActionCatalog\*.cs" LinkBase="UpdateActionCatalog" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,6 +2,8 @@
 
 The generator emits a `CREATE TABLE` script for every entity in your assembly, in dependency order, as a `const string` on `InquiryGeneratedSchema`. Use it for test bootstrapping, first-run setup, or as the starting point for a migration.
 
+Set `[InquiryTable("Name", GenerateDdl = false)]` for a mapping whose table is managed by hand-written migrations or by another canonical mapping. The entity remains available to generated stores and materializers, but it is completely excluded from schema DDL, schema validation, indexes, checks, and foreign-key analysis.
+
 On SQL Server, a non-nullable `byte[]` marked `[InquiryConcurrencyToken(DatabaseGenerated = true)]` is emitted as `ROWVERSION NOT NULL`. Ordinary `byte[]` columns remain `VARBINARY(MAX)`. Returning mutations capture a rowversion through an internal `BINARY(8)` output table; `ROWVERSION` is used only for the physical table column.
 
 For providers that require database objects to bind collections, the same class also exposes:
@@ -110,6 +112,43 @@ public string FullName { get; set; } = "";
 ## Indexes
 
 `[InquiryColumn(IsIndexed = true)]` (or `IsUnique = true` for a UNIQUE index) on a column emits a `CREATE INDEX` statement alongside the table DDL.
+
+Use repeatable class-level indexes for ordered composite keys, uniqueness, and covering columns:
+
+```csharp
+[InquiryIndex(nameof(TenantId), nameof(Code), IsUnique = true)]
+[InquiryIndex(nameof(CategoryId), Name = "IX_Product_Category", Include = new[] { nameof(DisplayName) })]
+public sealed class Product { /* ... */ }
+```
+
+`Include` emits non-key covering columns on SQL Server and PostgreSQL. SQLite, MySQL, MariaDB, and
+Oracle cannot represent this distinction faithfully, so their analyzers report an error instead of
+silently changing the index key. Composite and unique indexes work on all six providers. Existing
+single-column flags and their short `IX_`/`UX_` names remain unchanged.
+
+## Check constraints
+
+Repeat `[InquiryCheck("Quantity >= 0", Name = "CK_Product_Quantity")]` on an entity to emit named
+table checks. Check expressions are raw provider SQL over physical column names; Inquiry neither quotes
+nor translates them, so keep runtime input out and use syntax accepted by every provider you target.
+
+## Foreign-key actions
+
+`[InquiryForeignKey]` accepts `ConstraintName`, `OnDelete`, and `OnUpdate`. The action enum provides
+`NoAction`, `Restrict`, `Cascade`, `SetNull`, and `SetDefault`; unsupported provider/action pairs are
+compile-time errors. `SetNull` requires a nullable local property, and `SetDefault` requires a mapped
+database default.
+
+| Capability | SQLite | SQL Server | PostgreSQL | MySQL | MariaDB | Oracle |
+|---|---|---|---|---|---|---|
+| Covering `Include` | — | Yes | Yes | — | — | — |
+| Checks | Yes | Yes | Yes | Yes | Yes | Yes |
+| Delete `Cascade` / `SetNull` | Yes | Yes | Yes | Yes | Yes | Yes |
+| Delete `SetDefault` | Yes | Yes | Yes | — | — | — |
+| Update actions | Yes | Yes, except `Restrict` | Yes | Yes, except `SetDefault` | Yes, except `SetDefault` | — |
+
+Oracle supports delete `Cascade` and `SetNull` only. SQL Server and Oracle do not accept `Restrict`;
+Inquiry does not rewrite it to `NoAction` because their timing semantics are not universally equivalent.
 
 ## DDL safety lints (opt-in)
 

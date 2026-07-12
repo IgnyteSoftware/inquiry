@@ -40,9 +40,13 @@ internal static class EntityProcessor
         // A view is read-only with no FK DDL; for a table, GenerateForeignKeys defaults true.
         var generateForeignKeys = !isView && (nameAttribute is null ||
             GeneratorHelpers.GetNamedBool(nameAttribute, "GenerateForeignKeys", defaultValue: true));
+        var generateDdl = !isView && (nameAttribute is null ||
+            GeneratorHelpers.GetNamedBool(nameAttribute, "GenerateDdl", defaultValue: true));
 
         var columns = DiscoverColumns(entitySymbol, diagnostics);
         var relations = DiscoverRelations(entitySymbol, cancellationToken);
+        var indexes = DiscoverIndexes(entitySymbol, columns);
+        var checks = DiscoverChecks(entitySymbol);
 
         var keyColumns = columns.Where(static c => c.IsKey).ToImmutableArray();
         var isMapped = true;
@@ -136,9 +140,12 @@ internal static class EntityProcessor
             Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()))
         {
             Location = LocationData.From(entitySymbol.Locations.FirstOrDefault()),
+            Indexes = new EquatableArray<IndexData>(indexes.ToImmutableArray()),
+            Checks = new EquatableArray<CheckConstraintData>(checks.ToImmutableArray()),
             SoftDeleteColumn = softDeleteColumns.Length > 0 ? softDeleteColumns[0] : null,
             ConcurrencyToken = concurrencyTokens.Length > 0 ? concurrencyTokens[0] : null,
             GenerateForeignKeys = generateForeignKeys,
+            GenerateDdl = generateDdl,
             IsView = isView,
         };
     }
@@ -439,6 +446,9 @@ internal static class EntityProcessor
                 ForeignKeyTable = foreignKeyTable,
                 ForeignKeySchema = foreignKeySchema,
                 ForeignKeyColumn = foreignKeyColumn,
+                ForeignKeyConstraintName = foreignKeyAttribute is null ? null : GeneratorHelpers.GetNamedString(foreignKeyAttribute, "ConstraintName"),
+                ForeignKeyOnDelete = foreignKeyAttribute is null ? 0 : GetNamedEnumValue(foreignKeyAttribute, "OnDelete"),
+                ForeignKeyOnUpdate = foreignKeyAttribute is null ? 0 : GetNamedEnumValue(foreignKeyAttribute, "OnUpdate"),
                 IsIndexed = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsIndexed"),
                 IsUnicode = metadataAttribute is null || GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnicode", true),
                 IsUnique = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnique"),
@@ -458,6 +468,59 @@ internal static class EntityProcessor
 
         return columns;
     }
+
+    private static int GetNamedEnumValue(AttributeData attribute, string name)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == name && argument.Value.Value is int value) return value;
+        }
+        return 0;
+    }
+
+    private static ImmutableArray<IndexData>.Builder DiscoverIndexes(INamedTypeSymbol entity, IReadOnlyList<ColumnData> columns)
+    {
+        var result = ImmutableArray.CreateBuilder<IndexData>();
+        var byProperty = columns.ToDictionary(static c => c.PropertyName, StringComparer.Ordinal);
+        var ordinal = 0;
+        foreach (var attribute in entity.GetAttributes().Where(static a => a.AttributeClass?.ToDisplayString() == "Inquiry.Entities.InquiryIndexAttribute"))
+        {
+            var logicalKeys = ReadStringArray(attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0] : default).ToImmutableArray();
+            var keys = logicalKeys
+                .Select(p => byProperty.TryGetValue(p, out var c) ? c.ColumnName : "").ToImmutableArray();
+            var includeArg = attribute.NamedArguments.FirstOrDefault(static p => p.Key == "Include").Value;
+            var logicalIncludes = ReadStringArray(includeArg).ToImmutableArray();
+            var includes = logicalIncludes.Select(p => byProperty.TryGetValue(p, out var c) ? c.ColumnName : "").ToImmutableArray();
+            result.Add(new IndexData(null, string.Empty, new EquatableArray<string>(keys), new EquatableArray<string>(includes),
+                GeneratorHelpers.GetNamedBool(attribute, "IsUnique"), GeneratorHelpers.GetNamedString(attribute, "Name"),
+                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()))
+            {
+                LogicalKeyProperties = new EquatableArray<string>(logicalKeys),
+                LogicalIncludeProperties = new EquatableArray<string>(logicalIncludes),
+                Origin = IndexOrigin.TableAttribute,
+                Ordinal = ordinal++,
+            });
+        }
+        return result;
+    }
+
+    private static ImmutableArray<CheckConstraintData>.Builder DiscoverChecks(INamedTypeSymbol entity)
+    {
+        var result = ImmutableArray.CreateBuilder<CheckConstraintData>();
+        var ordinal = 0;
+        foreach (var attribute in entity.GetAttributes().Where(static a => a.AttributeClass?.ToDisplayString() == "Inquiry.Entities.InquiryCheckAttribute"))
+        {
+            var expression = attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value as string ?? string.Empty : string.Empty;
+            result.Add(new CheckConstraintData(null, string.Empty, expression, GeneratorHelpers.GetNamedString(attribute, "Name"),
+                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation())) { Ordinal = ordinal++ });
+        }
+        return result;
+    }
+
+    private static IEnumerable<string> ReadStringArray(TypedConstant constant)
+        => constant.Kind == TypedConstantKind.Array
+            ? constant.Values.Select(static value => value.Value as string ?? string.Empty)
+            : Enumerable.Empty<string>();
 
     /// <summary>
     /// Collapses a CLR type into the dialect-neutral <see cref="DbTypeClass"/> the DDL builder maps

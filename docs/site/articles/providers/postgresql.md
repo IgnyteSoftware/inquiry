@@ -1,5 +1,8 @@
 # PostgreSQL
 
+PostgreSQL schema DDL supports composite and unique `[InquiryIndex]` declarations, covering `Include`
+columns, `[InquiryCheck]`, and every `InquiryReferentialAction` value.
+
 Package: `Inquiry.PostgreSql`. Built on `Npgsql`.
 
 ## Install

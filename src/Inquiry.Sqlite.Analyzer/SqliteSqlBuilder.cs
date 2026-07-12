@@ -9,6 +9,11 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
     public override string DialectName => "Sqlite";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.Inline;
+    public override bool SupportsCheckConstraints => true;
+    public override ConstraintNameScope ForeignKeyConstraintNameScope => ConstraintNameScope.Table;
+    public override ConstraintNameScope CheckConstraintNameScope => ConstraintNameScope.Table;
+    public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is >= ReferentialActionKind.NoAction and <= ReferentialActionKind.SetDefault;
 
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";

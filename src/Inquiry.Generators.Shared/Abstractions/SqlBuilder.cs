@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
@@ -11,6 +12,11 @@ public enum CyclicForeignKeyStrategy
     Inline,
     AlterTable,
 }
+
+public enum ReferentialActionKind { NoAction, Restrict, Cascade, SetNull, SetDefault }
+public enum ReferentialActionEvent { Delete, Update }
+public enum ConstraintNameScope { Table, Schema }
+public enum IdentifierComparison { Ordinal, OrdinalIgnoreCase }
 
 /// <summary>
 /// Compile-time SQL builder consumed by the Inquiry source generator. One concrete subclass exists
@@ -34,6 +40,16 @@ public abstract class SqlBuilder
     public virtual bool SupportsDatabaseGeneratedConcurrencyToken => false;
 
     public virtual CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.ReportDiagnostic;
+    public virtual bool SupportsIndexIncludeColumns => false;
+    public virtual bool SupportsCheckConstraints => false;
+    public virtual ConstraintNameScope ForeignKeyConstraintNameScope => ConstraintNameScope.Schema;
+    public virtual ConstraintNameScope IndexNameScope => ConstraintNameScope.Schema;
+    public virtual ConstraintNameScope CheckConstraintNameScope => ConstraintNameScope.Schema;
+    public virtual IdentifierComparison IndexNameComparison => IdentifierComparison.Ordinal;
+    public virtual IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.Ordinal;
+    public virtual IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.Ordinal;
+    public virtual bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event)
+        => action == ReferentialActionKind.NoAction;
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
 
@@ -599,7 +615,21 @@ public abstract class SqlBuilder
             lines.Add("PRIMARY KEY (" + string.Join(", ", context.QuotedKeyColumns) + ")");
         }
 
-        if (context.GenerateForeignKeys)
+        if (context.NormalizedChecks is not null)
+        {
+            foreach (var check in context.NormalizedChecks)
+                lines.Add("CONSTRAINT " + QuoteIdentifier(check.EmittedName ?? check.RequestedName!) + " CHECK (" + check.Expression + ")");
+        }
+
+        if (context.GenerateForeignKeys && context.NormalizedForeignKeys is not null)
+        {
+            foreach (var foreignKey in context.NormalizedForeignKeys)
+            {
+                if (context.SuppressedForeignKeyColumns?.Contains(foreignKey.LocalColumn) == true) continue;
+                lines.Add(BuildForeignKeyConstraintBody(foreignKey, includeConstraintKeyword: !string.IsNullOrEmpty(foreignKey.EmittedName)));
+            }
+        }
+        else if (context.GenerateForeignKeys)
         {
             foreach (var column in context.Columns)
             {
@@ -619,10 +649,29 @@ public abstract class SqlBuilder
 
     internal virtual string BuildAddForeignKeySql(ForeignKeyConstraintData foreignKey)
         => "ALTER TABLE " + QuoteTable(foreignKey.LocalSchema, foreignKey.LocalTable)
-            + " ADD CONSTRAINT " + QuoteIdentifier(foreignKey.ConstraintName)
-            + " FOREIGN KEY (" + QuoteIdentifier(foreignKey.LocalColumn) + ") REFERENCES "
+            + " ADD CONSTRAINT " + QuoteIdentifier(foreignKey.EmittedName!)
+            + " " + BuildForeignKeyConstraintBody(foreignKey, includeConstraintKeyword: false);
+
+    private string BuildForeignKeyConstraintBody(ForeignKeyConstraintData foreignKey, bool includeConstraintKeyword)
+        => (includeConstraintKeyword ? "CONSTRAINT " + QuoteIdentifier(foreignKey.EmittedName!) + " " : string.Empty)
+            + "FOREIGN KEY (" + QuoteIdentifier(foreignKey.LocalColumn) + ") REFERENCES "
             + QuoteTable(foreignKey.ReferencedSchema, foreignKey.ReferencedTable)
-            + "(" + QuoteIdentifier(foreignKey.ReferencedColumn) + ")";
+            + "(" + QuoteIdentifier(foreignKey.ReferencedColumn) + ")"
+            + RenderReferentialActionClause(ReferentialActionEvent.Delete, (ReferentialActionKind)foreignKey.OnDelete)
+            + RenderReferentialActionClause(ReferentialActionEvent.Update, (ReferentialActionKind)foreignKey.OnUpdate);
+
+    protected virtual string RenderReferentialActionClause(ReferentialActionEvent @event, ReferentialActionKind action)
+        => action == ReferentialActionKind.NoAction ? string.Empty
+            : " ON " + (@event == ReferentialActionEvent.Delete ? "DELETE" : "UPDATE") + " " + RenderReferentialActionToken(action);
+
+    protected virtual string RenderReferentialActionToken(ReferentialActionKind action) => action switch
+    {
+        ReferentialActionKind.Restrict => "RESTRICT",
+        ReferentialActionKind.Cascade => "CASCADE",
+        ReferentialActionKind.SetNull => "SET NULL",
+        ReferentialActionKind.SetDefault => "SET DEFAULT",
+        _ => string.Empty,
+    };
 
     /// <summary>
     /// Builds the <c>CREATE INDEX</c> statements for the entity — one per column flagged
@@ -632,6 +681,22 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual IReadOnlyList<string> BuildCreateIndexSql(SqlBuildContext context)
     {
+        if (context.NormalizedIndexes is not null)
+        {
+            var normalized = new List<string>();
+            foreach (var index in context.NormalizedIndexes)
+            {
+                var unique = index.IsUnique ? "UNIQUE " : string.Empty;
+                var guard = SupportsCreateIndexIfNotExists ? "IF NOT EXISTS " : string.Empty;
+                var keys = string.Join(", ", index.KeyColumns.AsImmutableArray().Select(column => QuoteIdentifier(column)));
+                var include = index.IncludeColumns.Count > 0
+                    ? " INCLUDE (" + string.Join(", ", index.IncludeColumns.AsImmutableArray().Select(column => QuoteIdentifier(column))) + ")"
+                    : string.Empty;
+                normalized.Add("CREATE " + unique + "INDEX " + guard + QuoteIdentifier(index.EmittedName ?? index.RequestedName!)
+                    + " ON " + context.Table + " (" + keys + ")" + include);
+            }
+            return normalized;
+        }
         var statements = new List<string>();
         foreach (var column in context.Columns)
         {
