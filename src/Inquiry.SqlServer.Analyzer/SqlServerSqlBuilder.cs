@@ -8,6 +8,16 @@ namespace Inquiry.SqlServer.Analyzer;
 
 internal sealed class SqlServerSqlBuilder : SqlBuilder
 {
+    public override CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
+        => context.ProviderSpecialType switch
+        {
+            Microsoft.CodeAnalysis.SpecialType.System_SByte => new($"unchecked((global::System.Byte)({context.ValueExpression}))", "global::System.Byte", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt16 => new($"unchecked((global::System.Int16)({context.ValueExpression}))", "global::System.Int16", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt32 => new($"unchecked((global::System.Int32)({context.ValueExpression}))", "global::System.Int32", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt64 => new($"unchecked((global::System.Int64)({context.ValueExpression}))", "global::System.Int64", true),
+            _ => new(context.ValueExpression, context.ProviderTypeName, false),
+        };
+
     public override string DialectName => "SqlServer";
 
     protected override string CountExpression => "COUNT_BIG(*)";

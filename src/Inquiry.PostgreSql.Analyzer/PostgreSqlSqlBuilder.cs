@@ -6,6 +6,19 @@ namespace Inquiry.PostgreSql.Analyzer;
 
 internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 {
+    public override CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
+        => UnsignedCollectionElement(context);
+
+    private static CollectionElementExpression UnsignedCollectionElement(CollectionElementExpressionContext context)
+        => context.ProviderSpecialType switch
+        {
+            Microsoft.CodeAnalysis.SpecialType.System_SByte => new($"unchecked((global::System.Int16)(global::System.Byte)({context.ValueExpression}))", "global::System.Int16", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt16 => new($"unchecked((global::System.Int16)({context.ValueExpression}))", "global::System.Int16", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt32 => new($"unchecked((global::System.Int32)({context.ValueExpression}))", "global::System.Int32", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt64 => new($"unchecked((global::System.Int64)({context.ValueExpression}))", "global::System.Int64", true),
+            _ => new(context.ValueExpression, context.ProviderTypeName, false),
+        };
+
     public override string DialectName => "PostgreSql";
 
     public override string QuoteIdentifier(string identifier)

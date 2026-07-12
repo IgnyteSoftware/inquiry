@@ -29,6 +29,9 @@ public abstract class SqlBuilder
     public virtual CollectionParameterArtifact? BuildCollectionParameterArtifact(string? owningSchema, IColumn column)
         => null;
 
+    public virtual CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
+        => new(context.ValueExpression, context.ProviderTypeName, false);
+
     /// <summary>Returns the direct typed reader expression for one provider primitive.</summary>
     public virtual string BuildReaderExpression(ReaderExpressionContext context)
     {
