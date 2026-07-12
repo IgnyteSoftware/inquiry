@@ -43,6 +43,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ063         Many-to-many relation          ([InquiryManyToMany] misconfigured junction/child) [IN USE]
     //   INQ065         Column metadata range          ([InquiryColumn] Length/Precision/Scale out of range) [IN USE]
     //   INQ066–INQ067  DDL safety lints (off by default) (INQ066 nullable column with default, INQ067 unbounded string column; opt in via .editorconfig) [IN USE]
+    //   INQ068         Invalid database-generated concurrency-token shape [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -637,6 +638,14 @@ internal static class InquiryDiagnosticDescriptors
         "INQ060",
         "InquiryWhere JSON-path criterion is invalid",
         "Store method '{0}' filters field '{1}' with a JsonPath, but it cannot. The field must be a plain string column holding JSON text (no value converter), and the path must be a dotted object path like \"$.address.city\" — each segment an unquoted identifier (letter or '_', then letters/digits/'_'); no array indices, hyphens, or quoted keys.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DatabaseGeneratedConcurrencyTokenInvalid = new(
+        "INQ068",
+        "Database-generated concurrency token is invalid",
+        "Entity '{0}' marks property '{1}' as a database-generated concurrency token, but it is invalid. {2}",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

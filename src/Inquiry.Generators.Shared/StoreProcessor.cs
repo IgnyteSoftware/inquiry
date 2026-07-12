@@ -966,14 +966,11 @@ internal static class StoreProcessor
         }
 
         // a database-managed concurrency token (e.g. rowversion) is only supported on dialects with a
-        // native row-version type — currently SQL Server. On any other dialect it has no portable
-        // semantics, so reject it at emit (reusing INQ006; the reserved block is fully claimed by the
-        // entity-level INQ028/INQ029). Upsert on a token entity has unclear conflict semantics in v1, so
-        // it is likewise rejected.
-        if (entity.ConcurrencyToken is { IsDatabaseGeneratedToken: true } && sqlBuilder.DialectName != "SqlServer")
+        // native row-version type — currently SQL Server. Schema emission owns the property-located
+        // INQ068 diagnostic; this remains as defensive suppression so no unsupported store is emitted.
+        // Upsert on a token entity has unclear conflict semantics in v1, so it is likewise rejected.
+        if (entity.ConcurrencyToken is { IsDatabaseGeneratedToken: true } && !sqlBuilder.SupportsDatabaseGeneratedConcurrencyToken)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.InvalidParameters, store.Location?.ToLocation(), store.Name));
             return null;
         }
 

@@ -56,6 +56,36 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SqlServerDatabaseGeneratedByteArrayTokenUsesRowversionButOrdinaryBytesRemainVarbinaryMax()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Document")]
+            public sealed class Document
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryConcurrencyToken(DatabaseGenerated = true)]
+                public byte[] Version { get; set; } = System.Array.Empty<byte>();
+
+                [InquiryColumn]
+                public byte[] Payload { get; set; } = System.Array.Empty<byte>();
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("[Version] ROWVERSION NOT NULL", ddl);
+        Assert.Contains("[Payload] VARBINARY(MAX) NOT NULL", ddl);
+    }
+
+    [Fact]
     public void SqliteSchemaEmitsTypesIdentityNullabilityAndForeignKeys()
     {
         var result = RunGenerator(AuthorBookSource);

@@ -20,6 +20,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string DialectName => "SqlServer";
 
+    public override bool SupportsDatabaseGeneratedConcurrencyToken => true;
+
     protected override string CountExpression => "COUNT_BIG(*)";
 
     /// <summary>
@@ -274,7 +276,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // triggered tables).
     private string DeclareOutputTable(SqlBuildContext context)
         => "DECLARE @_out TABLE (" + string.Join(", ", context.Columns.Select(c =>
-            QuoteIdentifier(c.ColumnName) + " " + MapColumnType(c))) + ");";
+            QuoteIdentifier(c.ColumnName) + " " + (c.IsDatabaseGeneratedToken ? "BINARY(8)" : MapColumnType(c)))) + ");";
 
     private string SelectFromOutput(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM @_out";
@@ -374,6 +376,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             ? (column.IsUnicode ? "NVARCHAR(" + column.Length + ")" : "VARCHAR(" + column.Length + ")")
             : (column.IsUnicode ? "NVARCHAR(MAX)" : "VARCHAR(MAX)"),
     };
+
+    protected override string ColumnType(IColumn column)
+        => column.IsDatabaseGeneratedToken ? "ROWVERSION" : base.ColumnType(column);
 
     protected override string GeneratedKeyClause(IColumn column)
         => MapColumnType(column) + " IDENTITY(1,1) PRIMARY KEY";
