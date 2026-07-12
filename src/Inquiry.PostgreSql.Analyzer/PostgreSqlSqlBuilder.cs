@@ -21,6 +21,8 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 
     public override string DialectName => "PostgreSql";
 
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
 

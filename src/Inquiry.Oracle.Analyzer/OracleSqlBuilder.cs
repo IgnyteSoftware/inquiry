@@ -39,6 +39,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 {
     public override string DialectName => "Oracle";
 
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+
     public override string BuildReaderExpression(ReaderExpressionContext context)
     {
         if (context.ProviderIsDateOnly)

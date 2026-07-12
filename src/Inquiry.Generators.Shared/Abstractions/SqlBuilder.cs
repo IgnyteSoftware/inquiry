@@ -5,6 +5,13 @@ using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Abstractions;
 
+public enum CyclicForeignKeyStrategy
+{
+    ReportDiagnostic,
+    Inline,
+    AlterTable,
+}
+
 /// <summary>
 /// Compile-time SQL builder consumed by the Inquiry source generator. One concrete subclass exists
 /// per supported dialect, lives in that provider's analyzer assembly, and is registered with
@@ -25,6 +32,8 @@ public abstract class SqlBuilder
 
     /// <summary>Whether this provider has a native database-generated concurrency-token contract.</summary>
     public virtual bool SupportsDatabaseGeneratedConcurrencyToken => false;
+
+    public virtual CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.ReportDiagnostic;
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
 
@@ -594,7 +603,8 @@ public abstract class SqlBuilder
         {
             foreach (var column in context.Columns)
             {
-                if (string.IsNullOrEmpty(column.ForeignKeyTable) || string.IsNullOrEmpty(column.ForeignKeyColumn))
+                if (string.IsNullOrEmpty(column.ForeignKeyTable) || string.IsNullOrEmpty(column.ForeignKeyColumn)
+                    || context.SuppressedForeignKeyColumns?.Contains(column.ColumnName) == true)
                 {
                     continue;
                 }
@@ -606,6 +616,13 @@ public abstract class SqlBuilder
 
         return WrapCreateTable(context, string.Join(",\n    ", lines));
     }
+
+    internal virtual string BuildAddForeignKeySql(ForeignKeyConstraintData foreignKey)
+        => "ALTER TABLE " + QuoteTable(foreignKey.LocalSchema, foreignKey.LocalTable)
+            + " ADD CONSTRAINT " + QuoteIdentifier(foreignKey.ConstraintName)
+            + " FOREIGN KEY (" + QuoteIdentifier(foreignKey.LocalColumn) + ") REFERENCES "
+            + QuoteTable(foreignKey.ReferencedSchema, foreignKey.ReferencedTable)
+            + "(" + QuoteIdentifier(foreignKey.ReferencedColumn) + ")";
 
     /// <summary>
     /// Builds the <c>CREATE INDEX</c> statements for the entity — one per column flagged
