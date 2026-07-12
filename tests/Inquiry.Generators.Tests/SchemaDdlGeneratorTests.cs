@@ -203,6 +203,7 @@ public sealed partial class InquiryGeneratorTests
         var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ070").ToArray();
         Assert.Equal(2, diagnostics.Length);
         Assert.All(diagnostics, diagnostic => Assert.NotEqual(Microsoft.CodeAnalysis.Location.None, diagnostic.Location));
+        Assert.All(diagnostics, diagnostic => Assert.Contains("CycleA.BId -> CycleB.Id", diagnostic.GetMessage()));
         var ddl = ExtractSchemaDdl(result);
         Assert.DoesNotContain("ALTER TABLE", ddl);
         Assert.DoesNotContain("FOREIGN KEY ([BId])", ddl);
@@ -263,6 +264,8 @@ public sealed partial class InquiryGeneratorTests
         var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ069").ToArray();
         Assert.Equal(2, diagnostics.Length);
         Assert.All(diagnostics, diagnostic => Assert.NotEqual(Microsoft.CodeAnalysis.Location.None, diagnostic.Location));
+        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage().Contains("Table 'CycleA' foreign-key column 'BId'", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage().Contains("Table 'CycleB' foreign-key column 'AId'", StringComparison.Ordinal));
         var ddl = ExtractSchemaDdl(result);
         Assert.DoesNotContain("ALTER TABLE", ddl);
         Assert.DoesNotContain("FOREIGN KEY (\"BId\")", ddl);
