@@ -91,10 +91,14 @@ public static class InquiryTvpParameter
         return System.Type.GetTypeCode(storageType) switch
         {
             System.TypeCode.Boolean => new SqlMetaData("Value", SqlDbType.Bit),
+            System.TypeCode.SByte   => new SqlMetaData("Value", SqlDbType.TinyInt),
             System.TypeCode.Byte    => new SqlMetaData("Value", SqlDbType.TinyInt),
             System.TypeCode.Int16   => new SqlMetaData("Value", SqlDbType.SmallInt),
+            System.TypeCode.UInt16  => new SqlMetaData("Value", SqlDbType.SmallInt),
             System.TypeCode.Int32   => new SqlMetaData("Value", SqlDbType.Int),
+            System.TypeCode.UInt32  => new SqlMetaData("Value", SqlDbType.Int),
             System.TypeCode.Int64   => new SqlMetaData("Value", SqlDbType.BigInt),
+            System.TypeCode.UInt64  => new SqlMetaData("Value", SqlDbType.BigInt),
             System.TypeCode.Single  => new SqlMetaData("Value", SqlDbType.Real),
             System.TypeCode.Double  => new SqlMetaData("Value", SqlDbType.Float),
             System.TypeCode.Decimal => new SqlMetaData("Value", SqlDbType.Decimal, 18, 2),
