@@ -13,6 +13,8 @@ internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
 {
     public override string DialectName => "MariaDb";
 
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+
     // ---- Native RETURNING (#58) -------------------------------------------------------------
 
     public override string BuildInsertReturningSql(SqlBuildContext context)

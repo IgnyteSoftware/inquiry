@@ -15,6 +15,7 @@ namespace Inquiry.Generators.Abstractions;
 /// </remarks>
 public sealed class SqlBuildContext
 {
+    internal ISet<string>? SuppressedForeignKeyColumns { get; init; }
     /// <param name="suppressSoftDelete">
     /// When true, the soft-delete term is dropped from <see cref="ActiveRowPredicate"/> so SELECTs built
     /// from this context are not filtered by the soft-delete indicator (any global-filter terms still

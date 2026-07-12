@@ -135,6 +135,7 @@ internal static class EntityProcessor
             IsMapped: isMapped,
             Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()))
         {
+            Location = LocationData.From(entitySymbol.Locations.FirstOrDefault()),
             SoftDeleteColumn = softDeleteColumns.Length > 0 ? softDeleteColumns[0] : null,
             ConcurrencyToken = concurrencyTokens.Length > 0 ? concurrencyTokens[0] : null,
             GenerateForeignKeys = generateForeignKeys,

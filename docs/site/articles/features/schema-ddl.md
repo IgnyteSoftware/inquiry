@@ -55,6 +55,26 @@ CREATE TABLE IF NOT EXISTS "Products" (
 
 Tables are emitted in dependency order — referenced tables before their dependents — so the script runs without FK violations.
 
+### Cyclic foreign keys
+
+When two or more tables reference each other, no table ordering can make every referenced table exist
+first. Inquiry detects those cycles and handles only the foreign keys inside the cycle specially:
+
+- SQLite keeps cyclic foreign keys inline because SQLite accepts forward references in `CREATE TABLE`
+  and does not support `ALTER TABLE ... ADD CONSTRAINT`.
+- SQL Server, PostgreSQL, MySQL, MariaDB, and Oracle create all tables first, then add the cyclic
+  foreign keys with named `ALTER TABLE ... ADD CONSTRAINT` statements.
+- Self-referencing foreign keys remain inline on every provider.
+- Foreign keys entering or leaving a cycle remain inline and retain normal dependency ordering.
+
+Deferred constraint names are deterministic, hash-suffixed, and at most 63 UTF-8 bytes, so regenerated
+baselines use stable names within every supported provider's identifier limit. The emitted phases are
+provider artifacts, tables, deferred cyclic constraints, then indexes.
+
+`Ddl` is a run-once baseline script. In particular, deferred `ALTER TABLE` statements are not guarded
+against an existing constraint. Execute it against an empty database/schema, or translate the statements
+into the idempotency conventions of your migration tool.
+
 ## Per-dialect DDL flavor
 
 Each provider analyzer emits the right flavor:
@@ -71,7 +91,8 @@ Each provider analyzer emits the right flavor:
 > ```sql
 > BEGIN EXECUTE IMMEDIATE 'CREATE TABLE …'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF; END;
 > ```
-> All other dialects emit idempotent DDL (`CREATE TABLE IF NOT EXISTS`, or `IF OBJECT_ID(…) IS NULL` on SQL Server).
+> Other dialects guard table creation (`CREATE TABLE IF NOT EXISTS`, or `IF OBJECT_ID(…) IS NULL` on SQL Server),
+> but the complete baseline is not replayable when it contains deferred cyclic constraints or unguarded indexes.
 
 ## Server-computed columns
 
