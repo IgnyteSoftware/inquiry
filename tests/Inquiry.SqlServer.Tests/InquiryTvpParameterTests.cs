@@ -6,6 +6,55 @@ namespace Inquiry.SqlServer.Tests;
 
 public sealed class InquiryTvpParameterTests
 {
+    private enum UnsignedState : uint { High = 3_000_000_000u, Max = uint.MaxValue }
+
+    [Theory]
+    [MemberData(nameof(UnsignedCases))]
+    public void DirectUnsignedBinderUsesSignedArtifactMetadataAndRows(object values, SqlDbType expectedType, object[] expectedRows)
+    {
+        using var command = new SqlCommand();
+        switch (values)
+        {
+            case sbyte[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
+            case ushort[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
+            case uint[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
+            case ulong[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
+            case UnsignedState[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
+        }
+
+        var parameter = Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>()));
+        var records = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(parameter.Value).ToArray();
+        Assert.All(records, record => Assert.Equal(expectedType, record.GetSqlMetaData(0).SqlDbType));
+        Assert.Equal(expectedRows, records.Select(record => record.GetValue(0)).ToArray());
+    }
+
+    public static IEnumerable<object[]> UnsignedCases()
+    {
+        yield return new object[] { new sbyte[] { -1 }, SqlDbType.TinyInt, new object[] { byte.MaxValue } };
+        yield return new object[] { new ushort[] { ushort.MaxValue }, SqlDbType.SmallInt, new object[] { (short)-1 } };
+        yield return new object[] { new uint[] { uint.MaxValue }, SqlDbType.Int, new object[] { -1 } };
+        yield return new object[] { new ulong[] { ulong.MaxValue }, SqlDbType.BigInt, new object[] { -1L } };
+        yield return new object[] { new[] { UnsignedState.High, UnsignedState.Max }, SqlDbType.Int, new object[] { unchecked((int)3_000_000_000u), -1 } };
+    }
+
+    [Fact]
+    public void NullableUnsignedEmptyAndAllNullUseClosedGenericMetadataWithoutRows()
+    {
+        using var empty = new SqlCommand();
+        InquiryTvpParameter.Bind(empty, "@v", Array.Empty<uint?>(), "[dbo].[Inquiry_Tvp_test]");
+        var emptyParameter = Assert.IsType<SqlParameter>(Assert.Single(empty.Parameters.Cast<SqlParameter>()));
+        Assert.Equal(SqlDbType.Structured, emptyParameter.SqlDbType);
+        Assert.Equal("[dbo].[Inquiry_Tvp_test]", emptyParameter.TypeName);
+        Assert.Null(emptyParameter.Value);
+
+        using var allNull = new SqlCommand();
+        InquiryTvpParameter.Bind(allNull, "@v", new uint?[] { null, null }, "[dbo].[Inquiry_Tvp_test]");
+        var allNullParameter = Assert.IsType<SqlParameter>(Assert.Single(allNull.Parameters.Cast<SqlParameter>()));
+        Assert.Equal(SqlDbType.Structured, allNullParameter.SqlDbType);
+        Assert.Equal("[dbo].[Inquiry_Tvp_test]", allNullParameter.TypeName);
+        Assert.Null(allNullParameter.Value);
+    }
+
     [Fact]
     public void UnsupportedBinderFailsWithoutOpeningConnection()
     {

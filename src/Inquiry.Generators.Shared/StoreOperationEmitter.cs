@@ -1454,7 +1454,7 @@ internal static class StoreOperationEmitter
         bool isNegatedCollection)
     {
         var name = GeneratorHelpers.Escape(sqlParameterName);
-        var projected = ProjectedCollectionExpression(column, arg);
+        var projected = ProjectedCollectionExpression(sqlBuilder, column, arg);
         // Stamp the same DbType the scalar binder resolves for this column so an IN element binds with
         // the right type (e.g. DateTime2 on SQL Server, not legacy datetime). The array path leaves it
         // to the provider, which infers the element type from the typed native array.
@@ -1496,29 +1496,70 @@ internal static class StoreOperationEmitter
     /// nullable value/reference converter model binds <c>null</c> rather than calling
     /// <c>ToProvider</c> for that element.
     /// </summary>
-    private static string ProjectedCollectionExpression(ColumnData column, string arg)
+    private static string ProjectedCollectionExpression(SqlBuilder sqlBuilder, ColumnData column, string arg)
     {
-        if (column.Converter is { } conv)
+        var nullableModelElement = column.Type.IsNullable
+            || (column.Converter is not null && !column.Type.IsValueType);
+        var value = nullableModelElement
+            ? column.Type.IsValueType ? "_e.Value" : "_e"
+            : "_e";
+        string providerValue;
+        string providerTypeName;
+        Microsoft.CodeAnalysis.SpecialType providerSpecialType;
+        string? nullableResultType = null;
+        var requiresProjection = false;
+
+        if (column.Converter is { } converter)
         {
-            var converter = $"global::Inquiry.Entities.InquiryConverterCache<{conv.ConverterTypeDisplay}>.Instance";
-            var nullableProvider = conv.ProviderType?.IsValueType == true
-                ? conv.ProviderType.NonNullableDisplayName + "?"
-                : conv.ProviderTypeDisplay + "?";
-            var selector = column.Type.IsValueType
-                ? column.Type.IsNullable
-                    ? $"static _e => _e.HasValue ? ({nullableProvider}){converter}.ToProvider(_e.Value) : null"
-                    : $"static _e => {converter}.ToProvider(_e)"
-                : $"static _e => _e is null ? ({nullableProvider})null : {converter}.ToProvider(_e)";
-            return NullGuardedSelect(arg, selector);
+            var cache = $"global::Inquiry.Entities.InquiryConverterCache<{converter.ConverterTypeDisplay}>.Instance";
+            providerValue = $"{cache}.ToProvider({value})";
+            providerTypeName = converter.ProviderType?.NonNullableDisplayName ?? converter.ProviderTypeDisplay;
+            providerSpecialType = converter.ProviderSpecialType;
+            nullableResultType = converter.ProviderType?.IsValueType == true
+                ? converter.ProviderType.NonNullableDisplayName + "?"
+                : converter.ProviderTypeDisplay + "?";
+            requiresProjection = true;
+        }
+        else if (column.EnumAsString)
+        {
+            providerValue = $"{value}.ToString()";
+            providerTypeName = "global::System.String";
+            providerSpecialType = Microsoft.CodeAnalysis.SpecialType.System_String;
+            requiresProjection = true;
+        }
+        else
+        {
+            providerValue = value;
+            providerSpecialType = column.Type.IsEnum ? column.Type.EnumUnderlyingSpecialType : column.Type.SpecialType;
+            providerTypeName = column.Type.IsEnum ? SpecialTypeName(providerSpecialType) : column.Type.NonNullableDisplayName;
         }
 
-        if (column.EnumAsString)
-        {
-            return NullGuardedSelect(arg, "static _e => _e.ToString()");
-        }
+        var storage = sqlBuilder.BuildCollectionElementExpression(new CollectionElementExpressionContext(
+            providerValue, providerTypeName, providerSpecialType));
+        requiresProjection |= storage.IsTransformed;
+        if (!requiresProjection) return arg;
+        if (storage.IsTransformed) nullableResultType = storage.StorageTypeName + "?";
 
-        return arg;
+        var selector = nullableModelElement
+            ? column.Type.IsValueType
+                ? $"static _e => _e.HasValue ? ({nullableResultType ?? storage.StorageTypeName + "?"}){storage.ValueExpression} : null"
+                : $"static _e => _e is null ? ({nullableResultType ?? storage.StorageTypeName + "?"})null : {storage.ValueExpression}"
+            : $"static _e => {storage.ValueExpression}";
+        return NullGuardedSelect(arg, selector);
     }
+
+    private static string SpecialTypeName(Microsoft.CodeAnalysis.SpecialType type) => type switch
+    {
+        Microsoft.CodeAnalysis.SpecialType.System_SByte => "global::System.SByte",
+        Microsoft.CodeAnalysis.SpecialType.System_Byte => "global::System.Byte",
+        Microsoft.CodeAnalysis.SpecialType.System_Int16 => "global::System.Int16",
+        Microsoft.CodeAnalysis.SpecialType.System_UInt16 => "global::System.UInt16",
+        Microsoft.CodeAnalysis.SpecialType.System_Int32 => "global::System.Int32",
+        Microsoft.CodeAnalysis.SpecialType.System_UInt32 => "global::System.UInt32",
+        Microsoft.CodeAnalysis.SpecialType.System_Int64 => "global::System.Int64",
+        Microsoft.CodeAnalysis.SpecialType.System_UInt64 => "global::System.UInt64",
+        _ => "global::System.Int32",
+    };
 
     /// <summary>
     /// Wraps <paramref name="arg"/> in <c>Enumerable.Select(arg, selector)</c> behind a null guard so a

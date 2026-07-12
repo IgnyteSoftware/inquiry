@@ -44,6 +44,7 @@ services.AddInquirySqlServer(
 - **Prepared statements:** SQL Server's plan cache is automatic; the default `PreparedStatementMode.Auto` is a silent no-op.
 - **TVP artifacts are migration-owned:** generated `Compare.In` and `[InquiryDeleteAll]` methods bind deterministic, schema-qualified table-valued parameter types. Binding performs no catalog query, cache lookup, DDL, or connection open. Apply `InquiryGeneratedSchema.ProviderArtifactsDdl` during deployment. `ProviderArtifactsValidationSql` reports missing types without changing the database.
 - **Schemas are part of artifact identity:** an entity in schema `tenant` gets a `tenant.Inquiry_Tvp_...` type, distinct from the same element type in `dbo`. The additive setup DDL creates a missing custom schema before its types.
+- **Unsigned native collections:** `sbyte`, `ushort`, `uint`, and `ulong` collection elements are losslessly reinterpreted as the same-width provider-supported partners `byte`, `short`, `int`, and `long`. TVPs reuse the existing signed artifact signatures; values above the signed maximum and unsigned-backed enums retain their exact bit patterns. Nullable elements remain nullable and do not invoke converters when null.
 
 ## Testing
 
