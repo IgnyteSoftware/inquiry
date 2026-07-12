@@ -26,6 +26,7 @@ internal sealed record EntityData(
     bool IsMapped,
     EquatableArray<DiagnosticData> Diagnostics)
 {
+    public LocationData? Location { get; init; }
     /// <summary>
     /// The entity's single <c>[InquirySoftDelete]</c> column, or null when none is declared. Cached
     /// here so the store emitter can decide delete→update routing and SELECT filtering without rescanning.

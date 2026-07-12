@@ -3,8 +3,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Generated;
+using Inquiry.FeatureCatalog;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
+using Microsoft.Data.Sqlite;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -53,5 +55,33 @@ public sealed class SchemaDdlIntegrationTests
         Assert.Equal(2, all.Count);
         Assert.Contains(all, w => w.Name == "Gadget" && w.Weight == 2.5 && w.Notes == null);
         Assert.Contains(all, w => w.Name == "Gizmo" && w.Notes == "spare");
+    }
+
+    [Fact]
+    public async Task GeneratedSchemaSupportsCyclicAndSelfReferencingForeignKeys()
+    {
+        var ddl = CyclicForeignKeyDdl.Extract(InquiryGeneratedSchema.Ddl);
+        Assert.DoesNotContain("ALTER TABLE \"Cyclic", ddl);
+        Assert.Contains("REFERENCES \"CyclicAlpha\"", ddl);
+        Assert.Contains("REFERENCES \"CyclicBeta\"", ddl);
+
+        await using var harness = await SqliteTestHarness.CreateAsync(ddl, "GenCycle");
+        await using var connection = new SqliteConnection(harness.ConnectionString);
+        await connection.OpenAsync();
+
+        await ExecuteAsync(connection, "INSERT INTO CyclicAlpha (Id, BetaId, ParentId) VALUES (1, NULL, NULL)");
+        await ExecuteAsync(connection, "INSERT INTO CyclicBeta (Id, AlphaId) VALUES (1, 1)");
+        await ExecuteAsync(connection, "UPDATE CyclicAlpha SET BetaId = 1, ParentId = 1 WHERE Id = 1");
+
+        await Assert.ThrowsAsync<SqliteException>(() => ExecuteAsync(connection, "INSERT INTO CyclicAlpha (Id, BetaId) VALUES (2, 999)"));
+        await Assert.ThrowsAsync<SqliteException>(() => ExecuteAsync(connection, "INSERT INTO CyclicBeta (Id, AlphaId) VALUES (2, 999)"));
+        await Assert.ThrowsAsync<SqliteException>(() => ExecuteAsync(connection, "INSERT INTO CyclicAlpha (Id, ParentId) VALUES (3, 999)"));
+    }
+
+    private static async Task ExecuteAsync(SqliteConnection connection, string sql)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
     }
 }

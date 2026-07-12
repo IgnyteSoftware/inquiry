@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Inquiry.Generators;
@@ -46,7 +47,58 @@ internal static class SchemaEmitter
 
         ReportKeyDiagnostics(context, entities, builder, declaredLengths);
 
-        var ordered = OrderByForeignKeyDependencies(entities);
+        var graph = AnalyzeForeignKeys(entities);
+        foreach (var invalid in graph.InvalidMappings)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.DuplicateSchemaMapping,
+                invalid.Location?.ToLocation(),
+                invalid.Identity,
+                invalid.Reason));
+        }
+        var ordered = OrderByForeignKeyDependencies(entities, graph.CyclicIdentities);
+        var suppressedByTable = new Dictionary<string, ISet<string>>(System.StringComparer.Ordinal);
+        var deferredForeignKeys = new List<ForeignKeyConstraintData>();
+        foreach (var invalid in graph.InvalidForeignKeys)
+        {
+            var localKey = TableKey(invalid.LocalSchema, invalid.LocalTable);
+            if (!suppressedByTable.TryGetValue(localKey, out var invalidColumns))
+            {
+                invalidColumns = new HashSet<string>(System.StringComparer.Ordinal);
+                suppressedByTable.Add(localKey, invalidColumns);
+            }
+            invalidColumns.Add(invalid.LocalColumn);
+        }
+        foreach (var foreignKey in graph.ForeignKeys)
+        {
+            if (!graph.CyclicIdentities.Contains(foreignKey.CanonicalIdentity)
+                || builder.CyclicForeignKeyStrategy == CyclicForeignKeyStrategy.Inline)
+            {
+                continue;
+            }
+
+            var localKey = TableKey(foreignKey.LocalSchema, foreignKey.LocalTable);
+            if (!suppressedByTable.TryGetValue(localKey, out var columns))
+            {
+                columns = new HashSet<string>(System.StringComparer.Ordinal);
+                suppressedByTable.Add(localKey, columns);
+            }
+
+            columns.Add(foreignKey.LocalColumn);
+            if (builder.CyclicForeignKeyStrategy == CyclicForeignKeyStrategy.AlterTable)
+            {
+                deferredForeignKeys.Add(foreignKey);
+            }
+            else
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.CyclicForeignKeyNotSupported,
+                    foreignKey.Location?.ToLocation(),
+                    foreignKey.LocalTable,
+                    foreignKey.LocalColumn,
+                    builder.DialectName));
+            }
+        }
 
         var ddl = new StringBuilder();
         // Index statements are collected and appended after every CREATE TABLE so a referenced table
@@ -67,10 +119,20 @@ internal static class SchemaEmitter
                 entity.TableName,
                 columns,
                 suppressSoftDelete: false,
-                generateForeignKeys: entity.GenerateForeignKeys);
+                generateForeignKeys: entity.GenerateForeignKeys)
+            {
+                SuppressedForeignKeyColumns = suppressedByTable.TryGetValue(TableKey(entity.Schema, entity.TableName), out var suppressed)
+                    ? suppressed
+                    : null,
+            };
             ddl.Append(builder.BuildCreateTableSql(ctx));
             ddl.Append(';');
             indexStatements.AddRange(builder.BuildCreateIndexSql(ctx));
+        }
+
+        foreach (var foreignKey in deferredForeignKeys)
+        {
+            ddl.Append("\n\n").Append(builder.BuildAddForeignKeySql(foreignKey)).Append(';');
         }
 
         foreach (var indexStatement in indexStatements)
@@ -263,9 +325,11 @@ internal static class SchemaEmitter
     /// a self reference, is ignored. Input order is the tiebreak, and any rows left over by a reference
     /// cycle are appended in input order so emission is always total and deterministic.
     /// </summary>
-    private static IReadOnlyList<EntityData> OrderByForeignKeyDependencies(IReadOnlyList<EntityData> entities)
+    private static IReadOnlyList<EntityData> OrderByForeignKeyDependencies(
+        IReadOnlyList<EntityData> entities,
+        HashSet<string> cyclicIdentities)
     {
-        var byTable = new Dictionary<string, EntityData>(System.StringComparer.OrdinalIgnoreCase);
+        var byTable = new Dictionary<string, EntityData>(System.StringComparer.Ordinal);
         foreach (var entity in entities)
         {
             byTable[TableKey(entity.Schema, entity.TableName)] = entity;
@@ -275,18 +339,23 @@ internal static class SchemaEmitter
         var dependencies = new Dictionary<EntityData, HashSet<string>>();
         foreach (var entity in entities)
         {
-            var deps = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var deps = new HashSet<string>(System.StringComparer.Ordinal);
             var selfKey = TableKey(entity.Schema, entity.TableName);
             foreach (var column in entity.Columns.AsImmutableArray())
             {
-                if (string.IsNullOrEmpty(column.ForeignKeyTable))
+                if (!entity.GenerateForeignKeys || string.IsNullOrEmpty(column.ForeignKeyTable)
+                    || string.IsNullOrEmpty(column.ForeignKeyColumn))
                 {
                     continue;
                 }
 
                 var referencedKey = TableKey(column.ForeignKeySchema, column.ForeignKeyTable!);
-                if (!string.Equals(referencedKey, selfKey, System.StringComparison.OrdinalIgnoreCase)
-                    && byTable.ContainsKey(referencedKey))
+                var identity = CanonicalForeignKeyIdentity(
+                    entity.Schema, entity.TableName, column.ColumnName,
+                    column.ForeignKeySchema, column.ForeignKeyTable!, column.ForeignKeyColumn!);
+                if (!string.Equals(referencedKey, selfKey, System.StringComparison.Ordinal)
+                    && byTable.ContainsKey(referencedKey)
+                    && !cyclicIdentities.Contains(identity))
                 {
                     deps.Add(referencedKey);
                 }
@@ -296,15 +365,15 @@ internal static class SchemaEmitter
         }
 
         var ordered = new List<EntityData>(entities.Count);
-        var emitted = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        var emitted = new HashSet<string>(System.StringComparer.Ordinal);
 
-        // Repeatedly emit every entity whose dependencies are all already emitted, preserving input
-        // order within each pass. Stop when a pass adds nothing (all done, or a cycle remains).
+        // Repeatedly emit every entity whose dependencies are all already emitted, using the physical
+        // table identity as the stable tie-breaker. Stop when a pass adds nothing.
         bool progress = true;
         while (progress && ordered.Count < entities.Count)
         {
             progress = false;
-            foreach (var entity in entities)
+            foreach (var entity in entities.OrderBy(static value => TableKey(value.Schema, value.TableName), System.StringComparer.Ordinal))
             {
                 var entityKey = TableKey(entity.Schema, entity.TableName);
                 if (emitted.Contains(entityKey))
@@ -321,8 +390,8 @@ internal static class SchemaEmitter
             }
         }
 
-        // Append anything left (reference cycle) in input order.
-        foreach (var entity in entities)
+        // Defensive total ordering if malformed duplicate identities leave anything behind.
+        foreach (var entity in entities.OrderBy(static value => TableKey(value.Schema, value.TableName), System.StringComparer.Ordinal))
         {
             var entityKey = TableKey(entity.Schema, entity.TableName);
             if (!emitted.Contains(entityKey))
@@ -335,10 +404,269 @@ internal static class SchemaEmitter
         return ordered;
     }
 
+    private static ForeignKeyGraph AnalyzeForeignKeys(IReadOnlyList<EntityData> entities)
+    {
+        var invalidMappings = new List<InvalidSchemaMapping>();
+        var validEntities = entities.ToArray();
+        var tableKeys = new HashSet<string>(validEntities.Select(e => TableKey(e.Schema, e.TableName)), System.StringComparer.Ordinal);
+        var foreignKeys = new List<ForeignKeyConstraintData>();
+        var adjacency = new Dictionary<string, HashSet<string>>(System.StringComparer.Ordinal);
+        foreach (var key in tableKeys)
+        {
+            adjacency[key] = new HashSet<string>(System.StringComparer.Ordinal);
+        }
+
+        foreach (var entity in validEntities.OrderBy(static value => TableKey(value.Schema, value.TableName), System.StringComparer.Ordinal))
+        {
+            if (!entity.GenerateForeignKeys)
+            {
+                continue;
+            }
+
+            var localKey = TableKey(entity.Schema, entity.TableName);
+            foreach (var column in entity.Columns.AsImmutableArray())
+            {
+                if (string.IsNullOrEmpty(column.ForeignKeyTable) || string.IsNullOrEmpty(column.ForeignKeyColumn))
+                {
+                    continue;
+                }
+
+                var canonical = CanonicalForeignKeyIdentity(
+                    entity.Schema, entity.TableName, column.ColumnName,
+                    column.ForeignKeySchema, column.ForeignKeyTable!, column.ForeignKeyColumn!);
+                foreignKeys.Add(new ForeignKeyConstraintData(
+                    entity.Schema, entity.TableName, column.ColumnName,
+                    column.ForeignKeySchema, column.ForeignKeyTable!, column.ForeignKeyColumn!,
+                    column.Location, canonical, string.Empty));
+
+                var referencedKey = TableKey(column.ForeignKeySchema, column.ForeignKeyTable!);
+                if (!string.Equals(localKey, referencedKey, System.StringComparison.Ordinal)
+                    && tableKeys.Contains(referencedKey))
+                {
+                    adjacency[localKey].Add(referencedKey);
+                }
+            }
+        }
+
+        var componentByTable = FindStronglyConnectedComponents(adjacency, out var componentSizes);
+        bool IsCyclic(ForeignKeyConstraintData foreignKey)
+        {
+            var localKey = TableKey(foreignKey.LocalSchema, foreignKey.LocalTable);
+            var referencedKey = TableKey(foreignKey.ReferencedSchema, foreignKey.ReferencedTable);
+            return componentByTable.TryGetValue(localKey, out var localComponent)
+                && componentByTable.TryGetValue(referencedKey, out var referencedComponent)
+                && localComponent == referencedComponent
+                && componentSizes[localComponent] > 1;
+        }
+
+        var normalized = new List<ForeignKeyConstraintData>();
+        var invalidForeignKeys = new List<ForeignKeyConstraintData>();
+        var invalidComponents = new HashSet<int>();
+        foreach (var group in foreignKeys.GroupBy(static fk => fk.CanonicalIdentity, System.StringComparer.Ordinal)
+                     .OrderBy(static group => group.Key, System.StringComparer.Ordinal))
+        {
+            if (group.Count() > 1 && IsCyclic(group.First()))
+            {
+                foreach (var duplicate in group)
+                {
+                    invalidForeignKeys.Add(duplicate);
+                    invalidMappings.Add(new InvalidSchemaMapping(
+                        duplicate.Location,
+                        duplicate.CanonicalIdentity,
+                        "multiple properties declare the same physical foreign key"));
+                }
+                invalidComponents.Add(componentByTable[TableKey(group.First().LocalSchema, group.First().LocalTable)]);
+                continue;
+            }
+
+            normalized.AddRange(group);
+        }
+
+        var names = new Dictionary<string, string>(System.StringComparer.Ordinal);
+        var named = new List<ForeignKeyConstraintData>(normalized.Count);
+        foreach (var foreignKey in normalized)
+        {
+            if (IsCyclic(foreignKey)
+                && invalidComponents.Contains(componentByTable[TableKey(foreignKey.LocalSchema, foreignKey.LocalTable)]))
+            {
+                invalidForeignKeys.Add(foreignKey);
+                continue;
+            }
+
+            var hashBytes = 8;
+            string name;
+            while (true)
+            {
+                name = BuildForeignKeyName(foreignKey.LocalTable, foreignKey.LocalColumn, foreignKey.CanonicalIdentity, hashBytes);
+                if (!names.TryGetValue(name, out var existing) || existing == foreignKey.CanonicalIdentity)
+                {
+                    names[name] = foreignKey.CanonicalIdentity;
+                    named.Add(foreignKey with { ConstraintName = name });
+                    break;
+                }
+
+                hashBytes++;
+                if (hashBytes > 31)
+                {
+                    invalidMappings.Add(new InvalidSchemaMapping(
+                        foreignKey.Location,
+                        foreignKey.CanonicalIdentity,
+                        "its generated constraint name collides after the full SHA-256 suffix"));
+                    break;
+                }
+            }
+        }
+
+        var cyclic = new HashSet<string>(System.StringComparer.Ordinal);
+        foreach (var invalid in invalidForeignKeys)
+        {
+            if (IsCyclic(invalid))
+            {
+                cyclic.Add(invalid.CanonicalIdentity);
+            }
+        }
+        foreach (var foreignKey in named)
+        {
+            if (IsCyclic(foreignKey))
+            {
+                cyclic.Add(foreignKey.CanonicalIdentity);
+            }
+        }
+
+        return new ForeignKeyGraph(named, cyclic, invalidMappings, invalidForeignKeys);
+    }
+
+    private static Dictionary<string, int> FindStronglyConnectedComponents(
+        Dictionary<string, HashSet<string>> adjacency,
+        out List<int> componentSizes)
+    {
+        var index = 0;
+        var indices = new Dictionary<string, int>(System.StringComparer.Ordinal);
+        var lowLinks = new Dictionary<string, int>(System.StringComparer.Ordinal);
+        var stack = new Stack<string>();
+        var onStack = new HashSet<string>(System.StringComparer.Ordinal);
+        var components = new Dictionary<string, int>(System.StringComparer.Ordinal);
+        var sizes = new List<int>();
+
+        void Visit(string vertex)
+        {
+            indices[vertex] = index;
+            lowLinks[vertex] = index++;
+            stack.Push(vertex);
+            onStack.Add(vertex);
+
+            foreach (var target in adjacency[vertex].OrderBy(static value => value, System.StringComparer.Ordinal))
+            {
+                if (!indices.ContainsKey(target))
+                {
+                    Visit(target);
+                    lowLinks[vertex] = System.Math.Min(lowLinks[vertex], lowLinks[target]);
+                }
+                else if (onStack.Contains(target))
+                {
+                    lowLinks[vertex] = System.Math.Min(lowLinks[vertex], indices[target]);
+                }
+            }
+
+            if (lowLinks[vertex] != indices[vertex])
+            {
+                return;
+            }
+
+            var component = sizes.Count;
+            var size = 0;
+            string member;
+            do
+            {
+                member = stack.Pop();
+                onStack.Remove(member);
+                components[member] = component;
+                size++;
+            }
+            while (!string.Equals(member, vertex, System.StringComparison.Ordinal));
+            sizes.Add(size);
+        }
+
+        foreach (var vertex in adjacency.Keys.OrderBy(static value => value, System.StringComparer.Ordinal))
+        {
+            if (!indices.ContainsKey(vertex))
+            {
+                Visit(vertex);
+            }
+        }
+
+        componentSizes = sizes;
+        return components;
+    }
+
+    private static string CanonicalForeignKeyIdentity(
+        string? localSchema, string localTable, string localColumn,
+        string? referencedSchema, string referencedTable, string referencedColumn)
+        => CanonicalPart(localSchema) + CanonicalPart(localTable) + CanonicalPart(localColumn)
+            + CanonicalPart(referencedSchema) + CanonicalPart(referencedTable) + CanonicalPart(referencedColumn);
+
+    private static string CanonicalPart(string? value)
+    {
+        value ??= string.Empty;
+        return value.Length + ":" + value;
+    }
+
+    internal static string BuildForeignKeyName(string table, string column, string canonicalIdentity, int hashBytes)
+    {
+        if (hashBytes < 1 || hashBytes > 31)
+        {
+            throw new System.ArgumentOutOfRangeException(nameof(hashBytes));
+        }
+        byte[] hash;
+        using (var sha = SHA256.Create())
+        {
+            hash = sha.ComputeHash(Encoding.UTF8.GetBytes(canonicalIdentity));
+        }
+
+        var suffix = new StringBuilder(hashBytes * 2);
+        for (var i = 0; i < hashBytes; i++)
+        {
+            suffix.Append(hash[i].ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        var readable = "FK_" + table + "_" + column;
+        var suffixText = "_" + suffix;
+        var budget = 63 - Encoding.UTF8.GetByteCount(suffixText);
+        return TruncateUtf8(readable, budget) + suffixText;
+    }
+
+    private static string TruncateUtf8(string value, int byteBudget)
+    {
+        var length = 0;
+        var bytes = 0;
+        while (length < value.Length)
+        {
+            var chars = char.IsHighSurrogate(value[length]) && length + 1 < value.Length && char.IsLowSurrogate(value[length + 1]) ? 2 : 1;
+            var count = Encoding.UTF8.GetByteCount(value.Substring(length, chars));
+            if (bytes + count > byteBudget)
+            {
+                break;
+            }
+
+            bytes += count;
+            length += chars;
+        }
+
+        return value.Substring(0, length);
+    }
+
+    private sealed record ForeignKeyGraph(
+        List<ForeignKeyConstraintData> ForeignKeys,
+        HashSet<string> CyclicIdentities,
+        List<InvalidSchemaMapping> InvalidMappings,
+        List<ForeignKeyConstraintData> InvalidForeignKeys);
+
+    private sealed record InvalidSchemaMapping(LocationData? Location, string Identity, string Reason);
+
     /// <summary>Indexes every declared (non-zero) column Length by (schema, table, column) for FK derivation.</summary>
     private static Dictionary<string, int> BuildColumnLengthIndex(IReadOnlyList<EntityData> entities)
     {
-        var map = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+        var map = new Dictionary<string, int>(System.StringComparer.Ordinal);
         foreach (var entity in entities)
         {
             foreach (var column in entity.Columns.AsImmutableArray())

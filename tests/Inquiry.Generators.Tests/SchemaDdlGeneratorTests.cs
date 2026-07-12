@@ -1,4 +1,9 @@
 using System;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using Inquiry.Generators;
+using Inquiry.Generators.Abstractions;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -10,6 +15,33 @@ namespace Inquiry.Generators.Tests;
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
+    private const string CyclicSchemaSource = """
+        using Inquiry.Entities;
+        namespace Demo;
+
+        [InquiryTable("CycleRoot")]
+        public sealed class CycleRoot
+        {
+            [InquiryKey] public long Id { get; set; }
+        }
+
+        [InquiryTable("CycleA")]
+        public sealed class CycleA
+        {
+            [InquiryKey] public long Id { get; set; }
+            [InquiryForeignKey("BId", "CycleB", "Id")] public long? BId { get; set; }
+            [InquiryColumn(IsIndexed = true)] public int Sort { get; set; }
+        }
+
+        [InquiryTable("CycleB")]
+        public sealed class CycleB
+        {
+            [InquiryKey] public long Id { get; set; }
+            [InquiryForeignKey("AId", "CycleA", "Id")] public long? AId { get; set; }
+            [InquiryForeignKey("RootId", "CycleRoot", "Id")] public long RootId { get; set; }
+        }
+        """;
+
     private const string AuthorBookSource = """
         using Inquiry.Entities;
 
@@ -53,6 +85,196 @@ public sealed partial class InquiryGeneratorTests
         var end = text.LastIndexOf("\";", StringComparison.Ordinal);
         // Un-double the verbatim-string quotes to recover the raw DDL.
         return text.Substring(start, end - start).Replace("\"\"", "\"");
+    }
+
+    [Theory]
+    [InlineData("SqlServer", "[", "]")]
+    [InlineData("PostgreSql", "\"", "\"")]
+    [InlineData("MySql", "`", "`")]
+    [InlineData("MariaDb", "`", "`")]
+    [InlineData("Oracle", "", "")]
+    public void MultiTableCycleDefersOnlySccEdges(string dialect, string open, string close)
+    {
+        var result = RunGenerator(CyclicSchemaSource, dialect: dialect);
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Equal(2, Regex.Matches(ddl, "ALTER TABLE", RegexOptions.CultureInvariant).Count);
+        Assert.Contains($"FOREIGN KEY ({open}RootId{close}) REFERENCES {open}CycleRoot{close}({open}Id{close})", ddl);
+
+        var finalCreate = ddl.LastIndexOf("CREATE TABLE", StringComparison.Ordinal);
+        var firstAlter = ddl.IndexOf("ALTER TABLE", StringComparison.Ordinal);
+        var firstIndex = ddl.IndexOf("CREATE INDEX", StringComparison.Ordinal);
+        Assert.True(finalCreate < firstAlter);
+        Assert.True(firstAlter < firstIndex);
+
+        var cycleABody = TableCreateBody(ddl, open + "CycleA" + close);
+        var cycleBBody = TableCreateBody(ddl, open + "CycleB" + close);
+        Assert.DoesNotContain("FOREIGN KEY (" + open + "BId" + close + ")", cycleABody);
+        Assert.DoesNotContain("FOREIGN KEY (" + open + "AId" + close + ")", cycleBBody);
+        Assert.Contains("FOREIGN KEY (" + open + "RootId" + close + ")", cycleBBody);
+    }
+
+    [Fact]
+    public void SqliteKeepsMultiTableCycleInline()
+    {
+        var result = RunGenerator(CyclicSchemaSource);
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.DoesNotContain("ALTER TABLE", ddl);
+        Assert.Contains("FOREIGN KEY (\"BId\") REFERENCES \"CycleB\"(\"Id\")", ddl);
+        Assert.Contains("FOREIGN KEY (\"AId\") REFERENCES \"CycleA\"(\"Id\")", ddl);
+        Assert.Contains("FOREIGN KEY (\"RootId\") REFERENCES \"CycleRoot\"(\"Id\")", ddl);
+    }
+
+    [Fact]
+    public void GenerateForeignKeysFalseDoesNotCreateCycleOrAlter()
+    {
+        var source = CyclicSchemaSource.Replace("[InquiryTable(\"CycleA\")]", "[InquiryTable(\"CycleA\", GenerateForeignKeys = false)]");
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.DoesNotContain("ALTER TABLE", ddl);
+        Assert.DoesNotContain("FOREIGN KEY ([BId])", ddl);
+        Assert.Contains("FOREIGN KEY ([AId]) REFERENCES [CycleA]([Id])", ddl);
+    }
+
+    [Fact]
+    public void DeferredConstraintNamesAreStableHashSuffixedAndUtf8Bounded()
+    {
+        const string source = """
+            using Inquiry.Entities;
+            namespace Demo;
+            [InquiryTable("非常に長いテーブル名前非常に長いテーブル名前A")]
+            public sealed class A
+            {
+                [InquiryKey] public long Id { get; set; }
+                [InquiryForeignKey("非常に長い外部キーカラム名前A", "非常に長いテーブル名前非常に長いテーブル名前B", "Id")] public long? BId { get; set; }
+            }
+            [InquiryTable("非常に長いテーブル名前非常に長いテーブル名前B")]
+            public sealed class B
+            {
+                [InquiryKey] public long Id { get; set; }
+                [InquiryForeignKey("非常に長い外部キーカラム名前B", "非常に長いテーブル名前非常に長いテーブル名前A", "Id")] public long? AId { get; set; }
+            }
+            """;
+
+        var first = ExtractSchemaDdl(RunGenerator(source, dialect: "SqlServer"));
+        var second = ExtractSchemaDdl(RunGenerator(source, dialect: "SqlServer"));
+        var names = Regex.Matches(first, @"ADD CONSTRAINT \[([^]]+)\]")
+            .Cast<Match>().Select(m => m.Groups[1].Value).ToArray();
+        Assert.Equal(2, names.Length);
+        Assert.All(names, name =>
+        {
+            Assert.True(Encoding.UTF8.GetByteCount(name) <= 63);
+            Assert.Matches("_[0-9a-f]{16}$", name);
+        });
+        Assert.Equal(names, Regex.Matches(second, @"ADD CONSTRAINT \[([^]]+)\]").Cast<Match>().Select(m => m.Groups[1].Value));
+    }
+
+    [Fact]
+    public void CollisionExtensionTerminalNameNeverExceedsUtf8Limit()
+    {
+        var extended = SchemaEmitter.BuildForeignKeyName("非常に長いテーブル名前", "非常に長いカラム名前", "canonical-a", 9);
+        var terminal = SchemaEmitter.BuildForeignKeyName("非常に長いテーブル名前", "非常に長いカラム名前", "canonical-a", 31);
+        Assert.Matches("^_[0-9a-f]{62}$", terminal);
+        Assert.Equal(63, Encoding.UTF8.GetByteCount(terminal));
+        Assert.True(Encoding.UTF8.GetByteCount(extended) <= 63);
+        Assert.Throws<ArgumentOutOfRangeException>(() => SchemaEmitter.BuildForeignKeyName("T", "C", "canonical", 32));
+    }
+
+    [Fact]
+    public void DuplicateCyclicForeignKeyDeclarationsAreDiagnosedAndFullySuppressed()
+    {
+        const string source = """
+            using Inquiry.Entities;
+            namespace Demo;
+            [InquiryTable("CycleA")]
+            public sealed class A1 { [InquiryKey] public long Id { get; set; } [InquiryForeignKey("BId", "CycleB", "Id")] public long? BId { get; set; } }
+            [InquiryTable("CycleA")]
+            public sealed class A2 { [InquiryKey] public long Id { get; set; } [InquiryForeignKey("BId", "CycleB", "Id")] public long? BId { get; set; } }
+            [InquiryTable("CycleB")]
+            public sealed class B { [InquiryKey] public long Id { get; set; } [InquiryForeignKey("AId", "CycleA", "Id")] public long? AId { get; set; } }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ070").ToArray();
+        Assert.Equal(2, diagnostics.Length);
+        Assert.All(diagnostics, diagnostic => Assert.NotEqual(Microsoft.CodeAnalysis.Location.None, diagnostic.Location));
+        var ddl = ExtractSchemaDdl(result);
+        Assert.DoesNotContain("ALTER TABLE", ddl);
+        Assert.DoesNotContain("FOREIGN KEY ([BId])", ddl);
+        Assert.DoesNotContain("FOREIGN KEY ([AId])", ddl);
+    }
+
+    [Fact]
+    public void PostgreSqlCaseDistinctTablesAndSchemasRemainDistinct()
+    {
+        const string source = """
+            using Inquiry.Entities;
+            namespace Demo;
+            [InquiryTable("Node", Schema = "Upper")]
+            public sealed class UpperNode { [InquiryKey] public long Id { get; set; } [InquiryForeignKey("OtherId", "node", "Id", ReferencedSchema = "upper")] public long? OtherId { get; set; } }
+            [InquiryTable("node", Schema = "upper")]
+            public sealed class LowerNode { [InquiryKey] public long Id { get; set; } [InquiryForeignKey("OtherId", "Node", "Id", ReferencedSchema = "Upper")] public long? OtherId { get; set; } }
+            """;
+        var result = RunGenerator(source, dialect: "PostgreSql");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+        Assert.Contains("CREATE TABLE IF NOT EXISTS \"Upper\".\"Node\"", ddl);
+        Assert.Contains("CREATE TABLE IF NOT EXISTS \"upper\".\"node\"", ddl);
+        Assert.Equal(2, Regex.Matches(ddl, "ALTER TABLE").Count);
+    }
+
+    [Fact]
+    public void ReorderedDeclarationsProduceIdenticalDeferredSection()
+    {
+        var marker = "[InquiryTable(\"CycleA\")]";
+        var root = CyclicSchemaSource.Substring(0, CyclicSchemaSource.IndexOf(marker, StringComparison.Ordinal));
+        var aStart = CyclicSchemaSource.IndexOf(marker, StringComparison.Ordinal);
+        var bStart = CyclicSchemaSource.IndexOf("[InquiryTable(\"CycleB\")]", StringComparison.Ordinal);
+        var a = CyclicSchemaSource.Substring(aStart, bStart - aStart);
+        var b = CyclicSchemaSource.Substring(bStart);
+        var first = ExtractSchemaDdl(RunGenerator(root + a + b, dialect: "SqlServer"));
+        var second = ExtractSchemaDdl(RunGenerator(root + b + a, dialect: "SqlServer"));
+        Assert.Equal(first.Substring(first.IndexOf("ALTER TABLE", StringComparison.Ordinal)), second.Substring(second.IndexOf("ALTER TABLE", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void DuplicatePhysicalTablesWithoutCyclicForeignKeysRemainCompatible()
+    {
+        const string source = """
+            using Inquiry.Entities;
+            namespace Demo;
+            [InquiryTable("Same")] public sealed class A { [InquiryKey] public long Id { get; set; } }
+            [InquiryTable("Same")] public sealed class B { [InquiryKey] public long Id { get; set; } }
+            """;
+        var result = RunGenerator(source, dialect: "SqlServer");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ070");
+        Assert.DoesNotContain("ALTER TABLE", ExtractSchemaDdl(result));
+    }
+
+    [Fact]
+    public void SafeFallbackReportsEachCycleEdgeAndSuppressesConstraints()
+    {
+        var result = RunGenerator(CyclicSchemaSource, dialect: "Fallback", includeFallbackGenerator: true);
+        var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ069").ToArray();
+        Assert.Equal(2, diagnostics.Length);
+        Assert.All(diagnostics, diagnostic => Assert.NotEqual(Microsoft.CodeAnalysis.Location.None, diagnostic.Location));
+        var ddl = ExtractSchemaDdl(result);
+        Assert.DoesNotContain("ALTER TABLE", ddl);
+        Assert.DoesNotContain("FOREIGN KEY (\"BId\")", ddl);
+        Assert.DoesNotContain("FOREIGN KEY (\"AId\")", ddl);
+        Assert.Contains("FOREIGN KEY (\"RootId\")", ddl);
+    }
+
+    private static string TableCreateBody(string ddl, string quotedTable)
+    {
+        var start = ddl.IndexOf(quotedTable, StringComparison.Ordinal);
+        var end = ddl.IndexOf(';', start);
+        return ddl.Substring(start, end - start);
     }
 
     [Fact]
@@ -643,4 +865,26 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("\"Id\" BIGSERIAL PRIMARY KEY", ddl);
         Assert.Contains("\"Name\" TEXT NOT NULL", ddl);
     }
+}
+
+internal sealed class FallbackInquiryGenerator : InquiryGeneratorBase
+{
+    protected override string Dialect => "Fallback";
+    protected override SqlBuilder CreateSqlBuilder() => new FallbackSqlBuilder();
+}
+
+internal sealed class FallbackSqlBuilder : SqlBuilder
+{
+    public override string DialectName => "Fallback";
+    public override string QuoteIdentifier(string identifier) => "\"" + identifier.Replace("\"", "\"\"") + "\"";
+    public override string BuildSelectByKeySql(SqlBuildContext context) => throw new NotSupportedException();
+    public override string BuildInsertSql(SqlBuildContext context) => throw new NotSupportedException();
+    public override string BuildInsertReturningSql(SqlBuildContext context) => throw new NotSupportedException();
+    public override string BuildUpdateSql(SqlBuildContext context) => throw new NotSupportedException();
+    public override string BuildUpdateReturningSql(SqlBuildContext context) => throw new NotSupportedException();
+    public override string BuildDeleteByKeySql(SqlBuildContext context) => throw new NotSupportedException();
+    public override string BuildUpsertSql(SqlBuildContext context) => throw new NotSupportedException();
+    public override string BuildUpsertReturningSql(SqlBuildContext context) => throw new NotSupportedException();
+    protected override string MapColumnType(IColumn column) => column.TypeClass == DbTypeClass.Int64 ? "INTEGER" : "TEXT";
+    protected override string GeneratedKeyClause(IColumn column) => "INTEGER PRIMARY KEY";
 }

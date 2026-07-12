@@ -2537,7 +2537,7 @@ public sealed partial class InquiryGeneratorTests
         }
     }
 
-    private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite", string[]? enableDiagnostics = null)
+    private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite", string[]? enableDiagnostics = null, bool includeFallbackGenerator = false)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
         var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
@@ -2576,7 +2576,7 @@ public sealed partial class InquiryGeneratorTests
         // Each provider's analyzer ships a self-contained generator; drive all three to mirror a
         // real consumer that has referenced multiple provider packages. Each generator runs the
         // same arbitration logic and at most one of them emits (the one whose dialect matches).
-        var generators = new Microsoft.CodeAnalysis.ISourceGenerator[]
+        var generators = new List<Microsoft.CodeAnalysis.ISourceGenerator>
         {
             new global::Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator(),
             new global::Inquiry.SqlServer.Analyzer.InquirySqlServerGenerator().AsSourceGenerator(),
@@ -2585,6 +2585,10 @@ public sealed partial class InquiryGeneratorTests
             new global::Inquiry.MariaDb.Analyzer.InquiryMariaDbGenerator().AsSourceGenerator(),
             new global::Inquiry.Oracle.Analyzer.InquiryOracleGenerator().AsSourceGenerator(),
         };
+        if (includeFallbackGenerator)
+        {
+            generators.Add(new FallbackInquiryGenerator().AsSourceGenerator());
+        }
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
