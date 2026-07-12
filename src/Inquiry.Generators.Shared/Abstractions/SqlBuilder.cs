@@ -23,6 +23,9 @@ public abstract class SqlBuilder
 {
     public abstract string DialectName { get; }
 
+    /// <summary>Whether this provider has a native database-generated concurrency-token contract.</summary>
+    public virtual bool SupportsDatabaseGeneratedConcurrencyToken => false;
+
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
 
     /// <summary>Returns a deployment artifact required to bind this collection column, if any.</summary>
@@ -673,7 +676,7 @@ public abstract class SqlBuilder
            && (column.Length == 0 || column.Length > MaxBoundedStringLength(column.IsUnicode));
 
     /// <summary>The physical column type: the explicit <see cref="IColumn.SqlType"/> override if set, else <see cref="MapColumnType"/>.</summary>
-    protected string ColumnType(IColumn column)
+    protected virtual string ColumnType(IColumn column)
         => string.IsNullOrEmpty(column.SqlType) ? MapColumnType(column) : column.SqlType!;
 
     /// <summary>

@@ -2,6 +2,8 @@
 
 The generator emits a `CREATE TABLE` script for every entity in your assembly, in dependency order, as a `const string` on `InquiryGeneratedSchema`. Use it for test bootstrapping, first-run setup, or as the starting point for a migration.
 
+On SQL Server, a non-nullable `byte[]` marked `[InquiryConcurrencyToken(DatabaseGenerated = true)]` is emitted as `ROWVERSION NOT NULL`. Ordinary `byte[]` columns remain `VARBINARY(MAX)`. Returning mutations capture a rowversion through an internal `BINARY(8)` output table; `ROWVERSION` is used only for the physical table column.
+
 For providers that require database objects to bind collections, the same class also exposes:
 
 - `ProviderArtifactsDdl` - additive, idempotent setup DDL for compile-time-discovered artifacts.

@@ -38,7 +38,8 @@ If you call `UpdateAsync` with a stale `order.RowVersion`, zero rows match and t
 
 ## Provider-specific notes
 
-- **SQL Server** can use the native `ROWVERSION` (`TIMESTAMP`) type — declare it as `byte[]` with `[InquiryConcurrencyToken(DatabaseGenerated = true)]` and the generator omits the manual `+1` (SQL Server bumps it).
+- **SQL Server** can use native `ROWVERSION` — declare a non-nullable `byte[]` with `[InquiryConcurrencyToken(DatabaseGenerated = true)]`. Generated schema DDL emits `ROWVERSION NOT NULL`; inserts and bulk inserts omit the column; updates match the original eight-byte token and return the database-generated replacement. `SqlType`, length/precision/scale, defaults, computed expressions, converters, keys, and nullable token shapes are rejected at build time (`INQ068`) because they would weaken that contract.
+- Other providers reject `DatabaseGenerated = true`; use an ORM-managed numeric token there.
 - **PostgreSQL** typically uses an integer column with explicit increment (as above), or `xmin` for system-managed.
 - **MySQL** uses an integer column with explicit increment.
 - **Oracle** uses an integer or `TIMESTAMP` column with explicit increment.
