@@ -4,6 +4,8 @@ Inquiry deliberately does **not** ship a migration engine. It emits the full `CR
 
 > `InquiryGeneratedSchema` is generated `internal` to your entity assembly, so run the migration bootstrap from that assembly (or expose the string yourself).
 
+On SQL Server, `Ddl` includes the generated TVP types required by positive collection predicates and `[InquiryDeleteAll]`. For an existing database, add `InquiryGeneratedSchema.ProviderArtifactsDdl` to a migration before deploying code that references those methods. Use `ProviderArtifactsValidationSql` as a read-only deployment check. Do not run setup lazily from application requests: binding is deliberately free of catalog I/O and DDL, and missing artifacts fail visibly so migration drift is not hidden.
+
 ## DbUp
 
 Use the generated DDL as migration **0001** and hand-write everything after it. DbUp journals applied scripts, so the baseline runs exactly once:
@@ -45,6 +47,8 @@ Two practices make this setup self-policing:
 - **Never edit migration 0001.** When entities change, write a new `ALTER` migration; the regenerated `Ddl` constant is your reference for what the end-state should be, not a script to re-run.
 
 ## What stays out of scope
+
+When a new SQL Server collection element type or entity schema appears, include the regenerated `ProviderArtifactsDdl` in the next migration. Names are deterministic, so independently deployed instances and databases agree on the same objects.
 
 Diff-based migration generation, `ALTER` emission, versioning, and rollback are explicitly not planned ([roadmap](../../develop/roadmap.md#explicitly-out-of-scope-for-10)) — DbUp/FluentMigrator/Flyway own that lifecycle. Inquiry's contribution is an always-correct, dependency-ordered baseline for free.
 

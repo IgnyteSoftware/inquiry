@@ -47,7 +47,10 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains(providerDdl, ExtractSchemaDdl(result));
         Assert.Contains(ExpectedDeleteAllSql(dialect, "ConvertedKeys", providerIsString: false), store);
-        Assert.Contains($"{binder}.Bind(_c, \"{(dialect == "Oracle" ? ":keys" : "@keys")}\", {projected});", store);
+        var typeName = dialect == "SqlServer"
+            ? ", \"[dbo].[Inquiry_Tvp_e36b3e7cf003f2911419d555807aef152b7c6667f4b9b9fb3984b20ecedd995a]\""
+            : string.Empty;
+        Assert.Contains($"{binder}.Bind(_c, \"{(dialect == "Oracle" ? ":keys" : "@keys")}\", {projected}{typeName});", store);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{(dialect == "Oracle" ? ":keys" : "@keys")}\", ids);", store);
         Assert.Contains("static _e =>", store);
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(
@@ -110,8 +113,14 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains(ExpectedDeleteAllSql(dialect, "NullableKeys", providerIsString: false), nullableValue);
         Assert.Contains(ExpectedDeleteAllSql(dialect, "ReferenceKeys", providerIsString: true), reference);
-        Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {nullableProjection});", nullableValue);
-        Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {referenceProjection});", reference);
+        var nullableTypeName = dialect == "SqlServer"
+            ? ", \"[dbo].[Inquiry_Tvp_e36b3e7cf003f2911419d555807aef152b7c6667f4b9b9fb3984b20ecedd995a]\""
+            : string.Empty;
+        var referenceTypeName = dialect == "SqlServer"
+            ? ", \"[dbo].[Inquiry_Tvp_474f2ebbdd781f2c0331853ca09837a0aa4613f2bf445089eafda2b033abe95c]\""
+            : string.Empty;
+        Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {nullableProjection}{nullableTypeName});", nullableValue);
+        Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {referenceProjection}{referenceTypeName});", reference);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", ids);", nullableValue);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", ids);", reference);
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(nullableValue, "StrongIdConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());

@@ -277,6 +277,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
+        var collectionArtifacts = ImmutableArray.CreateBuilder<CollectionParameterArtifact>();
 
         foreach (var store in stores)
         {
@@ -287,10 +288,11 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 context.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
 
-            var registration = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
-            if (registration is not null)
+            var emission = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
+            if (emission is not null)
             {
-                storeRegistrations.Add(registration);
+                storeRegistrations.Add(emission.Registration);
+                collectionArtifacts.AddRange(emission.Artifacts);
             }
         }
 
@@ -298,7 +300,13 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         // entity array (source order) filtered to mapped entities so emission is deterministic.
         // Views are defined in the database, not created by Inquiry — exclude them from DDL.
         var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
-        SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);
+        var providerArtifacts = collectionArtifacts
+            .GroupBy(static artifact => artifact.Identity, System.StringComparer.Ordinal)
+            .Select(static group => group.First())
+            .OrderBy(static artifact => artifact.Schema, System.StringComparer.Ordinal)
+            .ThenBy(static artifact => artifact.Name, System.StringComparer.Ordinal)
+            .ToArray();
+        SchemaEmitter.Emit(context, schemaEntities, sqlBuilder, providerArtifacts);
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)
         {

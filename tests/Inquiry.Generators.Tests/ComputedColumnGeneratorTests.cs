@@ -73,7 +73,9 @@ public sealed partial class InquiryGeneratorTests
             AssertNoErrors(result);
             var ddl = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
             // The standard expression form, with no type / NOT NULL on the computed column.
-            Assert.Contains("AS (FirstName || ' ' || LastName)", ddl);
+            Assert.Contains(dialect == "SqlServer"
+                ? "AS (FirstName + ' ' + LastName)"
+                : "AS (FirstName || ' ' || LastName)", ddl);
             Assert.DoesNotContain("GENERATED ALWAYS", ddl);
         }
     }
@@ -95,6 +97,28 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(mariadb);
         var mariadbDdl = Assert.Single(mariadb.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Contains("GENERATED ALWAYS AS (FirstName || ' ' || LastName) STORED", mariadbDdl);
+    }
+
+    [Fact]
+    public void SqlServerComputedConcatenationTranslationPreservesQuotedAndCommentedPipes()
+    {
+        const string source = """
+            using Inquiry.Entities;
+            namespace Demo;
+            [InquiryTable("Lexical")]
+            public sealed class Lexical
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Computed = "FirstName || 'a||b''c' || [odd||name]]] || \"odd\"\"||name\" /* keep || */ || LastName -- keep ||\n || FirstName")]
+                public string Value { get; set; } = string.Empty;
+            }
+            """;
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var ddl = ExtractSchemaDdl(result);
+
+        Assert.Contains("AS (FirstName + 'a||b''c' + [odd||name]]] + \"odd\"\"||name\" /* keep || */ + LastName -- keep ||", ddl);
+        Assert.Contains(" + FirstName)", ddl);
     }
 
     [Fact]

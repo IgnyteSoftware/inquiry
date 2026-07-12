@@ -35,6 +35,8 @@ This is the one place Inquiry builds SQL at run time — necessarily, since the 
 
 ## How `UpdateAll` executes (ADO.NET `DbBatch`)
 
+On SQL Server, `[InquiryDeleteAll]` and positive collection predicates use compile-time-generated, schema-qualified TVP artifacts. Apply `InquiryGeneratedSchema.ProviderArtifactsDdl` in the migration/bootstrap path before the first call. Binding creates only the structured parameter and records; it does not query `TYPE_ID`, create a type, or maintain a process-wide artifact cache.
+
 Batch update does **not** concatenate statements: each item runs the ordinary single-row
 `UPDATE` (`_sqlUpdate`) with its own parameter set, dispatched through
 `IInquiry.ExecuteBatchAsync`. On providers whose ADO.NET driver implements
