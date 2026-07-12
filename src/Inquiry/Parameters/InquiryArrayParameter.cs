@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Common;
-using System.Linq;
 
 namespace Inquiry.Parameters;
 
@@ -105,7 +104,19 @@ public static class InquiryArrayParameter
     }
 
     private static TResult[] MapNonNull<T, TResult>(IEnumerable<T>? values, System.Func<T, TResult> selector)
-        => values is null ? System.Array.Empty<TResult>() : values.Where(static value => value is not null).Select(selector).ToArray();
+    {
+        if (values is null) return System.Array.Empty<TResult>();
+
+        var converted = values is ICollection<T> collection
+            ? new List<TResult>(collection.Count)
+            : new List<TResult>();
+        foreach (var value in values)
+        {
+            if (value is not null) converted.Add(selector(value));
+        }
+
+        return converted.ToArray();
+    }
 
     private static TUnderlying[] ConvertEnumElements<T, TUnderlying>(IEnumerable<T>? values)
         where TUnderlying : struct
