@@ -876,6 +876,7 @@ internal sealed class FallbackInquiryGenerator : InquiryGeneratorBase
 internal sealed class FallbackSqlBuilder : SqlBuilder
 {
     public override string DialectName => "Fallback";
+    public override string ProviderId => "fallback";
     public override string QuoteIdentifier(string identifier) => "\"" + identifier.Replace("\"", "\"\"") + "\"";
     public override string BuildSelectByKeySql(SqlBuildContext context) => throw new NotSupportedException();
     public override string BuildInsertSql(SqlBuildContext context) => throw new NotSupportedException();

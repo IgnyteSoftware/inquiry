@@ -41,6 +41,7 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override string DialectName => "Oracle";
+    public override string ProviderId => "oracle";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsCheckConstraints => true;

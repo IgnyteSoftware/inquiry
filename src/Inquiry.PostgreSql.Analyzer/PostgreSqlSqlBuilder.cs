@@ -20,6 +20,7 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
         };
 
     public override string DialectName => "PostgreSql";
+    public override string ProviderId => "postgresql";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsIndexIncludeColumns => true;

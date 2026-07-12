@@ -4,6 +4,7 @@ using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -377,6 +378,15 @@ internal static class EntityProcessor
             // database-generated/defaulted, an auditing column, soft-delete, or a concurrency token
             // (INQ057, expression cleared so emission stays valid).
             var computedExpression = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "Computed") : null;
+            var computedExpressionLocation = GetNamedArgumentLocation(metadataAttribute, "Computed");
+            var computedOverrides = property.GetAttributes()
+                .Where(static attribute => attribute.AttributeClass?.ToDisplayString() == "Inquiry.Entities.InquiryComputedExpressionAttribute")
+                .Select(static attribute => new ComputedExpressionOverrideData(
+                    attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value as string ?? string.Empty : string.Empty,
+                    attribute.ConstructorArguments.Length > 1 ? attribute.ConstructorArguments[1].Value as string ?? string.Empty : string.Empty,
+                    GetConstructorArgumentLocation(attribute, 0),
+                    GetConstructorArgumentLocation(attribute, 1)))
+                .ToImmutableArray();
             var hasComputedMetadata = !string.IsNullOrEmpty(computedExpression);
             if (!string.IsNullOrEmpty(computedExpression) &&
                 (keyAttribute is not null || isGenerated || useDatabaseDefault || isConcurrencyToken ||
@@ -443,6 +453,8 @@ internal static class EntityProcessor
                 Scale = scale,
                 DefaultExpression = defaultExpression,
                 ComputedExpression = computedExpression,
+                ComputedExpressionLocation = computedExpressionLocation,
+                ComputedExpressionOverrides = new EquatableArray<ComputedExpressionOverrideData>(computedOverrides),
                 ForeignKeyTable = foreignKeyTable,
                 ForeignKeySchema = foreignKeySchema,
                 ForeignKeyColumn = foreignKeyColumn,
@@ -467,6 +479,20 @@ internal static class EntityProcessor
         }
 
         return columns;
+    }
+
+    private static LocationData? GetNamedArgumentLocation(AttributeData? attribute, string name)
+    {
+        if (attribute?.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax) return null;
+        var argument = syntax.ArgumentList?.Arguments.FirstOrDefault(value => value.NameEquals?.Name.Identifier.ValueText == name);
+        return LocationData.From(argument?.Expression.GetLocation());
+    }
+
+    private static LocationData? GetConstructorArgumentLocation(AttributeData attribute, int ordinal)
+    {
+        if (attribute.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax
+            || syntax.ArgumentList is null || ordinal >= syntax.ArgumentList.Arguments.Count) return null;
+        return LocationData.From(syntax.ArgumentList.Arguments[ordinal].Expression.GetLocation());
     }
 
     private static int GetNamedEnumValue(AttributeData attribute, string name)
