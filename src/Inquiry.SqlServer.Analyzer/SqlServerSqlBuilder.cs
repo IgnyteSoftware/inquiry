@@ -20,6 +20,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string DialectName => "SqlServer";
 
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+
     public override bool SupportsDatabaseGeneratedConcurrencyToken => true;
 
     protected override string CountExpression => "COUNT_BIG(*)";

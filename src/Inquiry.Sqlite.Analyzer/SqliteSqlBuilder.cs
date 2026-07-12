@@ -8,6 +8,8 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 {
     public override string DialectName => "Sqlite";
 
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.Inline;
+
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
 

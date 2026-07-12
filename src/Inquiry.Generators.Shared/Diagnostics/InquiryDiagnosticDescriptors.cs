@@ -44,6 +44,8 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ065         Column metadata range          ([InquiryColumn] Length/Precision/Scale out of range) [IN USE]
     //   INQ066–INQ067  DDL safety lints (off by default) (INQ066 nullable column with default, INQ067 unbounded string column; opt in via .editorconfig) [IN USE]
     //   INQ068         Invalid database-generated concurrency-token shape [IN USE]
+    //   INQ069         Provider cannot emit a cyclic foreign-key constraint [IN USE]
+    //   INQ070         Duplicate/colliding physical schema mapping [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -646,6 +648,22 @@ internal static class InquiryDiagnosticDescriptors
         "INQ068",
         "Database-generated concurrency token is invalid",
         "Entity '{0}' marks property '{1}' as a database-generated concurrency token, but it is invalid. {2}",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor CyclicForeignKeyNotSupported = new(
+        "INQ069",
+        "Provider cannot emit cyclic foreign keys",
+        "Table '{0}' foreign-key column '{1}' participates in a schema cycle, but provider '{2}' cannot add the constraint after table creation. Break the cycle, disable generated foreign keys for the table, or use a provider that supports deferred constraint creation.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DuplicateSchemaMapping = new(
+        "INQ070",
+        "Duplicate physical schema mapping",
+        "Schema mapping '{0}' is ambiguous: {1}. Map each physical table and foreign-key constraint exactly once.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

@@ -11,4 +11,6 @@ internal sealed class MySqlSqlBuilder : MySqlFamilySqlBuilder
 {
     public override string DialectName => "MySql";
 
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+
 }
