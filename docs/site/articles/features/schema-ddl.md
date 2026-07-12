@@ -102,11 +102,15 @@ Each provider analyzer emits the right flavor:
 
 ```csharp
 [InquiryColumn("FullName", Computed = "FirstName || ' ' || LastName")]
+[InquiryComputedExpression("mysql", "CONCAT(FirstName, ' ', LastName)")]
+[InquiryComputedExpression("mariadb", "CONCAT(FirstName, ' ', LastName)")]
 public string FullName { get; set; } = "";
 ```
 
 - **Excluded from generated INSERT/UPDATE** (the database owns the value), but **selected and materialized** into the property on reads — and it recomputes automatically when its source columns change.
 - The DDL emits each dialect's computed-column form: `AS (<expr>)` on SQLite / SQL Server / Oracle; the typed `<type> GENERATED ALWAYS AS (<expr>) STORED` on PostgreSQL and MySQL (which require it).
+- Inquiry reports provably unsafe lexical shapes as `INQ072`, including unterminated quoting/comments, unmatched parentheses, statement separators, subqueries, and window expressions. This is conservative validation, not a full provider SQL parser.
+- `InquiryComputedExpression` supplies a provider-specific override while `Computed` remains the required fallback. Stable provider ids are `sqlite`, `sqlserver`, `postgresql`, `mysql`, `mariadb`, and `oracle`. MySQL and MariaDB reject a real `||` token because its meaning depends on SQL mode; use `CONCAT(...)`, `OR`, or an override.
 - A computed column can't also be a key, database-generated/defaulted, an auditing column, the soft-delete indicator, or a concurrency token (`INQ057`). The expression is **raw SQL** — keep untrusted input out of it.
 
 ## Indexes

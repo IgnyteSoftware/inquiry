@@ -18,7 +18,22 @@ public sealed class ComputedPerson
     public string LastName { get; set; } = string.Empty;
 
     [InquiryColumn("FullName", Computed = "FirstName || ' ' || LastName")]
+    [InquiryComputedExpression("mysql", "CONCAT(FirstName, ' ', LastName)")]
+    [InquiryComputedExpression("mariadb", "CONCAT(FirstName, ' ', LastName)")]
     public string FullName { get; set; } = string.Empty;
+
+    [InquiryColumn("Base Value")]
+    public int BaseValue { get; set; }
+
+    [InquiryColumn("MixedCaseValue")]
+    public int MixedCaseValue { get; set; }
+
+    [InquiryColumn("Computed Total", Computed = "\"Base Value\" + \"MixedCaseValue\"")]
+    [InquiryComputedExpression("sqlserver", "[Base Value] + [MixedCaseValue]")]
+    [InquiryComputedExpression("mysql", "`Base Value` + `MixedCaseValue`")]
+    [InquiryComputedExpression("mariadb", "`Base Value` + `MixedCaseValue`")]
+    [InquiryComputedExpression("oracle", "\"Base Value\" + MixedCaseValue")]
+    public int ComputedTotal { get; set; }
 }
 
 public partial class ComputedPersonStore : InquiryStore<ComputedPerson>
