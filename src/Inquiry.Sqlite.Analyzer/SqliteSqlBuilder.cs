@@ -7,6 +7,7 @@ namespace Inquiry.Sqlite.Analyzer;
 internal sealed class SqliteSqlBuilder : SqlBuilder
 {
     public override string DialectName => "Sqlite";
+    public override string ProviderId => "sqlite";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.Inline;
     public override bool SupportsCheckConstraints => true;

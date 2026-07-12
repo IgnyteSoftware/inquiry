@@ -18,9 +18,10 @@ public sealed class ComputedColumnIntegrationTests
 
         var store = harness.GetRequiredService<ComputedPersonStore>();
 
-        var person = (await store.InsertReturningAsync(new ComputedPerson { FirstName = "Ada", LastName = "Lovelace" }))!;
+        var person = (await store.InsertReturningAsync(new ComputedPerson { FirstName = "Ada", LastName = "Lovelace", BaseValue = 2, MixedCaseValue = 3 }))!;
 
         Assert.Equal("Ada Lovelace", person.FullName);
+        Assert.Equal(5, person.ComputedTotal);
 
         var reloaded = (await store.SelectByKeyAsync(person.Id))!;
         Assert.Equal("Ada Lovelace", reloaded.FullName);
@@ -35,11 +36,12 @@ public sealed class ComputedColumnIntegrationTests
 
         var store = harness.GetRequiredService<ComputedPersonStore>();
 
-        var person = (await store.InsertReturningAsync(new ComputedPerson { FirstName = "Grace", LastName = "Hopper" }))!;
+        var person = (await store.InsertReturningAsync(new ComputedPerson { FirstName = "Grace", LastName = "Hopper", BaseValue = 4, MixedCaseValue = 5 }))!;
 
-        await store.UpdateAsync(new ComputedPerson { Id = person.Id, FirstName = "Grace", LastName = "Murray", FullName = "ignored" });
+        await store.UpdateAsync(new ComputedPerson { Id = person.Id, FirstName = "Grace", LastName = "Murray", FullName = "ignored", BaseValue = 10, MixedCaseValue = 7 });
         var reloaded = (await store.SelectByKeyAsync(person.Id))!;
 
         Assert.Equal("Grace Murray", reloaded.FullName);
+        Assert.Equal(17, reloaded.ComputedTotal);
     }
 }

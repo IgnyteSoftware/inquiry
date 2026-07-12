@@ -1,5 +1,7 @@
 # Schema primitives plan (#175 slice C)
 
+> **Boundary revision (2026-07-12):** This slice intentionally stopped at normalized private schema data and emitted DDL. The final #175 plan in `2026-07-12-schema-manifest-contract-p0.md` now owns deterministic JSON, fingerprint, and assembly-metadata transport for that normalized graph so #72 can consume an expected-schema contract. The earlier “no JSON/generated manifest constant” statement applied to slice C implementation scope and is superseded for final #175 only; live comparison, catalog readers, query manifests, and drift diagnostics remain #72.
+
 ## Goal
 
 Add repeatable composite, unique, and covering indexes; table check constraints; and named foreign-key

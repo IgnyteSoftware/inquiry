@@ -13,6 +13,7 @@ public class SqlBuilderHelpersTests
     private sealed class TestSqlBuilder : SqlBuilder
     {
         public override string DialectName => "Test";
+        public override string ProviderId => "test";
         public override string QuoteIdentifier(string identifier) => "\"" + identifier + "\"";
         public override string BuildSelectByKeySql(SqlBuildContext context) => string.Empty;
         public override string BuildInsertSql(SqlBuildContext context) => string.Empty;

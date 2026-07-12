@@ -191,6 +191,22 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             }
         }
 
+        if (!entities.Any(static entity => entity.IsMapped) && stores.IsEmpty && projections.IsEmpty && adHocs.IsEmpty) return;
+        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower or DialectOwnershipKind.UnknownFollower) return;
+        if (ownership.Kind == DialectOwnershipKind.UnknownLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectUnknown, null,
+                FormatDialectForDiagnostic(ownership.UnknownDialect), string.IsNullOrWhiteSpace(ownership.AmbiguousDialects) ? "<none>" : ownership.AmbiguousDialects));
+            return;
+        }
+        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectAmbiguous, null, ownership.AmbiguousDialects));
+            return;
+        }
+
+        var sqlBuilder = CreateSqlBuilder();
+        entities = ResolveComputedExpressions(context, entities, sqlBuilder, out var computedInvalidEntityNames);
         var mappedEntities = new Dictionary<string, EntityData>();
         foreach (var entity in entities)
         {
@@ -230,31 +246,6 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             return;
         }
 
-        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower or DialectOwnershipKind.UnknownFollower)
-        {
-            return;
-        }
-
-        if (ownership.Kind == DialectOwnershipKind.UnknownLeader)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.DialectUnknown,
-                location: null,
-                FormatDialectForDiagnostic(ownership.UnknownDialect),
-                string.IsNullOrWhiteSpace(ownership.AmbiguousDialects) ? "<none>" : ownership.AmbiguousDialects));
-            return;
-        }
-
-        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.DialectAmbiguous,
-                location: null,
-                ownership.AmbiguousDialects));
-            return;
-        }
-
-        var sqlBuilder = CreateSqlBuilder();
         var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistration>();
         foreach (var entity in mappedEntities.Values)
         {
@@ -288,7 +279,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 context.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
 
-            var emission = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
+            var emission = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder, computedInvalidEntityNames);
             if (emission is not null)
             {
                 storeRegistrations.Add(emission.Registration);
@@ -321,6 +312,72 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     /// side — a reversed relation (INQ058), and a composite-key child (INQ041). A relation whose
     /// child type isn't a mapped entity is left alone (the emit path tolerates it).
     /// </summary>
+    private static ImmutableArray<EntityData> ResolveComputedExpressions(SourceProductionContext context, ImmutableArray<EntityData> entities, SqlBuilder builder,
+        out HashSet<string> computedInvalidEntityNames)
+    {
+        computedInvalidEntityNames = new HashSet<string>(System.StringComparer.Ordinal);
+        var resolved = ImmutableArray.CreateBuilder<EntityData>(entities.Length);
+        foreach (var entity in entities)
+        {
+            var valid = entity.IsMapped;
+            var columns = ImmutableArray.CreateBuilder<ColumnData>(entity.Columns.Count);
+            foreach (var column in entity.Columns)
+            {
+                var fallback = column.ComputedExpression;
+                var overrides = column.ComputedExpressionOverrides.AsImmutableArray();
+                var selected = fallback;
+                var selectedLocation = column.ComputedExpressionLocation ?? column.Location;
+                var reasons = new List<(LocationData? Location, string Reason)>();
+                foreach (var item in overrides)
+                {
+                    if (!IsValidProviderId(item.ProviderId)) reasons.Add((item.ProviderIdLocation, "provider id is invalid; use lowercase ASCII [a-z][a-z0-9.-]{0,63}"));
+                    if (string.IsNullOrWhiteSpace(item.Expression)) reasons.Add((item.ExpressionLocation, "override expression is empty or whitespace"));
+                }
+                foreach (var duplicate in overrides.Where(item => IsValidProviderId(item.ProviderId)).GroupBy(static item => item.ProviderId, System.StringComparer.Ordinal).Where(static group => group.Count() > 1))
+                    reasons.Add((duplicate.Skip(1).First().ExpressionLocation, "more than one override declares provider '" + duplicate.Key + "'"));
+                if (overrides.Length > 0 && string.IsNullOrWhiteSpace(fallback)) reasons.Add((overrides[0].ExpressionLocation, "a provider override requires a non-empty InquiryColumn.Computed fallback"));
+                var providerOverride = overrides.FirstOrDefault(item => item.ProviderId == builder.ProviderId);
+                if (providerOverride is not null) { selected = providerOverride.Expression; selectedLocation = providerOverride.ExpressionLocation; }
+                if (fallback is not null || overrides.Length > 0)
+                {
+                    if (string.IsNullOrWhiteSpace(selected))
+                    {
+                        if (providerOverride is null) reasons.Add((selectedLocation, "expression is empty or whitespace"));
+                    }
+                    else
+                    {
+                        var failures = builder.ValidateComputedExpression(selected!);
+                        if (failures.Count > 0) reasons.Add((selectedLocation, string.Join("; ", failures)));
+                    }
+                }
+                foreach (var reason in reasons)
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ComputedExpressionInvalid,
+                        reason.Location?.ToLocation(), entity.FullyQualifiedName + "." + column.PropertyName, builder.ProviderId, reason.Reason));
+                if (reasons.Count > 0) { valid = false; computedInvalidEntityNames.Add(entity.FullyQualifiedName); }
+                columns.Add(column with { ComputedExpression = reasons.Count == 0 && selected is not null ? builder.RenderComputedExpression(selected) : selected });
+            }
+            var finalColumns = columns.ToImmutable();
+            ColumnData? Find(ColumnData? original) => original is null ? null : finalColumns.FirstOrDefault(column => column.PropertyName == original.PropertyName);
+            resolved.Add(entity with
+            {
+                Columns = new EquatableArray<ColumnData>(finalColumns),
+                Keys = new EquatableArray<ColumnData>(entity.Keys.AsImmutableArray().Select(key => finalColumns.First(column => column.PropertyName == key.PropertyName)).ToImmutableArray()),
+                SoftDeleteColumn = Find(entity.SoftDeleteColumn),
+                ConcurrencyToken = Find(entity.ConcurrencyToken),
+                IsMapped = valid,
+            });
+        }
+        return resolved.ToImmutable();
+    }
+
+    private static bool IsValidProviderId(string value)
+    {
+        if (value.Length is < 1 or > 64 || value[0] is < 'a' or > 'z') return false;
+        for (var i = 1; i < value.Length; i++)
+            if (!(value[i] is >= 'a' and <= 'z' or >= '0' and <= '9' or '.' or '-')) return false;
+        return true;
+    }
+
     private static void ValidateRelations(SourceProductionContext context, Dictionary<string, EntityData> mappedEntities)
     {
         foreach (var entity in mappedEntities.Values)

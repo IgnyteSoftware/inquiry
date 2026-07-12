@@ -19,6 +19,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         };
 
     public override string DialectName => "SqlServer";
+    public override string ProviderId => "sqlserver";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsIndexIncludeColumns => true;
@@ -394,89 +395,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     // The shared feature catalog uses the ANSI concatenation operator in computed expressions.
     // SQL Server spells string concatenation with +.
-    protected override string RenderComputedColumn(IColumn column)
-        => "AS (" + TranslateConcatenationOperators(column.ComputedExpression!) + ")";
-
-    private static string TranslateConcatenationOperators(string expression)
-    {
-        var result = new StringBuilder(expression.Length);
-        var state = SqlLexicalState.Normal;
-        for (var index = 0; index < expression.Length; index++)
-        {
-            var current = expression[index];
-            var next = index + 1 < expression.Length ? expression[index + 1] : '\0';
-            switch (state)
-            {
-                case SqlLexicalState.Normal:
-                    if (current == '\'' || current == '"' || current == '[')
-                    {
-                        state = current == '\'' ? SqlLexicalState.SingleQuoted
-                            : current == '"' ? SqlLexicalState.DoubleQuoted
-                            : SqlLexicalState.Bracketed;
-                        result.Append(current);
-                    }
-                    else if (current == '-' && next == '-')
-                    {
-                        state = SqlLexicalState.LineComment;
-                        result.Append("--");
-                        index++;
-                    }
-                    else if (current == '/' && next == '*')
-                    {
-                        state = SqlLexicalState.BlockComment;
-                        result.Append("/*");
-                        index++;
-                    }
-                    else if (current == '|' && next == '|')
-                    {
-                        result.Append('+');
-                        index++;
-                    }
-                    else result.Append(current);
-                    break;
-
-                case SqlLexicalState.SingleQuoted:
-                    result.Append(current);
-                    if (current == '\'' && next == '\'') { result.Append(next); index++; }
-                    else if (current == '\'') state = SqlLexicalState.Normal;
-                    break;
-
-                case SqlLexicalState.DoubleQuoted:
-                    result.Append(current);
-                    if (current == '"' && next == '"') { result.Append(next); index++; }
-                    else if (current == '"') state = SqlLexicalState.Normal;
-                    break;
-
-                case SqlLexicalState.Bracketed:
-                    result.Append(current);
-                    if (current == ']' && next == ']') { result.Append(next); index++; }
-                    else if (current == ']') state = SqlLexicalState.Normal;
-                    break;
-
-                case SqlLexicalState.LineComment:
-                    result.Append(current);
-                    if (current is '\r' or '\n') state = SqlLexicalState.Normal;
-                    break;
-
-                case SqlLexicalState.BlockComment:
-                    result.Append(current);
-                    if (current == '*' && next == '/') { result.Append(next); index++; state = SqlLexicalState.Normal; }
-                    break;
-            }
-        }
-
-        return result.ToString();
-    }
-
-    private enum SqlLexicalState
-    {
-        Normal,
-        SingleQuoted,
-        DoubleQuoted,
-        Bracketed,
-        LineComment,
-        BlockComment,
-    }
+    public override string RenderComputedExpression(string expression)
+        => SqlExpressionLexer.Analyze(expression, SqlExpressionCommentPolicy.Standard, true).RenderedExpression;
 
     protected override string WrapCreateTable(SqlBuildContext context, string body)
     {
