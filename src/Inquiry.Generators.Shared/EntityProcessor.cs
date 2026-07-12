@@ -384,8 +384,8 @@ internal static class EntityProcessor
                 .Select(static attribute => new ComputedExpressionOverrideData(
                     attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value as string ?? string.Empty : string.Empty,
                     attribute.ConstructorArguments.Length > 1 ? attribute.ConstructorArguments[1].Value as string ?? string.Empty : string.Empty,
-                    GetConstructorArgumentLocation(attribute, 0),
-                    GetConstructorArgumentLocation(attribute, 1)))
+                    GetConstructorArgumentLocation(attribute, "providerId", 0),
+                    GetConstructorArgumentLocation(attribute, "expression", 1)))
                 .ToImmutableArray();
             var hasComputedMetadata = !string.IsNullOrEmpty(computedExpression);
             if (!string.IsNullOrEmpty(computedExpression) &&
@@ -488,11 +488,17 @@ internal static class EntityProcessor
         return LocationData.From(argument?.Expression.GetLocation());
     }
 
-    private static LocationData? GetConstructorArgumentLocation(AttributeData attribute, int ordinal)
+    private static LocationData? GetConstructorArgumentLocation(AttributeData attribute, string parameterName, int ordinal)
     {
-        if (attribute.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax
-            || syntax.ArgumentList is null || ordinal >= syntax.ArgumentList.Arguments.Count) return null;
-        return LocationData.From(syntax.ArgumentList.Arguments[ordinal].Expression.GetLocation());
+        if (attribute.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax || syntax.ArgumentList is null) return null;
+        var named = syntax.ArgumentList.Arguments.FirstOrDefault(argument =>
+            argument.NameColon?.Name.Identifier.ValueText == parameterName);
+        if (named is not null) return LocationData.From(named.Expression.GetLocation());
+        if (ordinal < 0 || ordinal >= syntax.ArgumentList.Arguments.Count) return null;
+        var positional = syntax.ArgumentList.Arguments[ordinal];
+        return positional.NameColon is null && positional.NameEquals is null
+            ? LocationData.From(positional.Expression.GetLocation())
+            : null;
     }
 
     private static int GetNamedEnumValue(AttributeData attribute, string name)
