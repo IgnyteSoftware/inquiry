@@ -320,10 +320,10 @@ internal static class SchemaEmitter
         => typeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64;
 
     /// <summary>
-    /// Kahn's topological sort keyed by schema-qualified table name (case-insensitive). Edges point from a referencing
-    /// table to the table it references; an edge whose target is not in this assembly's entity set, or
-    /// a self reference, is ignored. Input order is the tiebreak, and any rows left over by a reference
-    /// cycle are appended in input order so emission is always total and deterministic.
+    /// Kahn's topological sort keyed by the exact ordinal schema/table identity used by the FK graph.
+    /// Edges point from a referencing table to its referenced table; external targets, self references,
+    /// and SCC-internal cyclic edges do not constrain this phase. Exact table identity is the deterministic
+    /// tie-breaker, and the defensive final pass uses the same ordering.
     /// </summary>
     private static IReadOnlyList<EntityData> OrderByForeignKeyDependencies(
         IReadOnlyList<EntityData> entities,
@@ -472,7 +472,7 @@ internal static class SchemaEmitter
                     invalidForeignKeys.Add(duplicate);
                     invalidMappings.Add(new InvalidSchemaMapping(
                         duplicate.Location,
-                        duplicate.CanonicalIdentity,
+                        DescribeForeignKey(duplicate),
                         "multiple properties declare the same physical foreign key"));
                 }
                 invalidComponents.Add(componentByTable[TableKey(group.First().LocalSchema, group.First().LocalTable)]);
@@ -510,7 +510,7 @@ internal static class SchemaEmitter
                 {
                     invalidMappings.Add(new InvalidSchemaMapping(
                         foreignKey.Location,
-                        foreignKey.CanonicalIdentity,
+                        DescribeForeignKey(foreignKey),
                         "its generated constraint name collides after the full SHA-256 suffix"));
                     break;
                 }
@@ -610,6 +610,13 @@ internal static class SchemaEmitter
         value ??= string.Empty;
         return value.Length + ":" + value;
     }
+
+    private static string DescribeForeignKey(ForeignKeyConstraintData foreignKey)
+        => Qualify(foreignKey.LocalSchema, foreignKey.LocalTable) + "." + foreignKey.LocalColumn
+            + " -> " + Qualify(foreignKey.ReferencedSchema, foreignKey.ReferencedTable) + "." + foreignKey.ReferencedColumn;
+
+    private static string Qualify(string? schema, string table)
+        => string.IsNullOrEmpty(schema) ? table : schema + "." + table;
 
     internal static string BuildForeignKeyName(string table, string column, string canonicalIdentity, int hashBytes)
     {

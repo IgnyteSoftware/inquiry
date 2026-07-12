@@ -655,7 +655,7 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor CyclicForeignKeyNotSupported = new(
         "INQ069",
         "Provider cannot emit cyclic foreign keys",
-        "Entity '{0}' foreign-key property '{1}' participates in a schema cycle, but provider '{2}' cannot add the constraint after table creation. Break the cycle, disable generated foreign keys for the table, or use a provider that supports deferred constraint creation.",
+        "Table '{0}' foreign-key column '{1}' participates in a schema cycle, but provider '{2}' cannot add the constraint after table creation. Break the cycle, disable generated foreign keys for the table, or use a provider that supports deferred constraint creation.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
