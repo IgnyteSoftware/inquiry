@@ -20,7 +20,7 @@ public sealed class MySqlTestHarnessCleanupTests
             MySqlTestHarness.CreateFromDdlAsync(
                 _fixture.AdminConnectionString,
                 "CREATE TABLE `Broken` (`Id` THIS_TYPE_DOES_NOT_EXIST);",
-                "invalidddl",
+                "invalid`ddl",
                 databaseCreated: name => databaseName = name));
 
         Assert.False(string.IsNullOrWhiteSpace(databaseName));

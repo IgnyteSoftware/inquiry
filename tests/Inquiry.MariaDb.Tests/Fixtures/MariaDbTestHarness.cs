@@ -51,7 +51,7 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
             {
                 await admin.OpenAsync();
                 await using var cmd = admin.CreateCommand();
-                cmd.CommandText = $"CREATE DATABASE `{databaseName}`;";
+                cmd.CommandText = $"CREATE DATABASE {QuoteIdentifier(databaseName)};";
                 await cmd.ExecuteNonQueryAsync();
                 wasCreated = true;
                 databaseCreated?.Invoke(databaseName);
@@ -115,12 +115,13 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
 
     private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)
     {
-        var quotedName = databaseName.Replace("`", "``", StringComparison.Ordinal);
-
         await using var admin = new MySqlConnection(adminConnectionString);
         await admin.OpenAsync();
         await using var cmd = admin.CreateCommand();
-        cmd.CommandText = $"DROP DATABASE IF EXISTS `{quotedName}`;";
+        cmd.CommandText = $"DROP DATABASE IF EXISTS {QuoteIdentifier(databaseName)};";
         await cmd.ExecuteNonQueryAsync();
     }
+
+    private static string QuoteIdentifier(string identifier)
+        => "`" + identifier.Replace("`", "``", StringComparison.Ordinal) + "`";
 }
