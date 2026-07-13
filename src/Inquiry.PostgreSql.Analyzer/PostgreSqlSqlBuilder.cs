@@ -7,8 +7,19 @@ namespace Inquiry.PostgreSql.Analyzer;
 internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 {
     public override bool ComputedColumnDeclaresStoreType => true;
+
+    public override string BuildParameterValueExpression(ParameterValueExpressionContext context)
+        => context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_DateTime
+            ? $"global::System.DateTime.SpecifyKind({context.ValueExpression}, global::System.DateTimeKind.Unspecified)"
+            : base.BuildParameterValueExpression(context);
+
     public override CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
-        => UnsignedCollectionElement(context);
+        => context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_DateTime
+            ? new(
+                $"global::System.DateTime.SpecifyKind({context.ValueExpression}, global::System.DateTimeKind.Unspecified)",
+                "global::System.DateTime",
+                true)
+            : UnsignedCollectionElement(context);
 
     private static CollectionElementExpression UnsignedCollectionElement(CollectionElementExpressionContext context)
         => context.ProviderSpecialType switch
