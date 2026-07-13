@@ -745,6 +745,60 @@ internal static class StoreOperationEmitter
             ProviderIsTimeOnly: providerType?.IsTimeOnly == true,
             ProviderIsDateTimeOffset: providerType?.NonNullableDisplayName == "global::System.DateTimeOffset"));
 
+    private static string BulkFieldTypeExpression(ColumnData column, SqlBuilder sqlBuilder)
+    {
+        TypeData? providerType;
+        SpecialType providerSpecialType;
+        string providerTypeName;
+
+        if (column.Converter is { } converter)
+        {
+            providerType = converter.ProviderType;
+            providerSpecialType = converter.ProviderSpecialType;
+            providerTypeName = converter.ProviderType?.NonNullableDisplayName ?? converter.ProviderTypeDisplay;
+        }
+        else if (column.EnumAsString)
+        {
+            return "typeof(global::System.String)";
+        }
+        else if (column.Type.IsEnum)
+        {
+            providerType = null;
+            providerSpecialType = column.Type.EnumUnderlyingSpecialType;
+            providerTypeName = SpecialTypeName(providerSpecialType);
+        }
+        else
+        {
+            providerType = column.Type;
+            providerSpecialType = column.Type.SpecialType;
+            providerTypeName = column.Type.NonNullableDisplayName;
+        }
+
+        // BuildParameterValueExpression reinterprets these unsupported unsigned ADO primitives
+        // after any provider bridge, so metadata must describe the signed storage partner too.
+        var reinterpretedType = providerSpecialType switch
+        {
+            SpecialType.System_SByte => "global::System.Byte",
+            SpecialType.System_UInt16 => "global::System.Int16",
+            SpecialType.System_UInt32 => "global::System.Int32",
+            SpecialType.System_UInt64 => "global::System.Int64",
+            _ => null,
+        };
+        if (reinterpretedType is not null)
+        {
+            return $"typeof({reinterpretedType})";
+        }
+
+        var context = new ParameterValueExpressionContext(
+            "_value",
+            providerTypeName,
+            providerSpecialType,
+            ProviderIsDateOnly: providerType?.IsDateOnly == true,
+            ProviderIsTimeOnly: providerType?.IsTimeOnly == true,
+            ProviderIsDateTimeOffset: providerType?.NonNullableDisplayName == "global::System.DateTimeOffset");
+        return $"typeof({sqlBuilder.BuildParameterValueTypeName(context)})";
+    }
+
     private static string BuildInlineParameterValueExpression(ColumnData column, string accessor, SqlBuilder sqlBuilder)
     {
         var nonNullable = NonNullableValueExpression(column.Type, accessor);
@@ -2070,6 +2124,7 @@ internal static class StoreOperationEmitter
 
         var dbTypeExprs = insertable.Select(c => ResolveDbType(c, sqlBuilder)).ToArray();
         var hasColumnTypes = dbTypeExprs.All(e => e is not null);
+        var fieldTypeExprs = insertable.Select(c => BulkFieldTypeExpression(c, sqlBuilder)).ToArray();
 
         source.AppendLine($"    private static readonly global::Inquiry.BulkCopy.InquiryBulkInsertDefinition<{entityType}> {definitionField} = new(");
         source.AppendLine($"        {GeneratorHelpers.Literal(entity.Schema)},");
@@ -2086,12 +2141,13 @@ internal static class StoreOperationEmitter
         if (hasColumnTypes)
         {
             source.AppendLine($"        }},");
-            source.AppendLine($"        new global::System.Data.DbType[] {{ {string.Join(", ", dbTypeExprs)} }});");
+            source.AppendLine($"        new global::System.Data.DbType[] {{ {string.Join(", ", dbTypeExprs)} }},");
         }
         else
         {
-            source.AppendLine("        });");
+            source.AppendLine("        null,");
         }
+        source.AppendLine($"        new global::System.Type[] {{ {string.Join(", ", fieldTypeExprs)} }});");
         source.AppendLine();
 
         var hasStamps = HasSequentialGuidKey(entity);
