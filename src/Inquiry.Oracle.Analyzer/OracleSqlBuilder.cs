@@ -42,6 +42,11 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override string DialectName => "Oracle";
     public override string ProviderId => "oracle";
+    // Oracle requires DEFAULT before inline constraints such as NOT NULL.
+    protected override bool DefaultExpressionPrecedesInlineConstraints => true;
+    // Legal unquoted names fold to uppercase; names which require quotes retain exact identity.
+    public override string GetPhysicalIdentifierSortKey(string identifier)
+        => RequiresQuoting(identifier) ? "1\0" + identifier : "0\0" + FoldAscii(identifier, upper: true);
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsCheckConstraints => true;

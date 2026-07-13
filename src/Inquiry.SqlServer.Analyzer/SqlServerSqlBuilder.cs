@@ -20,6 +20,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string DialectName => "SqlServer";
     public override string ProviderId => "sqlserver";
+    // Stable conservative envelope for the commonly case-insensitive SQL Server collations.
+    public override string GetPhysicalIdentifierSortKey(string identifier) => FoldAscii(identifier, upper: true);
+    public override string GetProviderArtifactKind(CollectionParameterArtifact artifact) => "tvp";
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsIndexIncludeColumns => true;
