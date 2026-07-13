@@ -15,6 +15,9 @@ namespace Inquiry.Generators.Abstractions;
 /// </summary>
 public abstract class MySqlFamilySqlBuilder : SqlBuilder
 {
+    // lower_case_table_names is deployment-specific; ASCII-lower is the portable manifest envelope.
+    public override string GetPhysicalIdentifierSortKey(string identifier) => FoldAscii(identifier, upper: false);
+    public override bool ComputedColumnDeclaresStoreType => true;
     public override bool UseArrayInParameters => true;
 
     public override string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryJsonArrayParameter";

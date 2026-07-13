@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://inquiry.dev/schema/schema-manifest-v1.schema.json",
+  "title": "Inquiry expected schema manifest v1",
+  "description": "Unknown properties are permitted at every object boundary. Consumers of formatVersion 1 must ignore them; removing, renaming, or changing the meaning of a defined property or enum token requires a new formatVersion.",
+  "type": "object",
+  "required": ["formatVersion", "providerId", "tables", "providerArtifacts"],
+  "properties": {
+    "formatVersion": { "const": 1 },
+    "providerId": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,63}$" },
+    "tables": { "type": "array", "items": { "$ref": "#/$defs/table" } },
+    "providerArtifacts": { "type": "array", "items": { "$ref": "#/$defs/providerArtifact" } }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "identifier": { "type": "string", "minLength": 1 },
+    "identifierArray": { "type": "array", "items": { "$ref": "#/$defs/identifier" }, "minItems": 1 },
+    "table": {
+      "type": "object",
+      "required": ["schema", "name", "columns", "primaryKey", "indexes", "checks", "foreignKeys"],
+      "properties": {
+        "schema": { "type": ["string", "null"] },
+        "name": { "$ref": "#/$defs/identifier" },
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/column" }, "minItems": 1 },
+        "primaryKey": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/identifierArray" }] },
+        "indexes": { "type": "array", "items": { "$ref": "#/$defs/index" } },
+        "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } },
+        "foreignKeys": { "type": "array", "items": { "$ref": "#/$defs/foreignKey" } }
+      },
+      "additionalProperties": true
+    },
+    "column": {
+      "type": "object",
+      "required": ["name", "storeType", "typeInference", "typeClass", "nullable", "primaryKeyOrdinal", "generation", "defaultExpression", "computedExpression", "concurrency"],
+      "properties": {
+        "name": { "$ref": "#/$defs/identifier" },
+        "storeType": { "type": ["string", "null"] },
+        "typeInference": { "enum": ["explicit", "database"] },
+        "typeClass": { "enum": ["string", "boolean", "byte", "int16", "int32", "int64", "single", "double", "decimal", "datetime", "datetimeoffset", "dateonly", "timeonly", "guid", "bytearray", "unknown"] },
+        "nullable": { "type": "boolean" },
+        "primaryKeyOrdinal": { "type": ["integer", "null"], "minimum": 0 },
+        "generation": { "enum": ["none", "identity", "rowversion", "computed", "default"] },
+        "defaultExpression": { "type": ["string", "null"] },
+        "computedExpression": { "type": ["string", "null"] },
+        "concurrency": { "enum": ["none", "application", "database"] }
+      },
+      "additionalProperties": true
+    },
+    "index": {
+      "type": "object",
+      "required": ["name", "unique", "keyColumns", "includeColumns"],
+      "properties": {
+        "name": { "$ref": "#/$defs/identifier" },
+        "unique": { "type": "boolean" },
+        "keyColumns": { "$ref": "#/$defs/identifierArray" },
+        "includeColumns": { "type": "array", "items": { "$ref": "#/$defs/identifier" } }
+      },
+      "additionalProperties": true
+    },
+    "check": {
+      "type": "object",
+      "required": ["name", "expression"],
+      "properties": { "name": { "$ref": "#/$defs/identifier" }, "expression": { "type": "string", "minLength": 1 } },
+      "additionalProperties": true
+    },
+    "foreignKey": {
+      "type": "object",
+      "required": ["name", "localColumns", "referencedSchema", "referencedTable", "referencedColumns", "onDelete", "onUpdate"],
+      "properties": {
+        "name": { "type": ["string", "null"] },
+        "localColumns": { "$ref": "#/$defs/identifierArray" },
+        "referencedSchema": { "type": ["string", "null"] },
+        "referencedTable": { "$ref": "#/$defs/identifier" },
+        "referencedColumns": { "$ref": "#/$defs/identifierArray" },
+        "onDelete": { "$ref": "#/$defs/referentialAction" },
+        "onUpdate": { "$ref": "#/$defs/referentialAction" }
+      },
+      "additionalProperties": true
+    },
+    "referentialAction": { "enum": ["no-action", "restrict", "cascade", "set-null", "set-default"] },
+    "providerArtifact": {
+      "type": "object",
+      "required": ["schema", "name", "kind", "signature"],
+      "properties": {
+        "schema": { "type": "string" },
+        "name": { "$ref": "#/$defs/identifier" },
+        "kind": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
+        "signature": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    }
+  }
+}

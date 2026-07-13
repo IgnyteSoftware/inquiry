@@ -14,6 +14,26 @@ For providers that require database objects to bind collections, the same class 
 
 SQL Server uses these constants for schema-qualified TVP types. Applying artifacts is an explicit deployment step; generated commands never create or discover types at runtime.
 
+## Expected-schema manifest
+
+The same final normalized schema graph also produces `SchemaManifestJson`, `SchemaManifestSha256`,
+`SchemaManifestFormatVersion`, and `SchemaManifestChunkCount` on `InquiryGeneratedSchema`. Manifest v1
+records semantic provider-rendered tables, columns and final store types, keys, indexes, checks, foreign
+keys, and provider artifacts. It intentionally excludes DDL guards, inline-versus-deferred constraint
+placement, CLR property/type names, source paths, timestamps, and declaration order that does not change
+the physical schema. The lowercase SHA-256 fingerprint covers the exact UTF-8 JSON bytes.
+
+Tools can read the manifest without loading application code through assembly metadata keys
+`Inquiry.SchemaManifest.FormatVersion`, `Inquiry.SchemaManifest.Sha256`,
+`Inquiry.SchemaManifest.ChunkCount`, and `Inquiry.SchemaManifest.Chunk.0000` onward. Concatenate chunks
+in numeric order; each is at most 12,288 UTF-8 bytes. Manifest v1 property order and token meanings are
+stable. Additive fields may be ignored; removing, renaming, or changing an existing field requires a new
+format version.
+
+This release emits expected metadata only. It does not connect to a database, compare or apply schemas,
+refresh offline metadata, or generate migrations. The live/offline validation CLI and comparison policy
+belong to the separate validation workstream (#72).
+
 ## Usage
 
 ```csharp

@@ -297,7 +297,13 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .OrderBy(static artifact => artifact.Schema, System.StringComparer.Ordinal)
             .ThenBy(static artifact => artifact.Name, System.StringComparer.Ordinal)
             .ToArray();
-        SchemaEmitter.Emit(context, schemaEntities, sqlBuilder, providerArtifacts);
+        if (!string.IsNullOrEmpty(ownership.ManifestMetadataCollisionKey))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaManifestMetadataCollision,
+                null, ownership.ManifestMetadataCollisionKey));
+        }
+        SchemaEmitter.Emit(context, schemaEntities, sqlBuilder, providerArtifacts,
+            emitManifestMetadata: string.IsNullOrEmpty(ownership.ManifestMetadataCollisionKey));
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)
         {
@@ -459,6 +465,20 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     private DialectOwnership ResolveOwnership(Compilation compilation)
     {
+        var ownership = ResolveDialectOwnership(compilation);
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != "System.Reflection.AssemblyMetadataAttribute"
+                || attribute.ConstructorArguments.Length == 0
+                || attribute.ConstructorArguments[0].Value is not string key
+                || !key.StartsWith("Inquiry.SchemaManifest.", System.StringComparison.Ordinal)) continue;
+            return ownership with { ManifestMetadataCollisionKey = key };
+        }
+        return ownership;
+    }
+
+    private DialectOwnership ResolveDialectOwnership(Compilation compilation)
+    {
         var referencedNames = compilation.SourceModule.ReferencedAssemblySymbols
             .SelectMany(ReadDialectName)
             .Where(static name => !string.IsNullOrWhiteSpace(name))
@@ -547,15 +567,20 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     private enum DialectOwnershipKind { Owned, NotMine, AmbiguousLeader, AmbiguousFollower, UnknownLeader, UnknownFollower }
 
-    private readonly record struct DialectOwnership(DialectOwnershipKind Kind, string AmbiguousDialects, string UnknownDialect)
+    private readonly record struct DialectOwnership(DialectOwnershipKind Kind, string AmbiguousDialects, string UnknownDialect, string ManifestMetadataCollisionKey)
     {
         public DialectOwnership(DialectOwnershipKind kind)
-            : this(kind, string.Empty, string.Empty)
+            : this(kind, string.Empty, string.Empty, string.Empty)
         {
         }
 
         public DialectOwnership(DialectOwnershipKind kind, string ambiguousDialects)
-            : this(kind, ambiguousDialects, string.Empty)
+            : this(kind, ambiguousDialects, string.Empty, string.Empty)
+        {
+        }
+
+        public DialectOwnership(DialectOwnershipKind kind, string ambiguousDialects, string unknownDialect)
+            : this(kind, ambiguousDialects, unknownDialect, string.Empty)
         {
         }
     }

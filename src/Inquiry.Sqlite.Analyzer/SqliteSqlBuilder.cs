@@ -8,6 +8,8 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 {
     public override string DialectName => "Sqlite";
     public override string ProviderId => "sqlite";
+    // SQLite identifiers compare ASCII case-insensitively by default. Non-ASCII remains exact.
+    public override string GetPhysicalIdentifierSortKey(string identifier) => FoldAscii(identifier, upper: true);
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.Inline;
     public override bool SupportsCheckConstraints => true;
