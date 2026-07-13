@@ -683,4 +683,22 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor SchemaManifestTooLarge = new(
+        "INQ073",
+        "Schema manifest exceeds metadata transport limit",
+        "The generated schema manifest requires {0} metadata chunks, exceeding the maximum of 10000. Split the mapped schema across assemblies.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor GeneratedKeySchemaFacetInvalid = new(
+        "INQ074", "Generated key schema facets conflict",
+        "Generated key '{0}.{1}' cannot declare {2}; identity generation owns that physical facet. Remove the conflicting setting.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor SchemaManifestMetadataCollision = new(
+        "INQ075", "Schema manifest assembly metadata key is already declared",
+        "Assembly metadata key '{0}' is reserved for Inquiry schema-manifest transport. Remove the user declaration.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
 }

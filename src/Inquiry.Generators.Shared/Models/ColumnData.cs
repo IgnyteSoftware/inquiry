@@ -56,10 +56,13 @@ internal sealed record ColumnData : IColumn
     public DbTypeClass TypeClass { get; init; }
     public bool IsNullable { get; init; }
     public string? SqlType { get; init; }
+    public LocationData? SqlTypeLocation { get; init; }
     public int Length { get; init; }
     public int Precision { get; init; }
     public int Scale { get; init; }
     public string? DefaultExpression { get; init; }
+    public LocationData? DefaultExpressionLocation { get; init; }
+    public LocationData? UseDatabaseDefaultLocation { get; init; }
 
     /// <summary>Raw SQL expression for a server-computed column ([InquiryColumn(Computed = …)]), or null.</summary>
     public string? ComputedExpression { get; init; }
