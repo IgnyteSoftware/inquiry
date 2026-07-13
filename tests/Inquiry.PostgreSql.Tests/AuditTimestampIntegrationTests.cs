@@ -64,7 +64,10 @@ public sealed class AuditTimestampIntegrationTests
         Assert.Equal(stored.CreatedAt, after.CreatedAt);
         Assert.True(after.ModifiedAt > stored.ModifiedAt);
 
-        Assert.Equal(after.ModifiedAt, reconstructed.ModifiedAt);
+        // PostgreSQL TIMESTAMP stores microseconds. The entity retains the client UTC stamp while
+        // the parameter bridge sends the same wall-clock ticks and the server drops sub-microsecond ticks.
+        Assert.Equal(reconstructed.ModifiedAt.Ticks - (reconstructed.ModifiedAt.Ticks % 10), after.ModifiedAt.Ticks);
+        Assert.Equal(DateTimeKind.Utc, reconstructed.ModifiedAt.Kind);
     }
 
     [SkippableFact]

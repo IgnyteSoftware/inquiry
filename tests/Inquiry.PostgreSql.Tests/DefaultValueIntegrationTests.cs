@@ -57,7 +57,7 @@ public sealed class DefaultValueIntegrationTests
     private readonly PostgreSqlContainerFixture _fixture;
 
     private const string DefaultedItemDdl =
-        """CREATE TABLE "TDefaultedItem" ("Key" TEXT NOT NULL PRIMARY KEY, "Name" TEXT NOT NULL, "Status" TEXT DEFAULT 'New' NOT NULL);""";
+        """CREATE TABLE "TDefaultedItem" ("Key" UUID NOT NULL PRIMARY KEY, "Name" TEXT NOT NULL, "Status" TEXT DEFAULT 'New' NOT NULL);""";
 
     private const string DefaultedKeyItemDdl =
         """CREATE TABLE "TDefaultedKeyItem" ("Id" TEXT DEFAULT gen_random_uuid()::text NOT NULL PRIMARY KEY, "Name" TEXT NOT NULL);""";
