@@ -298,7 +298,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     {
         var keyColumn = context.QuotedKeyColumns[0];
         var keyParameter = context.KeyParameters[0];
-        var output = returning ? " OUTPUT " + InsertedColumns(context) + " INTO @_out" : string.Empty;
+        var output = returning
+            ? " OUTPUT " + InsertedColumns(context) + " INTO @_out (" + context.SelectColumns + ")"
+            : string.Empty;
 
         var generatedInsert = context.InsertableColumns.Count == 0
             ? "INSERT INTO " + context.Table + output + " DEFAULT VALUES; "
@@ -321,11 +323,15 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         string elseBranch;
         if (context.SetClauses.Length == 0)
         {
-            elseBranch =
-                "BEGIN TRANSACTION; " +
-                "IF NOT EXISTS (SELECT 1 FROM " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) WHERE " + keyColumn + " = " + keyParameter + ") " +
-                "INSERT INTO " + context.Table + " (" + explicitInsertCols + ")" + output + " VALUES (" + explicitInsertParams + "); " +
-                "COMMIT TRANSACTION; ";
+            elseBranch = BuildGeneratedKeyEmptySetBranch(
+                context,
+                returning,
+                keyColumn,
+                keyParameter,
+                explicitInsertCols,
+                explicitInsertParams,
+                output,
+                isIdentity);
         }
         else
         {
@@ -345,11 +351,64 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             "END " +
             "ELSE " +
             "BEGIN " +
-            identityOn +
+            (context.SetClauses.Length == 0 ? string.Empty : identityOn) +
             elseBranch +
-            identityOff +
+            (context.SetClauses.Length == 0 ? string.Empty : identityOff) +
             "END" +
             trailing;
+    }
+
+    private string BuildGeneratedKeyEmptySetBranch(
+        SqlBuildContext context,
+        bool returning,
+        string keyColumn,
+        string keyParameter,
+        string explicitInsertColumns,
+        string explicitInsertParameters,
+        string output,
+        bool isIdentity)
+    {
+        var identityOn = isIdentity
+            ? "SET IDENTITY_INSERT " + context.Table + " ON; SET @_inquiry_identity_insert = 1; "
+            : string.Empty;
+        var identityOff = isIdentity
+            ? "SET IDENTITY_INSERT " + context.Table + " OFF; SET @_inquiry_identity_insert = 0; "
+            : string.Empty;
+        var identityCleanup = isIdentity
+            ? "IF @_inquiry_identity_insert = 1 " +
+              "BEGIN TRY SET IDENTITY_INSERT " + context.Table + " OFF; SET @_inquiry_identity_insert = 0; END TRY BEGIN CATCH END CATCH; "
+            : string.Empty;
+        var insert =
+            identityOn +
+            "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ")" + output +
+            " VALUES (" + explicitInsertParameters + "); " +
+            identityOff;
+
+        var lockAndInsert = returning
+            ? "INSERT INTO @_out (" + context.SelectColumns + ") " +
+              "SELECT " + context.SelectColumns + " FROM " + context.Table +
+              " WITH (UPDLOCK, SERIALIZABLE) WHERE " + keyColumn + " = " + keyParameter + "; " +
+              "IF @@ROWCOUNT = 0 BEGIN " + insert + "END; "
+            : "IF NOT EXISTS (SELECT 1 FROM " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) WHERE " +
+              keyColumn + " = " + keyParameter + ") BEGIN " + insert + "END; ";
+
+        return
+            "DECLARE @_inquiry_started_transaction bit = 0; " +
+            "DECLARE @_inquiry_identity_insert bit = 0; " +
+            "DECLARE @_inquiry_savepoint_created bit = 0; " +
+            "DECLARE @_inquiry_savepoint nvarchar(32) = N'InquiryUpsert_' + RIGHT(REPLACE(CONVERT(nvarchar(36), NEWID()), N'-', N''), 16); " +
+            "BEGIN TRY " +
+            "IF @@TRANCOUNT = 0 BEGIN BEGIN TRANSACTION; SET @_inquiry_started_transaction = 1; END " +
+            "ELSE BEGIN SAVE TRANSACTION @_inquiry_savepoint; SET @_inquiry_savepoint_created = 1; END; " +
+            lockAndInsert +
+            "IF @_inquiry_started_transaction = 1 COMMIT TRANSACTION; " +
+            "END TRY " +
+            "BEGIN CATCH " +
+            identityCleanup +
+            "IF @_inquiry_started_transaction = 1 BEGIN IF XACT_STATE() <> 0 ROLLBACK TRANSACTION; END " +
+            "ELSE IF @_inquiry_savepoint_created = 1 AND XACT_STATE() = 1 ROLLBACK TRANSACTION @_inquiry_savepoint; " +
+            "THROW; " +
+            "END CATCH; ";
     }
 
     private static string JoinSql(string first, string rest)

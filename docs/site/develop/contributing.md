@@ -30,6 +30,20 @@ source under **its own** dialect, so it exercises that engine's real SQL. Contai
 Testcontainers; tests **skip gracefully** (they do not fail) when Docker is absent, so `dotnet test` stays
 green on a machine without Docker.
 
+SQL Server Full-Text Search is optional in Microsoft's base image. To run the release-required SQL Server
+suite locally, build the repository's pinned CU14 image and select it explicitly:
+
+```powershell
+docker build --file tests/Inquiry.SqlServer.Tests/Fixtures/SqlServerFts.Dockerfile --tag inquiry-sqlserver-fts:2022-cu14 .
+$env:INQUIRY_SQLSERVER_IMAGE = "inquiry-sqlserver-fts:2022-cu14"
+$env:INQUIRY_REQUIRE_DOCKER = "1"
+dotnet test tests/Inquiry.SqlServer.Tests/Inquiry.SqlServer.Tests.csproj -f net10.0
+```
+
+Required runs fail if the selected image cannot start, runs as root, or reports that Full-Text Search is
+unavailable. With `INQUIRY_REQUIRE_DOCKER` unset and no image override, ordinary local runs keep using the
+official base image and skip only the full-text tests when that optional component is absent.
+
 ## First build after clone: expect IDE squiggles
 
 The analyzers are attached to consuming projects via built DLL paths in `Directory.Build.targets`

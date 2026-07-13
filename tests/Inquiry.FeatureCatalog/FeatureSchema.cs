@@ -407,7 +407,7 @@ public static class FeatureSchema
 
     public const string ViewEntitySqlServerDdl = """
         CREATE TABLE Sale (Id BIGINT IDENTITY(1,1) PRIMARY KEY, Category NVARCHAR(200) NOT NULL, Amount DECIMAL(18,2) NOT NULL);
-        CREATE VIEW v_CategoryTotals AS SELECT Category, COUNT(*) AS SaleCount, SUM(Amount) AS TotalAmount FROM Sale GROUP BY Category;
+        EXEC(N'CREATE VIEW v_CategoryTotals AS SELECT Category, COUNT(*) AS SaleCount, SUM(Amount) AS TotalAmount FROM Sale GROUP BY Category;');
         """;
 
     public const string ViewEntityMySqlDdl = """
