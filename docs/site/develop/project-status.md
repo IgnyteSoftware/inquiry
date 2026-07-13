@@ -3,7 +3,8 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code:** 2026-07-08.
+**Last reconciled against the code:** 2026-07-13 from the MySQL-family restoration branch based on
+`880a16e`.
 
 ## Supported database engines (6, all live-tested)
 
@@ -87,11 +88,12 @@ Every live dialect exercises the full supported feature set via a shared, linked
 Northwind stores.
 
 **For current test counts**, run the whole suite (`dotnet test`) or a single project
-(e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). At the 2026-07-10 review snapshot, build/unit,
-SQLite, and NativeAOT jobs pass, but every server-provider integration leg fails on `net8.0` and `net9.0`.
-The current release gate and reviewed run are tracked in
-[#171](https://github.com/JakeOverstreet/inquiry/issues/171). Docker-gated suites skip locally (not in CI)
-when Docker is unavailable.
+(e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). The current release gate and exact run evidence
+are tracked in [#171](https://github.com/JakeOverstreet/inquiry/issues/171). PostgreSQL is green at
+253/253 on each supported TFM. SQL Server is green at 298/298 on each TFM plus a fresh net10 repeat,
+with zero skips using the release-gating FTS image. MySQL is green at 255/255 on each TFM plus a fresh
+net10 repeat; MariaDB is green at 258/258 on each TFM plus a fresh net10 repeat. Oracle and consecutive
+full-CI evidence remain. Docker-gated suites skip locally (not in CI) when Docker is unavailable.
 
 As of `da0353c`, the normal CI workflow runs on pull requests targeting `main`: **build-and-unit**
 (generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and runs the NativeAOT

@@ -7,18 +7,22 @@
 > predictable allocations; NativeAOT support; and explicit, validated SQL escape hatches. It is not
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
-> **Last reconciled against source and GitHub:** 2026-07-10 at `da0353c`. The latest complete live-CI
-> evidence is the preceding `67e46d9` run linked below.
+> **Last reconciled against source and GitHub:** 2026-07-13 from the MySQL-family restoration branch
+> based on `880a16e`. PostgreSQL, SQL Server, MySQL, and MariaDB are restored; Oracle and consecutive
+> full-CI evidence remain under
+> [#171](https://github.com/JakeOverstreet/inquiry/issues/171).
 
 ## Current release status
 
-**1.0.0 is not release-ready.** Build/unit tests and the NativeAOT smoke test pass, but the reviewed
-[CI run](https://github.com/JakeOverstreet/inquiry/actions/runs/29118034891) fails every live server-provider
-leg on both `net8.0` and `net9.0`. The provider matrix is the P0 release gate in
-[#171](https://github.com/JakeOverstreet/inquiry/issues/171); tests must be fixed, not muted or made non-gating.
-Commit `da0353c` changed the normal CI workflow to pull-request-only, so the current `main` commit has no
-full run. The conflict with the repository's documented direct-merge workflow is a release-governance
-blocker in [#89](https://github.com/JakeOverstreet/inquiry/issues/89).
+**1.0.0 is not release-ready.** The provider matrix remains the P0 correctness gate in
+[#171](https://github.com/JakeOverstreet/inquiry/issues/171); tests must be fixed, not muted or made
+non-gating. PostgreSQL is green at 253/253 on each of net8/net9/net10. SQL Server is green at 298/298
+on each TFM, plus a fresh-container net10 repeat, using the release-gating FTS image. MySQL is green at
+255/255 on each TFM plus a fresh net10 repeat; MariaDB is green at 258/258 on each TFM plus a fresh
+net10 repeat. Every provider leg reports zero skips. Oracle and the final full-CI runs still require
+current evidence. The normal CI/contribution-policy mismatch and consecutive release-candidate evidence
+remain owned by
+[#89](https://github.com/JakeOverstreet/inquiry/issues/89).
 
 The previous formal security scan was fixed at `318ee5f`, but the codebase has changed substantially since
 that snapshot. A release-candidate security scan and threat-model review are part of
@@ -61,9 +65,7 @@ issue state and acceptance criteria.
 | Workstream | Issues |
 |---|---|
 | Restore the live provider matrix | [#171](https://github.com/JakeOverstreet/inquiry/issues/171) |
-| Transaction lifecycle and parameter correctness | [#172](https://github.com/JakeOverstreet/inquiry/issues/172), [#173](https://github.com/JakeOverstreet/inquiry/issues/173) |
-| Provider-aware materialization and DDL | [#174](https://github.com/JakeOverstreet/inquiry/issues/174), [#175](https://github.com/JakeOverstreet/inquiry/issues/175) |
-| Broken/partial provider features | [#58](https://github.com/JakeOverstreet/inquiry/issues/58), [#69](https://github.com/JakeOverstreet/inquiry/issues/69), [#134](https://github.com/JakeOverstreet/inquiry/issues/134), [#169](https://github.com/JakeOverstreet/inquiry/issues/169) |
+| Broken/partial provider features | [#69](https://github.com/JakeOverstreet/inquiry/issues/69) |
 | Benchmark truth and release engineering | [#87](https://github.com/JakeOverstreet/inquiry/issues/87), [#89](https://github.com/JakeOverstreet/inquiry/issues/89) |
 
 ### P1 — must complete for 1.0
@@ -73,7 +75,7 @@ issue state and acceptance criteria.
 | Eager loading and relationship correctness | [#57](https://github.com/JakeOverstreet/inquiry/issues/57), [#70](https://github.com/JakeOverstreet/inquiry/issues/70), [#80](https://github.com/JakeOverstreet/inquiry/issues/80) |
 | Scaffolding and live/offline validation | [#72](https://github.com/JakeOverstreet/inquiry/issues/72), [#79](https://github.com/JakeOverstreet/inquiry/issues/79) |
 | Query composition, tenant safety, and locking | [#82](https://github.com/JakeOverstreet/inquiry/issues/82), [#177](https://github.com/JakeOverstreet/inquiry/issues/177), [#178](https://github.com/JakeOverstreet/inquiry/issues/178) |
-| Stored procedures | [#78](https://github.com/JakeOverstreet/inquiry/issues/78) |
+| Stored procedures | [#78](https://github.com/JakeOverstreet/inquiry/issues/78), [#188](https://github.com/JakeOverstreet/inquiry/issues/188) |
 | Generator correctness and release tracking | [#135](https://github.com/JakeOverstreet/inquiry/issues/135), [#176](https://github.com/JakeOverstreet/inquiry/issues/176) |
 | First-party provider authoring and conformance | [#184](https://github.com/JakeOverstreet/inquiry/issues/184) |
 | Execution-path performance and semantics | [#86](https://github.com/JakeOverstreet/inquiry/issues/86), [#179](https://github.com/JakeOverstreet/inquiry/issues/179), [#180](https://github.com/JakeOverstreet/inquiry/issues/180), [#181](https://github.com/JakeOverstreet/inquiry/issues/181), [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
@@ -220,8 +222,8 @@ acceptance criteria supersede any older wording that describes an initial implem
 - The SQLite-only feature suites and Oracle bulk fallback coverage were added in
   [#154](https://github.com/JakeOverstreet/inquiry/issues/154) and
   [#155](https://github.com/JakeOverstreet/inquiry/issues/155); both tracking issues are closed.
-- **Open:** make the new all-types bulk matrix green on every provider
-  ([#134](https://github.com/JakeOverstreet/inquiry/issues/134)).
+- The all-types bulk matrix is green on every provider and
+  [#134](https://github.com/JakeOverstreet/inquiry/issues/134) is closed.
 - **Open:** verify cancellation through generated/IInquiry operations rather than direct provider commands
   ([#156](https://github.com/JakeOverstreet/inquiry/issues/156)).
 - **Open:** add Roslyn analyzer diagnostic release tracking
@@ -275,13 +277,14 @@ new or reframed issue.
   nullable elements are retained, binary values use base64, enum/converter collections use their
   provider representation, and INQ038 rejects unsupported converter provider types.
 
-- **Single-row all-types bulk-insert test matrix introduced (#134, 2026-07-10).** Added
+- **All-types bulk-insert matrix completed (#134, 2026-07-13).** Added
   `BulkAllTypesItem` entity to the shared FeatureCatalog with one column per provider-primitive
   category (int, decimal, bool, Guid, DateTime, string, string?, byte[], enum, converter) and
   `BulkAllTypesIntegrationTests` to all six providers. Each test bulk-inserts a single row and
   asserts every type round-trips through the provider's bulk-copy path (native copier on PG/SS/MySQL/
-  MariaDB, batch-INSERT fallback on SQLite/Oracle). The reviewed matrix still fails on SQL Server and
-  Oracle, so [#134](https://github.com/JakeOverstreet/inquiry/issues/134) remains open.
+  MariaDB, batch-INSERT fallback on SQLite/Oracle). The final Docker-required matrix passed on all six
+  providers across net8/net9/net10, and [#134](https://github.com/JakeOverstreet/inquiry/issues/134)
+  is closed.
 
 - **Oracle `[InquiryBulkInsert]` fallback test coverage (#155, 2026-07-10).** Added
   `BulkInsertFallbackIntegrationTests` to the Oracle test project, verifying the multi-row batch
@@ -343,10 +346,10 @@ new or reframed issue.
   `BuildInsertReturningSql` and `BuildUpsertReturningSql` with MariaDB 10.5+ native
   `INSERT…RETURNING` / `INSERT…ON DUPLICATE KEY UPDATE…RETURNING`, halving round trips for these
   operations. `UPDATE…RETURNING` is not supported by MariaDB, so the update path keeps the emulated
-  two-statement batch from `MySqlFamilySqlBuilder`. Database-supplied GUID keys use inline
-  `COALESCE(@key, UUID())` in the insert values. The reviewed generated-key binder omits that parameter,
-  and DELETE RETURNING remains incomplete; both are tracked in
-  [#58](https://github.com/JakeOverstreet/inquiry/issues/58).
+  two-statement batch from `MySqlFamilySqlBuilder`. Null database-default keys route through native
+  insert-returning, while explicit-key upserts bind the supplied key and native `RETURNING` reads the
+  actual row, including an unambiguous secondary-unique conflict. DELETE RETURNING also shipped;
+  [#58](https://github.com/JakeOverstreet/inquiry/issues/58) is closed.
 
 - **Split MySQL and MariaDB into independent dialect providers (#168, 2026-07-09).** The MySQL builder
   body moved to a shared `MySqlFamilySqlBuilder` in `Inquiry.Generators.Shared`; `MySqlSqlBuilder` and
@@ -765,9 +768,11 @@ new or reframed issue.
   same-key upserts no longer throw a spurious duplicate-key error;
   covered by live concurrency + `uniqueidentifier`/`gen_random_uuid()` key tests. SQLite + MySQL parity is
   now **test-proven** (live generate + concurrency tests). MySQL additionally supports a **database-generated
-  GUID key**: a `Guid?` `UseDatabaseDefault` key is generated server-side via `UUID()` (captured in a
-  `@_inquiry_genkey` user variable for the emulated returning), so Inquiry enables `AllowUserVariables=true`
-  on MySQL connections by default. (Oracle generated-key upsert remains unsupported, tracked separately.)
+  non-auto database-default key**: null-key upserts route through insert, while explicit-key upserts bind
+  and select by the supplied key. MySQL insert-returning evaluates a declared standalone scalar
+  `DefaultExpression` once into the collision-safe `@'__inquiry.generated-key'` user variable; `Guid`
+  keys retain a `UUID()` fallback. Inquiry therefore enables `AllowUserVariables=true` on MySQL
+  connections by default. (Oracle generated-key upsert remains unsupported, tracked separately.)
 - **Providers:** Oracle ref-cursor detection requires the generated `:rc` bind, so it no longer
   misclassifies ad-hoc PL/SQL.
 - **Dependency injection:** generated `AddInquiryGeneratedStores()` registration is explicit, so

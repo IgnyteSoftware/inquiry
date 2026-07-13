@@ -10,7 +10,7 @@ namespace Inquiry.MySql.Tests;
 [InquiryTable("TDefaultedKeyItem")]
 public sealed class DefaultedKeyItem
 {
-    [InquiryKey(UseDatabaseDefault = true, Length = 255)]
+    [InquiryKey(UseDatabaseDefault = true, Length = 255, DefaultExpression = "(UUID())")]
     public string? Id { get; set; }
 
     [InquiryColumn]
@@ -24,6 +24,31 @@ public partial class DefaultedKeyItemStore : InquiryStore<DefaultedKeyItem>
 
     [InquiryUpsert(ReturnEntity = true)]
     public partial Task<DefaultedKeyItem?> UpsertReturningAsync(DefaultedKeyItem item, CancellationToken cancellationToken = default);
+
+    [InquirySelectOneByKey]
+    public partial Task<DefaultedKeyItem?> SelectByKeyAsync(string id, CancellationToken cancellationToken = default);
+}
+
+[InquiryTable("TDefaultedUniqueKeyItem")]
+public sealed class DefaultedUniqueKeyItem
+{
+    [InquiryKey(UseDatabaseDefault = true, Length = 255, DefaultExpression = "(UUID())")]
+    public string? Id { get; set; }
+
+    [InquiryColumn(IsUnique = true, Length = 255)]
+    public string Code { get; set; } = string.Empty;
+
+    [InquiryColumn]
+    public string Name { get; set; } = string.Empty;
+}
+
+public partial class DefaultedUniqueKeyItemStore : InquiryStore<DefaultedUniqueKeyItem>
+{
+    [InquiryUpsert]
+    public partial Task<int> UpsertAsync(DefaultedUniqueKeyItem item, CancellationToken cancellationToken = default);
+
+    [InquirySelectOneByKey]
+    public partial Task<DefaultedUniqueKeyItem?> SelectByKeyAsync(string id, CancellationToken cancellationToken = default);
 }
 
 [Collection(MySqlCollection.Name)]
@@ -36,6 +61,9 @@ public sealed class DefaultValueIntegrationTests
 
     private const string DefaultedKeyItemDdl =
         "CREATE TABLE `TDefaultedKeyItem` (`Id` VARCHAR(255) DEFAULT (UUID()) NOT NULL PRIMARY KEY, `Name` VARCHAR(255) NOT NULL);";
+
+    private const string DefaultedUniqueKeyItemDdl =
+        "CREATE TABLE `TDefaultedUniqueKeyItem` (`Id` VARCHAR(255) DEFAULT (UUID()) NOT NULL PRIMARY KEY, `Code` VARCHAR(255) NOT NULL UNIQUE, `Name` VARCHAR(255) NOT NULL);";
 
     public DefaultValueIntegrationTests(MySqlContainerFixture fixture) => _fixture = fixture;
 
@@ -104,6 +132,23 @@ public sealed class DefaultValueIntegrationTests
     }
 
     [SkippableFact]
+    public async Task InsertReturningEvaluatesDefaultKeyOncePerCallAndIgnoresEntityKey()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, DefaultedKeyItemDdl, "defkeyrepeat");
+        var store = harness.GetRequiredService<DefaultedKeyItemStore>();
+
+        var first = await store.InsertReturningAsync(new DefaultedKeyItem { Id = "caller-value", Name = "First" });
+        var second = await store.InsertReturningAsync(new DefaultedKeyItem { Id = "another-caller-value", Name = "Second" });
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.NotEqual("caller-value", first.Id);
+        Assert.NotEqual("another-caller-value", second.Id);
+        Assert.NotEqual(first.Id, second.Id);
+    }
+
+    [SkippableFact]
     public async Task UpsertReturningUsesDatabaseDefaultForNullPrimaryKey()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
@@ -115,5 +160,39 @@ public sealed class DefaultValueIntegrationTests
         Assert.NotNull(returned);
         Assert.False(string.IsNullOrWhiteSpace(returned.Id));
         Assert.Equal("Generated Key", returned.Name);
+    }
+
+    [SkippableFact]
+    public async Task UpsertReturningWithExplicitDefaultKeyHandlesInsertAndPrimaryKeyConflict()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, DefaultedKeyItemDdl, "defkeyexplicit");
+        var store = harness.GetRequiredService<DefaultedKeyItemStore>();
+
+        var inserted = await store.UpsertReturningAsync(new DefaultedKeyItem { Id = "explicit-key", Name = "Inserted" });
+        var updated = await store.UpsertReturningAsync(new DefaultedKeyItem { Id = "explicit-key", Name = "Updated" });
+
+        Assert.NotNull(inserted);
+        Assert.Equal("explicit-key", inserted.Id);
+        Assert.NotNull(updated);
+        Assert.Equal("explicit-key", updated.Id);
+        Assert.Equal("Updated", updated.Name);
+    }
+
+    [SkippableFact]
+    public async Task NonReturningUpsertSupportsSecondaryUniqueConflictWithoutChangingPrimaryKey()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, DefaultedUniqueKeyItemDdl, "defkeyunique");
+        var store = harness.GetRequiredService<DefaultedUniqueKeyItemStore>();
+
+        await store.UpsertAsync(new DefaultedUniqueKeyItem { Id = "original-key", Code = "same-code", Name = "Original" });
+        await store.UpsertAsync(new DefaultedUniqueKeyItem { Id = "losing-key", Code = "same-code", Name = "Updated" });
+
+        var original = await store.SelectByKeyAsync("original-key");
+        var losing = await store.SelectByKeyAsync("losing-key");
+        Assert.NotNull(original);
+        Assert.Equal("Updated", original.Name);
+        Assert.Null(losing);
     }
 }

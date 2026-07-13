@@ -35,41 +35,68 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
     public static Task<MySqlTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
         => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.MySqlDdl, namePrefix);
 
-    public static async Task<MySqlTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    public static async Task<MySqlTestHarness> CreateFromDdlAsync(
+        string adminConnectionString,
+        string ddl,
+        string? namePrefix = null,
+        Action<string>? databaseCreated = null)
     {
         var prefix = (namePrefix ?? "inquiry").ToLowerInvariant();
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
+        var wasCreated = false;
 
-        await using (var admin = new MySqlConnection(adminConnectionString))
+        try
         {
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            cmd.CommandText = $"CREATE DATABASE `{databaseName}`;";
-            await cmd.ExecuteNonQueryAsync();
+            await using (var admin = new MySqlConnection(adminConnectionString))
+            {
+                await admin.OpenAsync();
+                await using var cmd = admin.CreateCommand();
+                cmd.CommandText = $"CREATE DATABASE {QuoteIdentifier(databaseName)};";
+                await cmd.ExecuteNonQueryAsync();
+                wasCreated = true;
+                databaseCreated?.Invoke(databaseName);
+            }
+
+            var connectionString = new MySqlConnectionStringBuilder(adminConnectionString)
+            {
+                Database = databaseName,
+                // Keep MySqlConnector's multi-statement support on for the emulated
+                // INSERT ...; SELECT returning batches.
+                AllowUserVariables = true,
+            }.ToString();
+
+            await using (var db = new MySqlConnection(connectionString))
+            {
+                await db.OpenAsync();
+                await using var cmd = db.CreateCommand();
+                cmd.CommandText = ddl;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            var services = new ServiceCollection()
+                .AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly, typeof(VersionedItemStore).Assembly)
+                .AddInquiryMySql(connectionString)
+                .BuildServiceProvider();
+
+            return new MySqlTestHarness(adminConnectionString, databaseName, connectionString, services);
         }
-
-        var connectionString = new MySqlConnectionStringBuilder(adminConnectionString)
+        catch (Exception setupException) when (wasCreated)
         {
-            Database = databaseName,
-            // Keep MySqlConnector's multi-statement support on for the emulated
-            // INSERT ...; SELECT returning batches.
-            AllowUserVariables = true,
-        }.ToString();
+            MySqlConnection.ClearAllPools();
+            try
+            {
+                await DropDatabaseAsync(adminConnectionString, databaseName);
+            }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    $"MySQL test database '{databaseName}' setup and cleanup both failed.",
+                    setupException,
+                    cleanupException);
+            }
 
-        await using (var db = new MySqlConnection(connectionString))
-        {
-            await db.OpenAsync();
-            await using var cmd = db.CreateCommand();
-            cmd.CommandText = ddl;
-            await cmd.ExecuteNonQueryAsync();
+            throw;
         }
-
-        var services = new ServiceCollection()
-            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly, typeof(VersionedItemStore).Assembly)
-            .AddInquiryMySql(connectionString)
-            .BuildServiceProvider();
-
-        return new MySqlTestHarness(adminConnectionString, databaseName, connectionString, services);
     }
 
     public async ValueTask DisposeAsync()
@@ -81,15 +108,23 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
 
         try
         {
-            await using var admin = new MySqlConnection(_adminConnectionString);
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            cmd.CommandText = $"DROP DATABASE IF EXISTS `{_databaseName}`;";
-            await cmd.ExecuteNonQueryAsync();
+            await DropDatabaseAsync(_adminConnectionString, _databaseName);
         }
         catch
         {
             // Best-effort cleanup. Don't fail the test on teardown.
         }
     }
+
+    private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)
+    {
+        await using var admin = new MySqlConnection(adminConnectionString);
+        await admin.OpenAsync();
+        await using var cmd = admin.CreateCommand();
+        cmd.CommandText = $"DROP DATABASE IF EXISTS {QuoteIdentifier(databaseName)};";
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static string QuoteIdentifier(string identifier)
+        => "`" + identifier.Replace("`", "``", StringComparison.Ordinal) + "`";
 }

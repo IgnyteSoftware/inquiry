@@ -1697,11 +1697,11 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void MySqlGeneratedGuidKeyUpsertUsesServerSideUuidUserVariable()
+    public void MySqlDefaultGuidKeyInsertReturningUsesServerSideUuidCapture()
     {
         // A database-generated GUID key (UseDatabaseDefault) cannot use LAST_INSERT_ID() (that only
         // tracks AUTO_INCREMENT). The builder generates the GUID server-side via UUID(), captured in a
-        // @_inquiry_genkey user variable, so the emulated returning SELECT can read the row back by it.
+        // collision-safe quoted user variable, so the emulated returning SELECT can read the row back by it.
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -1745,13 +1745,12 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("GuidItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        // Non-returning: COALESCE(@Id, UUID()) supplies the key (explicit passes through, null generates).
-        Assert.Contains("private const string _sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\";", generatedText);
-        // Returning: capture the key in a user variable, then SELECT the row back by it.
-        Assert.Contains("private const string _sqlUpsertReturning = \"SET @_inquiry_genkey = COALESCE(@Id, UUID()); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
+        // The null-key runtime branch uses ordinary INSERT; this upsert SQL handles only explicit keys.
+        Assert.Contains("private const string _sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@Id, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\";", generatedText);
+        Assert.Contains("private const string _sqlUpsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@Id, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @Id\";", generatedText);
         // Insert-returning (the null-key upsert branch + any explicit InsertReturning) uses the same
         // user-variable capture, without ON DUPLICATE KEY UPDATE — so it can read back the generated GUID.
-        Assert.Contains("private const string _sqlInsertReturning = \"SET @_inquiry_genkey = UUID(); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
+        Assert.Contains("private const string _sqlInsertReturning = \"SET @'__inquiry.generated-key' = UUID(); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@'__inquiry.generated-key', @Name); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @'__inquiry.generated-key'\";", generatedText);
         // LAST_INSERT_ID() is only for AUTO_INCREMENT — it must NOT appear for a GUID key.
         Assert.DoesNotContain("LAST_INSERT_ID", generatedText);
     }
@@ -1814,7 +1813,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void MariaDbGuidKeyReturningEliminatesUserVariable()
     {
-        // #58: MariaDB's native RETURNING eliminates the @_inquiry_genkey user variable
+        // #58: MariaDB's native RETURNING eliminates MySQL's generated-key capture variable
         // that MySQL needs for emulated GUID-key returning (and the AllowUserVariables dependency).
         const string source = """
             using System;
@@ -1861,8 +1860,8 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("GuidItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("_sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\"", generatedText);
-        Assert.Contains("_sqlUpsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`) RETURNING `Id`, `Name`\"", generatedText);
+        Assert.Contains("_sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@Id, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\"", generatedText);
+        Assert.Contains("_sqlUpsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@Id, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`) RETURNING `Id`, `Name`\"", generatedText);
         Assert.Contains("_sqlInsertReturning = \"INSERT INTO `TGuidItem` (`Name`) VALUES (@Name) RETURNING `Id`, `Name`\"", generatedText);
         Assert.DoesNotContain("@_inquiry_genkey", generatedText);
         Assert.DoesNotContain("LAST_INSERT_ID", generatedText);

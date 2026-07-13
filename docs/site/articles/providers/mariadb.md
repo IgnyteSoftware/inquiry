@@ -56,8 +56,8 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
   `[InquirySoftDelete]`, use `HardDelete = true`; MariaDB has no `UPDATE…RETURNING`, so soft-delete
   returning is rejected at compile time with `INQ039` rather than being changed into a physical delete.
 - **No `AllowUserVariables` required:** unlike the MySQL provider, MariaDB's native `RETURNING`
-  eliminates the `@_inquiry_genkey` user variable that the emulated path needs for database-supplied
-  GUID keys, so `AllowUserVariables` is not forced on the connection string.
+  eliminates the collision-safe capture variable that MySQL's emulated path needs for non-auto
+  database-default keys, so `AllowUserVariables` is not forced on the connection string.
 - **Connection pooling:** the factory builds an app-lifetime `MySqlDataSource` (MySqlConnector's
   recommended pooled primitive) and opens connections from it — the foundation for future Aspire
   integration. The data source is disposed when the DI container shuts down.
