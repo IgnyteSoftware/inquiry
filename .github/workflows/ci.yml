@@ -74,7 +74,19 @@ jobs:
           dotnet-version: |
             8.0.x
             9.0.x
+      - name: Build pinned SQL Server full-text image
+        if: matrix.provider == 'SqlServer'
+        run: docker build --file tests/Inquiry.SqlServer.Tests/Fixtures/SqlServerFts.Dockerfile --tag inquiry-sqlserver-fts:2022-cu14 .
+      - name: Preflight SQL Server image runtime user
+        if: matrix.provider == 'SqlServer'
+        run: |
+          uid="$(docker run --rm --entrypoint /usr/bin/id inquiry-sqlserver-fts:2022-cu14 -u)"
+          test -n "$uid"
+          test "$uid" != "0"
+          echo "SQL Server image runtime UID: $uid"
       - name: Integration tests (${{ matrix.provider }} on ${{ matrix.tfm }})
+        env:
+          INQUIRY_SQLSERVER_IMAGE: ${{ matrix.provider == 'SqlServer' && 'inquiry-sqlserver-fts:2022-cu14' || '' }}
         run: dotnet test tests/Inquiry.${{ matrix.provider }}.Tests/Inquiry.${{ matrix.provider }}.Tests.csproj -c Release -f ${{ matrix.tfm }} --logger "trx;LogFileName=${{ matrix.provider }}-${{ matrix.tfm }}.trx" --results-directory test-results
       - name: Upload integration test results
         if: always()
