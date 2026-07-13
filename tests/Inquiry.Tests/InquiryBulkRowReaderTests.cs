@@ -223,5 +223,13 @@ public sealed class InquiryBulkRowReaderTests
         Assert.True(reader.IsClosed);
         Assert.Throws<ObjectDisposedException>(() => reader.Read());
         Assert.Throws<ObjectDisposedException>(() => _ = reader.HasRows);
+        Assert.Throws<ObjectDisposedException>(() => reader.GetValue(0));
+        Assert.Throws<ObjectDisposedException>(() => reader.GetFieldType(0));
+        Assert.Throws<ObjectDisposedException>(() => reader.GetBytes(2, 0, null, 0, 0));
+        Assert.Throws<ObjectDisposedException>(() => reader.GetChars(3, 0, null, 0, 0));
+        Assert.Throws<ObjectDisposedException>(() => reader.GetName(0));
+        Assert.Throws<ObjectDisposedException>(() => reader.GetOrdinal("Name"));
+        Assert.Throws<ObjectDisposedException>(() => reader.GetValues(Array.Empty<object>()));
+        Assert.Throws<ObjectDisposedException>(() => reader.NextResult());
     }
 }
