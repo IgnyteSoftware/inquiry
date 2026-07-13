@@ -32,6 +32,7 @@ public sealed class CancellationTokenPropagationTests
         {
             cts.Cancel();
             Exception? cleanupFailure = null;
+            Exception? terminalOutcome = null;
             try
             {
                 command.Cancel();
@@ -42,9 +43,24 @@ public sealed class CancellationTokenPropagationTests
                 cleanupFailure = exception;
             }
 
+            var observed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(5)));
+            if (observed == execution)
+            {
+                terminalOutcome = await Record.ExceptionAsync(() => execution);
+            }
+            else
+            {
+                _ = execution.ContinueWith(
+                    static task => _ = task.Exception,
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
             Assert.Fail(
                 "Direct SqlClient execution did not observe cancellation within 10 seconds. " +
-                $"Cleanup failure: {cleanupFailure?.ToString() ?? "none"}");
+                $"Cleanup failure: {cleanupFailure?.ToString() ?? "none"}. " +
+                $"Terminal outcome after cleanup: {terminalOutcome?.ToString() ?? (observed == execution ? "completed" : "still running")}");
         }
 
         var outcome = await Record.ExceptionAsync(() => execution);
