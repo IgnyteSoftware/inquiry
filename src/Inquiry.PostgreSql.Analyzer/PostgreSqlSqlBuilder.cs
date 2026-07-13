@@ -6,6 +6,7 @@ namespace Inquiry.PostgreSql.Analyzer;
 
 internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 {
+    public override bool ComputedColumnDeclaresStoreType => true;
     public override CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
         => UnsignedCollectionElement(context);
 
