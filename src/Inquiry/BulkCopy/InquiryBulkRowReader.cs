@@ -78,11 +78,16 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
         => GetValue(ordinal) is DBNull;
 
     /// <inheritdoc />
-    public override string GetName(int ordinal) => _definition.Columns[ordinal];
+    public override string GetName(int ordinal)
+    {
+        ValidateOrdinal(ordinal);
+        return _definition.Columns[ordinal];
+    }
 
     /// <inheritdoc />
     public override int GetOrdinal(string name)
     {
+        ThrowIfClosed();
         for (var i = 0; i < _definition.Columns.Count; i++)
         {
             if (string.Equals(_definition.Columns[i], name, StringComparison.OrdinalIgnoreCase))
@@ -147,7 +152,11 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     public override int RecordsAffected => -1;
 
     /// <inheritdoc />
-    public override bool NextResult() => false;
+    public override bool NextResult()
+    {
+        ThrowIfClosed();
+        return false;
+    }
 
     /// <inheritdoc />
     public override object this[int ordinal] => GetValue(ordinal);
@@ -158,6 +167,7 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     /// <inheritdoc />
     public override int GetValues(object[] values)
     {
+        ThrowIfClosed();
         if (values is null) throw new ArgumentNullException(nameof(values));
         var count = Math.Min(values.Length, FieldCount);
         for (var i = 0; i < count; i++)
@@ -284,6 +294,7 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
 
     private void ValidateOrdinal(int ordinal)
     {
+        ThrowIfClosed();
         if ((uint)ordinal >= (uint)FieldCount)
         {
             throw new IndexOutOfRangeException($"Column ordinal {ordinal} is outside the bulk insert shape.");
