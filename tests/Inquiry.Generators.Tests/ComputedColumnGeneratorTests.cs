@@ -31,6 +31,7 @@ public sealed partial class InquiryGeneratorTests
             public string LastName { get; set; } = string.Empty;
 
             [InquiryColumn("FullName", Length = 101, Computed = "FirstName || ' ' || LastName")]
+            [InquiryComputedExpression("postgresql", "\"FirstName\" || ' ' || \"LastName\"")]
             [InquiryComputedExpression("mysql", "CONCAT(FirstName, ' ', LastName)")]
             [InquiryComputedExpression("mariadb", "CONCAT(FirstName, ' ', LastName)")]
             public string FullName { get; set; } = string.Empty;
@@ -88,7 +89,7 @@ public sealed partial class InquiryGeneratorTests
         var pg = RunGenerator(ComputedSource, dialect: "PostgreSql");
         AssertNoErrors(pg);
         var pgDdl = Assert.Single(pg.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
-        Assert.Contains("GENERATED ALWAYS AS (FirstName || ' ' || LastName) STORED", pgDdl);
+        Assert.Contains("GENERATED ALWAYS AS (\"\"FirstName\"\" || ' ' || \"\"LastName\"\") STORED", pgDdl);
 
         var mysql = RunGenerator(ComputedSource, dialect: "MySql");
         AssertNoErrors(mysql);
