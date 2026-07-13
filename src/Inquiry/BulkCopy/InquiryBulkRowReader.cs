@@ -18,6 +18,11 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     private readonly InquiryBulkInsertDefinition<TEntity> _definition;
     private readonly IEnumerator<TEntity> _rows;
     private TEntity? _current;
+    private TEntity? _lookahead;
+    private bool _hasLookahead;
+    private bool _hasRowsKnown;
+    private bool _hasRows;
+    private bool _isClosed;
     private long _rowsRead;
 
     /// <summary>Initializes the reader over <paramref name="rows"/>.</summary>
@@ -36,31 +41,53 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     /// <inheritdoc />
     public override bool Read()
     {
+        ThrowIfClosed();
+
+        if (_hasLookahead)
+        {
+            _current = _lookahead;
+            _lookahead = null;
+            _hasLookahead = false;
+            _rowsRead++;
+            return true;
+        }
+
         if (!_rows.MoveNext())
         {
             _current = null;
+            _hasRowsKnown = true;
             return false;
         }
 
         _current = _rows.Current;
+        _hasRows = true;
+        _hasRowsKnown = true;
         _rowsRead++;
         return true;
     }
 
     /// <inheritdoc />
     public override object GetValue(int ordinal)
-        => _definition.GetValue(Current, ordinal);
+    {
+        ValidateOrdinal(ordinal);
+        return _definition.GetValue(Current, ordinal);
+    }
 
     /// <inheritdoc />
     public override bool IsDBNull(int ordinal)
         => GetValue(ordinal) is DBNull;
 
     /// <inheritdoc />
-    public override string GetName(int ordinal) => _definition.Columns[ordinal];
+    public override string GetName(int ordinal)
+    {
+        ValidateOrdinal(ordinal);
+        return _definition.Columns[ordinal];
+    }
 
     /// <inheritdoc />
     public override int GetOrdinal(string name)
     {
+        ThrowIfClosed();
         for (var i = 0; i < _definition.Columns.Count; i++)
         {
             if (string.Equals(_definition.Columns[i], name, StringComparison.OrdinalIgnoreCase))
@@ -77,9 +104,13 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     /// <inheritdoc />
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_isClosed)
         {
             _rows.Dispose();
+            _current = null;
+            _lookahead = null;
+            _hasLookahead = false;
+            _isClosed = true;
         }
 
         base.Dispose(disposing);
@@ -88,10 +119,31 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     // ---- Surface bulk-copy writers don't call ------------------------------------------------
 
     /// <inheritdoc />
-    public override bool HasRows => true;
+    public override bool HasRows
+    {
+        get
+        {
+            ThrowIfClosed();
+            if (_hasRowsKnown)
+            {
+                return _hasRows;
+            }
+
+            _hasRowsKnown = true;
+            if (!_rows.MoveNext())
+            {
+                return false;
+            }
+
+            _lookahead = _rows.Current;
+            _hasLookahead = true;
+            _hasRows = true;
+            return true;
+        }
+    }
 
     /// <inheritdoc />
-    public override bool IsClosed => false;
+    public override bool IsClosed => _isClosed;
 
     /// <inheritdoc />
     public override int Depth => 0;
@@ -100,7 +152,11 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     public override int RecordsAffected => -1;
 
     /// <inheritdoc />
-    public override bool NextResult() => false;
+    public override bool NextResult()
+    {
+        ThrowIfClosed();
+        return false;
+    }
 
     /// <inheritdoc />
     public override object this[int ordinal] => GetValue(ordinal);
@@ -111,6 +167,7 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     /// <inheritdoc />
     public override int GetValues(object[] values)
     {
+        ThrowIfClosed();
         if (values is null) throw new ArgumentNullException(nameof(values));
         var count = Math.Min(values.Length, FieldCount);
         for (var i = 0; i < count; i++)
@@ -129,14 +186,19 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
 
     /// <inheritdoc />
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2073",
-        Justification = "The returned type comes from GetType() on a live value the caller just produced; "
-            + "bulk-copy writers use it only for conversion decisions, not member reflection, so trimmed "
-            + "members are never accessed through this return value.")]
+        Justification = "The returned type is generated metadata or comes from GetType() on a live fallback "
+            + "value; bulk-copy writers use it only for conversion decisions, not member reflection.")]
     [return: System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(
         System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicFields
         | System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicProperties)]
     public override Type GetFieldType(int ordinal)
     {
+        ValidateOrdinal(ordinal);
+        if (_definition.FieldTypes is { } fieldTypes)
+        {
+            return fieldTypes[ordinal];
+        }
+
         // Some writers probe the field type for conversion decisions; derive it from the current
         // row's value when available. DBNull yields typeof(object) — the writer falls back to the
         // destination column's type.
@@ -151,13 +213,57 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     public override byte GetByte(int ordinal) => (byte)GetValue(ordinal);
 
     /// <inheritdoc />
-    public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length) => throw new NotSupportedException();
+    public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
+    {
+        ValidateOrdinal(ordinal);
+        ValidateCopyArguments(dataOffset, buffer, bufferOffset, length);
+        if (GetValue(ordinal) is not byte[] value)
+        {
+            throw new InvalidCastException($"Column {ordinal} does not contain a byte array.");
+        }
+
+        if (buffer is null)
+        {
+            return value.LongLength;
+        }
+
+        if (length == 0 || dataOffset >= value.LongLength)
+        {
+            return 0;
+        }
+
+        var count = Math.Min(length, value.Length - (int)dataOffset);
+        Array.Copy(value, (int)dataOffset, buffer, bufferOffset, count);
+        return count;
+    }
 
     /// <inheritdoc />
     public override char GetChar(int ordinal) => (char)GetValue(ordinal);
 
     /// <inheritdoc />
-    public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length) => throw new NotSupportedException();
+    public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length)
+    {
+        ValidateOrdinal(ordinal);
+        ValidateCopyArguments(dataOffset, buffer, bufferOffset, length);
+        if (GetValue(ordinal) is not string value)
+        {
+            throw new InvalidCastException($"Column {ordinal} does not contain a string.");
+        }
+
+        if (buffer is null)
+        {
+            return value.Length;
+        }
+
+        if (length == 0 || dataOffset >= value.Length)
+        {
+            return 0;
+        }
+
+        var count = Math.Min(length, value.Length - (int)dataOffset);
+        value.CopyTo((int)dataOffset, buffer, bufferOffset, count);
+        return count;
+    }
 
     /// <inheritdoc />
     public override DateTime GetDateTime(int ordinal) => (DateTime)GetValue(ordinal);
@@ -185,4 +291,32 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
 
     /// <inheritdoc />
     public override string GetString(int ordinal) => (string)GetValue(ordinal);
+
+    private void ValidateOrdinal(int ordinal)
+    {
+        ThrowIfClosed();
+        if ((uint)ordinal >= (uint)FieldCount)
+        {
+            throw new IndexOutOfRangeException($"Column ordinal {ordinal} is outside the bulk insert shape.");
+        }
+    }
+
+    private static void ValidateCopyArguments<T>(long dataOffset, T[]? buffer, int bufferOffset, int length)
+    {
+        if (dataOffset < 0) throw new ArgumentOutOfRangeException(nameof(dataOffset));
+        if (bufferOffset < 0) throw new ArgumentOutOfRangeException(nameof(bufferOffset));
+        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length));
+        if (buffer is not null && (bufferOffset > buffer.Length || length > buffer.Length - bufferOffset))
+        {
+            throw new ArgumentException("The destination range exceeds the supplied buffer.", nameof(buffer));
+        }
+    }
+
+    private void ThrowIfClosed()
+    {
+        if (_isClosed)
+        {
+            throw new ObjectDisposedException(GetType().Name);
+        }
+    }
 }

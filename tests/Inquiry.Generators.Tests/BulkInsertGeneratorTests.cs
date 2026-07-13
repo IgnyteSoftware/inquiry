@@ -57,6 +57,9 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("new[] { \"Cat\", \"Amount\", \"Note\" },", text);
         Assert.Contains("0 => (object?)_e.Category ?? global::System.DBNull.Value,", text);
         Assert.Contains("2 => (object?)_e.Note ?? global::System.DBNull.Value,", text);
+        Assert.Contains("new global::System.Type[] {", text);
+        Assert.Contains("typeof(string)", text);
+        Assert.Contains("typeof(decimal)", text);
 
         // The body streams through the copier; no batch-SQL machinery is emitted.
         Assert.Contains("return Inquiry.BulkInsertAsync(_bulkDef_BulkInsertAsync, items,", text);
