@@ -130,6 +130,21 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         return base.BuildParameterValueExpression(context);
     }
 
+    public override string BuildParameterValueTypeName(ParameterValueExpressionContext context)
+    {
+        if (context.ProviderIsDateOnly)
+        {
+            return "global::System.DateTime";
+        }
+
+        if (context.ProviderIsTimeOnly)
+        {
+            return "global::System.TimeSpan";
+        }
+
+        return base.BuildParameterValueTypeName(context);
+    }
+
     public override string CurrentTimestampExpression => "SYS_EXTRACT_UTC(SYSTIMESTAMP)";
 
     /// <summary>For <c>TIMESTAMP WITH TIME ZONE</c> columns, retain the timezone-aware form.</summary>

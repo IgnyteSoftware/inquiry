@@ -119,6 +119,14 @@ public abstract class SqlBuilder
         => context.ValueExpression;
 
     /// <summary>
+    /// Returns the CLR type name produced by <see cref="BuildParameterValueExpression"/>. Providers
+    /// that bridge a model/provider primitive to a different ADO value type must override this in
+    /// lockstep with the value-expression transformation.
+    /// </summary>
+    public virtual string BuildParameterValueTypeName(ParameterValueExpressionContext context)
+        => context.ProviderTypeName;
+
+    /// <summary>
     /// The fully-qualified <c>System.Data.DbType</c> expression bound onto a generated parameter for a
     /// column of the given <paramref name="type"/>, or <c>null</c> when no portable DbType applies (the
     /// provider then infers it). Routes provider-sensitive mappings through their virtual expression

@@ -12,7 +12,7 @@ public enum BulkColor { Red = 0, Green = 1, Blue = 2 }
 /// <summary>
 /// Fixture for <c>[InquiryBulkInsert]</c> all-types coverage (#134): a single entity with one column
 /// per provider-primitive category (int, decimal, bool, Guid, DateTime, string, byte[], enum,
-/// converter). The bulk-insert test round-trips a single row to verify each type survives the
+/// converter). The shared bulk-insert matrix round-trips exact boundary rows to verify each type survives the
 /// provider's bulk-copy serialization (native copier on PG/SS/MySQL/MariaDB, batch-INSERT fallback
 /// on SQLite/Oracle).
 /// </summary>
@@ -60,4 +60,7 @@ public partial class BulkAllTypesItemStore : InquiryStore<BulkAllTypesItem>
 
     [InquirySelectOneByKey]
     public partial Task<BulkAllTypesItem?> GetAsync(int id, CancellationToken cancellationToken = default);
+
+    [InquiryCount]
+    public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
 }
