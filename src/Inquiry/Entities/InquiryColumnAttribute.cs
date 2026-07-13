@@ -53,7 +53,13 @@ public class InquiryColumnAttribute : Attribute
     /// <summary>DDL generation: declared numeric scale for decimal columns; 0 uses the dialect default.</summary>
     public int Scale { get; set; }
 
-    /// <summary>DDL generation: raw SQL <c>DEFAULT</c> expression for the column (e.g. <c>"0"</c>), or null.</summary>
+    /// <summary>
+    /// Raw SQL <c>DEFAULT</c> expression for the column (for example, <c>"0"</c> or
+    /// <c>"(UUID())"</c>), or null. Inquiry emits this expression into generated DDL. MySQL also
+    /// uses it to evaluate a non-<c>AUTO_INCREMENT</c> database-default key exactly once when
+    /// emulating insert-returning. For that MySQL capture path it must be a standalone scalar that
+    /// does not reference mapped columns, and it must match the deployed database default.
+    /// </summary>
     public string? DefaultExpression { get; set; }
 
     /// <summary>

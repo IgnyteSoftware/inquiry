@@ -44,7 +44,11 @@ The escape hatch is linted: passing a **non-constant** string as `InquiryCommand
 
 ## MySQL user-variables caveat
 
-Inquiry enables `AllowUserVariables=true` on every **MySQL** connection (the emulated returning path needs it for the `@_inquiry_genkey` user variable on database-supplied GUID keys). This has one important consequence for **ad-hoc SQL**: if you misspell a `@parameter` name in hand-written SQL, MySqlConnector treats the unrecognized name as a MySQL user variable and evaluates it as `NULL` — silently, with no error.
+Inquiry enables `AllowUserVariables=true` on every **MySQL** connection (the emulated insert-returning
+path needs it for the collision-safe `@'__inquiry.generated-key'` capture used by non-auto
+database-default keys). This has one important consequence for **ad-hoc SQL**: if you misspell a
+`@parameter` name in hand-written SQL, MySqlConnector treats the unrecognized name as a MySQL user
+variable and evaluates it as `NULL` — silently, with no error.
 
 Generated store methods are unaffected (their SQL and parameters are compile-time constants), and the `FormattableString` facade path auto-names its parameters (`@p0`, `@p1`, …), so the risk is limited to explicitly constructed `InquiryCommand` instances where you author parameter names by hand. If a query unexpectedly returns no rows or null columns on MySQL, verify that every `@name` in the command text matches a parameter in the collection.
 

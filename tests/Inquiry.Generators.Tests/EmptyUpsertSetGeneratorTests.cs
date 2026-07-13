@@ -78,11 +78,13 @@ public sealed partial class InquiryGeneratorTests
     [Theory]
     [InlineData("MySql")]
     [InlineData("MariaDb")]
-    public void EmptySetUpsertEmitsKeySelfAssignNoOpOnMySql(string dialect)
+    public void EmptySetGeneratedKeyUpsertAssignsLastInsertIdOnceOnMySql(string dialect)
     {
         var text = LedgerUpsertSql(dialect);
-        // ON DUPLICATE KEY UPDATE requires an assignment; a key-only update set self-assigns the key.
-        Assert.Contains("ON DUPLICATE KEY UPDATE `Id` = `Id`", text);
+        // The LAST_INSERT_ID assignment is both the required non-empty update and the returning-key
+        // capture. Do not prepend a redundant key self-assignment for this key-only shape.
+        Assert.Contains("ON DUPLICATE KEY UPDATE `Id` = LAST_INSERT_ID(`Id`)", text);
+        Assert.DoesNotContain("`Id` = `Id`, `Id` = LAST_INSERT_ID(`Id`)", text);
         Assert.DoesNotContain("ON DUPLICATE KEY UPDATE ;", text);
     }
 
