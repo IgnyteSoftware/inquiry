@@ -72,11 +72,13 @@ public partial class ProductStore : InquiryStore<Product>
     [InquiryUpdate(ReturnEntity = true)]
     public partial Task<Product?> UpdateReturningAsync(Product product, CancellationToken cancellationToken = default);
 
+#if !INQUIRY_ORACLE_TESTS
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(Product product, CancellationToken cancellationToken = default);
 
     [InquiryUpsert(ReturnEntity = true)]
     public partial Task<Product?> UpsertReturningAsync(Product product, CancellationToken cancellationToken = default);
+#endif
 
     [InquiryDeleteOneByKey]
     public partial Task<bool> DeleteByKeyAsync(int? productID, CancellationToken cancellationToken = default);

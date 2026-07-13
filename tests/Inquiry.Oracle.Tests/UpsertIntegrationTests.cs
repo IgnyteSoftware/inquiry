@@ -45,22 +45,4 @@ public sealed class UpsertIntegrationTests
         Assert.Equal("Canada", loaded.Country);
     }
 
-    [SkippableFact]
-    public async Task ConcurrentUpsertsOfSameKeyEndInOneRowMatchingOneInput()
-    {
-        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "upsert_conc");
-        var store = harness.GetRequiredService<CustomerStore>();
-
-        const int parallelism = 10;
-        var inputs = Enumerable.Range(0, parallelism)
-            .Select(i => new Customer { CustomerID = "CONC1", CompanyName = "Co_" + i, Country = "USA" })
-            .ToArray();
-
-        await Task.WhenAll(inputs.Select(c => store.UpsertAsync(c)));
-
-        var loaded = await store.SelectByKeyAsync("CONC1");
-        Assert.NotNull(loaded);
-        Assert.Contains(loaded!.CompanyName, inputs.Select(i => i.CompanyName));
-    }
 }

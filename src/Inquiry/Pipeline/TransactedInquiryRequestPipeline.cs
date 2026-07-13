@@ -953,6 +953,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
                 return ScalarConvert.From<T>(value);
             }
+            catch (OperationCanceledException exception)
+                when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+            {
+                var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+                if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+                throw normalized;
+            }
             catch (Exception exception)
             {
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
@@ -1041,6 +1048,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
                 if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, null, cancellationToken).ConfigureAwait(false);
                 return ScalarConvert.From<T>(value);
+            }
+            catch (OperationCanceledException exception)
+                when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+            {
+                var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+                if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+                throw normalized;
             }
             catch (Exception exception)
             {

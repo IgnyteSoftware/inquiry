@@ -141,6 +141,81 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void OracleDialectReportsInq039AndEmitsCompileSafeStubsForIntentionalUnsupportedFixtures()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TGeneratedKeyOnly")]
+            public sealed class GeneratedKeyOnly
+            {
+                [InquiryKey(IsGenerated = true)]
+                public int? Id { get; set; }
+            }
+
+            public partial class GeneratedKeyOnlyStore : InquiryStore<GeneratedKeyOnly>
+            {
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(GeneratedKeyOnly item, CancellationToken cancellationToken = default);
+            }
+
+            [InquiryTable("TDefaultKeyOnly")]
+            public sealed class DefaultKeyOnly
+            {
+                [InquiryKey(UseDatabaseDefault = true, Length = 32)]
+                public string? Id { get; set; }
+            }
+
+            public partial class DefaultKeyOnlyStore : InquiryStore<DefaultKeyOnly>
+            {
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(DefaultKeyOnly item, CancellationToken cancellationToken = default);
+            }
+
+            [InquiryTable("TDefaultedKey")]
+            public sealed class DefaultedKey
+            {
+                [InquiryKey(UseDatabaseDefault = true, Length = 32)]
+                public string? Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class DefaultedKeyStore : InquiryStore<DefaultedKey>
+            {
+                [InquiryUpsert(ReturnEntity = true)]
+                public partial Task<DefaultedKey?> UpsertReturningAsync(DefaultedKey item, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        var diagnostics = result.RunResult.Diagnostics
+            .Where(static diagnostic => diagnostic.Id == "INQ039")
+            .ToArray();
+
+        Assert.Equal(3, diagnostics.Length);
+        Assert.All(diagnostics, static diagnostic => Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity));
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+
+        var generatedStores = result.RunResult.GeneratedTrees
+            .Where(static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal))
+            .Select(static tree => tree.GetText().ToString())
+            .ToArray();
+        Assert.Equal(3, generatedStores.Length);
+        Assert.All(generatedStores, static text =>
+        {
+            Assert.Contains("throw new global::System.NotSupportedException(", text);
+            Assert.DoesNotContain("_sqlUpsert ", text);
+        });
+    }
+
+    [Fact]
     public void OracleDialectEmitsValuesDefaultForAllGeneratedInsert()
     {
         // Oracle has no DEFAULT VALUES clause; an all-database-supplied insert uses VALUES (DEFAULT).
