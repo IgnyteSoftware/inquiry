@@ -35,38 +35,65 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
     public static Task<MariaDbTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
         => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.MySqlDdl, namePrefix);
 
-    public static async Task<MariaDbTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    public static async Task<MariaDbTestHarness> CreateFromDdlAsync(
+        string adminConnectionString,
+        string ddl,
+        string? namePrefix = null,
+        Action<string>? databaseCreated = null)
     {
         var prefix = (namePrefix ?? "inquiry").ToLowerInvariant();
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
+        var wasCreated = false;
 
-        await using (var admin = new MySqlConnection(adminConnectionString))
+        try
         {
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            cmd.CommandText = $"CREATE DATABASE `{databaseName}`;";
-            await cmd.ExecuteNonQueryAsync();
+            await using (var admin = new MySqlConnection(adminConnectionString))
+            {
+                await admin.OpenAsync();
+                await using var cmd = admin.CreateCommand();
+                cmd.CommandText = $"CREATE DATABASE `{databaseName}`;";
+                await cmd.ExecuteNonQueryAsync();
+                wasCreated = true;
+                databaseCreated?.Invoke(databaseName);
+            }
+
+            var connectionString = new MySqlConnectionStringBuilder(adminConnectionString)
+            {
+                Database = databaseName,
+            }.ToString();
+
+            await using (var db = new MySqlConnection(connectionString))
+            {
+                await db.OpenAsync();
+                await using var cmd = db.CreateCommand();
+                cmd.CommandText = ddl;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            var services = new ServiceCollection()
+                .AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly, typeof(VersionedItemStore).Assembly)
+                .AddInquiryMariaDb(connectionString)
+                .BuildServiceProvider();
+
+            return new MariaDbTestHarness(adminConnectionString, databaseName, connectionString, services);
         }
-
-        var connectionString = new MySqlConnectionStringBuilder(adminConnectionString)
+        catch (Exception setupException) when (wasCreated)
         {
-            Database = databaseName,
-        }.ToString();
+            MySqlConnection.ClearAllPools();
+            try
+            {
+                await DropDatabaseAsync(adminConnectionString, databaseName);
+            }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    $"MariaDB test database '{databaseName}' setup and cleanup both failed.",
+                    setupException,
+                    cleanupException);
+            }
 
-        await using (var db = new MySqlConnection(connectionString))
-        {
-            await db.OpenAsync();
-            await using var cmd = db.CreateCommand();
-            cmd.CommandText = ddl;
-            await cmd.ExecuteNonQueryAsync();
+            throw;
         }
-
-        var services = new ServiceCollection()
-            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly, typeof(VersionedItemStore).Assembly)
-            .AddInquiryMariaDb(connectionString)
-            .BuildServiceProvider();
-
-        return new MariaDbTestHarness(adminConnectionString, databaseName, connectionString, services);
     }
 
     public async ValueTask DisposeAsync()
@@ -78,15 +105,22 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
 
         try
         {
-            await using var admin = new MySqlConnection(_adminConnectionString);
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            cmd.CommandText = $"DROP DATABASE IF EXISTS `{_databaseName}`;";
-            await cmd.ExecuteNonQueryAsync();
+            await DropDatabaseAsync(_adminConnectionString, _databaseName);
         }
         catch
         {
             // Best-effort cleanup. Don't fail the test on teardown.
         }
+    }
+
+    private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)
+    {
+        var quotedName = databaseName.Replace("`", "``", StringComparison.Ordinal);
+
+        await using var admin = new MySqlConnection(adminConnectionString);
+        await admin.OpenAsync();
+        await using var cmd = admin.CreateCommand();
+        cmd.CommandText = $"DROP DATABASE IF EXISTS `{quotedName}`;";
+        await cmd.ExecuteNonQueryAsync();
     }
 }

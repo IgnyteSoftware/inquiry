@@ -42,6 +42,11 @@ public sealed class SqlBuildContext
     /// passed explicitly to keep the active-row filter intact. Null (the default) for entity contexts,
     /// which detect their global-filter columns from <paramref name="columns"/>.
     /// </param>
+    /// <param name="hasSecondaryUniqueConstraint">
+    /// Whether the entity declares any unique constraint beyond its primary key. Providers whose
+    /// upsert-returning emulation cannot identify a row after a secondary-unique conflict use this
+    /// metadata to degrade that operation instead of returning the wrong row.
+    /// </param>
     public SqlBuildContext(
         SqlBuilder builder,
         string? schema,
@@ -50,12 +55,14 @@ public sealed class SqlBuildContext
         bool suppressSoftDelete = false,
         bool generateForeignKeys = true,
         IColumn? softDeletePredicateColumn = null,
-        IReadOnlyList<IColumn>? globalFilterPredicateColumns = null)
+        IReadOnlyList<IColumn>? globalFilterPredicateColumns = null,
+        bool hasSecondaryUniqueConstraint = false)
     {
         Columns = columns;
         RawSchema = schema;
         RawTableName = tableName;
         GenerateForeignKeys = generateForeignKeys;
+        HasSecondaryUniqueConstraint = hasSecondaryUniqueConstraint;
         KeyColumns = columns.Where(c => c.IsKey).ToArray();
         // A database-managed token (rowversion) is supplied by the database, so exclude it from INSERT.
         // A server-computed column is calculated by the database expression, so exclude it too.
@@ -171,6 +178,9 @@ public sealed class SqlBuildContext
 
     /// <summary>Whether <c>BuildCreateTableSql</c> should emit FOREIGN KEY constraints.</summary>
     public bool GenerateForeignKeys { get; }
+
+    /// <summary>Whether the entity declares a unique constraint other than its primary key.</summary>
+    public bool HasSecondaryUniqueConstraint { get; }
 
     public IReadOnlyList<IColumn> Columns { get; }
     public IReadOnlyList<IColumn> KeyColumns { get; }

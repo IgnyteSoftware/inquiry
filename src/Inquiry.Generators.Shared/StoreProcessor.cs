@@ -991,7 +991,26 @@ internal static class StoreProcessor
         }
 
         var entityColumns = ToColumnList(entity.Columns);
-        var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns);
+        var mappedProperties = entity.Columns.AsImmutableArray().Select(static c => c.PropertyName).ToArray();
+        var primaryKeyProperties = entity.Keys.AsImmutableArray().Select(static c => c.PropertyName).ToArray();
+        var hasSecondaryUniqueConstraint = entity.Columns.AsImmutableArray().Any(static c => c.IsUnique && !c.IsKey) ||
+            entity.Indexes.AsImmutableArray().Any(index =>
+            {
+                if (!index.IsUnique) return false;
+                var logicalKeys = index.LogicalKeyProperties.AsImmutableArray();
+                if (logicalKeys.Length == 0 ||
+                    logicalKeys.Distinct(System.StringComparer.Ordinal).Count() != logicalKeys.Length ||
+                    logicalKeys.Any(key => !mappedProperties.Contains(key, System.StringComparer.Ordinal)))
+                {
+                    return false;
+                }
+
+                // A unique index containing the complete primary key cannot win while the full PK
+                // differs, so it does not make MySQL's explicit-key returning lookup ambiguous.
+                return !primaryKeyProperties.All(key => logicalKeys.Contains(key, System.StringComparer.Ordinal));
+            });
+        var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
+            hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint);
 
         var collectionArtifacts = ImmutableArray.CreateBuilder<CollectionParameterArtifact>();
         foreach (var item in valid)
@@ -1020,7 +1039,8 @@ internal static class StoreProcessor
         // there is no soft-delete column this is identical to ctx and is never used.
         var hasSoftDelete = entity.SoftDeleteColumn is not null;
         var ctxIncludeDeleted = hasSoftDelete
-            ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns, suppressSoftDelete: true)
+            ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
+                suppressSoftDelete: true, hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint)
             : ctx;
         SqlBuildContext CtxFor(StoreMethodData m) => hasSoftDelete && m.IncludeDeleted ? ctxIncludeDeleted : ctx;
 
@@ -1356,7 +1376,8 @@ internal static class StoreProcessor
                 StoreOperation.Insert when method.ReturnsEntity => insertReturningError,
                 StoreOperation.Update when method.ReturnsEntity => updateReturningError,
                 // Returning upsert uses _sqlUpsertReturning, or _sqlInsertReturning on the null-key path.
-                StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ?? insertReturningError,
+                StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ??
+                    (nullableDatabaseSuppliedKeyUpsert ? insertReturningError : null),
                 StoreOperation.DeleteOneByKey when method.ReturnsEntity && hasSoftDelete && !method.HardDelete => softDeleteReturningError,
                 StoreOperation.DeleteOneByKey when method.ReturnsEntity => deleteReturningError,
                 // Non-returning upsert uses _sqlUpsert (throws for a generated-key MERGE on Oracle).

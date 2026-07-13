@@ -82,9 +82,15 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
 
     public override string BuildInsertReturningSql(SqlBuildContext context)
     {
-        if (DatabaseSuppliesGuidKey(context))
+        if (HasCompositeDatabaseDefaultKey(context))
         {
-            return BuildGuidKeyInsertReturningSql(context);
+            throw new System.NotSupportedException(
+                "MySQL insert-returning cannot identify a row with a composite database-default key.");
+        }
+
+        if (HasNonAutoDatabaseDefaultKey(context))
+        {
+            return BuildDefaultKeyInsertReturningSql(context);
         }
 
         return BuildInsertSql(context) + "; " + BuildReturningSelect(context);
@@ -108,12 +114,12 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
 
     public override string BuildUpsertSql(SqlBuildContext context)
     {
-        if (DatabaseSuppliesGuidKey(context))
+        if (HasNonAutoDatabaseDefaultKey(context))
         {
-            return BuildGuidKeyUpsertSql(context);
+            return BuildDefaultKeyUpsertSql(context);
         }
 
-        if (DatabaseMaySupplyKey(context))
+        if (HasAutoIncrementKey(context))
         {
             return BuildGeneratedKeyUpsertSql(context);
         }
@@ -124,12 +130,25 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
 
     public override string BuildUpsertReturningSql(SqlBuildContext context)
     {
-        if (DatabaseSuppliesGuidKey(context))
+        if (HasCompositeDatabaseDefaultKey(context))
         {
-            return BuildGuidKeyUpsertReturningSql(context);
+            throw new System.NotSupportedException(
+                "MySQL upsert-returning cannot identify a row with a composite database-default key.");
         }
 
-        if (DatabaseMaySupplyKey(context))
+        if (HasNonAutoDatabaseDefaultKey(context))
+        {
+            if (context.HasSecondaryUniqueConstraint)
+            {
+                throw new System.NotSupportedException(
+                    "MySQL upsert-returning cannot identify the winning row after a secondary-unique conflict.");
+            }
+
+            return BuildDefaultKeyUpsertSql(context) + "; SELECT " + context.SelectColumns +
+                " FROM " + context.Table + " WHERE " + context.KeyWhereClause;
+        }
+
+        if (HasAutoIncrementKey(context))
         {
             // Read the upserted row back by its key. An explicit non-zero key inserts (or, on conflict,
             // updates) that exact key, so select by @key directly. A 0/NULL key triggers AUTO_INCREMENT;
@@ -157,78 +176,97 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
         // Append key = LAST_INSERT_ID(key) so the trailing SELECT can locate the row even when
         // ON DUPLICATE KEY fires on a secondary unique constraint (where LAST_INSERT_ID() is not
         // automatically set to the conflicting row's primary key).
-        var assignments = OnDuplicateKeyAssignments(context);
         var withKey = keyColumn + " = LAST_INSERT_ID(" + keyColumn + ")";
-        assignments = string.IsNullOrEmpty(assignments) ? withKey : assignments + ", " + withKey;
 
         return "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ") VALUES (" + explicitInsertParameters + ") " +
-            "ON DUPLICATE KEY UPDATE " + assignments;
+            "ON DUPLICATE KEY UPDATE " + OnDuplicateKeyAssignments(context, withKey);
     }
 
     /// <summary>
-    /// Emulated-returning trailing <c>SELECT</c> for the integer/client-key paths. A single
-    /// database-supplied (AUTO_INCREMENT) key is read back via session-scoped <c>LAST_INSERT_ID()</c>;
-    /// otherwise the row is selected by its key predicate. GUID database-supplied keys never reach here —
-    /// they branch to the <c>@_inquiry_genkey</c> user-variable methods before this is called.
+    /// Emulated-returning trailing <c>SELECT</c> for AUTO_INCREMENT and client-key paths. An
+    /// AUTO_INCREMENT key is read back via session-scoped <c>LAST_INSERT_ID()</c>; otherwise the row
+    /// is selected by its key predicate. Non-auto database-default keys branch to their capture path.
     /// </summary>
     private string BuildReturningSelect(SqlBuildContext context)
     {
-        var keyPredicate = DatabaseMaySupplyKey(context)
+        var keyPredicate = HasAutoIncrementKey(context)
             ? context.QuotedKeyColumns[0] + " = LAST_INSERT_ID()"
             : context.KeyWhereClause;
 
         return "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + keyPredicate;
     }
 
-    /// <summary>The session user variable holding the (generated or explicit) GUID key for the returning batch.</summary>
-    private const string GeneratedGuidKeyVariable = "@_inquiry_genkey";
+    /// <summary>The collision-safe session variable holding a captured database-default key.</summary>
+    private const string GeneratedDefaultKeyVariable = "@'__inquiry.generated-key'";
 
     /// <summary>
-    /// True when the single key is a database-supplied GUID. MySQL's LAST_INSERT_ID() returning trick only
-    /// works for AUTO_INCREMENT, so a GUID key generated by the database needs a different mechanism.
+    /// True when the single key is database-generated by AUTO_INCREMENT.
     /// </summary>
-    private static bool DatabaseSuppliesGuidKey(SqlBuildContext context)
-        => DatabaseMaySupplyKey(context) && context.KeyColumns[0].TypeClass == DbTypeClass.Guid;
+    private static bool HasAutoIncrementKey(SqlBuildContext context)
+        => context.KeyColumns.Count == 1 && context.KeyColumns[0].IsGenerated;
 
-    // Non-returning GUID-key upsert: COALESCE(@key, UUID()) lets an explicit key pass through and a null
-    // key be generated server-side. No user variable is needed because nothing is read back.
-    private string BuildGuidKeyUpsertSql(SqlBuildContext context)
+    private static bool HasNonAutoDatabaseDefaultKey(SqlBuildContext context)
+        => context.KeyColumns.Count == 1 && !context.KeyColumns[0].IsGenerated && context.KeyColumns[0].UseDatabaseDefault;
+
+    private static bool HasCompositeDatabaseDefaultKey(SqlBuildContext context)
+        => context.KeyColumns.Count > 1 && context.KeyColumns.Any(static key => key.UseDatabaseDefault);
+
+    // This SQL handles an explicit non-auto key. Nullable default-key upserts use ordinary INSERT SQL
+    // when the key is null, allowing the database default to run.
+    private string BuildDefaultKeyUpsertSql(SqlBuildContext context)
     {
         var keyColumn = context.QuotedKeyColumns[0];
-        var keyValue = "COALESCE(" + context.KeyParameters[0] + ", UUID())";
         var insertColumns = JoinSql(keyColumn, context.InsertColumns);
-        var insertValues = JoinSql(keyValue, context.InsertParameters);
+        var insertValues = JoinSql(context.KeyParameters[0], context.InsertParameters);
 
         return "INSERT INTO " + context.Table + " (" + insertColumns + ") VALUES (" + insertValues + ") " +
             "ON DUPLICATE KEY UPDATE " + OnDuplicateKeyAssignments(context);
     }
 
-    // Returning GUID-key upsert: capture the (generated or explicit) key in a user variable so the trailing
-    // SELECT can read the new/updated row back by it. Requires AllowUserVariables on the connection.
-    private string BuildGuidKeyUpsertReturningSql(SqlBuildContext context)
+    // MySQL must evaluate the deployed expression itself so INSERT and the trailing SELECT use the same
+    // value. UUID() remains the backwards-compatible fallback for GUID keys.
+    private string DefaultKeyCaptureExpression(SqlBuildContext context)
     {
-        var keyColumn = context.QuotedKeyColumns[0];
-        var insertColumns = JoinSql(keyColumn, context.InsertColumns);
-        var insertValues = JoinSql(GeneratedGuidKeyVariable, context.InsertParameters);
+        var key = context.KeyColumns[0];
+        if (!string.IsNullOrWhiteSpace(key.DefaultExpression))
+        {
+            var mappedIdentifiers = context.Columns
+                .SelectMany(static column => new[] { column.PropertyName, column.ColumnName })
+                .Distinct(System.StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var failures = SqlExpressionLexer.ValidateStandaloneScalar(
+                key.DefaultExpression!, ComputedExpressionCommentPolicy, mappedIdentifiers);
+            if (failures.Count > 0)
+            {
+                throw new System.NotSupportedException(
+                    "MySQL insert-returning DefaultExpression must be a standalone scalar: " +
+                    string.Join("; ", failures));
+            }
 
-        return "SET " + GeneratedGuidKeyVariable + " = COALESCE(" + context.KeyParameters[0] + ", UUID()); " +
-            "INSERT INTO " + context.Table + " (" + insertColumns + ") VALUES (" + insertValues + ") " +
-            "ON DUPLICATE KEY UPDATE " + OnDuplicateKeyAssignments(context) + "; " +
-            "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + keyColumn + " = " + GeneratedGuidKeyVariable;
+            return RenderDefaultExpression(key.DefaultExpression!);
+        }
+
+        if (key.TypeClass == DbTypeClass.Guid)
+        {
+            return "UUID()";
+        }
+
+        throw new System.NotSupportedException(
+            "MySQL insert-returning for a non-auto database-default key requires DefaultExpression metadata.");
     }
 
-    // Returning GUID-key INSERT: like the upsert form but without ON DUPLICATE KEY UPDATE — capture the
-    // generated UUID in a user variable so the trailing SELECT can read the inserted row back.
-    // Needed because MySQL has no RETURNING and LAST_INSERT_ID() cannot read back a server-generated UUID.
-    private string BuildGuidKeyInsertReturningSql(SqlBuildContext context)
+    // SET evaluates the default once without deprecated user-variable expression assignment. The quoted
+    // variable is reused by both INSERT and the emulated-returning SELECT.
+    private string BuildDefaultKeyInsertReturningSql(SqlBuildContext context)
     {
         var keyColumn = context.QuotedKeyColumns[0];
         var insertColumns = JoinSql(keyColumn, context.InsertColumns);
-        var insertValues = JoinSql(GeneratedGuidKeyVariable, context.InsertParameters);
+        var insertValues = JoinSql(GeneratedDefaultKeyVariable, context.InsertParameters);
+        var expression = DefaultKeyCaptureExpression(context);
 
-        return "SET " + GeneratedGuidKeyVariable + " = UUID(); " +
+        return "SET " + GeneratedDefaultKeyVariable + " = " + expression + "; " +
             "INSERT INTO " + context.Table + " (" + insertColumns + ") VALUES (" + insertValues + "); " +
-            "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + keyColumn + " = " + GeneratedGuidKeyVariable;
+            "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + keyColumn + " = " + GeneratedDefaultKeyVariable;
     }
 
     // The MySQL-equivalent of SqlBuildContext.SetClauses, but assigning each column from the
@@ -243,7 +281,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     // upsert UPDATE branch to the default. Bind the entity's parameter directly for those columns
     // instead; SelectMutationColumns(includeKey: true) — which drives the upsert binder — already
     // includes UseDatabaseDefault columns, so the parameter is available at the call site.
-    private string OnDuplicateKeyAssignments(SqlBuildContext context)
+    private string OnDuplicateKeyAssignments(SqlBuildContext context, string? requiredKeyAssignment = null)
     {
         var assignments = string.Join(", ", context.Columns
             .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
@@ -260,6 +298,13 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
             assignments = string.IsNullOrEmpty(assignments)
                 ? context.ConcurrencyVersionSet
                 : assignments + ", " + context.ConcurrencyVersionSet;
+        }
+
+        if (!string.IsNullOrEmpty(requiredKeyAssignment))
+        {
+            assignments = string.IsNullOrEmpty(assignments)
+                ? requiredKeyAssignment!
+                : assignments + ", " + requiredKeyAssignment!;
         }
 
         if (assignments.Length == 0)

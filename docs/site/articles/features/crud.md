@@ -279,8 +279,8 @@ Upsert atomicity differs per dialect; the table below pins what each provider do
 |---|---|---|
 | SQLite | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` (the key is included in the INSERT) — single statement, atomic |
 | PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` on the explicit-key branch — atomic (the explicit key is supplied, so no sequence value is consumed) |
-| MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Integer `AUTO_INCREMENT` key: same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic. GUID key (`UseDatabaseDefault`): generated server-side via `COALESCE(@key, UUID())`, captured in a `@_inquiry_genkey` user variable so the emulated returning can read it back — atomic. |
-| MariaDB | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Same `ON DUPLICATE KEY UPDATE` with `COALESCE(@key, UUID())` — atomic. Native `RETURNING` reads the row back directly (no user variable or trailing SELECT needed). |
+| MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Integer `AUTO_INCREMENT` key: same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo. Non-auto `UseDatabaseDefault` key: null routes through insert; an explicit key uses ordinary upsert and selects by that key. A declared secondary unique constraint makes return-entity upsert ambiguous and produces `INQ039`; non-returning upsert remains supported. |
+| MariaDB | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Null routes through native insert-returning; explicit keys use the ordinary upsert. Native `RETURNING` reads the actual inserted or updated row directly (no user variable or trailing SELECT needed). |
 | SQL Server | `UPDATE … IF @@ROWCOUNT = 0 INSERT` inside `BEGIN/COMMIT TRANSACTION` with `UPDLOCK, SERIALIZABLE` table hints — serializes concurrent same-key upserts, atomic with no duplicate-key race | Same update-first pattern on the explicit-key branch — atomic (the null/generate branch is a plain INSERT) |
 | Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ039` warning + throwing stub): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead |
 
@@ -288,15 +288,22 @@ What the contract guarantees, on every dialect: **N concurrent upserts of the sa
 
 What it does **not** guarantee on every dialect: that every parallel upsert succeeds. On Oracle, a duplicate-key failure on one parallel call is a known engine-level race and surfaces as an exception (SQL Server uses an update-first pattern with `UPDLOCK, SERIALIZABLE` hints, so all parallel upserts succeed). If your app must serialize on Oracle, wrap the upsert in an explicit transaction with an appropriate isolation level (`SERIALIZABLE`, or `READ COMMITTED` plus an advisory lock).
 
-On **MySQL**, a database-generated GUID key (a `Guid?` property with `UseDatabaseDefault = true`, e.g. a
-`CHAR(36) DEFAULT (UUID())` column) is supported: because MySQL has no `RETURNING` and `LAST_INSERT_ID()`
-only tracks `AUTO_INCREMENT`, Inquiry generates the value server-side with `UUID()`, captures it in a
-`@_inquiry_genkey` user variable, and selects the row back by it. Inquiry therefore enables
-`AllowUserVariables=true` on MySQL connections automatically. **MariaDB** uses native
-`INSERT…RETURNING` instead, so it does not need the user variable or `AllowUserVariables`.
+On **MySQL**, a non-`AUTO_INCREMENT` database-default key used by insert-returning must declare a
+standalone scalar `DefaultExpression` matching the deployed schema (for example, `"(UUID())"`). Inquiry
+evaluates that expression once into `@'__inquiry.generated-key'`, inserts the captured value, and selects
+the row by the same value. `Guid` keys retain `UUID()` as a compatibility fallback. Insert-returning
+intentionally ignores an entity's supplied value for a `UseDatabaseDefault` key. A nullable upsert with
+a null key takes that insert path; an explicit key uses the ordinary upsert and selects by `@key`.
+Because MySQL cannot safely identify a different primary key that wins a declared secondary-unique
+conflict, that return-entity shape produces `INQ039`; use non-returning upsert or model the conflict
+explicitly. Inquiry enables `AllowUserVariables=true` on MySQL connections for the capture batch.
+**MariaDB** uses native `INSERT…RETURNING` instead, so it does not need the user variable or
+`AllowUserVariables`.
 
-On **MySQL** and **MariaDB**, an empty-SET upsert (an entity with only key columns and nothing to update) uses
-`ON DUPLICATE KEY UPDATE key = key` — a no-op — because MySQL has no `DO NOTHING` equivalent.
+On **MySQL** and **MariaDB**, an empty-SET upsert (an entity with only key columns and nothing to update)
+must still emit an assignment because MySQL has no `DO NOTHING` equivalent. Client/non-auto keys use
+the no-op `ON DUPLICATE KEY UPDATE key = key`; an `AUTO_INCREMENT` key uses
+`key = LAST_INSERT_ID(key)` once so returning paths can recover the winning key.
 The returning variant (`ReturnEntity = true`) therefore returns the matched row on conflict rather
 than `null`, unlike PostgreSQL, SQLite, and SQL Server which return `null` when no columns are
 modified. Design for this if your code branches on the returning upsert's null/non-null result.

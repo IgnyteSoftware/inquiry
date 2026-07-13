@@ -66,7 +66,8 @@ public sealed class AuditTimestampIntegrationTests
         Assert.Equal(stored.CreatedAt, after.CreatedAt);
         Assert.True(after.ModifiedAt > stored.ModifiedAt);
 
-        Assert.Equal(after.ModifiedAt, reconstructed.ModifiedAt);
+        Assert.Equal(reconstructed.ModifiedAt.Ticks - (reconstructed.ModifiedAt.Ticks % 10), after.ModifiedAt.Ticks);
+        Assert.Equal(DateTimeKind.Utc, reconstructed.ModifiedAt.Kind);
     }
 
     [SkippableFact]
