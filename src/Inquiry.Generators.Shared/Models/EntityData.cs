@@ -12,6 +12,7 @@ namespace Inquiry.Generators.Models;
 /// </summary>
 internal sealed record EntityData(
     string FullyQualifiedName,
+    string HintName,
     string Name,
     string? Namespace,
     string TableName,
