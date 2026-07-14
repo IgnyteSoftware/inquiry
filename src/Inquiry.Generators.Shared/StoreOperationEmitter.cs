@@ -26,6 +26,7 @@ internal static class StoreOperationEmitter
         Dictionary<string, EntityData> relationChildEntities,
         Dictionary<string, EntityData> relationJunctionEntities,
         SqlBuilder sqlBuilder,
+        CollectionParameterResolution? deleteAllCollectionResolution = null,
         string? baseSelectField = null,
         string? resultTypeOverride = null,
         string? structMatOverride = null)
@@ -247,7 +248,9 @@ internal static class StoreOperationEmitter
                     entity.Schema,
                     sqlBuilder.ParameterName("keys"),
                     keysParam,
-                    isNegatedCollection: false));
+                    isNegatedCollection: false,
+                    elementIsNullable: method.Parameters[0].ElementIsNullable,
+                    resolution: deleteAllCollectionResolution));
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 source.AppendLine("    }");
@@ -1037,7 +1040,9 @@ internal static class StoreOperationEmitter
                     owningSchema,
                     binding.SqlParameterName,
                     arg,
-                    binding.IsNegatedCollection));
+                    binding.IsNegatedCollection,
+                    binding.ElementIsNullable,
+                    binding.CollectionResolution));
             }
             else
             {
@@ -1101,7 +1106,9 @@ internal static class StoreOperationEmitter
                     owningSchema,
                     binding.SqlParameterName,
                     arg,
-                    binding.IsNegatedCollection));
+                    binding.IsNegatedCollection,
+                    binding.ElementIsNullable,
+                    binding.CollectionResolution));
             }
             else
             {
@@ -1505,10 +1512,12 @@ internal static class StoreOperationEmitter
         string? owningSchema,
         string sqlParameterName,
         string arg,
-        bool isNegatedCollection)
+        bool isNegatedCollection,
+        bool elementIsNullable,
+        CollectionParameterResolution? resolution)
     {
         var name = GeneratorHelpers.Escape(sqlParameterName);
-        var projected = ProjectedCollectionExpression(sqlBuilder, column, arg);
+        var projected = ProjectedCollectionExpression(sqlBuilder, column, arg, elementIsNullable);
         // Stamp the same DbType the scalar binder resolves for this column so an IN element binds with
         // the right type (e.g. DateTime2 on SQL Server, not legacy datetime). The array path leaves it
         // to the provider, which infers the element type from the typed native array.
@@ -1527,14 +1536,10 @@ internal static class StoreOperationEmitter
 
         if (sqlBuilder.UseArrayInParameters)
         {
-            var artifact = sqlBuilder.BuildCollectionParameterArtifact(owningSchema, column);
-            if (artifact is null)
-            {
-                var method = sqlBuilder.DialectName == "SqlServer" ? "BindUnsupported" : "Bind";
-                return $"                {sqlBuilder.ArrayParameterBinderFqn}.{method}(_c, \"{name}\", {projected});";
-            }
-
-            return $"                {sqlBuilder.ArrayParameterBinderFqn}.Bind(_c, \"{name}\", {projected}, \"{GeneratorHelpers.Escape(artifact.RuntimeTypeName)}\");";
+            if (resolution is null || !resolution.IsValid)
+                throw new InvalidOperationException("Collection transport must be resolved once before method emission.");
+            return "                " + sqlBuilder.BuildCollectionParameterBinding(
+                new CollectionParameterBindingContext(resolution, "_c", name, projected));
         }
 
         return $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
@@ -1550,9 +1555,13 @@ internal static class StoreOperationEmitter
     /// nullable value/reference converter model binds <c>null</c> rather than calling
     /// <c>ToProvider</c> for that element.
     /// </summary>
-    private static string ProjectedCollectionExpression(SqlBuilder sqlBuilder, ColumnData column, string arg)
+    private static string ProjectedCollectionExpression(
+        SqlBuilder sqlBuilder,
+        ColumnData column,
+        string arg,
+        bool elementIsNullable)
     {
-        var nullableModelElement = column.Type.IsNullable
+        var nullableModelElement = elementIsNullable
             || (column.Converter is not null && !column.Type.IsValueType);
         var value = nullableModelElement
             ? column.Type.IsValueType ? "_e.Value" : "_e"
@@ -1583,9 +1592,10 @@ internal static class StoreOperationEmitter
         }
         else
         {
-            providerValue = value;
             providerSpecialType = column.Type.IsEnum ? column.Type.EnumUnderlyingSpecialType : column.Type.SpecialType;
             providerTypeName = column.Type.IsEnum ? SpecialTypeName(providerSpecialType) : column.Type.NonNullableDisplayName;
+            providerValue = column.Type.IsEnum ? $"({providerTypeName}){value}" : value;
+            requiresProjection = column.Type.IsEnum;
         }
 
         var storage = sqlBuilder.BuildCollectionElementExpression(new CollectionElementExpressionContext(

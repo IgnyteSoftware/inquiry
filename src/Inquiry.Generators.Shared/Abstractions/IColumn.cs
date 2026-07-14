@@ -96,14 +96,26 @@ public interface IColumn
     /// <summary>Explicit physical SQL type override (single-dialect escape hatch); null to infer.</summary>
     string? SqlType { get; }
 
+    /// <summary>The effective provider CLR type after converter/enum projection.</summary>
+    string ProviderClrTypeName { get; }
+
+    /// <summary>Whether a converter may produce null independently of the collection element.</summary>
+    bool ProviderValueIsNullable { get; }
+
     /// <summary>Declared length for string/binary types (0 = unspecified → dialect default).</summary>
     int Length { get; }
+
+    bool IsLengthSpecified { get; }
 
     /// <summary>Declared numeric precision (0 = unspecified → dialect default).</summary>
     int Precision { get; }
 
+    bool IsPrecisionSpecified { get; }
+
     /// <summary>Declared numeric scale (0 = unspecified).</summary>
     int Scale { get; }
+
+    bool IsScaleSpecified { get; }
 
     /// <summary>Raw SQL default expression for the column, or null for none.</summary>
     string? DefaultExpression { get; }
@@ -129,6 +141,8 @@ public interface IColumn
 
     /// <summary>Whether string columns and parameters use Unicode types.</summary>
     bool IsUnicode { get; }
+
+    bool IsUnicodeSpecified { get; }
 
     /// <summary>Emit a single-column UNIQUE index on this column.</summary>
     bool IsUnique { get; }

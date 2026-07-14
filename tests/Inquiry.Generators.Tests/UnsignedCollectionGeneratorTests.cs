@@ -65,7 +65,7 @@ public sealed partial class InquiryGeneratorTests
             Assert.Contains("AS TABLE ([Value] INT NOT NULL)", schema);
             Assert.Contains("AS TABLE ([Value] BIGINT NOT NULL)", schema);
             Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(schema, "AS TABLE \\(\\[Value\\] INT NOT NULL\\)").Cast<global::System.Text.RegularExpressions.Match>());
-            Assert.Contains("Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee", schema);
+            Assert.Contains("Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c", schema);
         }
     }
 

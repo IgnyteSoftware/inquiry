@@ -1,3 +1,4 @@
+using Inquiry.Commands;
 using Inquiry.Materialization;
 using System.Data.Common;
 
@@ -107,35 +108,26 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
 
         _disposed = true;
-        // Attempt every dispose even if an earlier one throws, so a failing reader dispose cannot leak the
-        // command or connection — and the lease is always released. The nested finally chain guarantees each
-        // step runs; the last exception thrown propagates.
+        List<Exception>? exceptions = null;
         try
         {
             await _reader.DisposeAsync().ConfigureAwait(false);
         }
-        finally
+        catch (Exception exception)
         {
-            try
-            {
-                await _command.DisposeAsync().ConfigureAwait(false);
-            }
-            finally
-            {
-                try
-                {
-                    if (_ownedConnection is not null)
-                    {
-                        await _ownedConnection.DisposeAsync().ConfigureAwait(false);
-                    }
-                }
-                finally
-                {
-                    // Transacted path: release the pipeline's in-flight lease so the shared connection is
-                    // free for the next operation. Connection-per-op path: no lease (null).
-                    _lease?.Dispose();
-                }
-            }
+            exceptions = InquiryCleanup.Add(exceptions, exception);
         }
+        try { InquiryCommandResources.Dispose(_command); }
+        catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+        try { await _command.DisposeAsync().ConfigureAwait(false); }
+        catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+        try
+        {
+            if (_ownedConnection is not null) await _ownedConnection.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+        try { _lease?.Dispose(); }
+        catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+        InquiryCleanup.ThrowIfAny(exceptions);
     }
 }

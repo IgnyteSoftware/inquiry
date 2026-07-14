@@ -8,15 +8,16 @@ namespace Inquiry.Generators.Models;
 /// from, the column it filters, and whether it is an <c>IN</c> collection (which the runtime expands).
 /// Emit-time only — never part of the cached model.
 /// </summary>
-internal readonly struct PredicateBinding
+internal sealed class PredicateBinding
 {
-    public PredicateBinding(string sqlParameterName, int methodParameterIndex, ColumnData column, bool isCollection, bool isNegatedCollection = false)
+    public PredicateBinding(string sqlParameterName, int methodParameterIndex, ColumnData column, bool isCollection, bool isNegatedCollection = false, bool elementIsNullable = false)
     {
         SqlParameterName = sqlParameterName;
         MethodParameterIndex = methodParameterIndex;
         Column = column;
         IsCollection = isCollection;
         IsNegatedCollection = isNegatedCollection;
+        ElementIsNullable = elementIsNullable;
     }
 
     public string SqlParameterName { get; }
@@ -30,6 +31,11 @@ internal readonly struct PredicateBinding
     /// always through the sentinel path (never an array parameter) so the empty case is dialect-uniform.
     /// </summary>
     public bool IsNegatedCollection { get; }
+
+    public bool ElementIsNullable { get; }
+
+    /// <summary>The exact provider resolution discovered for this binding and reused during emission.</summary>
+    public CollectionParameterResolution? CollectionResolution { get; set; }
 }
 
 /// <summary>
