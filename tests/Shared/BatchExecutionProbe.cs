@@ -9,18 +9,27 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Inquiry.Tests.Shared;
 
 internal sealed record FinalizedBatchCommand(string CommandText, object? Metadata);
+internal sealed record ExecutedBatchCommand(string CommandText, object? Metadata);
+internal sealed record ExecutedBatch(IReadOnlyList<ExecutedBatchCommand> Commands);
 
 internal sealed class BatchExecutionProbe
 {
     private readonly object _gate = new();
     private readonly Func<DbCommand, object?>? _inspectFinalizedCommand;
+    private readonly Func<DbBatchCommand, object?>? _inspectExecutedBatchCommand;
     private readonly List<int> _initializedChunkSizes = new();
     private readonly List<int> _executedBatchSizes = new();
+    private readonly List<ExecutedBatch> _executedBatches = new();
     private readonly List<FinalizedBatchCommand> _finalizedCommands = new();
     private int _createBatchCount;
 
-    internal BatchExecutionProbe(Func<DbCommand, object?>? inspectFinalizedCommand = null)
-        => _inspectFinalizedCommand = inspectFinalizedCommand;
+    internal BatchExecutionProbe(
+        Func<DbCommand, object?>? inspectFinalizedCommand = null,
+        Func<DbBatchCommand, object?>? inspectExecutedBatchCommand = null)
+    {
+        _inspectFinalizedCommand = inspectFinalizedCommand;
+        _inspectExecutedBatchCommand = inspectExecutedBatchCommand;
+    }
 
     internal int CreateBatchCount => Volatile.Read(ref _createBatchCount);
 
@@ -48,11 +57,34 @@ internal sealed class BatchExecutionProbe
         }
     }
 
+    internal IReadOnlyList<ExecutedBatch> ExecutedBatches
+    {
+        get
+        {
+            lock (_gate) return _executedBatches.ToArray();
+        }
+    }
+
     internal void RecordBatchCreated() => Interlocked.Increment(ref _createBatchCount);
 
     internal void RecordBatchExecuted(int itemCount)
     {
         lock (_gate) _executedBatchSizes.Add(itemCount);
+    }
+
+    internal void RecordBatchExecuted(DbBatchCommandCollection commands)
+    {
+        var snapshots = commands.Cast<DbBatchCommand>()
+            .Select(command => new ExecutedBatchCommand(
+                command.CommandText,
+                _inspectExecutedBatchCommand?.Invoke(command)))
+            .ToArray();
+
+        lock (_gate)
+        {
+            _executedBatchSizes.Add(snapshots.Length);
+            _executedBatches.Add(new ExecutedBatch(snapshots));
+        }
     }
 
     internal void RecordChunkInitialized(int itemCount)
@@ -73,6 +105,7 @@ internal sealed class BatchExecutionProbe
         {
             _initializedChunkSizes.Clear();
             _executedBatchSizes.Clear();
+            _executedBatches.Clear();
             _finalizedCommands.Clear();
         }
     }
@@ -244,14 +277,14 @@ internal sealed class ProbingDbBatch : DbBatch
     public override int ExecuteNonQuery()
     {
         var result = _inner.ExecuteNonQuery();
-        _probe.RecordBatchExecuted(_inner.BatchCommands.Count);
+        _probe.RecordBatchExecuted(_inner.BatchCommands);
         return result;
     }
 
     public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
     {
         var result = await _inner.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        _probe.RecordBatchExecuted(_inner.BatchCommands.Count);
+        _probe.RecordBatchExecuted(_inner.BatchCommands);
         return result;
     }
 

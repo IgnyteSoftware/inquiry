@@ -19,7 +19,7 @@ public sealed class BatchChunkingIntegrationTests
     public async Task FiveItemMutationsUseBoundedChunksAndMariaDbTransports()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        var probe = new BatchExecutionProbe(InspectCommand);
+        var probe = new BatchExecutionProbe(InspectCommand, InspectBatchCommand);
         await using var harness = await CreateAsync(probe);
         var store = harness.GetRequiredService<BatchChunkItemStore>();
 
@@ -46,6 +46,19 @@ public sealed class BatchChunkingIntegrationTests
             Assert.Contains(" SET `_t`.`Value` = `_v`.`Value`", command.CommandText, StringComparison.Ordinal);
             Assert.Equal(4, ParameterCount(command));
         });
+        Assert.Equal(new[] { 1 }, probe.ExecutedBatchSizes);
+        var executedBatch = Assert.Single(probe.ExecutedBatches);
+        var executedCommand = Assert.Single(executedBatch.Commands);
+        Assert.Equal("UPDATE `BatchChunkItem` SET `Value` = @Value WHERE `Id` = @Id", executedCommand.CommandText);
+        var executedParameters = Assert.IsType<CommandMetadata>(executedCommand.Metadata).Parameters;
+        Assert.Equal(2, executedParameters.Length);
+        AssertParameter(executedParameters, "@Id", DbType.Int32, MySqlDbType.Int32, 5);
+        AssertParameter(executedParameters, "@Value", DbType.String, MySqlDbType.VarChar, "updated5");
+
+        var persisted = await store.SelectAllAsync().ToListAsync();
+        Assert.Equal(
+            Enumerable.Range(1, 5).Select(id => (id, "updated" + id)),
+            persisted.OrderBy(item => item.Id).Select(item => (item.Id, item.Value)));
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
@@ -116,7 +129,7 @@ public sealed class BatchChunkingIntegrationTests
     }
 
     [SkippableFact]
-    public async Task OneThousandAndOneInsertsSplitAtDefaultParameterBoundary()
+    public async Task OneThousandAndOneInsertsSplitAtParameterBoundary()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         var probe = new BatchExecutionProbe();
@@ -124,7 +137,12 @@ public sealed class BatchChunkingIntegrationTests
             _fixture.AdminConnectionString,
             Ddl,
             "batch_chunk_1001",
-            configureServices: probe.Decorate);
+            configureServices: probe.Decorate,
+            configureOptions: options =>
+            {
+                options.MaxBatchSize = 2000;
+                options.MaxParametersPerCommand = 2000;
+            });
         var store = harness.GetRequiredService<BatchChunkItemStore>();
 
         Assert.Equal(1001, await store.InsertAllAsync(Items(1001)));
@@ -143,8 +161,29 @@ public sealed class BatchChunkingIntegrationTests
 
     private static object InspectCommand(System.Data.Common.DbCommand command)
         => new CommandMetadata(command.Parameters.Cast<MySqlParameter>()
-            .Select(parameter => new ParameterMetadata(parameter.DbType, parameter.Value))
+            .Select(SnapshotParameter)
             .ToArray());
+
+    private static object InspectBatchCommand(System.Data.Common.DbBatchCommand command)
+        => new CommandMetadata(command.Parameters.Cast<MySqlParameter>()
+            .Select(SnapshotParameter)
+            .ToArray());
+
+    private static ParameterMetadata SnapshotParameter(MySqlParameter parameter)
+        => new(parameter.ParameterName, parameter.DbType, parameter.MySqlDbType, parameter.Value);
+
+    private static void AssertParameter(
+        ParameterMetadata[] parameters,
+        string name,
+        DbType dbType,
+        MySqlDbType mySqlDbType,
+        object value)
+    {
+        var parameter = Assert.Single(parameters, parameter => parameter.Name == name);
+        Assert.Equal(dbType, parameter.DbType);
+        Assert.Equal(mySqlDbType, parameter.MySqlDbType);
+        Assert.Equal(value, parameter.Value);
+    }
 
     private static int ParameterCount(FinalizedBatchCommand command)
         => Assert.IsType<CommandMetadata>(command.Metadata).Parameters.Length;
@@ -159,5 +198,5 @@ public sealed class BatchChunkingIntegrationTests
         => new() { Id = id, Value = valuePrefix + id };
 
     private sealed record CommandMetadata(ParameterMetadata[] Parameters);
-    private sealed record ParameterMetadata(DbType DbType, object? Value);
+    private sealed record ParameterMetadata(string Name, DbType DbType, MySqlDbType MySqlDbType, object? Value);
 }

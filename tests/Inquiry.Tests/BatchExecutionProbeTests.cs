@@ -151,10 +151,13 @@ public sealed class BatchExecutionProbeTests
     }
 
     [Fact]
-    public async Task NativeBatchDelegatesProviderObjectsAndRecordsExecutedSize()
+    public async Task NativeBatchDelegatesProviderObjectsAndSnapshotsSuccessfulExecution()
     {
         var inner = new BatchRecordingConnection();
-        var probe = new BatchExecutionProbe();
+        var probe = new BatchExecutionProbe(
+            inspectExecutedBatchCommand: command => command.Parameters.Cast<DbParameter>()
+                .Select(parameter => (parameter.ParameterName, parameter.Value))
+                .ToArray());
         await using var connection = new ProbingDbConnection(inner, probe);
         await using var batch = connection.CreateBatch();
 
@@ -163,9 +166,16 @@ public sealed class BatchExecutionProbeTests
         batch.Timeout = 17;
         var first = batch.CreateBatchCommand();
         var second = batch.CreateBatchCommand();
+        first.CommandText = "first";
+        var parameter = first.CreateParameter();
+        parameter.ParameterName = "@id";
+        parameter.Value = 5;
+        first.Parameters.Add(parameter);
+        second.CommandText = "second";
         batch.BatchCommands.Add(first);
         batch.BatchCommands.Add(second);
 
+        Assert.Empty(probe.ExecutedBatches);
         Assert.Equal(2, await batch.ExecuteNonQueryAsync());
 
         Assert.Same(first, inner.LastBatch!.BatchCommands[0]);
@@ -174,9 +184,39 @@ public sealed class BatchExecutionProbeTests
         Assert.Equal(1, inner.LastBatch.ExecuteCount);
         Assert.Equal(1, probe.CreateBatchCount);
         Assert.Equal(new[] { 2 }, probe.ExecutedBatchSizes);
+        var executed = Assert.Single(probe.ExecutedBatches);
+        Assert.Equal(new[] { "first", "second" }, executed.Commands.Select(command => command.CommandText));
+        Assert.Equal(
+            new[] { ("@id", (object?)5) },
+            Assert.IsType<(string ParameterName, object? Value)[]>(executed.Commands[0].Metadata));
+
+        first.CommandText = "changed";
+        parameter.Value = 6;
+        Assert.Equal("first", executed.Commands[0].CommandText);
+        Assert.Equal(
+            new[] { ("@id", (object?)5) },
+            Assert.IsType<(string ParameterName, object? Value)[]>(executed.Commands[0].Metadata));
 
         probe.Reset();
         Assert.Empty(probe.ExecutedBatchSizes);
+        Assert.Empty(probe.ExecutedBatches);
+    }
+
+    [Fact]
+    public async Task FailedNativeBatchExecutionIsNotRecorded()
+    {
+        var inner = new BatchRecordingConnection();
+        var probe = new BatchExecutionProbe();
+        await using var connection = new ProbingDbConnection(inner, probe);
+        await using var batch = connection.CreateBatch();
+        batch.BatchCommands.Add(batch.CreateBatchCommand());
+        inner.LastBatch!.ExecuteException = new InvalidOperationException("failed");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => batch.ExecuteNonQueryAsync());
+
+        Assert.Equal("failed", exception.Message);
+        Assert.Empty(probe.ExecutedBatchSizes);
+        Assert.Empty(probe.ExecutedBatches);
     }
 
     [Fact]
@@ -310,6 +350,7 @@ public sealed class BatchExecutionProbeTests
 
         internal BatchRecordingBatch(DbConnection connection) => DbConnection = connection;
         internal int ExecuteCount { get; private set; }
+        internal Exception? ExecuteException { get; set; }
         public override int Timeout { get; set; }
         protected override DbBatchCommandCollection DbBatchCommands => _commands;
         protected override DbConnection? DbConnection { get; set; }
@@ -333,17 +374,20 @@ public sealed class BatchExecutionProbeTests
         private int Execute()
         {
             ExecuteCount++;
+            if (ExecuteException is not null) throw ExecuteException;
             return _commands.Count;
         }
     }
 
     private sealed class BatchRecordingCommand : DbBatchCommand
     {
+        private readonly SqliteCommand _command = new();
+
         public override string CommandText { get; set; } = string.Empty;
         public override CommandType CommandType { get; set; }
         public override int RecordsAffected => 1;
-        protected override DbParameterCollection DbParameterCollection => throw new NotSupportedException();
-        public override DbParameter CreateParameter() => new SqliteParameter();
+        protected override DbParameterCollection DbParameterCollection => _command.Parameters;
+        public override DbParameter CreateParameter() => _command.CreateParameter();
     }
 
     private sealed class BatchRecordingCommandCollection : DbBatchCommandCollection
