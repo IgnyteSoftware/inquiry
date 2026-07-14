@@ -448,8 +448,8 @@ internal static class InquiryDiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor ConverterConstructorMissing = new(
         "INQ082",
-        "Converter type needs an accessible parameterless constructor",
-        "Converter type '{0}' must have an accessible parameterless constructor for InquiryConverterCache<TConverter>.",
+        "Converter type needs a public parameterless constructor",
+        "Converter type '{0}' must have a public parameterless constructor for InquiryConverterCache<TConverter>.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
