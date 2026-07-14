@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Text;
+using Inquiry.Parameters;
 using MySqlConnector;
 
 namespace Inquiry.Benchmarks.MySqlFamily;
@@ -70,8 +71,8 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
     public Task<int> UpdateReusedCommandAsync(IReadOnlyList<MySqlBatchMutationItem> items)
         => ExecuteReusedCommandAsync(UpdateSql, items, includeValue: true);
 
-    public Task<int> DeleteReusedCommandAsync(IReadOnlyList<MySqlBatchMutationItem> items)
-        => ExecuteReusedCommandAsync(DeleteSql, items, includeValue: false);
+    public Task<int> DeleteReusedCommandAsync(IReadOnlyList<int> ids)
+        => ExecuteReusedDeleteAsync(ids);
 
     public Task<int> InsertDbBatchAsync(IReadOnlyList<MySqlBatchMutationItem> items)
         => ExecuteDbBatchAsync(InsertSql, items, includeValue: true);
@@ -79,8 +80,8 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
     public Task<int> UpdateDbBatchAsync(IReadOnlyList<MySqlBatchMutationItem> items)
         => ExecuteDbBatchAsync(UpdateSql, items, includeValue: true);
 
-    public Task<int> DeleteDbBatchAsync(IReadOnlyList<MySqlBatchMutationItem> items)
-        => ExecuteDbBatchAsync(DeleteSql, items, includeValue: false);
+    public Task<int> DeleteDbBatchAsync(IReadOnlyList<int> ids)
+        => ExecuteDbBatchDeleteAsync(ids);
 
     public Task<int> InsertSetBasedAsync(IReadOnlyList<MySqlBatchMutationItem> items)
         => ExecuteSetBasedInsertAsync(items);
@@ -88,8 +89,14 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
     public Task<int> UpdateSetBasedAsync(IReadOnlyList<MySqlBatchMutationItem> items)
         => ExecuteSetBasedUpdateAsync(items);
 
-    public Task<int> DeleteSetBasedAsync(IReadOnlyList<MySqlBatchMutationItem> items)
-        => ExecuteSetBasedDeleteAsync(items);
+    public Task<int> UpdateDerivedTableJoinAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteDerivedTableJoinUpdateAsync(items);
+
+    public Task<int> DeleteSetBasedAsync(IReadOnlyList<int> ids)
+        => ExecuteSetBasedDeleteAsync(ids);
+
+    public Task<int> DeleteJsonTableAsync(IReadOnlyList<int> ids)
+        => ExecuteJsonTableDeleteAsync(ids);
 
     private async Task<int> ExecuteReusedCommandAsync(
         string commandText,
@@ -147,6 +154,47 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         return affected;
     }
 
+    private async Task<int> ExecuteReusedDeleteAsync(IReadOnlyList<int> ids)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = DeleteSql;
+        var id = command.Parameters.Add("id", MySqlDbType.Int32);
+        await command.PrepareAsync().ConfigureAwait(false);
+        var affected = 0;
+        for (var i = 0; i < ids.Count; i++)
+        {
+            id.Value = ids[i];
+            affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
+    private async Task<int> ExecuteDbBatchDeleteAsync(IReadOnlyList<int> ids)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using DbBatch batch = connection.CreateBatch();
+        batch.Transaction = transaction;
+        for (var i = 0; i < ids.Count; i++)
+        {
+            var command = batch.CreateBatchCommand();
+            command.CommandText = DeleteSql;
+            AddParameter(command, "id", MySqlDbType.Int32, size: 0, ids[i]);
+            batch.BatchCommands.Add(command);
+        }
+
+        var affected = await batch.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
     private async Task<int> ExecuteSetBasedInsertAsync(IReadOnlyList<MySqlBatchMutationItem> items)
     {
         var sql = new StringBuilder(
@@ -193,9 +241,9 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         return affected;
     }
 
-    private async Task<int> ExecuteSetBasedDeleteAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+    private async Task<int> ExecuteDerivedTableJoinUpdateAsync(IReadOnlyList<MySqlBatchMutationItem> items)
     {
-        var sql = new StringBuilder("DELETE FROM `InquiryBatchEvidence` WHERE `Id` IN (");
+        var sql = new StringBuilder("UPDATE `InquiryBatchEvidence` AS `_t` INNER JOIN (");
         await using var connection = new MySqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
@@ -203,11 +251,58 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         command.Transaction = transaction;
         for (var i = 0; i < items.Count; i++)
         {
-            command.Parameters.Add($"id{i}", MySqlDbType.Int32).Value = items[i].Id;
+            sql.Append(i == 0 ? "SELECT " : " UNION ALL SELECT ");
+            sql.Append("@_u").Append(i).Append("_0");
+            if (i == 0) sql.Append(" AS `Id`");
+            sql.Append(", @_u").Append(i).Append("_1");
+            if (i == 0) sql.Append(" AS `ValueText`");
+            command.Parameters.Add($"_u{i}_0", MySqlDbType.Int32).Value = items[i].Id;
+            command.Parameters.Add($"_u{i}_1", MySqlDbType.VarChar, 100).Value = items[i].Value;
         }
 
-        AppendParameterList(sql, "id", items.Count);
+        sql.Append(") AS `_v` ON `_t`.`Id` = `_v`.`Id` ")
+            .Append("SET `_t`.`ValueText` = `_v`.`ValueText`;");
+        command.CommandText = sql.ToString();
+        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
+    private async Task<int> ExecuteSetBasedDeleteAsync(IReadOnlyList<int> ids)
+    {
+        var sql = new StringBuilder("DELETE FROM `InquiryBatchEvidence` WHERE `Id` IN (");
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        for (var i = 0; i < ids.Count; i++)
+        {
+            command.Parameters.Add($"id{i}", MySqlDbType.Int32).Value = ids[i];
+        }
+
+        AppendParameterList(sql, "id", ids.Count);
         command.CommandText = sql.Append(");").ToString();
+        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
+    private async Task<int> ExecuteJsonTableDeleteAsync(IReadOnlyList<int> ids)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            DELETE FROM `InquiryBatchEvidence`
+            WHERE `Id` IN (
+                SELECT jt.val
+                FROM JSON_TABLE(@ids, '$[*]' COLUMNS(val INT PATH '$')) jt
+            );
+            """;
+        InquiryJsonArrayParameter.Bind(command, "ids", ids);
         var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         await transaction.CommitAsync().ConfigureAwait(false);
         return affected;

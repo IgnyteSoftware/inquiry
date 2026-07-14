@@ -1,3 +1,5 @@
+using System.Text;
+using Inquiry.Parameters;
 using Oracle.ManagedDataAccess.Client;
 
 namespace Inquiry.Benchmarks.Oracle;
@@ -66,17 +68,31 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
     public Task<int> UpdateReusedCommandAsync(IReadOnlyList<OracleBatchMutationItem> items)
         => ExecuteReusedCommandAsync(UpdateSql, items, includeValue: true);
 
-    public Task<int> DeleteReusedCommandAsync(IReadOnlyList<OracleBatchMutationItem> items)
-        => ExecuteReusedCommandAsync(DeleteSql, items, includeValue: false);
+    public Task<int> DeleteReusedCommandAsync(IReadOnlyList<int> ids)
+        => ExecuteReusedDeleteAsync(ids);
 
-    public Task<int> InsertArrayBindingAsync(IReadOnlyList<OracleBatchMutationItem> items)
-        => ExecuteArrayBindingAsync(InsertSql, items, includeValue: true);
+    public Task<int> InsertArrayBindingAsync(
+        IReadOnlyList<OracleBatchMutationItem> items,
+        int[] ids,
+        string[] values,
+        int[] valueSizes)
+        => ExecuteArrayBindingAsync(InsertSql, items.Count, ids, values, valueSizes);
 
-    public Task<int> UpdateArrayBindingAsync(IReadOnlyList<OracleBatchMutationItem> items)
-        => ExecuteArrayBindingAsync(UpdateSql, items, includeValue: true);
+    public Task<int> UpdateArrayBindingAsync(
+        IReadOnlyList<OracleBatchMutationItem> items,
+        int[] ids,
+        string[] values,
+        int[] valueSizes)
+        => ExecuteArrayBindingAsync(UpdateSql, items.Count, ids, values, valueSizes);
 
-    public Task<int> DeleteArrayBindingAsync(IReadOnlyList<OracleBatchMutationItem> items)
-        => ExecuteArrayBindingAsync(DeleteSql, items, includeValue: false);
+    public Task<int> DeleteArrayBindingAsync(IReadOnlyList<int> ids)
+        => ExecuteArrayBindingDeleteAsync(ids);
+
+    public Task<int> InsertProductionInsertSelectAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteProductionInsertSelectAsync(items);
+
+    public Task<int> DeleteJsonTableAsync(IReadOnlyList<int> ids)
+        => ExecuteJsonTableDeleteAsync(ids);
 
     private async Task<int> ExecuteReusedCommandAsync(
         string commandText,
@@ -112,30 +128,106 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
 
     private async Task<int> ExecuteArrayBindingAsync(
         string commandText,
-        IReadOnlyList<OracleBatchMutationItem> items,
-        bool includeValue)
+        int count,
+        int[] ids,
+        string[] values,
+        int[] valueSizes)
     {
-        var ids = new int[items.Count];
-        for (var i = 0; i < items.Count; i++) ids[i] = items[i].Id;
-
         await using var connection = new OracleConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.Transaction = (OracleTransaction)transaction;
         command.BindByName = true;
-        command.ArrayBindCount = items.Count;
+        command.ArrayBindCount = count;
         command.CommandText = commandText;
         command.Parameters.Add("id", OracleDbType.Int32).Value = ids;
-        if (includeValue)
+        var value = command.Parameters.Add("value", OracleDbType.Varchar2, 100);
+        value.ArrayBindSize = valueSizes;
+        value.Value = values;
+
+        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
+    private async Task<int> ExecuteReusedDeleteAsync(IReadOnlyList<int> ids)
+    {
+        await using var connection = new OracleConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = (OracleTransaction)transaction;
+        command.BindByName = true;
+        command.CommandText = DeleteSql;
+        var id = command.Parameters.Add("id", OracleDbType.Int32);
+        await command.PrepareAsync().ConfigureAwait(false);
+        var affected = 0;
+        for (var i = 0; i < ids.Count; i++)
         {
-            var values = new string[items.Count];
-            for (var i = 0; i < items.Count; i++) values[i] = items[i].Value;
-            var value = command.Parameters.Add("value", OracleDbType.Varchar2);
-            value.ArrayBindSize = Enumerable.Repeat(100, items.Count).ToArray();
-            value.Value = values;
+            id.Value = ids[i];
+            affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
+    private async Task<int> ExecuteArrayBindingDeleteAsync(IReadOnlyList<int> ids)
+    {
+        await using var connection = new OracleConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = (OracleTransaction)transaction;
+        command.BindByName = true;
+        command.ArrayBindCount = ids.Count;
+        command.CommandText = DeleteSql;
+        command.Parameters.Add("id", OracleDbType.Int32).Value = ids;
+        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
+    private async Task<int> ExecuteProductionInsertSelectAsync(IReadOnlyList<OracleBatchMutationItem> items)
+    {
+        var sql = new StringBuilder("INSERT INTO INQUIRYBATCHEVIDENCE (ID, VALUETEXT) ");
+        await using var connection = new OracleConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = (OracleTransaction)transaction;
+        command.BindByName = true;
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (i > 0) sql.Append(" UNION ALL ");
+            sql.Append("SELECT :id").Append(i).Append(", :value").Append(i).Append(" FROM dual");
+            command.Parameters.Add($"id{i}", OracleDbType.Int32).Value = items[i].Id;
+            command.Parameters.Add($"value{i}", OracleDbType.Varchar2, 100).Value = items[i].Value;
+        }
+
+        command.CommandText = sql.ToString();
+        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
+    private async Task<int> ExecuteJsonTableDeleteAsync(IReadOnlyList<int> ids)
+    {
+        await using var connection = new OracleConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = (OracleTransaction)transaction;
+        command.BindByName = true;
+        command.CommandText = """
+            DELETE FROM INQUIRYBATCHEVIDENCE
+            WHERE ID IN (
+                SELECT jt.val
+                FROM JSON_TABLE(:ids, '$[*]' COLUMNS(val NUMBER(10) PATH '$')) jt
+            )
+            """;
+        InquiryJsonArrayParameter.Bind(command, "ids", ids);
         var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         await transaction.CommitAsync().ConfigureAwait(false);
         return affected;

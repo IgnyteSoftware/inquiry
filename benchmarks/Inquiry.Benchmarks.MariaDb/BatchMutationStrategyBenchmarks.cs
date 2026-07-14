@@ -14,7 +14,7 @@ public class BatchMutationStrategyBenchmarks
     private MySqlBatchMutationStrategyRunner _runner = null!;
     private MySqlBatchMutationItem[] _insertItems = null!;
     private MySqlBatchMutationItem[] _updateItems = null!;
-    private MySqlBatchMutationItem[] _deleteItems = null!;
+    private int[] _deleteIds = null!;
 
     [Params(1, 10, 100, 1000)]
     public int Rows;
@@ -33,7 +33,7 @@ public class BatchMutationStrategyBenchmarks
         _runner.ResetAsync(Rows).GetAwaiter().GetResult();
         _insertItems = CreateItems(Rows, 100_001, "Inserted");
         _updateItems = CreateItems(Rows, 1, "Updated");
-        _deleteItems = CreateItems(Rows, 1, "Deleted");
+        _deleteIds = CreateIds(Rows, 1);
     }
 
     [GlobalCleanup]
@@ -57,20 +57,33 @@ public class BatchMutationStrategyBenchmarks
     [BenchmarkCategory("BatchUpdate"), Benchmark]
     public Task<int> Update_SetBasedSql() => RequireAffectedRowsAsync(_runner.UpdateSetBasedAsync(_updateItems));
 
+    [BenchmarkCategory("BatchUpdate"), Benchmark]
+    public Task<int> Update_ProductionDerivedTableJoin() => RequireAffectedRowsAsync(_runner.UpdateDerivedTableJoinAsync(_updateItems));
+
     [BenchmarkCategory("BatchDelete"), Benchmark(Baseline = true)]
-    public Task<int> Delete_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.DeleteReusedCommandAsync(_deleteItems));
+    public Task<int> Delete_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.DeleteReusedCommandAsync(_deleteIds));
 
     [BenchmarkCategory("BatchDelete"), Benchmark]
-    public Task<int> Delete_DbBatch() => RequireAffectedRowsAsync(_runner.DeleteDbBatchAsync(_deleteItems));
+    public Task<int> Delete_DbBatch() => RequireAffectedRowsAsync(_runner.DeleteDbBatchAsync(_deleteIds));
 
     [BenchmarkCategory("BatchDelete"), Benchmark]
-    public Task<int> Delete_SetBasedSql() => RequireAffectedRowsAsync(_runner.DeleteSetBasedAsync(_deleteItems));
+    public Task<int> Delete_SetBasedSql() => RequireAffectedRowsAsync(_runner.DeleteSetBasedAsync(_deleteIds));
+
+    [BenchmarkCategory("BatchDelete"), Benchmark]
+    public Task<int> Delete_ProductionJsonTable() => RequireAffectedRowsAsync(_runner.DeleteJsonTableAsync(_deleteIds));
 
     private static MySqlBatchMutationItem[] CreateItems(int count, int firstId, string valuePrefix)
     {
         var items = new MySqlBatchMutationItem[count];
         for (var i = 0; i < count; i++) items[i] = new(firstId + i, $"{valuePrefix} {i}");
         return items;
+    }
+
+    private static int[] CreateIds(int count, int firstId)
+    {
+        var ids = new int[count];
+        for (var i = 0; i < count; i++) ids[i] = firstId + i;
+        return ids;
     }
 
     private async Task<int> RequireAffectedRowsAsync(Task<int> execution)
