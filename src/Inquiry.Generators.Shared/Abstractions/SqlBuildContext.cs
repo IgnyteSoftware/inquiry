@@ -16,6 +16,8 @@ namespace Inquiry.Generators.Abstractions;
 /// </remarks>
 public sealed class SqlBuildContext
 {
+    private readonly IReadOnlyList<string> _activeRowPredicateTerms;
+
     internal ISet<string>? SuppressedForeignKeyColumns { get; init; }
     internal IReadOnlyList<ForeignKeyConstraintData>? NormalizedForeignKeys { get; init; }
     internal IReadOnlyList<IndexData>? NormalizedIndexes { get; init; }
@@ -139,6 +141,7 @@ public sealed class SqlBuildContext
 
         ActiveRowPredicate = string.Join(" AND ", activeRowPredicates);
         QualifiedActiveRowPredicate = string.Join(" AND ", qualifiedActiveRowPredicates);
+        _activeRowPredicateTerms = activeRowPredicates;
 
         // Optimistic concurrency. The single token column (if any) drives the WHERE predicate every
         // UPDATE/DELETE AND-composes (against the original value, @token) and — for the ORM-managed form
@@ -207,6 +210,14 @@ public sealed class SqlBuildContext
     /// (e.g. many-to-many JOINs) where an unqualified column name would be ambiguous.
     /// </summary>
     public string QualifiedActiveRowPredicate { get; } = string.Empty;
+
+    /// <summary>
+    /// Returns <see cref="ActiveRowPredicate"/> qualified by an already-quoted table or alias.
+    /// This keeps aliased joins structural: callers supply a dialect-quoted qualifier and never
+    /// rewrite the generated predicate text.
+    /// </summary>
+    internal string QualifyActiveRowPredicate(string quotedQualifier)
+        => string.Join(" AND ", _activeRowPredicateTerms.Select(term => quotedQualifier + "." + term));
 
     /// <summary>The SET-clause body that marks a row deleted (<c>"IsDeleted" = 1</c> / <c>"DeletedAt" = CURRENT_TIMESTAMP</c>). Empty when no soft-delete column.</summary>
     public string SoftDeleteSetClause { get; } = string.Empty;
