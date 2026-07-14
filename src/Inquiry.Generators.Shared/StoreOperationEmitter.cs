@@ -1506,25 +1506,33 @@ internal static class StoreOperationEmitter
             source.AppendLine("        {");
             EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ");
             EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "            ");
-            source.AppendLine("        });");
+            if (sqlBuilder.BatchInsertStrategy == BatchInsertStrategy.Row)
+            {
+                source.AppendLine("        },");
+                source.AppendLine("        global::System.Data.CommandType.Text,");
+                source.AppendLine("        bindChunk: null,");
+                source.AppendLine("        preferPrepareOnce: true);");
+            }
+            else
+            {
+                source.AppendLine("        });");
+            }
             source.AppendLine();
             return;
         }
 
         var parametersPerItem = Math.Max(insertable.Length, 1);
         var hardParameterRows = sqlBuilder.HardMaxParametersPerCommand / parametersPerItem;
-        var maxItemsPerCommand = Math.Min(sqlBuilder.BatchInsertMaxRowsPerCommand, hardParameterRows);
+        var setBasedMaxItemsPerCommand = Math.Min(sqlBuilder.BatchInsertMaxRowsPerCommand, hardParameterRows);
+        var maxItemsPerCommand = sqlBuilder.BatchInsertStrategy == BatchInsertStrategy.Adaptive
+            ? sqlBuilder.BatchInsertMaxRowsPerCommand
+            : setBasedMaxItemsPerCommand;
 
         if (sqlBuilder.UsesArrayBindingForBatchMutations)
         {
             source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{entityType}> {prefix} = new(");
             source.AppendLine("        _sqlInsert,");
-            source.AppendLine("        static (_t, _it) =>");
-            source.AppendLine("        {");
-            EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ");
-            EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "            ");
-            EmitTargetRowParameters(source, insertable, sqlBuilder, "_it", indent: "            ");
-            source.AppendLine("        },");
+            EmitInsertRowBinder(source, entity, insertable, sqlBuilder, closingSuffix: ",");
             source.AppendLine("        bindChunk: static (_cmd, _items) =>");
             source.AppendLine("        {");
             EmitEntityArrayChunkBinder(source, entity, insertable, sqlBuilder, isInsert: true, indent: "            ");
@@ -1533,7 +1541,24 @@ internal static class StoreOperationEmitter
             return;
         }
 
+        if (sqlBuilder.BatchInsertStrategy == BatchInsertStrategy.Row)
+        {
+            source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{entityType}> {prefix} = new(");
+            source.AppendLine("        _sqlInsert,");
+            EmitInsertRowBinder(source, entity, insertable, sqlBuilder, closingSuffix: ",");
+            source.AppendLine("        global::System.Data.CommandType.Text,");
+            source.AppendLine("        bindChunk: null,");
+            source.AppendLine("        preferPrepareOnce: true);");
+            source.AppendLine();
+            return;
+        }
+
         source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{entityType}> {prefix} = new(");
+        if (sqlBuilder.BatchInsertStrategy == BatchInsertStrategy.Adaptive)
+        {
+            source.AppendLine("        _sqlInsert,");
+            EmitInsertRowBinder(source, entity, insertable, sqlBuilder, closingSuffix: ",");
+        }
         source.AppendLine("        static _count =>");
         source.AppendLine("        {");
         var estimatedInsertRowLength = sqlBuilder.BatchInsertRowClose.Length + sqlBuilder.BatchInsertRowSeparator.Length +
@@ -1576,9 +1601,37 @@ internal static class StoreOperationEmitter
         }
         source.AppendLine("            }");
         source.AppendLine("        },");
+        if (sqlBuilder.BatchInsertStrategy == BatchInsertStrategy.Adaptive)
+        {
+            source.AppendLine($"        static _items => _items.Count < {sqlBuilder.BatchInsertAdaptiveThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)},");
+        }
         source.AppendLine($"        parametersPerItem: {parametersPerItem.ToString(System.Globalization.CultureInfo.InvariantCulture)},");
-        source.AppendLine($"        maxItemsPerCommand: {maxItemsPerCommand.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+        if (sqlBuilder.BatchInsertStrategy == BatchInsertStrategy.Adaptive)
+        {
+            source.AppendLine($"        maxItemsPerCommand: {maxItemsPerCommand.ToString(System.Globalization.CultureInfo.InvariantCulture)},");
+            source.AppendLine("        commandType: global::System.Data.CommandType.Text,");
+            source.AppendLine($"        setBasedMaxItemsPerCommand: {setBasedMaxItemsPerCommand.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+        }
+        else
+        {
+            source.AppendLine($"        maxItemsPerCommand: {maxItemsPerCommand.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+        }
         source.AppendLine();
+    }
+
+    private static void EmitInsertRowBinder(
+        StringBuilder source,
+        EntityData entity,
+        IReadOnlyList<ColumnData> columns,
+        SqlBuilder sqlBuilder,
+        string closingSuffix)
+    {
+        source.AppendLine("        static (_t, _it) =>");
+        source.AppendLine("        {");
+        EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ");
+        EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "            ");
+        EmitTargetRowParameters(source, columns, sqlBuilder, "_it", indent: "            ");
+        source.AppendLine("        }" + closingSuffix);
     }
 
     private static void EmitTargetRowParameters(

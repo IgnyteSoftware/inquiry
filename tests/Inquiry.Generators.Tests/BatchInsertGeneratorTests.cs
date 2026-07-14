@@ -9,7 +9,7 @@ namespace Inquiry.Generators.Tests;
 public sealed partial class InquiryGeneratorTests
 {
     [Fact]
-    public void InsertAllEmitsMultiRowBatch()
+    public void SqliteInsertAllEmitsPreferredPreparedRowDescriptor()
     {
         const string source = """
             using System.Collections.Generic;
@@ -43,16 +43,13 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("private const string _sqlInsertAllPrefix = \"INSERT INTO \\\"TThing\\\" (\\\"Id\\\", \\\"Name\\\") VALUES \";", text);
-        // Per-row open is a separate const ("(" for multi-row VALUES; Oracle overrides it for INSERT ALL).
-        Assert.Contains("private const string _sqlInsertAllRowOpen = \"(\";", text);
+        Assert.Contains("private const string _sqlInsert = \"INSERT INTO \\\"TThing\\\" (\\\"Id\\\", \\\"Name\\\") VALUES (@Id, @Name)\";", text);
+        Assert.DoesNotContain("_sqlInsertAllPrefix", text);
         Assert.Contains("private static readonly global::Inquiry.Commands.InquiryBatchCommand<global::Demo.Thing> _batch_InsertAllAsync_", text);
         Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_InsertAllAsync_", text);
-        // Per-row placeholders and matching bound parameter names.
-        Assert.Contains("_sql.Append(\"@p\").Append(_r).Append(\"_0\");", text);
-        Assert.Contains("_p.ParameterName = \"@p\" + _r + \"_1\";", text);
-        Assert.Contains("parametersPerItem: 2,", text);
-        Assert.Contains("maxItemsPerCommand: 16383);", text);
+        Assert.Contains("_p0.ParameterName = \"@Id\";", text);
+        Assert.Contains("_p1.ParameterName = \"@Name\";", text);
+        Assert.Contains("preferPrepareOnce: true);", text);
     }
 
     [Fact]
@@ -143,7 +140,6 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Theory]
-    [InlineData("Sqlite", 16383)]
     [InlineData("SqlServer", 1000)]
     [InlineData("PostgreSql", 32767)]
     [InlineData("MySql", 32767)]
@@ -182,7 +178,95 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("parametersPerItem: 2,", text);
-        Assert.Contains($"maxItemsPerCommand: {expectedRows});", text);
+        Assert.Contains($"maxItemsPerCommand: {expectedRows}" +
+            (dialect == "SqlServer" ? "," : ");"), text);
+    }
+
+    [Fact]
+    public void SqlServerInsertAllEmitsAdaptiveBoundaryWithBothExactBinders()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TThing")]
+            public sealed class Thing
+            {
+                [InquiryKey] public long Id { get; set; }
+                [InquiryColumn(Length = 100)] public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class ThingStore : InquiryStore<Thing>
+            {
+                [InquiryInsertAll]
+                public partial Task<int> InsertAllAsync(IEnumerable<Thing> things, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("private const string _sqlInsert = \"INSERT INTO [TThing] ([Id], [Name]) VALUES (@Id, @Name)\";", text);
+        Assert.Contains("private const string _sqlInsertAllPrefix = \"INSERT INTO [TThing] ([Id], [Name]) VALUES \";", text);
+        Assert.Contains("_p0.ParameterName = \"@Id\";", text);
+        Assert.Contains("_p.ParameterName = \"@p\" + _r + \"_1\";", text);
+        Assert.Contains("static _items => _items.Count < 250,", text);
+        Assert.Contains("parametersPerItem: 2,", text);
+        Assert.Contains("maxItemsPerCommand: 1000,", text);
+        Assert.Contains("setBasedMaxItemsPerCommand: 1000);", text);
+    }
+
+    [Fact]
+    public void SqlServerWideInsertKeepsDbBatchAtOneThousandAndCapsOnlySetBasedSqlAtTwoHundredTen()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TWide")]
+            public sealed class Wide
+            {
+                [InquiryKey] public int C0 { get; set; }
+                [InquiryColumn] public int C1 { get; set; }
+                [InquiryColumn] public int C2 { get; set; }
+                [InquiryColumn] public int C3 { get; set; }
+                [InquiryColumn] public int C4 { get; set; }
+                [InquiryColumn] public int C5 { get; set; }
+                [InquiryColumn] public int C6 { get; set; }
+                [InquiryColumn] public int C7 { get; set; }
+                [InquiryColumn] public int C8 { get; set; }
+                [InquiryColumn] public int C9 { get; set; }
+            }
+
+            public partial class WideStore : InquiryStore<Wide>
+            {
+                [InquiryInsertAll]
+                public partial Task<int> InsertAllAsync(IEnumerable<Wide> items, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("WideStore.InquiryStore.g.cs", StringComparison.Ordinal))
+            .GetText().ToString();
+
+        Assert.Contains("static _items => _items.Count < 250,", text);
+        Assert.Contains("parametersPerItem: 10,", text);
+        Assert.Contains("maxItemsPerCommand: 1000,", text);
+        Assert.Contains("setBasedMaxItemsPerCommand: 210);", text);
     }
 
     [Fact]
@@ -317,7 +401,16 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sqlInsert,", descriptor);
         Assert.Contains("static (_, _it) =>", descriptor);
         Assert.DoesNotContain("static _count =>", descriptor);
-        Assert.DoesNotContain("bindChunk:", descriptor);
+        if (dialect == "Sqlite")
+        {
+            Assert.Contains("bindChunk: null,", descriptor);
+            Assert.Contains("preferPrepareOnce: true);", descriptor);
+        }
+        else
+        {
+            Assert.DoesNotContain("bindChunk:", descriptor);
+            Assert.DoesNotContain("preferPrepareOnce", descriptor);
+        }
     }
 
     [Fact]

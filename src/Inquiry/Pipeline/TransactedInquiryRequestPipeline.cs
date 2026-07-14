@@ -1523,6 +1523,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 _connection, _transaction, _connectionFactory, executionMode, _defaultCommandTimeoutSeconds,
                 _prepareEnabled,
                 _autoPrepareConfigured && command.PreferPrepareOnce,
+                _maxParametersPerCommand,
                 command, chunks, firstChunk, interceptedRows, interceptedChunk, cancellationToken).ConfigureAwait(false);
             chunks.Dispose();
             return total;

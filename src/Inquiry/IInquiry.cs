@@ -258,7 +258,7 @@ public interface IInquiry
             transaction = await BeginTransactionAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
             do
             {
-                if (command.BindItem is null || command.UseChunk?.Invoke(chunk) == true)
+                if (command.BindItem is null || command.ShouldUseChunk(chunk, MaxParametersPerCommand))
                 {
                     total += await transaction.ExecuteAsync(command.ForChunk(chunk).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
                 }

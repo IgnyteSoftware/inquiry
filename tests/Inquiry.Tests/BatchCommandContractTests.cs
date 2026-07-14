@@ -109,6 +109,7 @@ public sealed class BatchCommandContractTests
         Assert.Null(command.BindItem);
         Assert.Equal(3, command.ParametersPerItem);
         Assert.Equal(10, command.MaxItemsPerCommand);
+        Assert.Equal(10, command.SetBasedMaxItemsPerCommand);
         Assert.Equal(6, command.GetEffectiveChunkSize(maxBatchSize: 20, maxParametersPerCommand: 20));
         Assert.Equal("work-6", command.GetChunkCommandText(6));
     }
@@ -120,8 +121,44 @@ public sealed class BatchCommandContractTests
             new InquiryBatchCommand<int>(static _ => "work", static (_, _) => { }, -1)).ParamName);
         Assert.Equal("maxItemsPerCommand", Assert.Throws<ArgumentOutOfRangeException>(() =>
             new InquiryBatchCommand<int>(static _ => "work", static (_, _) => { }, 0, 0)).ParamName);
+        Assert.Equal("setBasedMaxItemsPerCommand", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new InquiryBatchCommand<int>(
+                "row", static (_, _) => { }, static _ => "chunk", static (_, _) => { },
+                static _ => true, parametersPerItem: 1, maxItemsPerCommand: 10,
+                commandType: CommandType.Text, setBasedMaxItemsPerCommand: 0)).ParamName);
 
         var command = new InquiryBatchCommand<int>(static _ => " ", static (_, _) => { }, 0);
         Assert.Equal("commandTextFactory", Assert.Throws<ArgumentException>(() => command.GetChunkCommandText(1)).ParamName);
+    }
+
+    [Fact]
+    public void SelectableDefinitionPreservesLegacySignatureAndAddsExplicitSetBasedLimit()
+    {
+        var type = typeof(InquiryBatchCommand<int>);
+        Type[] legacyParameterTypes =
+        [
+            typeof(string),
+            typeof(Action<InquiryParameterTarget, int>),
+            typeof(Func<int, string>),
+            typeof(Action<System.Data.Common.DbCommand, IReadOnlyList<int>>),
+            typeof(Func<IReadOnlyList<int>, bool>),
+            typeof(int),
+            typeof(int),
+            typeof(CommandType),
+        ];
+
+        Assert.NotNull(type.GetConstructor(legacyParameterTypes));
+        Assert.NotNull(type.GetConstructor([.. legacyParameterTypes, typeof(int)]));
+
+        var legacy = new InquiryBatchCommand<int>(
+            "row", static (_, _) => { }, static _ => "chunk", static (_, _) => { },
+            static _ => true, parametersPerItem: 1, maxItemsPerCommand: 10, commandType: CommandType.Text);
+        var bounded = new InquiryBatchCommand<int>(
+            "row", static (_, _) => { }, static _ => "chunk", static (_, _) => { },
+            static _ => true, parametersPerItem: 1, maxItemsPerCommand: 10,
+            commandType: CommandType.Text, setBasedMaxItemsPerCommand: 3);
+
+        Assert.Equal(int.MaxValue, legacy.SetBasedMaxItemsPerCommand);
+        Assert.Equal(3, bounded.SetBasedMaxItemsPerCommand);
     }
 }

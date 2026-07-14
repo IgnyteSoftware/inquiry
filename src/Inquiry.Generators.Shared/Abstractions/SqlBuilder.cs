@@ -17,6 +17,7 @@ public enum ReferentialActionKind { NoAction, Restrict, Cascade, SetNull, SetDef
 public enum ReferentialActionEvent { Delete, Update }
 public enum ConstraintNameScope { Table, Schema }
 public enum IdentifierComparison { Ordinal, OrdinalIgnoreCase }
+public enum BatchInsertStrategy { SetBased, Row, Adaptive }
 
 /// <summary>
 /// Compile-time SQL builder consumed by the Inquiry source generator. One concrete subclass exists
@@ -199,6 +200,12 @@ public abstract class SqlBuilder
     public virtual bool EmitsParameterSizePrecision => false;
 
     // ---- Batch insert / update ---------------------------------------------------------
+
+    /// <summary>Internal generator strategy used for generated InsertAll descriptors.</summary>
+    public virtual BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.SetBased;
+
+    /// <summary>First chunk size routed to the row/DbBatch side of an adaptive insert descriptor.</summary>
+    public virtual int BatchInsertAdaptiveThreshold => int.MaxValue;
 
     /// <summary>
     /// Header of a multi-row batch <c>INSERT</c> — the <c>_sqlInsertAllPrefix</c> const emitted before the

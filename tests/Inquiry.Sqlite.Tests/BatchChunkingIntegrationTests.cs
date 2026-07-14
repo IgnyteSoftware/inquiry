@@ -8,6 +8,8 @@ public sealed class BatchChunkingIntegrationTests
 {
     private const string Ddl =
         "CREATE TABLE BatchChunkItem (Id INTEGER PRIMARY KEY, Value TEXT NOT NULL);";
+    private const string DefaultOnlyDdl =
+        "CREATE TABLE DefaultOnlyBatchItem (Id INTEGER PRIMARY KEY AUTOINCREMENT);";
 
     [Fact]
     public async Task FiveItemMutationsUseBoundedChunksAndSQLiteTransports()
@@ -17,7 +19,11 @@ public sealed class BatchChunkingIntegrationTests
         var store = harness.GetRequiredService<BatchChunkItemStore>();
 
         Assert.Equal(5, await store.InsertAllAsync(Items(5)));
-        Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
+        Assert.Empty(probe.InitializedChunkSizes);
+        Assert.Equal(0, probe.CreateBatchCount);
+        Assert.Equal(5, probe.FinalizedCommands.Count);
+        Assert.All(probe.FinalizedCommands, command =>
+            Assert.Equal("INSERT INTO \"BatchChunkItem\" (\"Id\", \"Value\") VALUES (@Id, @Value)", command.CommandText));
 
         probe.Reset();
         var updates = new ExecutionBoundaryEnumerable<BatchChunkItem>(
@@ -54,7 +60,7 @@ public sealed class BatchChunkingIntegrationTests
         await Assert.ThrowsAsync<SqliteException>(() => store.InsertAllAsync(items));
 
         Assert.Equal(0, await store.CountAsync());
-        Assert.Equal(new[] { 2, 2 }, probe.InitializedChunkSizes);
+        Assert.Empty(probe.InitializedChunkSizes);
     }
 
     [Fact]
@@ -90,7 +96,7 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Equal(1, source.GetEnumeratorCount);
         Assert.Equal(4, source.MoveNextCount);
         Assert.Equal(1, source.DisposeCount);
-        Assert.Equal(new[] { 2, 2 }, probe.InitializedChunkSizes);
+        Assert.Empty(probe.InitializedChunkSizes);
     }
 
     [Fact]
@@ -105,8 +111,28 @@ public sealed class BatchChunkingIntegrationTests
 
         Assert.Equal(1001, await store.InsertAllAsync(Items(1001)));
 
-        Assert.Equal(new[] { 1000, 1 }, probe.InitializedChunkSizes);
+        Assert.Empty(probe.InitializedChunkSizes);
+        Assert.Equal(1001, probe.FinalizedCommands.Count);
         Assert.Equal(1001, await store.CountAsync());
+    }
+
+    [Fact]
+    public async Task DefaultOnlyInsertUsesPreferredFixedRowStatement()
+    {
+        var probe = new BatchExecutionProbe();
+        await using var harness = await SqliteTestHarness.CreateAsync(
+            DefaultOnlyDdl,
+            "batch_default_only",
+            configureServices: probe.Decorate);
+        var store = harness.GetRequiredService<DefaultOnlyBatchItemStore>();
+
+        Assert.Equal(3, await store.InsertAllAsync(
+            Enumerable.Range(0, 3).Select(static _ => new DefaultOnlyBatchItem())));
+        Assert.Equal(0, probe.CreateBatchCount);
+        Assert.Equal(3, probe.FinalizedCommands.Count);
+        Assert.All(probe.FinalizedCommands, command =>
+            Assert.Equal("INSERT INTO \"DefaultOnlyBatchItem\" DEFAULT VALUES", command.CommandText));
+        Assert.Equal(3, await store.CountAsync());
     }
 
     private static Task<SqliteTestHarness> CreateAsync(BatchExecutionProbe probe)

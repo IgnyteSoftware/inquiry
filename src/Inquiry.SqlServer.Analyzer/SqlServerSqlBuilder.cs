@@ -8,6 +8,9 @@ namespace Inquiry.SqlServer.Analyzer;
 
 internal sealed class SqlServerSqlBuilder : SqlBuilder
 {
+    public override BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.Adaptive;
+    public override int BatchInsertAdaptiveThreshold => 250;
+
     // SQL Server rejects a VALUES table-value constructor with more than 1,000 rows.
     public override int BatchInsertMaxRowsPerCommand => 1000;
 

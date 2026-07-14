@@ -14,6 +14,7 @@ internal static class InquiryBatchCommandExecutor
         int commandTimeoutSeconds,
         bool prepareEnabled,
         bool preferPrepareOnce,
+        int maxParametersPerCommand,
         InquiryBatchCommand<TItem> command,
         InquiryBatchChunkReader<TItem> chunks,
         IReadOnlyList<TItem> firstChunk,
@@ -25,7 +26,7 @@ internal static class InquiryBatchCommandExecutor
         {
             if (command.UseChunk is not null)
                 return await ExecuteSelectableAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
-                    prepareEnabled, preferPrepareOnce, executionMode, command, chunks, firstChunk, interceptedRows, interceptedChunk!, cancellationToken).ConfigureAwait(false);
+                    prepareEnabled, preferPrepareOnce, maxParametersPerCommand, executionMode, command, chunks, firstChunk, interceptedRows, interceptedChunk!, cancellationToken).ConfigureAwait(false);
             return await ExecuteInterceptedAsync(chunks, firstChunk,
                 command.BindItem is null ? interceptedChunk! : interceptedRows, cancellationToken).ConfigureAwait(false);
         }
@@ -33,7 +34,7 @@ internal static class InquiryBatchCommandExecutor
         if (command.UseChunk is not null)
         {
             return await ExecuteSelectableAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
-                prepareEnabled, preferPrepareOnce, executionMode, command, chunks, firstChunk, null, null, cancellationToken).ConfigureAwait(false);
+                prepareEnabled, preferPrepareOnce, maxParametersPerCommand, executionMode, command, chunks, firstChunk, null, null, cancellationToken).ConfigureAwait(false);
         }
 
         if (command.BindItem is null)
@@ -81,6 +82,7 @@ internal static class InquiryBatchCommandExecutor
         int commandTimeoutSeconds,
         bool prepareEnabled,
         bool preferPrepareOnce,
+        int maxParametersPerCommand,
         InquiryBatchExecutionMode executionMode,
         InquiryBatchCommand<TItem> command,
         InquiryBatchChunkReader<TItem> chunks,
@@ -93,7 +95,7 @@ internal static class InquiryBatchCommandExecutor
         var chunk = firstChunk;
         do
         {
-            if (command.UseChunk!(chunk))
+            if (command.ShouldUseChunk(chunk, maxParametersPerCommand))
             {
                 if (interceptedChunk is not null)
                 {

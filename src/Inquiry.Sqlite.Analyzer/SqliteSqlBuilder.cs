@@ -6,6 +6,8 @@ namespace Inquiry.Sqlite.Analyzer;
 
 internal sealed class SqliteSqlBuilder : SqlBuilder
 {
+    public override BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.Row;
+
     // SQLite 3.32+ defaults SQLITE_MAX_VARIABLE_NUMBER to 32,766.
     public override int HardMaxParametersPerCommand => 32766;
 

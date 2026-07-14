@@ -1104,7 +1104,9 @@ internal static class StoreProcessor
             nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity) ||
             valid.Any(m => (m.Method.Operation == StoreOperation.InsertAll ||
                 (m.Method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy)) &&
-                (sqlBuilder.UsesArrayBindingForBatchMutations || ctx.InsertableColumns.Count == 0));
+                (sqlBuilder.UsesArrayBindingForBatchMutations ||
+                 sqlBuilder.BatchInsertStrategy != BatchInsertStrategy.SetBased ||
+                 ctx.InsertableColumns.Count == 0));
         // UpdateAll keeps the single-row SQL for the default path and guarded provider fallbacks.
         var needsUpdate = valid.Any(static m =>
             (m.Method.Operation == StoreOperation.Update && !m.Method.ReturnsEntity) ||
@@ -1172,7 +1174,7 @@ internal static class StoreProcessor
         // InsertAll is supported on every dialect via the SqlBuilder batch-insert shape hooks (Oracle emits
         // INSERT INTO … SELECT … FROM dual UNION ALL; everyone else uses multi-row VALUES). The header + per-row open are
         // baked consts the emitter assembles at runtime. DeleteAll uses the IN-expansion path (every dialect).
-        if (needsInsertAll)
+        if (needsInsertAll && sqlBuilder.BatchInsertStrategy != BatchInsertStrategy.Row)
         {
             AppendConstSql(source, "_sqlInsertAllPrefix", sqlBuilder.BuildBatchInsertHeader(ctx));
             AppendConstSql(source, "_sqlInsertAllRowOpen", sqlBuilder.BuildBatchInsertRowOpen(ctx));

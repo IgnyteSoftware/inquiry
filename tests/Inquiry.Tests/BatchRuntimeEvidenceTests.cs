@@ -333,6 +333,83 @@ public sealed class BatchRuntimeEvidenceTests
     }
 
     [Theory]
+    [InlineData(200, true)]
+    [InlineData(201, false)]
+    [InlineData(1000, false)]
+    public async Task AdaptiveCommandAppliesAggregateParameterCapOnlyToSetBasedBranch(
+        int count,
+        bool expectedSetBased)
+    {
+        var state = new RecordingState();
+        var pipeline = CreatePipeline(
+            state, InquiryBatchExecutionMode.DbBatch, maxBatchSize: 1000,
+            maxParametersPerCommand: InquiryOptions.DefaultMaxParametersPerCommand);
+
+        Assert.Equal(count, await pipeline.ExecuteBatchAsync(AdaptiveTenParameterCommand(), Enumerable.Range(1, count)));
+        Assert.Equal(expectedSetBased ? new[] { count } : Array.Empty<int>(), state.InitializedChunkSizes);
+        Assert.Equal(expectedSetBased ? 0 : 1, state.BatchCreateCount);
+        Assert.Equal(expectedSetBased ? Array.Empty<int>() : new[] { count }, state.ExecutedBatchSizes);
+    }
+
+    [Fact]
+    public async Task AdaptiveCommandUsesDbBatchThenSetBasedTailAtProviderRowBoundary()
+    {
+        var state = new RecordingState();
+        var pipeline = CreatePipeline(
+            state, InquiryBatchExecutionMode.DbBatch, maxBatchSize: 2000,
+            maxParametersPerCommand: InquiryOptions.DefaultMaxParametersPerCommand);
+
+        Assert.Equal(1001, await pipeline.ExecuteBatchAsync(
+            AdaptiveTenParameterCommand(), Enumerable.Range(1, 1001)));
+        Assert.Equal(new[] { 1 }, state.InitializedChunkSizes);
+        Assert.Equal(1, state.BatchCreateCount);
+        Assert.Equal(new[] { 1000 }, state.ExecutedBatchSizes);
+    }
+
+    [Theory]
+    [InlineData(5, true)]
+    [InlineData(6, false)]
+    public async Task AdaptiveCommandHonorsConfiguredSetBasedParameterLimit(int count, bool expectedSetBased)
+    {
+        var state = new RecordingState();
+        var pipeline = CreatePipeline(
+            state, InquiryBatchExecutionMode.DbBatch, maxBatchSize: 1000, maxParametersPerCommand: 50);
+
+        Assert.Equal(count, await pipeline.ExecuteBatchAsync(AdaptiveTenParameterCommand(), Enumerable.Range(1, count)));
+        Assert.Equal(expectedSetBased ? new[] { count } : Array.Empty<int>(), state.InitializedChunkSizes);
+        Assert.Equal(expectedSetBased ? 0 : 1, state.BatchCreateCount);
+    }
+
+    [Fact]
+    public async Task AdaptiveCommandRejectsOneRowThatExceedsConfiguredParameterLimit()
+    {
+        var state = new RecordingState();
+        var pipeline = CreatePipeline(
+            state, InquiryBatchExecutionMode.DbBatch, maxBatchSize: 1000, maxParametersPerCommand: 9);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteBatchAsync(AdaptiveTenParameterCommand(), new[] { 1 }));
+        Assert.Equal(0, state.CommandCreateCount);
+        Assert.Equal(0, state.BatchCreateCount);
+    }
+
+    [Fact]
+    public async Task AdaptiveDbBatchBranchFallsBackToOneReusedCommandWhenProviderCannotCreateBatch()
+    {
+        var state = new RecordingState { CanCreateBatch = false };
+        var pipeline = CreatePipeline(
+            state, InquiryBatchExecutionMode.DbBatch, maxBatchSize: 1000,
+            maxParametersPerCommand: InquiryOptions.DefaultMaxParametersPerCommand);
+
+        Assert.Equal(201, await pipeline.ExecuteBatchAsync(
+            AdaptiveTenParameterCommand(), Enumerable.Range(1, 201)));
+        Assert.Empty(state.InitializedChunkSizes);
+        Assert.Equal(0, state.BatchCreateCount);
+        Assert.Equal(1, state.CommandCreateCount);
+        Assert.Equal(201, state.CommandExecuteCount);
+    }
+
+    [Theory]
     [InlineData(1000, 2100, 2, 1000)]
     [InlineData(1000, 2000, 3, 666)]
     [InlineData(1000, 32766, 40, 819)]
@@ -439,6 +516,27 @@ public sealed class BatchRuntimeEvidenceTests
             static (command, items) => ((RecordingCommand)command).AffectedRows = items.Count,
             preferPrepareOnce: true);
 
+    private static InquiryBatchCommand<int> AdaptiveTenParameterCommand()
+        => new(
+            "row-work",
+            static (target, item) =>
+            {
+                for (var i = 0; i < 10; i++)
+                {
+                    var parameter = target.CreateParameter();
+                    parameter.ParameterName = "value" + i;
+                    parameter.Value = item;
+                    target.AddParameter(parameter);
+                }
+            },
+            static count => "chunk-work-" + count,
+            static (command, items) => ((RecordingCommand)command).AffectedRows = items.Count,
+            static items => items.Count < 250,
+            parametersPerItem: 10,
+            maxItemsPerCommand: 1000,
+            commandType: CommandType.Text,
+            setBasedMaxItemsPerCommand: 210);
+
     private static InquiryBatchCommand<int> SelectableRowCommand()
         => new(
             "work",
@@ -515,6 +613,7 @@ public sealed class BatchRuntimeEvidenceTests
     private sealed class RecordingState
     {
         internal bool BatchCommandsCanCreateParameters { get; init; } = true;
+        internal bool CanCreateBatch { get; init; } = true;
         internal int BatchCreateCount { get; set; }
         internal int BatchDisposeCount { get; set; }
         internal int BatchPrepareCount { get; set; }
@@ -572,7 +671,7 @@ public sealed class BatchRuntimeEvidenceTests
 
         internal RecordingConnection(RecordingState state) => _state = state;
 
-        public override bool CanCreateBatch => true;
+        public override bool CanCreateBatch => _state.CanCreateBatch;
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";

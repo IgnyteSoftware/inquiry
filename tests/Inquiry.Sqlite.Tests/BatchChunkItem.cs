@@ -27,3 +27,21 @@ public partial class BatchChunkItemStore : InquiryStore<BatchChunkItem>
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
 }
+
+[InquiryTable("DefaultOnlyBatchItem")]
+public sealed class DefaultOnlyBatchItem
+{
+    [InquiryKey(IsGenerated = true)]
+    public int Id { get; set; }
+}
+
+public partial class DefaultOnlyBatchItemStore : InquiryStore<DefaultOnlyBatchItem>
+{
+    [InquiryInsertAll]
+    public partial Task<int> InsertAllAsync(
+        IEnumerable<DefaultOnlyBatchItem> items,
+        CancellationToken cancellationToken = default);
+
+    [InquiryCount]
+    public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
+}

@@ -281,7 +281,8 @@ internal interface IInquiryRequestPipeline
             command.GetEffectiveChunkSize(InquiryOptions.DefaultMaxBatchSize, InquiryOptions.DefaultMaxParametersPerCommand), cancellationToken);
         while (chunks.MoveNext(out var chunk))
         {
-            if (command.BindItem is null || command.UseChunk?.Invoke(chunk) == true)
+            if (command.BindItem is null || command.ShouldUseChunk(
+                    chunk, InquiryOptions.DefaultMaxParametersPerCommand))
             {
                 total += await ExecuteAsync(command.ForChunk(chunk), cancellationToken).ConfigureAwait(false);
             }
