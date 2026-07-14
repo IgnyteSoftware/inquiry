@@ -65,8 +65,8 @@ For 1.0, "feature complete" means:
 GitHub's [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1) is authoritative for
 issue state and acceptance criteria.
 
-As reconciled on 2026-07-14 after #171 closed, the milestone has **28 open issues: 3 P0, 19 P1,
-and 6 P2**.
+As reconciled on 2026-07-14 after #75 closed, the milestone has **27 open issues: 3 P0, 19 P1,
+and 5 P2**.
 
 ### P0 — stop-ship
 
@@ -92,8 +92,7 @@ and 6 P2**.
 
 - Project templates and Aspire integration: [#63](https://github.com/JakeOverstreet/inquiry/issues/63),
   [#71](https://github.com/JakeOverstreet/inquiry/issues/71).
-- Explain and testing ergonomics: [#73](https://github.com/JakeOverstreet/inquiry/issues/73),
-  [#75](https://github.com/JakeOverstreet/inquiry/issues/75).
+- Explain and testing ergonomics: [#73](https://github.com/JakeOverstreet/inquiry/issues/73).
 - Named databases/providers: [#85](https://github.com/JakeOverstreet/inquiry/issues/85).
 - Large-solution incremental-generator performance: [#182](https://github.com/JakeOverstreet/inquiry/issues/182).
 
@@ -145,13 +144,8 @@ acceptance criteria supersede any older wording that describes an initial implem
   exercised. The 1.0 scope is first-party providers in this repository; a stable public third-party
   provider SDK remains a separate post-1.0 product decision.
 - **~~DDL safety lint — more rules~~** *(resolved 2026-07-09)*. See [Recently resolved](#recently-resolved).
-- **Testing follow-ups: transaction sandbox + data factories** *(adoption review 2026-06-12)*.
-  The store interfaces and the `Inquiry.Testing` package (SQLite fixture, recording interceptor,
-  Respawn reset) shipped — see [Recently resolved](#recently-resolved) and
-  [Testing](../articles/features/testing.md). Remaining scope: an **Ecto-style SQL sandbox**
-  (each test inside a rolled-back transaction with connection ownership, enabling parallel
-  database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
-  Bogus-compatible).
+- **~~Testing follow-ups: transaction sandbox + data factories~~** *(resolved 2026-07-14)*.
+  See [Recently resolved](#recently-resolved) and [Testing](../articles/features/testing.md).
 - **Release engineering & governance — remaining scope** *(reconciled 2026-07-14)*. [#220](https://github.com/JakeOverstreet/inquiry/pull/220) shipped
   exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
   and the versioned required CI gate. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and analyzer release tracking,
@@ -651,8 +645,8 @@ new or reframed issue.
   `InquiryBulkInsertDefinition<T>` with converter/enum-aware ordinal accessors), returning
   `Task<long>` rows written with no parameter cap; SQLite/Oracle compile the method down to the
   multi-row batch insert. Sequential-GUID keys and auditing timestamps stamp per row as the
-  stream is enumerated; bulk insert uses a dedicated connection (no ambient transaction,
-  documented). Live tests on all five dialects via the shared `BulkItem` catalog fixture, and
+  stream is enumerated; bulk insert uses a dedicated connection and is rejected inside ambient
+  Inquiry transactions. Live tests on all five dialects via the shared `BulkItem` catalog fixture, and
   `BulkInsertBenchmarks` (PostgreSQL) compares chunked `VALUES` batches vs one binary `COPY`.
   See [Bulk insert](../articles/features/bulk-insert.md).
 - **Inquiry.Interceptors package (2026-06-13):** opt-in companion package with
@@ -741,6 +735,13 @@ new or reframed issue.
   and **first-class `DateOnly`/`TimeOnly` mapping** (materializer reads, `DbType.Date`/`Time`
   stamping, `CREATE TABLE` column types on all five dialects, Oracle `TimeOnly` as
   `INTERVAL DAY(0) TO SECOND(7)`), plus the IDE-squiggles troubleshooting docs.
+- **Testing sandbox and entity factories (2026-07-14):** `InquirySandbox` runs each callback in a
+  fresh DI scope and non-committable outer transaction, preserves user exceptions, and rolls back on
+  success, failure, and cancellation. Generated transactional stores resolved inside the callback share
+  the ambient transaction; native `[InquiryBulkInsert]` is rejected because its dedicated connection
+  cannot participate in rollback. Independent runs can execute concurrently on server databases.
+  `EntityFactory<T>` adds independent thread-safe sequences, ordered named states, deterministic
+  `BuildMany`, and delegate-based Bogus compatibility without coupling entity construction to store types.
 - **Production-readiness round (2026-06-12):** `InquiryOptions.DefaultCommandTimeout` applies a
   global command timeout (explicit `InquiryCommand.CommandTimeout` still wins); an ASP.NET Core
   health check (`AddHealthChecks().AddInquiry()`) opens a connection through the registered
