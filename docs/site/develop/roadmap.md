@@ -16,12 +16,12 @@
 ## Current release status
 
 **1.0.0 is not release-ready.** Provider restoration is complete: Oracle returned to the required
-matrix in #216, SQL Server's release-gating path was hardened in #218, and two consecutive full CI
+matrix in [#216](https://github.com/JakeOverstreet/inquiry/pull/216), SQL Server's release-gating path was hardened in [#218](https://github.com/JakeOverstreet/inquiry/pull/218), and two consecutive full CI
 runs are green at 20/20 required checks each. Both runs include all 15 PostgreSQL, MySQL, MariaDB,
 SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs with Docker failures configured to
 fail closed.
 
-#220 installed the immutable release-engineering foundation: an exact-commit detached-worktree pack,
+[#220](https://github.com/JakeOverstreet/inquiry/pull/220) installed the immutable release-engineering foundation: an exact-commit detached-worktree pack,
 the canonical nine-package manifest, package/bundle and CI-contract verification, package producer and
 independent verifier jobs, and the `ci-required-v1` aggregate required gate. Public promotion is still
 disabled. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and
@@ -29,9 +29,9 @@ analyzer release tracking, isolated net8/net9/net10 and NativeAOT installs from 
 SBOM/provenance/dependency evidence, hosted versioned documentation, changelog/release notes,
 release/support/security policies and repository rulesets, and protected promotion plus resumable publishing.
 
-The fresh #220 security diff scan and threat-model review found and fixed a custom-shell CI bypass.
+The fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security diff scan and threat-model review found and fixed a custom-shell CI bypass.
 The post-fix scan reported no remaining reportable findings; this does not replace the remaining
-release evidence and governance work tracked in #89.
+release evidence and governance work tracked in [#89](https://github.com/JakeOverstreet/inquiry/issues/89).
 
 ## Product contract
 
@@ -152,9 +152,9 @@ acceptance criteria supersede any older wording that describes an initial implem
   (each test inside a rolled-back transaction with connection ownership, enabling parallel
   database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
   Bogus-compatible).
-- **Release engineering & governance — remaining scope** *(reconciled 2026-07-14)*. #220 shipped
+- **Release engineering & governance — remaining scope** *(reconciled 2026-07-14)*. [#220](https://github.com/JakeOverstreet/inquiry/pull/220) shipped
   exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
-  and the versioned required CI gate. #89 remains open for APICompat and analyzer release tracking,
+  and the versioned required CI gate. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and analyzer release tracking,
   isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
   SBOM/provenance/dependency evidence, hosted versioned docs, changelog/release notes,
   release/support/security policies and repository rulesets, protected promotion, and a resumable publisher.

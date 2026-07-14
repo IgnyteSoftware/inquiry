@@ -69,8 +69,8 @@ release/support/security policies and repository rulesets, protected promotion, 
 
 ## Security status
 
-The early repository scan findings fixed in `318ee5f` remain covered. A fresh #220 security diff scan
-and threat-model review then found a custom-shell CI bypass; #220 fixed it and added regression coverage.
+The early repository scan findings fixed in `318ee5f` remain covered. A fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security diff scan
+and threat-model review then found a custom-shell CI bypass; [#220](https://github.com/JakeOverstreet/inquiry/pull/220) fixed it and added regression coverage.
 The post-fix review reported no remaining reportable findings. Security evidence, policies, and protected
 release governance are still part of the open [#89](https://github.com/JakeOverstreet/inquiry/issues/89)
 release work.
