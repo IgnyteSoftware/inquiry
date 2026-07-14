@@ -1,6 +1,9 @@
 # Batch operations
 
-Insert, update, or delete many rows in a single round-trip. The generator emits one statement with a parameter list per row, so you get N rows for ~1 round-trip's worth of latency.
+`[InquiryInsertAll]`, `[InquiryUpdateAll]`, and `[InquiryDeleteAll]` treat a collection as one
+**logical batch operation**. That does not mean every provider uses one SQL statement or one network
+round trip. Inquiry selects a bounded execution shape for the provider and operation: a set-based
+statement, `DbBatch`, a reused row command, or native array binding.
 
 ## You write
 
@@ -18,52 +21,111 @@ public partial class ShipperStore : InquiryStore<Shipper>
 }
 ```
 
-## The generator emits
+Inquiry enumerates the input once, buffers at most one bounded chunk, and returns the affected-row
+total across all physical commands. An empty collection is a zero-row no-op and does not open a
+connection.
 
-The SQL is **assembled at run time** per batch (the row count is unknown at compile time), but each row's parameter slot still uses the baked column list:
+## Atomicity and transactions
+
+A non-empty batch called outside an active Inquiry transaction opens one connection and an implicit
+`ReadCommitted` transaction for the entire logical operation. Inquiry commits only after every chunk
+succeeds. Failure or cancellation rolls that transaction back, so earlier chunks are not left committed.
+
+Inside an ambient Inquiry transaction, the batch reuses that transaction's connection and
+`DbTransaction`. It neither commits nor rolls back the caller-owned transaction and does not create a
+savepoint. The outer `ExecuteInTransactionAsync` callback or `IInquiryTransaction` handle remains
+responsible for the final outcome. See [Transactions](transactions.md) for the ambient Inquiry model and
+its distinction from `TransactionScope`.
+
+## Bounded chunking
+
+Inquiry automatically splits a batch by the smallest applicable bound:
+
+- `InquiryOptions.MaxBatchSize` (default `1000`)
+- `InquiryOptions.MaxParametersPerCommand` (default `2000`) for a generated whole-chunk or adaptive
+  descriptor that records a per-item parameter cost
+- a generated provider or SQL-shape limit, such as SQL Server's 1,000-row `VALUES` ceiling
+
+The configured parameter bound is not multiplied across fixed-row or array-binding descriptors. Those
+paths are bounded by `MaxBatchSize` and any generated provider limit; each fixed command already has its
+own legal parameter shape. For example, a SQL Server `DbBatch` may contain many one-row commands because
+the parameter limit applies to each child, not to the aggregate batch. The one-item fail-fast check
+applies only when a generated whole-chunk or adaptive descriptor records a per-item parameter cost and
+that one item exceeds the configured command limit.
+
+Lower the configured bounds for stricter deployments or memory budgets. Raise them only after checking
+the database, driver, packet, and statement limits that apply to your schema.
+
+## Provider strategies
+
+For entities with at least one bound insert column, the normal generated paths are:
+
+| Provider | `InsertAll` | `UpdateAll` | `DeleteAll` |
+|---|---|---|---|
+| SQLite | Fixed single-row command with reused parameters; under `PrepareStatements.Auto`, Inquiry prefers one preparation for the batch | Reused single-row command | One bounded `json_each` key-set delete per chunk |
+| SQL Server | Multi-row `VALUES` below 250 rows when the statement fits; `DbBatch` of fixed one-row inserts at or above 250 | `DbBatch` of fixed one-row updates | One bounded TVP key-set delete per chunk |
+| PostgreSQL | One bounded multi-row `VALUES` insert per chunk | `DbBatch` of fixed one-row updates | One bounded native-array (`ANY`) key-set delete per chunk |
+| MySQL / MariaDB | One bounded multi-row `VALUES` insert per chunk | Set-based derived-table update for eligible chunks; fixed row commands otherwise | One bounded `JSON_TABLE` key-set delete per chunk |
+| Oracle | Native array binding over one fixed insert statement per chunk | Native array binding over one fixed update statement per chunk | Native array binding over one fixed delete statement per chunk |
+
+An entity with no bound insert columns uses its provider's fixed, default-only insert once per row
+instead of a multi-row or array-bound shape. SQLite reuses that command with its normal preparation
+preference. SQL Server, PostgreSQL, MySQL, and MariaDB use `DbBatch` when available and otherwise reuse
+the command. Oracle reuses the command because this shape has no array binder.
+
+The SQL Server insert threshold is based on diagnostic measurements, not a universal claim about every
+machine or schema. The set-based path is also subject to the configured and generated parameter limits.
+If `DbBatch` is unavailable or its child commands cannot create parameters, Inquiry falls back to one
+reused row command.
+
+MySQL and MariaDB use their set-based update only when the generated key shape is safe and keys within
+the chunk are unique. Other chunks use `DbBatch` when available, then the reused row-command fallback.
+PostgreSQL row updates follow the same `DbBatch`-then-reuse fallback.
+
+Oracle array binding is used for generated mutation shapes that supply an array binder. Shapes without
+one, such as `DEFAULT VALUES` inserts, reuse the fixed row command. A provider error during array binding
+is surfaced; Inquiry does not retry writes through a different transport after execution has started.
+
+For the measurement scope and limitations behind the current SQLite and SQL Server insert choices, see
+the [batch insert strategy diagnostic decision](https://github.com/JakeOverstreet/inquiry/blob/7b691883e3da6a36514249cbbaed63a3620c491f/docs/plans/2026-07-14-batch-insert-strategy-decision.md).
+
+## Interceptors and fallbacks
+
+Active command interceptors must receive a real `DbCommand` lifecycle, so Inquiry does not use
+`DbBatch` or Oracle array binding for an intercepted chunk. A selected set-based command still produces
+one interceptor lifecycle for that physical chunk; a selected row or Oracle path produces one lifecycle
+per row. The SQLite descriptor's `Auto` prepare-once preference is not applied on this interceptor path.
+Explicit preparation settings may still prepare individual physical commands.
+
+These rules can increase the number of commands and round trips relative to the normal path. The batch
+still uses one transaction and the same chunk bounds.
+
+## Generated SQL and parameter binding
+
+Whole-chunk SQL is assembled at run time because the row count is not known at compile time, but the
+generator bakes the column list, parameter metadata, binders, and provider limits into a cached immutable
+descriptor. Fixed-row and array-binding paths keep their SQL text constant across batch sizes.
+
+For example, a set-based insert may produce:
 
 ```csharp
-// InsertAll: "INSERT INTO Shippers (CompanyName, Phone) VALUES (@CN_0, @Ph_0), (@CN_1, @Ph_1), ..."
-// DeleteAllByKey: "DELETE FROM Shippers WHERE ShipperID IN (@K_0, @K_1, @K_2, ...)"
+// INSERT INTO Shippers (CompanyName, Phone)
+// VALUES (@p0_0, @p0_1), (@p1_0, @p1_1), ...
 ```
 
-This is the one place Inquiry builds SQL at run time — necessarily, since the row count varies — but the column list and parameter shape come straight from the compile-time generator output.
+`[InquiryDeleteAll]` takes keys in the entity's model type, including strongly typed IDs. Inquiry passes
+each non-null key through its configured value converter exactly once, then uses the provider's generated
+collection transport (for example JSON table, native array, or TVP). A null key element is not converted
+and cannot match a non-null primary key.
 
-## Converter-backed keys
+PostgreSQL arrays and SQL Server TVPs normalize unsigned and `sbyte` elements to provider-supported
+numeric partners with unchecked, bit-preserving casts. SQL Server uses `byte`/`TINYINT` for `sbyte`;
+PostgreSQL uses `short[]` with values `0..255` because Npgsql reserves `byte[]` for scalar `bytea`.
+Both use `short`, `int`, and `long` for `ushort`, `uint`, and `ulong`.
 
-`[InquiryDeleteAll]` takes key values in the entity's model type, including strongly typed IDs. Inquiry projects every non-null key through its configured value converter once, then passes the provider values to the dialect's existing collection transport (JSON table, native array, TVP, or expanded parameters). A null key element is not converted and cannot match a non-null primary key; empty and null collections remain zero-row no-ops. Converters use their cached singleton and a deferred static selector, with no intermediate collection allocation.
-
-## How `UpdateAll` executes (ADO.NET `DbBatch`)
-
-On SQL Server, `[InquiryDeleteAll]` and positive collection predicates use compile-time-generated, schema-qualified TVP artifacts with exact provider facets and nullability. Apply `InquiryGeneratedSchema.ProviderArtifactsDdl` in the migration/bootstrap path before the first call. Binding peeks once and streams a single enumerator; it creates no intermediate collection and performs no catalog query, DDL, or connection open. Null/empty inputs bind zero rows. Nullable elements remain `DBNull` rows rather than being removed.
-
-PostgreSQL arrays and SQL Server TVPs normalize unsigned and `sbyte` elements to provider-supported numeric partners with unchecked bit-preserving casts. SQL Server uses `byte`/`TINYINT` for `sbyte`; PostgreSQL uses a `short[]` with the reinterpreted byte value `0..255` because Npgsql reserves `byte[]` for scalar `bytea`. Both use `short`, `int`, and `long` for `ushort`, `uint`, and `ulong`. Conversion happens once in the generated static selector, after any value converter. JSON-backed dialect transports are unchanged.
-
-Batch update does **not** concatenate statements: each item runs the ordinary single-row
-`UPDATE` (`_sqlUpdate`) with its own parameter set, dispatched through
-`IInquiry.ExecuteBatchAsync`. On providers whose ADO.NET driver implements
-`System.Data.Common.DbBatch` (Npgsql, Microsoft.Data.SqlClient, MySqlConnector) every row ships in
-**one round trip**; elsewhere (SQLite, Oracle) the rows execute sequentially on a single
-connection. Because each row is its own command, `UpdateAll` is no longer subject to the
-per-command parameter cap, the SQL stays constant (prepared-statement friendly), and the row
-count returned is the sum across items. `ExecuteBatchAsync` is also public on `IInquiry` for your
-own repeated-statement workloads. Note: command interceptors fire per item only on the sequential
-path; the `DbBatch` path has no per-command `DbCommand` to expose.
-
-Like the multi-statement form before it, a batch is **not implicitly transactional** — wrap the
-call in `ExecuteInTransactionAsync` if all-or-nothing semantics are required.
-
-## Parameter limits
-
-`InsertAll`, `DeleteAll`, and generated `IN` predicates stop before a command grows past `InquiryOptions.MaxParametersPerCommand` (default: `2000`). Lower it for providers or deployments with stricter limits; raise it only when your database and driver can handle larger commands reliably. (`UpdateAll` is exempt — see above.)
-
-## Provider differences
-
-- **PostgreSQL / SQLite** support multi-row `INSERT … VALUES (…), (…), …` directly.
-- **SQL Server** uses the same multi-row VALUES. SQL Server caps one `INSERT ... VALUES` statement at
-  1000 rows; Inquiry enforces `MaxParametersPerCommand` but does not auto-chunk, so chunk larger calls at
-  the call site or lower the configured parameter cap for SQL Server workloads.
-- **MySQL** supports multi-row VALUES with no hard cap (limited by `max_allowed_packet`).
-- **Oracle** doesn't support multi-row VALUES; the generator emits `INSERT ALL` instead.
-- **`UpdateAll` works on every provider**, including Oracle, via the `DbBatch`/sequential execution
-  described above (the previous Oracle `INQ039` stub is gone).
+`IInquiry.ExecuteBatchAsync` is also public for repeated-statement workloads. The built-in
+`DefaultInquiry` routes that overload through its bounded, implicit-transaction row-command pipeline.
+Passing a null item collection directly to this overload throws `ArgumentNullException`.
+The interface's default implementation instead calls `ExecuteAsync` once per item for compatibility with
+custom and test implementations; those implementations must provide their own batching and transaction
+semantics if they need the built-in guarantees.
