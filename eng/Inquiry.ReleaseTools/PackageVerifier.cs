@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection.Metadata;
@@ -13,6 +14,8 @@ namespace Inquiry.ReleaseTools;
 
 public static class PackageVerifier
 {
+    private static readonly TimeSpan ProjectEvaluationTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan ProcessTerminationTimeout = TimeSpan.FromSeconds(10);
     private static readonly ConcurrentDictionary<string, Lazy<IReadOnlyDictionary<string, (bool IsPackable, string PackageId)>>> ProjectEvaluationCache = new(StringComparer.Ordinal);
     private static readonly string[] RequiredPackageIds =
     [
@@ -218,14 +221,33 @@ public static class PackageVerifier
         start.ArgumentList.Add("-property:Configuration=Release");
         start.ArgumentList.Add("-property:ContinuousIntegrationBuild=true");
         start.ArgumentList.Add("-getProperty:IsPackable,PackageId");
-        using var process = Process.Start(start) ?? throw new ReleaseVerificationException($"Could not evaluate {projectPath}.");
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Require(process.ExitCode == 0, $"MSBuild evaluation failed for {projectPath}: {error.Trim()}");
+        BoundedProcessResult result;
         try
         {
-            using var json = JsonDocument.Parse(output);
+            result = BoundedProcess.Run(start, ProjectEvaluationTimeout, ProcessTerminationTimeout);
+        }
+        catch (Exception exception) when (exception is IOException or Win32Exception or InvalidOperationException)
+        {
+            throw new ReleaseVerificationException($"Could not evaluate {projectPath}: {exception.Message}");
+        }
+        Require(!result.TimedOut,
+            $"MSBuild evaluation timed out after {ProjectEvaluationTimeout.TotalSeconds:0} seconds for {projectPath}. " +
+            $"Process-tree kill requested: {result.ProcessTreeKillRequested}; root exited: {result.RootExited}; " +
+            $"streams drained: {result.StreamsDrained}; kill error: {result.KillError ?? "none"}. " +
+            $"stderr truncated: {result.StandardErrorTruncated}; stderr: {DiagnosticTail(result.StandardError)}; " +
+            $"stdout: {DiagnosticTail(result.StandardOutput)}");
+        Require(result.StreamsDrained,
+            $"MSBuild evaluation exited for {projectPath}, but its redirected output streams did not close within " +
+            $"{ProcessTerminationTimeout.TotalSeconds:0} seconds. A descendant process may still hold inherited handles. " +
+            $"stderr: {DiagnosticTail(result.StandardError)}; stdout: {DiagnosticTail(result.StandardOutput)}");
+        Require(!result.StandardOutputTruncated,
+            $"MSBuild evaluation output exceeded the {BoundedProcess.MaximumCapturedCharacters}-character capture limit " +
+            $"for {projectPath}; refusing to parse truncated property JSON. stdout tail: {DiagnosticTail(result.StandardOutput)}");
+        Require(result.ExitCode == 0,
+            $"MSBuild evaluation failed for {projectPath} with exit code {result.ExitCode}: {DiagnosticTail(result.StandardError)}");
+        try
+        {
+            using var json = JsonDocument.Parse(result.StandardOutput);
             var properties = json.RootElement.GetProperty("Properties");
             var isPackable = properties.GetProperty("IsPackable").GetString();
             var packageId = properties.GetProperty("PackageId").GetString();
@@ -746,6 +768,13 @@ public static class PackageVerifier
 
     private static bool IsLowerHex(string value, int length) =>
         value.Length == length && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static string DiagnosticTail(string value)
+    {
+        const int maximumLength = 4_096;
+        var trimmed = value.Trim();
+        return trimmed.Length <= maximumLength ? trimmed : "..." + trimmed[^maximumLength..];
+    }
 
     private static void ValidateRelativePath(string path, string name)
     {

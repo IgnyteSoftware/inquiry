@@ -157,17 +157,32 @@ public sealed class PackageAdversarialTests
 
     private static string Run(string workingDirectory, string fileName, params string[] arguments)
     {
-        var start = new ProcessStartInfo(fileName) { WorkingDirectory = workingDirectory, RedirectStandardOutput = true, RedirectStandardError = true };
+        var start = new ProcessStartInfo(fileName)
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
         foreach (var argument in arguments)
         {
             start.ArgumentList.Add(argument);
         }
-        using var process = Process.Start(start)!;
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"{fileName} failed: {error}\n{output}");
-        return output;
+        var result = BoundedProcess.Run(start, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(10));
+        Assert.False(result.TimedOut,
+            $"{fileName} timed out; killRequested={result.ProcessTreeKillRequested}; rootExited={result.RootExited}; " +
+            $"streamsDrained={result.StreamsDrained}; killError={result.KillError ?? "none"}; " +
+            $"stdoutTruncated={result.StandardOutputTruncated}; stderrTruncated={result.StandardErrorTruncated}\n" +
+            $"{result.StandardError}\n{result.StandardOutput}");
+        Assert.True(result.StreamsDrained,
+            $"{fileName} exited, but redirected streams remained open; a descendant may still hold inherited handles. " +
+            $"{result.StandardError}\n{result.StandardOutput}");
+        Assert.False(result.StandardOutputTruncated,
+            $"{fileName} standard output exceeded the bounded capture and cannot be returned completely.");
+        Assert.True(result.ExitCode == 0,
+            $"{fileName} failed with exit code {result.ExitCode}: {result.StandardError}\n{result.StandardOutput}");
+        return result.StandardOutput;
     }
 
     private static void Mutate(string path, Action<ZipArchive> mutation)
