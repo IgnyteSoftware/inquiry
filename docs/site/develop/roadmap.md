@@ -7,26 +7,31 @@
 > predictable allocations; NativeAOT support; and explicit, validated SQL escape hatches. It is not
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
-> **Last reconciled against source and GitHub:** 2026-07-13 from the MySQL-family restoration branch
-> based on `331a478`. PostgreSQL, SQL Server, MySQL, and MariaDB are restored; Oracle and consecutive
-> full-CI evidence remain under
-> [#171](https://github.com/JakeOverstreet/inquiry/issues/171).
+> **Last reconciled against source and GitHub:** 2026-07-14 at prerelease head `52f1431`, after
+> [#216](https://github.com/JakeOverstreet/inquiry/pull/216),
+> [#218](https://github.com/JakeOverstreet/inquiry/pull/218), and
+> [#220](https://github.com/JakeOverstreet/inquiry/pull/220). All providers are restored and
+> [#171](https://github.com/JakeOverstreet/inquiry/issues/171) is closed.
 
 ## Current release status
 
-**1.0.0 is not release-ready.** The provider matrix remains the P0 correctness gate in
-[#171](https://github.com/JakeOverstreet/inquiry/issues/171); tests must be fixed, not muted or made
-non-gating. PostgreSQL is green at 253/253 on each of net8/net9/net10. SQL Server is green at 298/298
-on each TFM, plus a fresh-container net10 repeat, using the release-gating FTS image. MySQL is green at
-255/255 on each TFM plus a fresh net10 repeat; MariaDB is green at 258/258 on each TFM plus a fresh
-net10 repeat. Every provider leg reports zero skips. Oracle and the final full-CI runs still require
-current evidence. The normal CI/contribution-policy mismatch and consecutive release-candidate evidence
-remain owned by
-[#89](https://github.com/JakeOverstreet/inquiry/issues/89).
+**1.0.0 is not release-ready.** Provider restoration is complete: Oracle returned to the required
+matrix in #216, SQL Server's release-gating path was hardened in #218, and two consecutive full CI
+runs are green at 20/20 required checks each. Both runs include all 15 PostgreSQL, MySQL, MariaDB,
+SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs with Docker failures configured to
+fail closed.
 
-The previous formal security scan was fixed at `318ee5f`, but the codebase has changed substantially since
-that snapshot. A release-candidate security scan and threat-model review are part of
-[#89](https://github.com/JakeOverstreet/inquiry/issues/89).
+#220 installed the immutable release-engineering foundation: an exact-commit detached-worktree pack,
+the canonical nine-package manifest, package/bundle and CI-contract verification, package producer and
+independent verifier jobs, and the `ci-required-v1` aggregate required gate. Public promotion is still
+disabled. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and
+analyzer release tracking, isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
+SBOM/provenance/dependency evidence, hosted versioned documentation, changelog/release notes,
+release/support/security policies and repository rulesets, and protected promotion plus resumable publishing.
+
+The fresh #220 security diff scan and threat-model review found and fixed a custom-shell CI bypass.
+The post-fix scan reported no remaining reportable findings; this does not replace the remaining
+release evidence and governance work tracked in #89.
 
 ## Product contract
 
@@ -60,11 +65,13 @@ For 1.0, "feature complete" means:
 GitHub's [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1) is authoritative for
 issue state and acceptance criteria.
 
+As reconciled on 2026-07-14 after #171 closed, the milestone has **28 open issues: 3 P0, 19 P1,
+and 6 P2**.
+
 ### P0 — stop-ship
 
 | Workstream | Issues |
 |---|---|
-| Restore the live provider matrix | [#171](https://github.com/JakeOverstreet/inquiry/issues/171) |
 | Broken/partial provider features | [#69](https://github.com/JakeOverstreet/inquiry/issues/69) |
 | Benchmark truth and release engineering | [#87](https://github.com/JakeOverstreet/inquiry/issues/87), [#89](https://github.com/JakeOverstreet/inquiry/issues/89) |
 
@@ -145,10 +152,12 @@ acceptance criteria supersede any older wording that describes an initial implem
   (each test inside a rolled-back transaction with connection ownership, enabling parallel
   database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
   Bogus-compatible).
-- **Release engineering & governance — remaining scope** *(adoption review 2026-06-12)*. Package
-  icon and a published versioning / breaking-change / support-window policy document. (RepositoryUrl,
-  SourceLink, symbol packages, package readme, MinVer tag-based versioning, and the pack/publish
-  workflow shipped — see [Recently resolved](#recently-resolved).)
+- **Release engineering & governance — remaining scope** *(reconciled 2026-07-14)*. #220 shipped
+  exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
+  and the versioned required CI gate. #89 remains open for APICompat and analyzer release tracking,
+  isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
+  SBOM/provenance/dependency evidence, hosted versioned docs, changelog/release notes,
+  release/support/security policies and repository rulesets, protected promotion, and a resumable publisher.
 - **Default interceptor library — remaining scope** *(gap research 2026-06-12)*. The
   `Inquiry.Interceptors` package shipped with slow-query warning logging and sqlcommenter
   trace-context tagging (see [Recently resolved](#recently-resolved)); the command-text assertion
@@ -230,8 +239,9 @@ acceptance criteria supersede any older wording that describes an initial implem
   ([#135](https://github.com/JakeOverstreet/inquiry/issues/135)).
 - The Oracle `:rc` finalize-once guard shipped and [#136](https://github.com/JakeOverstreet/inquiry/issues/136)
   is closed.
-- All failures exposed by expanded coverage remain release-blocking under
-  [#171](https://github.com/JakeOverstreet/inquiry/issues/171).
+- The provider-restoration gate is complete and
+  [#171](https://github.com/JakeOverstreet/inquiry/issues/171) closed after two consecutive 20/20
+  full CI runs passed all 15 live provider/TFM legs.
 
 ## Explicitly out of scope for 1.0
 
@@ -400,16 +410,19 @@ new or reframed issue.
   rows to the parent result set at the SQL level — no runtime parameters needed, preserves the grid path.
   The M:N child `_All` query still selects the complete child table and remains open in
   [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
-- **Release engineering — packaging infrastructure (2026-07-08).** `RepositoryUrl` placeholder replaced
+- **Release engineering — immutable packaging and required CI gate (#220, 2026-07-14).** `RepositoryUrl` placeholder replaced
   with the real GitHub URL; `RepositoryType`, `PackageProjectUrl` added. SourceLink
   (`Microsoft.SourceLink.GitHub`) embeds commit metadata and the `.snupkg` symbol packages enable
   step-through debugging. Root `README.md` wired as the NuGet package readme for all 9 shippable
   packages. MinVer tag-based versioning is configured for the first public release (`v1.0.0` tag →
   version `1.0.0`) with `MinVerMinimumMajorMinor=1.0`. The unsafe tag-triggered rebuild-and-wildcard-push
-  workflow has been removed. A canonical nine-package manifest, package/bundle verifier, and versioned
-  `ci-required-v1` contract are in place; immutable RC production, independent verification, protected
-  promotion, and resumable publication remain release-blocking under #89. Benchmark and sample projects
-  remain non-packable.
+  workflow has been removed. A canonical nine-package manifest, exact-commit detached-worktree pack,
+  package/bundle verifier, package producer and independent verifier jobs, and versioned
+  `ci-required-v1` aggregate required gate are in place. APICompat/analyzer release tracking,
+  isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
+  SBOM/provenance/dependency evidence, hosted versioned docs, changelog/release notes, policies/rulesets,
+  protected promotion, and resumable publication remain release-blocking under #89. Benchmark and sample
+  projects remain non-packable.
 - **PostgreSQL bulk COPY typed writes (#122, 2026-07-08).** The binary copier now threads
   `System.Data.DbType` through `InquiryBulkInsertDefinition.ColumnTypes` (populated at compile time by
   the source generator), maps them to `NpgsqlDbType` in `PostgreSqlBulkCopier.MapColumnTypes`, and calls
