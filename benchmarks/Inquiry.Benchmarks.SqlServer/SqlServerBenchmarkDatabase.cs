@@ -8,6 +8,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.MsSql;
+using Inquiry.Benchmarks.Contracts.Fixtures;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
@@ -54,7 +55,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
         {
             if (_container is null)
             {
-                var container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest")
+                var container = new MsSqlBuilder(DatabaseImageCatalog.GetRequired("sqlserver").Reference)
                     .Build();
                 await container.StartAsync().ConfigureAwait(false);
                 var connectionString = container.GetConnectionString();
