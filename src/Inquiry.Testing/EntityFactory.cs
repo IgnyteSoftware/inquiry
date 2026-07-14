@@ -5,6 +5,7 @@ namespace Inquiry.Testing;
 /// The factory only constructs entities; persistence remains the caller's responsibility.
 /// </summary>
 public sealed class EntityFactory<TEntity>
+    where TEntity : class
 {
     private readonly Func<long, TEntity> _create;
     private readonly Dictionary<string, Action<TEntity, long>> _states = new(StringComparer.Ordinal);
