@@ -49,7 +49,10 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("MySql")]
     public void UnsupportedDialectsReportINQ039AndEmitStub(string dialect)
     {
-        var result = RunGenerator(DeleteReturningSource, dialect: dialect);
+        var result = RunGenerator(
+            DeleteReturningSource,
+            dialect: dialect,
+            unsupportedOperationSeverity: ReportDiagnostic.Warn);
 
         Assert.Contains(result.RunResult.Diagnostics,
             d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning);

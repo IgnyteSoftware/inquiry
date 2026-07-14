@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ060.
+    //                  INQ045–INQ075, INQ077–INQ082. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -26,7 +26,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ033–INQ034  Soft deletes
     //   INQ035         Full-text search              (unsupported by dialect)
     //   INQ036–INQ038  JSON/array/value-converter column types
-    //   INQ039         Graceful degradation: operation unsupported by the active dialect (stub + warning) [IN USE]
+    //   INQ039         Operation unsupported by the active dialect (error; explicit lowering enables a stub) [IN USE]
     //   INQ045–INQ046  Ad-hoc DTO materialization    (INQ045 no mappable properties, INQ046 not constructible) [IN USE]
     //   INQ047         Sequential GUID key           (SequentialGuid on non-Guid / generated / db-default key) [IN USE]
     //   INQ048         Raw-SQL injection lint        (non-constant command text passed to InquiryCommand) [IN USE]
@@ -46,6 +46,8 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ068         Invalid database-generated concurrency-token shape [IN USE]
     //   INQ069         Provider cannot emit a cyclic foreign-key constraint [IN USE]
     //   INQ070         Duplicate/colliding physical schema mapping [IN USE]
+    //   INQ071–INQ077  Provider schema and artifact validation [IN USE]
+    //   INQ078–INQ082  Value-converter model and construction validation [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -398,8 +400,8 @@ internal static class InquiryDiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor ConverterInvalid = new(
         "INQ037",
-        "Converter type does not implement IInquiryValueConverter<,>",
-        "Entity '{0}' sets Converter = typeof({1}) on property '{2}', but '{1}' does not implement IInquiryValueConverter<TModel, TProvider>.",
+        "Converter type is invalid",
+        "Entity '{0}' sets Converter = typeof({1}) on property '{2}', but '{1}' does not provide exactly one IInquiryValueConverter<TModel, TProvider> contract for that property's non-null model type.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -408,6 +410,46 @@ internal static class InquiryDiagnosticDescriptors
         "INQ038",
         "Converter provider type is not supported",
         "Entity '{0}' converter '{1}' on property '{2}' uses provider type '{3}', which is not a supported non-null Inquiry scalar provider type. Model-property nullability controls database NULL.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConverterModelTypeMismatch = new(
+        "INQ078",
+        "Converter model type does not match the property type",
+        "Converter '{0}' on property '{1}' must implement IInquiryValueConverter<{2}, TProvider> for the property's non-null model type.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConverterTypeAbstract = new(
+        "INQ079",
+        "Converter type cannot be abstract",
+        "Converter type '{0}' is abstract and cannot be instantiated by generated Inquiry code.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConverterTypeOpenGeneric = new(
+        "INQ080",
+        "Converter type must be closed",
+        "Converter type '{0}' is an open generic type. Supply a closed converter type.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConverterTypeInaccessible = new(
+        "INQ081",
+        "Converter type is inaccessible",
+        "Converter type '{0}' is not accessible to generated Inquiry code.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConverterConstructorMissing = new(
+        "INQ082",
+        "Converter type needs a public parameterless constructor",
+        "Converter type '{0}' must have a public parameterless constructor for InquiryConverterCache<TConverter>.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -421,15 +463,14 @@ internal static class InquiryDiagnosticDescriptors
         isEnabledByDefault: true);
 
     // INQ039: a store method maps to an operation the active dialect cannot emit (e.g. Oracle has no
-    // INSERT/UPDATE/UPSERT ... RETURNING). Reported as a Warning so the build degrades gracefully —
-    // the generator emits a stub that throws NotSupportedException at runtime instead of aborting the
-    // entire compilation. Elevate to error via .editorconfig if a dialect must be fully supported.
+    // INSERT/UPDATE/UPSERT ... RETURNING). It is an error by default. A consumer that deliberately
+    // configures INQ039 below error severity project-wide opts into generated NotSupportedException runtime stubs.
     public static readonly DiagnosticDescriptor DialectOperationNotSupported = new(
         "INQ039",
         "Operation is not supported by the target dialect",
-        "Store method '{0}' maps to an operation the '{1}' dialect cannot emit ({2}). A stub that throws NotSupportedException at runtime was generated; calling it will fail. Use a dialect-supported pattern (for RETURNING, fetch the generated key separately) or compile against a dialect that supports it.",
+        "Store method '{0}' maps to an operation the '{1}' dialect cannot emit ({2}). Use a dialect-supported pattern (for RETURNING, fetch the generated key separately) or compile against a dialect that supports it. Configure INQ039 below error severity project-wide only to opt all unsupported project methods into generated NotSupportedException runtime stubs.",
         "Inquiry",
-        DiagnosticSeverity.Warning,
+        DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     // Reported at relation-declaration time (regardless of whether any method eager-loads it), so a

@@ -12,6 +12,10 @@
     <!-- pass `-c Release` when running. -->
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!-- This benchmark link-compiles the provider-neutral Northwind stores, including three
+         generated-key upserts that Oracle intentionally cannot implement. Suppressing INQ039 at
+         project scope opts those unused benchmark methods into compile-safe throwing stubs. -->
+    <NoWarn>$(NoWarn);INQ039</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

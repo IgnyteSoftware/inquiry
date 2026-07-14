@@ -43,9 +43,9 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 
 - **Connection factory does provider-specific fixups:** `BindByName = true` (so `:name` references bind by name, not position), `@`-to-`:` parameter renaming, and OUT-parameter binding for `RETURNING ... INTO` blocks.
 - **`INSERT ALL` for batch inserts:** Oracle doesn't support multi-row `VALUES`. The generator emits `INSERT ALL INTO t (...) VALUES (...) INTO t (...) VALUES (...) SELECT 1 FROM dual`.
-- **`UpdateAll` runs through the runtime batch API** — Oracle has no multi-row `UPDATE … VALUES`, so the generator emits the ordinary single-row `UPDATE` (`_sqlUpdate`) executed once per item via `Inquiry.ExecuteBatchAsync` (sequentially on one connection — Oracle's driver exposes no `DbBatch`). No `INQ039` warning, no throwing stub.
+- **`UpdateAll` runs through the runtime batch API** — Oracle has no multi-row `UPDATE … VALUES`, so the generator emits the ordinary single-row `UPDATE` (`_sqlUpdate`) executed once per item via `Inquiry.ExecuteBatchAsync` (sequentially on one connection — Oracle's driver exposes no `DbBatch`). No `INQ039` diagnostic or throwing stub.
 - **Full-text search is unsupported** — `[InquiryFullTextSearch]` is not implemented for Oracle in v1; the generator reports compile-time error `INQ035` (full-text search is available only on PostgreSQL, SQL Server, MySQL, and MariaDB). No `CONTAINS(...)` SQL is emitted.
-- **`Upsert` with DB-generated key** — the upsert path requires a known key. For a DB-generated key, use `InsertAsync` for new rows and `UpdateAsync` for existing ones; `UpsertAsync` is a throwing stub in that scenario.
+- **`Upsert` with DB-generated key** — the upsert path requires a known key. For a DB-generated key, use `InsertAsync` for new rows and `UpdateAsync` for existing ones; `UpsertAsync` produces the `INQ039` build error. Configuring `INQ039` as a warning or `none` project-wide opts every unsupported project method into a throwing runtime stub.
 - **Cloud transient-fault retry:** set `Compatibility = OracleCompatibility.CloudHosted` in the
   options overload to enable exponential-backoff retry on transient connection-open errors (instance
   unavailable, TNS listener down, connection lost). Tunable via `MaxAttempts`, `RetryBaseDelay`, and
