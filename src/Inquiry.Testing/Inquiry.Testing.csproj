@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-    <Description>Test helpers for the Inquiry source-generated micro-ORM: an in-memory SQLite fixture, a recording command interceptor, and a Respawn-based database reset wrapper. Test-framework-agnostic.</Description>
+    <Description>Framework-agnostic Inquiry test helpers: rollback sandboxes, entity factories, an in-memory SQLite fixture, command recording, and Respawn database reset.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
