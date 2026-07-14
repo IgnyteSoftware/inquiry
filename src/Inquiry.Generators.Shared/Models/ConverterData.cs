@@ -10,9 +10,13 @@ namespace Inquiry.Generators.Models;
 /// </summary>
 internal sealed record ConverterData(
     string ConverterTypeDisplay,
+    string ModelTypeDisplay,
     string ProviderTypeDisplay,
     SpecialType ProviderSpecialType)
 {
     /// <summary>Provider-side type facts, when resolved from an explicit converter.</summary>
     public TypeData? ProviderType { get; init; }
+
+    /// <summary>Whether the selected converter contract is implemented explicitly.</summary>
+    public bool RequiresInterfaceDispatch { get; init; }
 }

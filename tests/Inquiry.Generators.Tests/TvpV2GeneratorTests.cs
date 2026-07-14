@@ -91,7 +91,10 @@ public sealed partial class InquiryGeneratorTests
             { [InquiryExists, InquiryWhere("Value", Compare.In)] public partial Task<bool> Find(IReadOnlyList<{{(property.Contains("Guid") ? "System.Guid" : property.Contains("DateTime") ? "System.DateTime" : "string")}}> values, CancellationToken ct = default); }
             """;
 
-        var result = RunGenerator(source, dialect: "SqlServer");
+        var result = RunGenerator(
+            source,
+            dialect: "SqlServer",
+            unsupportedOperationSeverity: ReportDiagnostic.Warn);
         Assert.Contains(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ076" && diagnostic.Severity == DiagnosticSeverity.Error);
         var generated = string.Join("\n", result.RunResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         Assert.DoesNotContain("CREATE TYPE", generated);
@@ -138,7 +141,10 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "SqlServer");
+        var result = RunGenerator(
+            source,
+            dialect: "SqlServer",
+            unsupportedOperationSeverity: ReportDiagnostic.Warn);
         Assert.Single(result.RunResult.Diagnostics.Where(static diagnostic => diagnostic.Id == "INQ076"));
         var store = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
@@ -187,7 +193,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("[InquiryColumn(SqlType = \"   \")] public int Value { get; set; }")]
     [InlineData("[InquiryColumn(Precision = 0, Scale = 0)] public decimal Value { get; set; }")]
     [InlineData("[InquiryColumn(Scale = 8)] public System.DateTime Value { get; set; }")]
-    public void SqlServerInvalidInferredOrWhitespaceFacetsReportOnlyInq076AndKeepSafeStub(string property)
+    public void SqlServerInvalidInferredOrWhitespaceFacetsReportOnlyInq076AndDoNotEmitStubByDefault(string property)
     {
         var element = property.Contains("decimal", StringComparison.Ordinal) ? "decimal"
             : property.Contains("DateTime", StringComparison.Ordinal) ? "System.DateTime" : "int";
@@ -203,6 +209,43 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Single(result.RunResult.Diagnostics.Where(static diagnostic => diagnostic.Id == "INQ076"));
         Assert.DoesNotContain(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ039");
+        var store = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        Assert.DoesNotContain("throw new global::System.NotSupportedException", store);
+        Assert.DoesNotContain("InquiryTvpParameter.Bind", store);
+        Assert.Contains(result.Compilation.GetDiagnostics(),
+            static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Theory]
+    [InlineData(ReportDiagnostic.Warn)]
+    [InlineData(ReportDiagnostic.Suppress)]
+    public void SqlServerInvalidCollectionFacetEmitsCompileSafeStubOnlyWithProjectWideOptIn(
+        ReportDiagnostic unsupportedOperationAction)
+    {
+        const string source = """
+            using System.Collections.Generic; using System.Threading; using System.Threading.Tasks;
+            using Inquiry.Entities; using Inquiry.Stores;
+            namespace Demo;
+            [InquiryView("InvalidFacets")] public sealed class Item
+            { [InquiryColumn(Scale = 8)] public System.DateTime Value { get; set; } }
+            public partial class Store : InquiryStore<Item>
+            { [InquiryExists, InquiryWhere("Value", Compare.In)] public partial Task<bool> Find(IReadOnlyList<System.DateTime> values, CancellationToken ct = default); }
+            """;
+
+        var result = RunGenerator(
+            source,
+            dialect: "SqlServer",
+            unsupportedOperationSeverity: unsupportedOperationAction,
+            additionalDiagnosticOptions: new Dictionary<string, ReportDiagnostic>
+            {
+                ["INQ076"] = ReportDiagnostic.Suppress,
+            });
+
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ076");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ039");
+        Assert.DoesNotContain(result.Compilation.GetDiagnostics(),
+            static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         var store = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Contains("throw new global::System.NotSupportedException", store);

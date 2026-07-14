@@ -668,7 +668,7 @@ internal static class StoreOperationEmitter
         if (column.Converter is { } converter)
         {
             // converters are stateless; bind through the shared cached instance instead of allocating one per bind.
-            var toProvider = $"global::Inquiry.Entities.InquiryConverterCache<{converter.ConverterTypeDisplay}>.Instance.ToProvider({NonNullableValueExpression(column.Type, accessor)})";
+            var toProvider = ConverterInvocationEmitter.ToProvider(converter, NonNullableValueExpression(column.Type, accessor));
             // An unsigned/sbyte provider type is bound via its same-width storage partner (DbTypeMapper maps
             // the provider DbType to that signed/byte type): SqlClient rejects DbType.UInt*/SByte and would
             // overflow on a checked Convert past the signed max, so reinterpret the bit pattern with unchecked().
@@ -1576,8 +1576,7 @@ internal static class StoreOperationEmitter
 
         if (column.Converter is { } converter)
         {
-            var cache = $"global::Inquiry.Entities.InquiryConverterCache<{converter.ConverterTypeDisplay}>.Instance";
-            providerValue = $"{cache}.ToProvider({value})";
+            providerValue = ConverterInvocationEmitter.ToProvider(converter, value);
             providerTypeName = converter.ProviderType?.NonNullableDisplayName ?? converter.ProviderTypeDisplay;
             providerSpecialType = converter.ProviderSpecialType;
             nullableResultType = converter.ProviderType?.IsValueType == true

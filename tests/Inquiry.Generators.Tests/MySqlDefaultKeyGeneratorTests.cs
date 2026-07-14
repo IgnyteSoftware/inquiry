@@ -34,7 +34,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryUpsert] public partial Task<int> UpsertAsync(DefaultedItem item, CancellationToken cancellationToken = default);
                 [InquiryUpsert(ReturnEntity = true)] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);
                 """,
-            includeInsertReturning: true), dialect: "MySql");
+            includeInsertReturning: true), dialect: "MySql", unsupportedOperationSeverity: ReportDiagnostic.Warn);
 
         Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning);
         var text = DefaultKeyStoreText(result);
@@ -52,7 +52,8 @@ public sealed partial class InquiryGeneratorTests
             "string",
             extraMethods: "[InquiryUpsert(ReturnEntity = true)] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
             includeInsertReturning: true),
-            dialect: "MySql");
+            dialect: "MySql",
+            unsupportedOperationSeverity: ReportDiagnostic.Warn);
 
         AssertNoGeneratorErrors(result);
         Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ039");

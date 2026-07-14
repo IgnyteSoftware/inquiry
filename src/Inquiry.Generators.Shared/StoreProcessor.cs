@@ -861,6 +861,7 @@ internal static class StoreProcessor
         IReadOnlyDictionary<string, EntityData> entities,
         IReadOnlyDictionary<string, ProjectionData> projections,
         SqlBuilder sqlBuilder,
+        bool emitUnsupportedOperationStubs,
         ISet<string>? invalidEntityNames = null)
     {
         if (!store.IsEmittable)
@@ -1436,7 +1437,10 @@ internal static class StoreProcessor
             // emit a safe body without adding the generic INQ039 for the same transport failure.
             if (collectionErrors.TryGetValue(method, out var collectionError))
             {
-                StoreOperationEmitter.EmitUnsupportedStub(source, method, collectionError);
+                if (emitUnsupportedOperationStubs)
+                {
+                    StoreOperationEmitter.EmitUnsupportedStub(source, method, collectionError);
+                }
                 continue;
             }
             if (unsupportedReason is not null)
@@ -1445,7 +1449,10 @@ internal static class StoreProcessor
                     InquiryDiagnosticDescriptors.DialectOperationNotSupported,
                     method.Location?.ToLocation(),
                     method.Name, sqlBuilder.DialectName, unsupportedReason));
-                StoreOperationEmitter.EmitUnsupportedStub(source, method, unsupportedReason);
+                if (emitUnsupportedOperationStubs)
+                {
+                    StoreOperationEmitter.EmitUnsupportedStub(source, method, unsupportedReason);
+                }
                 continue;
             }
 

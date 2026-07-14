@@ -208,8 +208,11 @@ order:
    DLL paths, so run `dotnet build` once after a fresh clone or `git clean` before the IDE can load
    it. NuGet consumers are unaffected.
 
-A persistent CS8795 alongside an `INQ039` warning is different — it means the active dialect cannot
-emit that operation, and the method body is a throwing stub by design.
+A persistent CS8795 alongside an `INQ039` error means the active dialect cannot emit that operation.
+Unsupported operations fail the build by default. If you deliberately prefer runtime failures for every
+unsupported method in the project, configure `INQ039` as a warning or `none` project-wide in `.editorconfig`;
+Inquiry will then generate throwing stubs. Declaration-level pragmas and `SuppressMessage` attributes do
+not change this generator policy.
 
 ## Next steps
 
