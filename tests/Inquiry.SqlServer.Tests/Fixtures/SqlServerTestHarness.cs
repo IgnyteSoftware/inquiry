@@ -40,7 +40,8 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
         string ddl,
         string? namePrefix = null,
         bool provisionProviderArtifacts = true,
-        Action<string>? databaseCreated = null)
+        Action<string>? databaseCreated = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var prefix = namePrefix ?? "Inquiry";
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
@@ -78,10 +79,11 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            var services = new ServiceCollection()
+            var serviceCollection = new ServiceCollection()
                 .AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly)
-                .AddInquirySqlServer(connectionString)
-                .BuildServiceProvider();
+                .AddInquirySqlServer(connectionString);
+            configureServices?.Invoke(serviceCollection);
+            var services = serviceCollection.BuildServiceProvider();
 
             return new SqlServerTestHarness(adminConnectionString, databaseName, connectionString, services);
         }

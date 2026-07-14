@@ -20,6 +20,12 @@ internal sealed record ParameterData(
     /// </summary>
     public string? ElementComparisonDisplay { get; init; }
 
+    /// <summary>The collection element type with nullable wrappers/annotations removed.</summary>
+    public string? ElementNonNullableComparisonDisplay { get; init; }
+
+    /// <summary>Whether the collection element is a nullable value or annotated reference type.</summary>
+    public bool ElementIsNullable { get; init; }
+
     /// <summary>
     /// Source rendering of the parameter's explicit default value (e.g. <c>default</c>, <c>null</c>,
     /// <c>true</c>, a quoted string, or a fully-qualified enum cast), or null when the parameter has

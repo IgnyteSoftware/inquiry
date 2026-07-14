@@ -89,8 +89,12 @@ public abstract class SqlBuilder
     public virtual string BatchInsertRuntimeParameterPrefix => "@p";
 
     /// <summary>Returns a deployment artifact required to bind this collection column, if any.</summary>
-    public virtual CollectionParameterArtifact? BuildCollectionParameterArtifact(string? owningSchema, IColumn column)
-        => null;
+    public virtual CollectionParameterResolution ResolveCollectionParameter(CollectionParameterContext context)
+        => new(null, null);
+
+    /// <summary>Emits the provider-specific runtime call for one previously resolved collection transport.</summary>
+    public virtual string BuildCollectionParameterBinding(CollectionParameterBindingContext context)
+        => $"{ArrayParameterBinderFqn}.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression});";
 
     public virtual CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
         => new(context.ValueExpression, context.ProviderTypeName, false);

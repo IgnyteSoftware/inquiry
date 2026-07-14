@@ -214,10 +214,14 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             // Shared connection — the grid does NOT own/dispose it; it releases the lease on dispose.
             return new InquiryGridReader(reader, dbCommand, ownedConnection: null, lease: lease);
         }
-        catch
+        catch (Exception primaryException)
         {
+            var exceptions = new List<Exception> { primaryException };
             try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
-            finally { lease.Dispose(); }
+            catch (Exception exception) { exceptions.Add(exception); }
+            try { lease.Dispose(); }
+            catch (Exception exception) { exceptions.Add(exception); }
+            InquiryCleanup.ThrowIfAny(exceptions);
             throw;
         }
     }
@@ -241,11 +245,17 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         // becomes permanently un-committable. A command that was created is disposed in the finally;
         // matches the buffered overloads.
         DbCommand? dbCommand = null;
+        Exception? primaryException = null;
         try
         {
-            dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
-            InitializeCommandSync(dbCommand, command);
+            try
+            {
+                dbCommand = CreateCommand();
+                dbCommand.Transaction = _transaction;
+                InitializeCommandSync(dbCommand, command);
+            }
+            catch (Exception exception) { primaryException ??= exception; throw; }
+            if (dbCommand is null) throw new InvalidOperationException("Command creation completed without a command.");
             if (HasInterceptors)
             {
                 try
@@ -255,6 +265,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -267,6 +278,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                primaryException ??= exception;
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
             }
@@ -280,6 +292,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -293,6 +306,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -308,6 +322,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -315,7 +330,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
-            try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
+            try { await DisposeReaderAndCommandAsync(reader, dbCommand, primaryException).ConfigureAwait(false); }
             finally { ExitInFlight(); }
         }
     }
@@ -333,8 +348,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
 
             try
             {
@@ -346,7 +363,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -358,8 +376,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -381,8 +404,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
 
             try
             {
@@ -394,7 +419,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
@@ -412,8 +438,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -441,11 +472,17 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         // becomes permanently un-committable. A command that was created is disposed in the finally;
         // matches the buffered overloads.
         DbCommand? dbCommand = null;
+        Exception? primaryException = null;
         try
         {
-            dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
-            InitializeCommandSync(dbCommand, command);
+            try
+            {
+                dbCommand = CreateCommand();
+                dbCommand.Transaction = _transaction;
+                InitializeCommandSync(dbCommand, command);
+            }
+            catch (Exception exception) { primaryException ??= exception; throw; }
+            if (dbCommand is null) throw new InvalidOperationException("Command creation completed without a command.");
             if (HasInterceptors)
             {
                 try
@@ -455,6 +492,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -467,6 +505,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                primaryException ??= exception;
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
             }
@@ -480,6 +519,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -493,6 +533,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -508,6 +549,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -515,7 +557,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
-            try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
+            try { await DisposeReaderAndCommandAsync(reader, dbCommand, primaryException).ConfigureAwait(false); }
             finally { ExitInFlight(); }
         }
     }
@@ -534,8 +576,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
 
             try
             {
@@ -547,7 +591,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
                 var list = capacityHint > 0 ? new List<T>(capacityHint) : new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -559,8 +604,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -582,8 +632,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
 
             try
             {
@@ -595,7 +647,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(SequentialSingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(SequentialSingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
@@ -613,8 +666,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -643,17 +701,24 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         // becomes permanently un-committable. A command that was created is disposed in the finally;
         // matches the buffered overloads.
         DbCommand? dbCommand = null;
+        Exception? primaryException = null;
         try
         {
             // interceptorCommand is built inside the try too: new InquiryCommand(commandText) can throw
             // (empty/whitespace SQL), and it runs after EnterInFlight() — keeping it guarded ensures the
             // finally still releases the in-flight slot.
-            var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
-            dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
-            dbCommand.CommandText = commandText;
-            bindParameters(dbCommand, args);
-            _connectionFactory.FinalizeCommand(dbCommand);
+            InquiryCommand? interceptorCommand = null;
+            try
+            {
+                interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+                dbCommand = CreateCommand();
+                dbCommand.Transaction = _transaction;
+                dbCommand.CommandText = commandText;
+                bindParameters(dbCommand, args);
+                _connectionFactory.FinalizeCommand(dbCommand);
+            }
+            catch (Exception exception) { primaryException ??= exception; throw; }
+            if (dbCommand is null) throw new InvalidOperationException("Command creation completed without a command.");
             if (interceptorCommand is not null)
             {
                 try
@@ -663,6 +728,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -675,6 +741,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                primaryException ??= exception;
                 if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
             }
@@ -688,6 +755,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -701,6 +769,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -716,6 +785,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    primaryException ??= exception;
                     await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
                 }
@@ -723,7 +793,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
-            try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
+            try { await DisposeReaderAndCommandAsync(reader, dbCommand, primaryException).ConfigureAwait(false); }
             finally { ExitInFlight(); }
         }
     }
@@ -744,8 +814,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
             var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
             try
@@ -760,7 +832,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -772,8 +845,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -798,8 +876,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
             var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
             try
@@ -814,7 +894,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                await using var reader = await dbCommand.ExecuteReaderAsync(SequentialSingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(SequentialSingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, null, cancellationToken).ConfigureAwait(false);
@@ -832,8 +913,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -850,8 +936,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
 
             try
             {
@@ -870,8 +958,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -893,8 +986,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
             var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
             try
@@ -917,8 +1012,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -935,8 +1035,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
 
             try
             {
@@ -962,8 +1064,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -984,8 +1091,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
 
             try
             {
@@ -1004,8 +1113,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -1027,8 +1141,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         EnterInFlight();
         try
         {
-            await using var dbCommand = CreateCommand();
-            dbCommand.Transaction = _transaction;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
             var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
             try
@@ -1058,8 +1174,13 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             catch (Exception exception)
             {
+                commandResources.Capture(exception);
                 if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
         finally
@@ -1089,14 +1210,15 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         if (items.Count == 0) return 0;
 
         EnterInFlight();
+        DbBatch? batch = null;
+        Exception? primaryException = null;
         try
         {
             if (_connectionFactory.SupportsBatchExecution && _connection.CanCreateBatch)
             {
                 // Probe: some providers expose DbBatch but not DbBatchCommand.CreateParameter;
-                // those fall back to the sequential path below (the probe batch is disposed by
-                // await using at the end of this block).
-                await using var batch = _connection.CreateBatch();
+                // those fall back to the sequential path below.
+                batch = _connection.CreateBatch();
                 var firstCommand = batch.CreateBatchCommand();
                 if (firstCommand.CanCreateParameter)
                 {
@@ -1123,8 +1245,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             var total = 0;
             for (var i = 0; i < items.Count; i++)
             {
-                await using var dbCommand = CreateCommand();
-                dbCommand.Transaction = _transaction;
+                var dbCommand = CreateCommand();
+                var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+                try { dbCommand.Transaction = _transaction; }
+                catch (Exception exception) { commandResources.Capture(exception); throw; }
                 var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
 
                 try
@@ -1147,31 +1271,65 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
                 catch (Exception exception)
                 {
+                    commandResources.Capture(exception);
                     if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                     throw;
+                }
+                finally
+                {
+                    await commandResources.DisposeAsync().ConfigureAwait(false);
                 }
             }
 
             return total;
         }
+        catch (Exception exception)
+        {
+            primaryException = exception;
+            throw;
+        }
         finally
         {
-            ExitInFlight();
+            try
+            {
+                List<Exception>? cleanupExceptions = null;
+                try { if (batch is not null) await batch.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
+                if (primaryException is not null) InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
+                else InquiryCleanup.ThrowIfAny(cleanupExceptions);
+            }
+            finally
+            {
+                ExitInFlight();
+            }
         }
     }
 
     // ---- Shared helpers --------------------------------------------------------------
 
-    private static async ValueTask DisposeReaderAndCommandAsync(DbDataReader? reader, DbCommand? command)
+    private static async ValueTask DisposeReaderAndCommandAsync(
+        DbDataReader? reader,
+        DbCommand? command,
+        Exception? primaryException = null)
     {
+        List<Exception>? exceptions = null;
         try
         {
             if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
         }
-        finally
+        catch (Exception exception)
         {
-            if (command is not null) await command.DisposeAsync().ConfigureAwait(false);
+            exceptions = InquiryCleanup.Add(exceptions, exception);
         }
+        if (command is not null)
+        {
+            try { InquiryCommandResources.Dispose(command); }
+            catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+            try { await command.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+        }
+        if (primaryException is not null) InquiryCleanup.ThrowIfCleanupFailed(primaryException, exceptions);
+        else InquiryCleanup.ThrowIfAny(exceptions);
     }
 
     private void EnterInFlight()
