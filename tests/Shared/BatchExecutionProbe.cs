@@ -22,6 +22,7 @@ internal sealed class BatchExecutionProbe
     private readonly List<ExecutedBatch> _executedBatches = new();
     private readonly List<FinalizedBatchCommand> _finalizedCommands = new();
     private int _createBatchCount;
+    private int _beginTransactionCount;
 
     internal BatchExecutionProbe(
         Func<DbCommand, object?>? inspectFinalizedCommand = null,
@@ -32,6 +33,7 @@ internal sealed class BatchExecutionProbe
     }
 
     internal int CreateBatchCount => Volatile.Read(ref _createBatchCount);
+    internal int BeginTransactionCount => Volatile.Read(ref _beginTransactionCount);
 
     internal IReadOnlyList<int> InitializedChunkSizes
     {
@@ -66,6 +68,7 @@ internal sealed class BatchExecutionProbe
     }
 
     internal void RecordBatchCreated() => Interlocked.Increment(ref _createBatchCount);
+    internal void RecordTransactionStarted() => Interlocked.Increment(ref _beginTransactionCount);
 
     internal void RecordBatchExecuted(int itemCount)
     {
@@ -101,6 +104,7 @@ internal sealed class BatchExecutionProbe
     internal void Reset()
     {
         Interlocked.Exchange(ref _createBatchCount, 0);
+        Interlocked.Exchange(ref _beginTransactionCount, 0);
         lock (_gate)
         {
             _initializedChunkSizes.Clear();
@@ -226,12 +230,18 @@ internal sealed class ProbingDbConnection : DbConnection
         => _inner.GetSchema(collectionName, restrictionValues);
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
-        => _inner.BeginTransaction(isolationLevel);
+    {
+        _probe.RecordTransactionStarted();
+        return _inner.BeginTransaction(isolationLevel);
+    }
 
     protected override ValueTask<DbTransaction> BeginDbTransactionAsync(
         IsolationLevel isolationLevel,
         CancellationToken cancellationToken)
-        => _inner.BeginTransactionAsync(isolationLevel, cancellationToken);
+    {
+        _probe.RecordTransactionStarted();
+        return _inner.BeginTransactionAsync(isolationLevel, cancellationToken);
+    }
 
     protected override DbCommand CreateDbCommand() => _inner.CreateCommand();
 
