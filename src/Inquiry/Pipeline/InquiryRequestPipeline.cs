@@ -1335,10 +1335,11 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         DbTransaction? transaction = null;
         var committed = false;
         Exception? primaryException = null;
+        List<Exception>? cleanupExceptions = null;
         try
         {
             connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-            transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
             var hasActiveInterceptors = HasActiveInterceptors;
             Func<IReadOnlyList<TItem>, CancellationToken, Task<int>>? interceptedRows = hasActiveInterceptors
                 ? ExecuteInterceptedChunkAsync
@@ -1349,6 +1350,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             var total = await InquiryBatchCommandExecutor.ExecuteAsync(
                 connection, transaction, _connectionFactory, executionMode, _defaultCommandTimeoutSeconds, _prepareEnabled,
                 command, chunks, firstChunk, interceptedRows, interceptedChunk, cancellationToken).ConfigureAwait(false);
+            chunks.Dispose();
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             committed = true;
             return total;
@@ -1430,7 +1432,8 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
-            List<Exception>? cleanupExceptions = null;
+            try { chunks.Dispose(); }
+            catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
             try
             {
                 if (transaction is not null && !committed && primaryException is not null)

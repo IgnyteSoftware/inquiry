@@ -5,6 +5,7 @@ using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections;
+using System.Data;
 using System.Data.Common;
 
 namespace Inquiry.Tests;
@@ -395,6 +396,113 @@ public sealed class ExecuteBatchTests
         await transaction.CommitAsync();
     }
 
+    [Fact]
+    public async Task EmptyThrowingDisposeSourceDoesNotOpenConnection()
+    {
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        var source = new ThrowingDisposeEnumerable<(int Id, string Name)>(Array.Empty<(int, string)>());
+        var factory = new BatchTestConnectionFactory(connectionString);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>());
+        var command = new InquiryBatchCommand<(int Id, string Name)>(
+            "INSERT INTO Items (Id, Name) VALUES (@id, @name)", BindItem);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pipeline.ExecuteBatchAsync(command, source));
+
+        Assert.Equal("enumerator dispose failed", exception.Message);
+        Assert.Equal(0, factory.OpenCount);
+    }
+
+    [Fact]
+    public async Task ThrowingEnumeratorDisposeRollsBackSuccessfulNonAmbientWrites()
+    {
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        var source = new ThrowingDisposeEnumerable<(int Id, string Name)>(new[] { (1, "A"), (2, "B") });
+        var pipeline = new InquiryRequestPipeline(
+            new BatchTestConnectionFactory(connectionString), Array.Empty<IInquiryCommandInterceptor>());
+        var command = new InquiryBatchCommand<(int Id, string Name)>(
+            "INSERT INTO Items (Id, Name) VALUES (@id, @name)", BindItem);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pipeline.ExecuteBatchAsync(command, source));
+
+        Assert.Equal("enumerator dispose failed", exception.Message);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task ExecutionAndEnumeratorDisposeFailuresAreAggregatedInOrder()
+    {
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        var source = new ThrowingDisposeEnumerable<(int Id, string Name)>(new[] { (1, "A"), (1, "duplicate") });
+        var pipeline = new InquiryRequestPipeline(
+            new BatchTestConnectionFactory(connectionString), Array.Empty<IInquiryCommandInterceptor>());
+        var command = new InquiryBatchCommand<(int Id, string Name)>(
+            "INSERT INTO Items (Id, Name) VALUES (@id, @name)", BindItem);
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => pipeline.ExecuteBatchAsync(command, source));
+
+        Assert.IsType<SqliteException>(exception.InnerExceptions[0]);
+        Assert.Equal("enumerator dispose failed", exception.InnerExceptions[1].Message);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task AmbientLeaseIsHeldUntilEnumeratorDisposeCompletes()
+    {
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        var disposeEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseDispose = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new ThrowingDisposeEnumerable<(int Id, string Name)>(
+            new[] { (1, "A"), (2, "B") }, disposeEntered, releaseDispose);
+        var factory = new BatchTestConnectionFactory(connectionString);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>());
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var inquiry = new DefaultInquiry(pipeline, factory, Array.Empty<IInquiryCommandInterceptor>(), services);
+        await using var transaction = await inquiry.BeginTransactionAsync();
+        var command = new InquiryBatchCommand<(int Id, string Name)>(
+            "INSERT INTO Items (Id, Name) VALUES (@id, @name)", BindItem);
+
+        var batchTask = Task.Run(async () => await inquiry.ExecuteBatchAsync(command, source));
+        await disposeEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => transaction.CommitAsync());
+        releaseDispose.TrySetResult();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => batchTask);
+        await transaction.RollbackAsync();
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task HugeBatchBoundDoesNotPreallocateForEmptyEnumerable()
+    {
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        var factory = new BatchTestConnectionFactory(connectionString);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = int.MaxValue });
+        var command = new InquiryBatchCommand<(int Id, string Name)>(
+            "INSERT INTO Items (Id, Name) VALUES (@id, @name)", BindItem);
+        var source = Enumerable.Empty<(int Id, string Name)>().Where(static _ => true);
+
+        Assert.Equal(0, await pipeline.ExecuteBatchAsync(command, source));
+        Assert.Equal(0, factory.OpenCount);
+    }
+
+    [Fact]
+    public async Task NonAmbientBatchBeginsReadCommittedTransaction()
+    {
+        var connection = new IsolationRecordingConnection();
+        var pipeline = new InquiryRequestPipeline(
+            new IsolationRecordingFactory(connection), Array.Empty<IInquiryCommandInterceptor>());
+        var command = new InquiryBatchCommand<int>("work", static (_, _) => { });
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => pipeline.ExecuteBatchAsync(command, new[] { 1 }));
+
+        Assert.Equal(IsolationLevel.ReadCommitted, connection.RequestedIsolationLevel);
+    }
+
     private static void BindItem(InquiryParameterTarget target, (int Id, string Name) item)
     {
         var id = target.CreateParameter();
@@ -560,5 +668,75 @@ public sealed class ExecuteBatchTests
             public void Reset() => throw new NotSupportedException();
             public void Dispose() => _owner.DisposeCount++;
         }
+    }
+
+    private sealed class ThrowingDisposeEnumerable<T> : IEnumerable<T>
+    {
+        private readonly IReadOnlyList<T> _items;
+        private readonly TaskCompletionSource? _disposeEntered;
+        private readonly TaskCompletionSource? _releaseDispose;
+
+        internal ThrowingDisposeEnumerable(
+            IReadOnlyList<T> items,
+            TaskCompletionSource? disposeEntered = null,
+            TaskCompletionSource? releaseDispose = null)
+        {
+            _items = items;
+            _disposeEntered = disposeEntered;
+            _releaseDispose = releaseDispose;
+        }
+
+        public IEnumerator<T> GetEnumerator() => new Enumerator(this);
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private sealed class Enumerator : IEnumerator<T>
+        {
+            private readonly ThrowingDisposeEnumerable<T> _owner;
+            private int _index = -1;
+
+            internal Enumerator(ThrowingDisposeEnumerable<T> owner) => _owner = owner;
+            public T Current => _owner._items[_index];
+            object IEnumerator.Current => Current!;
+            public bool MoveNext() => ++_index < _owner._items.Count;
+            public void Reset() => throw new NotSupportedException();
+
+            public void Dispose()
+            {
+                _owner._disposeEntered?.TrySetResult();
+                _owner._releaseDispose?.Task.GetAwaiter().GetResult();
+                throw new InvalidOperationException("enumerator dispose failed");
+            }
+        }
+    }
+
+    private sealed class IsolationRecordingFactory : IInquiryConnectionFactory
+    {
+        private readonly DbConnection _connection;
+
+        internal IsolationRecordingFactory(DbConnection connection) => _connection = connection;
+
+        public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(_connection);
+    }
+
+    private sealed class IsolationRecordingConnection : DbConnection
+    {
+        public IsolationLevel? RequestedIsolationLevel { get; private set; }
+        public override string ConnectionString { get; set; } = string.Empty;
+        public override string Database => "recording";
+        public override string DataSource => "recording";
+        public override string ServerVersion => "1";
+        public override ConnectionState State => ConnectionState.Open;
+        public override void ChangeDatabase(string databaseName) { }
+        public override void Close() { }
+        public override void Open() { }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            RequestedIsolationLevel = isolationLevel;
+            throw new NotSupportedException("recorded");
+        }
+
+        protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
     }
 }

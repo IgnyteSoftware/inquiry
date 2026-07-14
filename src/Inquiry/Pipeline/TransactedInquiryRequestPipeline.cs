@@ -1517,9 +1517,11 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             Func<IReadOnlyList<TItem>, CancellationToken, Task<int>>? interceptedChunk = hasActiveInterceptors
                 ? ExecuteInterceptedWholeChunkAsync
                 : null;
-            return await InquiryBatchCommandExecutor.ExecuteAsync(
+            var total = await InquiryBatchCommandExecutor.ExecuteAsync(
                 _connection, _transaction, _connectionFactory, executionMode, _defaultCommandTimeoutSeconds, _prepareEnabled,
                 command, chunks, firstChunk, interceptedRows, interceptedChunk, cancellationToken).ConfigureAwait(false);
+            chunks.Dispose();
+            return total;
 
             async Task<int> ExecuteInterceptedChunkAsync(IReadOnlyList<TItem> chunk, CancellationToken token)
             {
@@ -1590,6 +1592,19 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await resources.DisposeAsync().ConfigureAwait(false);
                 }
             }
+        }
+        catch (Exception primaryException)
+        {
+            try { chunks.Dispose(); }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    "Inquiry batch execution failed and its source enumerator also failed to dispose.",
+                    primaryException,
+                    cleanupException);
+            }
+
+            throw;
         }
         finally
         {

@@ -249,23 +249,49 @@ public interface IInquiry
             command.GetEffectiveChunkSize(MaxBatchSize, MaxParametersPerCommand), cancellationToken);
         if (!chunks.MoveNext(out var chunk)) return 0;
 
-        await using var transaction = await BeginTransactionAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        IInquiryTransaction? transaction = null;
         var total = 0;
-        do
+        Exception? primaryException = null;
+        List<Exception>? cleanupExceptions = null;
+        try
         {
-            if (command.BindItem is null || command.UseChunk?.Invoke(chunk) == true)
+            transaction = await BeginTransactionAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            do
             {
-                total += await transaction.ExecuteAsync(command.ForChunk(chunk).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
+                if (command.BindItem is null || command.UseChunk?.Invoke(chunk) == true)
+                {
+                    total += await transaction.ExecuteAsync(command.ForChunk(chunk).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    for (var i = 0; i < chunk.Count; i++)
+                        total += await transaction.ExecuteAsync(command.ForItem(chunk[i]).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
+                }
             }
-            else
-            {
-                for (var i = 0; i < chunk.Count; i++)
-                    total += await transaction.ExecuteAsync(command.ForItem(chunk[i]).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
-            }
-        }
-        while (chunks.MoveNext(out chunk));
+            while (chunks.MoveNext(out chunk));
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            chunks.Dispose();
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            primaryException = exception;
+        }
+        finally
+        {
+            try { chunks.Dispose(); }
+            catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
+            try { if (transaction is not null) await transaction.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
+        }
+
+        if (primaryException is not null)
+        {
+            InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primaryException).Throw();
+        }
+
+        InquiryCleanup.ThrowIfAny(cleanupExceptions);
         return total;
     }
 

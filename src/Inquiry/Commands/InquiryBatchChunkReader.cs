@@ -11,6 +11,7 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
     private readonly List<T>? _buffer;
     private readonly CancellationToken _cancellationToken;
     private int _offset;
+    private int _disposed;
 
     internal InquiryBatchChunkReader(IEnumerable<T> items, int maxBatchSize, CancellationToken cancellationToken = default)
     {
@@ -28,7 +29,7 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
         else
         {
             _enumerator = items.GetEnumerator();
-            _buffer = new List<T>(maxBatchSize);
+            _buffer = new List<T>(Math.Min(maxBatchSize, InquiryOptions.DefaultMaxBatchSize));
         }
     }
 
@@ -61,7 +62,10 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
         return _buffer.Count != 0;
     }
 
-    public void Dispose() => _enumerator?.Dispose();
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0) _enumerator?.Dispose();
+    }
 }
 
 internal sealed class InquiryBatchChunkView<T> : IReadOnlyList<T>
