@@ -60,6 +60,8 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("class CustomerSummaryInquiryProjectionMaterializer", text);
         Assert.Contains("readonly struct CustomerSummaryInquiryProjectionStructMaterializer", text);
+        Assert.Contains("public bool IsInquirySequentialAccessSafe => true;", text);
+        Assert.DoesNotContain("IInquiryEntityMaterializer<global::Demo.CustomerSummary>.IsInquirySequentialAccessSafe", text);
         Assert.Contains("Id = reader.GetString(0)", text);
         Assert.Contains("Name = reader.GetString(1)", text);
     }

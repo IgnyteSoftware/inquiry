@@ -11,10 +11,9 @@ namespace Inquiry.Tests;
 
 /// <summary>
 /// Pins the reader <see cref="CommandBehavior"/> the pipeline passes to <c>ExecuteReaderAsync</c>.
-/// The generated-store (struct-materializer) overloads opt into <see cref="CommandBehavior.SequentialAccess"/>
-/// to stream columns forward-only (halving large-result allocation, matching Dapper). The ad-hoc
-/// (class-materializer) overloads stay buffered, because a caller-supplied
-/// <see cref="IInquiryEntityMaterializer{T}"/> may read columns out of order — which SequentialAccess forbids.
+/// Generated struct materializers always opt into <see cref="CommandBehavior.SequentialAccess"/>.
+/// Class materializers opt in only through their sequential-safety capability, so arbitrary custom
+/// materializers that may read columns out of order remain buffered.
 /// </summary>
 public sealed class SequentialAccessReadBehaviorTests
 {
@@ -190,6 +189,189 @@ public sealed class SequentialAccessReadBehaviorTests
         Assert.False(behavior.HasFlag(CommandBehavior.SingleRow));
     }
 
+    [Theory]
+    [InlineData(false, false, ClassReadShape.Stream)]
+    [InlineData(false, false, ClassReadShape.List)]
+    [InlineData(false, false, ClassReadShape.Single)]
+    [InlineData(false, true, ClassReadShape.Stream)]
+    [InlineData(false, true, ClassReadShape.List)]
+    [InlineData(false, true, ClassReadShape.Single)]
+    [InlineData(true, false, ClassReadShape.Stream)]
+    [InlineData(true, false, ClassReadShape.List)]
+    [InlineData(true, false, ClassReadShape.Single)]
+    [InlineData(true, true, ClassReadShape.Stream)]
+    [InlineData(true, true, ClassReadShape.List)]
+    [InlineData(true, true, ClassReadShape.Single)]
+    public async Task ClassMaterializerCapabilitySelectsReadBehaviorOnce(
+        bool useTransaction,
+        bool sequentialSafe,
+        ClassReadShape shape)
+    {
+        var recorded = new List<CommandBehavior>();
+        IInquiryEntityMaterializer<TestItem> materializer = sequentialSafe
+            ? new GeneratedSafeTestItemMaterializer()
+            : new TestItemClassMaterializer();
+
+        Assert.Equal(sequentialSafe, materializer.IsInquirySequentialAccessSafe);
+
+        if (useTransaction)
+        {
+            await using var scope = await CreateSeededTransactedPipelineAsync(recorded);
+            await ExecuteClassReadAsync(scope.Pipeline, materializer, shape);
+        }
+        else
+        {
+            var (pipeline, keeper) = await CreateSeededPipelineAsync(recorded);
+            await using var _ = keeper;
+            await ExecuteClassReadAsync(pipeline, materializer, shape);
+        }
+
+        var behavior = Assert.Single(recorded);
+        var expected = sequentialSafe
+            ? CommandBehavior.SingleResult | CommandBehavior.SequentialAccess
+            : CommandBehavior.SingleResult;
+        Assert.Equal(expected, behavior);
+        Assert.False(behavior.HasFlag(CommandBehavior.SingleRow));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GeneratedSafeClassValidatingSingleRejectsDuplicates(bool useTransaction)
+    {
+        var recorded = new List<CommandBehavior>();
+        var command = new InquiryCommand("SELECT Id, Name, Flag FROM T ORDER BY Id");
+
+        if (useTransaction)
+        {
+            await using var scope = await CreateSeededTransactedPipelineAsync(recorded, includeSecondRow: true);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                scope.Pipeline.QuerySingleOrDefaultAsync(
+                    command,
+                    new GeneratedSafeTestItemMaterializer()));
+        }
+        else
+        {
+            var (pipeline, keeper) = await CreateSeededPipelineAsync(recorded, includeSecondRow: true);
+            await using var _ = keeper;
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                pipeline.QuerySingleOrDefaultAsync(
+                    command,
+                    new GeneratedSafeTestItemMaterializer()));
+        }
+
+        var behavior = Assert.Single(recorded);
+        Assert.Equal(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess, behavior);
+        Assert.False(behavior.HasFlag(CommandBehavior.SingleRow));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReverseOrdinalCustomMaterializerRetainsBufferedCompatibility(bool useTransaction)
+    {
+        var recorded = new List<CommandBehavior>();
+        IReadOnlyList<TestItem> items;
+
+        if (useTransaction)
+        {
+            await using var scope = await CreateSeededTransactedPipelineAsync(recorded);
+            items = await scope.Pipeline.QueryListAsync(
+                new InquiryCommand("SELECT Id, Name, Flag FROM T"),
+                new ReverseOrdinalTestItemMaterializer());
+        }
+        else
+        {
+            var (pipeline, keeper) = await CreateSeededPipelineAsync(recorded);
+            await using var _ = keeper;
+            items = await pipeline.QueryListAsync(
+                new InquiryCommand("SELECT Id, Name, Flag FROM T"),
+                new ReverseOrdinalTestItemMaterializer());
+        }
+
+        var item = Assert.Single(items);
+        Assert.Equal(new TestItem(1, "Alpha", true), item);
+        Assert.Equal(CommandBehavior.SingleResult, Assert.Single(recorded));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SequentialSafetyCapabilityIsReadOncePerCommand(bool useTransaction)
+    {
+        var recorded = new List<CommandBehavior>();
+        var materializer = new CountingCapabilityMaterializer();
+
+        if (useTransaction)
+        {
+            await using var scope = await CreateSeededTransactedPipelineAsync(recorded);
+            Assert.Single(await scope.Pipeline.QueryListAsync(
+                new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer));
+        }
+        else
+        {
+            var (pipeline, keeper) = await CreateSeededPipelineAsync(recorded);
+            await using var _ = keeper;
+            Assert.Single(await pipeline.QueryListAsync(
+                new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer));
+        }
+
+        Assert.Equal(1, materializer.CapabilityReadCount);
+        Assert.Equal(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess, Assert.Single(recorded));
+    }
+
+    [Fact]
+    public async Task TransactedCapabilityGetterRunsAfterBusyStateGuard()
+    {
+        var recorded = new List<CommandBehavior>();
+        await using var scope = await CreateSeededTransactedPipelineAsync(recorded);
+        await using var enumerator = scope.Pipeline.QueryAsync(
+            new InquiryCommand("SELECT Id, Name, Flag FROM T"),
+            new TestItemClassMaterializer()).GetAsyncEnumerator();
+        Assert.True(await enumerator.MoveNextAsync());
+
+        var materializer = new ThrowingCapabilityMaterializer();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            scope.Pipeline.QueryListAsync(
+                new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer));
+
+        Assert.Contains("in flight", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, materializer.CapabilityReadCount);
+    }
+
+    [Fact]
+    public async Task TransactedCapabilityGetterFailureReleasesInFlightLease()
+    {
+        var recorded = new List<CommandBehavior>();
+        await using var scope = await CreateSeededTransactedPipelineAsync(recorded);
+        var materializer = new ThrowingCapabilityMaterializer();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            scope.Pipeline.QueryListAsync(
+                new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer));
+
+        Assert.Equal("Simulated capability failure.", exception.Message);
+        Assert.Equal(1, materializer.CapabilityReadCount);
+        Assert.Single(await scope.Pipeline.QueryListAsync(
+            new InquiryCommand("SELECT Id, Name, Flag FROM T"),
+            new TestItemClassMaterializer()));
+    }
+
+    [Fact]
+    public async Task TransactedCapabilityGetterRunsAfterClosedStateGuard()
+    {
+        var recorded = new List<CommandBehavior>();
+        await using var scope = await CreateSeededTransactedPipelineAsync(recorded);
+        scope.Pipeline.MarkClosed();
+        var materializer = new ThrowingCapabilityMaterializer();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            scope.Pipeline.QueryListAsync(
+                new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer));
+
+        Assert.Equal(0, materializer.CapabilityReadCount);
+    }
+
     [Fact]
     public async Task ClassMaterializerSingleRowReadDoesNotUseSingleRow()
     {
@@ -257,6 +439,72 @@ public sealed class SequentialAccessReadBehaviorTests
         return (pipeline, keeper);
     }
 
+    private static async Task<TransactedPipelineScope> CreateSeededTransactedPipelineAsync(
+        List<CommandBehavior> recorded,
+        bool includeSecondRow = false)
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = "InquirySeqAccessTxClass_" + Guid.NewGuid().ToString("N"),
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Shared,
+        }.ToString();
+        var keeper = new SqliteConnection(connectionString);
+        await keeper.OpenAsync();
+        await using (var create = keeper.CreateCommand())
+        {
+            create.CommandText =
+                "CREATE TABLE T (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL, Flag INTEGER NOT NULL);" +
+                "INSERT INTO T (Id, Name, Flag) VALUES (1, 'Alpha', 1);" +
+                (includeSecondRow ? "INSERT INTO T (Id, Name, Flag) VALUES (2, 'Beta', 0);" : string.Empty);
+            await create.ExecuteNonQueryAsync();
+        }
+
+        var factory = new RecordingConnectionFactory(connectionString, recorded);
+        var connection = await factory.OpenConnectionAsync();
+        var transaction = await connection.BeginTransactionAsync();
+        var pipeline = new TransactedInquiryRequestPipeline(
+            connection,
+            transaction,
+            Array.Empty<IInquiryCommandInterceptor>(),
+            factory,
+            options: null);
+        return new TransactedPipelineScope(pipeline, transaction, connection, keeper);
+    }
+
+    private static async Task ExecuteClassReadAsync(
+        IInquiryRequestPipeline pipeline,
+        IInquiryEntityMaterializer<TestItem> materializer,
+        ClassReadShape shape)
+    {
+        switch (shape)
+        {
+            case ClassReadShape.Stream:
+            {
+                var count = 0;
+                await foreach (var item in pipeline.QueryAsync(
+                    new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer))
+                {
+                    Assert.Equal(1, item.Id);
+                    count++;
+                }
+
+                Assert.Equal(1, count);
+                break;
+            }
+            case ClassReadShape.List:
+                Assert.Single(await pipeline.QueryListAsync(
+                    new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer));
+                break;
+            case ClassReadShape.Single:
+                Assert.NotNull(await pipeline.QuerySingleOrDefaultAsync(
+                    new InquiryCommand("SELECT Id, Name, Flag FROM T WHERE Id = 1"), materializer));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(shape), shape, null);
+        }
+    }
+
     private sealed record TestItem(int Id, string Name, bool Flag);
 
     private static TestItem Materialize(DbDataReader reader)
@@ -265,6 +513,56 @@ public sealed class SequentialAccessReadBehaviorTests
     private sealed class TestItemClassMaterializer : IInquiryEntityMaterializer<TestItem>
     {
         public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
+    }
+
+    private sealed class GeneratedSafeTestItemMaterializer : IInquiryEntityMaterializer<TestItem>
+    {
+        public bool IsInquirySequentialAccessSafe => true;
+
+        public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
+    }
+
+    private sealed class ReverseOrdinalTestItemMaterializer : IInquiryEntityMaterializer<TestItem>
+    {
+        public TestItem Materialize(DbDataReader reader)
+        {
+            var flag = reader.GetInt32(2) == 1;
+            var name = reader.GetString(1);
+            var id = reader.GetInt32(0);
+            return new TestItem(id, name, flag);
+        }
+    }
+
+    private sealed class CountingCapabilityMaterializer : IInquiryEntityMaterializer<TestItem>
+    {
+        public int CapabilityReadCount { get; private set; }
+
+        public bool IsInquirySequentialAccessSafe
+        {
+            get
+            {
+                CapabilityReadCount++;
+                return true;
+            }
+        }
+
+        public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
+    }
+
+    private sealed class ThrowingCapabilityMaterializer : IInquiryEntityMaterializer<TestItem>
+    {
+        public int CapabilityReadCount { get; private set; }
+
+        public bool IsInquirySequentialAccessSafe
+        {
+            get
+            {
+                CapabilityReadCount++;
+                throw new InvalidOperationException("Simulated capability failure.");
+            }
+        }
+
+        public TestItem Materialize(DbDataReader reader) => throw new InvalidOperationException("Not reached.");
     }
 
     private readonly struct TestItemStructMaterializer : IInquiryEntityMaterializer<TestItem>
@@ -289,6 +587,41 @@ public sealed class SequentialAccessReadBehaviorTests
             await inner.OpenAsync(cancellationToken);
             return new RecordingDbConnection(inner, _recorded);
         }
+    }
+
+    private sealed class TransactedPipelineScope : IAsyncDisposable
+    {
+        private readonly DbTransaction _transaction;
+        private readonly DbConnection _connection;
+        private readonly SqliteConnection _keeper;
+
+        public TransactedPipelineScope(
+            TransactedInquiryRequestPipeline pipeline,
+            DbTransaction transaction,
+            DbConnection connection,
+            SqliteConnection keeper)
+        {
+            Pipeline = pipeline;
+            _transaction = transaction;
+            _connection = connection;
+            _keeper = keeper;
+        }
+
+        public TransactedInquiryRequestPipeline Pipeline { get; }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _transaction.DisposeAsync();
+            await _connection.DisposeAsync();
+            await _keeper.DisposeAsync();
+        }
+    }
+
+    public enum ClassReadShape
+    {
+        Stream,
+        List,
+        Single,
     }
 
     private sealed class RecordingDbConnection : DbConnection

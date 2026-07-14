@@ -144,6 +144,8 @@ public sealed partial class InquiryGeneratorTests
         // specialize the pipeline body per concrete TMaterializer).
         Assert.Contains("internal sealed class OrganizationInquiryEntityMaterializer", generatedEntityText);
         Assert.Contains("internal readonly struct OrganizationInquiryEntityStructMaterializer", generatedEntityText);
+        Assert.Contains("public bool IsInquirySequentialAccessSafe => true;", generatedEntityText);
+        Assert.DoesNotContain("IInquiryEntityMaterializer<global::Demo.Organization>.IsInquirySequentialAccessSafe", generatedEntityText);
 
         var generatedServices = Assert.Single(
             result.RunResult.GeneratedTrees,

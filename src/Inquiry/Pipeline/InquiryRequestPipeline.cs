@@ -19,11 +19,10 @@ namespace Inquiry.Pipeline;
 /// <c>materializer.Materialize(reader)</c> call inlines instead of going through an interface
 /// dispatch.
 ///
-/// The class-materializer read methods pass <see cref="CommandBehavior.SingleResult"/> so the provider
-/// can release reader state as soon as the single result set drains. The struct-materializer overloads
-/// additionally pass <see cref="CommandBehavior.SequentialAccess"/> — generated materializers read each
-/// column exactly once in ascending ordinal order, so the row can be streamed forward-only instead of
-/// buffered, roughly halving allocation on large/wide result sets.
+/// The class-materializer read methods always pass <see cref="CommandBehavior.SingleResult"/> and add
+/// <see cref="CommandBehavior.SequentialAccess"/> only when the materializer declares that its reads are
+/// forward-only. Struct-materializer overloads always add <see cref="CommandBehavior.SequentialAccess"/>
+/// because generated materializers read each column in ascending ordinal order.
 ///
 /// Generated query bodies snapshot <see cref="HasActiveInterceptors"/> before allocating interceptor
 /// state. With no active interceptor, command-context allocations and notification awaits are omitted.
@@ -38,11 +37,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     // first row, silently suppressing the detection on providers that honour the hint (audit P2 #5).
     private const CommandBehavior SingleRowBehavior = CommandBehavior.SingleResult;
 
-    // The struct-materializer (generated-store) overloads add SequentialAccess: generated materializers
-    // read every column exactly once in ascending ordinal order, so the provider can stream the row
-    // forward-only instead of buffering it — roughly halving allocation on large/wide result sets
-    // (matching Dapper). The class-materializer overloads above keep the buffered behaviours, because a
-    // caller-supplied IInquiryEntityMaterializer<T> may read columns out of order, which SequentialAccess forbids.
+    // Struct-materializer overloads always add SequentialAccess. Class-materializer overloads add it only
+    // when the materializer declares forward-only ordinal safety; arbitrary custom materializers default to
+    // buffered behavior because they may read columns out of order.
     private const CommandBehavior SequentialReadBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
     private const CommandBehavior SequentialSingleRowBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
 
@@ -154,6 +151,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
+        var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
 
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         var dbCommand = CreateCommandOrDisposeConnection(connection);
@@ -181,7 +179,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             try
             {
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
             }
             catch (Exception exception)
@@ -251,6 +249,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
+        var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
 
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         var dbCommand = CreateCommandOrDisposeConnection(connection);
@@ -266,7 +265,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+            var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
             var list = new List<T>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -298,6 +297,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
+        var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialSingleRowBehavior : SingleRowBehavior;
 
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         var dbCommand = CreateCommandOrDisposeConnection(connection);
@@ -313,7 +313,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
+            var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {

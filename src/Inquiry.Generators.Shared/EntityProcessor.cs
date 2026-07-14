@@ -165,6 +165,8 @@ internal static class EntityProcessor
         // that resolve the materializer at runtime.
         source.AppendLine($"internal sealed class {entity.ClassMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{entityType}>");
         source.AppendLine("{");
+        source.AppendLine("    public bool IsInquirySequentialAccessSafe => true;");
+        source.AppendLine();
         source.AppendLine($"    public {entityType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
         MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, sqlBuilder, indent: "        ");

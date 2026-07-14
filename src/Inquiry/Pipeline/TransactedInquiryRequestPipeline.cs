@@ -28,11 +28,9 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     // first row, silently suppressing the detection on providers that honour the hint (audit P2 #5).
     private const CommandBehavior SingleRowBehavior = CommandBehavior.SingleResult;
 
-    // The struct-materializer (generated-store) overloads add SequentialAccess so the provider streams
-    // each row forward-only instead of buffering it — generated materializers read every column once in
-    // ascending ordinal order, so this is safe and roughly halves large-result allocation. The
-    // class-materializer overloads keep the buffered behaviours, since a caller-supplied materializer may
-    // read columns out of order, which SequentialAccess forbids.
+    // Struct-materializer overloads always add SequentialAccess. Class-materializer overloads add it only
+    // when the materializer declares forward-only ordinal safety; arbitrary custom materializers default to
+    // buffered behavior because they may read columns out of order.
     private const CommandBehavior SequentialReadBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
     private const CommandBehavior SequentialSingleRowBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
 
@@ -286,7 +284,6 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
-
         EnterInFlight();
         DbDataReader? reader = null;
         // Create the command INSIDE the try so a throw from CreateCommand()/InitializeCommand still runs
@@ -297,6 +294,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         Exception? primaryException = null;
         try
         {
+            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
             try
             {
                 dbCommand = CreateCommand();
@@ -323,7 +321,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             try
             {
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -393,10 +391,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
-
         EnterInFlight();
         try
         {
+            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
             var dbCommand = CreateCommand();
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             try { dbCommand.Transaction = _transaction; }
@@ -412,7 +410,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -449,10 +447,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
-
         EnterInFlight();
         try
         {
+            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialSingleRowBehavior : SingleRowBehavior;
             var dbCommand = CreateCommand();
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             try { dbCommand.Transaction = _transaction; }
@@ -468,7 +466,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {

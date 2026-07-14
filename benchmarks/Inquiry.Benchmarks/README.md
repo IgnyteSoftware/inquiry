@@ -20,7 +20,8 @@ raw ADO.NET. Two suites:
   `benchmarks/Inquiry.Benchmarks.{PostgreSql,MySql,Oracle,SqlServer}` compile generated stores for one
   dialect at a time. PostgreSQL also includes `PreparedStatementBenchmarks`, which compares Inquiry
   `PreparedStatementMode.None` vs `Auto` on Npgsql for a generated simple point read and a stable ad-hoc
-  multi-join point read.
+  multi-join point read. SQL Server also includes `GeneratedAdHocSequentialAccessBenchmarks`, which
+  isolates generated ad-hoc interface dispatch, provider buffering, and partial stream consumption.
 
 ```powershell
 # Cross-dialect read suite (PostgreSQL + MySQL + SQL Server, needs Docker).
@@ -48,7 +49,8 @@ Two invariants keep the comparison honest:
 
 - **Matching `CommandBehavior`.** Inquiry's generated stores open readers with
   `CommandBehavior.SingleResult | SequentialAccess` for list reads and
-  `SingleResult | SingleRow | SequentialAccess` for single-row reads. `SequentialAccess` lets the
+  `SingleResult | SequentialAccess` for validating single-row reads. Generator-proven unique reads
+  additionally use `SingleRow`. `SequentialAccess` lets the
   provider stream each row forward-only instead of buffering it (Dapper passes equivalent flags) —
   this roughly halves allocation on large/wide reads, so without it the baseline would buffer while
   the wrappers stream and a wrapper would print a sub-1.00× allocation ratio (as SQL Server
@@ -146,6 +148,38 @@ dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquir
 
 The explicit Windows RID overrides the benchmark project's Linux CI default; omit it when running on
 Linux. As with the other suites, a Dry result proves wiring but is not statistically meaningful.
+
+### Generated ad-hoc sequential access (`GeneratedAdHocSequentialAccessBenchmarks`)
+
+The SQL Server provider suite seeds 32 identically shaped wide rows: twelve ordered scalar columns followed
+by one 64 KiB `VARBINARY(MAX)` payload. Every measured SQL leg executes the same ordered `SELECT`;
+every fully-consumed leg materializes and checksums every scalar and every payload byte.
+
+- `MaterializerDispatch` invokes the generated class through a cached
+  `IInquiryEntityMaterializer<T>` and the generated struct through its constrained generic call over
+  the same in-memory `DataTableReader` row. It excludes DI, network, and provider I/O so the generated
+  materializer dispatch difference is visible in timing and disassembly.
+- `EndToEndAdHocPath` compares the public generated class/DI path with the generated struct-specialized
+  path over SQL Server. This intentionally measures their combined end-to-end overhead and is not
+  presented as isolated interface dispatch.
+- `InquiryBuffering` compares an otherwise-identical custom class materializer (buffered by default)
+  with the generated sequential-safe class.
+- `AdoBufferingFloor` compares raw ADO.NET `SingleResult` with
+  `SingleResult | SequentialAccess` over the same read loop.
+- `ConsumptionMode` compares buffered-list return with full async streaming.
+- `PartialStream` compares full enumeration with intentionally consuming one row and immediately
+  disposing the async enumerator; its result represents work avoided by early termination, not an
+  equal-cardinality speed ratio.
+
+Both `MemoryDiagnoser` and `DisassemblyDiagnoser` are enabled. The suite requires Docker and a SQL
+Server container. Omit `--job Dry` for publishable measurements and retained allocation/disassembly
+artifacts:
+
+```powershell
+dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks.SqlServer\Inquiry.Benchmarks.SqlServer.csproj -- --filter "*GeneratedAdHocSequentialAccessBenchmarks*"
+```
+
+The explicit Windows RID overrides the benchmark project's Linux CI default; omit it on Linux.
 
 ## Dataset size (`[Params(1000, 100000)]`)
 
