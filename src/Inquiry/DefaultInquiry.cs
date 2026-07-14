@@ -234,6 +234,14 @@ internal sealed class DefaultInquiry : IInquiry
         if (definition is null) throw new ArgumentNullException(nameof(definition));
         if (rows is null) throw new ArgumentNullException(nameof(rows));
 
+        if (_ambientSlot.Value?.Pipeline is not null)
+        {
+            throw new InvalidOperationException(
+                "Native bulk insert cannot run inside an Inquiry transaction because it uses a dedicated connection " +
+                "and would not participate in rollback. Use [InquiryInsertAll] for transaction-bound inserts, or " +
+                "run [InquiryBulkInsert] outside the transaction.");
+        }
+
         var copier = _serviceProvider.GetService<Inquiry.BulkCopy.IInquiryBulkCopier>()
             ?? throw new InvalidOperationException(
                 "No IInquiryBulkCopier is registered. Bulk insert needs a provider with a native bulk-copy API " +
