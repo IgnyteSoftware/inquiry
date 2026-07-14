@@ -101,8 +101,8 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
     public Task<int> InsertPreIssue180GeneratedControlAsync(IReadOnlyList<OracleBatchMutationItem> items)
         => ExecutePreIssue180GeneratedInsertSelectControlAsync(items);
 
-    public Task<int> DeleteJsonTableAsync(IReadOnlyList<int> ids)
-        => ExecuteJsonTableDeleteAsync(ids);
+    public Task<int> DeletePreIssue180GeneratedJsonTableControlAsync(IReadOnlyList<int> ids)
+        => ExecutePreIssue180GeneratedJsonTableControlAsync(ids);
 
     private async Task<int> ExecuteReusedCommandAsync(
         string commandText,
@@ -293,7 +293,7 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         return affected;
     }
 
-    private async Task<int> ExecuteJsonTableDeleteAsync(IReadOnlyList<int> ids)
+    private async Task<int> ExecutePreIssue180GeneratedJsonTableControlAsync(IReadOnlyList<int> ids)
     {
         await using var connection = new OracleConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);

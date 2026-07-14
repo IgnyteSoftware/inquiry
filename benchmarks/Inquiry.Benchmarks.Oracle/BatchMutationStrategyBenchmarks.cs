@@ -87,8 +87,11 @@ public class BatchMutationStrategyBenchmarks
     public Task<int> Delete_DirectDriverArrayBindingFloor() => RequireAffectedRowsAsync(
         _runner.DeleteDirectDriverArrayBindingFloorAsync(_deleteIds));
 
+    // This is the Oracle generated DELETE shape at ddac8eb, before issue #180 switched the
+    // finalized generated path to native array binding. It is retained only as a historical control.
     [BenchmarkCategory("BatchDelete"), Benchmark]
-    public Task<int> Delete_ProductionJsonTable() => RequireAffectedRowsAsync(_runner.DeleteJsonTableAsync(_deleteIds));
+    public Task<int> Delete_PreIssue180GeneratedJsonTableControl() => RequireAffectedRowsAsync(
+        _runner.DeletePreIssue180GeneratedJsonTableControlAsync(_deleteIds));
 
     private static OracleBatchMutationItem[] CreateItems(int count, int firstId, string valuePrefix)
     {
