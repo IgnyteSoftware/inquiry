@@ -90,14 +90,36 @@ public class SqlServerCollectionBenchmarks
         string typeName,
         IEnumerable<int> ids)
     {
+        Exception? primaryException = null;
         try
         {
             InquiryTvpParameter.Bind(command, "@ids", ids, typeName, IntTvpDescriptor);
             return await ReadAsync(command).ConfigureAwait(false);
         }
+        catch (Exception exception)
+        {
+            primaryException = exception;
+            throw;
+        }
         finally
         {
+            DisposeTvpCommandResources(command, primaryException);
+        }
+    }
+
+    internal static void DisposeTvpCommandResources(SqlCommand command, Exception? primaryException)
+    {
+        try
+        {
             InquiryCommandResources.Dispose(command);
+        }
+        catch (Exception cleanupException)
+        {
+            if (primaryException is null) throw;
+            throw new AggregateException(
+                "Inquiry execution failed and one or more resources also failed to release.",
+                primaryException,
+                cleanupException);
         }
     }
 
