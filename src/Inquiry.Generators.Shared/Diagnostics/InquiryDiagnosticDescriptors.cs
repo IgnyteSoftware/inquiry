@@ -709,4 +709,5 @@ internal static class InquiryDiagnosticDescriptors
         "INQ075", "Schema manifest assembly metadata key is already declared",
         "Assembly metadata key '{0}' is reserved for Inquiry schema-manifest transport. Remove the user declaration.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
 }

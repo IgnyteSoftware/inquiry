@@ -9,9 +9,9 @@ namespace Inquiry.Generators.Tests;
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
-    private const string IntTvpTypeName = "[dbo].[Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee]";
-    private const string BigIntTvpTypeName = "[dbo].[Inquiry_Tvp_e36b3e7cf003f2911419d555807aef152b7c6667f4b9b9fb3984b20ecedd995a]";
-    private const string StringTvpTypeName = "[dbo].[Inquiry_Tvp_474f2ebbdd781f2c0331853ca09837a0aa4613f2bf445089eafda2b033abe95c]";
+    private const string IntTvpTypeName = "[dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]";
+    private const string BigIntTvpTypeName = "[dbo].[Inquiry_Tvp_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc]";
+    private const string StringTvpTypeName = "[dbo].[Inquiry_Tvp_3dd8e5db30a8f837bbccaa41878576af742a2993aa5655c580e8a7ed2e31ea71]";
 
     [Fact]
     public void SqlServerInPredicateRendersTvpSubqueryAndBindsTvp()
@@ -28,7 +28,7 @@ public sealed partial class InquiryGeneratorTests
         var generatedText = GeneratedProductStoreText(result);
 
         Assert.Contains("[CategoryId] IN (SELECT [Value] FROM @CategoryId)", generatedText);
-        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@CategoryId\", categoryIds, \"{IntTvpTypeName}\");", generatedText);
+        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@CategoryId\", categoryIds, \"{IntTvpTypeName}\", _inquiryTvpDescriptor_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c);", generatedText);
         Assert.DoesNotContain("InquiryInExpansion", generatedText);
         Assert.DoesNotContain("InquiryArrayParameter", generatedText);
     }
@@ -71,7 +71,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("[Id] IN (SELECT [Value] FROM @keys)", text);
-        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@keys\", ids, \"{BigIntTvpTypeName}\");", text);
+        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@keys\", ids, \"{BigIntTvpTypeName}\", _inquiryTvpDescriptor_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc);", text);
         Assert.DoesNotContain("InquiryInExpansion", text);
         Assert.DoesNotContain("InquiryArrayParameter", text);
     }
@@ -133,7 +133,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("[Category] IN (SELECT [Value] FROM @Category)", text);
-        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Category\", categories, \"{StringTvpTypeName}\");", text);
+        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Category\", categories, \"{StringTvpTypeName}\", _inquiryTvpDescriptor_3dd8e5db30a8f837bbccaa41878576af742a2993aa5655c580e8a7ed2e31ea71);", text);
     }
 
     [Fact]

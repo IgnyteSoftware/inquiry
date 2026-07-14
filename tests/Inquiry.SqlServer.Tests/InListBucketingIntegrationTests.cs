@@ -69,7 +69,7 @@ public sealed class InListBucketingIntegrationTests
             CROSS APPLY sys.dm_exec_plan_attributes(cp.plan_handle) pa
             WHERE pa.attribute = 'dbid' AND pa.value = DB_ID()
               AND st.text LIKE '%Products%'
-              AND st.text LIKE '%Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee%'
+              AND st.text LIKE '%Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c%'
               AND st.text NOT LIKE '%dm_exec%';
             """;
         return (int)(await cmd.ExecuteScalarAsync())!;
