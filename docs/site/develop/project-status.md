@@ -3,10 +3,19 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code and GitHub:** 2026-07-14 at prerelease head `52f1431`, after
-[#216](https://github.com/JakeOverstreet/inquiry/pull/216),
-[#218](https://github.com/JakeOverstreet/inquiry/pull/218), and
-[#220](https://github.com/JakeOverstreet/inquiry/pull/220).
+**Last reconciled against the code and GitHub:** 2026-07-14 at prerelease head `d5e8a59`.
+
+**1.0.0 is not release-ready.** GitHub has 36 open issues: 30 carry a 1.0 priority label
+(4 P0, 21 P1, and 5 P2) and are assigned to the `1.0.0` milestone; six are explicitly planned for
+1.x or demand-driven work. The [Roadmap](roadmap.md) records the complete priority inventory.
+
+Delivery is active but incomplete. [#180](https://github.com/JakeOverstreet/inquiry/issues/180) remains
+open while its batch-execution implementation and evidence are under review.
+[#225](https://github.com/JakeOverstreet/inquiry/pull/225) merged a SQL Server collection-benchmark
+tranche that advances [#69](https://github.com/JakeOverstreet/inquiry/issues/69) and
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87); both issues remain open for their broader
+acceptance criteria. [#226](https://github.com/JakeOverstreet/inquiry/pull/226) merged the many-to-many
+child-filter correction and closed [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
 
 ## Supported database engines (6, all live-tested)
 
