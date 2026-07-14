@@ -50,6 +50,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public CategoryStore Categories => _services!.GetRequiredService<CategoryStore>();
     public BenchmarkM2MOrderStore ManyToManyOrders => _services!.GetRequiredService<BenchmarkM2MOrderStore>();
     public IInquiry Inquiry => _services!.GetRequiredService<IInquiry>();
+    public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
@@ -70,7 +71,9 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                 {
                     await connection.OpenAsync().ConfigureAwait(false);
                     await using var command = connection.CreateCommand();
-                    command.CommandText = NorthwindSchema.SqlServerDdl + """
+                    command.CommandText = NorthwindSchema.SqlServerDdl
+                        + global::Inquiry.Generated.InquiryGeneratedSchema.ProviderArtifactsDdl
+                        + """
                         CREATE TABLE BenchmarkM2MOrder (Id BIGINT IDENTITY(1,1) PRIMARY KEY, Name NVARCHAR(200) NOT NULL);
                         CREATE TABLE BenchmarkM2MProduct (Id BIGINT IDENTITY(1,1) PRIMARY KEY, Title NVARCHAR(200) NOT NULL);
                         CREATE TABLE BenchmarkM2MOrderProduct (OrderId BIGINT NOT NULL, ProductId BIGINT NOT NULL, PRIMARY KEY (OrderId, ProductId));
@@ -81,6 +84,11 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                             C07 INT NOT NULL, C08 INT NOT NULL, C09 INT NOT NULL,
                             C10 INT NOT NULL, C11 INT NOT NULL, C12 INT NOT NULL,
                             Payload VARBINARY(MAX) NOT NULL);
+                        CREATE TABLE InquiryBatchEvidence (
+                            Id INT NOT NULL PRIMARY KEY,
+                            ValueText NVARCHAR(100) NOT NULL);
+                        CREATE TYPE InquiryBatchEvidenceIdList AS TABLE (
+                            Id INT NOT NULL PRIMARY KEY);
                         """;
                     await command.ExecuteNonQueryAsync().ConfigureAwait(false);
                 }
