@@ -5,7 +5,7 @@ namespace Inquiry.Generators.Tests;
 /// <summary>
 /// Many-to-many eager loading ([InquiryManyToMany]): the single-parent load joins the related rows
 /// through the junction table (filtered by the junction's parent FK), and the batch (all-eager) load
-/// assembles in memory from two queries (all children + all junction rows). Verifies the JOIN SQL, the
+/// assembles in memory from filtered child and junction queries. Verifies the JOIN SQL, the
 /// batch consts, the per-dialect identifier quoting, and the INQ063 validation diagnostics.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
@@ -25,6 +25,8 @@ public sealed partial class InquiryGeneratorTests
         {
             [InquiryKey] public long Id { get; set; }
             [InquiryColumn] public string Name { get; set; } = string.Empty;
+            [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+            [InquiryColumn, InquiryGlobalFilter] public bool IsActive { get; set; } = true;
 
             [InquiryManyToMany(typeof(OrderProduct), nameof(OrderProduct.OrderId), nameof(OrderProduct.ProductId))]
             public List<Product> Products { get; set; } = new();
@@ -35,6 +37,8 @@ public sealed partial class InquiryGeneratorTests
         {
             [InquiryKey] public long Id { get; set; }
             [InquiryColumn] public string Title { get; set; } = string.Empty;
+            [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+            [InquiryColumn, InquiryGlobalFilter] public bool IsActive { get; set; } = true;
         }
 
         [InquiryTable("OrderProduct")]
@@ -42,6 +46,8 @@ public sealed partial class InquiryGeneratorTests
         {
             [InquiryKey] public long OrderId { get; set; }
             [InquiryKey] public long ProductId { get; set; }
+            [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+            [InquiryColumn, InquiryGlobalFilter] public bool IsActive { get; set; } = true;
         }
 
         public partial class OrderStore : Inquiry.Stores.InquiryStore<Demo.Order>
@@ -51,6 +57,9 @@ public sealed partial class InquiryGeneratorTests
 
             [InquirySelectAllEager]
             public partial IAsyncEnumerable<Order> AllWithProductsAsync(CancellationToken cancellationToken = default);
+
+            [InquirySelectAllEager(IncludeDeleted = true)]
+            public partial IAsyncEnumerable<Order> AllIncludingDeletedWithProductsAsync(CancellationToken cancellationToken = default);
         }
         """;
 
@@ -70,11 +79,92 @@ public sealed partial class InquiryGeneratorTests
         var text = GetOrderStore(result);
 
         // Single-parent JOIN through the junction, filtered by the junction's parent FK.
-        Assert.Contains("_sql_Products = \"SELECT \\\"Products\\\".\\\"Id\\\", \\\"Products\\\".\\\"Title\\\" FROM \\\"Products\\\" INNER JOIN \\\"OrderProduct\\\" \\\"__j\\\" ON \\\"__j\\\".\\\"ProductId\\\" = \\\"Products\\\".\\\"Id\\\" WHERE \\\"__j\\\".\\\"OrderId\\\" = @Id\";", text);
-        // Batch consts: all children + all junction rows (assembled in memory).
-        Assert.Contains("_sql_Products_All = \"SELECT \\\"Id\\\", \\\"Title\\\" FROM \\\"Products\\\"\";", text);
-        Assert.Contains("_sql_Products_Junction = \"SELECT \\\"OrderId\\\", \\\"ProductId\\\" FROM \\\"OrderProduct\\\" WHERE \\\"OrderId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\")\";", text);
+        Assert.Contains("_sql_Products = \"SELECT \\\"Products\\\".\\\"Id\\\", \\\"Products\\\".\\\"Title\\\", \\\"Products\\\".\\\"IsDeleted\\\", \\\"Products\\\".\\\"IsActive\\\" FROM \\\"Products\\\" INNER JOIN \\\"OrderProduct\\\" \\\"__j\\\" ON \\\"__j\\\".\\\"ProductId\\\" = \\\"Products\\\".\\\"Id\\\" WHERE \\\"__j\\\".\\\"OrderId\\\" = @Id AND \\\"__j\\\".\\\"IsDeleted\\\" = 0 AND \\\"__j\\\".\\\"IsActive\\\" = 1 AND \\\"Products\\\".\\\"IsDeleted\\\" = 0 AND \\\"Products\\\".\\\"IsActive\\\" = 1\";", text);
+        Assert.Contains("\\\"Id\\\" IN (SELECT \\\"__j\\\".\\\"ProductId\\\" FROM \\\"OrderProduct\\\" \\\"__j\\\"", text);
+        Assert.Contains("\\\"__j\\\".\\\"IsDeleted\\\" = 0 AND \\\"__j\\\".\\\"IsActive\\\" = 1 AND \\\"__j\\\".\\\"OrderId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1)", text);
+        Assert.Contains("_sql_Products_Junction = \"SELECT \\\"OrderId\\\", \\\"ProductId\\\", \\\"IsDeleted\\\", \\\"IsActive\\\" FROM \\\"OrderProduct\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1 AND \\\"OrderId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1) AND \\\"ProductId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Products\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1)\";", text);
+        Assert.Contains("_sql_Products_All_IncludeDeleted", text);
+        Assert.Contains("IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\" WHERE \\\"IsActive\\\" = 1)", text);
+        Assert.Contains("_sql_Products_Junction_IncludeDeleted", text);
+        Assert.Equal(2, text.Split(new[] { "_sql_Products_All_IncludeDeleted" }, StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, text.Split(new[] { "_sql_Products_Junction_IncludeDeleted" }, StringSplitOptions.None).Length - 1);
     }
+
+    [Theory]
+    [InlineData("Sqlite", "\"", "\"", "\"__j\"", "0", "1")]
+    [InlineData("SqlServer", "[", "]", "[__j]", "0", "1")]
+    [InlineData("PostgreSql", "\"", "\"", "\"__j\"", "FALSE", "TRUE")]
+    [InlineData("MySql", "`", "`", "`__j`", "0", "1")]
+    [InlineData("MariaDb", "`", "`", "`__j`", "0", "1")]
+    [InlineData("Oracle", "", "", "\"__j\"", "0", "1")]
+    public void ManyToManyBatchChildSqlFiltersThroughJunctionAndParent_AllDialects(
+        string dialect,
+        string quoteOpen,
+        string quoteClose,
+        string junctionAlias,
+        string falseLiteral,
+        string trueLiteral)
+    {
+        var result = RunGenerator(OrderProductSource, dialect: dialect);
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetOrderStore(result);
+        string Q(string name) => quoteOpen + name + quoteClose;
+
+        var expected = "SELECT " + Q("Id") + ", " + Q("Title") + ", " + Q("IsDeleted") + ", " + Q("IsActive")
+            + " FROM " + Q("Products")
+            + " WHERE " + Q("IsDeleted") + " = " + falseLiteral + " AND " + Q("IsActive") + " = " + trueLiteral
+            + " AND " + Q("Id") + " IN (SELECT " + junctionAlias + "." + Q("ProductId")
+            + " FROM " + Q("OrderProduct") + " " + junctionAlias
+            + " WHERE " + junctionAlias + "." + Q("IsDeleted") + " = " + falseLiteral
+            + " AND " + junctionAlias + "." + Q("IsActive") + " = " + trueLiteral
+            + " AND " + junctionAlias + "." + Q("OrderId") + " IN (SELECT " + Q("Id") + " FROM " + Q("Orders")
+            + " WHERE " + Q("IsDeleted") + " = " + falseLiteral + " AND " + Q("IsActive") + " = " + trueLiteral + "))";
+
+        Assert.Contains("_sql_Products_All = \"" + EscapeGeneratedString(expected) + "\";", text);
+        Assert.DoesNotContain("@", expected);
+    }
+
+    [Theory]
+    [InlineData("Sqlite", "\"", "\"", "\"__j\"", "0", "1")]
+    [InlineData("SqlServer", "[", "]", "[__j]", "0", "1")]
+    [InlineData("PostgreSql", "\"", "\"", "\"__j\"", "FALSE", "TRUE")]
+    [InlineData("MySql", "`", "`", "`__j`", "0", "1")]
+    [InlineData("MariaDb", "`", "`", "`__j`", "0", "1")]
+    [InlineData("Oracle", "", "", "\"__j\"", "0", "1")]
+    public void ManyToManyBatchChildSqlSupportsSchemasWithoutQualifiedColumnReferences(
+        string dialect,
+        string quoteOpen,
+        string quoteClose,
+        string junctionAlias,
+        string falseLiteral,
+        string trueLiteral)
+    {
+        var source = OrderProductSource
+            .Replace("[InquiryTable(\"Orders\")]", "[InquiryTable(\"Orders\", Schema = \"app\")]")
+            .Replace("[InquiryTable(\"Products\")]", "[InquiryTable(\"Products\", Schema = \"app\")]")
+            .Replace("[InquiryTable(\"OrderProduct\")]", "[InquiryTable(\"OrderProduct\", Schema = \"app\")]");
+        var result = RunGenerator(source, dialect: dialect);
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetOrderStore(result);
+        string Q(string name) => quoteOpen + name + quoteClose;
+        string T(string name) => Q("app") + "." + Q(name);
+
+        var expected = "SELECT " + Q("Id") + ", " + Q("Title") + ", " + Q("IsDeleted") + ", " + Q("IsActive")
+            + " FROM " + T("Products")
+            + " WHERE " + Q("IsDeleted") + " = " + falseLiteral + " AND " + Q("IsActive") + " = " + trueLiteral
+            + " AND " + Q("Id") + " IN (SELECT " + junctionAlias + "." + Q("ProductId")
+            + " FROM " + T("OrderProduct") + " " + junctionAlias
+            + " WHERE " + junctionAlias + "." + Q("IsDeleted") + " = " + falseLiteral
+            + " AND " + junctionAlias + "." + Q("IsActive") + " = " + trueLiteral
+            + " AND " + junctionAlias + "." + Q("OrderId") + " IN (SELECT " + Q("Id") + " FROM " + T("Orders")
+            + " WHERE " + Q("IsDeleted") + " = " + falseLiteral + " AND " + Q("IsActive") + " = " + trueLiteral + "))";
+
+        Assert.Contains("_sql_Products_All = \"" + EscapeGeneratedString(expected) + "\";", text);
+        Assert.DoesNotContain(T("Products") + "." + Q("Id") + " IN", expected);
+    }
+
+    private static string EscapeGeneratedString(string value)
+        => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     [Fact]
     public void ManyToManySingleEagerBindsParentKey_Sqlite()

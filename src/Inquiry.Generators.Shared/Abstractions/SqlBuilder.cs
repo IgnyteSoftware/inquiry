@@ -248,6 +248,59 @@ public abstract class SqlBuilder
             + " WHERE " + AppendWhere(inPredicate, childContext.ActiveRowPredicate);
     }
 
+    /// <summary>
+    /// Builds the parameterless many-to-many child SELECT used by an all-eager load. Only children
+    /// connected to an eligible parent through an eligible junction row are returned. The child key
+    /// is driven by a junction-key subquery so providers can seek the child primary key.
+    /// </summary>
+    internal string BuildManyToManySelectAllFilteredSql(
+        SqlBuildContext childContext,
+        SqlBuildContext junctionContext,
+        SqlBuildContext parentContext,
+        string childKeyColumnName,
+        string junctionChildForeignKeyColumnName,
+        string junctionParentForeignKeyColumnName,
+        string parentKeyColumnName)
+    {
+        var j = QuoteIdentifier("__j");
+        var parentSubquery = "SELECT " + QuoteIdentifier(parentKeyColumnName)
+            + " FROM " + parentContext.Table
+            + WhereSuffix(parentContext.ActiveRowPredicate);
+        var junctionPredicate = junctionContext.QualifyActiveRowPredicate(j);
+        junctionPredicate = AppendWhere(junctionPredicate,
+            j + "." + QuoteIdentifier(junctionParentForeignKeyColumnName) + " IN (" + parentSubquery + ")");
+        var junctionKeySubquery = "SELECT " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumnName)
+            + " FROM " + junctionContext.Table + " " + j
+            + WhereSuffix(junctionPredicate);
+        var childKeyPredicate = QuoteIdentifier(childKeyColumnName) + " IN (" + junctionKeySubquery + ")";
+
+        return "SELECT " + childContext.SelectColumns + " FROM " + childContext.Table
+            + " WHERE " + AppendWhere(childContext.ActiveRowPredicate, childKeyPredicate);
+    }
+
+    internal string BuildManyToManyJunctionAllFilteredSql(
+        SqlBuildContext junctionContext,
+        SqlBuildContext parentContext,
+        SqlBuildContext childContext,
+        string junctionParentForeignKeyColumnName,
+        string parentKeyColumnName,
+        string junctionChildForeignKeyColumnName,
+        string childKeyColumnName)
+    {
+        var parentSubquery = "SELECT " + QuoteIdentifier(parentKeyColumnName)
+            + " FROM " + parentContext.Table
+            + WhereSuffix(parentContext.ActiveRowPredicate);
+        var childSubquery = "SELECT " + QuoteIdentifier(childKeyColumnName)
+            + " FROM " + childContext.Table
+            + WhereSuffix(childContext.ActiveRowPredicate);
+        var where = AppendWhere(junctionContext.ActiveRowPredicate,
+            QuoteIdentifier(junctionParentForeignKeyColumnName) + " IN (" + parentSubquery + ")");
+        where = AppendWhere(where,
+            QuoteIdentifier(junctionChildForeignKeyColumnName) + " IN (" + childSubquery + ")");
+        return "SELECT " + junctionContext.SelectColumns + " FROM " + junctionContext.Table
+            + " WHERE " + where;
+    }
+
     public abstract string BuildSelectByKeySql(SqlBuildContext context);
 
     public virtual string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns, bool distinct = false)
@@ -275,9 +328,34 @@ public abstract class SqlBuilder
         string childKeyColumn,
         string junctionParentForeignKeyColumn,
         string parentParameterName)
+        => BuildManyToManySelectByParentSqlCore(
+            childContext, childColumns, QuoteTable(junctionSchema, junctionTable), string.Empty,
+            junctionChildForeignKeyColumn, childKeyColumn, junctionParentForeignKeyColumn, parentParameterName);
+
+    internal string BuildManyToManySelectByParentSql(
+        SqlBuildContext childContext,
+        IReadOnlyList<IColumn> childColumns,
+        SqlBuildContext junctionContext,
+        string junctionChildForeignKeyColumn,
+        string childKeyColumn,
+        string junctionParentForeignKeyColumn,
+        string parentParameterName)
+        => BuildManyToManySelectByParentSqlCore(
+            childContext, childColumns, junctionContext.Table,
+            junctionContext.QualifyActiveRowPredicate(QuoteIdentifier("__j")),
+            junctionChildForeignKeyColumn, childKeyColumn, junctionParentForeignKeyColumn, parentParameterName);
+
+    private string BuildManyToManySelectByParentSqlCore(
+        SqlBuildContext childContext,
+        IReadOnlyList<IColumn> childColumns,
+        string junctionTable,
+        string junctionActiveRowPredicate,
+        string junctionChildForeignKeyColumn,
+        string childKeyColumn,
+        string junctionParentForeignKeyColumn,
+        string parentParameterName)
     {
         var j = QuoteIdentifier("__j");
-        var junctionQuoted = QuoteTable(junctionSchema, junctionTable);
         var childCols = new System.Text.StringBuilder();
         for (var i = 0; i < childColumns.Count; i++)
         {
@@ -290,11 +368,13 @@ public abstract class SqlBuilder
         }
 
         var where = j + "." + QuoteIdentifier(junctionParentForeignKeyColumn) + " = " + ParameterName(parentParameterName);
+        where = AppendWhere(where, junctionActiveRowPredicate);
+        where = AppendWhere(where, childContext.QualifiedActiveRowPredicate);
         return "SELECT " + childCols.ToString()
             + " FROM " + childContext.Table
-            + " INNER JOIN " + junctionQuoted + " " + j
+            + " INNER JOIN " + junctionTable + " " + j
             + " ON " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumn) + " = " + childContext.Table + "." + QuoteIdentifier(childKeyColumn)
-            + " WHERE " + AppendWhere(where, childContext.QualifiedActiveRowPredicate);
+            + " WHERE " + where;
     }
 
     /// <summary>

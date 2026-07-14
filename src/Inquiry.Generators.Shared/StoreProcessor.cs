@@ -1321,6 +1321,8 @@ internal static class StoreProcessor
         // drops the eager method — so no valid eager method remains and this block is skipped.
         var hasEagerMethod = valid.Any(static m =>
             m.Method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager);
+        var hasIncludeDeletedSelectAllEager = hasSoftDelete && valid.Any(static m =>
+            m.Method.Operation == StoreOperation.SelectAllEager && m.Method.IncludeDeleted);
         if (relationChildEntities.Count > 0 && hasEagerMethod)
         {
             var emittedRelations = new HashSet<string>();
@@ -1345,19 +1347,35 @@ internal static class StoreProcessor
 
                 if (relation.IsManyToMany)
                 {
-                    // M:N consts: the single-parent JOIN through the junction, plus the two batch selects
-                    // (all children + all junction rows) the all-eager loader assembles in memory.
+                    // M:N consts: the single-parent JOIN through the junction, plus the two filtered batch
+                    // selects the all-eager loader assembles in memory.
                     var junctionEntity = relationJunctionEntities[relation.PropertyName];
                     var junctionParentFkColumn = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!.ColumnName;
                     var junctionChildFkColumn = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!.ColumnName;
                     var junctionCtx = new SqlBuildContext(sqlBuilder, junctionEntity.Schema, junctionEntity.TableName, ToColumnList(junctionEntity.Columns));
 
                     AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildManyToManySelectByParentSql(
-                        childCtx, ToColumnList(childEntity.Columns), junctionEntity.Schema, junctionEntity.TableName,
+                        childCtx, ToColumnList(childEntity.Columns), junctionCtx,
                         junctionChildFkColumn, childEntity.Keys[0].ColumnName, junctionParentFkColumn, entity.Keys[0].PropertyName));
-                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_All", sqlBuilder.BuildSelectAllSql(childCtx));
+                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_All",
+                        sqlBuilder.BuildManyToManySelectAllFilteredSql(
+                            childCtx, junctionCtx, ctx, childEntity.Keys[0].ColumnName,
+                            junctionChildFkColumn, junctionParentFkColumn, entity.Keys[0].ColumnName));
                     AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction",
-                        sqlBuilder.BuildSelectAllFilteredSql(junctionCtx, junctionParentFkColumn, ctx, entity.Keys[0].ColumnName));
+                        sqlBuilder.BuildManyToManyJunctionAllFilteredSql(
+                            junctionCtx, ctx, childCtx, junctionParentFkColumn, entity.Keys[0].ColumnName,
+                            junctionChildFkColumn, childEntity.Keys[0].ColumnName));
+                    if (hasIncludeDeletedSelectAllEager)
+                    {
+                        AppendConstSql(source, "_sql_" + relation.PropertyName + "_All_IncludeDeleted",
+                            sqlBuilder.BuildManyToManySelectAllFilteredSql(
+                                childCtx, junctionCtx, ctxIncludeDeleted, childEntity.Keys[0].ColumnName,
+                                junctionChildFkColumn, junctionParentFkColumn, entity.Keys[0].ColumnName));
+                        AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction_IncludeDeleted",
+                            sqlBuilder.BuildManyToManyJunctionAllFilteredSql(
+                                junctionCtx, ctxIncludeDeleted, childCtx, junctionParentFkColumn,
+                                entity.Keys[0].ColumnName, junctionChildFkColumn, childEntity.Keys[0].ColumnName));
+                    }
                     continue;
                 }
 
@@ -1372,6 +1390,12 @@ internal static class StoreProcessor
                 AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildSelectByFieldSql(childCtx, new List<IColumn> { filterColumn }));
                 AppendConstSql(source, "_sql_" + relation.PropertyName + "_All",
                     sqlBuilder.BuildSelectAllFilteredSql(childCtx, filterColumn.ColumnName, ctx, parentKeyColumn));
+                if (hasIncludeDeletedSelectAllEager)
+                {
+                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_All_IncludeDeleted",
+                        sqlBuilder.BuildSelectAllFilteredSql(
+                            childCtx, filterColumn.ColumnName, ctxIncludeDeleted, parentKeyColumn));
+                }
             }
         }
 
