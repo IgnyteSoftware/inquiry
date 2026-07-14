@@ -1,7 +1,7 @@
 using Inquiry.Generators.Abstractions;
+using Inquiry.Oracle.Shared;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 
 namespace Inquiry.Oracle.Analyzer;
@@ -93,12 +93,16 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     /// etc. Leading-underscore names move into a generated-safe namespace instead of being trimmed, so
     /// <c>offset</c>, <c>_offset</c>, and <c>__offset</c> remain distinct.
     /// </summary>
-    public override string ParameterName(string logicalName) => ":" + SafeBindName(logicalName);
-
-    private static string SafeBindName(string logicalName)
-        => !string.IsNullOrEmpty(logicalName) && logicalName[0] == '_'
-            ? "inq$" + logicalName.Length.ToString(CultureInfo.InvariantCulture) + "$" + logicalName
-            : logicalName;
+    public override string ParameterName(string logicalName) => ":" + OracleBindName.Encode(logicalName);
+    public override string RuntimeParameterName(string logicalName) => OracleBindName.Encode(logicalName);
+    public override string RuntimeParameterNameFromSql(string sqlParameterName)
+        => sqlParameterName.Length > 0 && (sqlParameterName[0] == ':' || sqlParameterName[0] == '@')
+            ? sqlParameterName.Substring(1)
+            : sqlParameterName;
+    public override string StoredProcedureParameterName(string formalName)
+        => formalName.Length > 0 && formalName[0] is '@' or ':' or '$' or '?'
+            ? formalName.Substring(1)
+            : formalName;
 
     /// <summary>
     /// ODP.NET's <c>OracleParameter.set_DbType</c> rejects <c>DbType.DateTime2</c> ("Value does not fall
@@ -377,21 +381,34 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle's VARCHAR2 caps at 4000 bytes; NVARCHAR2 caps at 2000 characters under the default
     // AL16UTF16 national charset (2 bytes/char × 2000 = 4000 bytes internal limit).
     protected override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 2000 : 4000;
+    public override bool RequiresBoundedComputedStrings => true;
 
-    // ---- Batch insert (INSERT ALL) -----------------------------------------------------------
-    // Oracle has no multi-row VALUES; its set-based multi-row insert is
-    //   INSERT ALL INTO t (cols) VALUES (...) INTO t (cols) VALUES (...) SELECT 1 FROM dual
-    // — a single INSERT statement, so ExecuteNonQuery still returns the total inserted-row count. The row
-    // parameters take the ':' sigil via ParameterName; OracleInquiryConnectionFactory.FinalizeCommand
-    // reconciles the binder's '@p{r}_{c}' names by BindByName.
-    public override string BuildBatchInsertHeader(SqlBuildContext context) => "INSERT ALL ";
+    protected override string RenderComputedColumn(IColumn column)
+    {
+        if (column.TypeClass != DbTypeClass.String)
+            return base.RenderComputedColumn(column);
+
+        var type = column.IsUnicode ? "NVARCHAR2" : "VARCHAR2";
+        return "AS (CAST(" + column.ComputedExpression + " AS " + type + "(" +
+            column.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")))";
+    }
+
+    // ---- Batch insert (single-table INSERT SELECT) -------------------------------------------
+    // Oracle has no multi-row VALUES. A multitable INSERT ALL evaluates a sequence only once for
+    // the source row, so it cannot safely populate several identity rows. Emit one single-table
+    // INSERT fed by SELECT ... FROM dual UNION ALL instead; each SELECT is an independent source row.
+    public override string BuildBatchInsertHeader(SqlBuildContext context)
+        => "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") ";
 
     public override string BuildBatchInsertRowOpen(SqlBuildContext context)
-        => "INTO " + context.Table + " (" + context.InsertColumns + ") VALUES (";
+        => "SELECT ";
 
-    public override string BatchInsertRowSeparator => " ";
+    public override string BatchInsertRowClose => " FROM dual";
+    public override string BatchInsertRowSeparator => " UNION ALL ";
+    public override string BatchInsertSqlParameterPrefix => ":iq1$b";
+    public override string BatchInsertRuntimeParameterPrefix => "iq1$b";
 
-    public override string BatchInsertFooter => " SELECT 1 FROM dual";
+    public override string BatchInsertFooter => string.Empty;
 
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {

@@ -751,6 +751,16 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return ScalarConvert.From<T>(value);
         }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            // Some providers (notably ODP.NET) translate their native cancellation error into an
+            // OperationCanceledException carrying an internal/default token. Preserve the public
+            // Inquiry contract by associating the failure with the caller token that reached ADO.NET.
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
+        }
         catch (Exception exception)
         {
             if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
@@ -786,7 +796,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             // ADO.NET populates output / return-value DbParameters after ExecuteNonQuery; read the
             // named one back and convert it the same way as a scalar result.
-            var readBack = ScalarConvert.From<T>(dbCommand.Parameters[readBackParameterName].Value);
+            var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return readBack;
@@ -828,6 +838,13 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return ScalarConvert.From<T>(value);
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {

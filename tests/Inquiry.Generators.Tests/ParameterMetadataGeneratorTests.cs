@@ -59,29 +59,39 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         var page = Method(text, "PageByCodeAsync");
-        Assert.Contains("@Code", page);
+        if (dialect == "Oracle") Assert.Matches("ParameterName = \"iq1\\$Codexx\\$[0-9a-f]{14}\"", page);
+        else Assert.Contains("@Code", page);
         Assert.Contains("DbType.AnsiString", page);
 
         var search = Method(text, "SearchAsync");
-        Assert.Contains("@OccurredAt", search);
+        Assert.Contains(dialect == "Oracle" ? "ParameterName = \"OccurredAt\"" : "@OccurredAt", search);
         Assert.Contains("DbType.DateTimeOffset", search);
 
         var exists = Method(text, "ExistsAsync");
-        Assert.Contains("@Code", exists);
+        Assert.Contains(dialect == "Oracle" ? "ParameterName = \"Code\"" : "@Code", exists);
         Assert.Contains("DbType.AnsiString", exists);
 
         var rename = Method(text, "RenameAsync");
-        Assert.Contains("@Code", rename);
+        if (dialect == "Oracle")
+        {
+            Assert.Matches("ParameterName = \"iq1\\$Codexx\\$[0-9a-f]{14}\"", rename);
+            Assert.Contains("ParameterName = \"Id\"", rename);
+        }
+        else
+        {
+            Assert.Contains("@Code", rename);
+            Assert.Contains("@Id", rename);
+        }
         Assert.Contains("DbType.AnsiString", rename);
-        Assert.Contains("@Id", rename);
         Assert.Contains("DbType.Int32", rename);
 
         var delete = Method(text, "DeleteAsync");
-        Assert.Contains("@Payload", delete);
+        Assert.Contains(dialect == "Oracle" ? "ParameterName = \"Payload\"" : "@Payload", delete);
         Assert.Contains("DbType.Binary", delete);
 
         var seek = Method(text, "SeekAsync");
-        Assert.Contains("@__cursor0", seek);
+        if (dialect == "Oracle") Assert.Matches("ParameterName = \"iq1\\$cursor\\$[0-9a-f]{14}\"", seek);
+        else Assert.Contains("@__cursor0", seek);
         Assert.Contains("DbType.Int32", seek);
     }
 

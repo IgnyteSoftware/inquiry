@@ -50,8 +50,9 @@ public sealed partial class InquiryGeneratorTests
         var typeName = dialect == "SqlServer"
             ? ", \"[dbo].[Inquiry_Tvp_e36b3e7cf003f2911419d555807aef152b7c6667f4b9b9fb3984b20ecedd995a]\""
             : string.Empty;
-        Assert.Contains($"{binder}.Bind(_c, \"{(dialect == "Oracle" ? ":keys" : "@keys")}\", {projected}{typeName});", store);
-        Assert.DoesNotContain($"{binder}.Bind(_c, \"{(dialect == "Oracle" ? ":keys" : "@keys")}\", ids);", store);
+        var parameterName = dialect == "Oracle" ? ":iq1$keysxx$d6859d157d8d31" : "@keys";
+        Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {projected}{typeName});", store);
+        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", ids);", store);
         Assert.Contains("static _e =>", store);
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(
             store,
@@ -107,7 +108,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var nullableValue = ConverterDeleteAllStore(result, "NullableKeyStore");
         var reference = ConverterDeleteAllStore(result, "ReferenceKeyStore");
-        var parameterName = dialect == "Oracle" ? ":keys" : "@keys";
+        var parameterName = dialect == "Oracle" ? ":iq1$keysxx$d6859d157d8d31" : "@keys";
         const string nullableProjection = "ids is null ? null : global::System.Linq.Enumerable.Select(ids, static _e => _e.HasValue ? (long?)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e.Value) : null)";
         const string referenceProjection = "ids is null ? null : global::System.Linq.Enumerable.Select(ids, static _e => _e is null ? (string?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_e))";
 
@@ -184,7 +185,7 @@ public sealed partial class InquiryGeneratorTests
             "SqlServer" => $"private const string _sqlDeleteAll = \"DELETE FROM [{table}] WHERE [Id] IN (SELECT [Value] FROM @keys)\";",
             "PostgreSql" => $"private const string _sqlDeleteAll = \"DELETE FROM \\\"{table}\\\" WHERE \\\"Id\\\" = ANY(@keys)\";",
             "MySql" or "MariaDb" => $"private const string _sqlDeleteAll = \"DELETE FROM `{table}` WHERE `Id` IN (SELECT jt.val FROM JSON_TABLE(@keys, '$[*]' COLUMNS(val {(providerIsString ? "LONGTEXT" : "BIGINT")} PATH '$')) jt)\";",
-            "Oracle" => $"private const string _sqlDeleteAll = \"DELETE FROM {table} WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:keys, '$[*]' COLUMNS(val {(providerIsString ? "VARCHAR2(4000)" : "NUMBER(19)")} PATH '$')) jt)\";",
+            "Oracle" => $"private const string _sqlDeleteAll = \"DELETE FROM {table} WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:iq1$keysxx$d6859d157d8d31, '$[*]' COLUMNS(val {(providerIsString ? "VARCHAR2(4000)" : "NUMBER(19)")} PATH '$')) jt)\";",
             _ => throw new global::System.ArgumentOutOfRangeException(nameof(dialect)),
         };
 }

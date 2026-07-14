@@ -311,7 +311,7 @@ public sealed partial class InquiryGeneratorTests
         var text = GetAccountStore(result);
 
         Assert.Contains("FROM TAccount WHERE IsActive = 1", text);
-        Assert.Contains("WHERE Id = :Id AND IsActive = 1", text);
+        Assert.Contains("WHERE Id = :iq1$Idxxxx$30d4cf864d6e68 AND IsActive = 1", text);
     }
 
     [Theory]

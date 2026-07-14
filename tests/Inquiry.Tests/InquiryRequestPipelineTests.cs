@@ -15,6 +15,96 @@ namespace Inquiry.Tests;
 public sealed class InquiryRequestPipelineTests
 {
     [Fact]
+    public async Task ExecuteScalarAssociatesProviderCancellationWithCallerToken()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var interceptor = new ProviderCancellationInterceptor(cancellationTokenSource);
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            new[] { interceptor });
+
+        var cancellation = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            pipeline.ExecuteScalarAsync<int>(new InquiryCommand("SELECT 1"), cancellationTokenSource.Token));
+
+        Assert.Equal(cancellationTokenSource.Token, cancellation.CancellationToken);
+        var reported = Assert.Single(interceptor.Failures);
+        Assert.Same(cancellation, reported);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarFastPathAssociatesProviderCancellationWithCallerToken()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var interceptor = new ProviderCancellationInterceptor(cancellationTokenSource);
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            new[] { interceptor });
+
+        var cancellation = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            pipeline.ExecuteScalarAsync<int, int>(
+                "SELECT 1",
+                0,
+                static (_, _) => { },
+                cancellationTokenSource.Token));
+
+        AssertCallerCancellation(cancellationTokenSource.Token, cancellation, interceptor);
+    }
+
+    [Fact]
+    public async Task TransactedExecuteScalarAssociatesProviderCancellationWithCallerToken()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        var factory = new TestConnectionFactory(connectionString);
+        await using var connection = await factory.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var interceptor = new ProviderCancellationInterceptor(cancellationTokenSource);
+        var pipeline = new TransactedInquiryRequestPipeline(
+            connection,
+            transaction,
+            new[] { interceptor },
+            factory,
+            options: null);
+
+        var cancellation = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            pipeline.ExecuteScalarAsync<int>(new InquiryCommand("SELECT 1"), cancellationTokenSource.Token));
+
+        AssertCallerCancellation(cancellationTokenSource.Token, cancellation, interceptor);
+    }
+
+    [Fact]
+    public async Task TransactedExecuteScalarFastPathAssociatesProviderCancellationWithCallerToken()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        var factory = new TestConnectionFactory(connectionString);
+        await using var connection = await factory.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var interceptor = new ProviderCancellationInterceptor(cancellationTokenSource);
+        var pipeline = new TransactedInquiryRequestPipeline(
+            connection,
+            transaction,
+            new[] { interceptor },
+            factory,
+            options: null);
+
+        var cancellation = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            pipeline.ExecuteScalarAsync<int, int>(
+                "SELECT 1",
+                0,
+                static (_, _) => { },
+                cancellationTokenSource.Token));
+
+        AssertCallerCancellation(cancellationTokenSource.Token, cancellation, interceptor);
+    }
+
+    [Fact]
     public async Task PipelineExecutesQueriesAndNonQueriesAgainstSqlite()
     {
         var connectionString = CreateSharedInMemoryConnectionString();
@@ -594,6 +684,16 @@ public sealed class InquiryRequestPipelineTests
         return items;
     }
 
+    private static void AssertCallerCancellation(
+        CancellationToken expectedToken,
+        OperationCanceledException cancellation,
+        ProviderCancellationInterceptor interceptor)
+    {
+        Assert.Equal(expectedToken, cancellation.CancellationToken);
+        var reported = Assert.Single(interceptor.Failures);
+        Assert.Same(cancellation, reported);
+    }
+
     private sealed class TestConnectionFactory : IInquiryConnectionFactory
     {
         private readonly string _connectionString;
@@ -664,6 +764,31 @@ public sealed class InquiryRequestPipelineTests
             => throw new InvalidOperationException("Interceptor setup failed.");
 
         public ValueTask CommandFailedAsync(InquiryCommandFailedContext context, CancellationToken cancellationToken = default)
+        {
+            Failures.Add(context.Exception);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ProviderCancellationInterceptor : IInquiryCommandInterceptor
+    {
+        private readonly CancellationTokenSource _source;
+
+        public ProviderCancellationInterceptor(CancellationTokenSource source) => _source = source;
+
+        public List<Exception> Failures { get; } = new();
+
+        public ValueTask CommandExecutingAsync(
+            InquiryCommandContext context,
+            CancellationToken cancellationToken = default)
+        {
+            _source.Cancel();
+            throw new OperationCanceledException();
+        }
+
+        public ValueTask CommandFailedAsync(
+            InquiryCommandFailedContext context,
+            CancellationToken cancellationToken = default)
         {
             Failures.Add(context.Exception);
             return ValueTask.CompletedTask;
