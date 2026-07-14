@@ -10,6 +10,7 @@ namespace Inquiry.Generators.Models;
 /// </summary>
 internal sealed record ProjectionData(
     string FullyQualifiedName,
+    string HintName,
     string Name,
     string? Namespace,
     string EntityFullyQualifiedName,
