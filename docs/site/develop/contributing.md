@@ -57,9 +57,16 @@ for the consumer-facing checklist.
 
 Run the code-review workflow on a feature branch before merging; fix Critical/Important findings first.
 
-## Merge to `main` directly — no pull requests
+## Pull requests and integration branches
 
-Merge a feature branch into `main` once it's complete, reviewed, and green. The project does not use PRs.
+All changes land through reviewed pull requests. During 1.0 stabilization, feature branches target
+`prerelease`; promotion to `main` is a separate reviewed pull request after the release gates pass. Direct
+pushes, force-pushes, branch deletion, and merge commits are not part of the supported workflow.
+
+The external rulesets for both `prerelease` and `main` must require linear history, an up-to-date branch,
+resolved conversations, at least one real human approval, and the final `ci-required-v1` status. Copilot and
+other automated reviews supplement, but do not replace, the human approval. These are repository-setting
+requirements: the checked-in workflow cannot enforce them by itself.
 
 ## Commit messages
 
@@ -70,19 +77,22 @@ approach is the convention.)
 ## CI
 
 [`.github/workflows/ci.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/ci.yml)
-runs on pushes to `main` and also on the `pull_request` event if a PR is opened:
+runs for pull requests into `prerelease` and `main`, and for merge-queue `merge_group` events:
 
 - a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker);
 - an **aot-smoke** job — publishes the `Inquiry.AotSmoke` sample as a native binary and executes it,
   verifying the NativeAOT story end-to-end; and
-- an **integration** job — a matrix of **PostgreSQL, MySQL, SQL Server, and Oracle** live suites, each on
-  **net8.0** and **net9.0**, provisioned with Testcontainers.
+- an **integration** job — a matrix of **PostgreSQL, MySQL, MariaDB, SQL Server, and Oracle** live suites, each on
+  **net8.0**, **net9.0**, and **net10.0** (exactly 15 required legs), provisioned with Testcontainers.
 
-CI uploads TRX result artifacts (`if: always()`) so failures and skips can be inspected.
+The always-running **ci-required-v1** job fails unless every required job and every matrix leg succeeds.
+Its versioned source of truth is `eng/ci-required-v1.json`; contract tests prevent the workflow matrix or
+aggregator from drifting away from it. CI uploads TRX result artifacts even after failures, fails if the
+evidence is absent, and retains the artifacts for 14 days.
 
 A separate **scheduled weekly workflow**
 ([`scheduled.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/scheduled.yml))
-runs every Monday and extends the integration matrix to **net10.0**, re-verifying every provider against
+runs every Monday and repeats the full three-TFM integration matrix, re-verifying every provider against
 current container images.
 
 **Warnings are errors everywhere.** Production projects set `TreatWarningsAsErrors`, and
@@ -103,24 +113,32 @@ Inquiry uses **MinVer** for tag-based versioning. The version is derived from th
 
 ### How to release
 
-1. Ensure `main` is green — CI must pass.
-2. Tag the release commit: `git tag v1.0.0`
-3. Push the tag: `git push --tags`
+Public publishing is disabled while the immutable release-candidate pipeline is being completed under
+[#89](https://github.com/JakeOverstreet/inquiry/issues/89). Do not create or push a release tag manually.
+The retired tag workflow rebuilt source and wildcard-pushed packages; that path was intentionally removed.
 
-The [`release.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/release.yml)
-workflow triggers on any `v*` tag push and:
+For local package-contract verification only, pack the nine manifest entries at an exact commit:
 
-- Checks out with full history (MinVer needs tags to derive the version).
-- Builds in Release configuration.
-- Runs generator, runtime, and SQLite tests as a gate.
-- Packs all 9 shippable packages (+ `.snupkg` symbol packages).
-- Pushes to NuGet.org using the `NUGET_API_KEY` repository secret.
+```powershell
+$output = Join-Path ([System.IO.Path]::GetTempPath()) 'inquiry-release-candidate'
+./eng/pack-release.ps1 -OutputPath $output -Commit (git rev-parse HEAD)
+```
 
-### Prerequisites
+This requires a clean worktree at the named `HEAD`, creates a detached temporary worktree at that exact
+commit, and restores and builds only from that immutable snapshot. It uses `MinVerVersionOverride=1.0.0`,
+refuses a non-empty or linked output directory, and validates exact nupkg and snupkg inventory, versions,
+dependencies, repository commit, metadata, assets, DLL/PDB identities, and complete SourceLink mappings.
+The canonical repository branch is recorded as `refs/heads/prerelease`, even though compilation occurs from
+the detached commit snapshot.
+It does not publish or create a tag. The protected promotion and resumable publication stages are not
+implemented yet; they must consume the verified bundle without rebuilding it.
 
-A `NUGET_API_KEY` secret must be configured in the repository's GitHub Actions secrets
-(Settings > Secrets and variables > Actions). Generate an API key at
-[nuget.org/account/apikeys](https://www.nuget.org/account/apikeys) scoped to the Inquiry packages.
+### Release prerequisites
+
+Repository visibility/plan, branch and tag rulesets, Pages, security features, the protected release
+environment, NuGet owners and package IDs, and trusted-publishing policy must pass the fail-closed settings
+attestation before RC. Repository code does not change those external settings. A short-lived scoped NuGet
+key is fallback-only and requires explicit owner approval; trusted OIDC publishing is the intended path.
 
 ### Shippable packages
 
@@ -142,8 +160,10 @@ Benchmark, sample, test, and analyzer projects are marked `IsPackable=false` and
 ### SourceLink and symbol packages
 
 Every package embeds SourceLink metadata (commit hash, repository URL) via
-`Microsoft.SourceLink.GitHub`, and ships a `.snupkg` symbol package. NuGet consumers can step into
-Inquiry source in their debugger without downloading the repo.
+`Microsoft.SourceLink.GitHub`, and ships a `.snupkg` symbol package. Provider symbol packages include
+portable PDBs for both bundled analyzer DLLs as well as the runtime assemblies. The verifier binds every
+PDB to its DLL CodeView identity and requires every source document to resolve to the named commit.
+NuGet consumers can step into Inquiry source in their debugger without downloading the repo.
 
 ## Adding a database
 

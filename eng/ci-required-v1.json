@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "ci-required-v1",
+  "requiredJobs": [
+    { "job": "build-and-unit" },
+    { "job": "aot-smoke" },
+    {
+      "job": "integration",
+      "matrix": {
+        "provider": [ "PostgreSql", "MySql", "MariaDb", "SqlServer", "Oracle" ],
+        "tfm": [ "net8.0", "net9.0", "net10.0" ]
+      }
+    },
+    { "job": "package-producer" },
+    { "job": "package-verifier" }
+  ]
+}
