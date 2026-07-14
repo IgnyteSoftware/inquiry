@@ -144,6 +144,58 @@ dotnet run -c Release --project benchmarks\Inquiry.Benchmarks\Inquiry.Benchmarks
 
 Results are written to `BenchmarkDotNet.Artifacts/` next to the run.
 
+## SQL Server collection transports
+
+`SqlServerCollectionBenchmarks` compares a pre-provisioned generated TVP with typed `OPENJSON`
+and scalar parameter expansion for 1, 10, 100, and 1,000 product IDs. Every operation uses the
+same buffered ten-column projection, a fresh pooled connection, one command, and the standard
+10,000-product fixture. Setup streams all 13 canonical Northwind tables into a fresh database using
+bounded `SqlBulkCopy`, applies full-scan statistics, and validates the generated TVP artifact before
+any collection starts.
+
+The checked jobs below are the authoritative collection commands. They are intentionally long-running
+and require Docker; results are evidence, not a claim that any transport always wins.
+
+The SQL Server benchmark project pins a Linux RID for release evidence. On Windows, build normally and
+invoke the managed DLL instead of `dotnet run` (the latter attempts to launch the Linux apphost):
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.SqlServer/Inquiry.Benchmarks.SqlServer.csproj -c Release -f net8.0
+dotnet benchmarks/Inquiry.Benchmarks.SqlServer/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.SqlServer.dll --collection-smoke
+```
+
+Use that managed-DLL form with `--collection-benchmark`, `--collection-verify`, or
+`--collection-evidence <path>` for the corresponding Windows command below.
+
+```powershell
+dotnet run -c Release -f net8.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-benchmark
+dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-benchmark
+```
+
+The smoke commands only validate wiring and are not suitable for published comparisons:
+
+```powershell
+dotnet run -c Release -f net8.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-smoke
+dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-smoke
+```
+
+Correctness and server evidence run outside the timed BenchmarkDotNet path. Evidence contains logical
+reads and hashed SQL/parameter/query/plan signatures; it intentionally contains no SQL text, raw rows,
+hosts, secrets, or local paths.
+
+The old `PlanCacheBenchmarks` suite was removed in full because it timed cache clearing and therefore
+could not produce authoritative latency results. Its declared-size versus inferred-size experiment was
+not silently carried forward; a separately controlled parameter-signature experiment remains explicit
+follow-up work under #87.
+
+```powershell
+dotnet run -c Release -f net8.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-verify
+dotnet run -c Release -f net8.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-evidence artifacts/benchmarks/sqlserver-collection-evidence.json
+```
+
+Until checked historical baselines and a stable benchmark runner are added under the broader benchmark
+roadmap, local output and collected server evidence are non-release-gating and non-authoritative.
+
 ## Reading the results
 
 Each benchmark class uses `[CategoriesColumn]` and groups by category, so the BDN summary

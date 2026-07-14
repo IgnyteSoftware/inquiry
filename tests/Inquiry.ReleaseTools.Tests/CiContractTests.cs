@@ -160,7 +160,8 @@ public sealed class CiContractTests
     [InlineData("  ci-required-v1:", "  unexpected-job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n\n  ci-required-v1:")]
     public void Contract_drift_is_rejected(string oldValue, string newValue)
     {
-        var workflow = File.ReadAllText(Path.Combine(RepositoryFixture.Root, ".github", "workflows", "ci.yml"));
+        var workflow = File.ReadAllText(Path.Combine(RepositoryFixture.Root, ".github", "workflows", "ci.yml"))
+            .ReplaceLineEndings("\n");
         Assert.Contains(oldValue, workflow, StringComparison.Ordinal);
         var path = Path.Combine(Path.GetTempPath(), $"inquiry-ci-{Guid.NewGuid():N}.yml");
         File.WriteAllText(path, workflow.Replace(oldValue, newValue, StringComparison.Ordinal));

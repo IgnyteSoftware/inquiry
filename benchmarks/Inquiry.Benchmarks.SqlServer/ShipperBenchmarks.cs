@@ -18,7 +18,7 @@ namespace Inquiry.Benchmarks.SqlServer;
 /// </summary>
 /// <remarks>
 /// The database is provisioned once per <see cref="Rows"/> parameter tier via
-/// <see cref="SqlServerBenchmarkDatabase"/> (Testcontainer, <c>mcr.microsoft.com/mssql/server:2022-latest</c>).
+/// <see cref="SqlServerBenchmarkDatabase"/> using the digest-pinned SQL Server image contract.
 /// Requires Docker.
 /// </remarks>
 [MemoryDiagnoser]
