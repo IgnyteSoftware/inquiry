@@ -3,6 +3,8 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
     <IsPackable>false</IsPackable>
+    <!-- BenchmarkDotNet starts nested restore/build/run processes; serialize the cross-TFM smoke executions. -->
+    <TestTfmsInParallel>false</TestTfmsInParallel>
     <BenchmarkEvidenceProvider>sqlite</BenchmarkEvidenceProvider>
     <BenchmarkEvidenceLane>DeveloperProject</BenchmarkEvidenceLane>
     <BenchmarkEvidenceProviderAssembly>Inquiry.Sqlite</BenchmarkEvidenceProviderAssembly>

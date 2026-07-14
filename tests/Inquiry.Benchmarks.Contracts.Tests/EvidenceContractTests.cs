@@ -4,6 +4,7 @@ using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
+using BenchmarkDotNet.Toolchains.InProcess.Emit;
 using Perfolizer.Horology;
 using Perfolizer.Mathematics.OutlierDetection;
 using Inquiry.Benchmarks.Contracts;
@@ -25,12 +26,14 @@ public sealed class EvidenceContractTests
         var runtimeIdentifier = metadata["RuntimeIdentifier"];
         var runtimeTfm = Environment.Version.Major == 8 ? "net8.0" : "net10.0";
         var repositoryRoot = FindRepositoryRoot();
+        var nuGetPackageRoot = metadata["NuGetPackageRoot"];
+        var userRoot = DeriveUserProfileRoot(nuGetPackageRoot);
         var roots = new List<SelectedAssetRoot>
         {
             new("repo", repositoryRoot),
-            new("nuget", metadata["NuGetPackageRoot"]),
+            new("nuget", nuGetPackageRoot),
             new("dotnet", metadata["DotNetRoot"]),
-            new("user", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+            new("user", userRoot),
         };
         var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
         if (Directory.Exists(programFilesX86)) roots.Add(new("programfilesx86", programFilesX86));
@@ -77,6 +80,35 @@ public sealed class EvidenceContractTests
                 directory = directory.Parent;
             return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
         }
+    }
+
+    [Fact]
+    public void NuGetProfileRootDerivationAcceptsOnlyTheCanonicalProfileLayout()
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var profileRoot = Path.Combine(Path.GetTempPath(), "inquiry-profile");
+
+        Assert.True(string.Equals(
+            Path.GetFullPath(profileRoot),
+            DeriveUserProfileRoot(Path.Combine(profileRoot, ".nuget", "packages")),
+            comparison));
+        Assert.Throws<InvalidOperationException>(() =>
+            DeriveUserProfileRoot(Path.Combine(profileRoot, "custom", "packages")));
+        Assert.Throws<InvalidOperationException>(() =>
+            DeriveUserProfileRoot(Path.Combine(profileRoot, ".nuget", "custom")));
+
+        var differentlyCasedRoot = Path.Combine(profileRoot, ".NUGET", "PACKAGES");
+        if (OperatingSystem.IsWindows())
+            Assert.True(string.Equals(
+                Path.GetFullPath(profileRoot), DeriveUserProfileRoot(differentlyCasedRoot), comparison));
+        else
+            Assert.Throws<InvalidOperationException>(() => DeriveUserProfileRoot(differentlyCasedRoot));
+
+        var volumeRoot = Path.GetPathRoot(Path.GetFullPath(profileRoot))!;
+        Assert.Throws<InvalidOperationException>(() =>
+            DeriveUserProfileRoot(Path.Combine(volumeRoot, ".nuget", "packages")));
     }
 
     [Fact]
@@ -1169,7 +1201,7 @@ public sealed class EvidenceContractTests
                 MaxRelativeError = 0.99,
                 ArtifactRoot = artifacts,
             };
-            var config = BenchmarkDotNetConfigFactory.Create(contract);
+            var config = BenchmarkDotNetConfigFactory.Create(contract, InProcessEmitToolchain.Instance);
 #if DEBUG
             // The test host and its referenced contracts are Debug assemblies. Production Release runs
             // retain DefaultConfig's optimization validator; only this Debug smoke execution disables it.
@@ -1181,7 +1213,10 @@ public sealed class EvidenceContractTests
             Assert.True(report.Success);
             Assert.NotEmpty(Directory.EnumerateFiles(artifacts, "*.json", SearchOption.AllDirectories));
 
-            var snapshot = BenchmarkDotNetReportCollector.Collect(report, memoryDiagnoserEnabled: true);
+            Assert.Equal([(0, 1), (0, 2)], report.GetResultRuns()
+                .Select(static measurement => (measurement.LaunchIndex, measurement.IterationIndex)));
+            var snapshot = BenchmarkDotNetReportCollector.Collect(
+                report, memoryDiagnoserEnabled: true, nativeLaunchIndexBase: 0);
             Assert.Equal(report.GcStats.TotalOperations, snapshot.GcStats.TotalOperations);
             Assert.Equal(report.GcStats.GetBytesAllocatedPerOperation(report.BenchmarkCase),
                 snapshot.GcStats.BytesAllocatedPerOperation);
@@ -1263,9 +1298,7 @@ public sealed class EvidenceContractTests
         var runtimeTfm = Environment.Version.Major == 8 ? "net8.0" : "net10.0";
         var repositoryRoot = FindRepositoryRoot();
         var nuGetPackageRoot = metadata["NuGetPackageRoot"];
-        var userRoot = new DirectoryInfo(nuGetPackageRoot.TrimEnd(
-                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).Parent?.Parent?.FullName
-            ?? throw new InvalidOperationException("NuGet package root has no containing user profile.");
+        var userRoot = DeriveUserProfileRoot(nuGetPackageRoot);
         var selectedRoots = new List<SelectedAssetRoot>
         {
             new("repo", repositoryRoot),
@@ -1359,5 +1392,37 @@ public sealed class EvidenceContractTests
                 throw new FileNotFoundException($"Selected asset does not exist: {logicalAssetId}", path);
             return path;
         }
+    }
+
+    private static string DeriveUserProfileRoot(string nuGetPackageRoot)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(nuGetPackageRoot);
+
+        var packages = new DirectoryInfo(Path.GetFullPath(nuGetPackageRoot));
+        var nuGetDirectory = packages.Parent;
+        var profileDirectory = nuGetDirectory?.Parent;
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (nuGetDirectory is null || profileDirectory is null ||
+            !string.Equals(packages.Name, "packages", comparison) ||
+            !string.Equals(nuGetDirectory.Name, ".nuget", comparison))
+        {
+            throw new InvalidOperationException(
+                "NuGet package root must use the canonical '<profile>/.nuget/packages' layout.");
+        }
+
+        var profileRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(profileDirectory.FullName));
+        var volumeRootPath = Path.GetPathRoot(profileRoot);
+        var volumeRoot = volumeRootPath is null
+            ? null
+            : Path.TrimEndingDirectorySeparator(Path.GetFullPath(volumeRootPath));
+        if (volumeRoot is null || string.Equals(profileRoot, volumeRoot, comparison))
+        {
+            throw new InvalidOperationException(
+                "NuGet package root must be contained by a user profile, not a volume or share root.");
+        }
+
+        return profileDirectory.FullName;
     }
 }

@@ -3,6 +3,7 @@ using BenchmarkDotNet.Environments;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Exporters.Json;
 using BenchmarkDotNet.Jobs;
+using BenchmarkDotNet.Toolchains;
 using Perfolizer.Horology;
 using Perfolizer.Mathematics.OutlierDetection;
 using System.Reflection;
@@ -13,6 +14,9 @@ namespace Inquiry.Benchmarks.Contracts;
 public static class BenchmarkDotNetConfigFactory
 {
     public static ManualConfig Create(BenchmarkJobContract contract)
+        => Create(contract, toolchain: null);
+
+    internal static ManualConfig Create(BenchmarkJobContract contract, IToolchain? toolchain)
     {
         var actualVersion = typeof(Job).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
@@ -46,6 +50,7 @@ public static class BenchmarkDotNetConfigFactory
             .WithMaxRelativeError(contract.MaxRelativeError)
             .WithEvaluateOverhead(contract.EvaluateOverhead)
             .WithOutlierMode(outlierMode);
+        if (toolchain is not null) job = job.WithToolchain(toolchain);
 
         return ManualConfig.Create(DefaultConfig.Instance)
             .AddJob(job)

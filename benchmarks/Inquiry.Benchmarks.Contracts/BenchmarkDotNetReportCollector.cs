@@ -12,19 +12,29 @@ public sealed record BenchmarkDotNetReportSnapshot(
 public static class BenchmarkDotNetReportCollector
 {
     public static BenchmarkDotNetReportSnapshot Collect(BenchmarkReport report, bool memoryDiagnoserEnabled)
+        => Collect(report, memoryDiagnoserEnabled, nativeLaunchIndexBase: 1);
+
+    internal static BenchmarkDotNetReportSnapshot Collect(
+        BenchmarkReport report,
+        bool memoryDiagnoserEnabled,
+        int nativeLaunchIndexBase)
     {
         ArgumentNullException.ThrowIfNull(report);
+        if (nativeLaunchIndexBase is not (0 or 1))
+            throw new ArgumentOutOfRangeException(nameof(nativeLaunchIndexBase));
         var resultRuns = report.GetResultRuns()
             .OrderBy(static measurement => measurement.LaunchIndex)
             .ThenBy(static measurement => measurement.IterationIndex)
             .ToArray();
         ValidateNativeCoordinates(
-            resultRuns.Select(static measurement => (measurement.LaunchIndex, measurement.IterationIndex)).ToArray(),
+            resultRuns.Select(measurement => (
+                measurement.LaunchIndex - nativeLaunchIndexBase + 1,
+                measurement.IterationIndex)).ToArray(),
             report.BenchmarkCase.Job.Run.LaunchCount,
             report.BenchmarkCase.Job.Run.IterationCount);
         var measurements = resultRuns
             .Select(measurement => new BenchmarkDotNetMeasurement(
-                measurement.LaunchIndex - 1,
+                measurement.LaunchIndex - nativeLaunchIndexBase,
                 measurement.IterationIndex - 1,
                 measurement.Operations,
                 measurement.GetAverageTime().Nanoseconds))
