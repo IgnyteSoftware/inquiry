@@ -97,15 +97,18 @@ internal sealed class DefaultInquiry : IInquiry
 
             if (slot.State == AmbientTransactionSlotState.Closed)
             {
-                throw new ObjectDisposedException(
-                    "Inquiry ambient transaction",
-                    "This async flow captured an Inquiry transaction that has already been committed, rolled back, or disposed. " +
-                    "Start a new operation after the transaction scope, or await child work before closing the transaction.");
+                throw CreateClosedAmbientTransactionException();
             }
 
             return _defaultPipeline;
         }
     }
+
+    private static ObjectDisposedException CreateClosedAmbientTransactionException()
+        => new(
+            "Inquiry ambient transaction",
+            "This async flow captured an Inquiry transaction that has already been committed, rolled back, or disposed. " +
+            "Start a new operation after the transaction scope, or await child work before closing the transaction.");
 
     /// <inheritdoc />
     public bool ThrowOnConcurrencyConflict => _options?.ThrowOnConcurrencyConflict ?? false;
@@ -234,7 +237,13 @@ internal sealed class DefaultInquiry : IInquiry
         if (definition is null) throw new ArgumentNullException(nameof(definition));
         if (rows is null) throw new ArgumentNullException(nameof(rows));
 
-        if (_ambientSlot.Value?.Pipeline is not null)
+        var ambientSlot = _ambientSlot.Value;
+        if (ambientSlot?.State == AmbientTransactionSlotState.Closed)
+        {
+            throw CreateClosedAmbientTransactionException();
+        }
+
+        if (ambientSlot?.Pipeline is not null)
         {
             throw new InvalidOperationException(
                 "Native bulk insert cannot run inside an Inquiry transaction because it uses a dedicated connection " +
