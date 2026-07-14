@@ -865,9 +865,11 @@ public static class CheckedArtifactSchemas
 {
     private static readonly Lazy<JsonSchema> EvidenceSchema = new(() => Load("benchmark-evidence-v2.schema.json"));
     private static readonly Lazy<JsonSchema> BaselineSchema = new(() => Load("checked-baseline.schema.json"));
+    private static readonly Lazy<JsonSchema> SelectedStrategySchema = new(() => Load("selected-batch-strategy-v1.schema.json"));
 
     public static JsonSchema Evidence => EvidenceSchema.Value;
     public static JsonSchema Baseline => BaselineSchema.Value;
+    public static JsonSchema SelectedStrategy => SelectedStrategySchema.Value;
 
     private static JsonSchema Load(string fileName)
     {
