@@ -1,6 +1,6 @@
 # Roadmap
 
-> Inquiry's first public release is **1.0.0**. Package versioning is independent of the .NET 8
+> Inquiry's first public release will be **1.0.0**. Package versioning is independent of the .NET 8
 > runtime floor.
 >
 > Inquiry is the **compile-time .NET micro-ORM**: generated constant SQL, binders, and materializers;
