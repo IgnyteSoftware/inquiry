@@ -56,6 +56,200 @@ public sealed class BatchRuntimeEvidenceTests
     }
 
     [Fact]
+    public async Task SelectableRowsWithActiveInterceptorNeverUseDbBatchAndPreservePerItemLifecycle()
+    {
+        var state = new RecordingState();
+        var interceptor = new LifecycleRecordingInterceptor();
+        var factory = new RecordingFactory(state, InquiryBatchExecutionMode.DbBatch);
+        var pipeline = new InquiryRequestPipeline(
+            factory,
+            new IInquiryCommandInterceptor[] { interceptor },
+            new InquiryOptions { MaxBatchSize = 2 });
+
+        var affected = await pipeline.ExecuteBatchAsync(SelectableRowCommand(), new[] { 1, 2, 3 });
+
+        Assert.Equal(3, affected);
+        Assert.Equal(0, state.BatchCreateCount);
+        Assert.Empty(state.ExecutedBatchSizes);
+        Assert.Equal(3, state.CommandCreateCount);
+        Assert.Equal(3, state.CommandExecuteCount);
+        Assert.Equal(3, state.CommandDisposeCount);
+        Assert.Equal(
+            new[]
+            {
+                "initialized:1", "executing:1", "executed:1:1",
+                "initialized:2", "executing:2", "executed:2:1",
+                "initialized:3", "executing:3", "executed:3:1",
+            },
+            interceptor.Events);
+        Assert.Equal(1, state.TransactionCommitCount);
+        Assert.Equal(0, state.TransactionRollbackCount);
+    }
+
+    [Fact]
+    public async Task SelectableRowsWithActiveInterceptorCancellationNeverUsesDbBatchAndRollsBack()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var state = new RecordingState();
+        var interceptor = new LifecycleRecordingInterceptor(cancellation, cancelAtValue: 2);
+        var factory = new RecordingFactory(state, InquiryBatchExecutionMode.DbBatch);
+        var pipeline = new InquiryRequestPipeline(
+            factory,
+            new IInquiryCommandInterceptor[] { interceptor },
+            new InquiryOptions { MaxBatchSize = 3 });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => pipeline.ExecuteBatchAsync(SelectableRowCommand(), new[] { 1, 2, 3 }, cancellation.Token));
+
+        Assert.Equal(0, state.BatchCreateCount);
+        Assert.Empty(state.ExecutedBatchSizes);
+        Assert.Equal(2, state.CommandCreateCount);
+        Assert.Equal(1, state.CommandExecuteCount);
+        Assert.Equal(2, state.CommandDisposeCount);
+        Assert.Equal(
+            new[]
+            {
+                "initialized:1", "executing:1", "executed:1:1",
+                "initialized:2", "executing:2", "failed:2:OperationCanceledException",
+            },
+            interceptor.Events);
+        Assert.Equal(0, state.TransactionCommitCount);
+        Assert.Equal(1, state.TransactionRollbackCount);
+    }
+
+    [Theory]
+    [InlineData(PreparedStatementMode.Auto, false, 1)]
+    [InlineData(PreparedStatementMode.None, false, 0)]
+    [InlineData(PreparedStatementMode.Auto, true, 1)]
+    [InlineData(PreparedStatementMode.None, true, 0)]
+    public async Task DescriptorPreferredPreparationHonorsModeAndTransactionOwnership(
+        PreparedStatementMode mode,
+        bool transacted,
+        int expectedPrepareCount)
+    {
+        var state = new RecordingState();
+        var factory = new RecordingFactory(state, InquiryBatchExecutionMode.ReusedCommand);
+        var options = new InquiryOptions { MaxBatchSize = 2, PrepareStatements = mode };
+        var command = PreferredRowCommand();
+
+        if (transacted)
+        {
+            var connection = new RecordingConnection(state);
+            var transaction = new RecordingTransaction(connection, state);
+            var pipeline = new TransactedInquiryRequestPipeline(
+                connection, transaction, Array.Empty<IInquiryCommandInterceptor>(), factory, options);
+
+            Assert.Equal(5, await pipeline.ExecuteBatchAsync(command, Enumerable.Range(1, 5)));
+        }
+        else
+        {
+            var pipeline = new InquiryRequestPipeline(
+                factory, Array.Empty<IInquiryCommandInterceptor>(), options);
+
+            Assert.Equal(5, await pipeline.ExecuteBatchAsync(command, Enumerable.Range(1, 5)));
+        }
+
+        Assert.Equal(1, state.CommandCreateCount);
+        Assert.Equal(1, state.CommandDisposeCount);
+        Assert.Equal(1, state.ParameterCreateCount);
+        Assert.Equal(expectedPrepareCount, state.CommandPrepareCount);
+        Assert.Equal(5, state.CommandExecuteCount);
+        Assert.Equal(transacted ? 0 : 1, state.TransactionCommitCount);
+        Assert.Equal(0, state.TransactionRollbackCount);
+    }
+
+    [Theory]
+    [InlineData(InquiryBatchExecutionMode.DbBatch)]
+    [InlineData(InquiryBatchExecutionMode.ArrayBinding)]
+    public async Task DescriptorPreparationHintDoesNotLeakIntoPhysicalBatchOrChunkPreparation(
+        InquiryBatchExecutionMode mode)
+    {
+        var state = new RecordingState();
+        var factory = new RecordingFactory(state, mode);
+        var pipeline = new InquiryRequestPipeline(
+            factory,
+            Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = 2, PrepareStatements = PreparedStatementMode.Auto });
+        var command = mode == InquiryBatchExecutionMode.DbBatch
+            ? PreferredRowCommand()
+            : PreferredChunkCapableCommand();
+
+        Assert.Equal(5, await pipeline.ExecuteBatchAsync(command, Enumerable.Range(1, 5)));
+        Assert.Equal(0, state.CommandPrepareCount);
+        Assert.Equal(0, state.BatchPrepareCount);
+        Assert.Equal(mode == InquiryBatchExecutionMode.DbBatch ? 3 : 0, state.BatchCreateCount);
+        Assert.Equal(mode == InquiryBatchExecutionMode.ArrayBinding ? 3 : 0, state.CommandCreateCount);
+    }
+
+    [Theory]
+    [InlineData(PreparedStatementMode.Auto, 1)]
+    [InlineData(PreparedStatementMode.None, 0)]
+    public async Task UnsupportedDbBatchFallbackHonorsDescriptorPreparationPreference(
+        PreparedStatementMode mode,
+        int expectedPrepareCount)
+    {
+        var state = new RecordingState { BatchCommandsCanCreateParameters = false };
+        var factory = new RecordingFactory(state, InquiryBatchExecutionMode.DbBatch);
+        var pipeline = new InquiryRequestPipeline(
+            factory,
+            Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = 2, PrepareStatements = mode });
+
+        Assert.Equal(5, await pipeline.ExecuteBatchAsync(PreferredRowCommand(), Enumerable.Range(1, 5)));
+        Assert.Equal(1, state.BatchCreateCount);
+        Assert.Equal(1, state.BatchDisposeCount);
+        Assert.Equal(1, state.CommandCreateCount);
+        Assert.Equal(expectedPrepareCount, state.CommandPrepareCount);
+        Assert.Equal(5, state.CommandExecuteCount);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task DescriptorPreparationFailureDisposesCommandAndRespectsTransactionOwnership(
+        bool transacted,
+        bool cancel)
+    {
+        var state = new RecordingState
+        {
+            ThrowOnCommandPrepare = !cancel,
+            CancelOnCommandPrepare = cancel,
+        };
+        var factory = new RecordingFactory(state, InquiryBatchExecutionMode.ReusedCommand);
+        var options = new InquiryOptions { PrepareStatements = PreparedStatementMode.Auto };
+        Func<Task> execute;
+
+        if (transacted)
+        {
+            var connection = new RecordingConnection(state);
+            var transaction = new RecordingTransaction(connection, state);
+            var pipeline = new TransactedInquiryRequestPipeline(
+                connection, transaction, Array.Empty<IInquiryCommandInterceptor>(), factory, options);
+            execute = () => pipeline.ExecuteBatchAsync(PreferredRowCommand(), new[] { 1 });
+        }
+        else
+        {
+            var pipeline = new InquiryRequestPipeline(
+                factory, Array.Empty<IInquiryCommandInterceptor>(), options);
+            execute = () => pipeline.ExecuteBatchAsync(PreferredRowCommand(), new[] { 1 });
+        }
+
+        if (cancel)
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(execute);
+        else
+            await Assert.ThrowsAsync<InvalidOperationException>(execute);
+
+        Assert.Equal(1, state.CommandCreateCount);
+        Assert.Equal(1, state.CommandPrepareCount);
+        Assert.Equal(1, state.CommandDisposeCount);
+        Assert.Equal(0, state.CommandExecuteCount);
+        Assert.Equal(0, state.TransactionCommitCount);
+        Assert.Equal(transacted ? 0 : 1, state.TransactionRollbackCount);
+    }
+
+    [Fact]
     public async Task WholeChunkAndDbBatchPrepareOncePerPhysicalChunk()
     {
         var chunkState = new RecordingState();
@@ -217,6 +411,107 @@ public sealed class BatchRuntimeEvidenceTests
             target.AddParameter(parameter);
         });
 
+    private static InquiryBatchCommand<int> PreferredRowCommand()
+        => new(
+            "work",
+            static (target, item) =>
+            {
+                var parameter = target.CreateParameter();
+                parameter.ParameterName = "value";
+                parameter.Value = item;
+                target.AddParameter(parameter);
+            },
+            CommandType.Text,
+            bindChunk: null,
+            preferPrepareOnce: true);
+
+    private static InquiryBatchCommand<int> PreferredChunkCapableCommand()
+        => new(
+            "work",
+            static (target, item) =>
+            {
+                var parameter = target.CreateParameter();
+                parameter.ParameterName = "value";
+                parameter.Value = item;
+                target.AddParameter(parameter);
+            },
+            CommandType.Text,
+            static (command, items) => ((RecordingCommand)command).AffectedRows = items.Count,
+            preferPrepareOnce: true);
+
+    private static InquiryBatchCommand<int> SelectableRowCommand()
+        => new(
+            "work",
+            static (target, item) =>
+            {
+                var parameter = target.CreateParameter();
+                parameter.ParameterName = "value";
+                parameter.Value = item;
+                target.AddParameter(parameter);
+            },
+            static count => "chunk-" + count,
+            static (_, _) => throw new InvalidOperationException("Chunk binding must not run."),
+            static _ => false,
+            parametersPerItem: 1);
+
+    private sealed class LifecycleRecordingInterceptor : IInquiryCommandInterceptor
+    {
+        private readonly CancellationTokenSource? _cancellation;
+        private readonly int? _cancelAtValue;
+
+        internal LifecycleRecordingInterceptor(
+            CancellationTokenSource? cancellation = null,
+            int? cancelAtValue = null)
+        {
+            _cancellation = cancellation;
+            _cancelAtValue = cancelAtValue;
+        }
+
+        internal List<string> Events { get; } = new();
+
+        public ValueTask CommandInitializedAsync(
+            InquiryCommandContext context,
+            CancellationToken cancellationToken = default)
+        {
+            Events.Add("initialized:" + GetValue(context));
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask CommandExecutingAsync(
+            InquiryCommandContext context,
+            CancellationToken cancellationToken = default)
+        {
+            var value = GetValue(context);
+            Events.Add("executing:" + value);
+            if (value == _cancelAtValue)
+            {
+                _cancellation!.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask CommandExecutedAsync(
+            InquiryCommandExecutedContext context,
+            CancellationToken cancellationToken = default)
+        {
+            Events.Add($"executed:{GetValue(context)}:{context.RecordsAffected}");
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask CommandFailedAsync(
+            InquiryCommandFailedContext context,
+            CancellationToken cancellationToken = default)
+        {
+            Events.Add($"failed:{GetValue(context)}:{context.Exception.GetType().Name}");
+            return ValueTask.CompletedTask;
+        }
+
+        private static int GetValue(InquiryCommandContext context)
+            => (int)context.Command.Parameters[0].Value!;
+    }
+
     private sealed class RecordingState
     {
         internal bool BatchCommandsCanCreateParameters { get; init; } = true;
@@ -227,12 +522,15 @@ public sealed class BatchRuntimeEvidenceTests
         internal int CommandDisposeCount { get; set; }
         internal int CommandExecuteCount { get; set; }
         internal int CommandPrepareCount { get; set; }
+        internal int ParameterCreateCount { get; set; }
         internal int TransactionCommitCount { get; set; }
         internal int TransactionRollbackCount { get; set; }
         internal int SavepointCreateCount { get; set; }
         internal int SavepointRollbackCount { get; set; }
         internal int SavepointReleaseCount { get; set; }
         internal bool ThrowOnCommandExecute { get; init; }
+        internal bool ThrowOnCommandPrepare { get; init; }
+        internal bool CancelOnCommandPrepare { get; init; }
         internal bool ThrowOnBatchExecute { get; init; }
         internal bool ThrowOnCommandDispose { get; init; }
         internal bool ThrowOnRollback { get; init; }
@@ -408,14 +706,27 @@ public sealed class BatchRuntimeEvidenceTests
             => Task.FromResult(Execute());
         public override object? ExecuteScalar() => null;
 
-        public override void Prepare() => _state.CommandPrepareCount++;
+        public override void Prepare()
+        {
+            _state.CommandPrepareCount++;
+            if (_state.CancelOnCommandPrepare) throw new OperationCanceledException();
+            if (_state.ThrowOnCommandPrepare) throw new InvalidOperationException("command prepare failed");
+        }
         public override Task PrepareAsync(CancellationToken cancellationToken = default)
         {
             _state.CommandPrepareCount++;
+            if (_state.CancelOnCommandPrepare)
+                return Task.FromException(new OperationCanceledException(cancellationToken));
+            if (_state.ThrowOnCommandPrepare)
+                return Task.FromException(new InvalidOperationException("command prepare failed"));
             return Task.CompletedTask;
         }
 
-        protected override DbParameter CreateDbParameter() => new RecordingParameter();
+        protected override DbParameter CreateDbParameter()
+        {
+            _state.ParameterCreateCount++;
+            return new RecordingParameter();
+        }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
         protected override void Dispose(bool disposing)
         {

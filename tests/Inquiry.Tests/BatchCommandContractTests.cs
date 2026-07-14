@@ -1,5 +1,7 @@
 using Inquiry.Commands;
+using System.ComponentModel;
 using System.Data;
+using System.Reflection;
 
 namespace Inquiry.Tests;
 
@@ -29,6 +31,50 @@ public sealed class BatchCommandContractTests
         Assert.Equal(CommandType.StoredProcedure, command.CommandType);
         Assert.Same(row, command.BindItem);
         Assert.Same(chunk, command.BindChunk);
+        Assert.False(command.PreferPrepareOnce);
+    }
+
+    [Fact]
+    public void BatchCommandPreservesDescriptorPreparationPreference()
+    {
+        var command = new InquiryBatchCommand<int>(
+            "work", static (_, _) => { }, CommandType.Text, bindChunk: null, preferPrepareOnce: true);
+
+        Assert.True(command.PreferPrepareOnce);
+
+        var type = typeof(InquiryBatchCommand<int>);
+        var legacy = type.GetConstructor([
+            typeof(string),
+            typeof(Action<InquiryParameterTarget, int>),
+            typeof(CommandType),
+            typeof(Action<System.Data.Common.DbCommand, IReadOnlyList<int>>),
+        ]);
+        var preferred = type.GetConstructor([
+            typeof(string),
+            typeof(Action<InquiryParameterTarget, int>),
+            typeof(CommandType),
+            typeof(Action<System.Data.Common.DbCommand, IReadOnlyList<int>>),
+            typeof(bool),
+        ]);
+
+        Assert.NotNull(legacy);
+        Assert.NotNull(preferred);
+        Assert.Equal(
+            EditorBrowsableState.Never,
+            preferred!.GetCustomAttribute<EditorBrowsableAttribute>()?.State);
+        Assert.Equal(
+            EditorBrowsableState.Never,
+            type.GetProperty(nameof(command.PreferPrepareOnce))!
+                .GetCustomAttribute<EditorBrowsableAttribute>()?.State);
+    }
+
+    [Fact]
+    public void LegacyDefaultLiteralConstructorCallRemainsUnambiguous()
+    {
+        Assert.Equal(
+            "commandType",
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new InquiryBatchCommand<int>("work", static (_, _) => { }, default)).ParamName);
     }
 
     [Theory]

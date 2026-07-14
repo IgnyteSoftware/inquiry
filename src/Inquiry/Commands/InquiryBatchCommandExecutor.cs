@@ -13,6 +13,7 @@ internal static class InquiryBatchCommandExecutor
         InquiryBatchExecutionMode executionMode,
         int commandTimeoutSeconds,
         bool prepareEnabled,
+        bool preferPrepareOnce,
         InquiryBatchCommand<TItem> command,
         InquiryBatchChunkReader<TItem> chunks,
         IReadOnlyList<TItem> firstChunk,
@@ -24,7 +25,7 @@ internal static class InquiryBatchCommandExecutor
         {
             if (command.UseChunk is not null)
                 return await ExecuteSelectableAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
-                    prepareEnabled, executionMode, command, chunks, firstChunk, interceptedRows, interceptedChunk!, cancellationToken).ConfigureAwait(false);
+                    prepareEnabled, preferPrepareOnce, executionMode, command, chunks, firstChunk, interceptedRows, interceptedChunk!, cancellationToken).ConfigureAwait(false);
             return await ExecuteInterceptedAsync(chunks, firstChunk,
                 command.BindItem is null ? interceptedChunk! : interceptedRows, cancellationToken).ConfigureAwait(false);
         }
@@ -32,7 +33,7 @@ internal static class InquiryBatchCommandExecutor
         if (command.UseChunk is not null)
         {
             return await ExecuteSelectableAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
-                prepareEnabled, executionMode, command, chunks, firstChunk, null, null, cancellationToken).ConfigureAwait(false);
+                prepareEnabled, preferPrepareOnce, executionMode, command, chunks, firstChunk, null, null, cancellationToken).ConfigureAwait(false);
         }
 
         if (command.BindItem is null)
@@ -47,7 +48,7 @@ internal static class InquiryBatchCommandExecutor
                 if (command.BindChunk is null)
                 {
                     return await ExecuteReusedAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
-                        prepareEnabled, command, chunks, firstChunk, cancellationToken).ConfigureAwait(false);
+                        prepareEnabled || preferPrepareOnce, command, chunks, firstChunk, cancellationToken).ConfigureAwait(false);
                 }
 
                 return await ExecuteChunkBoundAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
@@ -55,7 +56,7 @@ internal static class InquiryBatchCommandExecutor
 
             case InquiryBatchExecutionMode.ReusedCommand:
                 return await ExecuteReusedAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
-                    prepareEnabled, command, chunks, firstChunk, cancellationToken).ConfigureAwait(false);
+                    prepareEnabled || preferPrepareOnce, command, chunks, firstChunk, cancellationToken).ConfigureAwait(false);
 
             case InquiryBatchExecutionMode.DbBatch:
                 if (connection.CanCreateBatch)
@@ -66,7 +67,7 @@ internal static class InquiryBatchCommandExecutor
                 }
 
                 return await ExecuteReusedAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
-                    prepareEnabled, command, chunks, firstChunk, cancellationToken).ConfigureAwait(false);
+                    prepareEnabled || preferPrepareOnce, command, chunks, firstChunk, cancellationToken).ConfigureAwait(false);
 
             default:
                 throw new InvalidOperationException($"Unsupported batch execution mode: {executionMode}.");
@@ -79,6 +80,7 @@ internal static class InquiryBatchCommandExecutor
         IInquiryConnectionFactory connectionFactory,
         int commandTimeoutSeconds,
         bool prepareEnabled,
+        bool preferPrepareOnce,
         InquiryBatchExecutionMode executionMode,
         InquiryBatchCommand<TItem> command,
         InquiryBatchChunkReader<TItem> chunks,
@@ -104,6 +106,12 @@ internal static class InquiryBatchCommandExecutor
                 continue;
             }
 
+            if (interceptedRows is not null)
+            {
+                total += await interceptedRows(chunk, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
             if (executionMode == InquiryBatchExecutionMode.DbBatch && connection.CanCreateBatch)
             {
                 var result = await TryExecuteDbBatchAsync(connection, transaction, commandTimeoutSeconds,
@@ -115,15 +123,8 @@ internal static class InquiryBatchCommandExecutor
                 }
             }
 
-            if (interceptedRows is not null)
-            {
-                total += await interceptedRows(chunk, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                total += await ExecuteReusedAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
-                    prepareEnabled, command, chunks, chunk, cancellationToken, singleChunk: true).ConfigureAwait(false);
-            }
+            total += await ExecuteReusedAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
+                prepareEnabled || preferPrepareOnce, command, chunks, chunk, cancellationToken, singleChunk: true).ConfigureAwait(false);
         }
         while (chunks.MoveNext(out chunk));
 

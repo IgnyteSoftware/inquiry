@@ -14,6 +14,18 @@ public readonly struct InquiryBatchCommand<TItem>
         Action<InquiryParameterTarget, TItem> bindItem,
         CommandType commandType = CommandType.Text,
         Action<DbCommand, IReadOnlyList<TItem>>? bindChunk = null)
+        : this(commandText, bindItem, commandType, bindChunk, preferPrepareOnce: false)
+    {
+    }
+
+    /// <summary>Initializes a generated row-command definition with descriptor-scoped preparation preference.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public InquiryBatchCommand(
+        string commandText,
+        Action<InquiryParameterTarget, TItem> bindItem,
+        CommandType commandType,
+        Action<DbCommand, IReadOnlyList<TItem>>? bindChunk,
+        bool preferPrepareOnce)
     {
         if (string.IsNullOrWhiteSpace(commandText))
         {
@@ -33,6 +45,7 @@ public readonly struct InquiryBatchCommand<TItem>
         ParametersPerItem = 0;
         MaxItemsPerCommand = int.MaxValue;
         UseChunk = null;
+        PreferPrepareOnce = preferPrepareOnce;
     }
 
     /// <summary>Initializes a whole-chunk generated batch command definition.</summary>
@@ -61,6 +74,7 @@ public readonly struct InquiryBatchCommand<TItem>
         ParametersPerItem = parametersPerItem;
         MaxItemsPerCommand = maxItemsPerCommand;
         UseChunk = null;
+        PreferPrepareOnce = false;
     }
 
     /// <summary>Initializes a generated command that selects a set-based chunk shape when eligible.</summary>
@@ -105,6 +119,10 @@ public readonly struct InquiryBatchCommand<TItem>
 
     /// <summary>Gets the optional per-chunk set-based eligibility selector.</summary>
     public Func<IReadOnlyList<TItem>, bool>? UseChunk { get; }
+
+    /// <summary>Gets whether <see cref="PreparedStatementMode.Auto"/> may prepare the reused command once for this batch.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool PreferPrepareOnce { get; }
 
     internal void Validate()
     {

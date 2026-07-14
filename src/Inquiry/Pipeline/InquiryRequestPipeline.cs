@@ -49,6 +49,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     // True when Auto preparation is configured AND the provider's prepared state survives the
     // connection lifecycle. The per-command StoredProcedure check is applied at the call site.
     private readonly bool _prepareEnabled;
+    private readonly bool _autoPrepareConfigured;
 
     // Whole seconds from InquiryOptions.DefaultCommandTimeout; 0 = not configured (provider default).
     private readonly int _defaultCommandTimeoutSeconds;
@@ -75,7 +76,8 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _interceptors = interceptors?.ToArray() ?? throw new ArgumentNullException(nameof(interceptors));
-        _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.Auto) == PreparedStatementMode.Auto
+        _autoPrepareConfigured = (options?.PrepareStatements ?? PreparedStatementMode.Auto) == PreparedStatementMode.Auto;
+        _prepareEnabled = _autoPrepareConfigured
             && _connectionFactory.SupportsPersistentPreparedStatements;
         _defaultCommandTimeoutSeconds = options?.DefaultCommandTimeout is { } timeout
             ? (int)Math.Ceiling(timeout.TotalSeconds)
@@ -1348,7 +1350,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 ? ExecuteInterceptedWholeChunkAsync
                 : null;
             var total = await InquiryBatchCommandExecutor.ExecuteAsync(
-                connection, transaction, _connectionFactory, executionMode, _defaultCommandTimeoutSeconds, _prepareEnabled,
+                connection, transaction, _connectionFactory, executionMode, _defaultCommandTimeoutSeconds,
+                _prepareEnabled,
+                _autoPrepareConfigured && command.PreferPrepareOnce,
                 command, chunks, firstChunk, interceptedRows, interceptedChunk, cancellationToken).ConfigureAwait(false);
             chunks.Dispose();
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
