@@ -59,7 +59,7 @@ public sealed record SaleNote          // records work — use init properties,
 
 ## What the generator emits
 
-For each `[InquiryAdHoc]` type: a materializer reading the properties by ordinal, in a `{MetadataIdentity}.InquiryAdHoc.g.cs` file (namespace-qualified, with containing types separated by `+`), plus a registration line in `AddInquiryGeneratedStores()`:
+For each `[InquiryAdHoc]` type: a materializer reading the properties by ordinal, in a `{MetadataIdentity}.InquiryAdHoc.g.cs` file (namespace-qualified, with containing types separated by `+`, and generic arity backticks preserved as part of the CLR metadata identity, such as ``Outer`1+Inner`2``), plus a registration line in `AddInquiryGeneratedStores()`:
 
 ```csharp
 internal sealed class CategorySalesInquiryAdHocMaterializer
