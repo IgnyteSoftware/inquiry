@@ -8,7 +8,8 @@ namespace Inquiry.Benchmarks.Contracts.Evidence;
 
 public static class EvidenceSchema
 {
-    public const string Version = "inquiry-benchmark-evidence-v1";
+    public const string Version = "inquiry-benchmark-evidence-v2";
+    public const string LegacyVersion = "inquiry-benchmark-evidence-v1";
 }
 
 public static class EvidenceLimits
@@ -262,6 +263,13 @@ public sealed record ParityEvidence(BenchmarkScenario Scenario, ParityObservatio
     public string IdentityHash => CanonicalHash.Sha256(CanonicalHash.Join([Scenario.IdentityHash, Observation.IdentityHash]));
 }
 
+public sealed record BenchmarkTargetEvidence(
+    string AssemblyName,
+    string TypeName,
+    string MethodName,
+    int Cardinality,
+    IReadOnlyDictionary<string, string> Parameters);
+
 public sealed record BenchmarkEvidenceEnvelope(
     string SchemaVersion,
     bool Authoritative,
@@ -280,6 +288,8 @@ public sealed record BenchmarkEvidenceEnvelope(
     string ParityHash,
     string SqlFingerprint,
     string EnvironmentHash,
+    BenchmarkTargetEvidence BenchmarkTarget,
+    IReadOnlyDictionary<string, string> RuntimeCapabilities,
     ParityEvidence Parity,
     DatabaseEvidence Database,
     EnvironmentEvidence Environment,
@@ -297,6 +307,25 @@ public static class EvidenceValidator
     {
         var errors = new List<ContractError>();
         AddIf(evidence.SchemaVersion != EvidenceSchema.Version, "schema-version", "Evidence schema version is not supported.");
+        AddIf(string.IsNullOrWhiteSpace(evidence.BenchmarkTarget.AssemblyName) ||
+              string.IsNullOrWhiteSpace(evidence.BenchmarkTarget.TypeName) ||
+              string.IsNullOrWhiteSpace(evidence.BenchmarkTarget.MethodName) ||
+              evidence.BenchmarkTarget.Parameters.Any(static parameter =>
+                  string.IsNullOrWhiteSpace(parameter.Key) || string.IsNullOrWhiteSpace(parameter.Value)),
+            "benchmark-target", "Evidence must identify the exact benchmark assembly, type, method, and parameter values.");
+        AddIf(evidence.BenchmarkTarget.Cardinality != evidence.CaseKey.Cardinality ||
+              evidence.BenchmarkTarget.Cardinality <= 0,
+            "benchmark-target", "Benchmark target cardinality must equal the positive canonical case cardinality.");
+        if (evidence.BenchmarkTarget.Parameters.TryGetValue("Rows", out var rows))
+        {
+            AddIf(!int.TryParse(rows, System.Globalization.NumberStyles.None,
+                      System.Globalization.CultureInfo.InvariantCulture, out var rowsCardinality) ||
+                  rowsCardinality <= 0 || rowsCardinality != evidence.BenchmarkTarget.Cardinality,
+                "benchmark-target", "Benchmark target Rows, when present, must be a positive invariant integer equal to target cardinality.");
+        }
+        AddIf(evidence.RuntimeCapabilities.Count == 0 || evidence.RuntimeCapabilities.Any(static capability =>
+                string.IsNullOrWhiteSpace(capability.Key) || string.IsNullOrWhiteSpace(capability.Value)),
+            "runtime-capability", "At least one runtime capability with a non-empty name and observed value is required.");
         AddIf(evidence.CaseId != evidence.CaseKey.StableId, "case-key", "Evidence case ID does not match the canonical case key.");
         AddIf(evidence.CaseKey.Source.IdentityHash != evidence.Source.IdentityHash, "source-identity", "Case and evidence source identities differ.");
         AddIf(!StringComparer.Ordinal.Equals(evidence.Checkout.Commit, evidence.Source.Commit) || !IsGitCommit(evidence.Source.Commit),
@@ -746,6 +775,10 @@ public static partial class EvidenceHygieneValidator
             foreach (var property in element.EnumerateObject())
             {
                 var forbiddenKind = ClassifyPropertyName(property.Name);
+                // Rows is the single checked BenchmarkDotNet cardinality parameter. Only its
+                // row-classification is exempt; sensitive and payload aliases remain forbidden.
+                if (path == "$.benchmarkTarget.parameters" && property.Name == "Rows" && forbiddenKind == "row")
+                    forbiddenKind = null;
                 if (forbiddenKind is not null)
                 {
                     var code = forbiddenKind == "row" ? "row-data" : "forbidden-field";
@@ -830,7 +863,7 @@ public sealed record ArtifactValidationResult<T>(T? Artifact, IReadOnlyList<Cont
 
 public static class CheckedArtifactSchemas
 {
-    private static readonly Lazy<JsonSchema> EvidenceSchema = new(() => Load("benchmark-evidence.schema.json"));
+    private static readonly Lazy<JsonSchema> EvidenceSchema = new(() => Load("benchmark-evidence-v2.schema.json"));
     private static readonly Lazy<JsonSchema> BaselineSchema = new(() => Load("checked-baseline.schema.json"));
 
     public static JsonSchema Evidence => EvidenceSchema.Value;
@@ -874,6 +907,17 @@ public static class EvidenceArtifactValidator
 
         using (document)
         {
+            if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.TryGetProperty("schemaVersion", out var schemaVersion) &&
+                schemaVersion.ValueKind == JsonValueKind.String &&
+                !StringComparer.Ordinal.Equals(schemaVersion.GetString(), EvidenceSchema.Version))
+            {
+                var message = StringComparer.Ordinal.Equals(schemaVersion.GetString(), EvidenceSchema.LegacyVersion)
+                    ? "Benchmark evidence schema v1 is unsupported; regenerate the artifact using v2."
+                    : "Benchmark evidence schema version is not supported.";
+                return new(null, [new("schema-version", message)]);
+            }
+
             var schemaResult = CheckedArtifactSchemas.Evidence.Evaluate(
                 document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
             if (!schemaResult.IsValid)

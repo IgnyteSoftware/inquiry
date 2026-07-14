@@ -9,10 +9,10 @@
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
     <PackageReference Include="JsonSchema.Net" />
-    <EmbeddedResource Include="Evidence\benchmark-evidence.schema.json" />
+    <EmbeddedResource Include="Evidence\benchmark-evidence-v2.schema.json" />
     <EmbeddedResource Include="Evidence\checked-baseline.schema.json" />
     <EmbeddedResource Include="Evidence\sqlserver-collection-evidence.schema.json" />
-    <None Include="Evidence\benchmark-evidence.schema.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Evidence\benchmark-evidence-v2.schema.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Evidence\checked-baseline.schema.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Evidence\sqlserver-collection-evidence.schema.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

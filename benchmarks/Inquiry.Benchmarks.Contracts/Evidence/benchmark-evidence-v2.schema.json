@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/JakeOverstreet/inquiry/schemas/benchmark-evidence-v1.json",
-  "title": "Inquiry benchmark checked evidence envelope",
+  "$id": "https://github.com/JakeOverstreet/inquiry/schemas/benchmark-evidence-v2.json",
+  "title": "Inquiry benchmark checked evidence envelope v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schemaVersion", "authoritative", "caseId", "caseKey", "checkout", "source",
     "schemaHash", "datasetHash", "seed", "campaignId", "collectedAtUtc", "benchmarkConfigFileSha256", "benchmarkJobContractHash", "dependencyHash", "parityHash",
-    "sqlFingerprint", "environmentHash", "parity", "database", "environment", "aggregation", "launchHealthRule", "launchHealth", "benchmarkDotNet", "result"
+    "sqlFingerprint", "environmentHash", "benchmarkTarget", "runtimeCapabilities", "parity", "database", "environment", "aggregation", "launchHealthRule", "launchHealth", "benchmarkDotNet", "result"
   ],
   "properties": {
-    "schemaVersion": { "const": "inquiry-benchmark-evidence-v1" },
+    "schemaVersion": { "const": "inquiry-benchmark-evidence-v2" },
     "authoritative": { "type": "boolean" },
     "caseId": { "$ref": "#/$defs/hash" },
     "caseKey": { "$ref": "#/$defs/caseKey" },
@@ -36,6 +36,8 @@
     "parityHash": { "$ref": "#/$defs/hash" },
     "sqlFingerprint": { "$ref": "#/$defs/hash" },
     "environmentHash": { "$ref": "#/$defs/hash" },
+    "benchmarkTarget": { "$ref": "#/$defs/benchmarkTarget" },
+    "runtimeCapabilities": { "$ref": "#/$defs/stringMap" },
     "parity": { "$ref": "#/$defs/parity" },
     "database": {
       "type": "object",
@@ -127,6 +129,28 @@
     "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "gitCommit": { "type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" },
     "imageDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "stringMap": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "benchmarkTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assemblyName", "typeName", "methodName", "cardinality", "parameters"],
+      "properties": {
+        "assemblyName": { "type": "string", "minLength": 1 },
+        "typeName": { "type": "string", "minLength": 1 },
+        "methodName": { "type": "string", "minLength": 1 },
+        "cardinality": { "type": "integer", "minimum": 1 },
+        "parameters": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,
