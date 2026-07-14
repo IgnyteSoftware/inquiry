@@ -7,11 +7,9 @@
 > predictable allocations; NativeAOT support; and explicit, validated SQL escape hatches. It is not
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
-> **Last reconciled against source and GitHub:** 2026-07-14 at prerelease head `52f1431`, after
-> [#216](https://github.com/JakeOverstreet/inquiry/pull/216),
-> [#218](https://github.com/JakeOverstreet/inquiry/pull/218), and
-> [#220](https://github.com/JakeOverstreet/inquiry/pull/220). All providers are restored and
-> [#171](https://github.com/JakeOverstreet/inquiry/issues/171) is closed.
+> **Last reconciled against source and GitHub:** 2026-07-14 at prerelease head `d5e8a59`. All
+> providers are restored; [#171](https://github.com/JakeOverstreet/inquiry/issues/171) records that
+> completed restoration gate.
 
 ## Current release status
 
@@ -32,6 +30,14 @@ release/support/security policies and repository rulesets, and protected promoti
 The fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security diff scan and threat-model review found and fixed a custom-shell CI bypass.
 The post-fix scan reported no remaining reportable findings; this does not replace the remaining
 release evidence and governance work tracked in [#89](https://github.com/JakeOverstreet/inquiry/issues/89).
+
+Current delivery work does not change those gates. [#180](https://github.com/JakeOverstreet/inquiry/issues/180)
+remains open while its batch-execution implementation and benchmark-evidence contract are under review.
+[#225](https://github.com/JakeOverstreet/inquiry/pull/225) merged a SQL Server collection-benchmark
+tranche that advances [#69](https://github.com/JakeOverstreet/inquiry/issues/69) and
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87), but both issues remain open for their broader
+acceptance criteria. [#226](https://github.com/JakeOverstreet/inquiry/pull/226) merged the many-to-many
+child-filter correction and closed [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
 
 ## Product contract
 
@@ -62,11 +68,10 @@ For 1.0, "feature complete" means:
 
 ## Priority index
 
-GitHub's [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1) is authoritative for
-issue state and acceptance criteria.
-
-As reconciled on 2026-07-14 after #75 closed, the milestone has **27 open issues: 3 P0, 19 P1,
-and 5 P2**.
+GitHub issue state, priority labels, and the [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1)
+are authoritative for acceptance criteria. As reconciled on 2026-07-14, GitHub has **36 open issues**:
+**30 prioritized for 1.0 (4 P0, 21 P1, and 5 P2)** and six planned for post-1.0 work. All 30 prioritized
+issues are assigned to the `1.0.0` milestone.
 
 ### P0 — stop-ship
 
@@ -74,16 +79,18 @@ and 5 P2**.
 |---|---|
 | Broken/partial provider features | [#69](https://github.com/JakeOverstreet/inquiry/issues/69) |
 | Benchmark truth and release engineering | [#87](https://github.com/JakeOverstreet/inquiry/issues/87), [#89](https://github.com/JakeOverstreet/inquiry/issues/89) |
+| Sequential-key correctness | [#214](https://github.com/JakeOverstreet/inquiry/issues/214) |
 
 ### P1 — must complete for 1.0
 
 | Workstream | Issues |
 |---|---|
-| Eager loading and relationship correctness | [#57](https://github.com/JakeOverstreet/inquiry/issues/57), [#70](https://github.com/JakeOverstreet/inquiry/issues/70), [#80](https://github.com/JakeOverstreet/inquiry/issues/80) |
+| Eager loading and relationship correctness | [#70](https://github.com/JakeOverstreet/inquiry/issues/70), [#80](https://github.com/JakeOverstreet/inquiry/issues/80) |
 | Scaffolding and live/offline validation | [#72](https://github.com/JakeOverstreet/inquiry/issues/72), [#79](https://github.com/JakeOverstreet/inquiry/issues/79) |
 | Query composition, tenant safety, and locking | [#82](https://github.com/JakeOverstreet/inquiry/issues/82), [#177](https://github.com/JakeOverstreet/inquiry/issues/177), [#178](https://github.com/JakeOverstreet/inquiry/issues/178) |
 | Stored procedures | [#78](https://github.com/JakeOverstreet/inquiry/issues/78), [#188](https://github.com/JakeOverstreet/inquiry/issues/188) |
-| Generator correctness and release tracking | [#135](https://github.com/JakeOverstreet/inquiry/issues/135), [#176](https://github.com/JakeOverstreet/inquiry/issues/176) |
+| Generated query and model contracts | [#210](https://github.com/JakeOverstreet/inquiry/issues/210), [#211](https://github.com/JakeOverstreet/inquiry/issues/211), [#212](https://github.com/JakeOverstreet/inquiry/issues/212), [#219](https://github.com/JakeOverstreet/inquiry/issues/219) |
+| ASP.NET Core auditing integration | [#213](https://github.com/JakeOverstreet/inquiry/issues/213) |
 | First-party provider authoring and conformance | [#184](https://github.com/JakeOverstreet/inquiry/issues/184) |
 | Execution-path performance and semantics | [#86](https://github.com/JakeOverstreet/inquiry/issues/86), [#179](https://github.com/JakeOverstreet/inquiry/issues/179), [#180](https://github.com/JakeOverstreet/inquiry/issues/180), [#181](https://github.com/JakeOverstreet/inquiry/issues/181), [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
 | End-to-end cancellation | [#156](https://github.com/JakeOverstreet/inquiry/issues/156) |
@@ -230,8 +237,9 @@ acceptance criteria supersede any older wording that describes an initial implem
   [#134](https://github.com/JakeOverstreet/inquiry/issues/134) is closed.
 - **Open:** verify cancellation through generated/IInquiry operations rather than direct provider commands
   ([#156](https://github.com/JakeOverstreet/inquiry/issues/156)).
-- **Open:** add Roslyn analyzer diagnostic release tracking
-  ([#135](https://github.com/JakeOverstreet/inquiry/issues/135)).
+- Analyzer diagnostic release tracking and generator output-identity hardening are complete;
+  [#135](https://github.com/JakeOverstreet/inquiry/issues/135) and
+  [#176](https://github.com/JakeOverstreet/inquiry/issues/176) are closed.
 - The Oracle `:rc` finalize-once guard shipped and [#136](https://github.com/JakeOverstreet/inquiry/issues/136)
   is closed.
 - The provider-restoration gate is complete and
@@ -275,7 +283,7 @@ new or reframed issue.
   now accept `CancellationToken` (matching `EntityProcessor.Extract`) and call
   `ThrowIfCancellationRequested()` in their column-discovery loops. The diagnostic-ID registry
   comment corrected: INQ036–INQ037 were in use and INQ038 was reserved at that point. Analyzer release
-  tracking remains open in [#135](https://github.com/JakeOverstreet/inquiry/issues/135).
+  tracking subsequently completed and [#135](https://github.com/JakeOverstreet/inquiry/issues/135) is closed.
 
 - **MySQL-family type-correct JSON collections (#169, 2026-07-10).** MySQL and MariaDB now share
   one `JSON_TABLE` mapping, the runtime writes AOT-safe invariant JSON for supported scalars,
