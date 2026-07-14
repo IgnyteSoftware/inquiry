@@ -57,4 +57,28 @@
       <Analyzer Include="$(_InquiryOracleSharedPath)" Condition="'@(_InquiryOracleProjectReference)' != '' and Exists('$(_InquiryOracleSharedPath)')" />
     </ItemGroup>
   </Target>
+
+  <!-- Analyzer DLLs live outside lib/, so NuGet's default symbol discovery cannot see their portable
+       PDBs. Add them once from the first inner build; NuGet places these additional symbols under
+       lib/net8.0 in the snupkg without adding PDBs to the runtime nupkg. -->
+  <Target Name="_AddInquiryAnalyzerSymbolsToPackage"
+          BeforeTargets="_GetDebugSymbolsWithTfm"
+          DependsOnTargets="_ResolveAnalyzerDlls"
+          Condition="'$(TargetFramework)' == 'net8.0' and
+                     ('$(MSBuildProjectName)' == 'Inquiry.Sqlite' or
+                      '$(MSBuildProjectName)' == 'Inquiry.SqlServer' or
+                      '$(MSBuildProjectName)' == 'Inquiry.PostgreSql' or
+                      '$(MSBuildProjectName)' == 'Inquiry.MySql' or
+                      '$(MSBuildProjectName)' == 'Inquiry.MariaDb' or
+                      '$(MSBuildProjectName)' == 'Inquiry.Oracle')">
+    <ItemGroup>
+      <_InquiryAnalyzerSymbol Include="@(_AnalyzerTargetPath->'%(RootDir)%(Directory)%(Filename).pdb')" />
+      <_InquiryAnalyzerSymbol Include="@(_AnalyzerTargetPath->'%(RootDir)%(Directory)Inquiry.Generators.Shared.pdb')" />
+      <TfmSpecificDebugSymbolsFile Include="@(_InquiryAnalyzerSymbol)">
+        <TargetFramework>$(TargetFramework)</TargetFramework>
+      </TfmSpecificDebugSymbolsFile>
+    </ItemGroup>
+    <Error Condition="!Exists('%(_InquiryAnalyzerSymbol.Identity)')"
+           Text="Analyzer symbol package input is missing: %(_InquiryAnalyzerSymbol.Identity)" />
+  </Target>
 </Project>

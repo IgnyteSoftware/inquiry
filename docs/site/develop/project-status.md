@@ -4,7 +4,7 @@
 statement as a `const string` at build time. The runtime ships zero SQL.
 
 **Last reconciled against the code:** 2026-07-13 from the MySQL-family restoration branch based on
-`880a16e`.
+`331a478`.
 
 ## Supported database engines (6, all live-tested)
 
@@ -50,10 +50,15 @@ Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roa
 
 Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags. No public release has
 shipped yet; the first release will use the `v1.0.0` tag and package version `1.0.0`. Every package embeds
-SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg`
-symbol package. A tag-triggered [`release.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/release.yml)
-workflow packs all 9 shippable packages and pushes to NuGet.org. See
-[Contributing — Releasing](contributing.md#releasing) for the full process.
+SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg` symbol package, including the
+provider analyzer PDBs. The verifier binds each PDB to its DLL CodeView identity and checks complete
+SourceLink document coverage at the exact commit. The previous
+tag-triggered rebuild-and-wildcard-push workflow was removed because it did not prove the complete provider
+or package-consumer gates and could not safely recover from partial publication. `eng/release-manifest.json`
+now defines the exact nine-package 1.0 bundle, and the cross-platform verifier rejects inventory, version,
+dependency, repository-commit, metadata, symbol, and SourceLink drift. Public publishing remains disabled
+until the immutable RC, independent verification, protected promotion, and resumable publisher stages of
+[#89](https://github.com/JakeOverstreet/inquiry/issues/89) land. See [Contributing — Releasing](contributing.md#releasing).
 
 ## Security status
 
@@ -95,10 +100,12 @@ with zero skips using the release-gating FTS image. MySQL is green at 255/255 on
 net10 repeat; MariaDB is green at 258/258 on each TFM plus a fresh net10 repeat. Oracle and consecutive
 full-CI evidence remain. Docker-gated suites skip locally (not in CI) when Docker is unavailable.
 
-As of `da0353c`, the normal CI workflow runs on pull requests targeting `main`: **build-and-unit**
+The normal CI workflow runs on pull requests targeting `prerelease` and `main`, and on merge-queue events:
+**build-and-unit**
 (generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and runs the NativeAOT
 smoke app), and an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle ×
-net8.0/net9.0 via Testcontainers). Direct pushes to `main` currently do not trigger that workflow,
-which conflicts with the documented direct-merge process and must be resolved under
+net8.0/net9.0/net10.0 via Testcontainers — exactly 15 required legs). The `ci-required-v1` aggregator runs even after failures and fails unless
+all required jobs and matrix legs succeed. Direct merging has been retired; external rulesets must protect
+both branches with this context and the review requirements documented under
 [#89](https://github.com/JakeOverstreet/inquiry/issues/89). A separate **scheduled weekly workflow**
-(`scheduled.yml`) runs the full provider × net8.0/net9.0/net10.0 matrix every Monday.
+(`scheduled.yml`) repeats the full provider × net8.0/net9.0/net10.0 matrix every Monday.
