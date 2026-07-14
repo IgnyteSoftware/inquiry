@@ -49,6 +49,7 @@ internal static class AdHocProcessor
 
         return new AdHocData(
             FullyQualifiedName: symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            HintName: GeneratorHelpers.GetHintName(symbol, "InquiryAdHoc"),
             Name: symbol.Name,
             Namespace: symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToDisplayString(),
             Columns: new EquatableArray<ColumnData>(columns.ToImmutableArray()),
@@ -87,7 +88,7 @@ internal static class AdHocProcessor
 
         GeneratorHelpers.AppendNamespaceEnd(source, adHoc.Namespace);
 
-        context.AddSource($"{adHoc.Name}.InquiryAdHoc.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        context.AddSource(adHoc.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
         return new EntityRegistration(adHocType, adHoc.ClassMaterializerFullName);
     }
 

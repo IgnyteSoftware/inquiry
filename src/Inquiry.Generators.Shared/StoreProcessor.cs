@@ -80,6 +80,7 @@ internal static class StoreProcessor
 
         return new StoreData(
             Name: storeSymbol.Name,
+            HintName: GeneratorHelpers.GetHintName(storeSymbol, "InquiryStore"),
             Namespace: storeSymbol.ContainingNamespace.IsGlobalNamespace ? null : storeSymbol.ContainingNamespace.ToDisplayString(),
             FullyQualifiedName: storeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             EntityFullyQualifiedName: entityType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -1476,7 +1477,7 @@ internal static class StoreProcessor
 
         GeneratorHelpers.AppendNamespaceEnd(source, store.Namespace);
 
-        context.AddSource($"{store.Name}.InquiryStore.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        context.AddSource(store.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
         return new StoreEmissionResult(
             new StoreRegistration(store.FullyQualifiedName, interfaceFullyQualifiedName),
             collectionResolutions
@@ -1507,7 +1508,7 @@ internal static class StoreProcessor
             EmitStoreInterface(source, store, store.Methods.AsImmutableArray());
         }
         GeneratorHelpers.AppendNamespaceEnd(source, store.Namespace);
-        context.AddSource($"{store.Name}.InquiryStore.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        context.AddSource(store.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
         return new StoreEmissionResult(new StoreRegistration(store.FullyQualifiedName, interfaceName), ImmutableArray<CollectionParameterArtifact>.Empty);
     }
 

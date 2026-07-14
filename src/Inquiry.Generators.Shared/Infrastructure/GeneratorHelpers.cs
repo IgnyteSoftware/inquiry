@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Inquiry.Generators.Infrastructure;
@@ -202,6 +203,21 @@ internal static class GeneratorHelpers
         }
 
         return "global::" + containingType.ContainingNamespace.ToDisplayString() + "." + generatedTypeName;
+    }
+
+    public static string GetHintName(INamedTypeSymbol symbol, string generatedKind)
+    {
+        var containingTypes = new Stack<string>();
+        for (var current = symbol; current is not null; current = current.ContainingType)
+        {
+            containingTypes.Push(current.MetadataName);
+        }
+
+        var typeIdentity = string.Join("+", containingTypes);
+        var namespacePrefix = symbol.ContainingNamespace.IsGlobalNamespace
+            ? string.Empty
+            : symbol.ContainingNamespace.ToDisplayString() + ".";
+        return namespacePrefix + typeIdentity + "." + generatedKind + ".g.cs";
     }
 
     private static string StripGlobalPrefix(string displayName)
