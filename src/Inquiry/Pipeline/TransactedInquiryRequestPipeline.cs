@@ -42,6 +42,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     // Whole seconds from InquiryOptions.DefaultCommandTimeout; 0 = not configured (provider default).
     private readonly int _defaultCommandTimeoutSeconds;
+    private readonly int _maxBatchSize;
+    private readonly int _maxParametersPerCommand;
     // One atomic lifecycle: 0=open/idle, 1=open/busy, 2=terminal owner, 3=closed.
     private int _state;
 
@@ -61,6 +63,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         _defaultCommandTimeoutSeconds = options?.DefaultCommandTimeout is { } timeout
             ? (int)Math.Ceiling(timeout.TotalSeconds)
             : 0;
+        _maxBatchSize = options?.MaxBatchSize ?? InquiryOptions.DefaultMaxBatchSize;
+        _maxParametersPerCommand = options?.MaxParametersPerCommand ?? InquiryOptions.DefaultMaxParametersPerCommand;
     }
 
     /// <summary>
@@ -1473,14 +1477,11 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     /// <inheritdoc />
     /// <remarks>
-    /// When the connection factory allows batching and the provider supports
-    /// <see cref="DbConnection.CanCreateBatch"/> with parameter creation on
-    /// <see cref="DbBatchCommand"/>, all items execute in a single transaction-enlisted
-    /// <see cref="DbBatch"/> round trip. Interceptors do NOT fire on the DbBatch path — there is
-    /// no <see cref="DbCommand"/> to expose to them. The sequential fallback (one command per
-    /// item on the transaction's connection) fires interceptors per command as usual.
+    /// When available, bounded chunks execute through transaction-enlisted <see cref="DbBatch"/>
+    /// instances. Otherwise the pipeline reuses one command and parameter set. The transaction
+    /// operation lease is held across the entire batch.
     /// </remarks>
-    public async Task<int> ExecuteBatchAsync<TItem>(
+    public Task<int> ExecuteBatchAsync<TItem>(
         string commandText,
         IReadOnlyList<TItem> items,
         Action<InquiryParameterTarget, TItem> bindParameters,
@@ -1489,101 +1490,110 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         if (commandText is null) throw new ArgumentNullException(nameof(commandText));
         if (items is null) throw new ArgumentNullException(nameof(items));
         if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
-        if (items.Count == 0) return 0;
+        return ExecuteBatchAsync(new InquiryBatchCommand<TItem>(commandText, bindParameters), items, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> ExecuteBatchAsync<TItem>(
+        InquiryBatchCommand<TItem> command,
+        IEnumerable<TItem> items,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        if (items is null) throw new ArgumentNullException(nameof(items));
+        var executionMode = _connectionFactory.BatchExecutionMode;
+
+        using var chunks = new InquiryBatchChunkReader<TItem>(items,
+            command.GetEffectiveChunkSize(_maxBatchSize, _maxParametersPerCommand), cancellationToken);
+        if (!chunks.MoveNext(out var firstChunk)) return 0;
 
         EnterInFlight();
-        DbBatch? batch = null;
-        Exception? primaryException = null;
         try
         {
-            if (_connectionFactory.SupportsBatchExecution && _connection.CanCreateBatch)
-            {
-                // Probe: some providers expose DbBatch but not DbBatchCommand.CreateParameter;
-                // those fall back to the sequential path below.
-                batch = _connection.CreateBatch();
-                var firstCommand = batch.CreateBatchCommand();
-                if (firstCommand.CanCreateParameter)
-                {
-                    batch.Transaction = _transaction;
-                    if (_defaultCommandTimeoutSeconds > 0) batch.Timeout = _defaultCommandTimeoutSeconds;
-                    firstCommand.CommandText = commandText;
-                    bindParameters(new InquiryParameterTarget(firstCommand), items[0]);
-                    batch.BatchCommands.Add(firstCommand);
-                    for (var i = 1; i < items.Count; i++)
-                    {
-                        var batchCommand = batch.CreateBatchCommand();
-                        batchCommand.CommandText = commandText;
-                        bindParameters(new InquiryParameterTarget(batchCommand), items[i]);
-                        batch.BatchCommands.Add(batchCommand);
-                    }
+            var hasActiveInterceptors = HasActiveInterceptors;
+            Func<IReadOnlyList<TItem>, CancellationToken, Task<int>>? interceptedRows = hasActiveInterceptors
+                ? ExecuteInterceptedChunkAsync
+                : null;
+            Func<IReadOnlyList<TItem>, CancellationToken, Task<int>>? interceptedChunk = hasActiveInterceptors
+                ? ExecuteInterceptedWholeChunkAsync
+                : null;
+            return await InquiryBatchCommandExecutor.ExecuteAsync(
+                _connection, _transaction, _connectionFactory, executionMode, _defaultCommandTimeoutSeconds, _prepareEnabled,
+                command, chunks, firstChunk, interceptedRows, interceptedChunk, cancellationToken).ConfigureAwait(false);
 
-                    // DbBatch.ExecuteNonQueryAsync returns the summed rows affected across commands.
-                    return await batch.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            async Task<int> ExecuteInterceptedChunkAsync(IReadOnlyList<TItem> chunk, CancellationToken token)
+            {
+                var total = 0;
+                for (var i = 0; i < chunk.Count; i++)
+                {
+                    var dbCommand = CreateCommand();
+                    var resources = InquiryCommandResources.CreateScope(dbCommand);
+                    var interceptorCommand = new InquiryCommand(command.CommandText!, command.CommandType);
+                    try
+                    {
+                        dbCommand.Transaction = _transaction;
+                        dbCommand.CommandText = command.CommandText;
+                        dbCommand.CommandType = command.CommandType;
+                        command.BindItem!(new InquiryParameterTarget(dbCommand), chunk[i]);
+                        _connectionFactory.FinalizeCommand(dbCommand);
+                        await InvokeInitializedAsync(dbCommand, interceptorCommand, token).ConfigureAwait(false);
+                        await InvokeExecutingAsync(interceptorCommand, dbCommand, token).ConfigureAwait(false);
+                        await MaybePrepareAsync(dbCommand, token).ConfigureAwait(false);
+                        var affected = await dbCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                        await InvokeExecutedAsync(interceptorCommand, dbCommand, affected, token).ConfigureAwait(false);
+                        total += affected;
+                    }
+                    catch (Exception exception)
+                    {
+                        resources.Capture(exception);
+                        await InvokeFailedAsync(interceptorCommand, dbCommand, exception, token).ConfigureAwait(false);
+                        throw;
+                    }
+                    finally
+                    {
+                        await resources.DisposeAsync().ConfigureAwait(false);
+                    }
                 }
+
+                return total;
             }
 
-            // Sequential fallback: one command per item on the transaction's connection
-            // (mirrors ExecuteAsync<TArgs>).
-            var total = 0;
-            for (var i = 0; i < items.Count; i++)
+            async Task<int> ExecuteInterceptedWholeChunkAsync(IReadOnlyList<TItem> chunk, CancellationToken token)
             {
+                var commandText = command.GetChunkCommandText(chunk.Count);
                 var dbCommand = CreateCommand();
-                var commandResources = InquiryCommandResources.CreateScope(dbCommand);
-                try { dbCommand.Transaction = _transaction; }
-                catch (Exception exception) { commandResources.Capture(exception); throw; }
-                var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(commandText) : null;
-
+                var resources = InquiryCommandResources.CreateScope(dbCommand);
+                var interceptorCommand = new InquiryCommand(commandText, command.CommandType);
                 try
                 {
+                    dbCommand.Transaction = _transaction;
                     dbCommand.CommandText = commandText;
-                    bindParameters(new InquiryParameterTarget(dbCommand), items[i]);
+                    dbCommand.CommandType = command.CommandType;
+                    _connectionFactory.InitializeBatchChunkCommand(dbCommand, chunk.Count);
+                    command.BindChunk!(dbCommand, chunk);
                     _connectionFactory.FinalizeCommand(dbCommand);
-
-                    if (interceptorCommand is not null)
-                    {
-                        await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
-                        await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                    var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-
-                    if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
-                    total += recordsAffected;
+                    await InvokeInitializedAsync(dbCommand, interceptorCommand, token).ConfigureAwait(false);
+                    await InvokeExecutingAsync(interceptorCommand, dbCommand, token).ConfigureAwait(false);
+                    await MaybePrepareAsync(dbCommand, token).ConfigureAwait(false);
+                    var affected = await dbCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                    await InvokeExecutedAsync(interceptorCommand, dbCommand, affected, token).ConfigureAwait(false);
+                    return affected;
                 }
                 catch (Exception exception)
                 {
-                    commandResources.Capture(exception);
-                    if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    resources.Capture(exception);
+                    await InvokeFailedAsync(interceptorCommand, dbCommand, exception, token).ConfigureAwait(false);
                     throw;
                 }
                 finally
                 {
-                    await commandResources.DisposeAsync().ConfigureAwait(false);
+                    await resources.DisposeAsync().ConfigureAwait(false);
                 }
             }
-
-            return total;
-        }
-        catch (Exception exception)
-        {
-            primaryException = exception;
-            throw;
         }
         finally
         {
-            try
-            {
-                List<Exception>? cleanupExceptions = null;
-                try { if (batch is not null) await batch.DisposeAsync().ConfigureAwait(false); }
-                catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
-                if (primaryException is not null) InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
-                else InquiryCleanup.ThrowIfAny(cleanupExceptions);
-            }
-            finally
-            {
-                ExitInFlight();
-            }
+            ExitInFlight();
         }
     }
 

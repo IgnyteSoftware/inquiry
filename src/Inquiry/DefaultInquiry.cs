@@ -117,6 +117,9 @@ internal sealed class DefaultInquiry : IInquiry
     public int MaxParametersPerCommand => _options?.MaxParametersPerCommand ?? InquiryOptions.DefaultMaxParametersPerCommand;
 
     /// <inheritdoc />
+    public int MaxBatchSize => _options?.MaxBatchSize ?? InquiryOptions.DefaultMaxBatchSize;
+
+    /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
         FormattableString commandText,
         CancellationToken cancellationToken = default)
@@ -333,7 +336,14 @@ internal sealed class DefaultInquiry : IInquiry
         IReadOnlyList<TItem> items,
         Action<InquiryParameterTarget, TItem> bindParameters,
         CancellationToken cancellationToken = default)
-        => ActivePipeline.ExecuteBatchAsync(commandText, items, bindParameters, cancellationToken);
+        => ExecuteBatchAsync(new InquiryBatchCommand<TItem>(commandText, bindParameters), items, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<int> ExecuteBatchAsync<TItem>(
+        InquiryBatchCommand<TItem> command,
+        IEnumerable<TItem> items,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteBatchAsync(command, items, cancellationToken);
 
     /// <inheritdoc />
     public Task<T> ExecuteScalarAsync<T>(

@@ -17,6 +17,7 @@ public sealed class InquiryOptions
 
     private TimeSpan? _defaultCommandTimeout;
     private int _maxBatchSize = DefaultMaxBatchSize;
+    private int _maxParametersPerCommand = DefaultMaxParametersPerCommand;
 
     /// <summary>
     /// Gets or sets the command timeout applied to every command Inquiry executes, unless an
@@ -58,7 +59,19 @@ public sealed class InquiryOptions
     /// This bounds <c>Compare.In</c>, batch delete, batch insert, and batch update expansion before a
     /// provider-specific parameter cap is hit. Defaults to <see cref="DefaultMaxParametersPerCommand"/>.
     /// </summary>
-    public int MaxParametersPerCommand { get; set; } = DefaultMaxParametersPerCommand;
+    public int MaxParametersPerCommand
+    {
+        get => _maxParametersPerCommand;
+        set
+        {
+            if (value <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Maximum parameters per command must be positive.");
+            }
+
+            _maxParametersPerCommand = value;
+        }
+    }
 
     /// <summary>
     /// Gets or sets the maximum number of items Inquiry retains and executes in one batch chunk.

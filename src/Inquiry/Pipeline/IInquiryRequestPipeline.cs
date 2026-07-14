@@ -242,8 +242,7 @@ internal interface IInquiryRequestPipeline
     /// The default implementation loops over the existing
     /// <c>ExecuteAsync&lt;TArgs&gt;(string, TArgs, Action&lt;DbCommand, TArgs&gt;, …)</c> per item, so
     /// custom <c>IInquiryRequestPipeline</c> implementations stay source-compatible. The built-in
-    /// pipelines override this with a fast path that executes all items in a single
-    /// <see cref="DbBatch"/> round trip when the provider and connection factory support it.
+    /// pipelines override this with a bounded, atomic provider-selected fast path.
     /// </remarks>
     async Task<int> ExecuteBatchAsync<TItem>(
         string commandText,
@@ -263,6 +262,34 @@ internal interface IInquiryRequestPipeline
                 items[i],
                 (cmd, item) => bindParameters(new InquiryParameterTarget(cmd), item),
                 cancellationToken).ConfigureAwait(false);
+        }
+
+        return total;
+    }
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    async Task<int> ExecuteBatchAsync<TItem>(
+        InquiryBatchCommand<TItem> command,
+        IEnumerable<TItem> items,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        if (items is null) throw new ArgumentNullException(nameof(items));
+
+        var total = 0;
+        using var chunks = new InquiryBatchChunkReader<TItem>(items,
+            command.GetEffectiveChunkSize(InquiryOptions.DefaultMaxBatchSize, InquiryOptions.DefaultMaxParametersPerCommand), cancellationToken);
+        while (chunks.MoveNext(out var chunk))
+        {
+            if (command.BindItem is null || command.UseChunk?.Invoke(chunk) == true)
+            {
+                total += await ExecuteAsync(command.ForChunk(chunk), cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                for (var i = 0; i < chunk.Count; i++)
+                    total += await ExecuteAsync(command.ForItem(chunk[i]), cancellationToken).ConfigureAwait(false);
+            }
         }
 
         return total;

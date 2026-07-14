@@ -245,18 +245,28 @@ public interface IInquiry
     {
         command.Validate();
         if (items is null) throw new ArgumentNullException(nameof(items));
-        if (MaxBatchSize <= 0) throw new InvalidOperationException("MaxBatchSize must be positive.");
+        using var chunks = new InquiryBatchChunkReader<TItem>(items,
+            command.GetEffectiveChunkSize(MaxBatchSize, MaxParametersPerCommand), cancellationToken);
+        if (!chunks.MoveNext(out var chunk)) return 0;
 
+        await using var transaction = await BeginTransactionAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         var total = 0;
-        var chunk = new List<TItem>(MaxBatchSize);
-        using var enumerator = items.GetEnumerator();
-        while (true)
+        do
         {
-            chunk.Clear();
-            while (chunk.Count < MaxBatchSize && enumerator.MoveNext()) chunk.Add(enumerator.Current);
-            if (chunk.Count == 0) return total;
-            total += await ExecuteBatchAsync(command.CommandText, chunk, command.BindItem, cancellationToken).ConfigureAwait(false);
+            if (command.BindItem is null || command.UseChunk?.Invoke(chunk) == true)
+            {
+                total += await transaction.ExecuteAsync(command.ForChunk(chunk).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                for (var i = 0; i < chunk.Count; i++)
+                    total += await transaction.ExecuteAsync(command.ForItem(chunk[i]).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
+            }
         }
+        while (chunks.MoveNext(out chunk));
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return total;
     }
 
     /// <summary>
@@ -471,17 +481,6 @@ public interface IInquiry
     Task<IInquiryTransaction> BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default);
-
-    /// <summary>Runs a generated multi-chunk mutation atomically, reusing an ambient transaction.</summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<TResult> ExecuteBatchOperationAsync<TState, TResult>(
-        TState state,
-        Func<IInquiry, TState, CancellationToken, Task<TResult>> operation,
-        CancellationToken cancellationToken = default)
-    {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
-        return ExecuteInTransactionAsync((_, token) => operation(this, state, token), cancellationToken: cancellationToken);
-    }
 
     /// <summary>
     /// Opens a transaction, runs <paramref name="operation"/>, and commits when the operation
