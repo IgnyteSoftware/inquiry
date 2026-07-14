@@ -157,7 +157,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "Oracle");
+        var result = RunGenerator(source, dialect: "Oracle", unsupportedOperationSeverity: ReportDiagnostic.Warn);
 
         var allDiagnostics = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics).ToArray();
         Assert.Contains(allDiagnostics, d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning);
@@ -225,7 +225,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "Oracle");
+        var result = RunGenerator(source, dialect: "Oracle", unsupportedOperationSeverity: ReportDiagnostic.Warn);
         var diagnostics = result.RunResult.Diagnostics
             .Where(static diagnostic => diagnostic.Id == "INQ039")
             .ToArray();
