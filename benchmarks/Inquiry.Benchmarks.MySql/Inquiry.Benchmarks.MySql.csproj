@@ -40,6 +40,7 @@
     <Compile Include="..\..\samples\Inquiry.Northwind\Models\**\*.cs" LinkBase="Northwind\Models" />
     <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
+    <Compile Include="..\Inquiry.Benchmarks.MySqlFamily\MySqlBatchMutationStrategyRunner.cs" Link="Batch\MySqlBatchMutationStrategyRunner.cs" />
   </ItemGroup>
 
   <Import Project="..\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />
