@@ -11,7 +11,10 @@ namespace Inquiry.Benchmarks.Oracle;
 public class BatchMutationStrategyBenchmarks
 {
     private OracleBenchmarkDatabase _database = null!;
+    private BatchMutationBenchmarkStore _store = null!;
     private OracleBatchMutationStrategyRunner _runner = null!;
+    private BatchMutationBenchmarkItem[] _selectedInsertItems = null!;
+    private BatchMutationBenchmarkItem[] _selectedUpdateItems = null!;
     private OracleBatchMutationItem[] _insertItems = null!;
     private int[] _insertIds = null!;
     private string[] _insertValues = null!;
@@ -30,6 +33,7 @@ public class BatchMutationStrategyBenchmarks
     {
         ValidateEvidenceLabels();
         _database = OracleBenchmarkDatabase.CreateAsync(1000).GetAwaiter().GetResult();
+        _store = _database.BatchMutations;
         _runner = new OracleBatchMutationStrategyRunner(_database.ConnectionString);
         _runner.InitializeAsync().GetAwaiter().GetResult();
     }
@@ -38,6 +42,8 @@ public class BatchMutationStrategyBenchmarks
     public void IterationSetup()
     {
         _runner.ResetAsync(Rows).GetAwaiter().GetResult();
+        _selectedInsertItems = CreateSelectedItems(Rows, 100_001, "Inserted");
+        _selectedUpdateItems = CreateSelectedItems(Rows, 1, "Updated");
         _insertItems = CreateItems(Rows, 100_001, "Inserted");
         (_insertIds, _insertValues, _insertValueSizes) = CreateArrayBindingInputs(_insertItems);
         _updateItems = CreateItems(Rows, 1, "Updated");
@@ -50,6 +56,9 @@ public class BatchMutationStrategyBenchmarks
 
     [BenchmarkCategory("BatchInsert"), Benchmark(Baseline = true)]
     public Task<int> Insert_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.InsertReusedCommandAsync(_insertItems));
+
+    [BenchmarkCategory("BatchInsert"), Benchmark]
+    public Task<int> Inquiry_SelectedInsertAll() => RequireAffectedRowsAsync(_store.InsertAllAsync(_selectedInsertItems));
 
     [BenchmarkCategory("BatchInsert"), Benchmark]
     public Task<int> Insert_GeneratedChunkBinderControl() => RequireAffectedRowsAsync(
@@ -69,6 +78,9 @@ public class BatchMutationStrategyBenchmarks
     public Task<int> Update_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.UpdateReusedCommandAsync(_updateItems));
 
     [BenchmarkCategory("BatchUpdate"), Benchmark]
+    public Task<int> Inquiry_SelectedUpdateAll() => RequireAffectedRowsAsync(_store.UpdateAllAsync(_selectedUpdateItems));
+
+    [BenchmarkCategory("BatchUpdate"), Benchmark]
     public Task<int> Update_GeneratedChunkBinderControl() => RequireAffectedRowsAsync(
         _runner.UpdateGeneratedChunkBinderControlAsync(_updateItems));
 
@@ -78,6 +90,9 @@ public class BatchMutationStrategyBenchmarks
 
     [BenchmarkCategory("BatchDelete"), Benchmark(Baseline = true)]
     public Task<int> Delete_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.DeleteReusedCommandAsync(_deleteIds));
+
+    [BenchmarkCategory("BatchDelete"), Benchmark]
+    public Task<int> Inquiry_SelectedDeleteAll() => RequireAffectedRowsAsync(_store.DeleteAllAsync(_deleteIds));
 
     [BenchmarkCategory("BatchDelete"), Benchmark]
     public Task<int> Delete_GeneratedChunkBinderControl() => RequireAffectedRowsAsync(
@@ -97,6 +112,21 @@ public class BatchMutationStrategyBenchmarks
     {
         var items = new OracleBatchMutationItem[count];
         for (var i = 0; i < count; i++) items[i] = new(firstId + i, $"{valuePrefix} {i}");
+        return items;
+    }
+
+    private static BatchMutationBenchmarkItem[] CreateSelectedItems(int count, int firstId, string valuePrefix)
+    {
+        var items = new BatchMutationBenchmarkItem[count];
+        for (var i = 0; i < count; i++)
+        {
+            items[i] = new BatchMutationBenchmarkItem
+            {
+                Id = firstId + i,
+                ValueText = $"{valuePrefix} {i}",
+            };
+        }
+
         return items;
     }
 
