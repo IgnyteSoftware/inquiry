@@ -3,8 +3,10 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code:** 2026-07-13 from the MySQL-family restoration branch based on
-`331a478`.
+**Last reconciled against the code and GitHub:** 2026-07-14 at prerelease head `52f1431`, after
+[#216](https://github.com/JakeOverstreet/inquiry/pull/216),
+[#218](https://github.com/JakeOverstreet/inquiry/pull/218), and
+[#220](https://github.com/JakeOverstreet/inquiry/pull/220).
 
 ## Supported database engines (6, all live-tested)
 
@@ -56,18 +58,22 @@ SourceLink document coverage at the exact commit. The previous
 tag-triggered rebuild-and-wildcard-push workflow was removed because it did not prove the complete provider
 or package-consumer gates and could not safely recover from partial publication. `eng/release-manifest.json`
 now defines the exact nine-package 1.0 bundle, and the cross-platform verifier rejects inventory, version,
-dependency, repository-commit, metadata, symbol, and SourceLink drift. Public publishing remains disabled
-until the immutable RC, independent verification, protected promotion, and resumable publisher stages of
-[#89](https://github.com/JakeOverstreet/inquiry/issues/89) land. See [Contributing — Releasing](contributing.md#releasing).
+dependency, repository-commit, metadata, symbol, and SourceLink drift. `eng/pack-release.ps1` packs from
+an exact commit in a detached worktree, and CI separates the package producer from an independent verifier
+before the versioned `ci-required-v1` aggregate gate can pass. Public publishing remains disabled.
+[#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and analyzer release
+tracking, isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
+SBOM/provenance/dependency evidence, hosted versioned documentation, changelog/release notes,
+release/support/security policies and repository rulesets, protected promotion, and a resumable publisher. See
+[Contributing — Releasing](contributing.md#releasing).
 
 ## Security status
 
-A formal Codex Security repository scan was completed during early pre-release hardening. The validated findings
-were fixed on `main` in `318ee5f` (`Fix security scan findings`): lazy batch materialization now enforces
-the parameter cap while enumerating, MySQL update-returning on concurrency-token rows no longer returns stale
-rows after a failed update, and Oracle generated bind names no longer collapse leading-underscore parameters.
-The codebase has changed substantially since that scan; a fresh release-candidate scan and threat-model review
-are required by [#89](https://github.com/JakeOverstreet/inquiry/issues/89).
+The early repository scan findings fixed in `318ee5f` remain covered. A fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security diff scan
+and threat-model review then found a custom-shell CI bypass; [#220](https://github.com/JakeOverstreet/inquiry/pull/220) fixed it and added regression coverage.
+The post-fix review reported no remaining reportable findings. Security evidence, policies, and protected
+release governance are still part of the open [#89](https://github.com/JakeOverstreet/inquiry/issues/89)
+release work.
 
 ## Test status
 
@@ -93,19 +99,18 @@ Every live dialect exercises the full supported feature set via a shared, linked
 Northwind stores.
 
 **For current test counts**, run the whole suite (`dotnet test`) or a single project
-(e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). The current release gate and exact run evidence
-are tracked in [#171](https://github.com/JakeOverstreet/inquiry/issues/171). PostgreSQL is green at
-253/253 on each supported TFM. SQL Server is green at 298/298 on each TFM plus a fresh net10 repeat,
-with zero skips using the release-gating FTS image. MySQL is green at 255/255 on each TFM plus a fresh
-net10 repeat; MariaDB is green at 258/258 on each TFM plus a fresh net10 repeat. Oracle and consecutive
-full-CI evidence remain. Docker-gated suites skip locally (not in CI) when Docker is unavailable.
+(e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). The provider-restoration gate in
+[#171](https://github.com/JakeOverstreet/inquiry/issues/171) is closed. Two consecutive full CI runs
+are green at 20/20 required checks each, including every one of the 15 PostgreSQL, MySQL, MariaDB,
+SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs. Docker-gated suites skip locally
+(not in CI) when Docker is unavailable.
 
 The normal CI workflow runs on pull requests targeting `prerelease` and `main`, and on merge-queue events:
-**build-and-unit**
-(generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and runs the NativeAOT
-smoke app), and an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle ×
-net8.0/net9.0/net10.0 via Testcontainers — exactly 15 required legs). The `ci-required-v1` aggregator runs even after failures and fails unless
-all required jobs and matrix legs succeed. Direct merging has been retired; external rulesets must protect
-both branches with this context and the review requirements documented under
+**build-and-unit** (generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and
+runs the NativeAOT smoke app), an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server,
+Oracle × net8.0/net9.0/net10.0 via Testcontainers — exactly 15 required legs), **package-producer**,
+and the independent **package-verifier**. The `ci-required-v1` aggregator runs even after failures and
+fails unless all required jobs and matrix legs succeed. Direct merging has been retired; external
+rulesets must protect both branches with this context and the review requirements documented under
 [#89](https://github.com/JakeOverstreet/inquiry/issues/89). A separate **scheduled weekly workflow**
 (`scheduled.yml`) repeats the full provider × net8.0/net9.0/net10.0 matrix every Monday.
