@@ -256,6 +256,16 @@ public abstract class SqlBuilder
     public virtual string BuildArrayBindCountAssignment(string commandExpression, string countExpression)
         => throw new System.NotSupportedException("This dialect does not support DML array binding.");
 
+    /// <summary>Builds a per-element size expression for provider array binding, or null when none is needed.</summary>
+    public virtual string? BuildArrayBindSizeExpression(string valueExpression, string valueVariable, IColumn column) => null;
+
+    /// <summary>Emits the provider-specific assignment for a variable-width array parameter's element sizes.</summary>
+    public virtual string BuildArrayBindSizeAssignment(string parameterExpression, string sizesExpression)
+        => throw new System.NotSupportedException("This dialect does not support per-element array bind sizes.");
+
+    /// <summary>Emits provider-only metadata needed before assigning an array parameter value.</summary>
+    public virtual string? BuildArrayBindParameterMetadata(string parameterExpression, IColumn column) => null;
+
     public string QuoteTable(string? schema, string tableName)
     {
         return string.IsNullOrEmpty(schema)

@@ -227,6 +227,55 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("parametersPerItem:", text);
     }
 
+    [Fact]
+    public void OracleArrayBinderEmitsVariableElementSizesWithoutChangingFixedValueConversions()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TThing")]
+            public sealed class Thing
+            {
+                [InquiryKey] public Guid Id { get; set; }
+                [InquiryColumn(Length = 100)] public string Name { get; set; } = string.Empty;
+                [InquiryColumn] public byte[] Payload { get; set; } = System.Array.Empty<byte>();
+                [InquiryColumn] public bool Enabled { get; set; }
+                [InquiryColumn] public TimeOnly Window { get; set; }
+            }
+
+            public partial class ThingStore : InquiryStore<Thing>
+            {
+                [InquiryInsertAll]
+                public partial Task<int> InsertAllAsync(IEnumerable<Thing> things, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("var _sizes1 = new int[_items.Count];", text);
+        Assert.Contains("_sizes1[_i] = _values1[_i] is string _value1 ? _value1.Length : 0;", text);
+        Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleParameter)_p1).ArrayBindSize = _sizes1;", text);
+        Assert.Contains("var _sizes2 = new int[_items.Count];", text);
+        Assert.Contains("_sizes2[_i] = _values2[_i] is byte[] _value2 ? _value2.Length : 0;", text);
+        Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleParameter)_p2).ArrayBindSize = _sizes2;", text);
+        Assert.DoesNotContain("var _sizes0", text);
+        Assert.DoesNotContain("var _sizes3", text);
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.Binary;", text);
+        Assert.Contains("_p3.DbType = global::System.Data.DbType.Int32;", text);
+        Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleParameter)_p4).OracleDbType = global::Oracle.ManagedDataAccess.Client.OracleDbType.IntervalDS;", text);
+        Assert.Contains("_values4[_i] = (object)_it.Window.ToTimeSpan();", text);
+    }
+
     [Theory]
     [InlineData("Sqlite")]
     [InlineData("SqlServer")]

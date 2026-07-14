@@ -84,6 +84,7 @@ public sealed class ProviderReadAllTypes
     [InquiryColumn(Converter = typeof(OracleToggleConverter))]
     public OracleToggle ConvertedEnabled { get; set; }
     [InquiryColumn] public byte[] Payload { get; set; } = [];
+    [InquiryColumn(Length = 100)] public string Name { get; set; } = string.Empty;
     [InquiryColumn] public DateTime OccurredAt { get; set; }
 }
 
@@ -191,7 +192,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
             Id NUMBER(10) PRIMARY KEY, NumberValue NUMBER(10) NOT NULL, Enabled NUMBER(1) NOT NULL,
             Token RAW(16) NOT NULL, OptionalEnabled NUMBER(1) NULL, OptionalToken RAW(16) NULL,
             ConvertedToken RAW(16) NOT NULL, ConvertedEnabled NUMBER(1) NOT NULL,
-            Payload BLOB NOT NULL, OccurredAt TIMESTAMP NOT NULL);
+            Payload BLOB NOT NULL, Name NVARCHAR2(100) NOT NULL, OccurredAt TIMESTAMP NOT NULL);
         CREATE TABLE TemporalBatchItem (
             Id NUMBER(10) PRIMARY KEY, EventDate DATE NOT NULL,
             EventTime INTERVAL DAY TO SECOND NOT NULL, OffsetAt TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -274,7 +275,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
-            command.CommandText = $"INSERT INTO ProviderReadAllTypes (Id,NumberValue,Enabled,Token,ConvertedToken,ConvertedEnabled,Payload,OccurredAt) VALUES (1,42,1,HEXTORAW('{Convert.ToHexString(token.ToByteArray())}'),HEXTORAW('{Convert.ToHexString(token.ToByteArray())}'),1,HEXTORAW('01020304'),TIMESTAMP '2026-07-11 12:34:56')";
+            command.CommandText = $"INSERT INTO ProviderReadAllTypes (Id,NumberValue,Enabled,Token,ConvertedToken,ConvertedEnabled,Payload,Name,OccurredAt) VALUES (1,42,1,HEXTORAW('{Convert.ToHexString(token.ToByteArray())}'),HEXTORAW('{Convert.ToHexString(token.ToByteArray())}'),1,HEXTORAW('01020304'),'reader',TIMESTAMP '2026-07-11 12:34:56')";
             await command.ExecuteNonQueryAsync();
         }
         var value = await harness.GetRequiredService<ProviderReadAllTypesStore>().SelectByKeyAsync(1);
@@ -285,6 +286,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         Assert.Equal(new OracleExternalId(token), value.ConvertedToken);
         Assert.Equal(new OracleToggle(true), value.ConvertedEnabled);
         Assert.Equal([1, 2, 3, 4], value.Payload);
+        Assert.Equal("reader", value.Name);
         Assert.Equal(new DateTime(2026, 7, 11, 12, 34, 56), value.OccurredAt);
     }
 
@@ -341,6 +343,8 @@ public sealed class ProviderAwareMaterializerIntegrationTests
             NewAllTypes(2, false, convertedToken, null, null, true, optionalToken),
             NewAllTypes(3, true, new Guid("0ffeeddc-cbba-a998-8776-655443322110"), true, token, false, token),
         };
+        batch[0].Name = "éclair";
+        batch[1].Name = "東京";
         Assert.Equal(2, await store.InsertAllAsync(batch));
         foreach (var expected in batch)
         {
@@ -390,6 +394,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         ConvertedEnabled = new OracleToggle(convertedEnabled),
         ConvertedToken = new OracleExternalId(convertedToken),
         Payload = [(byte)id, (byte)(id + 1)],
+        Name = $"item-{id}",
         OccurredAt = new DateTime(2026, 7, 11, 12, 34, id),
     };
 
@@ -404,6 +409,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         Assert.Equal(expected.ConvertedEnabled, actual.ConvertedEnabled);
         Assert.Equal(expected.ConvertedToken, actual.ConvertedToken);
         Assert.Equal(expected.Payload, actual.Payload);
+        Assert.Equal(expected.Name, actual.Name);
         Assert.Equal(expected.OccurredAt, actual.OccurredAt);
     }
 

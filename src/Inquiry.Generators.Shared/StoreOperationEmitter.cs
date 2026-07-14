@@ -1611,6 +1611,10 @@ internal static class StoreOperationEmitter
         for (var i = 0; i < columns.Count; i++)
         {
             source.AppendLine($"{indent}var _values{i} = new object?[_items.Count];");
+            if (sqlBuilder.BuildArrayBindSizeExpression($"_values{i}[_i]", $"_value{i}", columns[i]) is not null)
+            {
+                source.AppendLine($"{indent}var _sizes{i} = new int[_items.Count];");
+            }
         }
         source.AppendLine($"{indent}for (var _i = 0; _i < _items.Count; _i++)");
         source.AppendLine($"{indent}{{");
@@ -1624,6 +1628,10 @@ internal static class StoreOperationEmitter
         {
             var column = columns[i];
             source.AppendLine($"{indent}    _values{i}[_i] = {BuildParameterValueExpression(column, "_it." + column.PropertyName, sqlBuilder)};");
+            if (sqlBuilder.BuildArrayBindSizeExpression($"_values{i}[_i]", $"_value{i}", column) is { } sizeExpression)
+            {
+                source.AppendLine($"{indent}    _sizes{i}[_i] = {sizeExpression};");
+            }
         }
         source.AppendLine($"{indent}}}");
 
@@ -1633,7 +1641,15 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}_p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent, predicate: false);
+            if (sqlBuilder.BuildArrayBindParameterMetadata($"_p{i}", column) is { } providerMetadata)
+            {
+                source.AppendLine($"{indent}{providerMetadata}");
+            }
             source.AppendLine($"{indent}_p{i}.Value = _values{i};");
+            if (sqlBuilder.BuildArrayBindSizeExpression($"_values{i}[_i]", $"_value{i}", column) is not null)
+            {
+                source.AppendLine($"{indent}{sqlBuilder.BuildArrayBindSizeAssignment($"_p{i}", $"_sizes{i}")}");
+            }
             source.AppendLine($"{indent}_cmd.Parameters.Add(_p{i});");
         }
     }
@@ -1810,14 +1826,30 @@ internal static class StoreOperationEmitter
             source.AppendLine("        {");
             source.AppendLine($"            {sqlBuilder.BuildArrayBindCountAssignment("_cmd", "_keys.Count")}");
             source.AppendLine("            var _values = new object?[_keys.Count];");
+            if (sqlBuilder.BuildArrayBindSizeExpression("_values[_i]", "_value", key) is not null)
+            {
+                source.AppendLine("            var _sizes = new int[_keys.Count];");
+            }
             source.AppendLine("            for (var _i = 0; _i < _keys.Count; _i++)");
             source.AppendLine("            {");
             source.AppendLine($"                _values[_i] = {BuildParameterValueExpression(key, "_keys[_i]", sqlBuilder)};");
+            if (sqlBuilder.BuildArrayBindSizeExpression("_values[_i]", "_value", key) is { } sizeExpression)
+            {
+                source.AppendLine($"                _sizes[_i] = {sizeExpression};");
+            }
             source.AppendLine("            }");
             source.AppendLine("            var _p = _cmd.CreateParameter();");
             source.AppendLine($"            _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(key.PropertyName))}\";");
             AppendColumnParameterMetadata(source, key, sqlBuilder, "_p", "            ", predicate: true);
+            if (sqlBuilder.BuildArrayBindParameterMetadata("_p", key) is { } providerMetadata)
+            {
+                source.AppendLine($"            {providerMetadata}");
+            }
             source.AppendLine("            _p.Value = _values;");
+            if (sqlBuilder.BuildArrayBindSizeExpression("_values[_i]", "_value", key) is not null)
+            {
+                source.AppendLine($"            {sqlBuilder.BuildArrayBindSizeAssignment("_p", "_sizes")}");
+            }
             source.AppendLine("            _cmd.Parameters.Add(_p);");
             source.AppendLine("        });");
             source.AppendLine();

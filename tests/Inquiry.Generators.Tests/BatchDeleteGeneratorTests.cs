@@ -177,7 +177,43 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleCommand)_cmd).ArrayBindCount = _keys.Count;", text);
         Assert.Contains("_p.ParameterName = \"iq1$Idxxxx$30d4cf864d6e68\";", text);
         Assert.Contains("_p.Value = _values;", text);
+        Assert.DoesNotContain("ArrayBindSize", text);
         Assert.DoesNotContain("InquiryJsonArrayParameter.Bind(_c, \":iq1$keysxx$d6859d157d8d31\", ids);", text);
+    }
+
+    [Fact]
+    public void OracleStringDeleteAllEmitsPerElementArrayBindSizes()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TThing")]
+            public sealed class Thing
+            {
+                [InquiryKey(Length = 64)] public string Code { get; set; } = string.Empty;
+            }
+
+            public partial class ThingStore : InquiryStore<Thing>
+            {
+                [InquiryDeleteAll]
+                public partial Task<int> DeleteAllAsync(IEnumerable<string> codes, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("var _sizes = new int[_keys.Count];", text);
+        Assert.Contains("_sizes[_i] = _values[_i] is string _value ? _value.Length : 0;", text);
+        Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleParameter)_p).ArrayBindSize = _sizes;", text);
     }
 
     [Fact]
