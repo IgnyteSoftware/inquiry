@@ -80,6 +80,7 @@ public sealed class InListBucketingIntegrationTests
 
         var duplicates = await items.InCategoriesAsync(new[] { 1, 1, 1 });
         Assert.Equal(2, duplicates.Count);
+        Assert.All(duplicates, item => Assert.Equal(1, item.CategoryId));
     }
 
     [SkippableFact]

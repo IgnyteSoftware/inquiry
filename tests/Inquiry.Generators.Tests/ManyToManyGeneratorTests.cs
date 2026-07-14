@@ -110,7 +110,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Empty(result.GeneratorDiagnostics);
         var text = GetOrderStore(result);
 
-        Assert.Contains("FROM Products INNER JOIN OrderProduct \\\"__j\\\" ON \\\"__j\\\".ProductId = Products.Id WHERE \\\"__j\\\".OrderId = :Id", text);
+        Assert.Contains("FROM Products INNER JOIN OrderProduct \\\"__j\\\" ON \\\"__j\\\".ProductId = Products.Id WHERE \\\"__j\\\".OrderId = :iq1$Idxxxx$30d4cf864d6e68", text);
     }
 
     [Fact]

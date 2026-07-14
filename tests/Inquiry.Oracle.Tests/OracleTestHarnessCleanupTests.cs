@@ -68,6 +68,24 @@ public sealed class OracleTestHarnessCleanupTests
         Assert.False(await UserExistsAsync(schemaUser));
     }
 
+    [SkippableFact]
+    public async Task TeardownDisconnectsOnlyTheDisposableSchemasLingeringSession()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await OracleTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString,
+            string.Empty,
+            "live_session");
+        var schemaUser = harness.SchemaUser;
+        await using var lingering = new OracleConnection(harness.ConnectionString);
+        await lingering.OpenAsync();
+
+        await harness.DisposeAsync();
+
+        Assert.Null(harness.CleanupFailure);
+        Assert.False(await UserExistsAsync(schemaUser));
+    }
+
     private async Task<bool> UserExistsAsync(string schemaUser)
     {
         await using var admin = new OracleConnection(_fixture.AdminConnectionString);

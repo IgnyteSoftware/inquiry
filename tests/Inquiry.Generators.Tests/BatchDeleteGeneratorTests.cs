@@ -122,8 +122,8 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM TThing WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:keys, '$[*]' COLUMNS(val NUMBER(19) PATH '$')) jt)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \":keys\", ids);", text);
+        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM TThing WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:iq1$keysxx$d6859d157d8d31, '$[*]' COLUMNS(val NUMBER(19) PATH '$')) jt)\";", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \":iq1$keysxx$d6859d157d8d31\", ids);", text);
     }
 
     [Fact]

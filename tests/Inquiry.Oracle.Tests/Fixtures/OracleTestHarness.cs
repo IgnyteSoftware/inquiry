@@ -172,7 +172,7 @@ internal sealed class OracleTestHarness : IAsyncDisposable
         string schemaUser)
     {
         var failures = new List<Exception>();
-        using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         try
         {
@@ -189,9 +189,10 @@ internal sealed class OracleTestHarness : IAsyncDisposable
                 {
                     using var userConnection = new OracleConnection(userConnectionString);
                     OracleConnection.ClearPool(userConnection);
+                    await DisconnectUserSessionsAsync(admin, schemaUser, cleanupCts.Token);
 
                     await using var cmd = admin.CreateCommand();
-                    cmd.CommandTimeout = 2;
+                    cmd.CommandTimeout = 10;
                     cmd.CommandText = $"DROP USER {schemaUser} CASCADE";
                     await cmd.ExecuteNonQueryAsync(cleanupCts.Token);
                     break;
@@ -201,10 +202,12 @@ internal sealed class OracleTestHarness : IAsyncDisposable
                     // Another cleanup path already removed this disposable user.
                     break;
                 }
-                catch (OracleException ex) when (ex.Number == 1940 && !cleanupCts.IsCancellationRequested)
+                catch (OracleException ex) when ((ex.Number == 1940 || ex.Number == 1013 || ex.Number == 604)
+                    && !cleanupCts.IsCancellationRequested)
                 {
-                    // ODP.NET can keep a just-disposed async connection visible for a short period.
-                    // Retry only the documented "currently connected" teardown race within the bound.
+                    // ODP.NET can retain a just-disposed pooled session briefly, and a busy Oracle
+                    // instance can cancel recursive DROP work. Re-clear only this schema's pool,
+                    // disconnect only this disposable user's sessions, and retry within the bound.
                     await Task.Delay(100, cleanupCts.Token);
                 }
             }
@@ -222,6 +225,40 @@ internal sealed class OracleTestHarness : IAsyncDisposable
         };
     }
 
+    private static async Task DisconnectUserSessionsAsync(
+        OracleConnection admin,
+        string schemaUser,
+        CancellationToken cancellationToken)
+    {
+        var sessions = new List<(int Sid, int Serial)>();
+        await using (var query = admin.CreateCommand())
+        {
+            query.BindByName = true;
+            query.CommandTimeout = 10;
+            query.CommandText = "SELECT SID, SERIAL# FROM V$SESSION WHERE USERNAME = :username";
+            query.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
+            await using var reader = await query.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                sessions.Add((reader.GetInt32(0), reader.GetInt32(1)));
+        }
+
+        foreach (var session in sessions)
+        {
+            try
+            {
+                await using var disconnect = admin.CreateCommand();
+                disconnect.CommandTimeout = 10;
+                disconnect.CommandText = $"ALTER SYSTEM DISCONNECT SESSION '{session.Sid},{session.Serial}' IMMEDIATE";
+                await disconnect.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (OracleException exception) when (exception.Number is 30 or 31)
+            {
+                // The session closed or was already marked for termination between V$SESSION
+                // enumeration and ALTER SYSTEM. Either state is sufficient for this teardown pass.
+            }
+        }
+    }
+
     private static async Task<bool> UserExistsAsync(
         OracleConnection admin,
         string schemaUser,
@@ -229,7 +266,7 @@ internal sealed class OracleTestHarness : IAsyncDisposable
     {
         await using var command = admin.CreateCommand();
         command.BindByName = true;
-        command.CommandTimeout = 2;
+        command.CommandTimeout = 10;
         command.CommandText = "SELECT COUNT(*) FROM ALL_USERS WHERE USERNAME = :username";
         command.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) != 0;

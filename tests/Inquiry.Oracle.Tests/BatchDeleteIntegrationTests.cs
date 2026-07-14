@@ -7,7 +7,7 @@ namespace Inquiry.Oracle.Tests;
 
 /// <summary>
 /// Batch operations over the Northwind <c>Region</c> entity against real Oracle. Batch <c>InsertAll</c>
-/// works via Oracle's set-based <c>INSERT ALL … SELECT 1 FROM dual</c> (a single statement, so the affected
+/// works via Oracle's set-based <c>INSERT INTO … SELECT … FROM dual UNION ALL</c> (a single statement, so the affected
 /// row count round-trips), and <c>DeleteAll</c> works via the dialect-aware <c>:keys</c> IN-expansion sentinel
 /// (an empty collection rewrites to <c>IN (NULL)</c> — a no-op). <c>UpdateAll</c> executes the single-row
 /// UPDATE once per item through the runtime batch API (sequential same-connection fallback on Oracle).
@@ -54,7 +54,7 @@ public sealed class BatchDeleteIntegrationTests
     public async Task InsertAllInsertsEveryRow()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        // Oracle batch insert emits INSERT ALL … SELECT 1 FROM dual — one statement over the whole collection.
+        // Oracle batch insert emits one INSERT SELECT/UNION ALL statement over the whole collection.
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "batchins");
         var regions = harness.GetRequiredService<RegionStore>();
 

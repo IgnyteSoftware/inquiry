@@ -17,7 +17,7 @@ public sealed class ComputedPerson
     [InquiryColumn("LastName")]
     public string LastName { get; set; } = string.Empty;
 
-    [InquiryColumn("FullName", Computed = "FirstName || ' ' || LastName")]
+    [InquiryColumn("FullName", Computed = "FirstName || ' ' || LastName", Length = 401)]
     [InquiryComputedExpression("postgresql", "\"FirstName\" || ' ' || \"LastName\"")]
     [InquiryComputedExpression("mysql", "CONCAT(FirstName, ' ', LastName)")]
     [InquiryComputedExpression("mariadb", "CONCAT(FirstName, ' ', LastName)")]

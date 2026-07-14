@@ -1,7 +1,8 @@
 using Inquiry.Connections;
+using Inquiry.Oracle.Shared;
 using Oracle.ManagedDataAccess.Client;
 using System.Data.Common;
-using System.Globalization;
+using System.Text;
 
 namespace Inquiry.Oracle;
 
@@ -126,20 +127,57 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     /// </summary>
     public void FinalizeCommand(DbCommand command)
     {
+        var rewriteText = command.CommandType != System.Data.CommandType.StoredProcedure;
+        List<BindRename>? renames = rewriteText ? new List<BindRename>() : null;
+        var logicalNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var providerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (DbParameter parameter in command.Parameters)
         {
-            var name = parameter.ParameterName;
-            if (!string.IsNullOrEmpty(name))
+            if (!string.IsNullOrEmpty(parameter.ParameterName))
             {
-                if (name[0] == '@' || name[0] == ':')
+                var parameterName = parameter.ParameterName;
+                var logicalName = parameterName[0] == '@' || parameterName[0] == ':'
+                    ? parameterName.Substring(1)
+                    : parameterName;
+                if (!logicalNames.Add(logicalName))
                 {
-                    name = name.Substring(1);
+                    throw new InvalidOperationException($"Oracle parameter names must be unique ignoring case; '{logicalName}' is duplicated.");
                 }
 
-                var safeName = SafeBindName(name);
-                parameter.ParameterName = safeName != name && ContainsBindName(command.CommandText, safeName)
-                    ? safeName
-                    : name;
+                if (rewriteText)
+                {
+                    // Generator-emitted Oracle SQL already uses a safe encoded token. All other
+                    // logical names are encoded even when their raw text happens to resemble our
+                    // encoded namespace; Encode itself is deliberately not idempotent.
+                    var generatedName = OracleBindName.IsEncoded(logicalName)
+                        && ContainsBindToken(command.CommandText, logicalName);
+                    var safeName = generatedName ? logicalName : OracleBindName.Encode(logicalName);
+                    if (!providerNames.Add(safeName))
+                    {
+                        throw new InvalidOperationException(
+                            $"Oracle parameter names '{logicalName}' and another command parameter resolve to the same provider bind '{safeName}'.");
+                    }
+
+                    // Whether the encoded target token already appears elsewhere is irrelevant:
+                    // every raw occurrence of this logical token still has to be rewritten.
+                    if (!generatedName && ContainsBindToken(command.CommandText, logicalName))
+                    {
+                        renames!.Add(new BindRename(logicalName, safeName));
+                    }
+
+                    parameter.ParameterName = safeName;
+                }
+                else
+                {
+                    // Stored-procedure parameters are formal names, not SQL bind tokens. Preserve
+                    // their spelling and only remove Inquiry's transport sigil.
+                    if (!providerNames.Add(logicalName))
+                    {
+                        throw new InvalidOperationException($"Oracle stored-procedure formal parameter '{logicalName}' is duplicated ignoring case.");
+                    }
+                    parameter.ParameterName = logicalName;
+                }
             }
 
             if (parameter.DbType == System.Data.DbType.Boolean)
@@ -151,6 +189,9 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                 parameter.DbType = System.Data.DbType.Int32;
             }
         }
+
+        if (renames is { Count: > 0 })
+            command.CommandText = RewriteBindTokens(command.CommandText, renames);
 
         // ReturnEntity = true ops are emitted (OracleSqlBuilder) as an anonymous PL/SQL block that runs the
         // mutation and OPENs a ref cursor (:rc) over the affected row. ExecuteReader on such a block returns
@@ -172,40 +213,172 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     private static bool IsReturningBlock(string commandText)
         => (commandText.StartsWith("DECLARE", System.StringComparison.Ordinal)
             || commandText.StartsWith("BEGIN", System.StringComparison.Ordinal))
-           && commandText.IndexOf(":rc", System.StringComparison.Ordinal) >= 0;
+           && ContainsBindToken(commandText, "rc");
 
-    private static string SafeBindName(string name)
-        => !string.IsNullOrEmpty(name) && name[0] == '_'
-            ? "inq$" + name.Length.ToString(CultureInfo.InvariantCulture) + "$" + name
-            : name;
-
-    private static bool ContainsBindName(string commandText, string bindName)
+    private static bool ContainsBindToken(string commandText, string bindName)
     {
-        var needle = ":" + bindName;
-        var start = 0;
-        while (true)
+        for (var i = 0; i < commandText.Length;)
         {
-            var index = commandText.IndexOf(needle, start, System.StringComparison.Ordinal);
-            if (index < 0)
+            if (TrySkipQuotedOrComment(commandText, ref i)) continue;
+
+            if ((commandText[i] == ':' || commandText[i] == '@')
+                && !(commandText[i] == '@' && IsDatabaseLinkAtSign(commandText, i)))
             {
-                return false;
+                var start = i + 1;
+                var end = start;
+                while (end < commandText.Length)
+                {
+                    var width = BindNameCharWidth(commandText, end);
+                    if (width == 0) break;
+                    end += width;
+                }
+                if (end - start == bindName.Length
+                    && string.Compare(commandText, start, bindName, 0, bindName.Length, StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    return true;
+                }
+                i = end;
+                continue;
             }
 
-            var next = index + needle.Length;
-            if (next == commandText.Length || !IsBindNameChar(commandText[next]))
-            {
-                return true;
-            }
-
-            start = index + 1;
+            i++;
         }
+
+        return false;
     }
 
-    private static bool IsBindNameChar(char c)
-        => (c >= 'A' && c <= 'Z')
-           || (c >= 'a' && c <= 'z')
-           || (c >= '0' && c <= '9')
-           || c == '_'
-           || c == '$'
-           || c == '#';
+    private static string RewriteBindTokens(string commandText, List<BindRename> renames)
+    {
+        StringBuilder? rewritten = null;
+        var copiedThrough = 0;
+        for (var i = 0; i < commandText.Length;)
+        {
+            if (TrySkipQuotedOrComment(commandText, ref i)) continue;
+
+            if ((commandText[i] == ':' || commandText[i] == '@')
+                && !(commandText[i] == '@' && IsDatabaseLinkAtSign(commandText, i)))
+            {
+                var tokenStart = i;
+                var nameStart = i + 1;
+                var end = nameStart;
+                while (end < commandText.Length)
+                {
+                    var width = BindNameCharWidth(commandText, end);
+                    if (width == 0) break;
+                    end += width;
+                }
+
+                for (var r = 0; r < renames.Count; r++)
+                {
+                    var rename = renames[r];
+                    if (end - nameStart != rename.Original.Length
+                        || string.Compare(commandText, nameStart, rename.Original, 0, rename.Original.Length, StringComparison.OrdinalIgnoreCase) != 0)
+                    {
+                        continue;
+                    }
+
+                    rewritten ??= new StringBuilder(commandText.Length + 16);
+                    rewritten.Append(commandText, copiedThrough, tokenStart - copiedThrough);
+                    rewritten.Append(':').Append(rename.Safe);
+                    copiedThrough = end;
+                    break;
+                }
+
+                i = end;
+                continue;
+            }
+
+            i++;
+        }
+
+        if (rewritten is null) return commandText;
+        rewritten.Append(commandText, copiedThrough, commandText.Length - copiedThrough);
+        return rewritten.ToString();
+    }
+
+    private static bool TrySkipQuotedOrComment(string text, ref int index)
+    {
+        var c = text[index];
+        if (c == '-' && index + 1 < text.Length && text[index + 1] == '-')
+        {
+            index += 2;
+            while (index < text.Length && text[index] != '\r' && text[index] != '\n') index++;
+            return true;
+        }
+
+        if (c == '/' && index + 1 < text.Length && text[index + 1] == '*')
+        {
+            var close = text.IndexOf("*/", index + 2, System.StringComparison.Ordinal);
+            index = close < 0 ? text.Length : close + 2;
+            return true;
+        }
+
+        if (c == '\'' || c == '"')
+        {
+            var quote = c;
+            index++;
+            while (index < text.Length)
+            {
+                if (text[index++] != quote) continue;
+                if (index < text.Length && text[index] == quote) { index++; continue; }
+                break;
+            }
+            return true;
+        }
+
+        var quotePrefixLength = (c == 'q' || c == 'Q') && index + 2 < text.Length && text[index + 1] == '\''
+            ? 2
+            : (c == 'n' || c == 'N') && index + 3 < text.Length
+                && (text[index + 1] == 'q' || text[index + 1] == 'Q') && text[index + 2] == '\''
+                    ? 3
+                    : 0;
+        if (quotePrefixLength != 0)
+        {
+            var opener = text[index + quotePrefixLength];
+            var closer = opener switch { '[' => ']', '{' => '}', '(' => ')', '<' => '>', _ => opener };
+            index += quotePrefixLength + 1;
+            while (index + 1 < text.Length)
+            {
+                if (text[index] == closer && text[index + 1] == '\'') { index += 2; return true; }
+                index++;
+            }
+            index = text.Length;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsDatabaseLinkAtSign(string text, int index)
+    {
+        if (index == 0) return false;
+        var previous = text[index - 1];
+        if (previous == '"' || previous is '_' or '$' or '#' || char.IsLetterOrDigit(previous)
+            || char.IsLowSurrogate(previous))
+        {
+            return true;
+        }
+        var category = char.GetUnicodeCategory(previous);
+        return category is System.Globalization.UnicodeCategory.NonSpacingMark
+            or System.Globalization.UnicodeCategory.SpacingCombiningMark;
+    }
+
+    private static int BindNameCharWidth(string text, int index)
+    {
+        if (!Rune.TryGetRuneAt(text, index, out var rune)) return 0;
+        if (rune.Value is '_' or '$' or '#') return rune.Utf16SequenceLength;
+        if (Rune.IsLetterOrDigit(rune)) return rune.Utf16SequenceLength;
+        var category = Rune.GetUnicodeCategory(rune);
+        return category is System.Globalization.UnicodeCategory.NonSpacingMark
+            or System.Globalization.UnicodeCategory.SpacingCombiningMark
+            ? rune.Utf16SequenceLength
+            : 0;
+    }
+
+    private readonly struct BindRename
+    {
+        public BindRename(string original, string safe) => (Original, Safe) = (original, safe);
+        public string Original { get; }
+        public string Safe { get; }
+    }
 }

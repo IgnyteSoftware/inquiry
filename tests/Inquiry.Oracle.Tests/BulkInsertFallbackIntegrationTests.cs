@@ -7,7 +7,7 @@ namespace Inquiry.Oracle.Tests;
 
 /// <summary>
 /// <c>[InquiryBulkInsert]</c> on Oracle — a dialect without a native bulk-copy API — compiles down
-/// to the multi-row batch insert (<c>INSERT ALL INTO ... SELECT 1 FROM dual</c>).
+/// to the multi-row batch insert (<c>INSERT INTO ... SELECT ... FROM dual UNION ALL</c>).
 /// Same store method, same semantics, batch SQL underneath.
 /// </summary>
 [Collection(OracleCollection.Name)]
@@ -39,7 +39,10 @@ public sealed class BulkInsertFallbackIntegrationTests
         Assert.Equal(250L, await store.CountAsync());
 
         var even = await store.ByCategoryAsync("even");
+        var odd = await store.ByCategoryAsync("odd");
         Assert.Equal(125, even.Count);
+        Assert.Equal(250, even.Concat(odd).Select(static item => item.Id).Distinct().Count());
+        Assert.All(even.Concat(odd), static item => Assert.True(item.Id > 0));
         Assert.Contains(even, i => i.Note is null);
         Assert.Contains(even, i => i.Amount == 1.25m * 2);
     }

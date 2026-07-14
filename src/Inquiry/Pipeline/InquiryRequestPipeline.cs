@@ -796,7 +796,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             // ADO.NET populates output / return-value DbParameters after ExecuteNonQuery; read the
             // named one back and convert it the same way as a scalar result.
-            var readBack = ScalarConvert.From<T>(dbCommand.Parameters[readBackParameterName].Value);
+            var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return readBack;
