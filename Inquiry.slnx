@@ -8,6 +8,9 @@
     <Project Path="benchmarks/Inquiry.Benchmarks.SqlServer/Inquiry.Benchmarks.SqlServer.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/eng/">
+    <Project Path="eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj" />
     <Project Path="samples/Inquiry.Northwind/Inquiry.Northwind.csproj" />
@@ -36,6 +39,7 @@
     <Project Path="tests/Inquiry.MariaDb.Tests/Inquiry.MariaDb.Tests.csproj" />
     <Project Path="tests/Inquiry.MySql.Tests/Inquiry.MySql.Tests.csproj" />
     <Project Path="tests/Inquiry.Oracle.Tests/Inquiry.Oracle.Tests.csproj" />
+    <Project Path="tests/Inquiry.ReleaseTools.Tests/Inquiry.ReleaseTools.Tests.csproj" />
     <Project Path="tests/Inquiry.Oracle.UnsupportedFixtures/Inquiry.Oracle.UnsupportedFixtures.csproj" />
     <Project Path="tests/Inquiry.PostgreSql.Tests/Inquiry.PostgreSql.Tests.csproj" />
     <Project Path="tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj" />
