@@ -62,7 +62,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("typeof(decimal)", text);
 
         // The body streams through the copier; no batch-SQL machinery is emitted.
-        Assert.Contains("return Inquiry.BulkInsertAsync(_bulkDef_BulkInsertAsync, items,", text);
+        Assert.Contains("return Inquiry.BulkInsertAsync(_bulkDef_BulkInsertAsync, ((global::System.Collections.Generic.IEnumerable<global::Demo.Item>?)items) ?? global::System.Array.Empty<global::Demo.Item>(),", text);
         Assert.DoesNotContain("_sqlInsertAllPrefix", text);
     }
 
@@ -127,11 +127,91 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         // Streaming stamp iterator wraps the source; rows are stamped as they are enumerated.
-        Assert.Contains("_Stamped(docs)", text);
+        Assert.Contains("_Stamped(((global::System.Collections.Generic.IEnumerable<global::Demo.Doc>?)docs) ?? global::System.Array.Empty<global::Demo.Doc>())", text);
         Assert.Contains("_e.Id = global::Inquiry.InquiryGuid.NewVersion7();", text);
         Assert.Contains("if (_e.CreatedAt == default)", text);
         Assert.Contains("_e.ModifiedAt = global::System.DateTime.UtcNow;", text);
         Assert.Contains("yield return _e;", text);
+    }
+
+    [Theory]
+    [InlineData("SqlServer")]
+    [InlineData("PostgreSql")]
+    public void NativeBulkInsertNormalizesNullableCollectionsWithoutWarnings(string dialect)
+    {
+        const string source = """
+            #nullable enable
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Item")]
+            public sealed class Item
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+            }
+
+            public partial class ItemStore : InquiryStore<Item>
+            {
+                [InquiryBulkInsert]
+                public partial Task<long> BulkInsertAsync(List<Item>? items, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: dialect);
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.Compilation.GetDiagnostics(), static diagnostic => diagnostic.Id == "CS8604");
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Contains("Inquiry.BulkInsertAsync(_bulkDef_BulkInsertAsync, ((global::System.Collections.Generic.IEnumerable<global::Demo.Item>?)items) ?? global::System.Array.Empty<global::Demo.Item>()", text);
+        Assert.DoesNotContain("Enumerable.ToList", text);
+    }
+
+    [Fact]
+    public void NativeBulkInsertNormalizesNullableCollectionBeforeStreamingStamps()
+    {
+        const string source = """
+            #nullable enable
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Doc")]
+            public sealed class Doc
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryCreatedAt]
+                public DateTime CreatedAt { get; set; }
+            }
+
+            public partial class DocStore : InquiryStore<Doc>
+            {
+                [InquiryBulkInsert]
+                public partial Task<long> BulkInsertAsync(IReadOnlyList<Doc>? docs, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "PostgreSql");
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.Compilation.GetDiagnostics(), static diagnostic => diagnostic.Id == "CS8604");
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Contains("_Stamped(((global::System.Collections.Generic.IEnumerable<global::Demo.Doc>?)docs) ?? global::System.Array.Empty<global::Demo.Doc>())", text);
+        Assert.DoesNotContain("Enumerable.ToList", text);
     }
 
     [Fact]

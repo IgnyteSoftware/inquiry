@@ -241,10 +241,10 @@ internal static class StoreOperationEmitter
                 // The bind/Expand name takes the dialect sigil (':keys' on Oracle, '@keys' elsewhere)
                 // to match the baked SQL. Returns rows affected; for a soft-delete entity
                 // _sqlDeleteAll is the soft UPDATE form.
-                var keysParam = method.Parameters[0].Name;
+                var keysExpression = NonNullBatchItemsExpression(method.Parameters[0]);
                 var batchDescriptor = BuildBatchDescriptorFieldName(method);
                 AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {keysParam}, {cancellation});");
+                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {keysExpression}, {cancellation});");
                 source.AppendLine("    }");
                 break;
             }
@@ -351,17 +351,17 @@ internal static class StoreOperationEmitter
             {
                 // The cached descriptor owns provider SQL and binding while the runtime streams bounded,
                 // atomic chunks from the original enumerable.
-                var itemsParam = method.Parameters[0].Name;
+                var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
                 var batchDescriptor = BuildBatchDescriptorFieldName(method);
                 if (method.Operation == StoreOperation.BulkInsert)
                 {
                     AppendHeader(source, method, parameters, isAsync: true);
-                    source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsParam}, {cancellation}).ConfigureAwait(false);");
+                    source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation}).ConfigureAwait(false);");
                 }
                 else
                 {
                     AppendHeader(source, method, parameters, isAsync: false);
-                    source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsParam}, {cancellation});");
+                    source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
                 }
                 source.AppendLine("    }");
                 break;
@@ -370,10 +370,10 @@ internal static class StoreOperationEmitter
             case StoreOperation.UpdateAll:
             {
                 // The runtime selects the descriptor's fixed-row, array-bound, or eligible set-based path.
-                var itemsParam = method.Parameters[0].Name;
+                var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
                 var batchDescriptor = BuildBatchDescriptorFieldName(method);
                 AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsParam}, {cancellation});");
+                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
                 source.AppendLine("    }");
                 break;
             }
@@ -1476,6 +1476,13 @@ internal static class StoreOperationEmitter
         return "_batch_" + method.Name + "_" + suffix;
     }
 
+    private static string NonNullBatchItemsExpression(ParameterData parameter)
+    {
+        var elementType = parameter.ElementComparisonDisplay
+            ?? throw new InvalidOperationException("A batch collection parameter must expose its element type.");
+        return $"((global::System.Collections.Generic.IEnumerable<{elementType}>?){parameter.Name}) ?? global::System.Array.Empty<{elementType}>()";
+    }
+
     /// <summary>
     /// Emits the cached whole-chunk descriptor for one multi-row insert operation. The runtime owns
     /// list slicing, bounded buffering, single enumeration, and transaction coordination; generated
@@ -2450,7 +2457,7 @@ internal static class StoreOperationEmitter
         SqlBuilder sqlBuilder)
     {
         var insertable = SelectMutationColumns(entity, includeKey: false);
-        var itemsParam = method.Parameters[0].Name;
+        var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
         var definitionField = $"_bulkDef_{method.Name}";
 
         var dbTypeExprs = insertable.Select(c => ResolveDbType(c, sqlBuilder)).ToArray();
@@ -2497,7 +2504,7 @@ internal static class StoreOperationEmitter
         AppendHeader(source, method, parameters, isAsync: false);
         if (hasStamps)
         {
-            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, _Stamped({itemsParam}), {cancellation});");
+            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, _Stamped({itemsExpression}), {cancellation});");
             source.AppendLine();
             source.AppendLine($"        static global::System.Collections.Generic.IEnumerable<{entityType}> _Stamped(global::System.Collections.Generic.IEnumerable<{entityType}> _source)");
             source.AppendLine("        {");
@@ -2511,7 +2518,7 @@ internal static class StoreOperationEmitter
         }
         else
         {
-            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, {itemsParam}, {cancellation});");
+            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, {itemsExpression}, {cancellation});");
         }
 
         source.AppendLine("    }");

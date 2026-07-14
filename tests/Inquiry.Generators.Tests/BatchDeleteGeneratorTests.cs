@@ -92,6 +92,49 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("InquiryInExpansion", text);
     }
 
+    [Theory]
+    [InlineData("Sqlite")]
+    [InlineData("SqlServer")]
+    public void NullableDeleteAllCollectionIsNormalizedOnceWithoutNullabilityWarnings(string dialect)
+    {
+        const string source = """
+            #nullable enable
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TThing")]
+            public sealed class Thing
+            {
+                [InquiryKey]
+                public long? Id { get; set; }
+            }
+
+            public partial class ThingStore : InquiryStore<Thing>
+            {
+                [InquiryDeleteAll]
+                public partial Task<int> DeleteAllAsync(IEnumerable<long?>? ids, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: dialect);
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.Compilation.GetDiagnostics(), static diagnostic => diagnostic.Id == "CS8604");
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Contains("((global::System.Collections.Generic.IEnumerable<long?>?)ids) ?? global::System.Array.Empty<long?>()", text);
+        Assert.DoesNotContain("Enumerable.ToList", text);
+        if (dialect == "SqlServer")
+        {
+            Assert.Contains("?? throw new global::System.InvalidOperationException(\"SQL Server TVP descriptor resolution returned null.\")", text);
+        }
+    }
+
     [Fact]
     public void OracleDeleteAllUsesSingleKeySqlWithArrayBinding()
     {

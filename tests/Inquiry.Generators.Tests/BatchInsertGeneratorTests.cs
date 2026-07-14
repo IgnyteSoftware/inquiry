@@ -316,4 +316,52 @@ public sealed partial class InquiryGeneratorTests
         Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(text, matches[0].Groups[1].Value).Count);
         Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(text, matches[1].Groups[1].Value).Count);
     }
+
+    [Fact]
+    public void NullableBatchMutationCollectionsPreserveNullAsEmptyWithoutReenumeration()
+    {
+        const string source = """
+            #nullable enable
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TThing")]
+            public sealed class Thing
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class ThingStore : InquiryStore<Thing>
+            {
+                [InquiryInsertAll]
+                public partial Task<int> InsertAllAsync(IEnumerable<Thing>? items, CancellationToken ct = default);
+
+                [InquiryUpdateAll]
+                public partial Task<int> UpdateAllAsync(IReadOnlyList<Thing>? items, CancellationToken ct = default);
+
+                [InquiryBulkInsert]
+                public partial Task<long> BulkInsertAsync(List<Thing>? items, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        Assert.DoesNotContain(result.Compilation.GetDiagnostics(), static diagnostic => diagnostic.Id == "CS8604");
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Equal(3, global::System.Text.RegularExpressions.Regex.Matches(
+            text,
+            @"\(\(global::System\.Collections\.Generic\.IEnumerable<global::Demo\.Thing>\?\)items\) \?\? global::System\.Array\.Empty<global::Demo\.Thing>\(\)").Count);
+        Assert.DoesNotContain("Enumerable.ToList", text);
+    }
 }

@@ -57,7 +57,8 @@ internal static class SqlServerTvpResolver
         var descriptor = "global::Inquiry.SqlServer.Parameters.InquiryTvpDescriptor.Get(\"" + resolved.DescriptorKind + "\", " +
             resolved.Length.ToString(CultureInfo.InvariantCulture) + "L, " +
             resolved.Precision.ToString(CultureInfo.InvariantCulture) + ", " +
-            resolved.Scale.ToString(CultureInfo.InvariantCulture) + ", " + (nullable ? "true" : "false") + ")";
+            resolved.Scale.ToString(CultureInfo.InvariantCulture) + ", " + (nullable ? "true" : "false") +
+            ") ?? throw new global::System.InvalidOperationException(\"SQL Server TVP descriptor resolution returned null.\")";
         var descriptorField = "_inquiryTvpDescriptor_" + hash;
 
         return new(new CollectionParameterArtifact(

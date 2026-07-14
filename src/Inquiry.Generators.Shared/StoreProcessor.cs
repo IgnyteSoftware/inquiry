@@ -1188,6 +1188,19 @@ internal static class StoreProcessor
             }
         }
 
+        // Provider descriptor fields must be initialized before any cached batch descriptor captures
+        // them. C# correctly treats a later static field as potentially null while an earlier field
+        // initializer is running, even when the later field's declared type is non-nullable.
+        foreach (var artifact in collectionResolutions
+            .Where(static resolution => resolution.Artifact is not null)
+            .Select(static resolution => resolution.Artifact!)
+            .GroupBy(static artifact => artifact.RuntimeDescriptorFieldName, StringComparer.Ordinal)
+            .Select(static group => group.First()))
+        {
+            source.AppendLine();
+            source.AppendLine($"    private static readonly {artifact.RuntimeDescriptorTypeName} {artifact.RuntimeDescriptorFieldName} = {artifact.RuntimeDescriptorExpression};");
+        }
+
         // Batch descriptors are immutable generated support values. Keep them on the store type so
         // every invocation reuses the same static binder delegate instead of constructing batch
         // command state per call.
@@ -1454,16 +1467,6 @@ internal static class StoreProcessor
                 ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct)
                 : sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct);
             AppendConstSql(source, "_sqlProj_" + method.Name, projSql);
-        }
-
-        foreach (var artifact in collectionResolutions
-            .Where(static resolution => resolution.Artifact is not null)
-            .Select(static resolution => resolution.Artifact!)
-            .GroupBy(static artifact => artifact.RuntimeDescriptorFieldName, StringComparer.Ordinal)
-            .Select(static group => group.First()))
-        {
-            source.AppendLine();
-            source.AppendLine($"    private static readonly {artifact.RuntimeDescriptorTypeName} {artifact.RuntimeDescriptorFieldName} = {artifact.RuntimeDescriptorExpression};");
         }
 
         source.AppendLine();
