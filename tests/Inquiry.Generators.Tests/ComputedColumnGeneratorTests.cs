@@ -69,16 +69,20 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void ComputedColumnDdlExpressionFormDialectsUseAsExpr()
     {
-        // SQLite, SQL Server, and Oracle all use the base expression form `AS (<expr>)`.
+        // SQLite and SQL Server use the base expression form. Oracle casts computed strings to a
+        // bounded scalar type because virtual columns cannot have a LOB result.
         foreach (var dialect in new[] { "Sqlite", "SqlServer", "Oracle" })
         {
             var result = RunGenerator(ComputedSource, dialect: dialect);
             AssertNoErrors(result);
             var ddl = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
             // The standard expression form, with no type / NOT NULL on the computed column.
-            Assert.Contains(dialect == "SqlServer"
-                ? "AS (FirstName + ' ' + LastName)"
-                : "AS (FirstName || ' ' || LastName)", ddl);
+            Assert.Contains(dialect switch
+            {
+                "SqlServer" => "AS (FirstName + ' ' + LastName)",
+                "Oracle" => "AS (CAST(FirstName || ' ' || LastName AS NVARCHAR2(101)))",
+                _ => "AS (FirstName || ' ' || LastName)",
+            }, ddl);
             Assert.DoesNotContain("GENERATED ALWAYS", ddl);
         }
     }
@@ -337,9 +341,32 @@ public sealed partial class InquiryGeneratorTests
         var ddl = ExtractSchemaDdl(result);
         Assert.Contains("MixedCaseValue NUMBER(10) NOT NULL", ddl);
         Assert.Contains("\"Computed Total\" AS (\"Base Value\" + MixedCaseValue)", ddl);
+        Assert.DoesNotContain("CAST(\"Base Value\" + MixedCaseValue", ddl);
         Assert.DoesNotContain("\"MixedCaseValue\"", ddl);
         var store = Assert.Single(result.RunResult.GeneratedTrees, tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Contains("SELECT Id, \\\"Base Value\\\", MixedCaseValue, \\\"Computed Total\\\" FROM Computed", store);
+    }
+
+    [Fact]
+    public void OracleComputedStringIsCastToDeclaredBoundedScalarType()
+    {
+        var result = RunGenerator(ComputedSource, dialect: "Oracle");
+        AssertNoErrors(result);
+
+        Assert.Contains("FullName AS (CAST(FirstName || ' ' || LastName AS NVARCHAR2(101)))", ExtractSchemaDdl(result));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2001)]
+    public void OracleComputedStringWithoutSupportedBoundedLengthReportsINQ077(int length)
+    {
+        var lengthArgument = length == 0 ? string.Empty : ", Length = 2001";
+        var source = "using Inquiry.Entities; namespace Demo; [InquiryTable(\"T\")] public sealed class T { [InquiryKey] public int Id {get;set;} [InquiryColumn(Computed=\"TO_CHAR(Id)\"" + lengthArgument + ")] public string Display {get;set;} = \"\"; }";
+
+        var result = RunGenerator(source, dialect: "Oracle");
+
+        Assert.Contains(result.RunResult.Diagnostics, diagnostic => diagnostic.Id == "INQ077");
     }
 
     [Fact]

@@ -14,5 +14,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
     <ProjectReference Include="..\Inquiry.Generators.Shared\Inquiry.Generators.Shared.csproj" PrivateAssets="all" />
+    <Compile Include="..\Inquiry.Oracle.Shared\OracleBindName.cs" Link="OracleBindName.cs" />
   </ItemGroup>
 </Project>

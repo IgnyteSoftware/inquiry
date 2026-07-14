@@ -43,6 +43,7 @@ public abstract class SqlBuilder
 
     public virtual string RenderComputedExpression(string expression) => expression;
     public virtual bool ComputedColumnDeclaresStoreType => false;
+    public virtual bool RequiresBoundedComputedStrings => false;
     protected virtual bool DefaultExpressionPrecedesInlineConstraints => false;
     public virtual string? GetSchemaManifestStoreType(IColumn column)
         => !string.IsNullOrEmpty(column.ComputedExpression) && !ComputedColumnDeclaresStoreType ? null : ColumnType(column);
@@ -80,6 +81,12 @@ public abstract class SqlBuilder
         => action == ReferentialActionKind.NoAction;
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
+    public virtual string RuntimeParameterName(string logicalName) => "@" + logicalName;
+    public virtual string RuntimeParameterNameFromSql(string sqlParameterName) => sqlParameterName;
+    public virtual string StoredProcedureParameterName(string formalName)
+        => formalName.Length > 0 && formalName[0] is '@' or ':' or '$' or '?' ? formalName : "@" + formalName;
+    public virtual string BatchInsertSqlParameterPrefix => "@p";
+    public virtual string BatchInsertRuntimeParameterPrefix => "@p";
 
     /// <summary>Returns a deployment artifact required to bind this collection column, if any.</summary>
     public virtual CollectionParameterArtifact? BuildCollectionParameterArtifact(string? owningSchema, IColumn column)
@@ -192,8 +199,8 @@ public abstract class SqlBuilder
     /// <summary>
     /// Header of a multi-row batch <c>INSERT</c> — the <c>_sqlInsertAllPrefix</c> const emitted before the
     /// per-row value tuples. Default is the standard multi-row form <c>INSERT INTO t (cols) VALUES </c>.
-    /// Oracle overrides with <c>INSERT ALL </c> (its multi-row insert repeats <c>INTO t (cols) VALUES (…)</c>
-    /// per row and ends with a <c>SELECT … FROM dual</c>).
+    /// Oracle overrides with one <c>INSERT INTO … SELECT … FROM dual UNION ALL …</c>
+    /// statement so identity sequences advance once per source row.
     /// </summary>
     public virtual string BuildBatchInsertHeader(SqlBuildContext context)
         => "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") VALUES ";
@@ -203,6 +210,7 @@ public abstract class SqlBuilder
     /// <c>INTO t (cols) VALUES (</c> per row.
     /// </summary>
     public virtual string BuildBatchInsertRowOpen(SqlBuildContext context) => "(";
+    public virtual string BatchInsertRowClose => ")";
 
     /// <summary>Separator placed between row tuples. Default <c>,</c> (multi-row VALUES); Oracle uses a space.</summary>
     public virtual string BatchInsertRowSeparator => ",";

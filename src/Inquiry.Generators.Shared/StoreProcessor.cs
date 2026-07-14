@@ -1128,7 +1128,7 @@ internal static class StoreProcessor
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
         if (needsCount) AppendConstSql(source, "_sqlCount", sqlBuilder.BuildCountSql(ctx));
         // InsertAll is supported on every dialect via the SqlBuilder batch-insert shape hooks (Oracle emits
-        // INSERT ALL … SELECT FROM dual; everyone else multi-row VALUES). The header + per-row open are
+        // INSERT INTO … SELECT … FROM dual UNION ALL; everyone else uses multi-row VALUES). The header + per-row open are
         // baked consts the emitter assembles at runtime. DeleteAll uses the IN-expansion path (every dialect).
         if (needsInsertAll)
         {

@@ -103,7 +103,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetProductStore(result);
 
-        Assert.Contains("WHERE NOT (Name LIKE :Name)", text);
+        Assert.Contains("WHERE NOT (Name LIKE :iq1$Namexx$ce0862aa45f482)", text);
     }
 
     [Fact]

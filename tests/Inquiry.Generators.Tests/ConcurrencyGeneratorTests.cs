@@ -445,7 +445,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("DELETE FROM `TWidget` WHERE `Id` = @Id AND `Version` = @Version", mariadb);
 
         var oracle = GetTokenStore(RunGenerator(TokenStore(TokenCrud), dialect: "Oracle"));
-        Assert.Contains("SET Name = :Name, Version = Version + 1 WHERE Id = :Id AND Version = :Version", oracle);
-        Assert.Contains("DELETE FROM TWidget WHERE Id = :Id AND Version = :Version", oracle);
+        Assert.Matches("SET Name = :iq1\\$Namexx\\$[0-9a-f]{14}, Version = Version \\+ 1 WHERE Id = :iq1\\$Idxxxx\\$[0-9a-f]{14} AND Version = :iq1\\$Versio\\$[0-9a-f]{14}", oracle);
+        Assert.Matches("DELETE FROM TWidget WHERE Id = :iq1\\$Idxxxx\\$[0-9a-f]{14} AND Version = :iq1\\$Versio\\$[0-9a-f]{14}", oracle);
     }
 }

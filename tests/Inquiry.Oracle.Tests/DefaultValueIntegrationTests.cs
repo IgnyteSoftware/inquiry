@@ -32,32 +32,13 @@ public partial class DefaultedItemStore : InquiryStore<DefaultedItem>
     public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);
 }
 
-[InquiryTable("TDefaultedKeyItem")]
-public sealed class DefaultedKeyItem
-{
-    [InquiryKey(UseDatabaseDefault = true, Length = 255)]
-    public string? Id { get; set; }
-
-    [InquiryColumn]
-    public string Name { get; set; } = string.Empty;
-}
-
-public partial class DefaultedKeyItemStore : InquiryStore<DefaultedKeyItem>
-{
-    [InquiryInsert(ReturnEntity = true)]
-    public partial Task<DefaultedKeyItem?> InsertReturningAsync(DefaultedKeyItem item, CancellationToken cancellationToken = default);
-
-    [InquiryUpsert(ReturnEntity = true)]
-    public partial Task<DefaultedKeyItem?> UpsertReturningAsync(DefaultedKeyItem item, CancellationToken cancellationToken = default);
-}
-
 [Collection(OracleCollection.Name)]
 public sealed class DefaultValueIntegrationTests
 {
     private readonly OracleContainerFixture _fixture;
 
     private const string DefaultedItemDdl =
-        "CREATE TABLE TDefaultedItem (Key VARCHAR2(255) NOT NULL PRIMARY KEY, Name VARCHAR2(255) NOT NULL, Status VARCHAR2(255) DEFAULT 'New' NOT NULL)";
+        "CREATE TABLE TDefaultedItem (Key RAW(16) NOT NULL PRIMARY KEY, Name VARCHAR2(255) NOT NULL, Status VARCHAR2(255) DEFAULT 'New' NOT NULL)";
 
     private const string DefaultedKeyItemDdl =
         "CREATE TABLE TDefaultedKeyItem (Id VARCHAR2(255) DEFAULT LOWER(RAWTOHEX(SYS_GUID())) NOT NULL PRIMARY KEY, Name VARCHAR2(255) NOT NULL)";
@@ -129,16 +110,15 @@ public sealed class DefaultValueIntegrationTests
     }
 
     [SkippableFact]
-    public async Task UpsertReturningUsesDatabaseDefaultForNullPrimaryKey()
+    public async Task UpsertReturningWithDatabaseDefaultKeyUsesGeneratedUnsupportedContract()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, DefaultedKeyItemDdl, "defkey");
         var store = harness.GetRequiredService<DefaultedKeyItemStore>();
 
-        var returned = await store.UpsertReturningAsync(new DefaultedKeyItem { Name = "Generated Key" });
+        var failure = await Assert.ThrowsAsync<NotSupportedException>(() =>
+            store.UpsertReturningAsync(new DefaultedKeyItem { Name = "Generated Key" }));
 
-        Assert.NotNull(returned);
-        Assert.False(string.IsNullOrWhiteSpace(returned.Id));
-        Assert.Equal("Generated Key", returned.Name);
+        Assert.Contains("database-generated", failure.Message, StringComparison.OrdinalIgnoreCase);
     }
 }

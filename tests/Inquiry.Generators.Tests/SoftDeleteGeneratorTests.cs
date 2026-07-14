@@ -226,8 +226,8 @@ public sealed partial class InquiryGeneratorTests
         var text = GetWidgetStore(result);
 
         Assert.Contains("FROM TWidget WHERE IsDeleted = 0", text);
-        Assert.Contains("WHERE Id = :Id AND IsDeleted = 0", text);
-        Assert.Contains("WHERE Name = :Name AND IsDeleted = 0", text);
+        Assert.Contains("WHERE Id = :iq1$Idxxxx$30d4cf864d6e68 AND IsDeleted = 0", text);
+        Assert.Contains("WHERE Name = :iq1$Namexx$ce0862aa45f482 AND IsDeleted = 0", text);
     }
 
     [Fact]
