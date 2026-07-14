@@ -16,6 +16,9 @@ public static class CiContractVerifier
 
     private static readonly string[] JobIds =
         ["build-and-unit", "aot-smoke", "integration", "package-producer", "package-verifier", "ci-required-v1"];
+    private static readonly string[] IntegrationProviders =
+        ["PostgreSql", "MySql", "MariaDb", "SqlServer", "Oracle"];
+    private static readonly string[] IntegrationTfms = ["net8.0", "net9.0", "net10.0"];
 
     public static void Verify(string repositoryRoot, string contractPath, string workflowPath)
     {
@@ -73,9 +76,17 @@ public static class CiContractVerifier
             var strategy = Map(job["strategy"], "integration.strategy", "fail-fast", "matrix");
             Require(Scalar(strategy["fail-fast"], "integration.strategy.fail-fast") == "false", "Integration matrix must fail-fast false.");
             var matrix = Map(strategy["matrix"], "integration.strategy.matrix", "provider", "tfm");
-            var requiredMatrix = contract.Single(item => item.Job == "integration").Matrix!;
-            RequireSequence(Sequence(matrix["provider"], "integration.matrix.provider"), requiredMatrix["provider"], "integration providers");
-            RequireSequence(Sequence(matrix["tfm"], "integration.matrix.tfm"), requiredMatrix["tfm"], "integration TFMs");
+            var requiredMatrix = contract.Single(item => item.Job == "integration").Matrix;
+            Require(requiredMatrix is not null, "CI contract integration matrix must be an object.");
+            var hasProviders = requiredMatrix!.TryGetValue("provider", out var requiredProviders);
+            var hasTfms = requiredMatrix.TryGetValue("tfm", out var requiredTfms);
+            Require(requiredMatrix.Count == 2 && hasProviders && hasTfms
+                    && requiredProviders is not null && requiredTfms is not null,
+                "CI contract integration matrix must contain exactly the non-null provider and tfm keys.");
+            RequireSequence(requiredProviders!, IntegrationProviders, "CI contract integration providers");
+            RequireSequence(requiredTfms!, IntegrationTfms, "CI contract integration TFMs");
+            RequireSequence(Sequence(matrix["provider"], "integration.matrix.provider"), requiredProviders!, "integration providers");
+            RequireSequence(Sequence(matrix["tfm"], "integration.matrix.tfm"), requiredTfms!, "integration TFMs");
             Require(Sequence(matrix["provider"], "integration.matrix.provider").Count * Sequence(matrix["tfm"], "integration.matrix.tfm").Count == 15,
                 "Integration matrix must contain exactly 15 provider/TFM legs.");
         }

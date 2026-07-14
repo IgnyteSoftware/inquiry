@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace Inquiry.ReleaseTools.Tests;
 
 public sealed class CiContractTests
@@ -15,6 +17,98 @@ public sealed class CiContractTests
     public void Unsafe_tag_rebuild_publisher_is_absent()
     {
         Assert.False(File.Exists(Path.Combine(RepositoryFixture.Root, ".github", "workflows", "release.yml")));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("missing-provider")]
+    [InlineData("missing-tfm")]
+    [InlineData("unexpected-key")]
+    public void Malformed_contract_integration_matrix_is_rejected(string mutation)
+    {
+        var contract = JsonNode.Parse(File.ReadAllText(
+            Path.Combine(RepositoryFixture.Root, "eng", "ci-required-v1.json")))!.AsObject();
+        var integration = contract["requiredJobs"]!.AsArray()
+            .Select(job => job!.AsObject())
+            .Single(job => job["job"]!.GetValue<string>() == "integration");
+        var matrix = integration["matrix"]!.AsObject();
+        switch (mutation)
+        {
+            case "null":
+                integration["matrix"] = null;
+                break;
+            case "missing-provider":
+                matrix.Remove("provider");
+                break;
+            case "missing-tfm":
+                matrix.Remove("tfm");
+                break;
+            case "unexpected-key":
+                matrix["unexpected"] = new JsonArray();
+                break;
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), $"inquiry-ci-contract-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, contract.ToJsonString());
+        try
+        {
+            var exception = Assert.Throws<ReleaseVerificationException>(() => CiContractVerifier.Verify(
+                RepositoryFixture.Root,
+                path,
+                Path.Combine(RepositoryFixture.Root, ".github", "workflows", "ci.yml")));
+            Assert.Contains("CI contract integration matrix", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData("provider")]
+    [InlineData("tfm")]
+    public void Contract_and_workflow_cannot_drift_from_the_canonical_matrix_together(string dimension)
+    {
+        var contract = JsonNode.Parse(File.ReadAllText(
+            Path.Combine(RepositoryFixture.Root, "eng", "ci-required-v1.json")))!.AsObject();
+        var integration = contract["requiredJobs"]!.AsArray()
+            .Select(job => job!.AsObject())
+            .Single(job => job["job"]!.GetValue<string>() == "integration");
+        var matrix = integration["matrix"]!.AsObject();
+        var workflow = File.ReadAllText(Path.Combine(RepositoryFixture.Root, ".github", "workflows", "ci.yml"));
+        if (dimension == "provider")
+        {
+            Assert.Contains("provider: [PostgreSql, MySql, MariaDb, SqlServer, Oracle]", workflow, StringComparison.Ordinal);
+            matrix["provider"]!.AsArray()[4] = "SqlServer";
+            workflow = workflow.Replace(
+                "provider: [PostgreSql, MySql, MariaDb, SqlServer, Oracle]",
+                "provider: [PostgreSql, MySql, MariaDb, SqlServer, SqlServer]",
+                StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Contains("tfm: [net8.0, net9.0, net10.0]", workflow, StringComparison.Ordinal);
+            matrix["tfm"]!.AsArray()[2] = "net9.0";
+            workflow = workflow.Replace(
+                "tfm: [net8.0, net9.0, net10.0]",
+                "tfm: [net8.0, net9.0, net9.0]",
+                StringComparison.Ordinal);
+        }
+
+        var contractPath = Path.Combine(Path.GetTempPath(), $"inquiry-ci-contract-{Guid.NewGuid():N}.json");
+        var workflowPath = Path.Combine(Path.GetTempPath(), $"inquiry-ci-{Guid.NewGuid():N}.yml");
+        File.WriteAllText(contractPath, contract.ToJsonString());
+        File.WriteAllText(workflowPath, workflow);
+        try
+        {
+            Assert.Throws<ReleaseVerificationException>(() => CiContractVerifier.Verify(
+                RepositoryFixture.Root, contractPath, workflowPath));
+        }
+        finally
+        {
+            File.Delete(contractPath);
+            File.Delete(workflowPath);
+        }
     }
 
     [Theory]
