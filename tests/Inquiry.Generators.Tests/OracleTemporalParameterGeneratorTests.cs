@@ -220,17 +220,23 @@ public sealed partial class InquiryGeneratorTests
         var directSeparate = OracleGeneratedStoreText(result, "TimeParentStore");
         var convertedSeparate = OracleGeneratedStoreText(result, "ConvertedTimeParentStore");
 
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)id.ToDateTime(global::System.TimeOnly.MinValue), global::System.Data.DbType.Date)", directGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Parent$b4df331386b214\", (object)id.ToDateTime(global::System.TimeOnly.MinValue), global::System.Data.DbType.Date)", directGrid);
+        Assert.Contains("_p0.ParameterName = \"iq1$Idxxxx$30d4cf864d6e68\";", directGrid);
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.Date;", directGrid);
+        Assert.Contains("_p0.Value = (object)_key.ToDateTime(global::System.TimeOnly.MinValue);", directGrid);
+        Assert.Contains("_p1.ParameterName = \"iq1$Parent$b4df331386b214\";", directGrid);
+        Assert.Contains("_p1.DbType = global::System.Data.DbType.Date;", directGrid);
+        Assert.Contains("_p1.Value = (object)_key.ToDateTime(global::System.TimeOnly.MinValue);", directGrid);
 
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(id).ToDateTime(global::System.TimeOnly.MinValue), global::System.Data.DbType.Date)", convertedGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Parent$b4df331386b214\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(id).ToDateTime(global::System.TimeOnly.MinValue), global::System.Data.DbType.Date)", convertedGrid);
+        Assert.Contains("_p0.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_key).ToDateTime(global::System.TimeOnly.MinValue);", convertedGrid);
+        Assert.Contains("_p1.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_key).ToDateTime(global::System.TimeOnly.MinValue);", convertedGrid);
 
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)id.ToTimeSpan())", directSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_entity.OwnerId).ToDateTime(global::System.TimeOnly.MinValue), global::System.Data.DbType.Date)", directSeparate);
+        Assert.Contains("_p.Value = (object)_arg.ToTimeSpan();", directSeparate);
+        Assert.Contains("_p.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_arg).ToDateTime(global::System.TimeOnly.MinValue);", directSeparate);
+        Assert.Contains("_entity.OwnerId,", directSeparate);
 
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessTimeConverter>.Instance.ToProvider(id).ToTimeSpan())", convertedSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)_entity.OwnerId.ToTimeSpan())", convertedSeparate);
+        Assert.Contains("_p.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessTimeConverter>.Instance.ToProvider(_arg).ToTimeSpan();", convertedSeparate);
+        Assert.Contains("_p.Value = (object)_arg.ToTimeSpan();", convertedSeparate);
+        Assert.Contains("_entity.OwnerId,", convertedSeparate);
     }
 
     [Theory]
@@ -249,14 +255,19 @@ public sealed partial class InquiryGeneratorTests
         var directSeparate = OracleGeneratedStoreText(result, "TimeParentStore");
         var convertedSeparate = OracleGeneratedStoreText(result, "ConvertedTimeParentStore");
 
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id, global::System.Data.DbType.Date)", directGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@ParentId\", id, global::System.Data.DbType.Date)", directGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(id), global::System.Data.DbType.Date)", convertedGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@ParentId\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(id), global::System.Data.DbType.Date)", convertedGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id, global::System.Data.DbType.Time)", directSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_entity.OwnerId), global::System.Data.DbType.Date)", directSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessTimeConverter>.Instance.ToProvider(id), global::System.Data.DbType.Time)", convertedSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", _entity.OwnerId, global::System.Data.DbType.Time)", convertedSeparate);
+        Assert.Contains("_p0.ParameterName = \"@Id\";", directGrid);
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.Date;", directGrid);
+        Assert.Contains("_p0.Value = (object?)_key ?? global::System.DBNull.Value;", directGrid);
+        Assert.Contains("_p1.ParameterName = \"@ParentId\";", directGrid);
+        Assert.Contains("_p1.DbType = global::System.Data.DbType.Date;", directGrid);
+        Assert.Contains("_p1.Value = (object?)_key ?? global::System.DBNull.Value;", directGrid);
+        Assert.Contains("_p0.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_key);", convertedGrid);
+        Assert.Contains("_p1.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_key);", convertedGrid);
+        Assert.Contains("_p.DbType = global::System.Data.DbType.Time;", directSeparate);
+        Assert.Contains("_p.Value = (object?)_arg ?? global::System.DBNull.Value;", directSeparate);
+        Assert.Contains("_p.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_arg);", directSeparate);
+        Assert.Contains("_p.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessTimeConverter>.Instance.ToProvider(_arg);", convertedSeparate);
+        Assert.Contains("_p.Value = (object?)_arg ?? global::System.DBNull.Value;", convertedSeparate);
 
         foreach (var text in new[] { directGrid, convertedGrid, directSeparate, convertedSeparate })
         {

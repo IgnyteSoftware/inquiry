@@ -61,7 +61,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("private const string _sqlCount = \"SELECT COUNT(*) FROM \\\"TOrg\\\"\";", text);
-        Assert.Contains("return Inquiry.ExecuteScalarAsync<long>(new global::Inquiry.Commands.InquiryCommand(_sqlCount)", text);
+        Assert.Contains("return Inquiry.ExecuteScalarAsync<long, byte>(new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlCount, default, static (_, _) => { })", text);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("private const string _sqlAgg_SumAsync = \"SELECT SUM(\\\"Amount\\\") FROM \\\"TSale\\\"\";", text);
-        Assert.Contains("return Inquiry.ExecuteScalarAsync<decimal?>(new global::Inquiry.Commands.InquiryCommand(_sqlAgg_SumAsync)", text);
+        Assert.Contains("return Inquiry.ExecuteScalarAsync<decimal?, byte>(new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlAgg_SumAsync, default, static (_, _) => { })", text);
         Assert.Contains("private const string _sqlAgg_MaxAsync = \"SELECT MAX(\\\"Amount\\\") FROM \\\"TSale\\\"\";", text);
     }
 

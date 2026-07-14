@@ -57,6 +57,140 @@ public sealed class SequentialAccessReadBehaviorTests
     }
 
     [Fact]
+    public async Task GeneratedKnownSingleReadUsesSingleRowAndSequentialAccess()
+    {
+        var recorded = new List<CommandBehavior>();
+        var (pipeline, keeper) = await CreateSeededPipelineAsync(recorded);
+        await using var _ = keeper;
+
+        var single = await pipeline.QueryGeneratedSingleOrDefaultAsync<TestItem, byte, TestItemStructMaterializer>(
+            new InquiryGeneratedCommand<byte>(
+                "SELECT Id, Name, Flag FROM T WHERE Id = 1",
+                default,
+                static (_, _) => { }),
+            new TestItemStructMaterializer());
+
+        Assert.NotNull(single);
+        var behavior = Assert.Single(recorded);
+        Assert.Equal(
+            CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess,
+            behavior);
+    }
+
+    [Fact]
+    public async Task GeneratedCommandValidatingSingleRejectsDuplicatesWithoutSingleRow()
+    {
+        var recorded = new List<CommandBehavior>();
+        var (pipeline, keeper) = await CreateSeededPipelineAsync(recorded, includeSecondRow: true);
+        await using var _ = keeper;
+        var command = new InquiryGeneratedCommand<byte>(
+            "SELECT Id, Name, Flag FROM T ORDER BY Id",
+            default,
+            static (_, _) => { });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            pipeline.QuerySingleOrDefaultAsync<TestItem, byte, TestItemStructMaterializer>(
+                command,
+                new TestItemStructMaterializer()));
+
+        Assert.Equal(
+            "QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.",
+            exception.Message);
+        var behavior = Assert.Single(recorded);
+        Assert.Equal(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess, behavior);
+        Assert.False(behavior.HasFlag(CommandBehavior.SingleRow));
+    }
+
+    [Fact]
+    public async Task TransactedGeneratedKnownSingleReadUsesSingleRowAndSequentialAccess()
+    {
+        var recorded = new List<CommandBehavior>();
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = "InquirySeqAccessTx_" + Guid.NewGuid().ToString("N"),
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Shared,
+        }.ToString();
+        await using var keeper = new SqliteConnection(connectionString);
+        await keeper.OpenAsync();
+        await using (var create = keeper.CreateCommand())
+        {
+            create.CommandText = "CREATE TABLE T (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL, Flag INTEGER NOT NULL);" +
+                "INSERT INTO T (Id, Name, Flag) VALUES (1, 'Alpha', 1);";
+            await create.ExecuteNonQueryAsync();
+        }
+
+        var factory = new RecordingConnectionFactory(connectionString, recorded);
+        await using var connection = await factory.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        var pipeline = new TransactedInquiryRequestPipeline(
+            connection,
+            transaction,
+            Array.Empty<IInquiryCommandInterceptor>(),
+            factory,
+            options: null);
+
+        var single = await pipeline.QueryGeneratedSingleOrDefaultAsync<TestItem, byte, TestItemStructMaterializer>(
+            new InquiryGeneratedCommand<byte>(
+                "SELECT Id, Name, Flag FROM T WHERE Id = 1",
+                default,
+                static (_, _) => { }),
+            new TestItemStructMaterializer());
+
+        Assert.NotNull(single);
+        Assert.Equal(
+            CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess,
+            Assert.Single(recorded));
+    }
+
+    [Fact]
+    public async Task TransactedGeneratedCommandValidatingSingleRejectsDuplicatesWithoutSingleRow()
+    {
+        var recorded = new List<CommandBehavior>();
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = "InquirySeqAccessTxDuplicate_" + Guid.NewGuid().ToString("N"),
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Shared,
+        }.ToString();
+        await using var keeper = new SqliteConnection(connectionString);
+        await keeper.OpenAsync();
+        await using (var create = keeper.CreateCommand())
+        {
+            create.CommandText = "CREATE TABLE T (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL, Flag INTEGER NOT NULL);" +
+                "INSERT INTO T (Id, Name, Flag) VALUES (1, 'Alpha', 1);" +
+                "INSERT INTO T (Id, Name, Flag) VALUES (2, 'Beta', 0);";
+            await create.ExecuteNonQueryAsync();
+        }
+
+        var factory = new RecordingConnectionFactory(connectionString, recorded);
+        await using var connection = await factory.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        var pipeline = new TransactedInquiryRequestPipeline(
+            connection,
+            transaction,
+            Array.Empty<IInquiryCommandInterceptor>(),
+            factory,
+            options: null);
+        var command = new InquiryGeneratedCommand<byte>(
+            "SELECT Id, Name, Flag FROM T ORDER BY Id",
+            default,
+            static (_, _) => { });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            pipeline.QuerySingleOrDefaultAsync<TestItem, byte, TestItemStructMaterializer>(
+                command,
+                new TestItemStructMaterializer()));
+
+        Assert.Equal(
+            "QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.",
+            exception.Message);
+        var behavior = Assert.Single(recorded);
+        Assert.Equal(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess, behavior);
+        Assert.False(behavior.HasFlag(CommandBehavior.SingleRow));
+    }
+
+    [Fact]
     public async Task ClassMaterializerSingleRowReadDoesNotUseSingleRow()
     {
         // Same contract as the struct-materializer path (see preceding test) — the class-materializer
@@ -96,7 +230,8 @@ public sealed class SequentialAccessReadBehaviorTests
     // it) for the whole test, because a shared-cache in-memory SQLite database exists only while at
     // least one connection to it is open.
     private static async Task<(InquiryRequestPipeline Pipeline, SqliteConnection Keeper)> CreateSeededPipelineAsync(
-        List<CommandBehavior> recorded)
+        List<CommandBehavior> recorded,
+        bool includeSecondRow = false)
     {
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -111,7 +246,8 @@ public sealed class SequentialAccessReadBehaviorTests
         {
             create.CommandText =
                 "CREATE TABLE T (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL, Flag INTEGER NOT NULL);" +
-                "INSERT INTO T (Id, Name, Flag) VALUES (1, 'Alpha', 1);";
+                "INSERT INTO T (Id, Name, Flag) VALUES (1, 'Alpha', 1);" +
+                (includeSecondRow ? "INSERT INTO T (Id, Name, Flag) VALUES (2, 'Beta', 0);" : string.Empty);
             await create.ExecuteNonQueryAsync();
         }
 

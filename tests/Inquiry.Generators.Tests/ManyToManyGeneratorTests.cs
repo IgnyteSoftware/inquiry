@@ -176,7 +176,9 @@ public sealed partial class InquiryGeneratorTests
         // The single-eager loader fetches parent + products in ONE round trip via the grid reader,
         // binding the parent key (the input key) into the combined multi-result command, and reads the
         // products result set into the navigation.
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id", text);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<long>(", text);
+        Assert.Contains("_p0.ParameterName = \"@Id\";", text);
+        Assert.Contains("_p0.Value = (object?)_key ?? global::System.DBNull.Value;", text);
         Assert.Contains("_entity.Products = await _grid.ReadListAsync<", text);
     }
 

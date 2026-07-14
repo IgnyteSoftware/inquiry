@@ -37,8 +37,9 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("WidgetStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
         Assert.Contains("_sqlDeleteReturning = \"DELETE FROM `TWidget` WHERE `Id` = @Id RETURNING `Id`, `Name`\"", text);
-        Assert.Contains("QuerySingleOrDefaultAsync<global::Demo.Widget, long,", text);
-        Assert.Contains("return await Inquiry.QuerySingleOrDefaultAsync", text);
+        Assert.Contains("QueryGeneratedSingleOrDefaultAsync<global::Demo.Widget, long,", text);
+        Assert.Contains("return await Inquiry.QueryGeneratedSingleOrDefaultAsync", text);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<long>(", text);
     }
 
     [Theory]

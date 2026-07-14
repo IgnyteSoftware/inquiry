@@ -35,10 +35,13 @@ public sealed partial class InquiryGeneratorTests
         var text = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("ProcedureStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
-        Assert.Contains("InquiryParameter(\"leftValue\"", text, StringComparison.Ordinal);
-        Assert.Contains("InquiryParameter(\"rightValue\"", text, StringComparison.Ordinal);
-        Assert.Contains("InquiryParameter(\"Total\"", text, StringComparison.Ordinal);
-        Assert.Contains("ExecuteProcedureScalarAsync<int>(_cmd, \"Total\"", text, StringComparison.Ordinal);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<(int Arg0, int Arg1)>(", text, StringComparison.Ordinal);
+        Assert.Contains("static (global::System.Data.Common.DbCommand _c, (int Arg0, int Arg1) _args) =>", text, StringComparison.Ordinal);
+        Assert.Contains("_p0.ParameterName = \"leftValue\";", text, StringComparison.Ordinal);
+        Assert.Contains("_p1.ParameterName = \"rightValue\";", text, StringComparison.Ordinal);
+        Assert.Contains("_p2.ParameterName = \"Total\";", text, StringComparison.Ordinal);
+        Assert.Contains("_p2.Direction = global::System.Data.ParameterDirection.Output;", text, StringComparison.Ordinal);
+        Assert.Contains("ExecuteProcedureScalarAsync<int, (int Arg0, int Arg1)>(_cmd, \"Total\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("iq1$", text, StringComparison.Ordinal);
     }
 

@@ -102,8 +102,50 @@ a like-for-like comparison it is omitted (noted in each class's doc comment).
 | `EagerLoadingBenchmarks`         | EagerAll                  | Separate-query eager load of `Product.Category` vs a Dapper/ADO two-query-then-stitch of the same shape.    |
 | `PreparedStatementBenchmarks`    | SimplePointRead, MultiJoinPointRead | PostgreSQL-only comparison of Inquiry `PreparedStatementMode.None` vs `Auto` on generated and ad-hoc stable SQL. |
 
-`ParameterBindingBenchmarks` (Inquiry's parameter-binding path in isolation, no SQL execution)
-rounds out the suite.
+### Generated-command hot path (`ParameterBindingBenchmarks` / `GeneratedCommandPipelineBenchmarks`)
+
+`ParameterBindingBenchmarks` is the retained-command floor. It isolates generated-store dispatch and
+parameter binding from database execution, calling real source-generated `[InquiryExists]` store
+methods with four state shapes:
+
+- parameterless;
+- one scalar parameter;
+- eight scalar parameters, which forces C#'s nested `ValueTuple` lowering; and
+- one collection predicate using SQLite's generated JSON-array transport.
+
+The generated legs dispatch an `InquiryGeneratedCommand<TArgs>` to a benchmark `IInquiry` sink. The
+sink reuses one provider `DbCommand`, applies the generated static binder, and never opens a
+connection. Every boxed `InquiryCommand` overload throws, so the benchmark fails immediately if a
+generator change falls back to the allocating compatibility path. Each generated leg is compared
+with a direct static-binder floor that performs the same command reset, command-text assignment, and
+provider-parameter creation. `[MemoryDiagnoser]` reports managed allocation and
+`[DisassemblyDiagnoser]` writes JIT assembly reports for auditing closure, delegate, and tuple costs.
+
+`GeneratedCommandPipelineBenchmarks` is intentionally a separate end-to-end measurement. Its
+parameterless, one-parameter, and eight-parameter methods execute real SQL against shared in-memory
+SQLite through this complete route:
+
+`generated store -> DefaultInquiry -> built-in InquiryRequestPipeline -> SQLite`
+
+Setup separately invokes the same methods through a routing guard that forwards
+`InquiryGeneratedCommand<TArgs>` and throws immediately if generated code reaches a boxed
+`InquiryCommand` scalar overload; the guard is not present in measured operations. These measurements
+include connection open/close, provider command creation and disposal, parameter binding, SQLite
+execution, scalar conversion, and task completion. They are not binder-only allocation floors and
+should not be compared as if they were. Each parameter shape compares the no-interceptor baseline
+with registered-but-inactive telemetry and a minimal active custom interceptor. Setup executes and
+validates every SQL shape and verifies that the custom interceptor receives all three operations.
+
+```powershell
+# Retained-command binder/JIT floor. Omit --job Dry for publishable measurements and disassembly.
+dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks\Inquiry.Benchmarks.csproj -- --filter "*ParameterBindingBenchmarks*" --job Dry
+
+# Real generated-store -> DefaultInquiry -> built-in-pipeline execution and allocation smoke.
+dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks\Inquiry.Benchmarks.csproj -- --filter "*GeneratedCommandPipelineBenchmarks*" --job Dry
+```
+
+The explicit Windows RID overrides the benchmark project's Linux CI default; omit it when running on
+Linux. As with the other suites, a Dry result proves wiring but is not statistically meaningful.
 
 ## Dataset size (`[Params(1000, 100000)]`)
 

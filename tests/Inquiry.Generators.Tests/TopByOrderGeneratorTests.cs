@@ -73,7 +73,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void TopByOrderUsesQuerySingleOrDefault()
+    public void TopByOrderUsesGeneratedGuaranteedSingleOrDefault()
     {
         var result = RunGenerator(SaleStore("""
             [InquirySelectTopByOrder("Amount")]
@@ -82,7 +82,8 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetSaleStore(result);
 
-        Assert.Contains("QuerySingleOrDefaultAsync", text);
+        Assert.Contains("QueryGeneratedSingleOrDefaultAsync<global::Demo.Sale, byte,", text);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlTop_GetCheapestAsync, default, static (_, _) => { })", text);
     }
 
     [Fact]

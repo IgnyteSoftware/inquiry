@@ -358,6 +358,81 @@ public interface IInquiry
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
 
+    // ---- Immutable generated-command path ---------------------------------------------
+
+    /// <summary>Streams rows from an immutable generated command definition.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => QueryAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    /// <summary>Buffers rows from an immutable generated command definition.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => QueryListAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken, capacityHint);
+
+    /// <summary>Executes a validating single-or-default generated query.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    /// <summary>
+    /// Executes a generator-proven single-row query. Custom implementations retain validating
+    /// behavior through this default fallback; the built-in pipeline uses its one-read path.
+    /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<TEntity?> QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    /// <summary>Executes a generated multi-result command.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => QueryMultipleAsync(command.ToInquiryCommand(), cancellationToken);
+
+    /// <summary>Executes a generated non-query command.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<int> ExecuteAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ExecuteAsync(command.ToInquiryCommand(), cancellationToken);
+
+    /// <summary>Executes a generated scalar command.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ExecuteScalarAsync<T>(command.ToInquiryCommand(), cancellationToken);
+
+    /// <summary>Executes a generated procedure and reads an output or return parameter.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+        => ExecuteProcedureScalarAsync<T>(command.ToInquiryCommand(), readBackParameterName, cancellationToken);
+
     // ---- Transactions -----------------------------------------------------------------
 
     /// <summary>

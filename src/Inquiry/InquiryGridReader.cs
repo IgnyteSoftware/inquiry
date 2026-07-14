@@ -67,6 +67,28 @@ public sealed class InquiryGridReader : IAsyncDisposable
     }
 
     /// <summary>
+    /// Reads a generator-proven single-row result set without issuing a duplicate probe, then
+    /// advances to the next result set.
+    /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public async Task<TEntity?> ReadGeneratedSingleOrDefaultAsync<TEntity, TMaterializer>(
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+    {
+        EnsureResultSet();
+        TEntity? result = null;
+        if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result = materializer.Materialize(_reader);
+        }
+
+        await AdvanceAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    /// <summary>
     /// Materializes the current result set into a list, then advances to the next result set.
     /// </summary>
     public async Task<List<TEntity>> ReadListAsync<TEntity, TMaterializer>(

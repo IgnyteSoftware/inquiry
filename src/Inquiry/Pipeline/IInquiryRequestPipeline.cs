@@ -154,10 +154,59 @@ internal interface IInquiryRequestPipeline
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
 
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryListAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken, capacityHint);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QuerySingleOrDefaultAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T?> QueryGeneratedSingleOrDefaultAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QuerySingleOrDefaultAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => QueryMultipleAsync(command.ToInquiryCommand(), cancellationToken);
+
     /// <summary>Executes a non-query command and returns the affected row count.</summary>
     Task<int> ExecuteAsync(
         InquiryCommand command,
         CancellationToken cancellationToken = default);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<int> ExecuteAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ExecuteAsync(command.ToInquiryCommand(), cancellationToken);
 
     /// <summary>
     /// Executes a non-query command with parameters bound by a caller-supplied static delegate.
@@ -227,6 +276,12 @@ internal interface IInquiryRequestPipeline
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Scalar execution is implemented by the built-in Inquiry pipeline.");
 
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ExecuteScalarAsync<T>(command.ToInquiryCommand(), cancellationToken);
+
     /// <summary>
     /// Executes a command (typically a stored procedure) and returns the post-execution value of a
     /// bound output / return-value parameter named <paramref name="readBackParameterName"/>,
@@ -240,6 +295,13 @@ internal interface IInquiryRequestPipeline
         string readBackParameterName,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Stored-procedure output execution is implemented by the built-in Inquiry pipeline.");
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+        => ExecuteProcedureScalarAsync<T>(command.ToInquiryCommand(), readBackParameterName, cancellationToken);
 
     /// <summary>
     /// Scalar query with parameters bound by a caller-supplied static delegate (allocation-free
