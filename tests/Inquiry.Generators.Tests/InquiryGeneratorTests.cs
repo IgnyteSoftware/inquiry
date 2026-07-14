@@ -2542,7 +2542,8 @@ public sealed partial class InquiryGeneratorTests
         string[]? enableDiagnostics = null,
         bool includeFallbackGenerator = false,
         ReportDiagnostic? unsupportedOperationSeverity = null,
-        SyntaxTreeOptionsProvider? syntaxTreeOptionsProvider = null)
+        SyntaxTreeOptionsProvider? syntaxTreeOptionsProvider = null,
+        IReadOnlyDictionary<string, ReportDiagnostic>? additionalDiagnosticOptions = null)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
         var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
@@ -2562,7 +2563,8 @@ public sealed partial class InquiryGeneratorTests
 
         // Off-by-default diagnostics (e.g. the INQ061 DDL lint) are suppressed unless a consumer opts in
         // via .editorconfig; mirror that opt-in here so a lint test can assert the diagnostic surfaces.
-        if (enableDiagnostics is { Length: > 0 } || unsupportedOperationSeverity is not null)
+        if (enableDiagnostics is { Length: > 0 } || unsupportedOperationSeverity is not null ||
+            additionalDiagnosticOptions is { Count: > 0 })
         {
             // Diagnostic IDs are case-insensitive; de-dupe so a caller passing the same id twice (in any
             // casing) doesn't throw from the dictionary build.
@@ -2574,6 +2576,13 @@ public sealed partial class InquiryGeneratorTests
             if (unsupportedOperationSeverity is { } severity)
             {
                 diagnosticOptions["INQ039"] = severity;
+            }
+            if (additionalDiagnosticOptions is not null)
+            {
+                foreach (var (diagnosticId, action) in additionalDiagnosticOptions)
+                {
+                    diagnosticOptions[diagnosticId] = action;
+                }
             }
             compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(
                 diagnosticOptions);

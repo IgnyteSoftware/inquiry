@@ -81,4 +81,4 @@ INQ078 | Inquiry | Error | Converter model type does not match the property type
 INQ079 | Inquiry | Error | Converter type cannot be abstract
 INQ080 | Inquiry | Error | Converter type must be closed
 INQ081 | Inquiry | Error | Converter type is inaccessible
-INQ082 | Inquiry | Error | Converter type needs an accessible parameterless constructor
+INQ082 | Inquiry | Error | Converter type needs a public parameterless constructor

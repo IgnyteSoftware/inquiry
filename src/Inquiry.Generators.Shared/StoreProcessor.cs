@@ -1437,7 +1437,10 @@ internal static class StoreProcessor
             // emit a safe body without adding the generic INQ039 for the same transport failure.
             if (collectionErrors.TryGetValue(method, out var collectionError))
             {
-                StoreOperationEmitter.EmitUnsupportedStub(source, method, collectionError);
+                if (emitUnsupportedOperationStubs)
+                {
+                    StoreOperationEmitter.EmitUnsupportedStub(source, method, collectionError);
+                }
                 continue;
             }
             if (unsupportedReason is not null)
