@@ -128,7 +128,7 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     public void FinalizeCommand(DbCommand command)
     {
         var rewriteText = command.CommandType != System.Data.CommandType.StoredProcedure;
-        List<BindRename>? renames = rewriteText ? new List<BindRename>() : null;
+        List<BindRename>? renames = null;
         var logicalNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var providerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -163,7 +163,7 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                     // every raw occurrence of this logical token still has to be rewritten.
                     if (!generatedName && ContainsBindToken(command.CommandText, logicalName))
                     {
-                        renames!.Add(new BindRename(logicalName, safeName));
+                        (renames ??= new List<BindRename>()).Add(new BindRename(logicalName, safeName));
                     }
 
                     parameter.ParameterName = safeName;
