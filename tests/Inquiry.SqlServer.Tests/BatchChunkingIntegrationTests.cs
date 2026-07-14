@@ -30,11 +30,13 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Equal(5, await store.UpdateAllAsync(Items(5, valuePrefix: "updated")));
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(3, probe.CreateBatchCount);
+        Assert.Equal(new[] { 2, 2, 1 }, probe.ExecutedBatchSizes);
         Assert.Empty(probe.FinalizedCommands);
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
         Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
+        Assert.Equal(3, probe.FinalizedCommands.Count);
         Assert.All(probe.FinalizedCommands, command =>
         {
             Assert.Contains("IN (SELECT [Value] FROM @keys)", command.CommandText, StringComparison.OrdinalIgnoreCase);

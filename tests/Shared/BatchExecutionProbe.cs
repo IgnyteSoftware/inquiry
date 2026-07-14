@@ -15,6 +15,7 @@ internal sealed class BatchExecutionProbe
     private readonly object _gate = new();
     private readonly Func<DbCommand, object?>? _inspectFinalizedCommand;
     private readonly List<int> _initializedChunkSizes = new();
+    private readonly List<int> _executedBatchSizes = new();
     private readonly List<FinalizedBatchCommand> _finalizedCommands = new();
     private int _createBatchCount;
 
@@ -39,7 +40,20 @@ internal sealed class BatchExecutionProbe
         }
     }
 
+    internal IReadOnlyList<int> ExecutedBatchSizes
+    {
+        get
+        {
+            lock (_gate) return _executedBatchSizes.ToArray();
+        }
+    }
+
     internal void RecordBatchCreated() => Interlocked.Increment(ref _createBatchCount);
+
+    internal void RecordBatchExecuted(int itemCount)
+    {
+        lock (_gate) _executedBatchSizes.Add(itemCount);
+    }
 
     internal void RecordChunkInitialized(int itemCount)
     {
@@ -58,6 +72,7 @@ internal sealed class BatchExecutionProbe
         lock (_gate)
         {
             _initializedChunkSizes.Clear();
+            _executedBatchSizes.Clear();
             _finalizedCommands.Clear();
         }
     }
@@ -190,7 +205,7 @@ internal sealed class ProbingDbConnection : DbConnection
     protected override DbBatch CreateDbBatch()
     {
         _probe.RecordBatchCreated();
-        return _inner.CreateBatch();
+        return new ProbingDbBatch(_inner.CreateBatch(), _probe);
     }
 
     protected override void Dispose(bool disposing)
@@ -204,6 +219,111 @@ internal sealed class ProbingDbConnection : DbConnection
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
             await _inner.DisposeAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
+    }
+}
+
+internal sealed class ProbingDbBatch : DbBatch
+{
+    private readonly DbBatch _inner;
+    private readonly BatchExecutionProbe _probe;
+    private int _disposed;
+
+    internal ProbingDbBatch(DbBatch inner, BatchExecutionProbe probe)
+    {
+        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        _probe = probe ?? throw new ArgumentNullException(nameof(probe));
+    }
+
+    public override int Timeout { get => _inner.Timeout; set => _inner.Timeout = value; }
+    protected override DbBatchCommandCollection DbBatchCommands => _inner.BatchCommands;
+    protected override DbConnection? DbConnection { get => _inner.Connection; set => _inner.Connection = value; }
+    protected override DbTransaction? DbTransaction { get => _inner.Transaction; set => _inner.Transaction = value; }
+
+    public override void Cancel() => _inner.Cancel();
+
+    public override int ExecuteNonQuery()
+    {
+        var result = _inner.ExecuteNonQuery();
+        _probe.RecordBatchExecuted(_inner.BatchCommands.Count);
+        return result;
+    }
+
+    public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await _inner.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        _probe.RecordBatchExecuted(_inner.BatchCommands.Count);
+        return result;
+    }
+
+    public override object? ExecuteScalar() => _inner.ExecuteScalar();
+    public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken = default)
+        => _inner.ExecuteScalarAsync(cancellationToken);
+    public override void Prepare() => _inner.Prepare();
+    public override Task PrepareAsync(CancellationToken cancellationToken = default)
+        => _inner.PrepareAsync(cancellationToken);
+    protected override DbBatchCommand CreateDbBatchCommand() => _inner.CreateBatchCommand();
+    protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        => _inner.ExecuteReader(behavior);
+    protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
+        CommandBehavior behavior,
+        CancellationToken cancellationToken = default)
+        => _inner.ExecuteReaderAsync(behavior, cancellationToken);
+
+    public override void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0) _inner.Dispose();
+        base.Dispose();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            await _inner.DisposeAsync().ConfigureAwait(false);
+        GC.SuppressFinalize(this);
+    }
+}
+
+internal sealed class ExecutionBoundaryEnumerable<T> : IEnumerable<T>
+{
+    private readonly IReadOnlyList<T> _items;
+    private readonly Func<int> _readExecutionCount;
+    private readonly List<int> _observedExecutionCounts = new();
+    private int _enumeratorCreated;
+
+    internal ExecutionBoundaryEnumerable(IReadOnlyList<T> items, Func<int> readExecutionCount)
+    {
+        _items = items ?? throw new ArgumentNullException(nameof(items));
+        _readExecutionCount = readExecutionCount ?? throw new ArgumentNullException(nameof(readExecutionCount));
+    }
+
+    internal IReadOnlyList<int> ObservedExecutionCounts => _observedExecutionCounts.ToArray();
+
+    public IEnumerator<T> GetEnumerator()
+    {
+        if (Interlocked.Increment(ref _enumeratorCreated) != 1)
+            throw new InvalidOperationException("The test source can only be enumerated once.");
+        return new Enumerator(this);
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    private sealed class Enumerator : IEnumerator<T>
+    {
+        private readonly ExecutionBoundaryEnumerable<T> _owner;
+        private int _index = -1;
+
+        internal Enumerator(ExecutionBoundaryEnumerable<T> owner) => _owner = owner;
+        public T Current => _owner._items[_index];
+        object IEnumerator.Current => Current!;
+
+        public bool MoveNext()
+        {
+            _owner._observedExecutionCounts.Add(_owner._readExecutionCount());
+            return ++_index < _owner._items.Count;
+        }
+
+        public void Reset() => throw new NotSupportedException();
+        public void Dispose() { }
     }
 }
 

@@ -20,14 +20,19 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
 
         probe.Reset();
-        Assert.Equal(5, await store.UpdateAllAsync(Items(5, valuePrefix: "updated")));
+        var updates = new ExecutionBoundaryEnumerable<BatchChunkItem>(
+            Items(5, valuePrefix: "updated"),
+            () => probe.FinalizedCommands.Count);
+        Assert.Equal(5, await store.UpdateAllAsync(updates));
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(0, probe.CreateBatchCount);
         Assert.Equal(5, probe.FinalizedCommands.Count);
+        Assert.Equal(new[] { 0, 0, 2, 2, 4, 4, 5 }, updates.ObservedExecutionCounts);
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
         Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
+        Assert.Equal(3, probe.FinalizedCommands.Count);
         Assert.All(probe.FinalizedCommands, command =>
         {
             Assert.Contains("json_each", command.CommandText, StringComparison.OrdinalIgnoreCase);

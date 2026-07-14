@@ -150,6 +150,59 @@ public sealed class BatchExecutionProbeTests
         Assert.Throws<InvalidOperationException>(() => source.GetEnumerator());
     }
 
+    [Fact]
+    public async Task NativeBatchDelegatesProviderObjectsAndRecordsExecutedSize()
+    {
+        var inner = new BatchRecordingConnection();
+        var probe = new BatchExecutionProbe();
+        await using var connection = new ProbingDbConnection(inner, probe);
+        await using var batch = connection.CreateBatch();
+
+        Assert.IsType<ProbingDbBatch>(batch);
+        Assert.Same(inner, batch.Connection);
+        batch.Timeout = 17;
+        var first = batch.CreateBatchCommand();
+        var second = batch.CreateBatchCommand();
+        batch.BatchCommands.Add(first);
+        batch.BatchCommands.Add(second);
+
+        Assert.Equal(2, await batch.ExecuteNonQueryAsync());
+
+        Assert.Same(first, inner.LastBatch!.BatchCommands[0]);
+        Assert.Same(second, inner.LastBatch.BatchCommands[1]);
+        Assert.Equal(17, inner.LastBatch.Timeout);
+        Assert.Equal(1, inner.LastBatch.ExecuteCount);
+        Assert.Equal(1, probe.CreateBatchCount);
+        Assert.Equal(new[] { 2 }, probe.ExecutedBatchSizes);
+
+        probe.Reset();
+        Assert.Empty(probe.ExecutedBatchSizes);
+    }
+
+    [Fact]
+    public void ExecutionBoundaryEnumerableRecordsReadsAgainstCompletedExecutions()
+    {
+        var executed = 0;
+        var source = new ExecutionBoundaryEnumerable<int>(new[] { 1, 2, 3, 4, 5 }, () => executed);
+
+        using (var enumerator = source.GetEnumerator())
+        {
+            Assert.True(enumerator.MoveNext());
+            Assert.True(enumerator.MoveNext());
+            executed += 2;
+            Assert.True(enumerator.MoveNext());
+            Assert.True(enumerator.MoveNext());
+            executed += 2;
+            Assert.True(enumerator.MoveNext());
+            Assert.False(enumerator.MoveNext());
+            executed++;
+            Assert.False(enumerator.MoveNext());
+        }
+
+        Assert.Equal(new[] { 0, 0, 2, 2, 4, 4, 5 }, source.ObservedExecutionCounts);
+        Assert.Throws<InvalidOperationException>(() => source.GetEnumerator());
+    }
+
     private sealed class ProbeTestConnectionFactory : IInquiryConnectionFactory
     {
         internal SqliteConnection? LastConnection { get; private set; }
@@ -227,5 +280,88 @@ public sealed class BatchExecutionProbeTests
             AsyncDisposeCount++;
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class BatchRecordingConnection : DbConnection
+    {
+        internal BatchRecordingBatch? LastBatch { get; private set; }
+        public override bool CanCreateBatch => true;
+        public override string ConnectionString { get; set; } = string.Empty;
+        public override string Database => "recording";
+        public override string DataSource => "recording";
+        public override string ServerVersion => "1";
+        public override ConnectionState State => ConnectionState.Open;
+        public override void ChangeDatabase(string databaseName) { }
+        public override void Close() { }
+        public override void Open() { }
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
+        protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
+
+        protected override DbBatch CreateDbBatch()
+        {
+            LastBatch = new BatchRecordingBatch(this);
+            return LastBatch;
+        }
+    }
+
+    private sealed class BatchRecordingBatch : DbBatch
+    {
+        private readonly BatchRecordingCommandCollection _commands = new();
+
+        internal BatchRecordingBatch(DbConnection connection) => DbConnection = connection;
+        internal int ExecuteCount { get; private set; }
+        public override int Timeout { get; set; }
+        protected override DbBatchCommandCollection DbBatchCommands => _commands;
+        protected override DbConnection? DbConnection { get; set; }
+        protected override DbTransaction? DbTransaction { get; set; }
+        public override void Cancel() { }
+        public override int ExecuteNonQuery() => Execute();
+        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(Execute());
+        public override object? ExecuteScalar() => null;
+        public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<object?>(null);
+        public override void Prepare() { }
+        public override Task PrepareAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        protected override DbBatchCommand CreateDbBatchCommand() => new BatchRecordingCommand();
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
+        protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
+            CommandBehavior behavior,
+            CancellationToken cancellationToken = default)
+            => Task.FromException<DbDataReader>(new NotSupportedException());
+
+        private int Execute()
+        {
+            ExecuteCount++;
+            return _commands.Count;
+        }
+    }
+
+    private sealed class BatchRecordingCommand : DbBatchCommand
+    {
+        public override string CommandText { get; set; } = string.Empty;
+        public override CommandType CommandType { get; set; }
+        public override int RecordsAffected => 1;
+        protected override DbParameterCollection DbParameterCollection => throw new NotSupportedException();
+        public override DbParameter CreateParameter() => new SqliteParameter();
+    }
+
+    private sealed class BatchRecordingCommandCollection : DbBatchCommandCollection
+    {
+        private readonly List<DbBatchCommand> _items = new();
+
+        public override int Count => _items.Count;
+        public override bool IsReadOnly => false;
+        public override void Add(DbBatchCommand item) => _items.Add(item);
+        public override void Clear() => _items.Clear();
+        public override bool Contains(DbBatchCommand item) => _items.Contains(item);
+        public override void CopyTo(DbBatchCommand[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
+        public override IEnumerator<DbBatchCommand> GetEnumerator() => _items.GetEnumerator();
+        public override int IndexOf(DbBatchCommand item) => _items.IndexOf(item);
+        public override void Insert(int index, DbBatchCommand item) => _items.Insert(index, item);
+        public override bool Remove(DbBatchCommand item) => _items.Remove(item);
+        public override void RemoveAt(int index) => _items.RemoveAt(index);
+        protected override DbBatchCommand GetBatchCommand(int index) => _items[index];
+        protected override void SetBatchCommand(int index, DbBatchCommand batchCommand) => _items[index] = batchCommand;
     }
 }
