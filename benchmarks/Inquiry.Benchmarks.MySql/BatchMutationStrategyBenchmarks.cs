@@ -11,9 +11,12 @@ namespace Inquiry.Benchmarks.MySql;
 public class BatchMutationStrategyBenchmarks
 {
     private MySqlBenchmarkDatabase _database = null!;
+    private BatchMutationBenchmarkStore _store = null!;
     private MySqlBatchMutationStrategyRunner _runner = null!;
-    private MySqlBatchMutationItem[] _insertItems = null!;
-    private MySqlBatchMutationItem[] _updateItems = null!;
+    private BatchMutationBenchmarkItem[] _selectedInsertItems = null!;
+    private BatchMutationBenchmarkItem[] _selectedUpdateItems = null!;
+    private MySqlBatchMutationItem[] _rawInsertItems = null!;
+    private MySqlBatchMutationItem[] _rawUpdateItems = null!;
     private int[] _deleteIds = null!;
 
     [Params(1, 10, 100, 1000)]
@@ -23,6 +26,7 @@ public class BatchMutationStrategyBenchmarks
     public void GlobalSetup()
     {
         _database = MySqlBenchmarkDatabase.CreateAsync(1000).GetAwaiter().GetResult();
+        _store = _database.BatchMutations;
         _runner = new MySqlBatchMutationStrategyRunner(_database.ConnectionString);
         _runner.InitializeAsync().GetAwaiter().GetResult();
     }
@@ -31,8 +35,10 @@ public class BatchMutationStrategyBenchmarks
     public void IterationSetup()
     {
         _runner.ResetAsync(Rows).GetAwaiter().GetResult();
-        _insertItems = CreateItems(Rows, 100_001, "Inserted");
-        _updateItems = CreateItems(Rows, 1, "Updated");
+        _selectedInsertItems = CreateSelectedItems(Rows, 100_001, "Inserted");
+        _selectedUpdateItems = CreateSelectedItems(Rows, 1, "Updated");
+        _rawInsertItems = CreateRawItems(Rows, 100_001, "Inserted");
+        _rawUpdateItems = CreateRawItems(Rows, 1, "Updated");
         _deleteIds = CreateIds(Rows, 1);
     }
 
@@ -40,42 +46,59 @@ public class BatchMutationStrategyBenchmarks
     public void GlobalCleanup() => _database.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     [BenchmarkCategory("BatchInsert"), Benchmark(Baseline = true)]
-    public Task<int> Insert_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.InsertReusedCommandAsync(_insertItems));
+    public Task<int> Inquiry_SelectedInsertAll() => RequireAffectedRowsAsync(_store.InsertAllAsync(_selectedInsertItems));
 
     [BenchmarkCategory("BatchInsert"), Benchmark]
-    public Task<int> Insert_DbBatch() => RequireAffectedRowsAsync(_runner.InsertDbBatchAsync(_insertItems));
+    public Task<int> Direct_ReusedPreparedInsert() => RequireAffectedRowsAsync(_runner.InsertReusedCommandAsync(_rawInsertItems));
 
     [BenchmarkCategory("BatchInsert"), Benchmark]
-    public Task<int> Insert_SetBasedSql() => RequireAffectedRowsAsync(_runner.InsertSetBasedAsync(_insertItems));
+    public Task<int> Native_DbBatchInsert() => RequireAffectedRowsAsync(_runner.InsertDbBatchAsync(_rawInsertItems));
+
+    [BenchmarkCategory("BatchInsert"), Benchmark]
+    public Task<int> Raw_MultiRowInsertControl() => RequireAffectedRowsAsync(_runner.InsertSetBasedAsync(_rawInsertItems));
 
     [BenchmarkCategory("BatchUpdate"), Benchmark(Baseline = true)]
-    public Task<int> Update_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.UpdateReusedCommandAsync(_updateItems));
+    public Task<int> Inquiry_SelectedUpdateAll() => RequireAffectedRowsAsync(_store.UpdateAllAsync(_selectedUpdateItems));
 
     [BenchmarkCategory("BatchUpdate"), Benchmark]
-    public Task<int> Update_DbBatch() => RequireAffectedRowsAsync(_runner.UpdateDbBatchAsync(_updateItems));
+    public Task<int> Direct_ReusedPreparedUpdate() => RequireAffectedRowsAsync(_runner.UpdateReusedCommandAsync(_rawUpdateItems));
 
     [BenchmarkCategory("BatchUpdate"), Benchmark]
-    public Task<int> Update_SetBasedSql() => RequireAffectedRowsAsync(_runner.UpdateSetBasedAsync(_updateItems));
+    public Task<int> Native_DbBatchUpdate() => RequireAffectedRowsAsync(_runner.UpdateDbBatchAsync(_rawUpdateItems));
 
     [BenchmarkCategory("BatchUpdate"), Benchmark]
-    public Task<int> Update_ProductionDerivedTableJoin() => RequireAffectedRowsAsync(_runner.UpdateDerivedTableJoinAsync(_updateItems));
+    public Task<int> Raw_CaseUpdateControl() => RequireAffectedRowsAsync(_runner.UpdateSetBasedAsync(_rawUpdateItems));
+
+    [BenchmarkCategory("BatchUpdate"), Benchmark]
+    public Task<int> Raw_DerivedTableJoinControl() => RequireAffectedRowsAsync(_runner.UpdateDerivedTableJoinAsync(_rawUpdateItems));
 
     [BenchmarkCategory("BatchDelete"), Benchmark(Baseline = true)]
-    public Task<int> Delete_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.DeleteReusedCommandAsync(_deleteIds));
+    public Task<int> Inquiry_SelectedDeleteAll() => RequireAffectedRowsAsync(_store.DeleteAllAsync(_deleteIds));
 
     [BenchmarkCategory("BatchDelete"), Benchmark]
-    public Task<int> Delete_DbBatch() => RequireAffectedRowsAsync(_runner.DeleteDbBatchAsync(_deleteIds));
+    public Task<int> Direct_ReusedPreparedDelete() => RequireAffectedRowsAsync(_runner.DeleteReusedCommandAsync(_deleteIds));
 
     [BenchmarkCategory("BatchDelete"), Benchmark]
-    public Task<int> Delete_SetBasedSql() => RequireAffectedRowsAsync(_runner.DeleteSetBasedAsync(_deleteIds));
+    public Task<int> Native_DbBatchDelete() => RequireAffectedRowsAsync(_runner.DeleteDbBatchAsync(_deleteIds));
 
     [BenchmarkCategory("BatchDelete"), Benchmark]
-    public Task<int> Delete_ProductionJsonTable() => RequireAffectedRowsAsync(_runner.DeleteJsonTableAsync(_deleteIds));
+    public Task<int> Raw_ExpandedInDeleteControl() => RequireAffectedRowsAsync(_runner.DeleteSetBasedAsync(_deleteIds));
 
-    private static MySqlBatchMutationItem[] CreateItems(int count, int firstId, string valuePrefix)
+    [BenchmarkCategory("BatchDelete"), Benchmark]
+    public Task<int> Raw_JsonTableDeleteControl() => RequireAffectedRowsAsync(_runner.DeleteJsonTableAsync(_deleteIds));
+
+    private static MySqlBatchMutationItem[] CreateRawItems(int count, int firstId, string valuePrefix)
     {
         var items = new MySqlBatchMutationItem[count];
         for (var i = 0; i < count; i++) items[i] = new(firstId + i, $"{valuePrefix} {i}");
+        return items;
+    }
+
+    private static BatchMutationBenchmarkItem[] CreateSelectedItems(int count, int firstId, string valuePrefix)
+    {
+        var items = new BatchMutationBenchmarkItem[count];
+        for (var i = 0; i < count; i++)
+            items[i] = new BatchMutationBenchmarkItem { Id = firstId + i, ValueText = $"{valuePrefix} {i}" };
         return items;
     }
 

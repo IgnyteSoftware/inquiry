@@ -27,6 +27,7 @@ public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
     public IDbContextFactory<MariaDbShipperContext> DbContextFactory => _dbContextFactory!;
 
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
 
     public static async Task<MariaDbBenchmarkDatabase> CreateAsync(int seedRows)
     {
@@ -56,6 +57,7 @@ public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
 
                 var services = new ServiceCollection()
                     .AddInquiry()
+                    .AddInquiryGeneratedStores()
                     .AddInquiryMariaDb(connectionString)
                     .AddDbContextFactory<MariaDbShipperContext>(options =>
                         options.UseMySql(connectionString, new MariaDbServerVersion(new Version(11, 4, 0))))
