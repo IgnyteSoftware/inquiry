@@ -1,6 +1,7 @@
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
+using Inquiry.Benchmarks.Contracts;
 
 namespace Inquiry.Benchmarks.PostgreSql;
 
@@ -24,6 +25,7 @@ public class BatchMutationStrategyBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        PrecomputedTransportBenchmarkContract.Validate(GetType());
         _database = PostgreSqlBenchmarkDatabase.CreateAsync(1).GetAwaiter().GetResult();
         _store = _database.BatchMutations;
         _runner = new PostgreSqlBatchMutationStrategyRunner(_database.ConnectionString);
@@ -46,8 +48,10 @@ public class BatchMutationStrategyBenchmarks
     public Task<int> Inquiry_SelectedInsertAll() => RequireAsync(_store.InsertAllAsync(_insertItems));
     [BenchmarkCategory("Insert"), Benchmark]
     public Task<int> Direct_ReusedPreparedInsert() => RequireAsync(_runner.InsertReusedPreparedAsync(_insertItems));
+    [BenchmarkCategory("Insert"), Benchmark, PrecomputedTransportBenchmark]
+    public Task<int> Raw_PrecomputedMultiRowInsertFloor() => RequireAsync(_runner.InsertMultiRowAsync(_insertSql, _insertItems));
     [BenchmarkCategory("Insert"), Benchmark]
-    public Task<int> Raw_MultiRowInsert() => RequireAsync(_runner.InsertMultiRowAsync(_insertSql, _insertItems));
+    public Task<int> Raw_EndToEndMultiRowInsert() => RequireAsync(_runner.InsertMultiRowAsync(BuildInsertSql(Rows), _insertItems));
 
     [BenchmarkCategory("Update"), Benchmark(Baseline = true)]
     public Task<int> Inquiry_SelectedUpdateAll() => RequireAsync(_store.UpdateAllAsync(_updateItems));

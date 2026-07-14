@@ -2,6 +2,7 @@ using System.Data;
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
+using Inquiry.Benchmarks.Contracts;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
@@ -28,6 +29,7 @@ public class BatchMutationStrategyBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        PrecomputedTransportBenchmarkContract.Validate(GetType());
         _database = SqlServerBenchmarkDatabase.CreateAsync(1).GetAwaiter().GetResult();
         _store = _database.BatchMutations;
         _runner = new SqlServerBatchMutationStrategyRunner(_database.ConnectionString);
@@ -60,8 +62,10 @@ public class BatchMutationStrategyBenchmarks
     public Task<int> Direct_ReusedPreparedInsert() => RequireAsync(_runner.InsertReusedPreparedAsync(_insertItems));
     [BenchmarkCategory("Insert"), Benchmark]
     public Task<int> Native_DbBatchInsert() => RequireAsync(RequireBatchSupport(_runner.InsertDbBatchAsync, _insertItems));
+    [BenchmarkCategory("Insert"), Benchmark, PrecomputedTransportBenchmark]
+    public Task<int> Raw_PrecomputedMultiRowInsertFloor() => RequireAsync(_runner.InsertMultiRowAsync(_insertSql, _insertItems));
     [BenchmarkCategory("Insert"), Benchmark]
-    public Task<int> Raw_MultiRowInsert() => RequireAsync(_runner.InsertMultiRowAsync(_insertSql, _insertItems));
+    public Task<int> Raw_EndToEndMultiRowInsert() => RequireAsync(_runner.InsertMultiRowAsync(BuildInsertSql(Rows), _insertItems));
 
     [BenchmarkCategory("Update"), Benchmark(Baseline = true)]
     public Task<int> Inquiry_SelectedUpdateAll() => RequireAsync(_store.UpdateAllAsync(_updateItems));
@@ -76,10 +80,14 @@ public class BatchMutationStrategyBenchmarks
     public Task<int> Direct_ReusedPreparedDelete() => RequireAsync(_runner.DeleteReusedPreparedAsync(_deleteIds));
     [BenchmarkCategory("Delete"), Benchmark]
     public Task<int> Native_DbBatchDelete() => RequireAsync(RequireBatchSupport(_runner.DeleteDbBatchAsync, _deleteIds));
-    // The prebuilt DataTable intentionally isolates the direct-driver TVP execution floor; it is
-    // not an end-to-end production-equivalent path because input construction is outside timing.
+    [BenchmarkCategory("Delete"), Benchmark, PrecomputedTransportBenchmark]
+    public Task<int> Raw_PrecomputedTvpDeleteFloor() => RequireAsync(_runner.DeleteTvpAsync(_deleteTvp));
     [BenchmarkCategory("Delete"), Benchmark]
-    public Task<int> Raw_TvpDelete() => RequireAsync(_runner.DeleteTvpAsync(_deleteTvp));
+    public async Task<int> Raw_EndToEndTvpDelete()
+    {
+        using var tvp = BuildDeleteTvp(_deleteIds);
+        return await RequireAsync(_runner.DeleteTvpAsync(tvp)).ConfigureAwait(false);
+    }
 
     private async Task<int> RequireAsync(Task<int> execution)
     {

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
+using Inquiry.Benchmarks.Contracts;
 
 namespace Inquiry.Benchmarks;
 
@@ -26,6 +27,7 @@ public class BatchMutationStrategyBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        PrecomputedTransportBenchmarkContract.Validate(GetType());
         _database = BenchmarkDatabase.CreateAsync(1).GetAwaiter().GetResult();
         _store = _database.BatchMutations;
         _runner = new SqliteBatchMutationStrategyRunner(_database.ConnectionString);
@@ -51,8 +53,11 @@ public class BatchMutationStrategyBenchmarks
     [BenchmarkCategory("Insert"), Benchmark]
     public Task<int> Direct_ReusedPreparedInsert() => RequireAsync(_runner.InsertReusedPreparedAsync(_insertItems));
 
+    [BenchmarkCategory("Insert"), Benchmark, PrecomputedTransportBenchmark]
+    public Task<int> Raw_PrecomputedMultiRowInsertFloor() => RequireAsync(_runner.InsertMultiRowAsync(_insertSql, _insertItems));
+
     [BenchmarkCategory("Insert"), Benchmark]
-    public Task<int> Raw_MultiRowInsert() => RequireAsync(_runner.InsertMultiRowAsync(_insertSql, _insertItems));
+    public Task<int> Raw_EndToEndMultiRowInsert() => RequireAsync(_runner.InsertMultiRowAsync(BuildInsertSql(Rows), _insertItems));
 
     [BenchmarkCategory("Update"), Benchmark(Baseline = true)]
     public Task<int> Inquiry_SelectedUpdateAll() => RequireAsync(_store.UpdateAllAsync(_updateItems));
@@ -66,8 +71,11 @@ public class BatchMutationStrategyBenchmarks
     [BenchmarkCategory("Delete"), Benchmark]
     public Task<int> Direct_ReusedPreparedDelete() => RequireAsync(_runner.DeleteReusedPreparedAsync(_deleteIds));
 
+    [BenchmarkCategory("Delete"), Benchmark, PrecomputedTransportBenchmark]
+    public Task<int> Raw_PreSerializedJsonEachDeleteFloor() => RequireAsync(_runner.DeleteJsonEachAsync(_deleteIdsJson));
+
     [BenchmarkCategory("Delete"), Benchmark]
-    public Task<int> Raw_JsonEachDelete() => RequireAsync(_runner.DeleteJsonEachAsync(_deleteIdsJson));
+    public Task<int> Raw_EndToEndJsonEachDelete() => RequireAsync(_runner.DeleteJsonEachAsync(JsonSerializer.Serialize(_deleteIds)));
 
     private async Task<int> RequireAsync(Task<int> execution)
     {
