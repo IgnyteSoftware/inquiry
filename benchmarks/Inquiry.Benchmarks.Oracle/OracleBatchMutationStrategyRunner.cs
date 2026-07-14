@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text;
 using Inquiry.Parameters;
 using Oracle.ManagedDataAccess.Client;
@@ -71,25 +72,34 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
     public Task<int> DeleteReusedCommandAsync(IReadOnlyList<int> ids)
         => ExecuteReusedDeleteAsync(ids);
 
-    public Task<int> InsertArrayBindingAsync(
+    public Task<int> InsertDirectDriverArrayBindingFloorAsync(
         IReadOnlyList<OracleBatchMutationItem> items,
         int[] ids,
         string[] values,
         int[] valueSizes)
         => ExecuteArrayBindingAsync(InsertSql, items.Count, ids, values, valueSizes);
 
-    public Task<int> UpdateArrayBindingAsync(
+    public Task<int> UpdateDirectDriverArrayBindingFloorAsync(
         IReadOnlyList<OracleBatchMutationItem> items,
         int[] ids,
         string[] values,
         int[] valueSizes)
         => ExecuteArrayBindingAsync(UpdateSql, items.Count, ids, values, valueSizes);
 
-    public Task<int> DeleteArrayBindingAsync(IReadOnlyList<int> ids)
-        => ExecuteArrayBindingDeleteAsync(ids);
+    public Task<int> DeleteDirectDriverArrayBindingFloorAsync(IReadOnlyList<int> ids)
+        => ExecuteDirectDriverArrayBindingDeleteFloorAsync(ids);
 
-    public Task<int> InsertProductionInsertSelectAsync(IReadOnlyList<OracleBatchMutationItem> items)
-        => ExecuteProductionInsertSelectAsync(items);
+    public Task<int> InsertGeneratedChunkBinderControlAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteGeneratedChunkBinderControlAsync(InsertSql, items);
+
+    public Task<int> UpdateGeneratedChunkBinderControlAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteGeneratedChunkBinderControlAsync(UpdateSql, items);
+
+    public Task<int> DeleteGeneratedChunkBinderControlAsync(IReadOnlyList<int> ids)
+        => ExecuteGeneratedChunkBinderDeleteControlAsync(ids);
+
+    public Task<int> InsertPreIssue180GeneratedControlAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecutePreIssue180GeneratedInsertSelectControlAsync(items);
 
     public Task<int> DeleteJsonTableAsync(IReadOnlyList<int> ids)
         => ExecuteJsonTableDeleteAsync(ids);
@@ -151,6 +161,51 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         return affected;
     }
 
+    private async Task<int> ExecuteGeneratedChunkBinderControlAsync(
+        string commandText,
+        IReadOnlyList<OracleBatchMutationItem> items)
+    {
+        await using var connection = new OracleConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = (OracleTransaction)transaction;
+        command.BindByName = true;
+        command.ArrayBindCount = items.Count;
+        command.CommandText = commandText;
+
+        // Match the finalized issue #180 generated chunk binder: allocate object arrays in the
+        // measured path, box scalar values, and calculate each variable-width element's actual size.
+        // This is a binder-equivalent direct-driver control; it intentionally excludes Inquiry's
+        // chunk reader and pipeline dispatch, which require a separate generated-store benchmark.
+        var ids = new object?[items.Count];
+        var values = new object?[items.Count];
+        var valueSizes = new int[items.Count];
+        for (var i = 0; i < items.Count; i++)
+        {
+            ids[i] = items[i].Id;
+            values[i] = items[i].Value;
+            valueSizes[i] = values[i] is string value ? value.Length : 0;
+        }
+
+        var id = command.CreateParameter();
+        id.ParameterName = "id";
+        id.DbType = DbType.Int32;
+        id.Value = ids;
+        command.Parameters.Add(id);
+
+        var text = command.CreateParameter();
+        text.ParameterName = "value";
+        text.DbType = DbType.String;
+        text.Value = values;
+        ((OracleParameter)text).ArrayBindSize = valueSizes;
+        command.Parameters.Add(text);
+
+        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
     private async Task<int> ExecuteReusedDeleteAsync(IReadOnlyList<int> ids)
     {
         await using var connection = new OracleConnection(connectionString);
@@ -173,7 +228,7 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         return affected;
     }
 
-    private async Task<int> ExecuteArrayBindingDeleteAsync(IReadOnlyList<int> ids)
+    private async Task<int> ExecuteDirectDriverArrayBindingDeleteFloorAsync(IReadOnlyList<int> ids)
     {
         await using var connection = new OracleConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
@@ -189,7 +244,33 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         return affected;
     }
 
-    private async Task<int> ExecuteProductionInsertSelectAsync(IReadOnlyList<OracleBatchMutationItem> items)
+    private async Task<int> ExecuteGeneratedChunkBinderDeleteControlAsync(IReadOnlyList<int> ids)
+    {
+        await using var connection = new OracleConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.Transaction = (OracleTransaction)transaction;
+        command.BindByName = true;
+        command.ArrayBindCount = ids.Count;
+        command.CommandText = DeleteSql;
+
+        var values = new object?[ids.Count];
+        for (var i = 0; i < ids.Count; i++) values[i] = ids[i];
+
+        var id = command.CreateParameter();
+        id.ParameterName = "id";
+        id.DbType = DbType.Int32;
+        id.Value = values;
+        command.Parameters.Add(id);
+
+        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
+        return affected;
+    }
+
+    private async Task<int> ExecutePreIssue180GeneratedInsertSelectControlAsync(
+        IReadOnlyList<OracleBatchMutationItem> items)
     {
         var sql = new StringBuilder("INSERT INTO INQUIRYBATCHEVIDENCE (ID, VALUETEXT) ");
         await using var connection = new OracleConnection(connectionString);

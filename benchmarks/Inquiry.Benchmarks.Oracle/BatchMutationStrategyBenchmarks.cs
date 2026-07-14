@@ -1,3 +1,4 @@
+using System.Reflection;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 
@@ -27,6 +28,7 @@ public class BatchMutationStrategyBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        ValidateEvidenceLabels();
         _database = OracleBenchmarkDatabase.CreateAsync(1000).GetAwaiter().GetResult();
         _runner = new OracleBatchMutationStrategyRunner(_database.ConnectionString);
         _runner.InitializeAsync().GetAwaiter().GetResult();
@@ -50,24 +52,40 @@ public class BatchMutationStrategyBenchmarks
     public Task<int> Insert_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.InsertReusedCommandAsync(_insertItems));
 
     [BenchmarkCategory("BatchInsert"), Benchmark]
-    public Task<int> Insert_ArrayBinding() => RequireAffectedRowsAsync(
-        _runner.InsertArrayBindingAsync(_insertItems, _insertIds, _insertValues, _insertValueSizes));
+    public Task<int> Insert_GeneratedChunkBinderControl() => RequireAffectedRowsAsync(
+        _runner.InsertGeneratedChunkBinderControlAsync(_insertItems));
 
+    [BenchmarkCategory("BatchInsert"), Benchmark, DirectDriverFloor]
+    public Task<int> Insert_DirectDriverArrayBindingFloor() => RequireAffectedRowsAsync(
+        _runner.InsertDirectDriverArrayBindingFloorAsync(_insertItems, _insertIds, _insertValues, _insertValueSizes));
+
+    // This is the Oracle generated INSERT shape at ddac8eb, before issue #180 switched the
+    // finalized generated path to native array binding. It is retained only as a historical control.
     [BenchmarkCategory("BatchInsert"), Benchmark]
-    public Task<int> Insert_ProductionInsertSelect() => RequireAffectedRowsAsync(_runner.InsertProductionInsertSelectAsync(_insertItems));
+    public Task<int> Insert_PreIssue180GeneratedInsertSelectControl() => RequireAffectedRowsAsync(
+        _runner.InsertPreIssue180GeneratedControlAsync(_insertItems));
 
     [BenchmarkCategory("BatchUpdate"), Benchmark(Baseline = true)]
     public Task<int> Update_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.UpdateReusedCommandAsync(_updateItems));
 
     [BenchmarkCategory("BatchUpdate"), Benchmark]
-    public Task<int> Update_ArrayBinding() => RequireAffectedRowsAsync(
-        _runner.UpdateArrayBindingAsync(_updateItems, _updateIds, _updateValues, _updateValueSizes));
+    public Task<int> Update_GeneratedChunkBinderControl() => RequireAffectedRowsAsync(
+        _runner.UpdateGeneratedChunkBinderControlAsync(_updateItems));
+
+    [BenchmarkCategory("BatchUpdate"), Benchmark, DirectDriverFloor]
+    public Task<int> Update_DirectDriverArrayBindingFloor() => RequireAffectedRowsAsync(
+        _runner.UpdateDirectDriverArrayBindingFloorAsync(_updateItems, _updateIds, _updateValues, _updateValueSizes));
 
     [BenchmarkCategory("BatchDelete"), Benchmark(Baseline = true)]
     public Task<int> Delete_ReusedPreparedCommand() => RequireAffectedRowsAsync(_runner.DeleteReusedCommandAsync(_deleteIds));
 
     [BenchmarkCategory("BatchDelete"), Benchmark]
-    public Task<int> Delete_ArrayBinding() => RequireAffectedRowsAsync(_runner.DeleteArrayBindingAsync(_deleteIds));
+    public Task<int> Delete_GeneratedChunkBinderControl() => RequireAffectedRowsAsync(
+        _runner.DeleteGeneratedChunkBinderControlAsync(_deleteIds));
+
+    [BenchmarkCategory("BatchDelete"), Benchmark, DirectDriverFloor]
+    public Task<int> Delete_DirectDriverArrayBindingFloor() => RequireAffectedRowsAsync(
+        _runner.DeleteDirectDriverArrayBindingFloorAsync(_deleteIds));
 
     [BenchmarkCategory("BatchDelete"), Benchmark]
     public Task<int> Delete_ProductionJsonTable() => RequireAffectedRowsAsync(_runner.DeleteJsonTableAsync(_deleteIds));
@@ -109,4 +127,23 @@ public class BatchMutationStrategyBenchmarks
             ? affected
             : throw new InvalidOperationException($"Expected {Rows} affected rows, but the provider returned {affected}.");
     }
+
+    private static void ValidateEvidenceLabels()
+    {
+        foreach (var method in typeof(BatchMutationStrategyBenchmarks).GetMethods(BindingFlags.Instance | BindingFlags.Public))
+        {
+            if (method.GetCustomAttribute<DirectDriverFloorAttribute>() is null) continue;
+            if (!method.Name.Contains("DirectDriver", StringComparison.Ordinal) ||
+                !method.Name.Contains("Floor", StringComparison.Ordinal) ||
+                method.Name.Contains("Production", StringComparison.Ordinal) ||
+                method.Name.Contains("Generated", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Direct-driver floor benchmark '{method.Name}' must be labeled as a floor, never as generated or production evidence.");
+            }
+        }
+    }
 }
+
+[AttributeUsage(AttributeTargets.Method)]
+internal sealed class DirectDriverFloorAttribute : Attribute;
