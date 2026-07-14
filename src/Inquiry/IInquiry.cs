@@ -133,8 +133,9 @@ public interface IInquiry
     /// Streams rows into a table via the provider's native bulk-copy API (SqlBulkCopy / binary
     /// COPY / MySqlBulkCopy). Generated <c>[InquiryBulkInsert]</c> methods on bulk-capable
     /// dialects call this; dialects without a bulk-copy API fall back to batch SQL at compile
-    /// time and never do. Bulk insert opens a dedicated connection, does not join an ambient
-    /// Inquiry transaction, and bypasses interceptors and telemetry.
+    /// time and never do. Bulk insert opens a dedicated connection and bypasses interceptors and
+    /// telemetry. The built-in implementation rejects calls made inside an ambient Inquiry
+    /// transaction because the dedicated connection could not participate in its rollback.
     /// </summary>
     /// <remarks>The default throws; <see cref="DefaultInquiry"/> resolves the provider's
     /// registered <see cref="Inquiry.BulkCopy.IInquiryBulkCopier"/>, so existing
