@@ -6,6 +6,9 @@ namespace Inquiry.Sqlite.Analyzer;
 
 internal sealed class SqliteSqlBuilder : SqlBuilder
 {
+    // SQLite 3.32+ defaults SQLITE_MAX_VARIABLE_NUMBER to 32,766.
+    public override int HardMaxParametersPerCommand => 32766;
+
     public override string DialectName => "Sqlite";
     public override string ProviderId => "sqlite";
     // SQLite identifiers compare ASCII case-insensitively by default. Non-ASCII remains exact.

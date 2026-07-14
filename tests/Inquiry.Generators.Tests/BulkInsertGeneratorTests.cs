@@ -75,9 +75,10 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // Compile-time fallback: the batch-insert consts + ExecuteAsync body, no copier call.
+        // Compile-time fallback: the batch-insert descriptor + bounded runtime body, no copier call.
         Assert.Contains("_sqlInsertAllPrefix", text);
-        Assert.Contains("Inquiry.ExecuteAsync", text);
+        Assert.Contains("InquiryBatchCommand<global::Demo.Item>", text);
+        Assert.Contains("Inquiry.ExecuteBatchAsync(_batch_BulkInsertAsync_", text);
         Assert.DoesNotContain("InquiryBulkInsertDefinition", text);
         Assert.DoesNotContain("Inquiry.BulkInsertAsync(", text);
     }

@@ -70,9 +70,10 @@ public sealed partial class InquiryGeneratorTests
         // Insert SQL still writes CreatedAt.
         Assert.Contains("_sqlInsert = \"INSERT INTO \\\"Doc\\\" (\\\"Title\\\", \\\"CreatedAt\\\", \\\"ModifiedAt\\\") VALUES (@Title, @CreatedAt, @ModifiedAt)\";", text);
 
-        // Batch update: per-item ModifiedAt pre-pass, no CreatedAt stamp on the update path.
-        Assert.Contains("_list[_a].ModifiedAt = global::System.DateTime.UtcNow;", text);
-        Assert.DoesNotContain("_list[_a].CreatedAt", text);
+        // Batch update: ModifiedAt is stamped in the descriptor binder when an item is admitted to a
+        // bounded runtime chunk. CreatedAt remains immutable and is not present in the update binder.
+        Assert.Contains("_it.ModifiedAt = global::System.DateTime.UtcNow;", text);
+        Assert.DoesNotContain("_it.CreatedAt", text);
     }
 
     [Fact]

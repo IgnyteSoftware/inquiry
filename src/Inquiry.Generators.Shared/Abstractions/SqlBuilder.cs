@@ -222,6 +222,40 @@ public abstract class SqlBuilder
     /// <summary>Trailing text after all row tuples. Default empty; Oracle appends <c> SELECT 1 FROM dual</c>.</summary>
     public virtual string BatchInsertFooter => "";
 
+    /// <summary>
+    /// Dialect row-count ceiling for one generated multi-row insert statement. Parameter-count and
+    /// configured batch-size ceilings are applied independently by the generated operation.
+    /// </summary>
+    public virtual int BatchInsertMaxRowsPerCommand => int.MaxValue;
+
+    /// <summary>
+    /// Hard provider/protocol ceiling for bound parameters in one command. The generated descriptor
+    /// applies this even when a user configures a larger runtime parameter limit.
+    /// </summary>
+    public virtual int HardMaxParametersPerCommand => 65535;
+
+    /// <summary>Whether batch mutations may use provider array binding with one fixed DML command.</summary>
+    public virtual bool UsesArrayBindingForBatchMutations => false;
+
+    /// <summary>Whether UpdateAll may use a provider-specific set-based statement for eligible chunks.</summary>
+    public virtual bool SupportsSetBasedBatchUpdate => false;
+
+    /// <summary>SQL preceding the first SELECT row in a set-based UpdateAll derived table.</summary>
+    public virtual string BuildSetBasedBatchUpdateHeader(string? schema, string tableName)
+        => throw new System.NotSupportedException($"Set-based batch update is not supported by {DialectName}.");
+
+    /// <summary>SQL joining a set-based UpdateAll derived table to the target and assigning its values.</summary>
+    public virtual string BuildSetBasedBatchUpdateFooter(
+        string? schema,
+        string tableName,
+        IReadOnlyList<IColumn> keyColumns,
+        IReadOnlyList<IColumn> setColumns)
+        => throw new System.NotSupportedException($"Set-based batch update is not supported by {DialectName}.");
+
+    /// <summary>Emits the provider command assignment that establishes the array-bind row count.</summary>
+    public virtual string BuildArrayBindCountAssignment(string commandExpression, string countExpression)
+        => throw new System.NotSupportedException("This dialect does not support DML array binding.");
+
     public string QuoteTable(string? schema, string tableName)
     {
         return string.IsNullOrEmpty(schema)

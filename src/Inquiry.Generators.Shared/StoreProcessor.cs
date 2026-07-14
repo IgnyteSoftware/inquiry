@@ -1101,8 +1101,11 @@ internal static class StoreProcessor
              m.Method.Operation == StoreOperation.SelectAllEager));
         var needsSelectByKey = valid.Any(m => UsesSharedSelect(m) && m.Method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
         var needsInsert = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && !m.Method.ReturnsEntity) ||
-            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity);
-        // UpdateAll reuses the single-row _sqlUpdate const (one UPDATE per item via the batch API).
+            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity) ||
+            valid.Any(m => (m.Method.Operation == StoreOperation.InsertAll ||
+                (m.Method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy)) &&
+                (sqlBuilder.UsesArrayBindingForBatchMutations || ctx.InsertableColumns.Count == 0));
+        // UpdateAll keeps the single-row SQL for the default path and guarded provider fallbacks.
         var needsUpdate = valid.Any(static m =>
             (m.Method.Operation == StoreOperation.Update && !m.Method.ReturnsEntity) ||
             m.Method.Operation == StoreOperation.UpdateAll);
@@ -1174,7 +1177,38 @@ internal static class StoreProcessor
             AppendConstSql(source, "_sqlInsertAllPrefix", sqlBuilder.BuildBatchInsertHeader(ctx));
             AppendConstSql(source, "_sqlInsertAllRowOpen", sqlBuilder.BuildBatchInsertRowOpen(ctx));
         }
-        if (needsDeleteAll) AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
+        if (needsDeleteAll)
+        {
+            // Retain the set-based collection SQL as a benchmark/control shape. Array-binding
+            // dialects execute the fixed single-key DML through _sqlDeleteAllItem in production.
+            AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
+            if (sqlBuilder.UsesArrayBindingForBatchMutations)
+            {
+                AppendConstSql(source, "_sqlDeleteAllItem", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
+            }
+        }
+
+        // Batch descriptors are immutable generated support values. Keep them on the store type so
+        // every invocation reuses the same static binder delegate instead of constructing batch
+        // command state per call.
+        foreach (var (method, _, _, _) in valid)
+        {
+            if (method.Operation == StoreOperation.InsertAll ||
+                (method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy))
+            {
+                StoreOperationEmitter.EmitInsertAllSupport(source, method, entity, sqlBuilder);
+            }
+            else if (method.Operation == StoreOperation.UpdateAll)
+            {
+                StoreOperationEmitter.EmitUpdateAllDescriptor(source, method, entity, sqlBuilder);
+            }
+            else if (method.Operation == StoreOperation.DeleteAll &&
+                deleteAllCollectionResolutions.TryGetValue(method, out var resolution) &&
+                resolution.IsValid)
+            {
+                StoreOperationEmitter.EmitDeleteAllDescriptor(source, method, entity, sqlBuilder, resolution);
+            }
+        }
 
         foreach (var fieldColumns in byFieldOps)
         {

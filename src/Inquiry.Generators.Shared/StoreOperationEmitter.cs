@@ -4,7 +4,9 @@ using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Inquiry.Generators;
@@ -240,25 +242,9 @@ internal static class StoreOperationEmitter
                 // to match the baked SQL. Returns rows affected; for a soft-delete entity
                 // _sqlDeleteAll is the soft UPDATE form.
                 var keysParam = method.Parameters[0].Name;
+                var batchDescriptor = BuildBatchDescriptorFieldName(method);
                 AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<({method.Parameters[0].TypeDisplay} Keys, int MaxParameters)>(");
-                source.AppendLine("            _sqlDeleteAll,");
-                source.AppendLine($"            (Keys: {keysParam}, MaxParameters: Inquiry.MaxParametersPerCommand),");
-                source.AppendLine("            static (global::System.Data.Common.DbCommand _c, (" + method.Parameters[0].TypeDisplay + " Keys, int MaxParameters) _args) =>");
-                source.AppendLine("            {");
-                source.AppendLine($"                var {keysParam} = _args.Keys;");
-                source.AppendLine(CollectionBindingExpression(
-                    sqlBuilder,
-                    entity.Keys[0],
-                    entity.Schema,
-                    sqlBuilder.ParameterName("keys"),
-                    keysParam,
-                    isNegatedCollection: false,
-                    elementIsNullable: method.Parameters[0].ElementIsNullable,
-                    resolution: deleteAllCollectionResolution,
-                    maxParametersExpression: "_args.MaxParameters"));
-                source.AppendLine("            });");
-                source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
+                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {keysParam}, {cancellation});");
                 source.AppendLine("    }");
                 break;
             }
@@ -363,97 +349,31 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.InsertAll:
             {
-                // batch insert — one multi-row INSERT built at runtime for the whole collection,
-                // bound via the existing ExecuteAsync<TArgs> fast path (one statement, not N round-trips).
-                // Reuse SelectMutationColumns so the bound columns stay in lockstep with the prefix const
-                // (_sqlInsertAllPrefix from ctx.InsertColumns) — both exclude generated, db-default, and
-                // database-generated-token columns.
-                var insertable = SelectMutationColumns(entity, includeKey: false);
-
+                // The cached descriptor owns provider SQL and binding while the runtime streams bounded,
+                // atomic chunks from the original enumerable.
                 var itemsParam = method.Parameters[0].Name;
-                AppendHeader(source, method, parameters, isAsync: true);
-                AppendBatchListMaterialization(source, itemsParam, entityType, insertable.Length, "insert");
-                EmitSequentialGuidBatchAssignment(source, entity, indent: "        ");
-                EmitAuditBatchAssignments(source, entity, isInsert: true, indent: "        ");
-                // Dialect-aware multi-row INSERT shape: header + per-row (rowOpen + bound params) joined by a
-                // separator + footer. Base => `INSERT INTO t (cols) VALUES (…),(…)`; Oracle =>
-                // `INSERT INTO t (cols) SELECT … FROM dual UNION ALL SELECT … FROM dual`. SQL and runtime
-                // parameter prefixes are dialect-owned so Oracle can stay on encoded, collision-safe names.
-                var _pSigil = sqlBuilder.BatchInsertSqlParameterPrefix;
-                var _runtimeParameterPrefix = sqlBuilder.BatchInsertRuntimeParameterPrefix;
-                var _rowSeparator = sqlBuilder.BatchInsertRowSeparator;
-                var _rowClose = sqlBuilder.BatchInsertRowClose;
-                var _insertFooter = sqlBuilder.BatchInsertFooter;
-                source.AppendLine("        var _sb = new global::System.Text.StringBuilder(_sqlInsertAllPrefix);");
-                source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
-                source.AppendLine("        {");
-                source.AppendLine($"            if (_r > 0) _sb.Append(\"{GeneratorHelpers.Escape(_rowSeparator)}\");");
-                source.AppendLine("            _sb.Append(_sqlInsertAllRowOpen);");
-                for (var _c = 0; _c < insertable.Length; _c++)
+                var batchDescriptor = BuildBatchDescriptorFieldName(method);
+                if (method.Operation == StoreOperation.BulkInsert)
                 {
-                    var seg = _c == 0 ? _pSigil : ", " + _pSigil;
-                    source.AppendLine($"            _sb.Append(\"{GeneratorHelpers.Escape(seg)}\").Append(_r).Append(\"_{_c}\");");
+                    AppendHeader(source, method, parameters, isAsync: true);
+                    source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsParam}, {cancellation}).ConfigureAwait(false);");
                 }
-                source.AppendLine($"            _sb.Append(\"{GeneratorHelpers.Escape(_rowClose)}\");");
-                source.AppendLine("        }");
-                if (_insertFooter.Length > 0)
+                else
                 {
-                    source.AppendLine($"        _sb.Append(\"{GeneratorHelpers.Escape(_insertFooter)}\");");
+                    AppendHeader(source, method, parameters, isAsync: false);
+                    source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsParam}, {cancellation});");
                 }
-                source.AppendLine($"        return await Inquiry.ExecuteAsync<global::System.Collections.Generic.IReadOnlyList<{entityType}>>(");
-                source.AppendLine("            _sb.ToString(),");
-                source.AppendLine("            _list,");
-                source.AppendLine("            static (_cmd, _items) =>");
-                source.AppendLine("            {");
-                source.AppendLine("                for (var _r = 0; _r < _items.Count; _r++)");
-                source.AppendLine("                {");
-                source.AppendLine("                    var _it = _items[_r];");
-                for (var _c = 0; _c < insertable.Length; _c++)
-                {
-                    var col = insertable[_c];
-                    source.AppendLine("                    {");
-                    source.AppendLine("                        var _p = _cmd.CreateParameter();");
-                    source.AppendLine($"                        _p.ParameterName = \"{GeneratorHelpers.Escape(_runtimeParameterPrefix)}\" + _r + \"_{_c}\";");
-                    AppendColumnParameterMetadata(source, col, sqlBuilder, "_p", "                        ", predicate: false);
-                    source.AppendLine($"                        _p.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName, sqlBuilder)};");
-                    source.AppendLine("                        _cmd.Parameters.Add(_p);");
-                    source.AppendLine("                    }");
-                }
-                source.AppendLine("                }");
-                source.AppendLine("            },");
-                source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                 source.AppendLine("    }");
                 break;
             }
 
             case StoreOperation.UpdateAll:
             {
-                // batch update — the ordinary single-row UPDATE (_sqlUpdate) executed once per item
-                // through the runtime batch API: one DbBatch round trip where the provider supports it,
-                // a sequential same-connection fallback otherwise. Each item gets its own parameter
-                // space, so the binder mirrors the single-row update binder (same columns, same order,
-                // same "@PropertyName" names) and no parameter-cap guard applies.
+                // The runtime selects the descriptor's fixed-row, array-bound, or eligible set-based path.
                 var itemsParam = method.Parameters[0].Name;
-                var updateColumns = SelectMutationColumns(entity, includeKey: true, forUpdate: true);
-                AppendHeader(source, method, parameters, isAsync: true);
-                AppendBatchListMaterialization(source, itemsParam, entityType, updateColumns.Length, "update", enforceParameterCap: false);
-                EmitAuditBatchAssignments(source, entity, isInsert: false, indent: "        ");
-                source.AppendLine("        return await Inquiry.ExecuteBatchAsync(");
-                source.AppendLine("            _sqlUpdate,");
-                source.AppendLine("            _list,");
-                source.AppendLine("            static (_t, _it) =>");
-                source.AppendLine("            {");
-                for (var _c = 0; _c < updateColumns.Length; _c++)
-                {
-                    var col = updateColumns[_c];
-                    source.AppendLine($"                var _p{_c} = _t.CreateParameter();");
-                    source.AppendLine($"                _p{_c}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(col.PropertyName))}\";");
-                    AppendColumnParameterMetadata(source, col, sqlBuilder, $"_p{_c}", "                ", predicate: false);
-                    source.AppendLine($"                _p{_c}.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName, sqlBuilder)};");
-                    source.AppendLine($"                _t.AddParameter(_p{_c});");
-                }
-                source.AppendLine("            },");
-                source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                var batchDescriptor = BuildBatchDescriptorFieldName(method);
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsParam}, {cancellation});");
                 source.AppendLine("    }");
                 break;
             }
@@ -1372,38 +1292,6 @@ internal static class StoreOperationEmitter
         pi++;
     }
 
-    private static void AppendBatchListMaterialization(StringBuilder source, string itemsParam, string entityType, int parametersPerItem, string operation, bool enforceParameterCap = true)
-    {
-        // enforceParameterCap guards a batch that packs every row's parameters into ONE command
-        // (InsertAll's multi-row VALUES). A batched-per-item operation (UpdateAll via ExecuteBatchAsync)
-        // binds each row to its own command, so per-command parameter counts stay tiny and no cap applies.
-        var parameterCount = Math.Max(parametersPerItem, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-        var message = "Inquiry batch " + operation + " would exceed the configured parameter limit for one command. Reduce the collection size, chunk the operation, or raise InquiryOptions.MaxParametersPerCommand if your provider supports it.";
-
-        source.AppendLine($"        var _list = {itemsParam} as global::System.Collections.Generic.IReadOnlyList<{entityType}>;");
-        source.AppendLine("        if (_list is null)");
-        source.AppendLine("        {");
-        source.AppendLine($"            if ({itemsParam} is null) throw new global::System.ArgumentNullException(nameof({itemsParam}));");
-        source.AppendLine($"            var _tmp = new global::System.Collections.Generic.List<{entityType}>();");
-        source.AppendLine($"            foreach (var _item in {itemsParam})");
-        source.AppendLine("            {");
-        if (enforceParameterCap)
-        {
-            source.AppendLine($"                if ((long)(_tmp.Count + 1) * {parameterCount}L > Inquiry.MaxParametersPerCommand)");
-            source.AppendLine($"                    throw new global::System.InvalidOperationException(\"{message}\");");
-        }
-        source.AppendLine("                _tmp.Add(_item);");
-        source.AppendLine("            }");
-        source.AppendLine("            _list = _tmp;");
-        source.AppendLine("        }");
-        source.AppendLine("        if (_list.Count == 0) return 0;");
-        if (enforceParameterCap)
-        {
-            source.AppendLine($"        if ((long)_list.Count * {parameterCount}L > Inquiry.MaxParametersPerCommand)");
-            source.AppendLine($"            throw new global::System.InvalidOperationException(\"{message}\");");
-        }
-    }
-
     /// <summary>Strips a trailing nullable annotation/<c>Nullable&lt;&gt;</c> marker from a cursor type display.</summary>
     private static string StripNullable(string typeDisplay)
         => typeDisplay.EndsWith("?", StringComparison.Ordinal) ? typeDisplay.Substring(0, typeDisplay.Length - 1) : typeDisplay;
@@ -1568,6 +1456,384 @@ internal static class StoreOperationEmitter
     {
         if (columns.Count == 1) return columns[0].PropertyName;
         return string.Join("_", columns.Select(c => c.PropertyName));
+    }
+
+    private static string BuildBatchDescriptorFieldName(StoreMethodData method)
+    {
+        var signature = method.Name + "(" + string.Join(",", method.Parameters.AsImmutableArray().Select(static parameter => parameter.TypeDisplay)) + ")";
+        byte[] hash;
+        using (var sha = SHA256.Create())
+        {
+            hash = sha.ComputeHash(Encoding.UTF8.GetBytes(signature));
+        }
+
+        var suffix = new StringBuilder(16);
+        for (var i = 0; i < 8; i++)
+        {
+            suffix.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
+        }
+
+        return "_batch_" + method.Name + "_" + suffix;
+    }
+
+    /// <summary>
+    /// Emits the cached whole-chunk descriptor for one multi-row insert operation. The runtime owns
+    /// list slicing, bounded buffering, single enumeration, and transaction coordination; generated
+    /// code owns only cardinality-specific SQL and one exact-once chunk binder.
+    /// </summary>
+    public static void EmitInsertAllSupport(
+        StringBuilder source,
+        StoreMethodData method,
+        EntityData entity,
+        SqlBuilder sqlBuilder)
+    {
+        var entityType = entity.FullyQualifiedName;
+        var insertable = SelectMutationColumns(entity, includeKey: false);
+        var prefix = BuildBatchDescriptorFieldName(method);
+
+        if (insertable.Length == 0)
+        {
+            source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{entityType}> {prefix} = new(");
+            source.AppendLine("        _sqlInsert,");
+            source.AppendLine("        static (_, _it) =>");
+            source.AppendLine("        {");
+            EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ");
+            EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "            ");
+            source.AppendLine("        });");
+            source.AppendLine();
+            return;
+        }
+
+        var parametersPerItem = Math.Max(insertable.Length, 1);
+        var hardParameterRows = sqlBuilder.HardMaxParametersPerCommand / parametersPerItem;
+        var maxItemsPerCommand = Math.Min(sqlBuilder.BatchInsertMaxRowsPerCommand, hardParameterRows);
+
+        if (sqlBuilder.UsesArrayBindingForBatchMutations)
+        {
+            source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{entityType}> {prefix} = new(");
+            source.AppendLine("        _sqlInsert,");
+            source.AppendLine("        static (_t, _it) =>");
+            source.AppendLine("        {");
+            EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ");
+            EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "            ");
+            EmitTargetRowParameters(source, insertable, sqlBuilder, "_it", indent: "            ");
+            source.AppendLine("        },");
+            source.AppendLine("        bindChunk: static (_cmd, _items) =>");
+            source.AppendLine("        {");
+            EmitEntityArrayChunkBinder(source, entity, insertable, sqlBuilder, isInsert: true, indent: "            ");
+            source.AppendLine("        });");
+            source.AppendLine();
+            return;
+        }
+
+        source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{entityType}> {prefix} = new(");
+        source.AppendLine("        static _count =>");
+        source.AppendLine("        {");
+        var estimatedInsertRowLength = sqlBuilder.BatchInsertRowClose.Length + sqlBuilder.BatchInsertRowSeparator.Length +
+            insertable.Length * 24;
+        source.AppendLine($"            var _sql = new global::System.Text.StringBuilder(_sqlInsertAllPrefix, _sqlInsertAllPrefix.Length + (_count * (_sqlInsertAllRowOpen.Length + {estimatedInsertRowLength})));");
+        source.AppendLine("            for (var _r = 0; _r < _count; _r++)");
+        source.AppendLine("            {");
+        source.AppendLine($"                if (_r > 0) _sql.Append(\"{GeneratorHelpers.Escape(sqlBuilder.BatchInsertRowSeparator)}\");");
+        source.AppendLine("                _sql.Append(_sqlInsertAllRowOpen);");
+        for (var i = 0; i < insertable.Length; i++)
+        {
+            var segment = i == 0 ? sqlBuilder.BatchInsertSqlParameterPrefix : ", " + sqlBuilder.BatchInsertSqlParameterPrefix;
+            source.AppendLine($"                _sql.Append(\"{GeneratorHelpers.Escape(segment)}\").Append(_r).Append(\"_{i}\");");
+        }
+        source.AppendLine($"                _sql.Append(\"{GeneratorHelpers.Escape(sqlBuilder.BatchInsertRowClose)}\");");
+        source.AppendLine("            }");
+        if (sqlBuilder.BatchInsertFooter.Length > 0)
+        {
+            source.AppendLine($"            _sql.Append(\"{GeneratorHelpers.Escape(sqlBuilder.BatchInsertFooter)}\");");
+        }
+        source.AppendLine("            return _sql.ToString();");
+        source.AppendLine("        },");
+        source.AppendLine("        static (_cmd, _items) =>");
+        source.AppendLine("        {");
+        source.AppendLine("            for (var _r = 0; _r < _items.Count; _r++)");
+        source.AppendLine("            {");
+        source.AppendLine("                var _it = _items[_r];");
+        EmitSequentialGuidAssignment(source, entity, "_it", indent: "                ");
+        EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "                ");
+        for (var i = 0; i < insertable.Length; i++)
+        {
+            var column = insertable[i];
+            source.AppendLine("                {");
+            source.AppendLine("                    var _p = _cmd.CreateParameter();");
+            source.AppendLine($"                    _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.BatchInsertRuntimeParameterPrefix)}\" + _r + \"_{i}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, "_p", "                    ", predicate: false);
+            source.AppendLine($"                    _p.Value = {BuildParameterValueExpression(column, "_it." + column.PropertyName, sqlBuilder)};");
+            source.AppendLine("                    _cmd.Parameters.Add(_p);");
+            source.AppendLine("                }");
+        }
+        source.AppendLine("            }");
+        source.AppendLine("        },");
+        source.AppendLine($"        parametersPerItem: {parametersPerItem.ToString(System.Globalization.CultureInfo.InvariantCulture)},");
+        source.AppendLine($"        maxItemsPerCommand: {maxItemsPerCommand.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+        source.AppendLine();
+    }
+
+    private static void EmitTargetRowParameters(
+        StringBuilder source,
+        IReadOnlyList<ColumnData> columns,
+        SqlBuilder sqlBuilder,
+        string itemExpression,
+        string indent)
+    {
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            source.AppendLine($"{indent}var _p{i} = _t.CreateParameter();");
+            source.AppendLine($"{indent}_p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent, predicate: false);
+            source.AppendLine($"{indent}_p{i}.Value = {BuildParameterValueExpression(column, itemExpression + "." + column.PropertyName, sqlBuilder)};");
+            source.AppendLine($"{indent}_t.AddParameter(_p{i});");
+        }
+    }
+
+    private static void EmitEntityArrayChunkBinder(
+        StringBuilder source,
+        EntityData entity,
+        IReadOnlyList<ColumnData> columns,
+        SqlBuilder sqlBuilder,
+        bool isInsert,
+        string indent)
+    {
+        source.AppendLine($"{indent}{sqlBuilder.BuildArrayBindCountAssignment("_cmd", "_items.Count")}");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            source.AppendLine($"{indent}var _values{i} = new object?[_items.Count];");
+        }
+        source.AppendLine($"{indent}for (var _i = 0; _i < _items.Count; _i++)");
+        source.AppendLine($"{indent}{{");
+        source.AppendLine($"{indent}    var _it = _items[_i];");
+        if (isInsert)
+        {
+            EmitSequentialGuidAssignment(source, entity, "_it", indent + "    ");
+        }
+        EmitAuditAssignments(source, entity, "_it", isInsert, indent + "    ");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            source.AppendLine($"{indent}    _values{i}[_i] = {BuildParameterValueExpression(column, "_it." + column.PropertyName, sqlBuilder)};");
+        }
+        source.AppendLine($"{indent}}}");
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            source.AppendLine($"{indent}var _p{i} = _cmd.CreateParameter();");
+            source.AppendLine($"{indent}_p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent, predicate: false);
+            source.AppendLine($"{indent}_p{i}.Value = _values{i};");
+            source.AppendLine($"{indent}_cmd.Parameters.Add(_p{i});");
+        }
+    }
+
+    /// <summary>
+    /// Emits the cached immutable descriptor used by one generated UpdateAll method. Audit values and
+    /// converted provider values are produced in the row binder so they are evaluated exactly once when
+    /// the runtime admits that item to its bounded chunk.
+    /// </summary>
+    public static void EmitUpdateAllDescriptor(
+        StringBuilder source,
+        StoreMethodData method,
+        EntityData entity,
+        SqlBuilder sqlBuilder)
+    {
+        var entityType = entity.FullyQualifiedName;
+        var updateColumns = SelectMutationColumns(entity, includeKey: true, forUpdate: true);
+        var setColumns = updateColumns.Where(static column => !column.IsKey).ToArray();
+        var useSetBasedChunk = sqlBuilder.SupportsSetBasedBatchUpdate &&
+            setColumns.Length > 0 &&
+            entity.Keys.AsImmutableArray().All(IsSafeSetBasedUpdateKey);
+        var prefix = BuildBatchDescriptorFieldName(method);
+        source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{entityType}> {prefix} = new(");
+        source.AppendLine("        _sqlUpdate,");
+        source.AppendLine("        static (_t, _it) =>");
+        source.AppendLine("        {");
+        EmitAuditAssignments(source, entity, "_it", isInsert: false, indent: "            ");
+        for (var i = 0; i < updateColumns.Length; i++)
+        {
+            var column = updateColumns[i];
+            source.AppendLine($"            var _p{i} = _t.CreateParameter();");
+            source.AppendLine($"            _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", "            ", predicate: false);
+            source.AppendLine($"            _p{i}.Value = {BuildParameterValueExpression(column, "_it." + column.PropertyName, sqlBuilder)};");
+            source.AppendLine($"            _t.AddParameter(_p{i});");
+        }
+
+        if (sqlBuilder.UsesArrayBindingForBatchMutations)
+        {
+            source.AppendLine("        },");
+            source.AppendLine("        bindChunk: static (_cmd, _items) =>");
+            source.AppendLine("        {");
+            EmitEntityArrayChunkBinder(source, entity, updateColumns, sqlBuilder, isInsert: false, indent: "            ");
+            source.AppendLine("        });");
+        }
+        else if (useSetBasedChunk)
+        {
+            EmitSetBasedUpdateChunk(source, entity, updateColumns, setColumns, sqlBuilder);
+        }
+        else
+        {
+            source.AppendLine("        });");
+        }
+        source.AppendLine();
+    }
+
+    private static void EmitSetBasedUpdateChunk(
+        StringBuilder source,
+        EntityData entity,
+        IReadOnlyList<ColumnData> updateColumns,
+        IReadOnlyList<ColumnData> setColumns,
+        SqlBuilder sqlBuilder)
+    {
+        var header = sqlBuilder.BuildSetBasedBatchUpdateHeader(entity.Schema, entity.TableName);
+        var footer = sqlBuilder.BuildSetBasedBatchUpdateFooter(
+            entity.Schema,
+            entity.TableName,
+            entity.Keys.AsImmutableArray(),
+            setColumns);
+        var parametersPerItem = updateColumns.Count;
+        var maxItemsPerCommand = sqlBuilder.HardMaxParametersPerCommand / parametersPerItem;
+
+        source.AppendLine("        },");
+        source.AppendLine("        static _count =>");
+        source.AppendLine("        {");
+        var estimatedUpdateRowLength = 18 + updateColumns.Count * 24;
+        source.AppendLine($"            var _sql = new global::System.Text.StringBuilder(\"{GeneratorHelpers.Escape(header)}\", {header.Length + footer.Length} + (_count * {estimatedUpdateRowLength}));");
+        source.AppendLine("            for (var _r = 0; _r < _count; _r++)");
+        source.AppendLine("            {");
+        source.AppendLine("                _sql.Append(_r == 0 ? \"SELECT \" : \" UNION ALL SELECT \");");
+        for (var i = 0; i < updateColumns.Count; i++)
+        {
+            var column = updateColumns[i];
+            if (i > 0)
+            {
+                source.AppendLine("                _sql.Append(\", \");");
+            }
+            source.AppendLine($"                _sql.Append(\"@_u\").Append(_r).Append(\"_{i}\");");
+            source.AppendLine($"                if (_r == 0) _sql.Append(\" AS {GeneratorHelpers.Escape(sqlBuilder.QuoteIdentifier(column.ColumnName))}\");");
+        }
+        source.AppendLine("            }");
+        source.AppendLine($"            return _sql.Append(\"{GeneratorHelpers.Escape(footer)}\").ToString();");
+        source.AppendLine("        },");
+        source.AppendLine("        static (_cmd, _items) =>");
+        source.AppendLine("        {");
+        source.AppendLine("            for (var _r = 0; _r < _items.Count; _r++)");
+        source.AppendLine("            {");
+        source.AppendLine("                var _it = _items[_r];");
+        EmitAuditAssignments(source, entity, "_it", isInsert: false, indent: "                ");
+        for (var i = 0; i < updateColumns.Count; i++)
+        {
+            var column = updateColumns[i];
+            source.AppendLine("                {");
+            source.AppendLine("                    var _p = _cmd.CreateParameter();");
+            source.AppendLine($"                    _p.ParameterName = \"@_u\" + _r + \"_{i}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, "_p", "                    ", predicate: false);
+            source.AppendLine($"                    _p.Value = {BuildParameterValueExpression(column, "_it." + column.PropertyName, sqlBuilder)};");
+            source.AppendLine("                    _cmd.Parameters.Add(_p);");
+            source.AppendLine("                }");
+        }
+        source.AppendLine("            }");
+        source.AppendLine("        },");
+        EmitSetBasedUpdateSelector(source, entity.Keys.AsImmutableArray());
+        source.AppendLine($"        parametersPerItem: {parametersPerItem.ToString(System.Globalization.CultureInfo.InvariantCulture)},");
+        source.AppendLine($"        maxItemsPerCommand: {maxItemsPerCommand.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
+    }
+
+    private static void EmitSetBasedUpdateSelector(StringBuilder source, IReadOnlyList<ColumnData> keys)
+    {
+        var keyType = keys.Count == 1
+            ? keys[0].Type.DisplayName
+            : "(" + string.Join(", ", keys.Select(static key => key.Type.DisplayName)) + ")";
+        var keyValue = keys.Count == 1
+            ? "_items[_i]." + keys[0].PropertyName
+            : "(" + string.Join(", ", keys.Select(static key => "_items[_i]." + key.PropertyName)) + ")";
+
+        source.AppendLine("        static _items =>");
+        source.AppendLine("        {");
+        source.AppendLine("            if (_items.Count < 2) return false;");
+        source.AppendLine($"            var _keys = new global::System.Collections.Generic.HashSet<{keyType}>(_items.Count);");
+        source.AppendLine("            for (var _i = 0; _i < _items.Count; _i++)");
+        source.AppendLine("            {");
+        source.AppendLine($"                if (!_keys.Add({keyValue})) return false;");
+        source.AppendLine("            }");
+        source.AppendLine("            return true;");
+        source.AppendLine("        },");
+    }
+
+    private static bool IsSafeSetBasedUpdateKey(ColumnData key)
+        => !key.IsNullable &&
+           key.Converter is null &&
+           !key.EnumAsString &&
+           key.TypeClass is DbTypeClass.Boolean or DbTypeClass.Byte or DbTypeClass.Int16 or
+               DbTypeClass.Int32 or DbTypeClass.Int64 or DbTypeClass.Decimal or DbTypeClass.Guid;
+
+    /// <summary>
+    /// Emits a cached descriptor for DeleteAll. Array-DML dialects use the fixed single-key statement
+    /// plus an array binder; other dialects use one bounded collection-parameter command per chunk.
+    /// </summary>
+    public static void EmitDeleteAllDescriptor(
+        StringBuilder source,
+        StoreMethodData method,
+        EntityData entity,
+        SqlBuilder sqlBuilder,
+        CollectionParameterResolution resolution)
+    {
+        var keyType = entity.Keys[0].Type.DisplayName;
+        var prefix = BuildBatchDescriptorFieldName(method);
+        source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{keyType}> {prefix} = new(");
+
+        if (sqlBuilder.UsesArrayBindingForBatchMutations)
+        {
+            var key = entity.Keys[0];
+            source.AppendLine("        _sqlDeleteAllItem,");
+            source.AppendLine("        static (_t, _key) =>");
+            source.AppendLine("        {");
+            source.AppendLine("            var _p = _t.CreateParameter();");
+            source.AppendLine($"            _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(key.PropertyName))}\";");
+            AppendColumnParameterMetadata(source, key, sqlBuilder, "_p", "            ", predicate: true);
+            source.AppendLine($"            _p.Value = {BuildParameterValueExpression(key, "_key", sqlBuilder)};");
+            source.AppendLine("            _t.AddParameter(_p);");
+            source.AppendLine("        },");
+            source.AppendLine("        bindChunk: static (_cmd, _keys) =>");
+            source.AppendLine("        {");
+            source.AppendLine($"            {sqlBuilder.BuildArrayBindCountAssignment("_cmd", "_keys.Count")}");
+            source.AppendLine("            var _values = new object?[_keys.Count];");
+            source.AppendLine("            for (var _i = 0; _i < _keys.Count; _i++)");
+            source.AppendLine("            {");
+            source.AppendLine($"                _values[_i] = {BuildParameterValueExpression(key, "_keys[_i]", sqlBuilder)};");
+            source.AppendLine("            }");
+            source.AppendLine("            var _p = _cmd.CreateParameter();");
+            source.AppendLine($"            _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(key.PropertyName))}\";");
+            AppendColumnParameterMetadata(source, key, sqlBuilder, "_p", "            ", predicate: true);
+            source.AppendLine("            _p.Value = _values;");
+            source.AppendLine("            _cmd.Parameters.Add(_p);");
+            source.AppendLine("        });");
+            source.AppendLine();
+            return;
+        }
+
+        source.AppendLine("        static _ => _sqlDeleteAll,");
+        source.AppendLine("        static (_c, _keys) =>");
+        source.AppendLine("        {");
+        source.AppendLine(CollectionBindingExpression(
+            sqlBuilder,
+            entity.Keys[0],
+            entity.Schema,
+            sqlBuilder.ParameterName("keys"),
+            "_keys",
+            isNegatedCollection: false,
+            elementIsNullable: method.Parameters[0].ElementIsNullable,
+            resolution: resolution,
+            maxParametersExpression: "0"));
+        source.AppendLine("        },");
+        source.AppendLine("        parametersPerItem: 0,");
+        source.AppendLine("        maxItemsPerCommand: global::System.Int32.MaxValue);");
+        source.AppendLine();
     }
 
     private static string NonNullableValueExpression(TypeData type, string accessor)
@@ -2314,72 +2580,6 @@ internal static class StoreOperationEmitter
     /// <summary>Update-path stamp: modified-* auditing columns only (created-* are immutable).</summary>
     private static void EmitModifiedAuditAssignment(StringBuilder source, EntityData entity, string parameter, string indent)
         => EmitAuditAssignments(source, entity, parameter, isInsert: false, indent);
-
-    /// <summary>Per-item auditing pre-pass over the materialized batch list (<c>_list</c>).</summary>
-    private static void EmitAuditBatchAssignments(StringBuilder source, EntityData entity, bool isInsert, string indent)
-    {
-        var hasStamps = false;
-        foreach (var column in entity.Columns.AsImmutableArray())
-        {
-            if ((IsCreatedAudit(column) && isInsert) || IsModifiedAudit(column))
-            {
-                hasStamps = true;
-                break;
-            }
-        }
-
-        if (!hasStamps)
-        {
-            return;
-        }
-
-        source.AppendLine($"{indent}for (var _a = 0; _a < _list.Count; _a++)");
-        source.AppendLine($"{indent}{{");
-        foreach (var column in entity.Columns.AsImmutableArray())
-        {
-            var access = $"_list[_a].{column.PropertyName}";
-            if (IsCreatedAudit(column) && isInsert)
-            {
-                source.AppendLine($"{indent}    if ({AuditUnsetCheck(column, access)})");
-                source.AppendLine($"{indent}    {{");
-                source.AppendLine($"{indent}        {access} = {AuditStampValue(column)};");
-                source.AppendLine($"{indent}    }}");
-            }
-            else if (IsModifiedAudit(column))
-            {
-                source.AppendLine($"{indent}    {access} = {AuditStampValue(column)};");
-            }
-        }
-        source.AppendLine($"{indent}}}");
-        source.AppendLine();
-    }
-
-    /// <summary>Per-item v7 assignment pre-pass over the materialized batch list (<c>_list</c>).</summary>
-    private static void EmitSequentialGuidBatchAssignment(StringBuilder source, EntityData entity, string indent)
-    {
-        if (!HasSequentialGuidKey(entity))
-        {
-            return;
-        }
-
-        source.AppendLine($"{indent}for (var _g = 0; _g < _list.Count; _g++)");
-        source.AppendLine($"{indent}{{");
-        foreach (var key in entity.Keys.AsImmutableArray())
-        {
-            if (!key.IsSequentialGuid)
-            {
-                continue;
-            }
-
-            var access = $"_list[_g].{key.PropertyName}";
-            source.AppendLine($"{indent}    if ({SequentialGuidUnsetCheck(key, access)})");
-            source.AppendLine($"{indent}    {{");
-            source.AppendLine($"{indent}        {access} = global::Inquiry.InquiryGuid.NewVersion7();");
-            source.AppendLine($"{indent}    }}");
-        }
-        source.AppendLine($"{indent}}}");
-        source.AppendLine();
-    }
 
     private static string GetParameterDeclaration(EquatableArray<ParameterData> parameters, bool enumeratorCancellation = false)
     {

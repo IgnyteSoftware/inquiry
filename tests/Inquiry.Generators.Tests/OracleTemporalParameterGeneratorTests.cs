@@ -167,13 +167,21 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("DbType.Time;", text);
         Assert.Contains("after.Value.ToDateTime(global::System.TimeOnly.MinValue)", text);
 
-        foreach (var methodName in new[] { "InsertAsync", "UpdateAsync", "InsertAllAsync", "UpdateAllAsync" })
+        foreach (var methodName in new[] { "InsertAsync", "UpdateAsync" })
         {
             var method = Method(text, methodName);
             Assert.Contains(".ToDateTime(global::System.TimeOnly.MinValue)", method);
             Assert.Contains(".ToTimeSpan()", method);
             Assert.Contains("DbType.DateTimeOffset", method);
             Assert.DoesNotContain("DbType.Time;", method);
+        }
+        foreach (var methodName in new[] { "InsertAllAsync", "UpdateAllAsync" })
+        {
+            var descriptor = BatchDescriptor(text, methodName);
+            Assert.Contains(".ToDateTime(global::System.TimeOnly.MinValue)", descriptor);
+            Assert.Contains(".ToTimeSpan()", descriptor);
+            Assert.Contains("DbType.DateTimeOffset", descriptor);
+            Assert.DoesNotContain("DbType.Time;", descriptor);
         }
         var datePredicate = Method(text, "PageAsync");
         Assert.Contains("date.ToDateTime(global::System.TimeOnly.MinValue)", datePredicate);

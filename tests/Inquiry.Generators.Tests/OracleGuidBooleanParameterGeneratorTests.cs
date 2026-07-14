@@ -261,13 +261,20 @@ public sealed partial class InquiryGeneratorTests
         {
             "InsertAsync", "UpdateAsync", "UpsertAsync", "GetAsync", "DeleteAsync", "PageAsync",
             "SearchAsync", "ExistsAsync", "SetEnabledAsync", "DeleteFlagAsync", "SeekAsync",
-            "InsertAllAsync", "UpdateAllAsync", "BulkWriteAsync",
         })
         {
             var method = Method(text, methodName);
             Assert.DoesNotContain("DbType.Guid", method);
             Assert.DoesNotContain("DbType.Boolean", method);
             AssertOracleScalarMetadataPrecedesValue(method);
+        }
+
+        foreach (var methodName in new[] { "InsertAllAsync", "UpdateAllAsync", "BulkWriteAsync" })
+        {
+            var descriptor = BatchDescriptor(text, methodName);
+            Assert.DoesNotContain("DbType.Guid", descriptor);
+            Assert.DoesNotContain("DbType.Boolean", descriptor);
+            AssertOracleScalarMetadataPrecedesValue(descriptor);
         }
 
         Assert.Contains("DbType.Binary", Method(text, "InsertAsync"));
@@ -286,12 +293,12 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("DbType.Int32", Method(text, "SetEnabledAsync"));
         Assert.Contains("DbType.Int32", Method(text, "DeleteFlagAsync"));
         Assert.Contains("DbType.Binary", Method(text, "SeekAsync"));
-        Assert.Contains("DbType.Binary", Method(text, "InsertAllAsync"));
-        Assert.Contains("DbType.Int32", Method(text, "InsertAllAsync"));
-        Assert.Contains("DbType.Binary", Method(text, "UpdateAllAsync"));
-        Assert.Contains("DbType.Int32", Method(text, "UpdateAllAsync"));
-        Assert.Contains("DbType.Binary", Method(text, "BulkWriteAsync"));
-        Assert.Contains("DbType.Int32", Method(text, "BulkWriteAsync"));
+        Assert.Contains("DbType.Binary", BatchDescriptor(text, "InsertAllAsync"));
+        Assert.Contains("DbType.Int32", BatchDescriptor(text, "InsertAllAsync"));
+        Assert.Contains("DbType.Binary", BatchDescriptor(text, "UpdateAllAsync"));
+        Assert.Contains("DbType.Int32", BatchDescriptor(text, "UpdateAllAsync"));
+        Assert.Contains("DbType.Binary", BatchDescriptor(text, "BulkWriteAsync"));
+        Assert.Contains("DbType.Int32", BatchDescriptor(text, "BulkWriteAsync"));
 
         var insert = Method(text, "InsertAsync");
         Assert.Contains("_e.Id", insert);

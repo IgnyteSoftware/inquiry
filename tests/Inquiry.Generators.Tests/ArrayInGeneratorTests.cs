@@ -130,7 +130,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("\\\"Id\\\" = ANY(@keys)", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"@keys\", ids);", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"@keys\", _keys);", text);
         Assert.DoesNotContain("InquiryInExpansion", text);
     }
 

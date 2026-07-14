@@ -502,17 +502,18 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("RegionStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("private const string _sqlInsertAllPrefix = \"INSERT INTO TRegion (RegionId, Name) \";", text);
-        Assert.Contains("private const string _sqlInsertAllRowOpen = \"SELECT \";", text);
-        Assert.Contains("_sb.Append(\":iq1$b\").Append(_r).Append(\"_0\");", text);
-        Assert.Contains("_sb.Append(\" FROM dual\");", text);
-        Assert.Contains("_sb.Append(\" UNION ALL \");", text);
+        Assert.Contains("private const string _sqlInsert = \"INSERT INTO TRegion (RegionId, Name) VALUES (:", text);
+        Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleCommand)_cmd).ArrayBindCount = _items.Count;", text);
+        Assert.Contains("_p0.Value = _values0;", text);
+        Assert.Contains("_p1.Value = _values1;", text);
         // UpdateAll executes the single-row UPDATE per item via the batch API; no stub, no template const.
-        Assert.Contains("return await Inquiry.ExecuteBatchAsync(", text);
+        Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_InsertAllAsync_", text);
+        Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_UpdateAllAsync_", text);
+        Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_DeleteAllAsync_", text);
         Assert.Contains("_sqlUpdate,", text);
         Assert.DoesNotContain("throw new global::System.NotSupportedException(", text);
         Assert.DoesNotContain("_sqlUpdateAllRow", text);
-        Assert.Contains("_sqlDeleteAll", text);
+        Assert.Contains("_sqlDeleteAllItem", text);
     }
 
     [Fact]
@@ -530,10 +531,11 @@ public sealed partial class InquiryGeneratorTests
 
         // Multi-row VALUES shape: "(" row-open, "@" sigil, no INSERT ALL / dual-select footer.
         Assert.Contains("private const string _sqlInsertAllRowOpen = \"(\";", text);
-        Assert.Contains("_sb.Append(\"@p\").Append(_r).Append(\"_0\");", text);
+        Assert.Contains("_sql.Append(\"@p\").Append(_r).Append(\"_0\");", text);
         Assert.DoesNotContain("INSERT ALL", text);
         Assert.DoesNotContain("SELECT 1 FROM dual", text);
-        Assert.Contains("return await Inquiry.ExecuteBatchAsync(", text);
+        Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_InsertAllAsync_", text);
+        Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_UpdateAllAsync_", text);
         Assert.DoesNotContain("_sqlUpdateAllRow", text);
         Assert.DoesNotContain("throw new global::System.NotSupportedException(", text);
     }

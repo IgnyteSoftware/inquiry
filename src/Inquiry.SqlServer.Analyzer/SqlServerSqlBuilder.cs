@@ -8,6 +8,12 @@ namespace Inquiry.SqlServer.Analyzer;
 
 internal sealed class SqlServerSqlBuilder : SqlBuilder
 {
+    // SQL Server rejects a VALUES table-value constructor with more than 1,000 rows.
+    public override int BatchInsertMaxRowsPerCommand => 1000;
+
+    // Documented SQL Server stored-procedure/command parameter ceiling.
+    public override int HardMaxParametersPerCommand => 2100;
+
     public override CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
         => context.ProviderSpecialType switch
         {

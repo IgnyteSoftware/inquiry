@@ -37,6 +37,11 @@ namespace Inquiry.Oracle.Analyzer;
 /// </summary>
 internal sealed class OracleSqlBuilder : SqlBuilder
 {
+    public override bool UsesArrayBindingForBatchMutations => true;
+
+    public override string BuildArrayBindCountAssignment(string commandExpression, string countExpression)
+        => $"((global::Oracle.ManagedDataAccess.Client.OracleCommand){commandExpression}).ArrayBindCount = {countExpression};";
+
     public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
