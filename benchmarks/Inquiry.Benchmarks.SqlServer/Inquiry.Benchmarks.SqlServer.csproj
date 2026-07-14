@@ -15,6 +15,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Inquiry.Benchmarks.SqlServer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
     <PackageReference Include="Dapper" />
@@ -33,6 +37,7 @@
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
     <ProjectReference Include="..\Inquiry.Benchmarks.DLG\Inquiry.Benchmarks.DLG.csproj" />
+    <ProjectReference Include="..\Inquiry.Benchmarks.Contracts\Inquiry.Benchmarks.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
