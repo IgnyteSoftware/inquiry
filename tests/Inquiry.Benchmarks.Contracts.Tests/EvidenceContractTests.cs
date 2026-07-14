@@ -296,16 +296,31 @@ public sealed class EvidenceContractTests
             "Inquiry", "Inquiry.Sqlite", "Inquiry.SqlServer", "Inquiry.PostgreSql", "Inquiry.MySql",
             "Inquiry.MariaDb", "Inquiry.Oracle", "Inquiry.Interceptors", "Inquiry.Testing",
         }, SourceArtifactManifestCatalog.PackageIds);
-        Assert.Equal(12, SourceArtifactManifestCatalog.Manifests.Count);
-        Assert.All(SourceArtifactManifestCatalog.Manifests,
-            static manifest => Assert.Equal(BenchmarkSourceLane.DeveloperProject, manifest.Lane));
-        Assert.Throws<ArgumentOutOfRangeException>(() => SourceArtifactManifestCatalog.GetRequired(
+        var providers = new[] { "sqlite", "sqlserver", "postgresql", "mysql", "mariadb", "oracle" };
+        Assert.Equal(providers, SourceArtifactManifestCatalog.Providers);
+        var expectedLanes = providers.SelectMany(provider => new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
+            (Provider: provider, RuntimeTfm: runtimeTfm, Lane: BenchmarkSourceLane.DeveloperProject))).ToArray();
+        Assert.Equal(expectedLanes, SourceArtifactManifestCatalog.Manifests.Select(static manifest =>
+            (manifest.Provider, manifest.RuntimeTfm, manifest.Lane)));
+        var packageError = Assert.Throws<ArgumentOutOfRangeException>(() => SourceArtifactManifestCatalog.GetRequired(
             "sqlite", BenchmarkSourceMode.PackageConsumer, "net8.0"));
+        Assert.Equal("mode", packageError.ParamName);
+        Assert.Contains("trusted RC package producer", packageError.Message, StringComparison.Ordinal);
 
         foreach (var manifest in SourceArtifactManifestCatalog.Manifests)
         {
             Assert.Equal(ResolvedDependencyManifest.RequiredSelectionRule, manifest.ResolvedDependencyScope);
             Assert.Equal(TestData.RuntimeIdentifier, manifest.RuntimeIdentifier);
+            var target = $"{manifest.RuntimeTfm}/{TestData.RuntimeIdentifier}";
+            Assert.Equal($"source-artifacts-v1/{manifest.Provider}/DeveloperProject/{target}", manifest.Id);
+            Assert.Equal(new[]
+            {
+                (SourceArtifactRole.BenchmarkConfigFile, $"config/{manifest.Provider}/{target}/benchmark.config.json"),
+                (SourceArtifactRole.PackageLockFile, $"restore/{manifest.Provider}/{target}/packages.lock.json"),
+                (SourceArtifactRole.DependencyArtifact, $"restore/{manifest.Provider}/{target}/project.assets.json"),
+                (SourceArtifactRole.SelectedAssetsManifest, $"restore/{manifest.Provider}/{target}/selected-assets.tsv"),
+                (SourceArtifactRole.ResolvedDependencyManifest, $"restore/{manifest.Provider}/{target}/resolved-assets.manifest"),
+            }, manifest.ExpectedArtifacts.Select(static artifact => (artifact.Role, artifact.RelativeArtifactId)));
             var source = TestData.ProjectSource(manifest.Provider, manifest.RuntimeTfm);
             Assert.Equal(manifest.IdentityHash, source.ArtifactManifestHash);
             var selectedArtifacts = source.ResolvedDependencies.FromSelectedAssets();

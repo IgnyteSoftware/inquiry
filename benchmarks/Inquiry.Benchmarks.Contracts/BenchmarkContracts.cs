@@ -96,7 +96,7 @@ public static class SourceArtifactManifestCatalog
 
     public static IReadOnlyList<SourceArtifactManifest> Manifests { get; } =
         Providers.SelectMany(provider => new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
-            Create(provider, BenchmarkSourceMode.ProjectReference, runtimeTfm))).ToArray();
+            Create(provider, runtimeTfm))).ToArray();
 
     public const string ReleaseRuntimeIdentifier = "linux-x64";
 
@@ -106,6 +106,10 @@ public static class SourceArtifactManifestCatalog
         string runtimeTfm,
         string runtimeIdentifier = ReleaseRuntimeIdentifier)
     {
+        if (mode != BenchmarkSourceMode.ProjectReference)
+            throw new ArgumentOutOfRangeException(nameof(mode), mode,
+                "Package-consumer source artifact manifests require a trusted RC package producer and are not wired.");
+
         var lane = LaneFor(mode);
         return Manifests.SingleOrDefault(manifest =>
                    StringComparer.Ordinal.Equals(manifest.Provider, provider) && manifest.Lane == lane &&
@@ -122,25 +126,21 @@ public static class SourceArtifactManifestCatalog
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown source mode."),
     };
 
-    private static SourceArtifactManifest Create(string provider, BenchmarkSourceMode mode, string runtimeTfm)
+    private static SourceArtifactManifest Create(string provider, string runtimeTfm)
     {
-        var lane = LaneFor(mode);
+        const BenchmarkSourceLane lane = BenchmarkSourceLane.DeveloperProject;
         if (!Providers.Contains(provider, StringComparer.Ordinal))
             throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown provider.");
         var runtimeIdentifier = ReleaseRuntimeIdentifier;
         var target = $"{runtimeTfm}/{runtimeIdentifier}";
-        var artifacts = new List<SourceArtifactExpectation>();
-        if (mode == BenchmarkSourceMode.PackageConsumer)
-            artifacts.AddRange(PackageIds.Select(static id =>
-                new SourceArtifactExpectation(SourceArtifactRole.Package, $"packages/{id}.nupkg")));
-        artifacts.AddRange(
+        SourceArtifactExpectation[] artifacts =
         [
             new(SourceArtifactRole.BenchmarkConfigFile, $"config/{provider}/{target}/benchmark.config.json"),
             new(SourceArtifactRole.PackageLockFile, $"restore/{provider}/{target}/packages.lock.json"),
             new(SourceArtifactRole.DependencyArtifact, $"restore/{provider}/{target}/project.assets.json"),
             new(SourceArtifactRole.SelectedAssetsManifest, $"restore/{provider}/{target}/selected-assets.tsv"),
             new(SourceArtifactRole.ResolvedDependencyManifest, $"restore/{provider}/{target}/resolved-assets.manifest"),
-        ]);
+        ];
         return new($"source-artifacts-v1/{provider}/{lane}/{target}", provider, lane, runtimeTfm, runtimeIdentifier,
             ResolvedDependencyManifest.RequiredSelectionRule, artifacts);
     }
