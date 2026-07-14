@@ -353,6 +353,10 @@ public static class CiContractVerifier
         {
             throw new ReleaseVerificationException($"CI workflow is invalid YAML: {exception.Message}");
         }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ReleaseVerificationException($"Could not read CI workflow '{path}': {exception.Message}");
+        }
     }
 
     private static void ValidateCanonicalYaml(YamlNode node)
@@ -389,6 +393,10 @@ public static class CiContractVerifier
         catch (JsonException exception)
         {
             throw new ReleaseVerificationException($"The CI contract is invalid JSON: {exception.Message}");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ReleaseVerificationException($"Could not read CI contract '{path}': {exception.Message}");
         }
     }
 

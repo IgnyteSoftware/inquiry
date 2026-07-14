@@ -28,6 +28,12 @@ public static class PackageVerifier
     ];
 
     private static readonly string[] RequiredTfms = ["net8.0", "net9.0", "net10.0"];
+    private static readonly EnumerationOptions ProjectEnumerationOptions = new()
+    {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = false,
+        AttributesToSkip = FileAttributes.ReparsePoint
+    };
     private static readonly Guid SourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
 
     public static void VerifyManifest(string repositoryRoot, string manifestPath)
@@ -41,16 +47,20 @@ public static class PackageVerifier
         Require(manifest.PackageVersion == "1.0.0", "packageVersion must be exactly 1.0.0.");
         Require(manifest.Tag == $"v{manifest.PackageVersion}", "tag must equal v plus packageVersion.");
         Require(packages.Count == RequiredPackageIds.Length, "The manifest must contain exactly nine packages.");
+        foreach (var package in packages)
+        {
+            Require(!string.IsNullOrWhiteSpace(package.Id), "Package ID cannot be empty.");
+        }
+
         Require(packages.Select(package => package.Id).Distinct(StringComparer.Ordinal).Count() == packages.Count,
             "The manifest contains duplicate package IDs.");
 
         var packagesById = packages.ToDictionary(package => package.Id, StringComparer.Ordinal);
-        RequireSequence(packagesById.Keys.Order(), RequiredPackageIds, "package IDs");
+        RequireSequence(packagesById.Keys.Order(StringComparer.Ordinal), RequiredPackageIds.Order(StringComparer.Ordinal), "package IDs");
 
         foreach (var package in packages)
         {
-            Require(!string.IsNullOrWhiteSpace(package.Id), "Package ID cannot be empty.");
-            var dependencies = package.Dependencies ?? throw new ReleaseVerificationException($"{package.Id} dependencies must be an array.");
+            var dependencies = package.Dependencies ?? throw new ReleaseVerificationException($"{package.Id} dependencies must be a non-null object.");
             var libTfms = package.LibTfms ?? throw new ReleaseVerificationException($"{package.Id} libTfms must be an array.");
             var analyzers = package.Analyzers ?? throw new ReleaseVerificationException($"{package.Id} analyzers must be an array.");
             var analyzerSymbols = package.AnalyzerSymbols ?? throw new ReleaseVerificationException($"{package.Id} analyzerSymbols must be an array.");
@@ -64,7 +74,7 @@ public static class PackageVerifier
             Require(IsWithin(root, projectPath), $"Project path escapes the repository: {package.Project}");
             Require(File.Exists(projectPath), $"Project does not exist: {package.Project}");
             Require(Path.GetFileNameWithoutExtension(projectPath) == package.Id, $"Project/package ID mismatch for {package.Id}.");
-            RequireSequence(libTfms.Order(), RequiredTfms.Order(), $"{package.Id} lib TFMs");
+            RequireSequence(libTfms.Order(StringComparer.Ordinal), RequiredTfms.Order(StringComparer.Ordinal), $"{package.Id} lib TFMs");
             Require(analyzers.Distinct(StringComparer.Ordinal).Count() == analyzers.Count, $"{package.Id} has duplicate analyzer assets.");
             RequireSequence(analyzerSymbols.Order(StringComparer.Ordinal), analyzers
                 .Select(static analyzer => Path.ChangeExtension(analyzer, ".pdb"))
@@ -118,7 +128,7 @@ public static class PackageVerifier
             })
             .Order(StringComparer.Ordinal)
             .ToArray();
-        var fileSystemEntries = Directory.EnumerateFileSystemEntries(bundle, "*", SearchOption.AllDirectories).ToArray();
+        var fileSystemEntries = Directory.EnumerateFileSystemEntries(bundle, "*", SearchOption.TopDirectoryOnly).ToArray();
         Require(fileSystemEntries.All(path => File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0),
             "Bundle must contain regular files only; directories and links are forbidden.");
         var actualFiles = fileSystemEntries.Select(path => Normalize(Path.GetRelativePath(bundle, path))).Order(StringComparer.Ordinal).ToArray();
@@ -159,7 +169,7 @@ public static class PackageVerifier
             .ToHashSet(StringComparer.Ordinal);
         var actualPaths = new HashSet<string>(StringComparer.Ordinal);
 
-        var projectPaths = Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories)
+        var projectPaths = Directory.EnumerateFiles(root, "*.csproj", ProjectEnumerationOptions)
             .Where(path => !IsBuildOrWorktreePath(root, path))
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -183,7 +193,7 @@ public static class PackageVerifier
             }
         }
 
-        RequireSequence(actualPaths.Order(), expectedPaths.Order(), "packable project inventory");
+        RequireSequence(actualPaths.Order(StringComparer.Ordinal), expectedPaths.Order(StringComparer.Ordinal), "packable project inventory");
     }
 
     private static bool IsBuildOrWorktreePath(string root, string path)
@@ -286,8 +296,8 @@ public static class PackageVerifier
             var dependenciesElement = metadata.Elements().Single(element => element.Name.LocalName == "dependencies");
             var dependencyGroups = dependenciesElement.Elements().Where(element => element.Name.LocalName == "group").ToArray();
             RequireSequence(
-                dependencyGroups.Select(group => (string?)group.Attribute("targetFramework") ?? string.Empty).Order(),
-                package.LibTfms.Order(),
+                dependencyGroups.Select(group => (string?)group.Attribute("targetFramework") ?? string.Empty).Order(StringComparer.Ordinal),
+                package.LibTfms.Order(StringComparer.Ordinal),
                 $"{package.Id} dependency TFMs");
             foreach (var group in dependencyGroups)
             {
@@ -299,7 +309,7 @@ public static class PackageVerifier
                     element => (string?)element.Attribute("id") ?? string.Empty,
                     element => (string?)element.Attribute("version") ?? string.Empty,
                     StringComparer.Ordinal);
-                RequireSequence(actual.Keys.Order(), package.Dependencies.Keys.Order(),
+                RequireSequence(actual.Keys.Order(StringComparer.Ordinal), package.Dependencies.Keys.Order(StringComparer.Ordinal),
                     $"{package.Id} dependencies for {(string?)group.Attribute("targetFramework")}");
                 foreach (var dependency in package.Dependencies)
                 {
@@ -308,15 +318,15 @@ public static class PackageVerifier
                 }
             }
 
-            var expectedLibDlls = package.LibTfms.Select(tfm => $"lib/{tfm}/{package.Id}.dll").Order().ToArray();
+            var expectedLibDlls = package.LibTfms.Select(tfm => $"lib/{tfm}/{package.Id}.dll").Order(StringComparer.Ordinal).ToArray();
             var expectedLibAssets = expectedLibDlls
                 .Concat(package.LibTfms.Select(tfm => $"lib/{tfm}/{package.Id}.xml"))
-                .Order().ToArray();
-            var actualLibAssets = entries.Where(path => path.StartsWith("lib/", StringComparison.Ordinal)).Order().ToArray();
+                .Order(StringComparer.Ordinal).ToArray();
+            var actualLibAssets = entries.Where(path => path.StartsWith("lib/", StringComparison.Ordinal)).Order(StringComparer.Ordinal).ToArray();
             RequireSequence(actualLibAssets, expectedLibAssets, $"{package.Id} lib assets");
             var analyzerDlls = entries.Where(path => path.StartsWith("analyzers/dotnet/cs/", StringComparison.Ordinal) && path.EndsWith(".dll", StringComparison.Ordinal))
-                .Select(Path.GetFileName).Order().ToArray();
-            RequireSequence(analyzerDlls!, package.Analyzers.Order(), $"{package.Id} analyzer assets");
+                .Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
+            RequireSequence(analyzerDlls!, package.Analyzers.Order(StringComparer.Ordinal), $"{package.Id} analyzer assets");
 
             var identities = new Dictionary<string, DebugIdentity>(StringComparer.Ordinal);
             foreach (var dllPath in expectedLibDlls)

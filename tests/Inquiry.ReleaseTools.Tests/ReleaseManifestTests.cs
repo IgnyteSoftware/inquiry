@@ -23,12 +23,31 @@ public sealed class ReleaseManifestTests
     [InlineData("null-assets")]
     [InlineData("casing")]
     [InlineData("repository-branch")]
+    [InlineData("null-id")]
+    [InlineData("empty-id")]
     public void Invalid_manifest_is_rejected(string mutation)
     {
         var path = MutatedManifest(mutation);
         try
         {
             Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyManifest(RepositoryFixture.Root, path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Null_dependencies_reports_object_contract()
+    {
+        var path = MutatedManifest("null-dependencies");
+        try
+        {
+            var exception = Assert.Throws<ReleaseVerificationException>(() =>
+                PackageVerifier.VerifyManifest(RepositoryFixture.Root, path));
+
+            Assert.Contains("dependencies must be a non-null object", exception.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -86,6 +105,44 @@ public sealed class ReleaseManifestTests
         }
     }
 
+    [Fact]
+    public void Bundle_directory_reparse_point_is_rejected_without_traversal()
+    {
+        var bundle = Directory.CreateTempSubdirectory("inquiry-bundle-inventory-");
+        var target = Directory.CreateTempSubdirectory("inquiry-bundle-target-");
+        var link = Path.Combine(bundle.FullName, "linked-directory");
+        try
+        {
+            CreateExpectedEmptyBundle(bundle.FullName);
+            File.WriteAllBytes(Path.Combine(target.FullName, "outside.txt"), []);
+            try
+            {
+                Directory.CreateSymbolicLink(link, target.FullName);
+            }
+            catch (Exception exception) when (exception is UnauthorizedAccessException or PlatformNotSupportedException or IOException)
+            {
+                return;
+            }
+
+            var verificationException = Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyBundle(
+                RepositoryFixture.Root,
+                Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+                bundle.FullName,
+                new string('a', 40)));
+
+            Assert.Equal("Bundle must contain regular files only; directories and links are forbidden.", verificationException.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(link))
+            {
+                Directory.Delete(link);
+            }
+            bundle.Delete(recursive: true);
+            target.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("extra")]
     [InlineData("version")]
@@ -137,18 +194,7 @@ public sealed class ReleaseManifestTests
         var repository = Directory.CreateTempSubdirectory("inquiry-packable-inventory-");
         try
         {
-            var sourceManifest = Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json");
-            var manifestPath = Path.Combine(repository.FullName, "eng", "release-manifest.json");
-            Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
-            File.Copy(sourceManifest, manifestPath);
-            var manifest = JsonNode.Parse(File.ReadAllText(sourceManifest))!.AsObject();
-            foreach (var package in manifest["packages"]!.AsArray())
-            {
-                var projectPath = Path.Combine(repository.FullName, package!["project"]!.GetValue<string>());
-                Directory.CreateDirectory(Path.GetDirectoryName(projectPath)!);
-                var packageId = package!["id"]!.GetValue<string>();
-                File.WriteAllText(projectPath, $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><IsPackable>true</IsPackable><PackageId>{packageId}</PackageId></PropertyGroup></Project>");
-            }
+            var manifestPath = CreateSyntheticManifestRepository(repository.FullName);
 
             var unexpected = Path.Combine(repository.FullName, "tools", "Unexpected", "Unexpected.csproj");
             Directory.CreateDirectory(Path.GetDirectoryName(unexpected)!);
@@ -160,6 +206,39 @@ public sealed class ReleaseManifestTests
         finally
         {
             repository.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Packable_project_inventory_does_not_descend_through_reparse_directories()
+    {
+        var repository = Directory.CreateTempSubdirectory("inquiry-packable-inventory-");
+        var external = Directory.CreateTempSubdirectory("inquiry-external-project-");
+        var link = Path.Combine(repository.FullName, "linked-projects");
+        try
+        {
+            var manifestPath = CreateSyntheticManifestRepository(repository.FullName);
+            var unexpected = Path.Combine(external.FullName, "Unexpected.csproj");
+            File.WriteAllText(unexpected, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><IsPackable>true</IsPackable><PackageId>Unexpected</PackageId></PropertyGroup></Project>");
+            try
+            {
+                Directory.CreateSymbolicLink(link, external.FullName);
+            }
+            catch (Exception exception) when (exception is UnauthorizedAccessException or PlatformNotSupportedException or IOException)
+            {
+                return;
+            }
+
+            PackageVerifier.VerifyManifest(repository.FullName, manifestPath);
+        }
+        finally
+        {
+            if (Directory.Exists(link))
+            {
+                Directory.Delete(link);
+            }
+            repository.Delete(recursive: true);
+            external.Delete(recursive: true);
         }
     }
 
@@ -227,6 +306,15 @@ public sealed class ReleaseManifestTests
             case "repository-branch":
                 root["assets"]!["repositoryBranch"] = "refs/heads/main";
                 break;
+            case "null-id":
+                packages[0]!["id"] = null;
+                break;
+            case "empty-id":
+                packages[0]!["id"] = string.Empty;
+                break;
+            case "null-dependencies":
+                packages[0]!["dependencies"] = null;
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(mutation));
         }
@@ -234,6 +322,24 @@ public sealed class ReleaseManifestTests
         var path = Path.Combine(Path.GetTempPath(), $"inquiry-release-manifest-{Guid.NewGuid():N}.json");
         File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions(JsonSerializerOptions.Default) { WriteIndented = true }));
         return path;
+    }
+
+    private static string CreateSyntheticManifestRepository(string repository)
+    {
+        var sourceManifest = Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json");
+        var manifestPath = Path.Combine(repository, "eng", "release-manifest.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
+        File.Copy(sourceManifest, manifestPath);
+        var manifest = JsonNode.Parse(File.ReadAllText(sourceManifest))!.AsObject();
+        foreach (var package in manifest["packages"]!.AsArray())
+        {
+            var projectPath = Path.Combine(repository, package!["project"]!.GetValue<string>());
+            Directory.CreateDirectory(Path.GetDirectoryName(projectPath)!);
+            var packageId = package!["id"]!.GetValue<string>();
+            File.WriteAllText(projectPath, $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><IsPackable>true</IsPackable><PackageId>{packageId}</PackageId></PropertyGroup></Project>");
+        }
+
+        return manifestPath;
     }
 
     private static void CreateExpectedEmptyBundle(string bundle)

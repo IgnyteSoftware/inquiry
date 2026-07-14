@@ -49,6 +49,10 @@ public static class ReleaseTool
         {
             throw new ReleaseVerificationException($"The release manifest is invalid JSON: {exception.Message}");
         }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ReleaseVerificationException($"Could not read release manifest '{manifestPath}': {exception.Message}");
+        }
     }
 
     private static int Fail(TextWriter error, string message)
