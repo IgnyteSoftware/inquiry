@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Inquiry.Benchmarks.Contracts/Inquiry.Benchmarks.Contracts.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.FixtureGenerator/Inquiry.Benchmarks.FixtureGenerator.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.DLG/Inquiry.Benchmarks.DLG.csproj" Id="d8e858e3-2391-43d3-9471-0bebe45d2326" />
     <Project Path="benchmarks/Inquiry.Benchmarks.MariaDb/Inquiry.Benchmarks.MariaDb.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.MySql/Inquiry.Benchmarks.MySql.csproj" />
@@ -35,6 +37,7 @@
     <Project Path="src/Inquiry/Inquiry.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Inquiry.Benchmarks.Contracts.Tests/Inquiry.Benchmarks.Contracts.Tests.csproj" />
     <Project Path="tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj" />
     <Project Path="tests/Inquiry.MariaDb.Tests/Inquiry.MariaDb.Tests.csproj" />
     <Project Path="tests/Inquiry.MySql.Tests/Inquiry.MySql.Tests.csproj" />
