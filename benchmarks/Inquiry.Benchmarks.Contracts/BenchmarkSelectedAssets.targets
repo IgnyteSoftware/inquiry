@@ -29,7 +29,7 @@
       <_BenchmarkCoreProduct Include="@(_BenchmarkProductAsset)"
           Condition="'%(_BenchmarkProductAsset.Filename)' == 'Inquiry'" />
       <_BenchmarkInquiryAnalyzer Include="@(_BenchmarkAnalyzerAsset)"
-          Condition="$([System.String]::Copy('%(_BenchmarkAnalyzerAsset.Filename)').StartsWith('Inquiry.'))" />
+          Condition="'%(_BenchmarkAnalyzerAsset.Filename)' == '$(BenchmarkEvidenceProviderAssembly).Analyzer'" />
     </ItemGroup>
 
     <Error Condition="'@(_BenchmarkCoreProduct)' == '' or '@(_BenchmarkProviderProduct)' == ''"

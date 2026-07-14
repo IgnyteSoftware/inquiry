@@ -145,6 +145,47 @@ public sealed class EvidenceContractTests
     }
 
     [Fact]
+    public void SelectedAssetCollectorRequiresTheExactProviderAnalyzer()
+    {
+        var temporary = Path.Combine(Path.GetTempPath(), $"inquiry-provider-analyzer-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(temporary);
+        try
+        {
+            string Asset(string name)
+            {
+                var path = Path.Combine(temporary, name);
+                File.WriteAllText(path, name);
+                return path;
+            }
+
+            var manifest = Path.Combine(temporary, "selected-assets.tsv");
+            File.WriteAllLines(manifest,
+            [
+                $"{ResolvedDependencyManifestCollector.EmittedSchemaVersion}\tsqlite\tDeveloperProject\tnet8.0\tlinux-x64",
+                $"CompilerReference\tcompiler:framework\t{Asset("compiler.dll")}",
+                $"Runtime\truntime:host\t{Asset("runtime.dll")}",
+                $"Analyzer\tanalyzer:shared\t{Asset("Inquiry.Generators.Shared.dll")}",
+                $"GeneratedSource\tgenerated:probe\t{Asset("SelectedAssetProbe.g.cs")}",
+                $"HostAssembly\tbenchmark-host\t{Asset("Inquiry.Benchmarks.Probe.dll")}",
+                $"ProductAssembly\tinquiry-product\t{Asset("Inquiry.dll")}",
+                $"ProductAssembly\tprovider-product\t{Asset("Inquiry.Sqlite.dll")}",
+            ]);
+            var projectAssets = Path.Combine(temporary, "project.assets.json");
+            File.WriteAllText(projectAssets, "{}");
+
+            var exception = Assert.Throws<InvalidDataException>(() => ResolvedDependencyManifestCollector.Collect(
+                manifest, projectAssets, "sqlite", BenchmarkSourceLane.DeveloperProject,
+                "net8.0", "linux-x64", [new SelectedAssetRoot("repo", temporary)]));
+
+            Assert.Contains("provider analyzer", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ResolvedDependencyIdentityIsStableAcrossPhysicalRootRelocation()
     {
         var temporary = Path.Combine(Path.GetTempPath(), $"inquiry-relocation-{Guid.NewGuid():N}");
@@ -365,6 +406,32 @@ public sealed class EvidenceContractTests
             var drifted = envelope with { Source = source, CaseKey = envelope.CaseKey with { Source = source } };
             Assert.Contains(EvidenceValidator.Validate(drifted), static error => error.Code == "resolved-dependency-manifest");
         }
+    }
+
+    [Fact]
+    public void ResolvedDependencyEvidenceRequiresTheExactProviderAnalyzer()
+    {
+        var source = TestData.ProjectSource();
+        var resolved = source.ResolvedDependencies with
+        {
+            Assets = source.ResolvedDependencies.Assets.Where(static asset =>
+                !asset.LogicalAssetId.EndsWith("/Inquiry.Sqlite.Analyzer.dll", StringComparison.Ordinal)).ToArray(),
+        };
+        var fixedArtifacts = source.Artifacts.Where(static artifact => artifact.Role is not
+            (SourceArtifactRole.RuntimeAssembly or SourceArtifactRole.AnalyzerAssembly or SourceArtifactRole.GeneratedSource) &&
+            artifact.Role != SourceArtifactRole.ResolvedDependencyManifest).Append(
+                source.Artifacts.GetSingle(SourceArtifactRole.ResolvedDependencyManifest) with
+                {
+                    Sha256 = resolved.ContentSha256,
+                });
+        source = source with
+        {
+            ResolvedDependencies = resolved,
+            Artifacts = fixedArtifacts.Concat(resolved.FromSelectedAssets()).ToArray(),
+        };
+
+        Assert.Contains(EvidenceValidator.Validate(TestData.Envelope(source)),
+            static error => error.Code == "resolved-dependency-manifest");
     }
 
     [Fact]

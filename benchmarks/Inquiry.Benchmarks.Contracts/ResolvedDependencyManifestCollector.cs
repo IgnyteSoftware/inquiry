@@ -94,8 +94,9 @@ public static class ResolvedDependencyManifestCollector
         if (requiredProductNames.Any(required => assets.All(asset => asset.Kind != ResolvedAssetKind.ProductAssembly ||
                 !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(asset.LogicalAssetId), required))))
             throw new InvalidDataException("The selected product role must contain Inquiry.dll and the exact provider assembly.");
+        var providerAnalyzer = ProviderAnalyzerAssemblyName(provider);
         if (assets.All(asset => asset.Kind != ResolvedAssetKind.Analyzer ||
-                !Path.GetFileName(asset.LogicalAssetId).StartsWith("Inquiry.", StringComparison.OrdinalIgnoreCase)))
+                !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(asset.LogicalAssetId), providerAnalyzer)))
             throw new InvalidDataException("The selected analyzer role must contain an Inquiry provider analyzer.");
 
         return new ResolvedDependencyManifest(
@@ -262,6 +263,9 @@ public static class ResolvedDependencyManifestCollector
         "oracle" => "Inquiry.Oracle.dll",
         _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown benchmark provider."),
     };
+
+    internal static string ProviderAnalyzerAssemblyName(string provider)
+        => Path.GetFileNameWithoutExtension(ProviderAssemblyName(provider)) + ".Analyzer.dll";
 
     private static void EnsureNoReparsePoint(string root, string file)
     {

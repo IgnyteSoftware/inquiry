@@ -672,6 +672,7 @@ public static class EvidenceValidator
             ResolvedAssetKind.ProductAssembly,
         };
         var providerAssembly = ResolvedDependencyManifestCollector.ProviderAssemblyName(sourceManifest.Provider);
+        var providerAnalyzerAssembly = ResolvedDependencyManifestCollector.ProviderAnalyzerAssemblyName(sourceManifest.Provider);
         var invalidPhysicalRole =
             requiredKinds.Any(kind => resolved.Assets.All(asset => asset.Kind != kind)) ||
             resolved.Assets.Any(asset => asset.Kind == ResolvedAssetKind.HostAssembly &&
@@ -684,7 +685,7 @@ public static class EvidenceValidator
             resolved.Assets.All(asset => asset.Kind != ResolvedAssetKind.ProductAssembly ||
                 !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(asset.LogicalAssetId), providerAssembly)) ||
             resolved.Assets.All(asset => asset.Kind != ResolvedAssetKind.Analyzer ||
-                !Path.GetFileName(asset.LogicalAssetId).StartsWith("Inquiry.", StringComparison.OrdinalIgnoreCase));
+                !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(asset.LogicalAssetId), providerAnalyzerAssembly));
         if (!StringComparer.Ordinal.Equals(resolved.SelectionRuleId, ResolvedDependencyManifest.RequiredSelectionRule) ||
             !StringComparer.Ordinal.Equals(resolved.SelectionRuleId, sourceManifest.ResolvedDependencyScope) ||
             !StringComparer.Ordinal.Equals(resolved.Provider, sourceManifest.Provider) ||
