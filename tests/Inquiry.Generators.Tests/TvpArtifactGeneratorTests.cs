@@ -43,9 +43,9 @@ public sealed partial class InquiryGeneratorTests
         var schema = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
         var itemStore = Assert.Single(result.RunResult.GeneratedTrees,
-            static tree => tree.FilePath.EndsWith("\\ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+            static tree => string.Equals(Path.GetFileName(tree.FilePath), "Demo.ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
         var tenantStore = Assert.Single(result.RunResult.GeneratedTrees,
-            static tree => tree.FilePath.EndsWith("TenantItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+            static tree => string.Equals(Path.GetFileName(tree.FilePath), "Demo.TenantItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
         Assert.Contains("public const string ProviderArtifactsDdl", schema);
         Assert.Contains("public const string ProviderArtifactsValidationSql", schema);

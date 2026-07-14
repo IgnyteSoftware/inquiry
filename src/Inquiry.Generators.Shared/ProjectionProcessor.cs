@@ -43,6 +43,7 @@ internal static class ProjectionProcessor
 
         return new ProjectionData(
             FullyQualifiedName: symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            HintName: GeneratorHelpers.GetHintName(symbol, "InquiryProjection"),
             Name: symbol.Name,
             Namespace: symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToDisplayString(),
             EntityFullyQualifiedName: entityFqn,
@@ -83,7 +84,7 @@ internal static class ProjectionProcessor
 
         GeneratorHelpers.AppendNamespaceEnd(source, projection.Namespace);
 
-        context.AddSource($"{projection.Name}.InquiryProjection.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        context.AddSource(projection.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
         return new EntityRegistration(projectionType, projection.ClassMaterializerFullName);
     }
 

@@ -126,6 +126,7 @@ internal static class EntityProcessor
 
         return new EntityData(
             FullyQualifiedName: entitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            HintName: GeneratorHelpers.GetHintName(entitySymbol, "InquiryEntity"),
             Name: entitySymbol.Name,
             Namespace: entitySymbol.ContainingNamespace.IsGlobalNamespace ? null : entitySymbol.ContainingNamespace.ToDisplayString(),
             TableName: tableName,
@@ -185,7 +186,7 @@ internal static class EntityProcessor
 
         GeneratorHelpers.AppendNamespaceEnd(source, entity.Namespace);
 
-        context.AddSource($"{entity.Name}.InquiryEntity.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        context.AddSource(entity.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
         return new EntityRegistration(entityType, entity.ClassMaterializerFullName);
     }
 
