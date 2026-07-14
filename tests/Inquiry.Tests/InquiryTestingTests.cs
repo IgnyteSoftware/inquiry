@@ -139,6 +139,35 @@ public sealed class InquiryTestingTests
     }
 
     [Fact]
+    public async Task SiblingSandboxRunsStartedBeforeEitherIsAwaitedEnterConcurrently()
+    {
+        var services = new ServiceCollection()
+            .AddScoped<IInquiry>(_ => CreateSuccessfulSandboxInquiry())
+            .BuildServiceProvider();
+        await using (services.ConfigureAwait(false))
+        {
+            var sandbox = new InquirySandbox(services);
+            var bothEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var entered = 0;
+
+            async Task EnterAsync()
+            {
+                await sandbox.RunAsync(async (_, token) =>
+                {
+                    if (Interlocked.Increment(ref entered) == 2) bothEntered.TrySetResult();
+                    await bothEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+                });
+            }
+
+            var first = EnterAsync();
+            var second = EnterAsync();
+
+            await Task.WhenAll(first, second);
+            Assert.Equal(2, entered);
+        }
+    }
+
+    [Fact]
     public void EntityFactoriesHaveIndependentDeterministicSequences()
     {
         var first = new EntityFactory<FactoryEntity>(sequence => new FactoryEntity { Id = sequence });
@@ -334,14 +363,18 @@ public sealed class InquiryTestingTests
                 return Task.FromResult(Transaction!);
             }
 
-            if (Mode == FailingSandboxProxyMode.Transaction && targetMethod?.Name == nameof(Transactions.IInquiryTransaction.RollbackAsync))
+            if (Mode != FailingSandboxProxyMode.Inquiry && targetMethod?.Name == nameof(Transactions.IInquiryTransaction.RollbackAsync))
             {
-                return Task.FromException(new InvalidOperationException("rollback failure"));
+                return Mode == FailingSandboxProxyMode.Transaction
+                    ? Task.FromException(new InvalidOperationException("rollback failure"))
+                    : Task.CompletedTask;
             }
 
-            if (Mode == FailingSandboxProxyMode.Transaction && targetMethod?.Name == nameof(IAsyncDisposable.DisposeAsync))
+            if (Mode != FailingSandboxProxyMode.Inquiry && targetMethod?.Name == nameof(IAsyncDisposable.DisposeAsync))
             {
-                return new ValueTask(Task.FromException(new InvalidOperationException("transaction disposal failure")));
+                return Mode == FailingSandboxProxyMode.Transaction
+                    ? new ValueTask(Task.FromException(new InvalidOperationException("transaction disposal failure")))
+                    : ValueTask.CompletedTask;
             }
 
             throw new NotSupportedException(targetMethod?.Name);
@@ -352,10 +385,20 @@ public sealed class InquiryTestingTests
     {
         Inquiry,
         Transaction,
+        SuccessfulTransaction,
     }
 
     private sealed class FailingScopeDisposable : IDisposable
     {
         public void Dispose() => throw new InvalidOperationException("scope disposal failure");
+    }
+
+    private static IInquiry CreateSuccessfulSandboxInquiry()
+    {
+        var transaction = DispatchProxy.Create<Transactions.IInquiryTransaction, FailingSandboxProxy>();
+        ((FailingSandboxProxy)(object)transaction).Mode = FailingSandboxProxyMode.SuccessfulTransaction;
+        var inquiry = DispatchProxy.Create<IInquiry, FailingSandboxProxy>();
+        ((FailingSandboxProxy)(object)inquiry).Transaction = transaction;
+        return inquiry;
     }
 }

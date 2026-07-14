@@ -13,7 +13,7 @@ itself cannot be mocked. Opt in to interface generation instead:
 public partial class OrganizationStore : InquiryStore<Organization>
 {
     [InquirySelectOneByKey]
-    public partial Task<Organization?> SelectByKeyAsync(string key, CancellationToken ct = default);
+    public partial Task<Organization?> SelectByKeyAsync(Guid key, CancellationToken ct = default);
 }
 ```
 
@@ -57,10 +57,11 @@ var sandbox = new InquirySandbox(applicationServices);
 await sandbox.RunAsync(async (context, cancellationToken) =>
 {
     var organizations = context.Services.GetRequiredService<OrganizationStore>();
-    await organizations.InsertAsync(factory.Build("active"), cancellationToken);
+    var organization = factory.Build("active");
+    await organizations.InsertAsync(organization, cancellationToken);
 
     // Visible to this transaction, but absent after RunAsync returns.
-    var inserted = await organizations.SelectByKeyAsync("ORG01", cancellationToken);
+    var inserted = await organizations.SelectByKeyAsync(organization.Id, cancellationToken);
     Assert.NotNull(inserted);
 });
 ```
@@ -89,7 +90,7 @@ thread-safe sequence. Named states compose in the order passed to `Build`/`Build
 ```csharp
 var factory = new EntityFactory<Organization>(sequence => new Organization
     {
-        Id = $"ORG{sequence:00}",
+        Id = Guid.NewGuid(),
         Name = $"Organization {sequence}"
     })
     .State("active", organization => organization.IsActive = true)
