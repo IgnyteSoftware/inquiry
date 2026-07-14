@@ -270,7 +270,7 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees,
             t => string.Equals(
                 global::System.IO.Path.GetFileName(t.FilePath),
-                $"{storeName}.InquiryStore.g.cs",
+                $"Demo.{storeName}.InquiryStore.g.cs",
                 StringComparison.Ordinal));
         return tree.GetText().ToString();
     }
