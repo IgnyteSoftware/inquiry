@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <IsPackable>false</IsPackable>
+    <BenchmarkEvidenceProvider>sqlite</BenchmarkEvidenceProvider>
+    <BenchmarkEvidenceLane>DeveloperProject</BenchmarkEvidenceLane>
+    <BenchmarkEvidenceProviderAssembly>Inquiry.Sqlite</BenchmarkEvidenceProviderAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="System.Collections.Immutable" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\..\benchmarks\Inquiry.Benchmarks.Contracts\Inquiry.Benchmarks.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ProjectAssetsFile</_Parameter1>
+      <_Parameter2>$(MSBuildProjectDirectory)\obj\project.assets.json</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SelectedAssetsManifest</_Parameter1>
+      <_Parameter2>$(MSBuildProjectDirectory)\$(BenchmarkSelectedAssetsManifestPath)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>NuGetPackageRoot</_Parameter1>
+      <_Parameter2>$(NuGetPackageRoot)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>DotNetRoot</_Parameter1>
+      <_Parameter2>$(NetCoreRoot)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>RuntimeIdentifier</_Parameter1>
+      <_Parameter2>$(RuntimeIdentifier)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <Import Project="..\..\benchmarks\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />
+</Project>
