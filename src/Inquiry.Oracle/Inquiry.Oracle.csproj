@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Inquiry.Oracle.Tests" />
+    <Compile Include="..\Inquiry.Oracle.Shared\OracleBindName.cs" Link="OracleBindName.cs" />
   </ItemGroup>
 
   <!-- Resolve analyzer DLL paths dynamically so dotnet pack works under UseArtifactsOutput or custom OutputPath. -->

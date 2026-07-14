@@ -24,8 +24,10 @@ public partial class ShipperStore : InquiryStore<Shipper>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Shipper shipper, CancellationToken cancellationToken = default);
 
+#if !INQUIRY_ORACLE_TESTS
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(Shipper shipper, CancellationToken cancellationToken = default);
+#endif
 
     [InquiryDeleteOneByKey]
     public partial Task<bool> DeleteByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);

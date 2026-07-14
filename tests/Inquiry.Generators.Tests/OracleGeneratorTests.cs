@@ -12,6 +12,37 @@ namespace Inquiry.Generators.Tests;
 public sealed partial class InquiryGeneratorTests
 {
     [Fact]
+    public void OracleStoredProcedurePreservesFormalInputOutputAndReadbackNames()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            [InquiryTable("TProcedure")]
+            public sealed class ProcedureRow { [InquiryKey] public int Id { get; set; } }
+            public partial class ProcedureStore : InquiryStore<ProcedureRow>
+            {
+                [InquiryStoredProcedure("ADD_VALUES", OutputParameter = "Total")]
+                public partial Task<int> AddAsync(int leftValue, int rightValue, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        AssertNoErrors(result);
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("ProcedureStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Contains("InquiryParameter(\"leftValue\"", text, StringComparison.Ordinal);
+        Assert.Contains("InquiryParameter(\"rightValue\"", text, StringComparison.Ordinal);
+        Assert.Contains("InquiryParameter(\"Total\"", text, StringComparison.Ordinal);
+        Assert.Contains("ExecuteProcedureScalarAsync<int>(_cmd, \"Total\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("iq1$", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OracleDialectEmitsUnquotedIdentifiersColonParametersAndMergeUpsert()
     {
         const string source = """
@@ -75,20 +106,20 @@ public sealed partial class InquiryGeneratorTests
         // Unquoted identifiers (Oracle folds unquoted names to uppercase, so the DDL is created
         // unquoted to match) and :name bind parameters in every statement.
         Assert.Contains("private const string _sqlSelectAll = \"SELECT Key, Name FROM TOrganization\";", generatedText);
-        Assert.Contains("private const string _sqlSelectByKey = \"SELECT Key, Name FROM TOrganization WHERE Key = :Key\";", generatedText);
-        Assert.Contains("private const string _sqlSelectBy_Name = \"SELECT Key, Name FROM TOrganization WHERE Name = :Name\";", generatedText);
-        Assert.Contains("private const string _sqlInsert = \"INSERT INTO TOrganization (Key, Name) VALUES (:Key, :Name)\";", generatedText);
-        Assert.Contains("private const string _sqlUpdate = \"UPDATE TOrganization SET Name = :Name WHERE Key = :Key\";", generatedText);
-        Assert.Contains("private const string _sqlDeleteByKey = \"DELETE FROM TOrganization WHERE Key = :Key\";", generatedText);
+        Assert.Contains("private const string _sqlSelectByKey = \"SELECT Key, Name FROM TOrganization WHERE Key = :iq1$Keyxxx$2638875556e0da\";", generatedText);
+        Assert.Contains("private const string _sqlSelectBy_Name = \"SELECT Key, Name FROM TOrganization WHERE Name = :iq1$Namexx$ce0862aa45f482\";", generatedText);
+        Assert.Contains("private const string _sqlInsert = \"INSERT INTO TOrganization (Key, Name) VALUES (:iq1$Keyxxx$2638875556e0da, :iq1$Namexx$ce0862aa45f482)\";", generatedText);
+        Assert.Contains("private const string _sqlUpdate = \"UPDATE TOrganization SET Name = :iq1$Namexx$ce0862aa45f482 WHERE Key = :iq1$Keyxxx$2638875556e0da\";", generatedText);
+        Assert.Contains("private const string _sqlDeleteByKey = \"DELETE FROM TOrganization WHERE Key = :iq1$Keyxxx$2638875556e0da\";", generatedText);
 
         // MERGE … USING (SELECT … FROM dual) upsert; SetClauses excludes the ON-clause key column.
         Assert.Contains(
-            "private const string _sqlUpsert = \"MERGE INTO TOrganization target USING (SELECT :Key AS k0 FROM dual) source ON (target.Key = source.k0) WHEN MATCHED THEN UPDATE SET Name = :Name WHEN NOT MATCHED THEN INSERT (Key, Name) VALUES (:Key, :Name)\";",
+            "private const string _sqlUpsert = \"MERGE INTO TOrganization target USING (SELECT :iq1$Keyxxx$2638875556e0da AS k0 FROM dual) source ON (target.Key = source.k0) WHEN MATCHED THEN UPDATE SET Name = :iq1$Namexx$ce0862aa45f482 WHEN NOT MATCHED THEN INSERT (Key, Name) VALUES (:iq1$Keyxxx$2638875556e0da, :iq1$Namexx$ce0862aa45f482)\";",
             generatedText);
 
         // The runtime binds parameters with the hardcoded '@' prefix (shared emitter); Oracle's
         // BindByName=true matches them by name against the ':'-prefixed SQL.
-        Assert.Contains("_p0.ParameterName = \"@Key\";", generatedText);
+        Assert.Contains("_p0.ParameterName = \"iq1$Keyxxx$2638875556e0da\";", generatedText);
     }
 
     [Fact]
@@ -138,6 +169,81 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
         Assert.Contains("throw new global::System.NotSupportedException(", text);
         Assert.DoesNotContain("_sqlUpsert ", text); // the unsupported upsert const was skipped
+    }
+
+    [Fact]
+    public void OracleDialectReportsInq039AndEmitsCompileSafeStubsForIntentionalUnsupportedFixtures()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TGeneratedKeyOnly")]
+            public sealed class GeneratedKeyOnly
+            {
+                [InquiryKey(IsGenerated = true)]
+                public int? Id { get; set; }
+            }
+
+            public partial class GeneratedKeyOnlyStore : InquiryStore<GeneratedKeyOnly>
+            {
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(GeneratedKeyOnly item, CancellationToken cancellationToken = default);
+            }
+
+            [InquiryTable("TDefaultKeyOnly")]
+            public sealed class DefaultKeyOnly
+            {
+                [InquiryKey(UseDatabaseDefault = true, Length = 32)]
+                public string? Id { get; set; }
+            }
+
+            public partial class DefaultKeyOnlyStore : InquiryStore<DefaultKeyOnly>
+            {
+                [InquiryUpsert]
+                public partial Task<int> UpsertAsync(DefaultKeyOnly item, CancellationToken cancellationToken = default);
+            }
+
+            [InquiryTable("TDefaultedKey")]
+            public sealed class DefaultedKey
+            {
+                [InquiryKey(UseDatabaseDefault = true, Length = 32)]
+                public string? Id { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            public partial class DefaultedKeyStore : InquiryStore<DefaultedKey>
+            {
+                [InquiryUpsert(ReturnEntity = true)]
+                public partial Task<DefaultedKey?> UpsertReturningAsync(DefaultedKey item, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        var diagnostics = result.RunResult.Diagnostics
+            .Where(static diagnostic => diagnostic.Id == "INQ039")
+            .ToArray();
+
+        Assert.Equal(3, diagnostics.Length);
+        Assert.All(diagnostics, static diagnostic => Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity));
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+
+        var generatedStores = result.RunResult.GeneratedTrees
+            .Where(static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal))
+            .Select(static tree => tree.GetText().ToString())
+            .ToArray();
+        Assert.Equal(3, generatedStores.Length);
+        Assert.All(generatedStores, static text =>
+        {
+            Assert.Contains("throw new global::System.NotSupportedException(", text);
+            Assert.DoesNotContain("_sqlUpsert ", text);
+        });
     }
 
     [Fact]
@@ -202,9 +308,9 @@ public sealed partial class InquiryGeneratorTests
         // generated paging binder still emits the '@__offset'/'@__limit' runtime parameters, which
         // OracleInquiryConnectionFactory.FinalizeCommand reconciles.
         // Verified live by Inquiry.Oracle.Tests.PaginationIntegrationTests.
-        Assert.Contains("ORDER BY Id ASC OFFSET :inq$8$__offset ROWS FETCH NEXT :inq$7$__limit ROWS ONLY", text);
-        Assert.Contains("_p0.ParameterName = \"@__offset\";", text);
-        Assert.Contains("_p1.ParameterName = \"@__limit\";", text);
+        Assert.Contains("ORDER BY Id ASC OFFSET :iq1$offset$f951564368e298 ROWS FETCH NEXT :iq1$limitx$d661ce51163918 ROWS ONLY", text);
+        Assert.Contains("_p0.ParameterName = \"iq1$offset$f951564368e298\";", text);
+        Assert.Contains("_p1.ParameterName = \"iq1$limitx$d661ce51163918\";", text);
     }
 
     [Fact]
@@ -253,12 +359,12 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("BindingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("WHERE LeadingOffset = :inq$7$_offset", text);
-        Assert.Contains("OFFSET :inq$8$__offset ROWS FETCH NEXT :inq$7$__limit ROWS ONLY", text);
+        Assert.Contains("WHERE LeadingOffset = :iq1$offset$87567ea371cd6f", text);
+        Assert.Contains("OFFSET :iq1$offset$f951564368e298 ROWS FETCH NEXT :iq1$limitx$d661ce51163918 ROWS ONLY", text);
         Assert.DoesNotContain("OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY", text);
-        Assert.Contains("_p0.ParameterName = \"@_offset\";", text);
-        Assert.Contains("_p0.ParameterName = \"@__offset\";", text);
-        Assert.Contains("_p1.ParameterName = \"@__limit\";", text);
+        Assert.Contains("_p0.ParameterName = \"iq1$offset$87567ea371cd6f\";", text);
+        Assert.Contains("_p0.ParameterName = \"iq1$offset$f951564368e298\";", text);
+        Assert.Contains("_p1.ParameterName = \"iq1$limitx$d661ce51163918\";", text);
     }
 
     [Fact]
@@ -275,8 +381,8 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        Assert.Contains("WHERE CategoryId IN (SELECT jt.val FROM JSON_TABLE(:CategoryId, '$[*]' COLUMNS(val NUMBER(10) PATH '$')) jt)\";", generatedText);
-        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \":CategoryId\", categoryIds);", generatedText);
+        Assert.Contains("WHERE CategoryId IN (SELECT jt.val FROM JSON_TABLE(:iq1$Catego$ade38be14ffb48, '$[*]' COLUMNS(val NUMBER(10) PATH '$')) jt)\";", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \":iq1$Catego$ade38be14ffb48\", categoryIds);", generatedText);
     }
 
     [Fact]
@@ -330,7 +436,7 @@ public sealed partial class InquiryGeneratorTests
 
         // PL/SQL block: generated key captured into a %TYPE local, then OPEN :rc over the re-selected row.
         Assert.Contains(
-            "private const string _sqlInsertReturning = \"DECLARE v_key TWidget.Id%TYPE; BEGIN INSERT INTO TWidget (Name) VALUES (:Name) RETURNING Id INTO v_key; OPEN :rc FOR SELECT Id, Name FROM TWidget WHERE Id = v_key; END;\";",
+            "private const string _sqlInsertReturning = \"DECLARE v_key TWidget.Id%TYPE; BEGIN INSERT INTO TWidget (Name) VALUES (:iq1$Namexx$ce0862aa45f482) RETURNING Id INTO v_key; OPEN :rc FOR SELECT Id, Name FROM TWidget WHERE Id = v_key; END;\";",
             text);
         Assert.DoesNotContain("throw new global::System.NotSupportedException(", text); // no stub
     }
@@ -393,12 +499,11 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("RegionStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // INSERT ALL shape: `INSERT ALL ` header, per-row `INTO t (cols) VALUES (`, ':' sigil params, and a
-        // trailing dual select.
-        Assert.Contains("private const string _sqlInsertAllPrefix = \"INSERT ALL \";", text);
-        Assert.Contains("private const string _sqlInsertAllRowOpen = \"INTO TRegion (RegionId, Name) VALUES (\";", text);
-        Assert.Contains("_sb.Append(\":p\").Append(_r).Append(\"_0\");", text);
-        Assert.Contains("_sb.Append(\" SELECT 1 FROM dual\");", text);
+        Assert.Contains("private const string _sqlInsertAllPrefix = \"INSERT INTO TRegion (RegionId, Name) \";", text);
+        Assert.Contains("private const string _sqlInsertAllRowOpen = \"SELECT \";", text);
+        Assert.Contains("_sb.Append(\":iq1$b\").Append(_r).Append(\"_0\");", text);
+        Assert.Contains("_sb.Append(\" FROM dual\");", text);
+        Assert.Contains("_sb.Append(\" UNION ALL \");", text);
         // UpdateAll executes the single-row UPDATE per item via the batch API; no stub, no template const.
         Assert.Contains("return await Inquiry.ExecuteBatchAsync(", text);
         Assert.Contains("_sqlUpdate,", text);

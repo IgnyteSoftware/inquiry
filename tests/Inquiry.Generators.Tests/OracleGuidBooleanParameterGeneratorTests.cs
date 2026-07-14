@@ -315,32 +315,32 @@ public sealed partial class InquiryGeneratorTests
         const string guidFromJson = "HEXTORAW(SUBSTR(jt.val, 7, 2) || SUBSTR(jt.val, 5, 2) || SUBSTR(jt.val, 3, 2) || SUBSTR(jt.val, 1, 2) || SUBSTR(jt.val, 12, 2) || SUBSTR(jt.val, 10, 2) || SUBSTR(jt.val, 17, 2) || SUBSTR(jt.val, 15, 2) || SUBSTR(jt.val, 20, 4) || SUBSTR(jt.val, 25, 12))";
 
         var directIn = Method(text, "InDirectAsync");
-        var directGuidSql = $"Id IN (SELECT {guidFromJson} FROM JSON_TABLE(:Id, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)";
+        var directGuidSql = $"Id IN (SELECT {guidFromJson} FROM JSON_TABLE(:iq1$Idxxxx$30d4cf864d6e68, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)";
         var directInSql = SqlConstantContaining(text, directGuidSql);
         Assert.Contains(directInSql.Name, directIn);
-        Assert.Contains("Enabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:Enabled, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", directInSql.Declaration);
-        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":Id\", ids);", directIn);
-        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":Enabled\", enabled);", directIn);
+        Assert.Contains("Enabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:iq1$Enable$f77dd1731be3f8, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", directInSql.Declaration);
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Idxxxx$30d4cf864d6e68\", ids);", directIn);
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Enable$f77dd1731be3f8\", enabled);", directIn);
         Assert.DoesNotContain("InquiryInExpansion", directIn);
         Assert.DoesNotContain("DbType.Binary", directIn);
         Assert.DoesNotContain("DbType.Int32", directIn);
 
         var convertedIn = Method(text, "InConvertedAsync");
-        var convertedGuidSql = $"ConvertedToken IN (SELECT {guidFromJson} FROM JSON_TABLE(:ConvertedToken, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)";
+        var convertedGuidSql = $"ConvertedToken IN (SELECT {guidFromJson} FROM JSON_TABLE(:iq1$Conver$a66c43bcfcaa30, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)";
         var convertedInSql = SqlConstantContaining(text, convertedGuidSql);
         Assert.Contains(convertedInSql.Name, convertedIn);
-        Assert.Contains("ConvertedEnabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:ConvertedEnabled, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", convertedInSql.Declaration);
-        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":ConvertedToken\", tokens is null ? null : global::System.Linq.Enumerable.Select(tokens, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(_e)));", convertedIn);
-        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":ConvertedEnabled\", enabled is null ? null : global::System.Linq.Enumerable.Select(enabled, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(_e)));", convertedIn);
+        Assert.Contains("ConvertedEnabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:iq1$Conver$59f8aef3bdc996, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", convertedInSql.Declaration);
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Conver$a66c43bcfcaa30\", tokens is null ? null : global::System.Linq.Enumerable.Select(tokens, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(_e)));", convertedIn);
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Conver$59f8aef3bdc996\", enabled is null ? null : global::System.Linq.Enumerable.Select(enabled, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(_e)));", convertedIn);
         Assert.DoesNotContain("InquiryInExpansion", convertedIn);
 
         var directNotIn = Method(text, "NotInDirectAsync");
-        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":Id\", ids, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Binary);", directNotIn);
-        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":Enabled\", enabled, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", directNotIn);
+        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":iq1$Idxxxx$30d4cf864d6e68\", ids, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Binary);", directNotIn);
+        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":iq1$Enable$f77dd1731be3f8\", enabled, Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", directNotIn);
 
         var convertedNotIn = Method(text, "NotInConvertedAsync");
-        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":ConvertedToken\", tokens is null ? null : global::System.Linq.Enumerable.Select(tokens, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(_e)), Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Binary);", convertedNotIn);
-        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":ConvertedEnabled\", enabled is null ? null : global::System.Linq.Enumerable.Select(enabled, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(_e)), Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", convertedNotIn);
+        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":iq1$Conver$a66c43bcfcaa30\", tokens is null ? null : global::System.Linq.Enumerable.Select(tokens, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(_e)), Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Binary);", convertedNotIn);
+        Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":iq1$Conver$59f8aef3bdc996\", enabled is null ? null : global::System.Linq.Enumerable.Select(enabled, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(_e)), Inquiry.MaxParametersPerCommand, dbType: global::System.Data.DbType.Int32);", convertedNotIn);
 
         Assert.DoesNotContain(".ToByteArray()", directNotIn + convertedNotIn);
         Assert.DoesNotContain("? 1 : 0", directNotIn + convertedNotIn);
@@ -361,36 +361,36 @@ public sealed partial class InquiryGeneratorTests
         var convertedGuidSeparate = OracleBindingStoreText(result, "ConvertedGuidReferenceParentStore");
 
         Assert.Contains("_grid.ReadListAsync<", directGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id, global::System.Data.DbType.Binary)", directGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@ParentId\", id, global::System.Data.DbType.Binary)", directGrid);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", id, global::System.Data.DbType.Binary)", directGrid);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Parent$b4df331386b214\", id, global::System.Data.DbType.Binary)", directGrid);
 
         Assert.Contains("_grid.ReadListAsync<", convertedGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(id), global::System.Data.DbType.Binary)", convertedGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@ParentId\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(id), global::System.Data.DbType.Binary)", convertedGrid);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(id), global::System.Data.DbType.Binary)", convertedGrid);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Parent$b4df331386b214\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(id), global::System.Data.DbType.Binary)", convertedGrid);
 
         Assert.Contains("_grid.ReadListAsync<", directBoolGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id, global::System.Data.DbType.Int32)", directBoolGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@ParentId\", id, global::System.Data.DbType.Int32)", directBoolGrid);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", id, global::System.Data.DbType.Int32)", directBoolGrid);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Parent$b4df331386b214\", id, global::System.Data.DbType.Int32)", directBoolGrid);
 
         Assert.Contains("_grid.ReadListAsync<", convertedBoolGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(id), global::System.Data.DbType.Int32)", convertedBoolGrid);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@ParentId\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(id), global::System.Data.DbType.Int32)", convertedBoolGrid);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(id), global::System.Data.DbType.Int32)", convertedBoolGrid);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Parent$b4df331386b214\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(id), global::System.Data.DbType.Int32)", convertedBoolGrid);
 
         Assert.DoesNotContain("_grid.ReadListAsync<", directSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id, global::System.Data.DbType.Int32)", directSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(_entity.OwnerId), global::System.Data.DbType.Int32)", directSeparate);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", id, global::System.Data.DbType.Int32)", directSeparate);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(_entity.OwnerId), global::System.Data.DbType.Int32)", directSeparate);
 
         Assert.DoesNotContain("_grid.ReadListAsync<", convertedSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(id), global::System.Data.DbType.Int32)", convertedSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", _entity.OwnerId, global::System.Data.DbType.Int32)", convertedSeparate);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(id), global::System.Data.DbType.Int32)", convertedSeparate);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", _entity.OwnerId, global::System.Data.DbType.Int32)", convertedSeparate);
 
         Assert.DoesNotContain("_grid.ReadListAsync<", directGuidSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", id, global::System.Data.DbType.Binary)", directGuidSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", _entity.OwnerId, global::System.Data.DbType.Binary)", directGuidSeparate);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", id, global::System.Data.DbType.Binary)", directGuidSeparate);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", _entity.OwnerId, global::System.Data.DbType.Binary)", directGuidSeparate);
 
         Assert.DoesNotContain("_grid.ReadListAsync<", convertedGuidSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(id), global::System.Data.DbType.Binary)", convertedGuidSeparate);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Id\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(_entity.OwnerId), global::System.Data.DbType.Binary)", convertedGuidSeparate);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(id), global::System.Data.DbType.Binary)", convertedGuidSeparate);
+        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"iq1$Idxxxx$30d4cf864d6e68\", (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(_entity.OwnerId), global::System.Data.DbType.Binary)", convertedGuidSeparate);
 
         foreach (var text in new[]
         {

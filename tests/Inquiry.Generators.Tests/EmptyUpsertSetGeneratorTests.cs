@@ -194,7 +194,7 @@ public sealed partial class InquiryGeneratorTests
         var text = LedgerUpsertSql("SqlServer");
         var returning = SqlConstant(text, "_sqlUpsertReturning");
 
-        Assert.Contains("DECLARE @_out TABLE ([Id] BIGINT, [CreatedAt] DATETIME2);", text);
+        Assert.Contains("DECLARE @_out TABLE ([Id] BIGINT, [CreatedAt] DATETIME2(7));", text);
         Assert.Contains("INSERT INTO @_out ([Id], [CreatedAt]) SELECT [Id], [CreatedAt] FROM [Ledger] WITH (UPDLOCK, SERIALIZABLE)", returning);
         Assert.Contains("OUTPUT INSERTED.[Id], INSERTED.[CreatedAt] INTO @_out ([Id], [CreatedAt])", returning);
         Assert.Contains("SELECT [Id], [CreatedAt] FROM @_out", returning);

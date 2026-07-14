@@ -348,6 +348,10 @@ internal static class EntityProcessor
             var metadataAttribute = columnAttribute ?? foreignKeyAttribute;
             var isKey = keyAttribute is not null;
             var sqlType = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "SqlType") : null;
+            var lengthSpecified = HasNamedArgument(metadataAttribute, "Length");
+            var precisionSpecified = HasNamedArgument(metadataAttribute, "Precision");
+            var scaleSpecified = HasNamedArgument(metadataAttribute, "Scale");
+            var isUnicodeSpecified = HasNamedArgument(metadataAttribute, "IsUnicode");
             var length = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Length") : null) ?? 0;
             var precision = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Precision") : null) ?? 0;
             var scale = (metadataAttribute is not null ? GeneratorHelpers.GetNamedInt(metadataAttribute, "Scale") : null) ?? 0;
@@ -362,7 +366,9 @@ internal static class EntityProcessor
                 : precision < 0 ? "Precision (" + precision + ") cannot be negative"
                 : scale < 0 ? "Scale (" + scale + ") cannot be negative"
                 : precision > 38 ? "Precision (" + precision + ") exceeds the maximum of 38 (use SqlType for a wider decimal)"
-                : scale > precision ? "Scale (" + scale + ") cannot exceed Precision (" + precision + ")"
+                : scale > precision && typeData.SpecialType != SpecialType.System_DateTime &&
+                    typeData.NonNullableDisplayName != "global::System.DateTimeOffset" && !typeData.IsTimeOnly
+                    ? "Scale (" + scale + ") cannot exceed Precision (" + precision + ")"
                 : null;
             if (rangeError is not null)
             {
@@ -449,9 +455,21 @@ internal static class EntityProcessor
                 IsNullable = !isKey && typeData.IsNullable,
                 SqlType = sqlType,
                 SqlTypeLocation = GetNamedArgumentLocation(metadataAttribute, "SqlType"),
+                ProviderClrTypeName = converter is not null
+                    ? converter.ProviderType?.NonNullableDisplayName ?? converter.ProviderTypeDisplay
+                    : enumAsString ? "global::System.String"
+                    : typeData.IsEnum ? SpecialTypeDisplayName(typeData.EnumUnderlyingSpecialType)
+                    : typeData.NonNullableDisplayName,
+                ProviderValueIsNullable = converter?.ProviderType?.IsNullable == true,
                 Length = length,
+                IsLengthSpecified = lengthSpecified,
+                LengthLocation = GetNamedArgumentLocation(metadataAttribute, "Length"),
                 Precision = precision,
+                IsPrecisionSpecified = precisionSpecified,
+                PrecisionLocation = GetNamedArgumentLocation(metadataAttribute, "Precision"),
                 Scale = scale,
+                IsScaleSpecified = scaleSpecified,
+                ScaleLocation = GetNamedArgumentLocation(metadataAttribute, "Scale"),
                 DefaultExpression = defaultExpression,
                 DefaultExpressionLocation = GetNamedArgumentLocation(metadataAttribute, "DefaultExpression"),
                 UseDatabaseDefaultLocation = GetNamedArgumentLocation(metadataAttribute, "UseDatabaseDefault"),
@@ -466,6 +484,8 @@ internal static class EntityProcessor
                 ForeignKeyOnUpdate = foreignKeyAttribute is null ? 0 : GetNamedEnumValue(foreignKeyAttribute, "OnUpdate"),
                 IsIndexed = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsIndexed"),
                 IsUnicode = metadataAttribute is null || GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnicode", true),
+                IsUnicodeSpecified = isUnicodeSpecified,
+                IsUnicodeLocation = GetNamedArgumentLocation(metadataAttribute, "IsUnicode"),
                 IsUnique = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnique"),
                 IndexName = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "IndexName") : null,
                 Converter = converter,
@@ -586,6 +606,22 @@ internal static class EntityProcessor
         SpecialType.System_DateTime => DbTypeClass.DateTime,
         // String, Char, and anything else fall back to a text column.
         _ => DbTypeClass.String,
+    };
+
+    private static bool HasNamedArgument(AttributeData? attribute, string name)
+        => attribute?.NamedArguments.Any(pair => pair.Key == name) == true;
+
+    private static string SpecialTypeDisplayName(SpecialType type) => type switch
+    {
+        SpecialType.System_SByte => "global::System.SByte",
+        SpecialType.System_Byte => "global::System.Byte",
+        SpecialType.System_Int16 => "global::System.Int16",
+        SpecialType.System_UInt16 => "global::System.UInt16",
+        SpecialType.System_Int32 => "global::System.Int32",
+        SpecialType.System_UInt32 => "global::System.UInt32",
+        SpecialType.System_Int64 => "global::System.Int64",
+        SpecialType.System_UInt64 => "global::System.UInt64",
+        _ => "global::System.Int32",
     };
 
     /// <summary>

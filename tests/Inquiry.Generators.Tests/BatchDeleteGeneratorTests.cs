@@ -83,7 +83,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("[Code] IN (SELECT [Value] FROM @keys)", text);
-        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@keys\", codes, \"[dbo].[Inquiry_Tvp_474f2ebbdd781f2c0331853ca09837a0aa4613f2bf445089eafda2b033abe95c]\");", text);
+        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@keys\", codes, \"[dbo].[Inquiry_Tvp_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f]\", _inquiryTvpDescriptor_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f);", text);
         Assert.DoesNotContain("InquiryInExpansion", text);
     }
 
@@ -122,8 +122,8 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM TThing WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:keys, '$[*]' COLUMNS(val NUMBER(19) PATH '$')) jt)\";", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \":keys\", ids);", text);
+        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM TThing WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:iq1$keysxx$d6859d157d8d31, '$[*]' COLUMNS(val NUMBER(19) PATH '$')) jt)\";", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \":iq1$keysxx$d6859d157d8d31\", ids);", text);
     }
 
     [Fact]

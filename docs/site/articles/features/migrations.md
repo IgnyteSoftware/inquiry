@@ -4,7 +4,9 @@ Inquiry deliberately does **not** ship a migration engine. It emits the full `CR
 
 > `InquiryGeneratedSchema` is generated `internal` to your entity assembly, so run the migration bootstrap from that assembly (or expose the string yourself).
 
-On SQL Server, `Ddl` includes the generated TVP types required by positive collection predicates and `[InquiryDeleteAll]`. For an existing database, add `InquiryGeneratedSchema.ProviderArtifactsDdl` to a migration before deploying code that references those methods. Use `ProviderArtifactsValidationSql` as a read-only deployment check. Do not run setup lazily from application requests: binding is deliberately free of catalog I/O and DDL, and missing artifacts fail visibly so migration drift is not hidden.
+On SQL Server, `Ddl` includes the generated TVP types required by positive collection predicates and `[InquiryDeleteAll]`. For an existing database, add `InquiryGeneratedSchema.ProviderArtifactsDdl` to a migration before deploying code that references those methods. Use `ProviderArtifactsValidationSql` as a read-only deployment check: success returns no rows; otherwise inspect `Status` (`missing`, `mismatched`, or `metadata-invisible`) and `Details`. Do not run setup lazily from application requests: binding is deliberately free of catalog I/O and DDL, and invalid artifacts fail visibly so migration drift is not hidden.
+
+Use separate deployment and application principals. The migration principal needs permission to create schemas/types. The application principal needs `REFERENCES` on the generated types (granting `REFERENCES` on the owning schema is the practical option) plus its ordinary table permissions. A principal running the validation query also needs catalog visibility, normally `VIEW DEFINITION` on the owning schema/database; without it the query reports `metadata-invisible` instead of incorrectly claiming the type is missing.
 
 ## DbUp
 
@@ -49,6 +51,8 @@ Two practices make this setup self-policing:
 ## What stays out of scope
 
 When a new SQL Server collection element type or entity schema appears, include the regenerated `ProviderArtifactsDdl` in the next migration. Names are deterministic, so independently deployed instances and databases agree on the same objects.
+
+TVP v2 names include exact facets and nullability. SQL Server cannot alter a user-defined table type in place, so deploy in this order: create the newly generated types, run validation with a catalog-visible deployment principal, deploy the application binaries that reference them, then remove unreferenced legacy types in a later migration. Do not drop old types in the same migration when rolling instances may still use them. This also applies when moving from the pre-release coarse TVP names to v2.
 
 Diff-based migration generation, `ALTER` emission, versioning, and rollback are explicitly not planned ([roadmap](../../develop/roadmap.md#explicitly-out-of-scope-for-10)) — DbUp/FluentMigrator/Flyway own that lifecycle. Inquiry's contribution is an always-correct, dependency-ordered baseline for free.
 

@@ -26,6 +26,7 @@ internal static class StoreOperationEmitter
         Dictionary<string, EntityData> relationChildEntities,
         Dictionary<string, EntityData> relationJunctionEntities,
         SqlBuilder sqlBuilder,
+        CollectionParameterResolution? deleteAllCollectionResolution = null,
         string? baseSelectField = null,
         string? resultTypeOverride = null,
         string? structMatOverride = null)
@@ -247,7 +248,9 @@ internal static class StoreOperationEmitter
                     entity.Schema,
                     sqlBuilder.ParameterName("keys"),
                     keysParam,
-                    isNegatedCollection: false));
+                    isNegatedCollection: false,
+                    elementIsNullable: method.Parameters[0].ElementIsNullable,
+                    resolution: deleteAllCollectionResolution));
                 source.AppendLine("            });");
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 source.AppendLine("    }");
@@ -332,7 +335,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("            static (_cmd, _arg) =>");
                 source.AppendLine("            {");
                 source.AppendLine("                var _p = _cmd.CreateParameter();");
-                source.AppendLine("                _p.ParameterName = \"@searchTerm\";");
+                source.AppendLine($"                _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("searchTerm"))}\";");
                 source.AppendLine("                _p.DbType = global::System.Data.DbType.String;");
                 source.AppendLine("                _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
                 source.AppendLine("                _cmd.Parameters.Add(_p);");
@@ -367,11 +370,13 @@ internal static class StoreOperationEmitter
                 EmitSequentialGuidBatchAssignment(source, entity, indent: "        ");
                 EmitAuditBatchAssignments(source, entity, isInsert: true, indent: "        ");
                 // Dialect-aware multi-row INSERT shape: header + per-row (rowOpen + bound params) joined by a
-                // separator + footer. Base => `INSERT INTO t (cols) VALUES (…),(…)`; Oracle => `INSERT ALL
-                // INTO t (cols) VALUES (…) INTO … SELECT 1 FROM dual`. The row-param sigil follows the dialect
-                // (':' on Oracle); the binder below keeps '@', reconciled by the connection factory.
-                var _pSigil = sqlBuilder.ParameterName("p");
+                // separator + footer. Base => `INSERT INTO t (cols) VALUES (…),(…)`; Oracle =>
+                // `INSERT INTO t (cols) SELECT … FROM dual UNION ALL SELECT … FROM dual`. SQL and runtime
+                // parameter prefixes are dialect-owned so Oracle can stay on encoded, collision-safe names.
+                var _pSigil = sqlBuilder.BatchInsertSqlParameterPrefix;
+                var _runtimeParameterPrefix = sqlBuilder.BatchInsertRuntimeParameterPrefix;
                 var _rowSeparator = sqlBuilder.BatchInsertRowSeparator;
+                var _rowClose = sqlBuilder.BatchInsertRowClose;
                 var _insertFooter = sqlBuilder.BatchInsertFooter;
                 source.AppendLine("        var _sb = new global::System.Text.StringBuilder(_sqlInsertAllPrefix);");
                 source.AppendLine("        for (var _r = 0; _r < _list.Count; _r++)");
@@ -383,7 +388,7 @@ internal static class StoreOperationEmitter
                     var seg = _c == 0 ? _pSigil : ", " + _pSigil;
                     source.AppendLine($"            _sb.Append(\"{GeneratorHelpers.Escape(seg)}\").Append(_r).Append(\"_{_c}\");");
                 }
-                source.AppendLine("            _sb.Append(')');");
+                source.AppendLine($"            _sb.Append(\"{GeneratorHelpers.Escape(_rowClose)}\");");
                 source.AppendLine("        }");
                 if (_insertFooter.Length > 0)
                 {
@@ -402,7 +407,7 @@ internal static class StoreOperationEmitter
                     var col = insertable[_c];
                     source.AppendLine("                    {");
                     source.AppendLine("                        var _p = _cmd.CreateParameter();");
-                    source.AppendLine($"                        _p.ParameterName = \"@p\" + _r + \"_{_c}\";");
+                    source.AppendLine($"                        _p.ParameterName = \"{GeneratorHelpers.Escape(_runtimeParameterPrefix)}\" + _r + \"_{_c}\";");
                     AppendColumnParameterMetadata(source, col, sqlBuilder, "_p", "                        ", predicate: false);
                     source.AppendLine($"                        _p.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName, sqlBuilder)};");
                     source.AppendLine("                        _cmd.Parameters.Add(_p);");
@@ -436,7 +441,7 @@ internal static class StoreOperationEmitter
                 {
                     var col = updateColumns[_c];
                     source.AppendLine($"                var _p{_c} = _t.CreateParameter();");
-                    source.AppendLine($"                _p{_c}.ParameterName = \"@{GeneratorHelpers.Escape(col.PropertyName)}\";");
+                    source.AppendLine($"                _p{_c}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(col.PropertyName))}\";");
                     AppendColumnParameterMetadata(source, col, sqlBuilder, $"_p{_c}", "                ", predicate: false);
                     source.AppendLine($"                _p{_c}.Value = {BuildParameterValueExpression(col, "_it." + col.PropertyName, sqlBuilder)};");
                     source.AppendLine($"                _t.AddParameter(_p{_c});");
@@ -460,7 +465,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.StoredProcedure:
-                EmitStoredProcedure(source, method, parameters, entityType, structMat, cancellation);
+                EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, structMat, cancellation);
                 break;
         }
     }
@@ -889,7 +894,7 @@ internal static class StoreOperationEmitter
         {
             var column = columns[i];
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
-            source.AppendLine($"{indent}    _p{i}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
+            source.AppendLine($"{indent}    _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent + "    ", emitSizePrecision);
             source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i), sqlBuilder)};");
             source.AppendLine($"{indent}    _cmd.Parameters.Add(_p{i});");
@@ -1037,12 +1042,14 @@ internal static class StoreOperationEmitter
                     owningSchema,
                     binding.SqlParameterName,
                     arg,
-                    binding.IsNegatedCollection));
+                    binding.IsNegatedCollection,
+                    binding.ElementIsNullable,
+                    binding.CollectionResolution));
             }
             else
             {
                 source.AppendLine($"                var _p{i} = _c.CreateParameter();");
-                source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
+                source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterNameFromSql(binding.SqlParameterName))}\";");
                 AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{i}", "                ", predicate: true);
                 source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{i});");
@@ -1081,7 +1088,7 @@ internal static class StoreOperationEmitter
             var column = setColumns[i];
             var arg = method.Parameters[i].Name;
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
-            source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(column.PropertyName)}\";");
+            source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
             source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(column, arg, sqlBuilder)};");
             source.AppendLine($"                _c.Parameters.Add(_p{pi});");
@@ -1101,12 +1108,14 @@ internal static class StoreOperationEmitter
                     owningSchema,
                     binding.SqlParameterName,
                     arg,
-                    binding.IsNegatedCollection));
+                    binding.IsNegatedCollection,
+                    binding.ElementIsNullable,
+                    binding.CollectionResolution));
             }
             else
             {
                 source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
-                source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(binding.SqlParameterName)}\";");
+                source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterNameFromSql(binding.SqlParameterName))}\";");
                 AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: true);
                 source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
@@ -1156,7 +1165,7 @@ internal static class StoreOperationEmitter
         {
             var arg = method.Parameters[i].Name;
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
-            source.AppendLine($"                _p{pi}.ParameterName = \"@{GeneratorHelpers.Escape(fieldColumns[i].PropertyName)}\";");
+            source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(fieldColumns[i].PropertyName))}\";");
             AppendColumnParameterMetadata(source, fieldColumns[i], sqlBuilder, $"_p{pi}", "                ", predicate: true);
             source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg, sqlBuilder)};");
             source.AppendLine($"                _c.Parameters.Add(_p{pi});");
@@ -1168,8 +1177,8 @@ internal static class StoreOperationEmitter
         {
             var offsetArg = method.Parameters[fieldColumns.Count].Name;
             var limitArg = method.Parameters[fieldColumns.Count + 1].Name;
-            AppendScalarIntParameter(source, ref pi, "@__offset", offsetArg);
-            AppendScalarIntParameter(source, ref pi, "@__limit", limitArg);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, "__offset", offsetArg);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, "__limit", limitArg);
             // The limit is the exact maximum row count, so pre-size the result list (#61).
             pagedCapacityArg = $", capacityHint: {limitArg}";
         }
@@ -1243,7 +1252,7 @@ internal static class StoreOperationEmitter
                         ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
                         : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
                 source.AppendLine($"                    var _p{pi} = _c.CreateParameter();");
-                source.AppendLine($"                    _p{pi}.ParameterName = \"@__cursor{i}\";");
+                source.AppendLine($"                    _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("__cursor" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)))}\";");
                 AppendColumnParameterMetadata(source, plan.KeysetColumns[i], sqlBuilder, $"_p{pi}", "                    ", predicate: true);
                 source.AppendLine($"                    _p{pi}.Value = {valueExpr};");
                 source.AppendLine($"                    _c.Parameters.Add(_p{pi});");
@@ -1252,7 +1261,7 @@ internal static class StoreOperationEmitter
             source.AppendLine("                }");
         }
 
-        AppendScalarIntParameter(source, ref pi, "@__pageSize", pageSizeParam + " + 1");
+        AppendScalarIntParameter(source, sqlBuilder, ref pi, "__pageSize", pageSizeParam + " + 1");
 
         source.AppendLine("            });");
         // Over-fetch pageSize + 1 to detect a next page; pre-size the list to that exact count (#61).
@@ -1290,10 +1299,10 @@ internal static class StoreOperationEmitter
         source.AppendLine($"        return new global::Inquiry.Paging.InquiryPage<{entityType}, {nonNullableCursor}>(_items, _next, _hasMore);");
     }
 
-    private static void AppendScalarIntParameter(StringBuilder source, ref int pi, string name, string valueExpr)
+    private static void AppendScalarIntParameter(StringBuilder source, SqlBuilder sqlBuilder, ref int pi, string logicalName, string valueExpr)
     {
         source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
-        source.AppendLine($"                _p{pi}.ParameterName = \"{name}\";");
+        source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(logicalName))}\";");
         source.AppendLine($"                _p{pi}.DbType = global::System.Data.DbType.Int32;");
         source.AppendLine($"                _p{pi}.Value = {valueExpr};");
         source.AppendLine($"                _c.Parameters.Add(_p{pi});");
@@ -1379,7 +1388,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
     }
 
-    private static void EmitStoredProcedure(StringBuilder source, StoreMethodData method, string parameters, string entityType, string structMat, string cancellation)
+    private static void EmitStoredProcedure(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string structMat, string cancellation)
     {
         var procParams = Take(method.Parameters, method.Parameters.Count - 1).ToArray();
         var isAsyncEnum = method.ProcedureReturn == ProcedureReturnKind.AsyncEnumerableOfEntity;
@@ -1399,12 +1408,12 @@ internal static class StoreOperationEmitter
             source.AppendLine("            {");
             foreach (var p in procParams)
             {
-                source.AppendLine($"                new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(p.Name)}\", (object?){p.Name} ?? global::System.DBNull.Value),");
+                source.AppendLine($"                new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(p.Name))}\", (object?){p.Name} ?? global::System.DBNull.Value),");
             }
 
             if (hasScalarOutput)
             {
-                source.AppendLine($"                {BuildProcedureOutputParameter(method)},");
+                source.AppendLine($"                {BuildProcedureOutputParameter(sqlBuilder, method)},");
             }
 
             source.AppendLine("            },");
@@ -1428,7 +1437,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"        return await Inquiry.ExecuteAsync(_cmd, {cancellation}).ConfigureAwait(false);");
                 break;
             case ProcedureReturnKind.TaskOfOutputScalar:
-                source.AppendLine($"        return await Inquiry.ExecuteProcedureScalarAsync<{method.ScalarResultType}>(_cmd, \"{GeneratorHelpers.Escape(method.ProcedureReadBackName!)}\", {cancellation}).ConfigureAwait(false);");
+                source.AppendLine($"        return await Inquiry.ExecuteProcedureScalarAsync<{method.ScalarResultType}>(_cmd, \"{GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(method.ProcedureReadBackName!))}\", {cancellation}).ConfigureAwait(false);");
                 break;
         }
 
@@ -1441,9 +1450,9 @@ internal static class StoreOperationEmitter
     /// parameter starts as <c>DBNull</c> with its DbType (and <c>Size = -1</c> for variable-length
     /// strings so providers allocate a read-back buffer).
     /// </summary>
-    private static string BuildProcedureOutputParameter(StoreMethodData method)
+    private static string BuildProcedureOutputParameter(SqlBuilder sqlBuilder, StoreMethodData method)
     {
-        var name = "\"" + GeneratorHelpers.Escape(method.ProcedureReadBackName!) + "\"";
+        var name = "\"" + GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(method.ProcedureReadBackName!)) + "\"";
         if (method.ProcedureReturnsValue)
         {
             return $"new global::Inquiry.Parameters.InquiryParameter({name}, 0, direction: global::System.Data.ParameterDirection.ReturnValue)";
@@ -1505,10 +1514,12 @@ internal static class StoreOperationEmitter
         string? owningSchema,
         string sqlParameterName,
         string arg,
-        bool isNegatedCollection)
+        bool isNegatedCollection,
+        bool elementIsNullable,
+        CollectionParameterResolution? resolution)
     {
         var name = GeneratorHelpers.Escape(sqlParameterName);
-        var projected = ProjectedCollectionExpression(sqlBuilder, column, arg);
+        var projected = ProjectedCollectionExpression(sqlBuilder, column, arg, elementIsNullable);
         // Stamp the same DbType the scalar binder resolves for this column so an IN element binds with
         // the right type (e.g. DateTime2 on SQL Server, not legacy datetime). The array path leaves it
         // to the provider, which infers the element type from the typed native array.
@@ -1527,14 +1538,10 @@ internal static class StoreOperationEmitter
 
         if (sqlBuilder.UseArrayInParameters)
         {
-            var artifact = sqlBuilder.BuildCollectionParameterArtifact(owningSchema, column);
-            if (artifact is null)
-            {
-                var method = sqlBuilder.DialectName == "SqlServer" ? "BindUnsupported" : "Bind";
-                return $"                {sqlBuilder.ArrayParameterBinderFqn}.{method}(_c, \"{name}\", {projected});";
-            }
-
-            return $"                {sqlBuilder.ArrayParameterBinderFqn}.Bind(_c, \"{name}\", {projected}, \"{GeneratorHelpers.Escape(artifact.RuntimeTypeName)}\");";
+            if (resolution is null || !resolution.IsValid)
+                throw new InvalidOperationException("Collection transport must be resolved once before method emission.");
+            return "                " + sqlBuilder.BuildCollectionParameterBinding(
+                new CollectionParameterBindingContext(resolution, "_c", name, projected));
         }
 
         return $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, Inquiry.MaxParametersPerCommand{dbTypeArg}{sizePrecisionArgs});";
@@ -1550,9 +1557,13 @@ internal static class StoreOperationEmitter
     /// nullable value/reference converter model binds <c>null</c> rather than calling
     /// <c>ToProvider</c> for that element.
     /// </summary>
-    private static string ProjectedCollectionExpression(SqlBuilder sqlBuilder, ColumnData column, string arg)
+    private static string ProjectedCollectionExpression(
+        SqlBuilder sqlBuilder,
+        ColumnData column,
+        string arg,
+        bool elementIsNullable)
     {
-        var nullableModelElement = column.Type.IsNullable
+        var nullableModelElement = elementIsNullable
             || (column.Converter is not null && !column.Type.IsValueType);
         var value = nullableModelElement
             ? column.Type.IsValueType ? "_e.Value" : "_e"
@@ -1583,9 +1594,10 @@ internal static class StoreOperationEmitter
         }
         else
         {
-            providerValue = value;
             providerSpecialType = column.Type.IsEnum ? column.Type.EnumUnderlyingSpecialType : column.Type.SpecialType;
             providerTypeName = column.Type.IsEnum ? SpecialTypeName(providerSpecialType) : column.Type.NonNullableDisplayName;
+            providerValue = column.Type.IsEnum ? $"({providerTypeName}){value}" : value;
+            requiresProjection = column.Type.IsEnum;
         }
 
         var storage = sqlBuilder.BuildCollectionElementExpression(new CollectionElementExpressionContext(
@@ -1724,7 +1736,7 @@ internal static class StoreOperationEmitter
         foreach (var paramName in paramNames)
         {
             var keyValue = BuildInlineParameterValueExpression(entity.Keys[0], keyParamName, sqlBuilder);
-            source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(paramName)}\", {keyValue}{keyDbArg}{keySizeArg}),");
+            source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(paramName))}\", {keyValue}{keyDbArg}{keySizeArg}),");
         }
         source.AppendLine("                }),");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -1761,7 +1773,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("                new global::Inquiry.Parameters.InquiryParameter[]");
         source.AppendLine("                {");
         var inputKeyValue = BuildInlineParameterValueExpression(entity.Keys[0], keyParamName, sqlBuilder);
-        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {inputKeyValue}{_keyDbArg}{_keySizeArg}),");
+        source.AppendLine($"                    new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(entity.Keys[0].PropertyName))}\", {inputKeyValue}{_keyDbArg}{_keySizeArg}),");
         source.AppendLine("                }),");
         source.AppendLine("            default,");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -1783,7 +1795,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
                 var entityKeyValue = BuildInlineParameterValueExpression(entity.Keys[0], "_entity." + entity.Keys[0].PropertyName, sqlBuilder);
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(entity.Keys[0].PropertyName)}\", {entityKeyValue}{_keyDbArg}{_keySizeArg}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(entity.Keys[0].PropertyName))}\", {entityKeyValue}{_keyDbArg}{_keySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
@@ -1801,7 +1813,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
                 var relationKeyValue = BuildInlineParameterValueExpression(entity.Keys[0], "_entity." + entity.Keys[0].PropertyName, sqlBuilder);
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(relation.ForeignKeyProperty)}\", {relationKeyValue}{_keyDbArg}{_keySizeArg}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(relation.ForeignKeyProperty))}\", {relationKeyValue}{_keyDbArg}{_keySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
@@ -1820,7 +1832,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("                    new global::Inquiry.Parameters.InquiryParameter[]");
                 source.AppendLine("                    {");
                 var childKeyValue = BuildInlineParameterValueExpression(childEntity.Keys[0], "_entity." + relation.ForeignKeyProperty, sqlBuilder);
-                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"@{GeneratorHelpers.Escape(parentKeyPropertyName)}\", {childKeyValue}{_childKeyDbArg}{_childKeySizeArg}),");
+                source.AppendLine($"                        new global::Inquiry.Parameters.InquiryParameter(\"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(parentKeyPropertyName))}\", {childKeyValue}{_childKeyDbArg}{_childKeySizeArg}),");
                 source.AppendLine("                    }),");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}).ConfigureAwait(false);");

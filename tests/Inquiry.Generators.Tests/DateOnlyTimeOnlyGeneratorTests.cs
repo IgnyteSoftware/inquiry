@@ -113,10 +113,10 @@ public sealed partial class InquiryGeneratorTests
         var ddl = ExtractSchemaDdl(result);
 
         Assert.Contains("[EventDate] DATE NOT NULL", ddl);
-        Assert.Contains("[StartTime] TIME NOT NULL", ddl);
+        Assert.Contains("[StartTime] TIME(7) NOT NULL", ddl);
         Assert.Contains("[EndDate] DATE,", ddl);
-        Assert.Contains("[EndTime] TIME", ddl);
-        Assert.DoesNotContain("[EndTime] TIME NOT NULL", ddl);
+        Assert.Contains("[EndTime] TIME(7)", ddl);
+        Assert.DoesNotContain("[EndTime] TIME(7) NOT NULL", ddl);
     }
 
     [Fact]
