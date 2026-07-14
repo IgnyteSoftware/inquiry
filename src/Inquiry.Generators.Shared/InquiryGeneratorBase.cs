@@ -510,8 +510,12 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             ? compilationAction
             : ReportDiagnostic.Default;
         var provider = compilation.Options.SyntaxTreeOptionsProvider;
-        if (provider is not null &&
-            provider.TryGetGlobalDiagnosticValue("INQ039", cancellationToken, out var globalAction))
+        if (provider is null)
+        {
+            return IsUnsupportedOperationStubOptIn(fallback);
+        }
+
+        if (provider.TryGetGlobalDiagnosticValue("INQ039", cancellationToken, out var globalAction))
         {
             fallback = globalAction;
         }
@@ -520,8 +524,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         foreach (var tree in compilation.SyntaxTrees)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var action = provider is not null &&
-                provider.TryGetDiagnosticValue(tree, "INQ039", cancellationToken, out var treeAction)
+            var action = provider.TryGetDiagnosticValue(tree, "INQ039", cancellationToken, out var treeAction)
                     ? treeAction
                     : fallback;
             if (!IsUnsupportedOperationStubOptIn(action) ||
