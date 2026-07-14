@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Inquiry.Benchmarks.Contracts.Tests" />
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="JsonSchema.Net" />
+    <EmbeddedResource Include="Evidence\benchmark-evidence.schema.json" />
+    <EmbeddedResource Include="Evidence\checked-baseline.schema.json" />
+    <None Include="Evidence\benchmark-evidence.schema.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Evidence\checked-baseline.schema.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
