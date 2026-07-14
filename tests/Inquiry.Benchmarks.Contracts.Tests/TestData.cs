@@ -78,10 +78,10 @@ internal static class TestData
 
     private static ResolvedDependencyAsset ProviderResolvedAsset(string provider) => provider switch
     {
-        "sqlite" => new("nuget/microsoft.data.sqlite/10.0.9/lib/net8.0/Microsoft.Data.Sqlite.dll", ResolvedAssetKind.Runtime, "runtime:Microsoft.Data.Sqlite", new string('7', 64)),
+        "sqlite" => new("nuget/microsoft.data.sqlite/10.0.8/lib/net8.0/Microsoft.Data.Sqlite.dll", ResolvedAssetKind.Runtime, "runtime:Microsoft.Data.Sqlite", new string('7', 64)),
         "sqlserver" => new("nuget/microsoft.data.sqlclient/7.0.1/lib/net8.0/Microsoft.Data.SqlClient.dll", ResolvedAssetKind.Runtime, "runtime:Microsoft.Data.SqlClient", new string('7', 64)),
         "postgresql" => new("nuget/npgsql/10.0.3/lib/net8.0/Npgsql.dll", ResolvedAssetKind.Runtime, "runtime:Npgsql", new string('7', 64)),
-        "mysql" or "mariadb" => new("nuget/mysqlconnector/2.6.1/lib/net8.0/MySqlConnector.dll", ResolvedAssetKind.Runtime, "runtime:MySqlConnector", new string('7', 64)),
+        "mysql" or "mariadb" => new("nuget/mysqlconnector/2.6.0/lib/net8.0/MySqlConnector.dll", ResolvedAssetKind.Runtime, "runtime:MySqlConnector", new string('7', 64)),
         "oracle" => new("nuget/oracle.manageddataaccess.core/23.26.200/lib/net8.0/Oracle.ManagedDataAccess.dll", ResolvedAssetKind.Runtime, "runtime:Oracle.ManagedDataAccess.Core", new string('7', 64)),
         _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown provider."),
     };

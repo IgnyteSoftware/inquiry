@@ -852,6 +852,10 @@ public sealed record EvidenceArtifactValidationContext(
 
 public static class EvidenceArtifactValidator
 {
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
+
     public static ArtifactValidationResult<BenchmarkEvidenceEnvelope> Validate(
         byte[] json,
         EvidenceArtifactValidationContext? filesystem = null)
@@ -965,7 +969,7 @@ public static class EvidenceArtifactValidator
         {
             if ((current.Attributes & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidDataException($"Artifact path traverses a reparse point: {relativeArtifactId}");
-            if (StringComparer.OrdinalIgnoreCase.Equals(current.FullName.TrimEnd(Path.DirectorySeparatorChar), root))
+            if (PathComparer.Equals(current.FullName.TrimEnd(Path.DirectorySeparatorChar), root))
                 return path;
             current = current is FileInfo file ? file.Directory : ((DirectoryInfo)current).Parent;
         }

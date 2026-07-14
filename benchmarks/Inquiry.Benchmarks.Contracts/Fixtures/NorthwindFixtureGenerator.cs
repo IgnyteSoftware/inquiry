@@ -45,19 +45,31 @@ public static class FixtureChecksum
 {
     public static string Compute(IEnumerable<SeedRow> rows)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var row in rows)
-        {
-            hash.AppendData(Encoding.UTF8.GetBytes(row.Table));
-            hash.AppendData([0]);
-            hash.AppendData(Encoding.UTF8.GetBytes(row.Ordinal.ToString(CultureInfo.InvariantCulture)));
-            hash.AppendData([0]);
-            hash.AppendData(Encoding.UTF8.GetBytes(row.CanonicalText));
-            hash.AppendData([10]);
-        }
-
-        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        using var accumulator = new FixtureChecksumAccumulator();
+        foreach (var row in rows) accumulator.Append(row);
+        return accumulator.GetHashAndReset();
     }
+}
+
+public sealed class FixtureChecksumAccumulator : IDisposable
+{
+    private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
+    public void Append(SeedRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        _hash.AppendData(Encoding.UTF8.GetBytes(row.Table));
+        _hash.AppendData([0]);
+        _hash.AppendData(Encoding.UTF8.GetBytes(row.Ordinal.ToString(CultureInfo.InvariantCulture)));
+        _hash.AppendData([0]);
+        _hash.AppendData(Encoding.UTF8.GetBytes(row.CanonicalText));
+        _hash.AppendData([10]);
+    }
+
+    public string GetHashAndReset()
+        => Convert.ToHexString(_hash.GetHashAndReset()).ToLowerInvariant();
+
+    public void Dispose() => _hash.Dispose();
 }
 
 public static class NorthwindFixtureGenerator

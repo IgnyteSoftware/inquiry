@@ -48,6 +48,17 @@ public sealed class FixtureContractTests
     }
 
     [Fact]
+    public void StreamingChecksumMatchesEnumerableChecksum()
+    {
+        var rows = NorthwindFixtureGenerator.Generate(
+            "Orders", FixtureTier.Tiny, NorthwindFixtureCatalog.Seed).Take(20).ToArray();
+        using var accumulator = new FixtureChecksumAccumulator();
+        foreach (var row in rows) accumulator.Append(row);
+
+        Assert.Equal(FixtureChecksum.Compute(rows), accumulator.GetHashAndReset());
+    }
+
+    [Fact]
     public void TinyTierUsesExactCheckedCustomerAndOrderSelectivityBuckets()
     {
         var customers = NorthwindFixtureGenerator.Generate("Customers", FixtureTier.Tiny, NorthwindFixtureCatalog.Seed).ToArray();

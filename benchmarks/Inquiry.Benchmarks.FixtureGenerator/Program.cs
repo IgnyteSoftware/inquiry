@@ -71,11 +71,15 @@ foreach (var table in NorthwindFixtureCatalog.Schema.Tables)
     var path = Path.Combine(outputDirectory, safeName + ".jsonl");
     await using var stream = File.Create(path);
     await using var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false));
+    using var checksum = new FixtureChecksumAccumulator();
     var rows = NorthwindFixtureGenerator.Generate(table.Name, tier, manifest.Seed);
     foreach (var row in rows)
+    {
         await writer.WriteLineAsync(JsonSerializer.Serialize(row.Values, EvidenceJson.Options));
+        checksum.Append(row);
+    }
     await writer.FlushAsync();
-    checksums[table.Name] = FixtureChecksum.Compute(NorthwindFixtureGenerator.Generate(table.Name, tier, manifest.Seed));
+    checksums[table.Name] = checksum.GetHashAndReset();
     if (!StringComparer.Ordinal.Equals(checksums[table.Name], manifest.TableChecksums[table.Name]))
         throw new InvalidOperationException($"Generated checksum drift for '{table.Name}'.");
 }
