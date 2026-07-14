@@ -79,17 +79,41 @@ public sealed class BatchRuntimeEvidenceTests
         Assert.Equal(3, batchState.BatchDisposeCount);
     }
 
-    [Fact]
-    public async Task TransactedBatchUsesOuterTransactionWithoutSavepointsOrCommit()
+    [Theory]
+    [InlineData(InquiryBatchExecutionMode.ReusedCommand, false)]
+    [InlineData(InquiryBatchExecutionMode.ReusedCommand, true)]
+    [InlineData(InquiryBatchExecutionMode.DbBatch, false)]
+    [InlineData(InquiryBatchExecutionMode.DbBatch, true)]
+    public async Task TransactedBatchEnlistsOuterTransactionWithoutOwningItsOutcome(
+        InquiryBatchExecutionMode mode,
+        bool throwOnExecute)
     {
-        var state = new RecordingState();
+        var state = new RecordingState
+        {
+            ThrowOnCommandExecute = throwOnExecute,
+            ThrowOnBatchExecute = throwOnExecute,
+        };
         var connection = new RecordingConnection(state);
         var transaction = new RecordingTransaction(connection, state);
-        var factory = new RecordingFactory(state, InquiryBatchExecutionMode.ReusedCommand);
+        var factory = new RecordingFactory(state, mode);
         var pipeline = new TransactedInquiryRequestPipeline(
             connection, transaction, Array.Empty<IInquiryCommandInterceptor>(), factory, options: null);
 
-        Assert.Equal(3, await pipeline.ExecuteBatchAsync(RowCommand(), new[] { 1, 2, 3 }));
+        if (throwOnExecute)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => pipeline.ExecuteBatchAsync(RowCommand(), new[] { 1, 2, 3 }));
+        }
+        else
+        {
+            Assert.Equal(3, await pipeline.ExecuteBatchAsync(RowCommand(), new[] { 1, 2, 3 }));
+        }
+
+        var assignedTransactions = mode == InquiryBatchExecutionMode.DbBatch
+            ? state.BatchTransactions
+            : state.CommandTransactions;
+        Assert.NotEmpty(assignedTransactions);
+        Assert.All(assignedTransactions, assigned => Assert.Same(transaction, assigned));
 
         Assert.Equal(0, state.TransactionCommitCount);
         Assert.Equal(0, state.TransactionRollbackCount);
@@ -102,7 +126,8 @@ public sealed class BatchRuntimeEvidenceTests
     public async Task EffectiveLimitSplitsOneThousandAndOneItemsAtExactBoundary()
     {
         var state = new RecordingState();
-        var pipeline = CreatePipeline(state, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 1000);
+        var pipeline = CreatePipeline(
+            state, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 2000, maxParametersPerCommand: 10000);
         var command = new InquiryBatchCommand<int>(
             count => "work-" + count,
             (dbCommand, items) => ((RecordingCommand)dbCommand).AffectedRows = items.Count,
@@ -118,6 +143,7 @@ public sealed class BatchRuntimeEvidenceTests
     [InlineData(1000, 2000, 3, 666)]
     [InlineData(1000, 32766, 40, 819)]
     [InlineData(1000, 65535, 100, 655)]
+    [InlineData(2000, 10000, 2, 1000)]
     public void EffectiveLimitHonorsRowAndProviderParameterCaps(
         int maxBatchSize,
         int maxParameters,
@@ -167,7 +193,8 @@ public sealed class BatchRuntimeEvidenceTests
         RecordingState state,
         InquiryBatchExecutionMode mode,
         int maxBatchSize,
-        bool prepare = false)
+        bool prepare = false,
+        int maxParametersPerCommand = InquiryOptions.DefaultMaxParametersPerCommand)
     {
         var factory = new RecordingFactory(state, mode, prepare);
         return new InquiryRequestPipeline(
@@ -176,6 +203,7 @@ public sealed class BatchRuntimeEvidenceTests
             new InquiryOptions
             {
                 MaxBatchSize = maxBatchSize,
+                MaxParametersPerCommand = maxParametersPerCommand,
                 PrepareStatements = prepare ? PreparedStatementMode.Auto : PreparedStatementMode.None,
             });
     }
@@ -205,6 +233,7 @@ public sealed class BatchRuntimeEvidenceTests
         internal int SavepointRollbackCount { get; set; }
         internal int SavepointReleaseCount { get; set; }
         internal bool ThrowOnCommandExecute { get; init; }
+        internal bool ThrowOnBatchExecute { get; init; }
         internal bool ThrowOnCommandDispose { get; init; }
         internal bool ThrowOnRollback { get; init; }
         internal bool ThrowOnTransactionDispose { get; init; }
@@ -212,6 +241,8 @@ public sealed class BatchRuntimeEvidenceTests
         internal List<int> ExecutedBatchSizes { get; } = new();
         internal List<int> InitializedChunkSizes { get; } = new();
         internal List<string> CleanupEvents { get; } = new();
+        internal List<DbTransaction?> CommandTransactions { get; } = new();
+        internal List<DbTransaction?> BatchTransactions { get; } = new();
     }
 
     private sealed class RecordingFactory : IInquiryConnectionFactory
@@ -350,6 +381,7 @@ public sealed class BatchRuntimeEvidenceTests
     private sealed class RecordingCommand : DbCommand
     {
         private readonly RecordingState _state;
+        private DbTransaction? _transaction;
 
         internal RecordingCommand(RecordingState state) => _state = state;
         internal int AffectedRows { get; set; } = 1;
@@ -361,7 +393,15 @@ public sealed class BatchRuntimeEvidenceTests
         public override UpdateRowSource UpdatedRowSource { get; set; }
         protected override DbConnection? DbConnection { get; set; }
         protected override DbParameterCollection DbParameterCollection { get; } = new RecordingParameterCollection();
-        protected override DbTransaction? DbTransaction { get; set; }
+        protected override DbTransaction? DbTransaction
+        {
+            get => _transaction;
+            set
+            {
+                _transaction = value;
+                _state.CommandTransactions.Add(value);
+            }
+        }
         public override void Cancel() { }
         public override int ExecuteNonQuery() => Execute();
         public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
@@ -400,6 +440,7 @@ public sealed class BatchRuntimeEvidenceTests
     {
         private readonly RecordingState _state;
         private readonly RecordingBatchCommandCollection _commands = new();
+        private DbTransaction? _transaction;
 
         internal RecordingBatch(DbConnection connection, RecordingState state)
         {
@@ -410,7 +451,15 @@ public sealed class BatchRuntimeEvidenceTests
         public override int Timeout { get; set; }
         protected override DbBatchCommandCollection DbBatchCommands => _commands;
         protected override DbConnection? DbConnection { get; set; }
-        protected override DbTransaction? DbTransaction { get; set; }
+        protected override DbTransaction? DbTransaction
+        {
+            get => _transaction;
+            set
+            {
+                _transaction = value;
+                _state.BatchTransactions.Add(value);
+            }
+        }
         public override void Cancel() { }
         public override int ExecuteNonQuery() => Execute();
         public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
@@ -441,6 +490,7 @@ public sealed class BatchRuntimeEvidenceTests
 
         private int Execute()
         {
+            if (_state.ThrowOnBatchExecute) throw new InvalidOperationException("batch execute failed");
             _state.ExecutedBatchSizes.Add(_commands.Count);
             return _commands.Count;
         }
