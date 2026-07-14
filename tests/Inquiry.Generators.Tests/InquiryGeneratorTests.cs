@@ -2536,7 +2536,13 @@ public sealed partial class InquiryGeneratorTests
         }
     }
 
-    private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite", string[]? enableDiagnostics = null, bool includeFallbackGenerator = false)
+    private static GeneratorTestResult RunGenerator(
+        string source,
+        string? dialect = "Sqlite",
+        string[]? enableDiagnostics = null,
+        bool includeFallbackGenerator = false,
+        ReportDiagnostic? unsupportedOperationSeverity = null,
+        SyntaxTreeOptionsProvider? syntaxTreeOptionsProvider = null)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
         var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
@@ -2556,14 +2562,25 @@ public sealed partial class InquiryGeneratorTests
 
         // Off-by-default diagnostics (e.g. the INQ061 DDL lint) are suppressed unless a consumer opts in
         // via .editorconfig; mirror that opt-in here so a lint test can assert the diagnostic surfaces.
-        if (enableDiagnostics is { Length: > 0 })
+        if (enableDiagnostics is { Length: > 0 } || unsupportedOperationSeverity is not null)
         {
             // Diagnostic IDs are case-insensitive; de-dupe so a caller passing the same id twice (in any
             // casing) doesn't throw from the dictionary build.
-            compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(
-                enableDiagnostics
+            var diagnosticOptions = enableDiagnostics is { Length: > 0 }
+                ? enableDiagnostics
                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(static id => id, static _ => ReportDiagnostic.Info, StringComparer.OrdinalIgnoreCase));
+                    .ToDictionary(static id => id, static _ => ReportDiagnostic.Info, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, ReportDiagnostic>(StringComparer.OrdinalIgnoreCase);
+            if (unsupportedOperationSeverity is { } severity)
+            {
+                diagnosticOptions["INQ039"] = severity;
+            }
+            compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(
+                diagnosticOptions);
+        }
+        if (syntaxTreeOptionsProvider is not null)
+        {
+            compilationOptions = compilationOptions.WithSyntaxTreeOptionsProvider(syntaxTreeOptionsProvider);
         }
 
         var compilation = CSharpCompilation.Create(

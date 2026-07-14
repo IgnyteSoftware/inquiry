@@ -25,7 +25,7 @@ internal static class MaterializerEmitter
     {
         var nonNullable = type.NonNullableDisplayName;
         var read = converter is not null
-            ? $"global::Inquiry.Entities.InquiryConverterCache<{converter.ConverterTypeDisplay}>.Instance.FromProvider({PlainReadExpression(converter.ProviderType, converter.ProviderSpecialType, index, nonNullable, converter.ProviderTypeDisplay, sqlBuilder, role)})"
+            ? ConverterInvocationEmitter.FromProvider(converter, PlainReadExpression(converter.ProviderType, converter.ProviderSpecialType, index, nonNullable, converter.ProviderTypeDisplay, sqlBuilder, role))
             : enumAsString
                 ? $"global::System.Enum.Parse<{nonNullable}>({sqlBuilder.BuildReaderExpression(new ReaderExpressionContext(index, nonNullable, "global::System.String", SpecialType.System_String, role))})"
                 : type.IsEnum

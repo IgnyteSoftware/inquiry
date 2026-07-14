@@ -47,7 +47,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryTableAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax,
-                transform: static (ctx, ct) => EntityProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
+                transform: static (ctx, ct) => EntityProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ctx.SemanticModel.Compilation, ct))
             .WithTrackingName(EntitiesTrackingName)
             .Collect();
 
@@ -58,7 +58,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryViewAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-                transform: static (ctx, ct) => EntityProcessor.ExtractView((INamedTypeSymbol)ctx.TargetSymbol, ct))
+                transform: static (ctx, ct) => EntityProcessor.ExtractView((INamedTypeSymbol)ctx.TargetSymbol, ctx.SemanticModel.Compilation, ct))
             .WithTrackingName(ViewsTrackingName)
             .Collect();
 
@@ -102,7 +102,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         // assemblies), so it re-projects on every edit — but into a tiny equatable value, so the
         // output stage still caches whenever ownership is unchanged.
         var ownership = context.CompilationProvider
-            .Select((compilation, _) => ResolveOwnership(compilation))
+            .Select((compilation, cancellationToken) => ResolveOwnership(compilation, cancellationToken))
             .WithTrackingName(OwnershipTrackingName);
 
         var combined = allEntities.Combine(stores).Combine(projections).Combine(adHocs).Combine(ownership);
@@ -279,7 +279,14 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 context.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
 
-            var emission = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder, computedInvalidEntityNames);
+            var emission = StoreProcessor.Emit(
+                context,
+                store,
+                mappedEntities,
+                mappedProjections,
+                sqlBuilder,
+                ownership.EmitUnsupportedOperationStubs,
+                computedInvalidEntityNames);
             if (emission is not null)
             {
                 storeRegistrations.Add(emission.Registration);
@@ -478,9 +485,12 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         return null;
     }
 
-    private DialectOwnership ResolveOwnership(Compilation compilation)
+    private DialectOwnership ResolveOwnership(Compilation compilation, CancellationToken cancellationToken)
     {
-        var ownership = ResolveDialectOwnership(compilation);
+        var ownership = ResolveDialectOwnership(compilation) with
+        {
+            EmitUnsupportedOperationStubs = ShouldEmitUnsupportedOperationStubs(compilation, cancellationToken),
+        };
         foreach (var attribute in compilation.Assembly.GetAttributes())
         {
             if (attribute.AttributeClass?.ToDisplayString() != "System.Reflection.AssemblyMetadataAttribute"
@@ -491,6 +501,45 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         }
         return ownership;
     }
+
+    private static bool ShouldEmitUnsupportedOperationStubs(
+        Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        var fallback = compilation.Options.SpecificDiagnosticOptions.TryGetValue("INQ039", out var compilationAction)
+            ? compilationAction
+            : ReportDiagnostic.Default;
+        var provider = compilation.Options.SyntaxTreeOptionsProvider;
+        if (provider is not null &&
+            provider.TryGetGlobalDiagnosticValue("INQ039", cancellationToken, out var globalAction))
+        {
+            fallback = globalAction;
+        }
+
+        ReportDiagnostic? uniformAction = null;
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var action = provider is not null &&
+                provider.TryGetDiagnosticValue(tree, "INQ039", cancellationToken, out var treeAction)
+                    ? treeAction
+                    : fallback;
+            if (!IsUnsupportedOperationStubOptIn(action) ||
+                uniformAction is { } previousAction && previousAction != action)
+            {
+                return false;
+            }
+
+            uniformAction = action;
+        }
+
+        return uniformAction is { } resolvedAction
+            ? IsUnsupportedOperationStubOptIn(resolvedAction)
+            : IsUnsupportedOperationStubOptIn(fallback);
+    }
+
+    private static bool IsUnsupportedOperationStubOptIn(ReportDiagnostic action)
+        => action is not ReportDiagnostic.Default and not ReportDiagnostic.Error;
 
     private DialectOwnership ResolveDialectOwnership(Compilation compilation)
     {
@@ -582,20 +631,25 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     private enum DialectOwnershipKind { Owned, NotMine, AmbiguousLeader, AmbiguousFollower, UnknownLeader, UnknownFollower }
 
-    private readonly record struct DialectOwnership(DialectOwnershipKind Kind, string AmbiguousDialects, string UnknownDialect, string ManifestMetadataCollisionKey)
+    private readonly record struct DialectOwnership(
+        DialectOwnershipKind Kind,
+        string AmbiguousDialects,
+        string UnknownDialect,
+        string ManifestMetadataCollisionKey,
+        bool EmitUnsupportedOperationStubs)
     {
         public DialectOwnership(DialectOwnershipKind kind)
-            : this(kind, string.Empty, string.Empty, string.Empty)
+            : this(kind, string.Empty, string.Empty, string.Empty, false)
         {
         }
 
         public DialectOwnership(DialectOwnershipKind kind, string ambiguousDialects)
-            : this(kind, ambiguousDialects, string.Empty, string.Empty)
+            : this(kind, ambiguousDialects, string.Empty, string.Empty, false)
         {
         }
 
         public DialectOwnership(DialectOwnershipKind kind, string ambiguousDialects, string unknownDialect)
-            : this(kind, ambiguousDialects, unknownDialect, string.Empty)
+            : this(kind, ambiguousDialects, unknownDialect, string.Empty, false)
         {
         }
     }

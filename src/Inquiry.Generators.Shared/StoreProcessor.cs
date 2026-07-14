@@ -861,6 +861,7 @@ internal static class StoreProcessor
         IReadOnlyDictionary<string, EntityData> entities,
         IReadOnlyDictionary<string, ProjectionData> projections,
         SqlBuilder sqlBuilder,
+        bool emitUnsupportedOperationStubs,
         ISet<string>? invalidEntityNames = null)
     {
         if (!store.IsEmittable)
@@ -1445,7 +1446,10 @@ internal static class StoreProcessor
                     InquiryDiagnosticDescriptors.DialectOperationNotSupported,
                     method.Location?.ToLocation(),
                     method.Name, sqlBuilder.DialectName, unsupportedReason));
-                StoreOperationEmitter.EmitUnsupportedStub(source, method, unsupportedReason);
+                if (emitUnsupportedOperationStubs)
+                {
+                    StoreOperationEmitter.EmitUnsupportedStub(source, method, unsupportedReason);
+                }
                 continue;
             }
 

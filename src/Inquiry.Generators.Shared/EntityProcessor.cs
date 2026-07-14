@@ -22,14 +22,14 @@ namespace Inquiry.Generators;
 internal static class EntityProcessor
 {
     /// <summary>Extracts the cacheable model for one <c>[InquiryTable]</c> entity symbol.</summary>
-    public static EntityData Extract(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
-        => ExtractCore(entitySymbol, isView: false, cancellationToken);
+    public static EntityData Extract(INamedTypeSymbol entitySymbol, Compilation compilation, CancellationToken cancellationToken)
+        => ExtractCore(entitySymbol, compilation, isView: false, cancellationToken);
 
     /// <summary>Extracts a <c>[InquiryView]</c> read-only, keyless-permitted entity.</summary>
-    public static EntityData ExtractView(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
-        => ExtractCore(entitySymbol, isView: true, cancellationToken);
+    public static EntityData ExtractView(INamedTypeSymbol entitySymbol, Compilation compilation, CancellationToken cancellationToken)
+        => ExtractCore(entitySymbol, compilation, isView: true, cancellationToken);
 
-    private static EntityData ExtractCore(INamedTypeSymbol entitySymbol, bool isView, CancellationToken cancellationToken)
+    private static EntityData ExtractCore(INamedTypeSymbol entitySymbol, Compilation compilation, bool isView, CancellationToken cancellationToken)
     {
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticData>();
         var location = entitySymbol.Locations.FirstOrDefault();
@@ -44,7 +44,7 @@ internal static class EntityProcessor
         var generateDdl = !isView && (nameAttribute is null ||
             GeneratorHelpers.GetNamedBool(nameAttribute, "GenerateDdl", defaultValue: true));
 
-        var columns = DiscoverColumns(entitySymbol, diagnostics);
+        var columns = DiscoverColumns(entitySymbol, compilation, diagnostics);
         var relations = DiscoverRelations(entitySymbol, cancellationToken);
         var indexes = DiscoverIndexes(entitySymbol, columns);
         var checks = DiscoverChecks(entitySymbol);
@@ -190,7 +190,10 @@ internal static class EntityProcessor
         return new EntityRegistration(entityType, entity.ClassMaterializerFullName);
     }
 
-    private static List<ColumnData> DiscoverColumns(INamedTypeSymbol entitySymbol, ImmutableArray<DiagnosticData>.Builder diagnostics)
+    private static List<ColumnData> DiscoverColumns(
+        INamedTypeSymbol entitySymbol,
+        Compilation compilation,
+        ImmutableArray<DiagnosticData>.Builder diagnostics)
     {
         var columns = new List<ColumnData>();
 
@@ -412,7 +415,7 @@ internal static class EntityProcessor
 
             // a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
             // converter) maps a non-primitive property to/from a provider primitive.
-            var converter = ResolveConverter(property, columnAttribute, typeData, entitySymbol, diagnostics);
+            var converter = ResolveConverter(property, columnAttribute, typeData, entitySymbol, compilation, diagnostics);
 
             if (isDatabaseGeneratedToken &&
                 (!typeData.IsByteArray || typeData.IsNullable || keyAttribute is not null || isGenerated || useDatabaseDefault ||
@@ -637,29 +640,102 @@ internal static class EntityProcessor
         AttributeData? columnAttribute,
         TypeData typeData,
         INamedTypeSymbol entitySymbol,
+        Compilation compilation,
         ImmutableArray<DiagnosticData>.Builder diagnostics)
     {
         var converterType = columnAttribute is not null ? GeneratorHelpers.GetNamedType(columnAttribute, "Converter") : null;
         if (converterType is not null)
         {
-            var providerType = FindConverterProviderType(converterType);
-            if (providerType is null)
+            var converterLocation = GetNamedArgumentSourceLocation(columnAttribute, "Converter") ?? property.Locations.FirstOrDefault();
+            if (converterType.IsUnboundGenericType)
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterTypeOpenGeneric,
+                    converterLocation,
+                    converterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                return null;
+            }
+
+            if (converterType.IsAbstract)
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterTypeAbstract,
+                    converterLocation,
+                    converterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                return null;
+            }
+
+            if (!compilation.IsSymbolAccessibleWithin(converterType, entitySymbol.ContainingAssembly))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterTypeInaccessible,
+                    converterLocation,
+                    converterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                return null;
+            }
+
+            var converterInterface = compilation.GetTypeByMetadataName("Inquiry.Entities.IInquiryValueConverter`2");
+            var implementedInterfaces = converterInterface is null
+                ? ImmutableArray<INamedTypeSymbol>.Empty
+                : converterType.AllInterfaces
+                    .Where(iface => SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, converterInterface))
+                    .ToImmutableArray();
+            if (implementedInterfaces.IsEmpty)
             {
                 diagnostics.Add(DiagnosticData.Create(
                     InquiryDiagnosticDescriptors.ConverterInvalid,
-                    property.Locations.FirstOrDefault(),
+                    converterLocation,
                     entitySymbol.Name,
                     converterType.Name,
                     property.Name));
                 return null;
             }
 
+            var modelType = UnwrapNullable(property.Type);
+            var matchingContracts = implementedInterfaces
+                .Where(iface => SymbolEqualityComparer.Default.Equals(iface.TypeArguments[0], modelType))
+                .ToImmutableArray();
+            if (matchingContracts.IsEmpty)
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterModelTypeMismatch,
+                    converterLocation,
+                    converterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    property.Name,
+                    modelType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                return null;
+            }
+
+            if (matchingContracts.Length > 1)
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterInvalid,
+                    converterLocation,
+                    entitySymbol.Name,
+                    converterType.Name,
+                    property.Name));
+                return null;
+            }
+
+            var converterContract = matchingContracts[0];
+
+            if (!HasAccessibleParameterlessConstructor(converterType))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ConverterConstructorMissing,
+                    converterLocation,
+                    converterType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                return null;
+            }
+
+            var providerType = converterContract.TypeArguments[1];
+
             var providerTypeData = TypeData.Create(providerType, providerType.NullableAnnotation);
             if (!IsSupportedConverterProviderType(providerTypeData))
             {
                 diagnostics.Add(DiagnosticData.Create(
                     InquiryDiagnosticDescriptors.ConverterProviderTypeUnsupported,
-                    property.Locations.FirstOrDefault(),
+                    converterLocation,
                     entitySymbol.Name,
                     converterType.Name,
                     property.Name,
@@ -669,10 +745,12 @@ internal static class EntityProcessor
 
             return new ConverterData(
                 converterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                modelType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 providerType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 providerType.SpecialType)
             {
                 ProviderType = providerTypeData,
+                RequiresInterfaceDispatch = RequiresInterfaceDispatch(converterType, converterContract),
             };
         }
 
@@ -680,6 +758,7 @@ internal static class EntityProcessor
         {
             return new ConverterData(
                 "global::Inquiry.Converters.InquiryJsonConverter<" + typeData.NonNullableDisplayName + ">",
+                typeData.NonNullableDisplayName,
                 "string",
                 SpecialType.System_String);
         }
@@ -697,19 +776,37 @@ internal static class EntityProcessor
                 or SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal
                 or SpecialType.System_Char or SpecialType.System_String or SpecialType.System_DateTime);
 
-    /// <summary>Returns the <c>TProvider</c> of the converter's <c>IInquiryValueConverter&lt;TModel, TProvider&gt;</c> interface, or null.</summary>
-    private static ITypeSymbol? FindConverterProviderType(INamedTypeSymbol converterType)
+    private static ITypeSymbol UnwrapNullable(ITypeSymbol type)
     {
-        foreach (var iface in converterType.AllInterfaces)
-        {
-            if (iface.TypeArguments.Length == 2 &&
-                iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Inquiry.Entities.IInquiryValueConverter<TModel, TProvider>")
-            {
-                return iface.TypeArguments[1];
-            }
-        }
+        if (type is INamedTypeSymbol named &&
+            named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+            return named.TypeArguments[0];
 
-        return null;
+        return type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+    }
+
+    private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol converterType)
+    {
+        if (converterType.TypeKind == TypeKind.Struct) return true;
+
+        // InquiryConverterCache<TConverter> carries a new() constraint, which specifically requires
+        // a public parameterless constructor even when an internal constructor is otherwise visible.
+        return converterType.InstanceConstructors.Any(static ctor =>
+            ctor.Parameters.IsEmpty && ctor.DeclaredAccessibility == Accessibility.Public);
+    }
+
+    private static bool RequiresInterfaceDispatch(INamedTypeSymbol converterType, INamedTypeSymbol converterContract)
+        => converterContract.GetMembers()
+            .OfType<IMethodSymbol>()
+            .Any(member => converterType.FindImplementationForInterfaceMember(member) is IMethodSymbol implementation &&
+                !implementation.ExplicitInterfaceImplementations.IsEmpty);
+
+    private static Location? GetNamedArgumentSourceLocation(AttributeData? attribute, string name)
+    {
+        if (attribute?.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax) return null;
+        return syntax.ArgumentList?.Arguments
+            .FirstOrDefault(value => value.NameEquals?.Name.Identifier.ValueText == name)?
+            .Expression.GetLocation();
     }
 
     /// <summary>
