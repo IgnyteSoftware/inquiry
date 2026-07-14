@@ -173,8 +173,9 @@ acceptance criteria supersede any older wording that describes an initial implem
   largest onboarding lever for existing databases.
 - **Many-to-many relations — auto-managed junction** *(gap research 2026-06-12)*. Eager-loading M:N
   through an explicitly-mapped junction shipped — see [Recently resolved](#recently-resolved). Remaining:
-  an *auto-managed* / implicit junction table (no hand-written junction entity), composite-key related
-  entities, and applying the child's soft-delete/global filters to the eager M:N collection.
+  an *auto-managed* / implicit junction table (no hand-written junction entity) and composite-key related
+  entities. Child, junction, and parent soft-delete/global filters are already applied to all-parent eager
+  M:N result sets.
 - **CTEs and set operations** *(gap research 2026-06-12)*. `WITH` / `UNION` / `INTERSECT` / `EXCEPT`
   composition in the predicate/select model (Kysely-style); ad-hoc SQL covers this today.
 - **Parameterized & named query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. The
@@ -398,12 +399,13 @@ new or reframed issue.
   `UPDLOCK, SERIALIZABLE` table hints. Eliminates MERGE's plan-cache bloat and deadlock risks while
   maintaining atomicity via key-range locks. All three upsert variants (standard, empty-SET, generated-key)
   converted; concurrency-tested.
-- **SelectAllEager collection/junction filtering foundation (#57, 2026-07-08).** Collection `_All` and
-  M:N `_Junction`
-  eager-loading consts now use a subquery filter (`WHERE fk IN (SELECT pk FROM parent)`) to scope child
-  rows to the parent result set at the SQL level — no runtime parameters needed, preserves the grid path.
-  The M:N child `_All` query still selects the complete child table and remains open in
-  [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
+- **SelectAllEager collection/junction filtering (#57, 2026-07-14).** Collection `_All` and M:N
+  `_Junction` eager-loading consts use a parent subquery, while the M:N child `_All` const now uses a
+  parameterless child-key `IN` subquery over eligible junction and parent rows. Child, junction, and parent
+  soft-delete/global filters are composed structurally, preserving the grid path without runtime key
+  expansion. Covered by generated-SQL assertions and live suites for SQLite, SQL Server, PostgreSQL,
+  MySQL, MariaDB, and Oracle; SQL Server performance evidence is in
+  [`EagerLoadingBenchmarks.cs`](../../../benchmarks/Inquiry.Benchmarks.SqlServer/EagerLoadingBenchmarks.cs).
 - **Release engineering — immutable packaging and required CI gate (#220, 2026-07-14).** `RepositoryUrl` placeholder replaced
   with the real GitHub URL; `RepositoryType`, `PackageProjectUrl` added. SourceLink
   (`Microsoft.SourceLink.GitHub`) embeds commit metadata and the `.snupkg` symbol packages enable
@@ -536,12 +538,14 @@ new or reframed issue.
 - **Many-to-many relations `[InquiryManyToMany]` (2026-06-13):** eager-loading a M:N association through
   a mapped junction (link) entity. The single-parent eager load (`[InquirySelectOneByKeyEager]`) joins
   the related rows through the junction filtered by the parent key; the all-parents load
-  (`[InquirySelectAllEager]`) assembles every parent's collection **in memory from two queries** (all
-  children + all junction rows) — no N+1 — reusing the child's and junction's existing materializers. The
-  JOIN is ANSI-uniform across all five dialects (space alias for Oracle, table-qualified child columns).
+  (`[InquirySelectAllEager]`) assembles every parent's collection in memory from parameterless child and
+  junction result sets scoped to eligible parents. The child query uses a child-key `IN` subquery over
+  eligible junction rows, so unrelated and child/junction/parent-filtered rows are not materialized — no
+  N+1 and no runtime key expansion. The JOIN and filtered batch shapes are ANSI-uniform across all six
+  dialects (space alias for Oracle, table-qualified child columns).
   Misconfiguration (non-collection nav, unmapped junction/child, missing junction FK property, composite
-  child key) is **`INQ063`**. Generator snapshots across dialects + live SQLite round-trip (single-eager,
-  all-eager, empty collection). Writing associations is through the junction entity's own store. See
+  child key) is **`INQ063`**. Generator assertions and live coverage span SQLite, SQL Server, PostgreSQL,
+  MySQL, MariaDB, and Oracle. Writing associations is through the junction entity's own store. See
   [Many-to-many relations](../articles/features/many-to-many.md).
 
 - **Negated predicate operators `Compare.NotLike` / `Compare.NotBetween` / `Compare.NotIn` (2026-06-13):**

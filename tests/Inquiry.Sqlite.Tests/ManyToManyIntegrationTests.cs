@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Sqlite.Tests.Fixtures;
+using Microsoft.Data.Sqlite;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -64,6 +66,85 @@ public sealed class ManyToManyIntegrationTests
         var second = all.Single(o => o.Name == "Second");
         Assert.Equal(new[] { "Apple", "Banana" }, first.Products.Select(p => p.Title).OrderBy(t => t).ToArray());
         Assert.Equal(new[] { "Banana", "Cherry" }, second.Products.Select(p => p.Title).OrderBy(t => t).ToArray());
+    }
+
+    [Fact]
+    public async Task AllEagerDoesNotMaterializeUnrelatedOrFilteredRows()
+    {
+        var (harness, orders, order1, _) = await SeedAsync();
+        await using var _ = harness;
+        var scenario = await M2MExcludedRowsScenario.SeedAsync(
+            orders,
+            harness.GetRequiredService<M2MProductStore>(),
+            harness.GetRequiredService<M2MOrderProductStore>(),
+            order1);
+
+        M2MMaterializationProbe.Reset(scenario.DefaultExcludedTitles, scenario.DefaultExcludedProductIds);
+        var single = await orders.GetWithProductsAsync(order1);
+        Assert.NotNull(single);
+        Assert.DoesNotContain(single!.Products,
+            p => p.Title is "Deleted junction" or "Inactive junction");
+
+        M2MMaterializationProbe.Reset(scenario.DefaultExcludedTitles, scenario.DefaultExcludedProductIds);
+
+        var all = new List<M2MOrder>();
+        await foreach (var order in orders.AllWithProductsAsync()) all.Add(order);
+
+        Assert.True(M2MMaterializationProbe.ChildReads > 0);
+        Assert.True(M2MMaterializationProbe.JunctionReads > 0);
+        Assert.Equal(0, M2MMaterializationProbe.ExcludedChildReads);
+        Assert.Equal(0, M2MMaterializationProbe.ExcludedJunctionReads);
+    }
+
+    [Fact]
+    public async Task IncludeDeletedEagerUsesMatchingParentScopeAndKeepsRelationFilters()
+    {
+        var (harness, orders, order1, _) = await SeedAsync();
+        await using var _ = harness;
+        var scenario = await M2MExcludedRowsScenario.SeedAsync(
+            orders,
+            harness.GetRequiredService<M2MProductStore>(),
+            harness.GetRequiredService<M2MOrderProductStore>(),
+            order1);
+        M2MMaterializationProbe.Reset(
+            scenario.IncludeDeletedExcludedTitles,
+            scenario.IncludeDeletedExcludedProductIds);
+
+        var all = new List<M2MOrder>();
+        await foreach (var order in orders.AllIncludingDeletedWithProductsAsync()) all.Add(order);
+
+        var deletedParent = all.Single(o => o.Id == scenario.DeletedParentId);
+        Assert.Contains(deletedParent.Products, p => p.Title == scenario.DeletedParentIncludedTitle);
+        Assert.True(M2MMaterializationProbe.ChildReads > 0);
+        Assert.True(M2MMaterializationProbe.JunctionReads > 0);
+        Assert.Equal(0, M2MMaterializationProbe.ExcludedChildReads);
+        Assert.Equal(0, M2MMaterializationProbe.ExcludedJunctionReads);
+    }
+
+    [Fact]
+    public async Task GeneratedBatchChildSqlSearchesProductPrimaryKey()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(
+            FeatureSchema.ManyToManySqliteDdl, "ManyToManyPlan");
+        var field = typeof(M2MOrderStore).GetField(
+            "_sql_Products_All", BindingFlags.NonPublic | BindingFlags.Static);
+        var sql = Assert.IsType<string>(field?.GetRawConstantValue());
+
+        await using var connection = new SqliteConnection(harness.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "EXPLAIN QUERY PLAN " + sql;
+        var details = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) details.Add(reader.GetString(3));
+
+        Assert.Contains(details, detail =>
+            detail.Contains("SEARCH", System.StringComparison.OrdinalIgnoreCase)
+            && detail.Contains("M2MProduct", System.StringComparison.OrdinalIgnoreCase)
+            && detail.Contains("PRIMARY KEY", System.StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(details, detail =>
+            detail.Contains("SCAN", System.StringComparison.OrdinalIgnoreCase)
+            && detail.Contains("M2MProduct", System.StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

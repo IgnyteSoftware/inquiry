@@ -44,6 +44,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
     public ProductStore Products => _services!.GetRequiredService<ProductStore>();
     public CategoryStore Categories => _services!.GetRequiredService<CategoryStore>();
+    public BenchmarkM2MOrderStore ManyToManyOrders => _services!.GetRequiredService<BenchmarkM2MOrderStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
@@ -64,12 +65,17 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                 {
                     await connection.OpenAsync().ConfigureAwait(false);
                     await using var command = connection.CreateCommand();
-                    command.CommandText = NorthwindSchema.SqlServerDdl;
+                    command.CommandText = NorthwindSchema.SqlServerDdl + """
+                        CREATE TABLE BenchmarkM2MOrder (Id BIGINT IDENTITY(1,1) PRIMARY KEY, Name NVARCHAR(200) NOT NULL);
+                        CREATE TABLE BenchmarkM2MProduct (Id BIGINT IDENTITY(1,1) PRIMARY KEY, Title NVARCHAR(200) NOT NULL);
+                        CREATE TABLE BenchmarkM2MOrderProduct (OrderId BIGINT NOT NULL, ProductId BIGINT NOT NULL, PRIMARY KEY (OrderId, ProductId));
+                        """;
                     await command.ExecuteNonQueryAsync().ConfigureAwait(false);
                 }
 
                 var services = new ServiceCollection()
                     .AddInquiry()
+                    .AddInquiryGeneratedStores()
                     .AddInquirySqlServer(connectionString)
                     // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
                     // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
@@ -162,6 +168,51 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                 pCat.Value   = categoryIds[i % categoryIds.Count];
                 pPrice.Value = 10m + (i % 100);
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        // M:N eager evidence: two eligible parents, eight participating children, and rowCount
+        // unrelated children. The old-shape control therefore materializes rowCount + 8 children;
+        // Inquiry's generated child-key IN query materializes only the eight participating rows.
+        var orderIds = new List<long>();
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = (SqlTransaction)tx;
+            insert.CommandText =
+                "INSERT INTO BenchmarkM2MOrder (Name) OUTPUT inserted.Id VALUES (@name);";
+            var pName = insert.Parameters.Add("@name", System.Data.SqlDbType.NVarChar, 200);
+            for (var i = 0; i < 2; i++)
+            {
+                pName.Value = "Order " + i;
+                orderIds.Add((long)(await insert.ExecuteScalarAsync().ConfigureAwait(false))!);
+            }
+        }
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = (SqlTransaction)tx;
+            command.CommandText = """
+                INSERT INTO BenchmarkM2MProduct (Title) OUTPUT inserted.Id VALUES (@title);
+                """;
+            var pTitle = command.Parameters.Add("@title", System.Data.SqlDbType.NVarChar, 200);
+            var participatingIds = new List<long>();
+            for (var i = 0; i < rowCount + 8; i++)
+            {
+                pTitle.Value = i < 8 ? "Participating " + i : "Unrelated " + (i - 8);
+                var id = (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+                if (i < 8) participatingIds.Add(id);
+            }
+
+            command.CommandText =
+                "INSERT INTO BenchmarkM2MOrderProduct (OrderId, ProductId) VALUES (@orderId, @productId);";
+            command.Parameters.Clear();
+            var pOrderId = command.Parameters.Add("@orderId", System.Data.SqlDbType.BigInt);
+            var pProductId = command.Parameters.Add("@productId", System.Data.SqlDbType.BigInt);
+            for (var i = 0; i < participatingIds.Count; i++)
+            {
+                pOrderId.Value = orderIds[i % orderIds.Count];
+                pProductId.Value = participatingIds[i];
+                await command.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
 

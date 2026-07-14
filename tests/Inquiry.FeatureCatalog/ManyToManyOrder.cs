@@ -6,6 +6,210 @@ using Inquiry.Stores;
 
 namespace Inquiry.FeatureCatalog;
 
+public static class M2MMaterializationProbe
+{
+    public const string Sentinel = "__UNRELATED_SENTINEL__";
+    private static readonly object Gate = new();
+    private static HashSet<string> _excludedTitles = new();
+    private static HashSet<long> _excludedJunctionProductIds = new();
+    private static int _childReads;
+    private static int _excludedChildReads;
+    private static int _junctionReads;
+    private static int _excludedJunctionReads;
+
+    public static int ChildReads => Volatile.Read(ref _childReads);
+    public static int ExcludedChildReads => Volatile.Read(ref _excludedChildReads);
+    public static int JunctionReads => Volatile.Read(ref _junctionReads);
+    public static int ExcludedJunctionReads => Volatile.Read(ref _excludedJunctionReads);
+
+    public static void Reset(IEnumerable<string> excludedTitles, IEnumerable<long> excludedJunctionProductIds)
+    {
+        lock (Gate)
+        {
+            _excludedTitles = new HashSet<string>(excludedTitles);
+            _excludedJunctionProductIds = new HashSet<long>(excludedJunctionProductIds);
+        }
+        Volatile.Write(ref _childReads, 0);
+        Volatile.Write(ref _excludedChildReads, 0);
+        Volatile.Write(ref _junctionReads, 0);
+        Volatile.Write(ref _excludedJunctionReads, 0);
+    }
+
+    internal static void RecordChild(string value)
+    {
+        Interlocked.Increment(ref _childReads);
+        lock (Gate)
+        {
+            if (_excludedTitles.Contains(value)) Interlocked.Increment(ref _excludedChildReads);
+        }
+    }
+
+    internal static void RecordJunction(long productId)
+    {
+        Interlocked.Increment(ref _junctionReads);
+        lock (Gate)
+        {
+            if (_excludedJunctionProductIds.Contains(productId)) Interlocked.Increment(ref _excludedJunctionReads);
+        }
+    }
+}
+
+public sealed class M2MTitleConverter : IInquiryValueConverter<string, string>
+{
+    public string ToProvider(string model) => model;
+    public string FromProvider(string provider)
+    {
+        M2MMaterializationProbe.RecordChild(provider);
+        return provider;
+    }
+}
+
+public sealed class M2MJunctionProductIdConverter : IInquiryValueConverter<long, long>
+{
+    public long ToProvider(long model) => model;
+    public long FromProvider(long provider)
+    {
+        M2MMaterializationProbe.RecordJunction(provider);
+        return provider;
+    }
+}
+
+public sealed class M2MExcludedRowsScenarioResult
+{
+    public long DeletedParentId { get; init; }
+    public string DeletedParentIncludedTitle { get; init; } = string.Empty;
+    public IReadOnlyList<string> DefaultExcludedTitles { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<long> DefaultExcludedProductIds { get; init; } = Array.Empty<long>();
+    public IReadOnlyList<string> IncludeDeletedExcludedTitles { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<long> IncludeDeletedExcludedProductIds { get; init; } = Array.Empty<long>();
+}
+
+public static class M2MExcludedRowsScenario
+{
+    public static readonly string[] ExcludedTitles =
+    {
+        "Deleted child",
+        "Inactive child",
+        "Deleted junction",
+        "Inactive junction",
+    };
+
+    public static async Task<M2MExcludedRowsScenarioResult> SeedAsync(
+        M2MOrderStore orders,
+        M2MProductStore products,
+        M2MOrderProductStore links,
+        long participatingOrderId)
+    {
+        var defaultExcludedTitles = new List<string>();
+        var defaultExcludedIds = new List<long>();
+        var includeExcludedTitles = new List<string>();
+        var includeExcludedIds = new List<long>();
+
+        var participatingChild = (await products.InsertAsync(new M2MProduct
+        {
+            Title = "Participating child",
+        }))!.Id;
+        await links.LinkAsync(new M2MOrderProduct
+        {
+            OrderId = participatingOrderId,
+            ProductId = participatingChild,
+        });
+
+        for (var i = 0; i < 63; i++)
+        {
+            await products.InsertAsync(new M2MProduct { Title = "Unrelated " + i });
+        }
+
+        await products.InsertAsync(new M2MProduct { Title = M2MMaterializationProbe.Sentinel });
+        defaultExcludedTitles.Add(M2MMaterializationProbe.Sentinel);
+        includeExcludedTitles.Add(M2MMaterializationProbe.Sentinel);
+
+        var deletedChild = (await products.InsertAsync(new M2MProduct
+        {
+            Title = ExcludedTitles[0],
+            IsDeleted = true,
+        }))!.Id;
+        await links.LinkAsync(new M2MOrderProduct { OrderId = participatingOrderId, ProductId = deletedChild });
+        defaultExcludedTitles.Add(ExcludedTitles[0]);
+        defaultExcludedIds.Add(deletedChild);
+        includeExcludedTitles.Add(ExcludedTitles[0]);
+        includeExcludedIds.Add(deletedChild);
+
+        var inactiveChild = (await products.InsertAsync(new M2MProduct
+        {
+            Title = ExcludedTitles[1],
+            IsActive = false,
+        }))!.Id;
+        await links.LinkAsync(new M2MOrderProduct { OrderId = participatingOrderId, ProductId = inactiveChild });
+        defaultExcludedTitles.Add(ExcludedTitles[1]);
+        defaultExcludedIds.Add(inactiveChild);
+        includeExcludedTitles.Add(ExcludedTitles[1]);
+        includeExcludedIds.Add(inactiveChild);
+
+        var deletedJunction = (await products.InsertAsync(new M2MProduct { Title = ExcludedTitles[2] }))!.Id;
+        await links.LinkAsync(new M2MOrderProduct
+        {
+            OrderId = participatingOrderId,
+            ProductId = deletedJunction,
+            IsDeleted = true,
+        });
+        defaultExcludedTitles.Add(ExcludedTitles[2]);
+        defaultExcludedIds.Add(deletedJunction);
+        includeExcludedTitles.Add(ExcludedTitles[2]);
+        includeExcludedIds.Add(deletedJunction);
+
+        var inactiveJunction = (await products.InsertAsync(new M2MProduct { Title = ExcludedTitles[3] }))!.Id;
+        await links.LinkAsync(new M2MOrderProduct
+        {
+            OrderId = participatingOrderId,
+            ProductId = inactiveJunction,
+            IsActive = false,
+        });
+        defaultExcludedTitles.Add(ExcludedTitles[3]);
+        defaultExcludedIds.Add(inactiveJunction);
+        includeExcludedTitles.Add(ExcludedTitles[3]);
+        includeExcludedIds.Add(inactiveJunction);
+
+        var deletedParent = (await orders.InsertAsync(new M2MOrder
+        {
+            Name = "Deleted parent",
+            IsDeleted = true,
+        }))!;
+        var inactiveParent = (await orders.InsertAsync(new M2MOrder
+        {
+            Name = "Inactive parent",
+            IsActive = false,
+        }))!;
+        var deletedParentIncludedTitle = "Deleted parent child 0";
+        for (var i = 0; i < 16; i++)
+        {
+            var deletedParentTitle = "Deleted parent child " + i;
+            var deletedParentChild = (await products.InsertAsync(new M2MProduct { Title = deletedParentTitle }))!.Id;
+            await links.LinkAsync(new M2MOrderProduct { OrderId = deletedParent.Id, ProductId = deletedParentChild });
+            defaultExcludedTitles.Add(deletedParentTitle);
+            defaultExcludedIds.Add(deletedParentChild);
+
+            var inactiveParentTitle = "Inactive parent child " + i;
+            var inactiveParentChild = (await products.InsertAsync(new M2MProduct { Title = inactiveParentTitle }))!.Id;
+            await links.LinkAsync(new M2MOrderProduct { OrderId = inactiveParent.Id, ProductId = inactiveParentChild });
+            defaultExcludedTitles.Add(inactiveParentTitle);
+            defaultExcludedIds.Add(inactiveParentChild);
+            includeExcludedTitles.Add(inactiveParentTitle);
+            includeExcludedIds.Add(inactiveParentChild);
+        }
+
+        return new M2MExcludedRowsScenarioResult
+        {
+            DeletedParentId = deletedParent.Id,
+            DeletedParentIncludedTitle = deletedParentIncludedTitle,
+            DefaultExcludedTitles = defaultExcludedTitles,
+            DefaultExcludedProductIds = defaultExcludedIds,
+            IncludeDeletedExcludedTitles = includeExcludedTitles,
+            IncludeDeletedExcludedProductIds = includeExcludedIds,
+        };
+    }
+}
+
 [InquiryTable("M2MOrder")]
 public sealed class M2MOrder
 {
@@ -14,6 +218,12 @@ public sealed class M2MOrder
 
     [InquiryColumn("Name")]
     public string Name { get; set; } = string.Empty;
+
+    [InquiryColumn("IsDeleted"), InquirySoftDelete]
+    public bool IsDeleted { get; set; }
+
+    [InquiryColumn("IsActive"), InquiryGlobalFilter]
+    public bool IsActive { get; set; } = true;
 
     [InquiryManyToMany(typeof(M2MOrderProduct), nameof(M2MOrderProduct.OrderId), nameof(M2MOrderProduct.ProductId))]
     public List<M2MProduct> Products { get; set; } = new();
@@ -25,8 +235,14 @@ public sealed class M2MProduct
     [InquiryKey(IsGenerated = true)]
     public long Id { get; set; }
 
-    [InquiryColumn("Title")]
+    [InquiryColumn("Title", Converter = typeof(M2MTitleConverter))]
     public string Title { get; set; } = string.Empty;
+
+    [InquiryColumn("IsDeleted"), InquirySoftDelete]
+    public bool IsDeleted { get; set; }
+
+    [InquiryColumn("IsActive"), InquiryGlobalFilter]
+    public bool IsActive { get; set; } = true;
 }
 
 [InquiryTable("M2MOrderProduct")]
@@ -35,8 +251,14 @@ public sealed class M2MOrderProduct
     [InquiryKey]
     public long OrderId { get; set; }
 
-    [InquiryKey]
+    [InquiryKey(Converter = typeof(M2MJunctionProductIdConverter))]
     public long ProductId { get; set; }
+
+    [InquiryColumn("IsDeleted"), InquirySoftDelete]
+    public bool IsDeleted { get; set; }
+
+    [InquiryColumn("IsActive"), InquiryGlobalFilter]
+    public bool IsActive { get; set; } = true;
 }
 
 public partial class M2MOrderStore : InquiryStore<M2MOrder>
@@ -49,6 +271,9 @@ public partial class M2MOrderStore : InquiryStore<M2MOrder>
 
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<M2MOrder> AllWithProductsAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAllEager(IncludeDeleted = true)]
+    public partial IAsyncEnumerable<M2MOrder> AllIncludingDeletedWithProductsAsync(CancellationToken cancellationToken = default);
 }
 
 public partial class M2MProductStore : InquiryStore<M2MProduct>

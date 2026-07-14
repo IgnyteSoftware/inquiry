@@ -73,6 +73,59 @@ public sealed class ManyToManyIntegrationTests
     }
 
     [SkippableFact]
+    public async Task AllEagerDoesNotMaterializeUnrelatedOrFilteredRows()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var (harness, orders, order1, _) = await SeedAsync();
+        await using var _ = harness;
+        var scenario = await M2MExcludedRowsScenario.SeedAsync(
+            orders,
+            harness.GetRequiredService<M2MProductStore>(),
+            harness.GetRequiredService<M2MOrderProductStore>(),
+            order1);
+
+        M2MMaterializationProbe.Reset(scenario.DefaultExcludedTitles, scenario.DefaultExcludedProductIds);
+        var single = await orders.GetWithProductsAsync(order1);
+        Assert.NotNull(single);
+        Assert.DoesNotContain(single!.Products,
+            p => p.Title is "Deleted junction" or "Inactive junction");
+
+        M2MMaterializationProbe.Reset(scenario.DefaultExcludedTitles, scenario.DefaultExcludedProductIds);
+
+        var all = await orders.AllWithProductsAsync().ToListAsync();
+
+        Assert.True(M2MMaterializationProbe.ChildReads > 0);
+        Assert.True(M2MMaterializationProbe.JunctionReads > 0);
+        Assert.Equal(0, M2MMaterializationProbe.ExcludedChildReads);
+        Assert.Equal(0, M2MMaterializationProbe.ExcludedJunctionReads);
+    }
+
+    [SkippableFact]
+    public async Task IncludeDeletedEagerUsesMatchingParentScopeAndKeepsRelationFilters()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var (harness, orders, order1, _) = await SeedAsync();
+        await using var _ = harness;
+        var scenario = await M2MExcludedRowsScenario.SeedAsync(
+            orders,
+            harness.GetRequiredService<M2MProductStore>(),
+            harness.GetRequiredService<M2MOrderProductStore>(),
+            order1);
+        M2MMaterializationProbe.Reset(
+            scenario.IncludeDeletedExcludedTitles,
+            scenario.IncludeDeletedExcludedProductIds);
+
+        var all = await orders.AllIncludingDeletedWithProductsAsync().ToListAsync();
+
+        var deletedParent = all.Single(o => o.Id == scenario.DeletedParentId);
+        Assert.Contains(deletedParent.Products, p => p.Title == scenario.DeletedParentIncludedTitle);
+        Assert.True(M2MMaterializationProbe.ChildReads > 0);
+        Assert.True(M2MMaterializationProbe.JunctionReads > 0);
+        Assert.Equal(0, M2MMaterializationProbe.ExcludedChildReads);
+        Assert.Equal(0, M2MMaterializationProbe.ExcludedJunctionReads);
+    }
+
+    [SkippableFact]
     public async Task EagerCollectionIsEmptyWhenNoAssociations()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);

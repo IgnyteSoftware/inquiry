@@ -1864,6 +1864,9 @@ internal static class StoreOperationEmitter
         // ;-separated batch on most dialects, Oracle's DBMS_SQL.RETURN_RESULT PL/SQL wrapper via the
         // MultiResultBatch* hooks.
         var useGrid = sqlBuilder.SupportsMultiResultBatch && emittedRelations.Count > 0;
+        var relationSqlSuffix = method.IncludeDeleted && entity.SoftDeleteColumn is not null
+            ? "_IncludeDeleted"
+            : string.Empty;
 
         // Emits the opener for iterating one relation's rows: from the grid (the next pre-read result set) on
         // the single-round-trip path, or a per-relation query on the fallback path. The loop body is identical.
@@ -1880,10 +1883,10 @@ internal static class StoreOperationEmitter
             var sqlFields = new List<string> { parentSelectField };
             foreach (var relation in emittedRelations)
             {
-                sqlFields.Add($"_sql_{relation.PropertyName}_All");
+                sqlFields.Add($"_sql_{relation.PropertyName}_All{relationSqlSuffix}");
                 if (relation.IsManyToMany)
                 {
-                    sqlFields.Add($"_sql_{relation.PropertyName}_Junction");
+                    sqlFields.Add($"_sql_{relation.PropertyName}_Junction{relationSqlSuffix}");
                 }
             }
             AppendGridCommandText(source, sqlBuilder, sqlFields);
@@ -1909,7 +1912,7 @@ internal static class StoreOperationEmitter
             var childStructMat = childEntity.StructMaterializerFullName;
             if (relation.IsManyToMany)
             {
-                // Load all children indexed by key, then load the junction rows and group the children
+                // Load participating children indexed by key, then load participating junction rows and group the children
                 // under each parent key — a two-query in-memory assembly (no N+1) reusing both materializers.
                 var junctionEntity = relationJunctionEntities[relation.PropertyName];
                 var junctionType = junctionEntity.FullyQualifiedName;
@@ -1921,7 +1924,7 @@ internal static class StoreOperationEmitter
                 var parentKeyType = entity.Keys[0].Type.NonNullableDisplayName;
 
                 source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>();");
-                AppendRowLoop("_c", childType, childStructMat, $"{fieldName}_All");
+                AppendRowLoop("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                 source.AppendLine("        {");
                 if (childKey.Type.IsNullable)
                 {
@@ -1931,7 +1934,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("        }");
 
                 source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>();");
-                AppendRowLoop("_j", junctionType, junctionStructMat, $"{fieldName}_Junction");
+                AppendRowLoop("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
                 source.AppendLine("        {");
                 if (jChildFk.Type.IsNullable)
                 {
@@ -1959,7 +1962,7 @@ internal static class StoreOperationEmitter
                 var fkKeyType = childFkColumn?.Type.NonNullableDisplayName ?? "object";
 
                 source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{fkKeyType}, global::System.Collections.Generic.List<{childType}>>();");
-                AppendRowLoop("_c", childType, childStructMat, $"{fieldName}_All");
+                AppendRowLoop("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                 source.AppendLine("        {");
                 if (childFkNullable)
                 {
@@ -1987,7 +1990,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, {childType}>();");
                 if (childKeyNullable)
                 {
-                    AppendRowLoop("_p", childType, childStructMat, $"{fieldName}_All");
+                    AppendRowLoop("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                     source.AppendLine("        {");
                     source.AppendLine($"            if (_p.{relatedKeyProperty} is null) continue;");
                     source.AppendLine($"            _parents_{relation.PropertyName}[{NonNullableValueExpression(childEntity.Keys[0].Type, $"_p.{relatedKeyProperty}")}] = _p;");
@@ -1995,7 +1998,7 @@ internal static class StoreOperationEmitter
                 }
                 else
                 {
-                    AppendRowLoop("_p", childType, childStructMat, $"{fieldName}_All");
+                    AppendRowLoop("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                     source.AppendLine($"            _parents_{relation.PropertyName}[_p.{relatedKeyProperty}] = _p;");
                 }
             }

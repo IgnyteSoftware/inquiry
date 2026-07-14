@@ -59,7 +59,21 @@ The related rows are never carried on the child entity (the foreign keys live on
    WHERE __j."OrderId" = @Id
   ```
 
-- **All parents** (`[InquirySelectAllEager]`) — two queries assembled in memory, **no N+1**: every child (`SELECT * FROM Products`) is indexed by key, every junction row (`SELECT * FROM OrderProduct`) groups its child under the parent key, and each parent's collection is handed out from the grouping. Both queries reuse the child's and the junction's existing materializers.
+- **All parents** (`[InquirySelectAllEager]`) — parameterless child and junction result sets are assembled in memory, **no N+1**. The child query selects only rows whose key appears in an eligible junction row for an eligible parent; the junction query is scoped to the same parent set. Child, junction, and parent soft-delete/global filters are applied in SQL, so unrelated or filtered rows are not materialized. Both result sets reuse the existing child and junction materializers.
+
+  The child query uses a child-key `IN` subquery rather than a correlated child-table scan:
+
+  ```sql
+  SELECT "Id", "Title"
+    FROM "Products"
+   WHERE "Id" IN (
+       SELECT "__j"."ProductId"
+         FROM "OrderProduct" "__j"
+        WHERE "__j"."OrderId" IN (SELECT "Id" FROM "Orders")
+  )
+  ```
+
+  Soft-delete and global-filter predicate terms are omitted from the example for brevity.
 
 The JOIN is ANSI-standard, so the SQL is dialect-uniform across all six providers (the junction takes a space alias — Oracle rejects `AS` for table aliases — and child columns are table-qualified to stay unambiguous).
 
@@ -84,7 +98,6 @@ A `[InquiryManyToMany]` navigation must be a **collection** (`List<T>` / `IReadO
 
 - The junction must be an explicitly mapped entity (no implicit/auto-managed junction table yet).
 - The related (child) entity must have a single-column key.
-- The eager collection is not narrowed by the child's [soft-delete](soft-delete.md) / [global filters](global-filters.md) — combine with the child's own filtered queries if you need that.
 
 ## See also
 
