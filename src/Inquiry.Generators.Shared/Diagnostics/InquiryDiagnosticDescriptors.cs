@@ -546,6 +546,14 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor ComputedStringRequiresBoundedLength = new(
+        "INQ077",
+        "Oracle computed string column requires a bounded length",
+        "Computed string column '{0}' must declare a positive Length no greater than {1} for Oracle so its virtual expression can be cast to a supported scalar string type.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     // INQ055: an auditing user column ([InquiryCreatedBy]/[InquiryModifiedBy]) must be a writable
     // string column the generator can stamp from the ambient user, and it cannot double as the key,
     // a generated/db-default column, the soft-delete indicator, or the concurrency token.
@@ -701,4 +709,5 @@ internal static class InquiryDiagnosticDescriptors
         "INQ075", "Schema manifest assembly metadata key is already declared",
         "Assembly metadata key '{0}' is reserved for Inquiry schema-manifest transport. Remove the user declaration.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
 }

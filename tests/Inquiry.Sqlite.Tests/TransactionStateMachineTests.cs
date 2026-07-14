@@ -151,7 +151,10 @@ public sealed class TransactionStateMachineTests
         var tx = await inquiry.BeginTransactionAsync();
         await tx.ExecuteAsync(InsertCustomer("FAIL2", "Failing", "USA"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.RollbackAsync());
+        var rollbackFailure = await Assert.ThrowsAsync<AggregateException>(() => tx.RollbackAsync());
+        Assert.Equal(2, rollbackFailure.InnerExceptions.Count);
+        Assert.All(rollbackFailure.InnerExceptions,
+            exception => Assert.Contains("rollback failure", exception.Message, StringComparison.OrdinalIgnoreCase));
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
             () => tx.ExecuteAsync(InsertCustomer("AFTR2", "After", "USA")));
@@ -421,6 +424,74 @@ public sealed class TransactionStateMachineTests
         Assert.Equal(1, probe.ConnectionDisposeCalls);
     }
 
+    [Theory]
+    [InlineData(FailureMode.OnTransactionDispose)]
+    [InlineData(FailureMode.OnConnectionDispose)]
+    public async Task SuccessfulCommitIsNotReportedAsFailedWhenDeferredCleanupFails(FailureMode mode)
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "commit_cleanup_outcome");
+        var (inquiry, probe) = BuildInquiryWithProbe(harness.ConnectionString, mode);
+        var tx = await inquiry.BeginTransactionAsync();
+        await tx.ExecuteAsync(InsertCustomer("DONE1", "Committed", "USA"));
+
+        await tx.CommitAsync();
+        var cleanup = await Assert.ThrowsAsync<InvalidOperationException>(async () => await tx.DisposeAsync());
+
+        Assert.Contains("dispose", cleanup.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, probe.CommitCalls);
+        Assert.Equal(0, probe.RollbackCalls);
+        Assert.NotNull(await harness.GetRequiredService<CustomerStore>().SelectByKeyAsync("DONE1"));
+    }
+
+    [Fact]
+    public async Task FailedTerminalAggregatesPrimaryRollbackAndBothDisposeFailuresInOrder()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "terminal_cleanup_aggregate");
+        var (inquiry, probe) = BuildInquiryWithProbe(harness.ConnectionString, FailureMode.OnCommitAndAllCleanup);
+        var tx = await inquiry.BeginTransactionAsync();
+
+        var aggregate = await Assert.ThrowsAsync<AggregateException>(() => tx.CommitAsync());
+
+        Assert.Collection(aggregate.InnerExceptions,
+            exception => Assert.Contains("commit failure", exception.Message, StringComparison.OrdinalIgnoreCase),
+            exception => Assert.Contains("rollback failure", exception.Message, StringComparison.OrdinalIgnoreCase),
+            exception => Assert.Contains("transaction dispose", exception.Message, StringComparison.OrdinalIgnoreCase),
+            exception => Assert.Contains("connection dispose", exception.Message, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(1, probe.CommitCalls);
+        Assert.Equal(1, probe.RollbackCalls);
+        Assert.Equal(1, probe.TransactionDisposeCalls);
+        Assert.Equal(1, probe.ConnectionDisposeCalls);
+        await tx.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FailedTerminalBoundsHungRollbackAndNeverDisposesConcurrently()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "terminal_cleanup_timeout");
+        var (inquiry, probe) = BuildInquiryWithProbe(harness.ConnectionString, FailureMode.OnCommitWithHangingRollback);
+        var tx = await inquiry.BeginTransactionAsync();
+
+        var aggregate = await Assert.ThrowsAsync<AggregateException>(
+            () => tx.CommitAsync().WaitAsync(TimeSpan.FromSeconds(8)));
+
+        Assert.Contains("commit failure", aggregate.InnerExceptions[0].Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<TimeoutException>(aggregate.InnerExceptions[1]);
+        Assert.Equal(1, probe.RollbackCalls);
+        Assert.Equal(0, probe.TransactionDisposeCalls);
+        Assert.Equal(0, probe.ConnectionDisposeCalls);
+
+        probe.AllowTerminal.TrySetResult();
+        for (var attempt = 0;
+             attempt < 100 && (Volatile.Read(ref probe.TransactionDisposeCalls) == 0 || Volatile.Read(ref probe.ConnectionDisposeCalls) == 0);
+             attempt++)
+        {
+            await Task.Delay(20);
+        }
+        Assert.Equal(1, probe.TransactionDisposeCalls);
+        Assert.Equal(1, probe.ConnectionDisposeCalls);
+        await tx.DisposeAsync();
+    }
+
     [Fact]
     public async Task TransactionDisposeFailureStillDisposesConnectionAndRemainsPrimary()
     {
@@ -501,7 +572,8 @@ public sealed class TransactionStateMachineTests
         var (inquiry, probe) = BuildInquiryWithProbe(harness.ConnectionString, FailureMode.OnRollback);
         var tx = await inquiry.BeginTransactionAsync();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.RollbackAsync());
+        var rollbackFailure = await Assert.ThrowsAsync<AggregateException>(() => tx.RollbackAsync());
+        Assert.Equal(2, rollbackFailure.InnerExceptions.Count);
         await tx.DisposeAsync();
 
         Assert.Equal(2, probe.RollbackCalls); // terminal call + one best-effort cleanup attempt
@@ -871,6 +943,8 @@ public sealed class TransactionStateMachineTests
         OnCommandDispose,
         GatedCommit,
         GatedRollback,
+        OnCommitAndAllCleanup,
+        OnCommitWithHangingRollback,
     }
 
     private sealed class LifecycleProbe
@@ -945,7 +1019,8 @@ public sealed class TransactionStateMachineTests
         {
             System.Threading.Interlocked.Increment(ref _probe.ConnectionDisposeCalls);
             await _inner.DisposeAsync();
-            if (_failureMode == FailureMode.OnConnectionDispose) throw new InvalidOperationException("Simulated connection dispose failure.");
+            if (_failureMode is FailureMode.OnConnectionDispose or FailureMode.OnCommitAndAllCleanup)
+                throw new InvalidOperationException("Simulated connection dispose failure.");
         }
     }
 
@@ -1086,7 +1161,7 @@ public sealed class TransactionStateMachineTests
 
         public override void Commit()
         {
-            if (_failureMode == FailureMode.OnCommit)
+            if (_failureMode is FailureMode.OnCommit or FailureMode.OnCommitAndAllCleanup or FailureMode.OnCommitWithHangingRollback)
                 throw new InvalidOperationException("Simulated commit failure for tests.");
             Inner.Commit();
         }
@@ -1099,7 +1174,7 @@ public sealed class TransactionStateMachineTests
                 _probe.TerminalEntered.TrySetResult();
                 await _probe.AllowTerminal.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
-            if (_failureMode == FailureMode.OnCommit)
+            if (_failureMode is FailureMode.OnCommit or FailureMode.OnCommitAndAllCleanup or FailureMode.OnCommitWithHangingRollback)
                 throw new InvalidOperationException("Simulated commit failure for tests.");
             await Inner.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -1114,12 +1189,17 @@ public sealed class TransactionStateMachineTests
         public override async Task RollbackAsync(CancellationToken cancellationToken = default)
         {
             var rollbackCall = System.Threading.Interlocked.Increment(ref _probe.RollbackCalls);
+            if (_failureMode == FailureMode.OnCommitWithHangingRollback)
+            {
+                _probe.TerminalEntered.TrySetResult();
+                await _probe.AllowTerminal.Task.ConfigureAwait(false);
+            }
             if (_failureMode == FailureMode.GatedRollback && rollbackCall == 1)
             {
                 _probe.TerminalEntered.TrySetResult();
                 await _probe.AllowTerminal.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
-            if (_failureMode == FailureMode.OnRollback)
+            if (_failureMode is FailureMode.OnRollback or FailureMode.OnCommitAndAllCleanup)
                 throw new InvalidOperationException("Simulated rollback failure for tests.");
             await Inner.RollbackAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -1142,7 +1222,8 @@ public sealed class TransactionStateMachineTests
         {
             System.Threading.Interlocked.Increment(ref _probe.TransactionDisposeCalls);
             await Inner.DisposeAsync();
-            if (_failureMode == FailureMode.OnTransactionDispose) throw new InvalidOperationException("Simulated transaction dispose failure.");
+            if (_failureMode is FailureMode.OnTransactionDispose or FailureMode.OnCommitAndAllCleanup)
+                throw new InvalidOperationException("Simulated transaction dispose failure.");
         }
     }
 }

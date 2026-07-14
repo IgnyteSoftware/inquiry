@@ -59,60 +59,18 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     /// <inheritdoc />
     public override string ArrayParameterBinderFqn => "global::Inquiry.SqlServer.Parameters.InquiryTvpParameter";
 
-    public override CollectionParameterArtifact? BuildCollectionParameterArtifact(string? owningSchema, IColumn column)
+    public override CollectionParameterResolution ResolveCollectionParameter(CollectionParameterContext context)
+        => SqlServerTvpResolver.Resolve(this, context);
+
+    public override string BuildCollectionParameterBinding(CollectionParameterBindingContext context)
     {
-        var elementSignature = column.TypeClass switch
-        {
-            DbTypeClass.Boolean => "bit",
-            DbTypeClass.Byte => "tinyint",
-            DbTypeClass.Int16 => "smallint",
-            DbTypeClass.Int32 => "int",
-            DbTypeClass.Int64 => "bigint",
-            DbTypeClass.Single => "real",
-            DbTypeClass.Double => "float",
-            DbTypeClass.Decimal => "decimal(18,2)",
-            DbTypeClass.String => "nvarchar(max)",
-            DbTypeClass.Guid => "uniqueidentifier",
-            DbTypeClass.DateTime => "datetime2",
-            DbTypeClass.DateTimeOffset => "datetimeoffset",
-            _ => null,
-        };
-        if (elementSignature is null) return null;
-
-        var schema = string.IsNullOrWhiteSpace(owningSchema) ? "dbo" : owningSchema!;
-        var canonicalSignature = "sqlserver-tvp-v1|element=" + elementSignature;
-        string hash;
-        using (var sha = SHA256.Create())
-        {
-            var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(canonicalSignature));
-            var hex = new StringBuilder(bytes.Length * 2);
-            foreach (var value in bytes) hex.Append(value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
-            hash = hex.ToString();
-        }
-
-        var name = "Inquiry_Tvp_" + hash;
-        var quotedSchema = QuoteIdentifier(schema);
-        var quotedName = QuoteIdentifier(name);
-        var qualified = quotedSchema + "." + quotedName;
-        var validationName = qualified;
-        var escapedValidation = validationName.Replace("'", "''");
-        var createType = $"CREATE TYPE {qualified} AS TABLE ([Value] {elementSignature.ToUpperInvariant()} NOT NULL)";
-        var escapedCreateType = createType.Replace("'", "''");
-        var schemaDdl = string.IsNullOrWhiteSpace(owningSchema)
-            ? string.Empty
-            : $"IF SCHEMA_ID(N'{schema.Replace("'", "''")}') IS NULL EXEC(N'CREATE SCHEMA {quotedSchema.Replace("'", "''")}');\n";
-        var ddl = $"IF TYPE_ID(N'{escapedValidation}') IS NULL EXEC(N'{escapedCreateType}');";
-
-        return new CollectionParameterArtifact(
-            "sqlserver-tvp-v1|schema=" + schema + "|element=" + elementSignature,
-            schema,
-            name,
-            qualified,
-            schemaDdl,
-            ddl,
-            validationName,
-            elementSignature);
+        var artifact = context.Resolution.Artifact
+            ?? throw new System.InvalidOperationException("A successful SQL Server TVP resolution must include an artifact.");
+        return $"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, \"{EscapeLiteral(artifact.RuntimeTypeName)}\", {artifact.RuntimeDescriptorFieldName});";
     }
+
+    private static string EscapeLiteral(string value)
+        => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     public override string QuoteIdentifier(string identifier)
         => "[" + identifier.Replace("]", "]]") + "]";
@@ -423,31 +381,14 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // VARCHAR(MAX), which cannot be keyed or indexed (see MapColumnType).
     protected override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 4000 : 8000;
 
-    protected override string MapColumnType(IColumn column) => column.TypeClass switch
-    {
-        DbTypeClass.Boolean => "BIT",
-        DbTypeClass.Byte => "TINYINT",
-        DbTypeClass.Int16 => "SMALLINT",
-        DbTypeClass.Int32 => "INT",
-        DbTypeClass.Int64 => "BIGINT",
-        DbTypeClass.Single => "REAL",
-        DbTypeClass.Double => "FLOAT",
-        DbTypeClass.Decimal => "DECIMAL(" + DecimalSpec(column, 18, 2) + ")",
-        DbTypeClass.DateTime => "DATETIME2",
-        DbTypeClass.DateTimeOffset => "DATETIMEOFFSET",
-        DbTypeClass.DateOnly => "DATE",
-        DbTypeClass.TimeOnly => "TIME",
-        DbTypeClass.Guid => "UNIQUEIDENTIFIER",
-        DbTypeClass.ByteArray => "VARBINARY(MAX)",
+    protected override string MapColumnType(IColumn column)
+        => SqlServerTvpResolver.InferredColumnDdl(column);
+
         // A declared Length beyond the fixed-width ceiling (nvarchar 4000 / varchar 8000) is not a legal
         // bounded type — NVARCHAR(5000) is a DDL error — so it maps to the MAX type instead of emitting
         // invalid SQL. For a regular column that yields valid DDL; for a string KEY or indexed column the
         // MAX type cannot be keyed/indexed, which INQ031/INQ032 now report (the over-ceiling case is folded
         // into MapsToUnboundedString via MaxBoundedStringLength).
-        _ => column.Length > 0 && column.Length <= MaxBoundedStringLength(column.IsUnicode)
-            ? (column.IsUnicode ? "NVARCHAR(" + column.Length + ")" : "VARCHAR(" + column.Length + ")")
-            : (column.IsUnicode ? "NVARCHAR(MAX)" : "VARCHAR(MAX)"),
-    };
 
     protected override string ColumnType(IColumn column)
         => column.IsDatabaseGeneratedToken ? "ROWVERSION" : base.ColumnType(column);

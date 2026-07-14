@@ -354,6 +354,21 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                     {
                         var failures = builder.ValidateComputedExpression(selected!);
                         if (failures.Count > 0) reasons.Add((selectedLocation, string.Join("; ", failures)));
+                        if (builder.RequiresBoundedComputedStrings && column.TypeClass == DbTypeClass.String)
+                        {
+                            var maxLength = builder.MaxBoundedStringLength(column.IsUnicode);
+                            if (column.Length <= 0 || column.Length > maxLength)
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(
+                                    InquiryDiagnosticDescriptors.ComputedStringRequiresBoundedLength,
+                                    selectedLocation?.ToLocation(),
+                                    entity.FullyQualifiedName + "." + column.PropertyName,
+                                    maxLength));
+                                valid = false;
+                                computedInvalidEntityNames.Add(entity.FullyQualifiedName);
+                                selected = null;
+                            }
+                        }
                     }
                 }
                 foreach (var reason in reasons)

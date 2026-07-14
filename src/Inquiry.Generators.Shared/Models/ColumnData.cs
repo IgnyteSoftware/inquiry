@@ -57,9 +57,17 @@ internal sealed record ColumnData : IColumn
     public bool IsNullable { get; init; }
     public string? SqlType { get; init; }
     public LocationData? SqlTypeLocation { get; init; }
+    public string ProviderClrTypeName { get; init; } = string.Empty;
+    public bool ProviderValueIsNullable { get; init; }
     public int Length { get; init; }
+    public bool IsLengthSpecified { get; init; }
+    public LocationData? LengthLocation { get; init; }
     public int Precision { get; init; }
+    public bool IsPrecisionSpecified { get; init; }
+    public LocationData? PrecisionLocation { get; init; }
     public int Scale { get; init; }
+    public bool IsScaleSpecified { get; init; }
+    public LocationData? ScaleLocation { get; init; }
     public string? DefaultExpression { get; init; }
     public LocationData? DefaultExpressionLocation { get; init; }
     public LocationData? UseDatabaseDefaultLocation { get; init; }
@@ -76,6 +84,8 @@ internal sealed record ColumnData : IColumn
     public int ForeignKeyOnUpdate { get; init; }
     public bool IsIndexed { get; init; }
     public bool IsUnicode { get; init; } = true;
+    public bool IsUnicodeSpecified { get; init; }
+    public LocationData? IsUnicodeLocation { get; init; }
     public bool IsUnique { get; init; }
     public string? IndexName { get; init; }
 

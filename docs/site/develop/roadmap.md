@@ -8,7 +8,7 @@
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
 > **Last reconciled against source and GitHub:** 2026-07-13 from the MySQL-family restoration branch
-> based on `880a16e`. PostgreSQL, SQL Server, MySQL, and MariaDB are restored; Oracle and consecutive
+> based on `331a478`. PostgreSQL, SQL Server, MySQL, and MariaDB are restored; Oracle and consecutive
 > full-CI evidence remain under
 > [#171](https://github.com/JakeOverstreet/inquiry/issues/171).
 
@@ -405,8 +405,11 @@ new or reframed issue.
   (`Microsoft.SourceLink.GitHub`) embeds commit metadata and the `.snupkg` symbol packages enable
   step-through debugging. Root `README.md` wired as the NuGet package readme for all 9 shippable
   packages. MinVer tag-based versioning is configured for the first public release (`v1.0.0` tag →
-  version `1.0.0`) with `MinVerMinimumMajorMinor=1.0`. Tag-triggered `release.yml` workflow packs and pushes to NuGet.org.
-  Benchmark and sample projects marked non-packable.
+  version `1.0.0`) with `MinVerMinimumMajorMinor=1.0`. The unsafe tag-triggered rebuild-and-wildcard-push
+  workflow has been removed. A canonical nine-package manifest, package/bundle verifier, and versioned
+  `ci-required-v1` contract are in place; immutable RC production, independent verification, protected
+  promotion, and resumable publication remain release-blocking under #89. Benchmark and sample projects
+  remain non-packable.
 - **PostgreSQL bulk COPY typed writes (#122, 2026-07-08).** The binary copier now threads
   `System.Data.DbType` through `InquiryBulkInsertDefinition.ColumnTypes` (populated at compile time by
   the source generator), maps them to `NpgsqlDbType` in `PostgreSqlBulkCopier.MapColumnTypes`, and calls
@@ -781,10 +784,10 @@ new or reframed issue.
   registering two providers in one container now fails fast with a clear message.
 - **Hardening:** sample DB credentials are labeled local-dev-only with an `INQUIRY_SAMPLE_DB` override;
   the known build-warning sources are scoped-suppressed (production projects are warnings-as-errors).
-- **CI:** Oracle moved into the integration matrix (net8.0/net9.0); CI emits TRX artifacts.
+- **CI:** Oracle moved into the integration matrix (net8.0/net9.0/net10.0); CI emits TRX artifacts.
 - **CI hardening:** a provider suite that can't start its Docker container now FAILS CI (via the
   `INQUIRY_REQUIRE_DOCKER` guard) instead of silently skipping; a new scheduled weekly workflow runs the
-  full provider × net8.0/net9.0/net10.0 matrix (the normal integration matrix stays net8.0/net9.0).
+  full provider × net8.0/net9.0/net10.0 matrix (the normal integration matrix now enforces the same 15 legs).
 - **Formal security scan:** the Codex Security repository scan completed during pre-release hardening.
   Findings were fixed with regression coverage for lazy batch parameter-cap enforcement, MySQL
   update-returning concurrency behavior, and Oracle generated bind-name collisions.

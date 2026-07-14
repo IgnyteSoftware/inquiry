@@ -433,6 +433,8 @@ internal static class StoreProcessor
         GeneratorHelpers.IsCancellationToken(parameter.Type))
     {
         ElementComparisonDisplay = GetEnumerableElementComparisonDisplay(parameter.Type),
+        ElementNonNullableComparisonDisplay = GetEnumerableElementType(parameter.Type)?.NonNullableDisplayName,
+        ElementIsNullable = GetEnumerableElementType(parameter.Type)?.IsNullable == true,
         DefaultValueLiteral = GetDefaultValueLiteral(parameter),
     };
 
@@ -493,6 +495,15 @@ internal static class StoreProcessor
     /// element-type validation.
     /// </summary>
     private static string? GetEnumerableElementComparisonDisplay(ITypeSymbol type)
+        => GetEnumerableElementSymbol(type)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+    private static TypeData? GetEnumerableElementType(ITypeSymbol type)
+    {
+        var element = GetEnumerableElementSymbol(type);
+        return element is null ? null : TypeData.Create(element, element.NullableAnnotation);
+    }
+
+    private static ITypeSymbol? GetEnumerableElementSymbol(ITypeSymbol type)
     {
         if (type.SpecialType == SpecialType.System_String)
         {
@@ -509,9 +520,7 @@ internal static class StoreProcessor
             enumerable = named;
         }
 
-        return enumerable is { TypeArguments.Length: 1 }
-            ? enumerable.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-            : null;
+        return enumerable is { TypeArguments.Length: 1 } ? enumerable.TypeArguments[0] : null;
     }
 
     /// <summary>
@@ -1012,22 +1021,50 @@ internal static class StoreProcessor
         var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
             hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint);
 
-        var collectionArtifacts = ImmutableArray.CreateBuilder<CollectionParameterArtifact>();
+        var collectionResolutions = ImmutableArray.CreateBuilder<CollectionParameterResolution>();
+        var deleteAllCollectionResolutions = new Dictionary<StoreMethodData, CollectionParameterResolution>();
+        var collectionErrors = new Dictionary<StoreMethodData, string>();
         foreach (var item in valid)
         {
             if (item.Method.Operation == StoreOperation.DeleteAll)
             {
-                var artifact = sqlBuilder.BuildCollectionParameterArtifact(entity.Schema, entity.Keys[0]);
-                if (artifact is not null) collectionArtifacts.Add(artifact);
+                deleteAllCollectionResolutions[item.Method] = ResolveCollection(
+                    item.Method, entity.Keys[0], item.Method.Parameters[0].ElementIsNullable);
             }
 
             if (item.PredicatePlan is null) continue;
             foreach (var binding in item.PredicatePlan.Bindings)
             {
                 if (!binding.IsCollection || binding.IsNegatedCollection) continue;
-                var artifact = sqlBuilder.BuildCollectionParameterArtifact(entity.Schema, binding.Column);
-                if (artifact is not null) collectionArtifacts.Add(artifact);
+                binding.CollectionResolution = ResolveCollection(item.Method, binding.Column, binding.ElementIsNullable);
             }
+        }
+
+        CollectionParameterResolution ResolveCollection(StoreMethodData method, ColumnData column, bool elementIsNullable)
+        {
+            var resolution = sqlBuilder.ResolveCollectionParameter(
+                new CollectionParameterContext(entity.Schema, method.Name, column, elementIsNullable));
+            if (resolution.IsValid)
+            {
+                collectionResolutions.Add(resolution);
+                return resolution;
+            }
+            var diagnostic = resolution.Diagnostic!;
+            if (collectionErrors.ContainsKey(method)) return resolution;
+
+            collectionErrors.Add(method, diagnostic.FailureMessage);
+            var location = diagnostic.Facet switch
+            {
+                "SqlType" => column.SqlTypeLocation,
+                "Length" => column.LengthLocation,
+                "Precision" => column.PrecisionLocation,
+                "Scale" => column.ScaleLocation,
+                "IsUnicode" => column.IsUnicodeLocation,
+                _ => method.Location,
+            };
+            context.ReportDiagnostic(Diagnostic.Create(diagnostic.Descriptor, location?.ToLocation(),
+                diagnostic.MessageArguments.Cast<object>().ToArray()));
+            return resolution;
         }
 
         // [InquiryGlobalFilter] columns: a projection's column subset omits them, so they must be passed
@@ -1128,7 +1165,7 @@ internal static class StoreProcessor
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
         if (needsCount) AppendConstSql(source, "_sqlCount", sqlBuilder.BuildCountSql(ctx));
         // InsertAll is supported on every dialect via the SqlBuilder batch-insert shape hooks (Oracle emits
-        // INSERT ALL … SELECT FROM dual; everyone else multi-row VALUES). The header + per-row open are
+        // INSERT INTO … SELECT … FROM dual UNION ALL; everyone else uses multi-row VALUES). The header + per-row open are
         // baked consts the emitter assembles at runtime. DeleteAll uses the IN-expansion path (every dialect).
         if (needsInsertAll)
         {
@@ -1359,6 +1396,16 @@ internal static class StoreProcessor
             AppendConstSql(source, "_sqlProj_" + method.Name, projSql);
         }
 
+        foreach (var artifact in collectionResolutions
+            .Where(static resolution => resolution.Artifact is not null)
+            .Select(static resolution => resolution.Artifact!)
+            .GroupBy(static artifact => artifact.RuntimeDescriptorFieldName, StringComparer.Ordinal)
+            .Select(static group => group.First()))
+        {
+            source.AppendLine();
+            source.AppendLine($"    private static readonly {artifact.RuntimeDescriptorTypeName} {artifact.RuntimeDescriptorFieldName} = {artifact.RuntimeDescriptorExpression};");
+        }
+
         source.AppendLine();
         source.AppendLine($"    public {store.Name}(global::Inquiry.IInquiry inquiry)");
         source.AppendLine("        : base(inquiry)");
@@ -1384,6 +1431,13 @@ internal static class StoreProcessor
                 StoreOperation.Upsert => upsertError,
                 _ => null,
             };
+            // The provider diagnostic was already reported at the precise invalid facet above. Still
+            // emit a safe body without adding the generic INQ039 for the same transport failure.
+            if (collectionErrors.TryGetValue(method, out var collectionError))
+            {
+                StoreOperationEmitter.EmitUnsupportedStub(source, method, collectionError);
+                continue;
+            }
             if (unsupportedReason is not null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -1398,12 +1452,14 @@ internal static class StoreProcessor
             {
                 // Project: select the projection's columns and materialize the projection type.
                 StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
-                    sqlBuilder, "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
+                    sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null,
+                    "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
             }
             else
             {
                 baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
-                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities, sqlBuilder, baseSelectField);
+                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
+                    sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null, baseSelectField);
             }
         }
 
@@ -1423,7 +1479,10 @@ internal static class StoreProcessor
         context.AddSource($"{store.Name}.InquiryStore.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
         return new StoreEmissionResult(
             new StoreRegistration(store.FullyQualifiedName, interfaceFullyQualifiedName),
-            collectionArtifacts.ToImmutable());
+            collectionResolutions
+                .Where(static resolution => resolution.Artifact is not null)
+                .Select(static resolution => resolution.Artifact!)
+                .ToImmutableArray());
     }
 
     private static StoreEmissionResult EmitInvalidEntityStore(SourceProductionContext context, StoreData store)
@@ -1953,8 +2012,10 @@ internal static class StoreProcessor
                 {
                     // IN/NOT IN match the collection element against the column's non-nullable type: a set
                     // of values to test membership against is never itself nullable.
-                    var element = method.Parameters[paramIndex].ElementComparisonDisplay;
-                    if (element is null || element != column.Type.NonNullableDisplayName)
+                    var parameter = method.Parameters[paramIndex];
+                    var element = parameter.ElementNonNullableComparisonDisplay;
+                    if (element is null || element != column.Type.NonNullableDisplayName ||
+                        (!column.IsNullable && parameter.ElementIsNullable))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateInRequiresCollection, method.Location?.ToLocation(), method.Name, predicate.Field));
                         return false;
@@ -1969,7 +2030,9 @@ internal static class StoreProcessor
                     // exactly — ':name' on Oracle, '@name' elsewhere. FinalizeCommand only renames
                     // parameters, not the text, so it cannot bridge a mismatch here. NOT IN always uses the
                     // sentinel path (isNegatedCollection) so its empty-collection rewrite is dialect-uniform.
-                    bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column, isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn));
+                    bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column,
+                        isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn,
+                        elementIsNullable: parameter.ElementIsNullable));
                     paramIndex += 1;
                     hasIn = true;
                     break;

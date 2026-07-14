@@ -106,4 +106,25 @@ internal static class InquiryParameterBinder
             ? name
             : "@" + name;
     }
+
+    /// <summary>
+    /// Resolves a bound parameter after provider finalization. Some providers retain Inquiry's
+    /// transport sigil while Oracle removes it to preserve stored-procedure formal names.
+    /// </summary>
+    internal static DbParameter FindByLogicalName(DbParameterCollection parameters, string name)
+    {
+        var normalized = NormalizeName(name);
+        var logical = normalized.Substring(1);
+        foreach (DbParameter parameter in parameters)
+        {
+            var candidate = parameter.ParameterName;
+            if (candidate.Length > 0 && candidate[0] is '@' or ':' or '$' or '?')
+            {
+                candidate = candidate.Substring(1);
+            }
+            if (string.Equals(candidate, logical, StringComparison.OrdinalIgnoreCase)) return parameter;
+        }
+
+        throw new IndexOutOfRangeException($"The command does not contain a read-back parameter named '{name}'.");
+    }
 }

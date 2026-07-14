@@ -16,6 +16,7 @@
     <Authors>Inquiry Contributors</Authors>
     <Company>Inquiry Contributors</Company>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
 
     <!-- SourceLink: embed commit metadata so NuGet consumers can step into source -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -34,5 +35,6 @@
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

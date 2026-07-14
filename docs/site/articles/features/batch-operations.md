@@ -35,7 +35,7 @@ This is the one place Inquiry builds SQL at run time — necessarily, since the 
 
 ## How `UpdateAll` executes (ADO.NET `DbBatch`)
 
-On SQL Server, `[InquiryDeleteAll]` and positive collection predicates use compile-time-generated, schema-qualified TVP artifacts. Apply `InquiryGeneratedSchema.ProviderArtifactsDdl` in the migration/bootstrap path before the first call. Binding creates only the structured parameter and records; it does not query `TYPE_ID`, create a type, or maintain a process-wide artifact cache.
+On SQL Server, `[InquiryDeleteAll]` and positive collection predicates use compile-time-generated, schema-qualified TVP artifacts with exact provider facets and nullability. Apply `InquiryGeneratedSchema.ProviderArtifactsDdl` in the migration/bootstrap path before the first call. Binding peeks once and streams a single enumerator; it creates no intermediate collection and performs no catalog query, DDL, or connection open. Null/empty inputs bind zero rows. Nullable elements remain `DBNull` rows rather than being removed.
 
 PostgreSQL arrays and SQL Server TVPs normalize unsigned and `sbyte` elements to provider-supported numeric partners with unchecked bit-preserving casts. SQL Server uses `byte`/`TINYINT` for `sbyte`; PostgreSQL uses a `short[]` with the reinterpreted byte value `0..255` because Npgsql reserves `byte[]` for scalar `bytea`. Both use `short`, `int`, and `long` for `ushort`, `uint`, and `ulong`. Conversion happens once in the generated static selector, after any value converter. JSON-backed dialect transports are unchanged.
 

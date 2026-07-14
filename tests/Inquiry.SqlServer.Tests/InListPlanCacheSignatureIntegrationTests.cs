@@ -37,7 +37,7 @@ public sealed class InListPlanCacheSignatureIntegrationTests
         var (distinctSignatures, sampleText) = await QueryInListPlanCacheAsync(harness.ConnectionString);
 
         Assert.Equal(1, distinctSignatures);
-        Assert.Contains("Inquiry_Tvp_474f2ebbdd781f2c0331853ca09837a0aa4613f2bf445089eafda2b033abe95c", sampleText);
+        Assert.Contains("Inquiry_Tvp_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f", sampleText);
     }
 
     // Distinct parameterized IN statement texts cached for THIS database (isolated by the dbid plan
@@ -55,7 +55,7 @@ public sealed class InListPlanCacheSignatureIntegrationTests
             CROSS APPLY sys.dm_exec_plan_attributes(cp.plan_handle) pa
             WHERE pa.attribute = 'dbid' AND pa.value = DB_ID()
               AND st.text LIKE '%TPlanCacheItem%'
-              AND st.text LIKE '%Inquiry_Tvp_474f2ebbdd781f2c0331853ca09837a0aa4613f2bf445089eafda2b033abe95c%'
+              AND st.text LIKE '%Inquiry_Tvp_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f%'
               AND st.text NOT LIKE '%dm_exec%';
             """;
         await using var reader = await cmd.ExecuteReaderAsync();

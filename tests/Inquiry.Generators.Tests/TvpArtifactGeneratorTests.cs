@@ -43,7 +43,7 @@ public sealed partial class InquiryGeneratorTests
         var schema = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
         var itemStore = Assert.Single(result.RunResult.GeneratedTrees,
-            static tree => tree.FilePath.EndsWith("\\ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+            static tree => string.Equals(Path.GetFileName(tree.FilePath), "ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
         var tenantStore = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("TenantItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
@@ -51,18 +51,29 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("public const string ProviderArtifactsValidationSql", schema);
         Assert.Contains("public const string Ddl = ProviderArtifactsDdl +", schema);
         Assert.Equal(3, global::System.Text.RegularExpressions.Regex.Matches(schema, "CREATE TYPE").Count);
-        Assert.Contains("TYPE_ID(N'[dbo].[Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee]')", schema);
+        Assert.Contains("TYPE_ID(N'[dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]')", schema);
         Assert.Contains("AS TABLE ([Value] INT NOT NULL)", schema);
-        Assert.Contains("AS TABLE ([Value] NVARCHAR(MAX) NOT NULL)", schema);
+        Assert.Contains("AS TABLE ([Value] NVARCHAR(64) NOT NULL)", schema);
         Assert.Contains("SCHEMA_ID(N'tenant')", schema);
         Assert.Contains("CREATE SCHEMA [tenant]", schema);
-        Assert.Contains("[tenant].[Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee]", schema);
-        Assert.Contains("N'int' AS [ExpectedElementSignature]", schema);
-        Assert.Contains("N'nvarchar(max)' AS [ExpectedElementSignature]", schema);
+        Assert.Contains("[tenant].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]", schema);
+        Assert.Contains("N'int|nullable=0' AS [ExpectedElementSignature]", schema);
+        Assert.Contains("N'nvarchar(64)|nullable=0' AS [ExpectedElementSignature]", schema);
+        Assert.Contains("tt.is_memory_optimized = 0", schema);
+        Assert.Contains("c.column_id = 1", schema);
+        Assert.Contains("c.name = N'Value'", schema);
+        Assert.Contains("st.is_user_defined = 0", schema);
+        Assert.Contains("st.is_assembly_type = 0", schema);
+        Assert.Contains("c.collation_name = CONVERT(sysname, DATABASEPROPERTYEX(DB_NAME(), 'Collation'))", schema);
+        Assert.Contains("c.is_identity = 0", schema);
+        Assert.Contains("c.is_computed = 0", schema);
+        Assert.Contains("sys.key_constraints", schema);
+        Assert.Contains("sys.check_constraints", schema);
+        Assert.Contains("sys.default_constraints", schema);
 
-        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Id\", ids, \"[dbo].[Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee]\")", itemStore);
-        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Code\", codes, \"[dbo].[Inquiry_Tvp_474f2ebbdd781f2c0331853ca09837a0aa4613f2bf445089eafda2b033abe95c]\")", itemStore);
-        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Id\", ids, \"[tenant].[Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee]\")", tenantStore);
+        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Id\", ids, \"[dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]\", _inquiryTvpDescriptor_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c)", itemStore);
+        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Code\", codes, \"[dbo].[Inquiry_Tvp_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f]\", _inquiryTvpDescriptor_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f)", itemStore);
+        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Id\", ids, \"[tenant].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]\", _inquiryTvpDescriptor_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c)", tenantStore);
         Assert.DoesNotContain("BindUnsupported", itemStore);
         Assert.DoesNotContain("BindUnsupported", tenantStore);
         Assert.Contains("InquiryInExpansion.ExpandNotIn", itemStore);
@@ -108,7 +119,7 @@ public sealed partial class InquiryGeneratorTests
         var schema = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Contains("ProviderArtifactsDdl", schema);
-        Assert.Contains("CREATE TYPE [dbo].[Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee]", schema);
+        Assert.Contains("CREATE TYPE [dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]", schema);
         Assert.DoesNotContain("IF OBJECT_ID", schema);
     }
 
@@ -123,7 +134,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var generated = string.Join("\n", result.RunResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
-        Assert.Contains("[9 odd]].schema'].[Inquiry_Tvp_5fcff71acdcd2dc2f2d9b8c73ef6cfb000902eeb236c89d2221808eb2617bbee]", generated);
+        Assert.Contains("[9 odd]].schema'].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]", generated);
         Assert.Contains("N'9 odd].schema'''", generated);
     }
 
@@ -169,7 +180,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void SqlServerUnsupportedCollectionUsesExplicitUnsupportedPathAndNoArtifact()
+    public void SqlServerDateOnlyCollectionUsesExactDateArtifact()
     {
         const string source = """
             using System; using System.Collections.Generic; using System.Threading; using System.Threading.Tasks;
@@ -182,8 +193,10 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var generated = string.Join("\n", result.RunResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
-        Assert.Contains("InquiryTvpParameter.BindUnsupported(_c, \"@Day\", days)", generated);
-        Assert.DoesNotContain("ProviderArtifactsDdl", generated);
+        Assert.Contains("AS TABLE ([Value] DATE NOT NULL)", generated);
+        Assert.Contains("Inquiry_Tvp_bb6f1e40447b5ac39c46dbc309797500a3103474d1e5bd4d28cfa8fd2570e949", generated);
+        Assert.Contains("InquiryTvpDescriptor.Get(\"date\", 0L, 0, 0, false)", generated);
+        Assert.DoesNotContain("BindUnsupported", generated);
     }
 
     [Theory]

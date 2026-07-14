@@ -1,48 +1,106 @@
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.Tests.Fixtures;
-using System.Data.Common;
+using Microsoft.Extensions.DependencyInjection;
+using Oracle.ManagedDataAccess.Client;
 
 namespace Inquiry.Oracle.Tests;
 
 /// <summary>
-/// Pins the concurrent-upsert contract on Oracle (audit P2 #6). The client-supplied-key path uses
-/// <c>MERGE … WHEN MATCHED THEN UPDATE / WHEN NOT MATCHED THEN INSERT</c>. Like SQL Server's MERGE,
-/// Oracle's MERGE without explicit locking has race-condition concerns under concurrent writes
-/// (two MERGEs can both fall into WHEN NOT MATCHED and one fails on a unique-constraint violation).
-/// The API-level contract still holds: at least one upsert succeeds and the surviving row's state
-/// matches one of the inputs.
+/// Pins Oracle's caller-owned retry contract for concurrent client-key MERGE operations. Inquiry does
+/// not retry a losing MERGE internally because replay safety belongs to the application transaction.
 /// </summary>
 [Collection(OracleCollection.Name)]
 public sealed class UpsertConcurrencyTests
 {
     private readonly OracleContainerFixture _fixture;
+
     public UpsertConcurrencyTests(OracleContainerFixture fixture) => _fixture = fixture;
 
     [SkippableFact]
-    public async Task ConcurrentUpsertsOfSameKeyEndInOneRowMatchingOneInput()
+    public async Task LosingClientKeyMergeReportsUniqueConstraintAndCallerRetrySucceeds()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "upsert_concurrent");
-        var store = harness.GetRequiredService<CustomerStore>();
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "upsert_race");
+        await using var winnerScope = harness.Services.CreateAsyncScope();
+        await using var loserScope = harness.Services.CreateAsyncScope();
 
-        const int parallelism = 10;
-        var inputs = Enumerable.Range(0, parallelism)
-            .Select(i => new Customer { CustomerID = "CONC1", CompanyName = "Co_" + i, Country = "USA" })
-            .ToArray();
+        var winnerInquiry = winnerScope.ServiceProvider.GetRequiredService<IInquiry>();
+        var winnerStore = winnerScope.ServiceProvider.GetRequiredService<CustomerStore>();
+        var loserInquiry = loserScope.ServiceProvider.GetRequiredService<IInquiry>();
+        var loserStore = loserScope.ServiceProvider.GetRequiredService<CustomerStore>();
+        var winner = new Customer { CustomerID = "CONC1", CompanyName = "Winner", Country = "USA" };
+        var loser = new Customer { CustomerID = "CONC1", CompanyName = "Retried", Country = "Canada" };
+        var attempts = 0;
 
-        // Tolerate the MERGE-race: a unique-constraint failure on one parallel call is a known
-        // Oracle MERGE limitation, not a bug in the upsert path. At least one call must succeed
-        // and the surviving row must match some input.
-        var results = await Task.WhenAll(inputs.Select(async c =>
+        await using var winnerTransaction = await winnerInquiry.BeginTransactionAsync();
+        await winnerStore.UpsertAsync(winner);
+
+        await using var loserTransaction = await loserInquiry.BeginTransactionAsync();
+        attempts++;
+        var firstLoserAttempt = loserStore.UpsertAsync(loser);
+        await WaitUntilBlockedAsync(firstLoserAttempt, harness.SchemaUser);
+
+        // The loser is now waiting on the winner's uncommitted key. Commit before awaiting it so the
+        // provider deterministically resolves the race as ORA-00001 instead of a timing-dependent result.
+        await winnerTransaction.CommitAsync();
+        var conflict = await Assert.ThrowsAsync<OracleException>(() => firstLoserAttempt);
+        Assert.Equal(1, conflict.Number);
+        await loserTransaction.RollbackAsync();
+
+        await using (var retryScope = harness.Services.CreateAsyncScope())
         {
-            try { await store.UpsertAsync(c); return true; }
-            catch (DbException) { return false; }
-        }));
-        Assert.Contains(true, results);
+            var retryInquiry = retryScope.ServiceProvider.GetRequiredService<IInquiry>();
+            var retryStore = retryScope.ServiceProvider.GetRequiredService<CustomerStore>();
+            await using var retryTransaction = await retryInquiry.BeginTransactionAsync();
+            attempts++;
+            await retryStore.UpsertAsync(loser);
+            await retryTransaction.CommitAsync();
+        }
 
-        var loaded = await store.SelectByKeyAsync("CONC1");
-        Assert.NotNull(loaded);
-        Assert.Contains(loaded!.CompanyName, inputs.Select(i => i.CompanyName));
+        Assert.Equal(2, attempts);
+        await using var verificationScope = harness.Services.CreateAsyncScope();
+        var verificationInquiry = verificationScope.ServiceProvider.GetRequiredService<IInquiry>();
+        var verificationStore = verificationScope.ServiceProvider.GetRequiredService<CustomerStore>();
+        var count = await verificationInquiry.ExecuteScalarAsync<int>(
+            $"SELECT COUNT(*) FROM Customers");
+        var stored = await verificationStore.SelectByKeyAsync("CONC1");
+
+        Assert.Equal(1, count);
+        Assert.NotNull(stored);
+        Assert.Equal("Retried", stored.CompanyName);
+        Assert.Equal("Canada", stored.Country);
+    }
+
+    private async Task WaitUntilBlockedAsync(Task loserAttempt, string schemaUser)
+    {
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var admin = new OracleConnection(_fixture.AdminConnectionString);
+        await admin.OpenAsync(watchdog.Token);
+
+        while (true)
+        {
+            if (loserAttempt.IsCompleted)
+            {
+                var earlyOutcome = await Record.ExceptionAsync(() => loserAttempt);
+                Assert.Fail($"The losing MERGE completed before it blocked on the winner. Outcome: {earlyOutcome?.ToString() ?? "success"}");
+            }
+
+            await using var command = admin.CreateCommand();
+            command.BindByName = true;
+            command.CommandText = """
+                SELECT COUNT(*)
+                FROM V$SESSION
+                WHERE USERNAME = :username
+                  AND BLOCKING_SESSION IS NOT NULL
+                """;
+            command.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
+            if (Convert.ToInt32(await command.ExecuteScalarAsync(watchdog.Token)) > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(50, watchdog.Token);
+        }
     }
 }

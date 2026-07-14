@@ -198,8 +198,7 @@ internal static class SchemaEmitter
             var artifactDdl = string.Join("", schemaDdl)
                 + string.Join("\n\n", providerArtifacts.Select(static artifact => artifact.CreateDdl));
             if (ddl.Length > 0) artifactDdl += "\n\n";
-            var validationSql = string.Join("\nUNION ALL\n", providerArtifacts.Select(static artifact =>
-                $"SELECT N'{artifact.ValidationName.Replace("'", "''")}' AS [ArtifactName], N'{artifact.ElementSignature.Replace("'", "''")}' AS [ExpectedElementSignature] WHERE TYPE_ID(N'{artifact.ValidationName.Replace("'", "''")}') IS NULL"));
+            var validationSql = string.Join("\nUNION ALL\n", providerArtifacts.Select(static artifact => artifact.ValidationSql));
             source.AppendLine("    /// <summary>Additive setup DDL for provider-owned schema artifacts.</summary>");
             source.AppendLine($"    public const string ProviderArtifactsDdl = @\"{artifactDdl.Replace("\"", "\"\"")}\";");
             source.AppendLine("    /// <summary>Read-only validation query returning one row per missing provider artifact.</summary>");
