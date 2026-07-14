@@ -57,7 +57,12 @@ var sandbox = new InquirySandbox(applicationServices);
 await sandbox.RunAsync(async (context, cancellationToken) =>
 {
     var organizations = context.Services.GetRequiredService<OrganizationStore>();
-    var organization = factory.Build("active");
+    var organization = new Organization
+    {
+        Id = Guid.NewGuid(),
+        Name = "Sandbox organization",
+        IsActive = true
+    };
     await organizations.InsertAsync(organization, cancellationToken);
 
     // Visible to this transaction, but absent after RunAsync returns.
