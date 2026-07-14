@@ -87,7 +87,7 @@ one, such as `DEFAULT VALUES` inserts, reuse the fixed row command. A provider e
 is surfaced; Inquiry does not retry writes through a different transport after execution has started.
 
 For the measurement scope and limitations behind the current SQLite and SQL Server insert choices, see
-the [batch insert strategy diagnostic decision](https://github.com/JakeOverstreet/inquiry/blob/7b691883e3da6a36514249cbbaed63a3620c491f/docs/plans/2026-07-14-batch-insert-strategy-decision.md).
+the [batch insert strategy diagnostic decision](https://github.com/JakeOverstreet/inquiry/issues/180).
 
 ## Interceptors and fallbacks
 
