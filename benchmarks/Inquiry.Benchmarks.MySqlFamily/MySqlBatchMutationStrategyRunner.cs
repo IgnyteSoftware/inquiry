@@ -4,6 +4,8 @@ using MySqlConnector;
 
 namespace Inquiry.Benchmarks.MySqlFamily;
 
+internal readonly record struct MySqlBatchMutationItem(int Id, string Value);
+
 /// <summary>
 /// Direct-driver floor used by the MySQL and MariaDB benchmark projects. Each operation opens one
 /// connection, commits one transaction, and returns the provider's affected-row count. Database
@@ -50,7 +52,7 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         insert.Transaction = transaction;
         insert.CommandText = InsertSql;
         var id = insert.Parameters.Add("id", MySqlDbType.Int32);
-        var value = insert.Parameters.Add("value", MySqlDbType.VarChar);
+        var value = insert.Parameters.Add("value", MySqlDbType.VarChar, 100);
         await insert.PrepareAsync().ConfigureAwait(false);
         for (var i = 0; i < rows; i++)
         {
@@ -62,38 +64,37 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         await transaction.CommitAsync().ConfigureAwait(false);
     }
 
-    public Task<int> InsertReusedCommandAsync(int rows)
-        => ExecuteReusedCommandAsync(InsertSql, rows, static i => 100_001 + i, "Inserted");
+    public Task<int> InsertReusedCommandAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteReusedCommandAsync(InsertSql, items, includeValue: true);
 
-    public Task<int> UpdateReusedCommandAsync(int rows)
-        => ExecuteReusedCommandAsync(UpdateSql, rows, static i => i + 1, "Updated");
+    public Task<int> UpdateReusedCommandAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteReusedCommandAsync(UpdateSql, items, includeValue: true);
 
-    public Task<int> DeleteReusedCommandAsync(int rows)
-        => ExecuteReusedCommandAsync(DeleteSql, rows, static i => i + 1, valuePrefix: null);
+    public Task<int> DeleteReusedCommandAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteReusedCommandAsync(DeleteSql, items, includeValue: false);
 
-    public Task<int> InsertDbBatchAsync(int rows)
-        => ExecuteDbBatchAsync(InsertSql, rows, static i => 100_001 + i, "Inserted");
+    public Task<int> InsertDbBatchAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteDbBatchAsync(InsertSql, items, includeValue: true);
 
-    public Task<int> UpdateDbBatchAsync(int rows)
-        => ExecuteDbBatchAsync(UpdateSql, rows, static i => i + 1, "Updated");
+    public Task<int> UpdateDbBatchAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteDbBatchAsync(UpdateSql, items, includeValue: true);
 
-    public Task<int> DeleteDbBatchAsync(int rows)
-        => ExecuteDbBatchAsync(DeleteSql, rows, static i => i + 1, valuePrefix: null);
+    public Task<int> DeleteDbBatchAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteDbBatchAsync(DeleteSql, items, includeValue: false);
 
-    public Task<int> InsertSetBasedAsync(int rows)
-        => ExecuteSetBasedInsertAsync(rows);
+    public Task<int> InsertSetBasedAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteSetBasedInsertAsync(items);
 
-    public Task<int> UpdateSetBasedAsync(int rows)
-        => ExecuteSetBasedUpdateAsync(rows);
+    public Task<int> UpdateSetBasedAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteSetBasedUpdateAsync(items);
 
-    public Task<int> DeleteSetBasedAsync(int rows)
-        => ExecuteSetBasedDeleteAsync(rows);
+    public Task<int> DeleteSetBasedAsync(IReadOnlyList<MySqlBatchMutationItem> items)
+        => ExecuteSetBasedDeleteAsync(items);
 
     private async Task<int> ExecuteReusedCommandAsync(
         string commandText,
-        int rows,
-        Func<int, int> idFactory,
-        string? valuePrefix)
+        IReadOnlyList<MySqlBatchMutationItem> items,
+        bool includeValue)
     {
         await using var connection = new MySqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
@@ -103,17 +104,17 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         command.CommandText = commandText;
         var id = command.Parameters.Add("id", MySqlDbType.Int32);
         MySqlParameter? value = null;
-        if (valuePrefix is not null)
+        if (includeValue)
         {
-            value = command.Parameters.Add("value", MySqlDbType.VarChar);
+            value = command.Parameters.Add("value", MySqlDbType.VarChar, 100);
         }
 
         await command.PrepareAsync().ConfigureAwait(false);
         var affected = 0;
-        for (var i = 0; i < rows; i++)
+        for (var i = 0; i < items.Count; i++)
         {
-            id.Value = idFactory(i);
-            if (value is not null) value.Value = $"{valuePrefix} {i}";
+            id.Value = items[i].Id;
+            if (value is not null) value.Value = items[i].Value;
             affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
@@ -123,9 +124,8 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
 
     private async Task<int> ExecuteDbBatchAsync(
         string commandText,
-        int rows,
-        Func<int, int> idFactory,
-        string? valuePrefix)
+        IReadOnlyList<MySqlBatchMutationItem> items,
+        bool includeValue)
     {
         await using var connection = new MySqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
@@ -133,12 +133,12 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         await using DbBatch batch = connection.CreateBatch();
         batch.Transaction = transaction;
 
-        for (var i = 0; i < rows; i++)
+        for (var i = 0; i < items.Count; i++)
         {
             var command = batch.CreateBatchCommand();
             command.CommandText = commandText;
-            AddParameter(command, "id", idFactory(i));
-            if (valuePrefix is not null) AddParameter(command, "value", $"{valuePrefix} {i}");
+            AddParameter(command, "id", MySqlDbType.Int32, size: 0, items[i].Id);
+            if (includeValue) AddParameter(command, "value", MySqlDbType.VarChar, size: 100, items[i].Value);
             batch.BatchCommands.Add(command);
         }
 
@@ -147,7 +147,7 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         return affected;
     }
 
-    private async Task<int> ExecuteSetBasedInsertAsync(int rows)
+    private async Task<int> ExecuteSetBasedInsertAsync(IReadOnlyList<MySqlBatchMutationItem> items)
     {
         var sql = new StringBuilder(
             "INSERT INTO `InquiryBatchEvidence` (`Id`, `ValueText`) VALUES ");
@@ -156,12 +156,12 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        for (var i = 0; i < rows; i++)
+        for (var i = 0; i < items.Count; i++)
         {
             if (i > 0) sql.Append(',');
             sql.Append("(@id").Append(i).Append(", @value").Append(i).Append(')');
-            command.Parameters.AddWithValue($"id{i}", 100_001 + i);
-            command.Parameters.AddWithValue($"value{i}", $"Inserted {i}");
+            command.Parameters.Add($"id{i}", MySqlDbType.Int32).Value = items[i].Id;
+            command.Parameters.Add($"value{i}", MySqlDbType.VarChar, 100).Value = items[i].Value;
         }
 
         command.CommandText = sql.Append(';').ToString();
@@ -170,7 +170,7 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         return affected;
     }
 
-    private async Task<int> ExecuteSetBasedUpdateAsync(int rows)
+    private async Task<int> ExecuteSetBasedUpdateAsync(IReadOnlyList<MySqlBatchMutationItem> items)
     {
         var sql = new StringBuilder("UPDATE `InquiryBatchEvidence` SET `ValueText` = CASE `Id` ");
         await using var connection = new MySqlConnection(connectionString);
@@ -178,22 +178,22 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        for (var i = 0; i < rows; i++)
+        for (var i = 0; i < items.Count; i++)
         {
             sql.Append("WHEN @id").Append(i).Append(" THEN @value").Append(i).Append(' ');
-            command.Parameters.AddWithValue($"id{i}", i + 1);
-            command.Parameters.AddWithValue($"value{i}", $"Updated {i}");
+            command.Parameters.Add($"id{i}", MySqlDbType.Int32).Value = items[i].Id;
+            command.Parameters.Add($"value{i}", MySqlDbType.VarChar, 100).Value = items[i].Value;
         }
 
         sql.Append("END WHERE `Id` IN (");
-        AppendParameterList(sql, "id", rows);
+        AppendParameterList(sql, "id", items.Count);
         command.CommandText = sql.Append(");").ToString();
         var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         await transaction.CommitAsync().ConfigureAwait(false);
         return affected;
     }
 
-    private async Task<int> ExecuteSetBasedDeleteAsync(int rows)
+    private async Task<int> ExecuteSetBasedDeleteAsync(IReadOnlyList<MySqlBatchMutationItem> items)
     {
         var sql = new StringBuilder("DELETE FROM `InquiryBatchEvidence` WHERE `Id` IN (");
         await using var connection = new MySqlConnection(connectionString);
@@ -201,22 +201,29 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        for (var i = 0; i < rows; i++)
+        for (var i = 0; i < items.Count; i++)
         {
-            command.Parameters.AddWithValue($"id{i}", i + 1);
+            command.Parameters.Add($"id{i}", MySqlDbType.Int32).Value = items[i].Id;
         }
 
-        AppendParameterList(sql, "id", rows);
+        AppendParameterList(sql, "id", items.Count);
         command.CommandText = sql.Append(");").ToString();
         var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         await transaction.CommitAsync().ConfigureAwait(false);
         return affected;
     }
 
-    private static void AddParameter(DbBatchCommand command, string name, object value)
+    private static void AddParameter(
+        DbBatchCommand command,
+        string name,
+        MySqlDbType type,
+        int size,
+        object value)
     {
-        var parameter = command.CreateParameter();
+        var parameter = (MySqlParameter)command.CreateParameter();
         parameter.ParameterName = name;
+        parameter.MySqlDbType = type;
+        if (size > 0) parameter.Size = size;
         parameter.Value = value;
         command.Parameters.Add(parameter);
     }

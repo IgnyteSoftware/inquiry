@@ -2,6 +2,8 @@ using Oracle.ManagedDataAccess.Client;
 
 namespace Inquiry.Benchmarks.Oracle;
 
+internal readonly record struct OracleBatchMutationItem(int Id, string Value);
+
 internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
 {
     private const string InsertSql =
@@ -58,29 +60,28 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         await transaction.CommitAsync().ConfigureAwait(false);
     }
 
-    public Task<int> InsertReusedCommandAsync(int rows)
-        => ExecuteReusedCommandAsync(InsertSql, rows, static i => 100_001 + i, "Inserted");
+    public Task<int> InsertReusedCommandAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteReusedCommandAsync(InsertSql, items, includeValue: true);
 
-    public Task<int> UpdateReusedCommandAsync(int rows)
-        => ExecuteReusedCommandAsync(UpdateSql, rows, static i => i + 1, "Updated");
+    public Task<int> UpdateReusedCommandAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteReusedCommandAsync(UpdateSql, items, includeValue: true);
 
-    public Task<int> DeleteReusedCommandAsync(int rows)
-        => ExecuteReusedCommandAsync(DeleteSql, rows, static i => i + 1, valuePrefix: null);
+    public Task<int> DeleteReusedCommandAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteReusedCommandAsync(DeleteSql, items, includeValue: false);
 
-    public Task<int> InsertArrayBindingAsync(int rows)
-        => ExecuteArrayBindingAsync(InsertSql, rows, static i => 100_001 + i, "Inserted");
+    public Task<int> InsertArrayBindingAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteArrayBindingAsync(InsertSql, items, includeValue: true);
 
-    public Task<int> UpdateArrayBindingAsync(int rows)
-        => ExecuteArrayBindingAsync(UpdateSql, rows, static i => i + 1, "Updated");
+    public Task<int> UpdateArrayBindingAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteArrayBindingAsync(UpdateSql, items, includeValue: true);
 
-    public Task<int> DeleteArrayBindingAsync(int rows)
-        => ExecuteArrayBindingAsync(DeleteSql, rows, static i => i + 1, valuePrefix: null);
+    public Task<int> DeleteArrayBindingAsync(IReadOnlyList<OracleBatchMutationItem> items)
+        => ExecuteArrayBindingAsync(DeleteSql, items, includeValue: false);
 
     private async Task<int> ExecuteReusedCommandAsync(
         string commandText,
-        int rows,
-        Func<int, int> idFactory,
-        string? valuePrefix)
+        IReadOnlyList<OracleBatchMutationItem> items,
+        bool includeValue)
     {
         await using var connection = new OracleConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
@@ -91,17 +92,17 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         command.CommandText = commandText;
         var id = command.Parameters.Add("id", OracleDbType.Int32);
         OracleParameter? value = null;
-        if (valuePrefix is not null)
+        if (includeValue)
         {
             value = command.Parameters.Add("value", OracleDbType.Varchar2, 100);
         }
 
         await command.PrepareAsync().ConfigureAwait(false);
         var affected = 0;
-        for (var i = 0; i < rows; i++)
+        for (var i = 0; i < items.Count; i++)
         {
-            id.Value = idFactory(i);
-            if (value is not null) value.Value = $"{valuePrefix} {i}";
+            id.Value = items[i].Id;
+            if (value is not null) value.Value = items[i].Value;
             affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
@@ -111,12 +112,11 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
 
     private async Task<int> ExecuteArrayBindingAsync(
         string commandText,
-        int rows,
-        Func<int, int> idFactory,
-        string? valuePrefix)
+        IReadOnlyList<OracleBatchMutationItem> items,
+        bool includeValue)
     {
-        var ids = new int[rows];
-        for (var i = 0; i < rows; i++) ids[i] = idFactory(i);
+        var ids = new int[items.Count];
+        for (var i = 0; i < items.Count; i++) ids[i] = items[i].Id;
 
         await using var connection = new OracleConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
@@ -124,15 +124,15 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         await using var command = connection.CreateCommand();
         command.Transaction = (OracleTransaction)transaction;
         command.BindByName = true;
-        command.ArrayBindCount = rows;
+        command.ArrayBindCount = items.Count;
         command.CommandText = commandText;
         command.Parameters.Add("id", OracleDbType.Int32).Value = ids;
-        if (valuePrefix is not null)
+        if (includeValue)
         {
-            var values = new string[rows];
-            for (var i = 0; i < rows; i++) values[i] = $"{valuePrefix} {i}";
+            var values = new string[items.Count];
+            for (var i = 0; i < items.Count; i++) values[i] = items[i].Value;
             var value = command.Parameters.Add("value", OracleDbType.Varchar2);
-            value.ArrayBindSize = Enumerable.Repeat(100, rows).ToArray();
+            value.ArrayBindSize = Enumerable.Repeat(100, items.Count).ToArray();
             value.Value = values;
         }
 
