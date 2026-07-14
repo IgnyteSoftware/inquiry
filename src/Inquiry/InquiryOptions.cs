@@ -12,7 +12,11 @@ public sealed class InquiryOptions
     /// </summary>
     public const int DefaultMaxParametersPerCommand = 2000;
 
+    /// <summary>Default maximum number of items retained and executed in one batch chunk.</summary>
+    public const int DefaultMaxBatchSize = 1000;
+
     private TimeSpan? _defaultCommandTimeout;
+    private int _maxBatchSize = DefaultMaxBatchSize;
 
     /// <summary>
     /// Gets or sets the command timeout applied to every command Inquiry executes, unless an
@@ -55,4 +59,22 @@ public sealed class InquiryOptions
     /// provider-specific parameter cap is hit. Defaults to <see cref="DefaultMaxParametersPerCommand"/>.
     /// </summary>
     public int MaxParametersPerCommand { get; set; } = DefaultMaxParametersPerCommand;
+
+    /// <summary>
+    /// Gets or sets the maximum number of items Inquiry retains and executes in one batch chunk.
+    /// Defaults to <see cref="DefaultMaxBatchSize"/>.
+    /// </summary>
+    public int MaxBatchSize
+    {
+        get => _maxBatchSize;
+        set
+        {
+            if (value <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Maximum batch size must be positive.");
+            }
+
+            _maxBatchSize = value;
+        }
+    }
 }
