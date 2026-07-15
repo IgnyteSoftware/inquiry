@@ -191,6 +191,13 @@ internal static class TestData
             parity.IdentityHash,
             observation.CommandGraph.SqlFingerprint,
             environment.IdentityHash,
+            new BenchmarkTargetEvidence(
+                "Inquiry.Benchmarks",
+                "Inquiry.Benchmarks.CustomerByKeyBenchmarks",
+                "Inquiry_GetByKey",
+                1,
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["Rows"] = "1" }),
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["supports-batch-execution"] = "false" },
             parity,
             provider == "sqlite"
                 ? new DatabaseEvidence(null, "SQLite 3.50.3", "3.50.3", ["ENABLE_FTS5", "THREADSAFE=1"], "in-process")

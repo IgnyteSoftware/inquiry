@@ -1101,8 +1101,13 @@ internal static class StoreProcessor
              m.Method.Operation == StoreOperation.SelectAllEager));
         var needsSelectByKey = valid.Any(m => UsesSharedSelect(m) && m.Method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
         var needsInsert = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && !m.Method.ReturnsEntity) ||
-            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity);
-        // UpdateAll reuses the single-row _sqlUpdate const (one UPDATE per item via the batch API).
+            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity) ||
+            valid.Any(m => (m.Method.Operation == StoreOperation.InsertAll ||
+                (m.Method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy)) &&
+                (sqlBuilder.UsesArrayBindingForBatchMutations ||
+                 sqlBuilder.BatchInsertStrategy != BatchInsertStrategy.SetBased ||
+                 ctx.InsertableColumns.Count == 0));
+        // UpdateAll keeps the single-row SQL for the default path and guarded provider fallbacks.
         var needsUpdate = valid.Any(static m =>
             (m.Method.Operation == StoreOperation.Update && !m.Method.ReturnsEntity) ||
             m.Method.Operation == StoreOperation.UpdateAll);
@@ -1169,12 +1174,56 @@ internal static class StoreProcessor
         // InsertAll is supported on every dialect via the SqlBuilder batch-insert shape hooks (Oracle emits
         // INSERT INTO … SELECT … FROM dual UNION ALL; everyone else uses multi-row VALUES). The header + per-row open are
         // baked consts the emitter assembles at runtime. DeleteAll uses the IN-expansion path (every dialect).
-        if (needsInsertAll)
+        if (needsInsertAll && sqlBuilder.BatchInsertStrategy != BatchInsertStrategy.Row)
         {
             AppendConstSql(source, "_sqlInsertAllPrefix", sqlBuilder.BuildBatchInsertHeader(ctx));
             AppendConstSql(source, "_sqlInsertAllRowOpen", sqlBuilder.BuildBatchInsertRowOpen(ctx));
         }
-        if (needsDeleteAll) AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
+        if (needsDeleteAll)
+        {
+            // Retain the set-based collection SQL as a benchmark/control shape. Array-binding
+            // dialects execute the fixed single-key DML through _sqlDeleteAllItem in production.
+            AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
+            if (sqlBuilder.UsesArrayBindingForBatchMutations)
+            {
+                AppendConstSql(source, "_sqlDeleteAllItem", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
+            }
+        }
+
+        // Provider descriptor fields must be initialized before any cached batch descriptor captures
+        // them. C# correctly treats a later static field as potentially null while an earlier field
+        // initializer is running, even when the later field's declared type is non-nullable.
+        foreach (var artifact in collectionResolutions
+            .Where(static resolution => resolution.Artifact is not null)
+            .Select(static resolution => resolution.Artifact!)
+            .GroupBy(static artifact => artifact.RuntimeDescriptorFieldName, StringComparer.Ordinal)
+            .Select(static group => group.First()))
+        {
+            source.AppendLine();
+            source.AppendLine($"    private static readonly {artifact.RuntimeDescriptorTypeName} {artifact.RuntimeDescriptorFieldName} = {artifact.RuntimeDescriptorExpression};");
+        }
+
+        // Batch descriptors are immutable generated support values. Keep them on the store type so
+        // every invocation reuses the same static binder delegate instead of constructing batch
+        // command state per call.
+        foreach (var (method, _, _, _) in valid)
+        {
+            if (method.Operation == StoreOperation.InsertAll ||
+                (method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy))
+            {
+                StoreOperationEmitter.EmitInsertAllSupport(source, method, entity, sqlBuilder);
+            }
+            else if (method.Operation == StoreOperation.UpdateAll)
+            {
+                StoreOperationEmitter.EmitUpdateAllDescriptor(source, method, entity, sqlBuilder);
+            }
+            else if (method.Operation == StoreOperation.DeleteAll &&
+                deleteAllCollectionResolutions.TryGetValue(method, out var resolution) &&
+                resolution.IsValid)
+            {
+                StoreOperationEmitter.EmitDeleteAllDescriptor(source, method, entity, sqlBuilder, resolution);
+            }
+        }
 
         foreach (var fieldColumns in byFieldOps)
         {
@@ -1420,16 +1469,6 @@ internal static class StoreProcessor
                 ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct)
                 : sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct);
             AppendConstSql(source, "_sqlProj_" + method.Name, projSql);
-        }
-
-        foreach (var artifact in collectionResolutions
-            .Where(static resolution => resolution.Artifact is not null)
-            .Select(static resolution => resolution.Artifact!)
-            .GroupBy(static artifact => artifact.RuntimeDescriptorFieldName, StringComparer.Ordinal)
-            .Select(static group => group.First()))
-        {
-            source.AppendLine();
-            source.AppendLine($"    private static readonly {artifact.RuntimeDescriptorTypeName} {artifact.RuntimeDescriptorFieldName} = {artifact.RuntimeDescriptorExpression};");
         }
 
         source.AppendLine();

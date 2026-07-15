@@ -35,7 +35,12 @@ internal sealed class PostgreSqlTestHarness : IAsyncDisposable
     public static Task<PostgreSqlTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
         => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.PostgreSqlDdl, namePrefix);
 
-    public static async Task<PostgreSqlTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    public static async Task<PostgreSqlTestHarness> CreateFromDdlAsync(
+        string adminConnectionString,
+        string ddl,
+        string? namePrefix = null,
+        Action<InquiryOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var prefix = (namePrefix ?? "inquiry").ToLowerInvariant();
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
@@ -63,10 +68,14 @@ internal sealed class PostgreSqlTestHarness : IAsyncDisposable
             await cmd.ExecuteNonQueryAsync();
         }
 
-        var services = new ServiceCollection()
-            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly)
-            .AddInquiryPostgreSql(connectionString)
-            .BuildServiceProvider();
+        var serviceCollection = new ServiceCollection();
+        if (configureOptions is null)
+            serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+        else
+            serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+        serviceCollection.AddInquiryPostgreSql(connectionString);
+        configureServices?.Invoke(serviceCollection);
+        var services = serviceCollection.BuildServiceProvider();
 
         return new PostgreSqlTestHarness(adminConnectionString, databaseName, connectionString, services);
     }

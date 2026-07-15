@@ -87,13 +87,14 @@ public sealed partial class InquiryGeneratorTests
 
         // Read paths dispatch through the struct-materializer overloads so the JIT can specialize
         // per concrete TMaterializer and inline the Materialize call. Streaming SelectAll /
-        // SelectAllByField (IAsyncEnumerable) use the 2-arg struct QueryAsync overload.
-        Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>", generatedText);
+        // SelectAllByField (IAsyncEnumerable) use the generated-command struct QueryAsync overload.
+        Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization, byte, global::Demo.OrganizationInquiryEntityStructMaterializer>", generatedText);
 
         // SelectByKey binds the key via the allocation-free static-delegate fast path: a 3-arg
-        // QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer> with an inline static binder —
+        // QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer> with an inline static binder —
         // no InquiryParameter[] / InquiryCommand allocation per call.
-        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::System.Guid, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.Contains("Inquiry.QueryGeneratedSingleOrDefaultAsync<global::Demo.Organization, global::System.Guid, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<global::System.Guid>(", generatedText);
         Assert.Contains("static (_cmd, _key) =>", generatedText);
         Assert.Contains("_p0.ParameterName = \"@Key\";", generatedText);
 
@@ -103,8 +104,9 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_p1.DbType = global::System.Data.DbType.String;", generatedText);
         Assert.Contains("_p2.DbType = global::System.Data.DbType.Boolean;", generatedText);
 
-        // Returning InsertReturning binds the whole entity via the same fast path (TArgs = entity).
-        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        // Returning InsertReturning binds the whole entity through the generated guaranteed-single path.
+        Assert.Contains("Inquiry.QueryGeneratedSingleOrDefaultAsync<global::Demo.Organization, global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<global::Demo.Organization>(", generatedText);
         Assert.Contains("static (_cmd, _e) =>", generatedText);
 
         // Non-returning Insert/Update/Delete use the allocation-free ExecuteAsync<TArgs> fast path.
@@ -142,6 +144,8 @@ public sealed partial class InquiryGeneratorTests
         // specialize the pipeline body per concrete TMaterializer).
         Assert.Contains("internal sealed class OrganizationInquiryEntityMaterializer", generatedEntityText);
         Assert.Contains("internal readonly struct OrganizationInquiryEntityStructMaterializer", generatedEntityText);
+        Assert.Contains("public bool IsInquirySequentialAccessSafe => true;", generatedEntityText);
+        Assert.DoesNotContain("IInquiryEntityMaterializer<global::Demo.Organization>.IsInquirySequentialAccessSafe", generatedEntityText);
 
         var generatedServices = Assert.Single(
             result.RunResult.GeneratedTrees,

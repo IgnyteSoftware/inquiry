@@ -1,3 +1,4 @@
+using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Oracle.Shared;
 using Oracle.ManagedDataAccess.Client;
@@ -87,10 +88,13 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 
     // Oracle's FinalizeCommand below strips the '@' sigil from parameter names and converts bools
     // to 0/1 — both on DbCommand. The DbBatch path binds onto DbBatchCommand and bypasses
-    // FinalizeCommand entirely, so a future ODP.NET DbBatch implementation would skip those fixups
-    // and every batched statement would fail to bind. Oracle therefore takes the sequential path.
+    // FinalizeCommand entirely, so a future ODP.NET DbBatch implementation would skip those fixups.
+    // Generated batch mutations use ODP.NET array binding on a normal DbCommand instead.
     /// <inheritdoc />
     public bool SupportsBatchExecution => false;
+
+    /// <inheritdoc />
+    public InquiryBatchExecutionMode BatchExecutionMode => InquiryBatchExecutionMode.ArrayBinding;
 
     /// <summary>
     /// Enables <see cref="OracleCommand.BindByName"/> so parameters bind by name. ODP.NET binds

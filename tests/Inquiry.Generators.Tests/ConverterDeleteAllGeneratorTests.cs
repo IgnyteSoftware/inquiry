@@ -43,16 +43,28 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(ConverterDeleteAllSource, dialect: dialect);
         AssertNoErrors(result);
         var store = ConverterDeleteAllStore(result, "ConvertedKeyStore");
-        const string projected = "ids is null ? null : global::System.Linq.Enumerable.Select(ids, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e))";
+        const string projected = "_keys is null ? null : global::System.Linq.Enumerable.Select(_keys, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e))";
 
         Assert.Contains(providerDdl, ExtractSchemaDdl(result));
         Assert.Contains(ExpectedDeleteAllSql(dialect, "ConvertedKeys", providerIsString: false), store);
+        if (dialect == "Oracle")
+        {
+            Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleCommand)_cmd).ArrayBindCount = _keys.Count;", store);
+            Assert.Contains("_values[_i] = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_keys[_i]);", store);
+            Assert.DoesNotContain("InquiryJsonArrayParameter.Bind", store);
+            // The fixed fallback and array binder each contain one conversion site; the runtime selects
+            // exactly one path for a chunk, so an element is never converted by both.
+            Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(
+                store,
+                "StrongIdConverter>.Instance.ToProvider\\(").Count);
+            return;
+        }
         var typeName = dialect == "SqlServer"
             ? ", \"[dbo].[Inquiry_Tvp_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc]\", _inquiryTvpDescriptor_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc"
             : string.Empty;
         var parameterName = dialect == "Oracle" ? ":iq1$keysxx$d6859d157d8d31" : "@keys";
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {projected}{typeName});", store);
-        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", ids);", store);
+        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _keys);", store);
         Assert.Contains("static _e =>", store);
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(
             store,
@@ -109,11 +121,22 @@ public sealed partial class InquiryGeneratorTests
         var nullableValue = ConverterDeleteAllStore(result, "NullableKeyStore");
         var reference = ConverterDeleteAllStore(result, "ReferenceKeyStore");
         var parameterName = dialect == "Oracle" ? ":iq1$keysxx$d6859d157d8d31" : "@keys";
-        const string nullableProjection = "ids is null ? null : global::System.Linq.Enumerable.Select(ids, static _e => _e.HasValue ? (long?)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e.Value) : null)";
-        const string referenceProjection = "ids is null ? null : global::System.Linq.Enumerable.Select(ids, static _e => _e is null ? (string?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_e))";
+        const string nullableProjection = "_keys is null ? null : global::System.Linq.Enumerable.Select(_keys, static _e => _e.HasValue ? (long?)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e.Value) : null)";
+        const string referenceProjection = "_keys is null ? null : global::System.Linq.Enumerable.Select(_keys, static _e => _e is null ? (string?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_e))";
 
         Assert.Contains(ExpectedDeleteAllSql(dialect, "NullableKeys", providerIsString: false), nullableValue);
         Assert.Contains(ExpectedDeleteAllSql(dialect, "ReferenceKeys", providerIsString: true), reference);
+        if (dialect == "Oracle")
+        {
+            Assert.Contains("ArrayBindCount = _keys.Count;", nullableValue);
+            Assert.Contains("_values[_i] = _keys[_i] is null ? global::System.DBNull.Value : (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_keys[_i].Value);", nullableValue);
+            Assert.Contains("_values[_i] = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_keys[_i]);", reference);
+            Assert.DoesNotContain("InquiryJsonArrayParameter.Bind", nullableValue);
+            Assert.DoesNotContain("InquiryJsonArrayParameter.Bind", reference);
+            Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(nullableValue, "StrongIdConverter>.Instance.ToProvider\\(").Count);
+            Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(reference, "RefIdConverter>.Instance.ToProvider\\(").Count);
+            return;
+        }
         var nullableTypeName = dialect == "SqlServer"
             ? ", \"[dbo].[Inquiry_Tvp_cbf1884dfb169a6aea6812ce91ba77ade5483b7a07639554520bb82e4b08cfa7]\", _inquiryTvpDescriptor_cbf1884dfb169a6aea6812ce91ba77ade5483b7a07639554520bb82e4b08cfa7"
             : string.Empty;
@@ -122,8 +145,8 @@ public sealed partial class InquiryGeneratorTests
             : string.Empty;
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {nullableProjection}{nullableTypeName});", nullableValue);
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {referenceProjection}{referenceTypeName});", reference);
-        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", ids);", nullableValue);
-        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", ids);", reference);
+        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _keys);", nullableValue);
+        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _keys);", reference);
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(nullableValue, "StrongIdConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(reference, "RefIdConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
     }
@@ -167,8 +190,8 @@ public sealed partial class InquiryGeneratorTests
         var enumStore = ConverterDeleteAllStore(result, "EnumKeyStore");
 
         Assert.Contains("UPDATE \\\"SoftKeys\\\" SET \\\"IsDeleted\\\" = 1", softDelete);
-        Assert.Contains("Enumerable.Select(ids, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e))", softDelete);
-        Assert.Contains("Enumerable.Select(ids, static _e => _e.ToString())", enumStore);
+        Assert.Contains("Enumerable.Select(_keys, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e))", softDelete);
+        Assert.Contains("Enumerable.Select(_keys, static _e => _e.ToString())", enumStore);
     }
 
     private static string ConverterDeleteAllStore(GeneratorTestResult result, string name)

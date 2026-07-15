@@ -60,6 +60,24 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     /// <summary>MySQL-family bulk inserts ride MySqlBulkCopy via the provider-registered copier.</summary>
     public override bool SupportsBulkCopy => true;
 
+    public override bool SupportsSetBasedBatchUpdate => true;
+
+    public override string BuildSetBasedBatchUpdateHeader(string? schema, string tableName)
+        => "UPDATE " + QuoteTable(schema, tableName) + " AS `_t` INNER JOIN (";
+
+    public override string BuildSetBasedBatchUpdateFooter(
+        string? schema,
+        string tableName,
+        IReadOnlyList<IColumn> keyColumns,
+        IReadOnlyList<IColumn> setColumns)
+    {
+        var join = string.Join(" AND ", keyColumns.Select(column =>
+            "`_t`." + QuoteIdentifier(column.ColumnName) + " = `_v`." + QuoteIdentifier(column.ColumnName)));
+        var assignments = string.Join(", ", setColumns.Select(column =>
+            "`_t`." + QuoteIdentifier(column.ColumnName) + " = `_v`." + QuoteIdentifier(column.ColumnName)));
+        return ") AS `_v` ON " + join + " SET " + assignments;
+    }
+
     public override string BuildFullTextSearchSql(SqlBuildContext context, IReadOnlyList<IColumn> searchColumns)
     {
         // MATCH ... AGAINST natural-language search (requires a FULLTEXT index on the columns).

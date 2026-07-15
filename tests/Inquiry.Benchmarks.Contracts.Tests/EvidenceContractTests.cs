@@ -659,6 +659,90 @@ public sealed class EvidenceContractTests
     }
 
     [Fact]
+    public void EvidenceRequiresExactBenchmarkTargetAndNonEmptyRuntimeCapabilities()
+    {
+        var envelope = TestData.Envelope();
+        var drifted = envelope with
+        {
+            BenchmarkTarget = envelope.BenchmarkTarget with
+            {
+                MethodName = "",
+                Parameters = new Dictionary<string, string>(StringComparer.Ordinal) { ["Rows"] = "10" },
+            },
+            RuntimeCapabilities = new Dictionary<string, string>(StringComparer.Ordinal),
+        };
+
+        var codes = EvidenceValidator.Validate(drifted).Select(static error => error.Code).ToHashSet();
+        Assert.Contains("benchmark-target", codes);
+        Assert.Contains("runtime-capability", codes);
+    }
+
+    [Fact]
+    public void BenchmarkTargetCardinalityDoesNotAssumeRowsParameter()
+    {
+        var envelope = TestData.Envelope();
+        var nonRowsTarget = envelope with
+        {
+            BenchmarkTarget = envelope.BenchmarkTarget with
+            {
+                Parameters = new Dictionary<string, string>(StringComparer.Ordinal) { ["Dialect"] = "sqlite" },
+            },
+        };
+
+        Assert.DoesNotContain(EvidenceValidator.Validate(nonRowsTarget), static error => error.Code == "benchmark-target");
+        var artifact = EvidenceArtifactValidator.Validate(
+            JsonSerializer.SerializeToUtf8Bytes(nonRowsTarget, EvidenceJson.Options));
+        Assert.DoesNotContain(artifact.Errors, static error => error.Code is "json-schema" or "benchmark-target");
+        Assert.Contains(EvidenceValidator.Validate(nonRowsTarget with
+        {
+            BenchmarkTarget = nonRowsTarget.BenchmarkTarget with { Cardinality = 10 },
+        }), static error => error.Code == "benchmark-target");
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("1,000")]
+    [InlineData("10")]
+    public void BenchmarkTargetRowsMustExactlyMatchTargetCardinalityWhenPresent(string rows)
+    {
+        var envelope = TestData.Envelope() with
+        {
+            BenchmarkTarget = TestData.Envelope().BenchmarkTarget with
+            {
+                Parameters = new Dictionary<string, string>(StringComparer.Ordinal) { ["Rows"] = rows },
+            },
+        };
+
+        Assert.Contains(EvidenceValidator.Validate(envelope), static error => error.Code == "benchmark-target");
+    }
+
+    [Fact]
+    public void BenchmarkTargetRowsIsSafeButSensitiveAndPayloadAliasesRemainForbidden()
+    {
+        var safe = JsonSerializer.SerializeToUtf8Bytes(TestData.Envelope(), EvidenceJson.Options);
+        Assert.DoesNotContain(EvidenceHygieneValidator.Validate(safe), static error => error.Code == "row-data");
+
+        foreach (var key in new[] { "Password", "ApiKey", "EntityPayload" })
+        {
+            var envelope = TestData.Envelope();
+            envelope = envelope with
+            {
+                BenchmarkTarget = envelope.BenchmarkTarget with
+                {
+                    Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["Rows"] = "1",
+                        [key] = "redacted",
+                    },
+                },
+            };
+            Assert.NotEmpty(EvidenceHygieneValidator.Validate(
+                JsonSerializer.SerializeToUtf8Bytes(envelope, EvidenceJson.Options)));
+        }
+    }
+
+    [Fact]
     public void EveryEnvironmentAndDatabaseFacetIsValidatedAndHashed()
     {
         var envelope = TestData.Envelope();
@@ -898,6 +982,15 @@ public sealed class EvidenceContractTests
         Assert.Contains(EvidenceArtifactValidator.Validate(schemaInvalid).Errors,
             static error => error.Code == "json-schema");
 
+        var legacy = JsonSerializer.SerializeToUtf8Bytes(new { schemaVersion = EvidenceSchema.LegacyVersion });
+        var legacyResult = EvidenceArtifactValidator.Validate(legacy);
+        Assert.Contains(legacyResult.Errors, static error =>
+            error.Code == "schema-version" && error.Message.Contains("v1 is unsupported", StringComparison.Ordinal));
+
+        var future = JsonSerializer.SerializeToUtf8Bytes(new { schemaVersion = "inquiry-benchmark-evidence-v3" });
+        Assert.Contains(EvidenceArtifactValidator.Validate(future).Errors,
+            static error => error.Code == "schema-version");
+
         var unsafeEnvironment = TestData.Envelope();
         var environment = unsafeEnvironment.Environment with { DockerStorage = "/arbitrary/worktree/private/output" };
         unsafeEnvironment = unsafeEnvironment with { Environment = environment, EnvironmentHash = environment.IdentityHash };
@@ -907,6 +1000,16 @@ public sealed class EvidenceContractTests
         var semantic = TestData.Envelope() with { CaseId = new string('0', 64) };
         Assert.Contains(EvidenceArtifactValidator.Validate(JsonSerializer.SerializeToUtf8Bytes(semantic, EvidenceJson.Options)).Errors,
             static error => error.Code == "case-key");
+    }
+
+    [Fact]
+    public void VersionedEvidenceSchemaIsCopiedToTestOutput()
+    {
+        var evidenceDirectory = Path.Combine(AppContext.BaseDirectory, "Evidence");
+        Assert.True(File.Exists(Path.Combine(evidenceDirectory, "benchmark-evidence-v2.schema.json")));
+        var resources = typeof(CheckedArtifactSchemas).Assembly.GetManifestResourceNames();
+        Assert.Contains(resources, static name => name.EndsWith("benchmark-evidence-v2.schema.json", StringComparison.Ordinal));
+        Assert.DoesNotContain(resources, static name => name.EndsWith("benchmark-evidence.schema.json", StringComparison.Ordinal));
     }
 
     [Fact]

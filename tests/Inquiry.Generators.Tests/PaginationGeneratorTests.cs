@@ -127,7 +127,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("new global::Inquiry.Paging.InquiryPage<global::Demo.User, long>(_items, _next, _hasMore);", text);
         // #61: the over-fetch list is pre-sized to pageSize + 1, and the sentinel row is trimmed in place
         // (single RemoveAt, no second list / per-item copy).
-        Assert.Contains("QueryListAsync<global::Demo.User, global::Demo.UserInquiryEntityStructMaterializer>(_cmd, default, cancellationToken, capacityHint: pageSize + 1)", text);
+        Assert.Contains("QueryListAsync<global::Demo.User, (long? Arg0, int Arg1), global::Demo.UserInquiryEntityStructMaterializer>(_cmd, default, cancellationToken, capacityHint: pageSize + 1)", text);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<(long? Arg0, int Arg1)>(", text);
         Assert.Contains("if (_hasMore) ((global::System.Collections.Generic.List<global::Demo.User>)_rows).RemoveAt(_rows.Count - 1);", text);
         Assert.DoesNotContain("new global::System.Collections.Generic.List<global::Demo.User>(_rows.Count - 1)", text);
     }
