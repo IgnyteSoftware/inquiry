@@ -7,7 +7,7 @@
 > predictable allocations; NativeAOT support; and explicit, validated SQL escape hatches. It is not
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
-> **Last reconciled against source and GitHub:** 2026-07-14 at prerelease head `d5e8a59`. All
+> **Last reconciled against source and GitHub:** 2026-07-14 after completing #179, #180, and #181. All
 > providers are restored; [#171](https://github.com/JakeOverstreet/inquiry/issues/171) records that
 > completed restoration gate.
 
@@ -31,13 +31,19 @@ The fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security di
 The post-fix scan reported no remaining reportable findings; this does not replace the remaining
 release evidence and governance work tracked in [#89](https://github.com/JakeOverstreet/inquiry/issues/89).
 
-Current delivery work does not change those gates. [#180](https://github.com/JakeOverstreet/inquiry/issues/180)
-remains open while its batch-execution implementation and benchmark-evidence contract are under review.
+The generated execution-path tranche ([#179](https://github.com/JakeOverstreet/inquiry/issues/179),
+[#180](https://github.com/JakeOverstreet/inquiry/issues/180), and
+[#181](https://github.com/JakeOverstreet/inquiry/issues/181)) is complete. Immutable generated commands,
+sequential-safe generated ad-hoc materializers, and bounded provider-selected batch transports passed
+114/114 focused live tests across all six providers and .NET 8/9/10. The retained 72-cell diagnostic
+strategy record is published in the [batch mutation diagnostic matrix](batch-mutation-diagnostic-matrix.md);
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87) still owns authoritative release-grade evidence.
 [#225](https://github.com/JakeOverstreet/inquiry/pull/225) merged a SQL Server collection-benchmark
 tranche that advances [#69](https://github.com/JakeOverstreet/inquiry/issues/69) and
 [#87](https://github.com/JakeOverstreet/inquiry/issues/87), but both issues remain open for their broader
 acceptance criteria. [#226](https://github.com/JakeOverstreet/inquiry/pull/226) merged the many-to-many
 child-filter correction and closed [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
+[#68](https://github.com/JakeOverstreet/inquiry/issues/68) is closed with the Roslyn 4.8 hold policy recorded.
 
 ## Product contract
 
@@ -69,8 +75,8 @@ For 1.0, "feature complete" means:
 ## Priority index
 
 GitHub issue state, priority labels, and the [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1)
-are authoritative for acceptance criteria. As reconciled on 2026-07-14, GitHub has **36 open issues**:
-**30 prioritized for 1.0 (4 P0, 21 P1, and 5 P2)** and six planned for post-1.0 work. All 30 prioritized
+are authoritative for acceptance criteria. As reconciled on 2026-07-14, GitHub has **32 open issues**:
+**27 prioritized for 1.0 (4 P0, 18 P1, and 5 P2)** and five planned for post-1.0 work. All 27 prioritized
 issues are assigned to the `1.0.0` milestone.
 
 ### P0 — stop-ship
@@ -92,7 +98,7 @@ issues are assigned to the `1.0.0` milestone.
 | Generated query and model contracts | [#210](https://github.com/JakeOverstreet/inquiry/issues/210), [#211](https://github.com/JakeOverstreet/inquiry/issues/211), [#212](https://github.com/JakeOverstreet/inquiry/issues/212), [#219](https://github.com/JakeOverstreet/inquiry/issues/219) |
 | ASP.NET Core auditing integration | [#213](https://github.com/JakeOverstreet/inquiry/issues/213) |
 | First-party provider authoring and conformance | [#184](https://github.com/JakeOverstreet/inquiry/issues/184) |
-| Execution-path performance and semantics | [#86](https://github.com/JakeOverstreet/inquiry/issues/86), [#179](https://github.com/JakeOverstreet/inquiry/issues/179), [#180](https://github.com/JakeOverstreet/inquiry/issues/180), [#181](https://github.com/JakeOverstreet/inquiry/issues/181), [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
+| Execution-path performance and semantics | [#86](https://github.com/JakeOverstreet/inquiry/issues/86), [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
 | End-to-end cancellation | [#156](https://github.com/JakeOverstreet/inquiry/issues/156) |
 
 ### P2 — target for 1.0 if release gates stay healthy
@@ -110,7 +116,6 @@ issues are assigned to the `1.0.0` milestone.
   [#81](https://github.com/JakeOverstreet/inquiry/issues/81), provider-native/vector types
   [#83](https://github.com/JakeOverstreet/inquiry/issues/83), and verified cloud modes
   [#88](https://github.com/JakeOverstreet/inquiry/issues/88).
-- Roslyn stays at 4.8 until a concrete capability requires [#68](https://github.com/JakeOverstreet/inquiry/issues/68).
 - Additional engines are added only with user demand and live CI; MariaDB satisfied and closed the previous
   engine-count issue.
 
@@ -278,6 +283,28 @@ acceptance criteria supersede any older wording that describes an initial implem
 This archive records when an initial capability landed. It does **not** override the priority index or
 GitHub: several capabilities exposed follow-up correctness/performance work and remain open under a
 new or reframed issue.
+
+- **Generated execution hot path (#179, 2026-07-14).** Parameterless generated operations bypass
+  `InquiryCommand`; predicate, paging, keyset, and aggregate paths carry immutable value state through
+  static binders; known-unique generated reads use the guaranteed-single-row path while the public
+  validating API still rejects duplicates. Allocation and disassembly benchmarks cover parameterless,
+  one-parameter, and multi-parameter execution with inactive and active interceptor states.
+
+- **Generated ad-hoc sequential access (#181, 2026-07-14).** Generated materializers now advertise an
+  internal ordinal-safe capability, preserving `SequentialAccess` for generated ad-hoc lists and streams
+  without changing arbitrary custom materializers. SQL Server, PostgreSQL, and MySQL wide-row/live-stream
+  tests and interface/buffering/allocation/partial-consumption benchmarks cover the contract.
+
+- **Bounded provider-selected batch execution (#180, 2026-07-14).** Generated insert/update/delete batches
+  stream through bounded chunks, participate in ambient transactions, and use one owned transaction when
+  non-ambient. Providers select multi-row SQL, native `DbBatch`, key-set SQL, reused prepared commands, or
+  Oracle array binding with interceptor-safe fallbacks. The [diagnostic matrix](batch-mutation-diagnostic-matrix.md)
+  retains 300 measurements across all six providers, three operations, and 1/10/100/1,000 rows; #87 retains
+  the stricter authoritative release-evidence gate.
+
+- **Roslyn version policy (#68, 2026-07-14).** Roslyn remains pinned at 4.8 because Inquiry uses only
+  incremental-generator APIs available on the .NET 8 floor. Upgrade when a concrete compiler capability,
+  compatibility fix, or supported-SDK requirement justifies the analyzer-host compatibility cost.
 
 - **Generator polish foundation (#135, 2026-07-10).** `ProjectionProcessor.Extract` and `AdHocProcessor.Extract`
   now accept `CancellationToken` (matching `EntityProcessor.Extract`) and call

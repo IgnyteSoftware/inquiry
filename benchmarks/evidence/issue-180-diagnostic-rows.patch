@@ -1,0 +1,14 @@
+diff --git a/benchmarks/Inquiry.Benchmarks/BatchMutationStrategyBenchmarks.cs b/benchmarks/Inquiry.Benchmarks/BatchMutationStrategyBenchmarks.cs
+--- a/benchmarks/Inquiry.Benchmarks/BatchMutationStrategyBenchmarks.cs
++++ b/benchmarks/Inquiry.Benchmarks/BatchMutationStrategyBenchmarks.cs
+@@ -24,2 +24,2 @@
+-    [Params(1, 10, 100, 1000)]
++    [Params(1, 10, 100, 128, 250, 500, 750, 1000)]
+     public int Rows;
+diff --git a/benchmarks/Inquiry.Benchmarks.SqlServer/BatchMutationStrategyBenchmarks.cs b/benchmarks/Inquiry.Benchmarks.SqlServer/BatchMutationStrategyBenchmarks.cs
+--- a/benchmarks/Inquiry.Benchmarks.SqlServer/BatchMutationStrategyBenchmarks.cs
++++ b/benchmarks/Inquiry.Benchmarks.SqlServer/BatchMutationStrategyBenchmarks.cs
+@@ -24,2 +24,2 @@
+-    [Params(1, 10, 100, 1000)]
++    [Params(1, 10, 100, 128, 250, 500, 750, 1000)]
+     public int Rows;

@@ -37,6 +37,27 @@ namespace Inquiry.Oracle.Analyzer;
 /// </summary>
 internal sealed class OracleSqlBuilder : SqlBuilder
 {
+    public override bool UsesArrayBindingForBatchMutations => true;
+
+    public override string BuildArrayBindCountAssignment(string commandExpression, string countExpression)
+        => $"((global::Oracle.ManagedDataAccess.Client.OracleCommand){commandExpression}).ArrayBindCount = {countExpression};";
+
+    public override string? BuildArrayBindSizeExpression(string valueExpression, string valueVariable, IColumn column)
+        => column.TypeClass switch
+        {
+            DbTypeClass.String => $"{valueExpression} is string {valueVariable} ? {valueVariable}.Length : 0",
+            DbTypeClass.ByteArray => $"{valueExpression} is byte[] {valueVariable} ? {valueVariable}.Length : 0",
+            _ => null,
+        };
+
+    public override string BuildArrayBindSizeAssignment(string parameterExpression, string sizesExpression)
+        => $"((global::Oracle.ManagedDataAccess.Client.OracleParameter){parameterExpression}).ArrayBindSize = {sizesExpression};";
+
+    public override string? BuildArrayBindParameterMetadata(string parameterExpression, IColumn column)
+        => column.TypeClass == DbTypeClass.TimeOnly
+            ? $"((global::Oracle.ManagedDataAccess.Client.OracleParameter){parameterExpression}).OracleDbType = global::Oracle.ManagedDataAccess.Client.OracleDbType.IntervalDS;"
+            : null;
+
     public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;

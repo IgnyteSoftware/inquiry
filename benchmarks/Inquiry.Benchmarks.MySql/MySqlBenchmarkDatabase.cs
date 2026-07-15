@@ -38,6 +38,7 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
     public IDbContextFactory<MySqlShipperContext> DbContextFactory => _dbContextFactory!;
 
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
@@ -71,6 +72,7 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
 
                 var services = new ServiceCollection()
                     .AddInquiry()
+                    .AddInquiryGeneratedStores()
                     .AddInquiryMySql(connectionString)
                     // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
                     // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.

@@ -43,15 +43,26 @@ internal sealed class OracleTestHarness : IAsyncDisposable
         string adminConnectionString,
         string? namePrefix = null,
         Action<string>? userCreated = null,
-        CancellationToken cancellationToken = default)
-        => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.OracleDdl, namePrefix, userCreated, cancellationToken);
+        CancellationToken cancellationToken = default,
+        Action<global::Inquiry.InquiryOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
+        => CreateFromDdlAsync(
+            adminConnectionString,
+            NorthwindSchema.OracleDdl,
+            namePrefix,
+            userCreated,
+            cancellationToken,
+            configureOptions,
+            configureServices);
 
     public static async Task<OracleTestHarness> CreateFromDdlAsync(
         string adminConnectionString,
         string ddl,
         string? namePrefix = null,
         Action<string>? userCreated = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<global::Inquiry.InquiryOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var prefix = (namePrefix ?? "inquiry").ToUpperInvariant();
         var schemaUser = prefix + "_" + Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant();
@@ -95,15 +106,28 @@ internal sealed class OracleTestHarness : IAsyncDisposable
                 }
             }
 
-            var services = new ServiceCollection()
-                .AddInquiry(
+            var services = new ServiceCollection();
+            if (configureOptions is null)
+            {
+                services.AddInquiry(
                     typeof(CustomerStore).Assembly,
                     typeof(VersionedItemStore).Assembly,
-                    typeof(OracleUnsupportedFixtureMarker).Assembly)
-                .AddInquiryOracle(connectionString)
-                .BuildServiceProvider();
+                    typeof(OracleUnsupportedFixtureMarker).Assembly);
+            }
+            else
+            {
+                services.AddInquiry(
+                    configureOptions,
+                    typeof(CustomerStore).Assembly,
+                    typeof(VersionedItemStore).Assembly,
+                    typeof(OracleUnsupportedFixtureMarker).Assembly);
+            }
 
-            return new OracleTestHarness(adminConnectionString, schemaUser, connectionString, services);
+            services.AddInquiryOracle(connectionString);
+            configureServices?.Invoke(services);
+            var serviceProvider = services.BuildServiceProvider();
+
+            return new OracleTestHarness(adminConnectionString, schemaUser, connectionString, serviceProvider);
         }
         catch (Exception setupFailure)
         {

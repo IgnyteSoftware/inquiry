@@ -117,6 +117,9 @@ internal sealed class DefaultInquiry : IInquiry
     public int MaxParametersPerCommand => _options?.MaxParametersPerCommand ?? InquiryOptions.DefaultMaxParametersPerCommand;
 
     /// <inheritdoc />
+    public int MaxBatchSize => _options?.MaxBatchSize ?? InquiryOptions.DefaultMaxBatchSize;
+
+    /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
         FormattableString commandText,
         CancellationToken cancellationToken = default)
@@ -228,6 +231,49 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(commandText, args, bindParameters, materializer, cancellationToken);
 
     /// <inheritdoc />
+    public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryListAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken, capacityHint);
+
+    /// <inheritdoc />
+    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TEntity?> QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
+
+    /// <inheritdoc />
     public Task<long> BulkInsertAsync<TEntity>(
         Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
@@ -279,12 +325,25 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteAsync(commandText, args, bindParameters, cancellationToken);
 
     /// <inheritdoc />
+    public Task<int> ExecuteAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteAsync(command, cancellationToken);
+
+    /// <inheritdoc />
     public Task<int> ExecuteBatchAsync<TItem>(
         string commandText,
         IReadOnlyList<TItem> items,
         Action<InquiryParameterTarget, TItem> bindParameters,
         CancellationToken cancellationToken = default)
-        => ActivePipeline.ExecuteBatchAsync(commandText, items, bindParameters, cancellationToken);
+        => ExecuteBatchAsync(new InquiryBatchCommand<TItem>(commandText, bindParameters), items, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<int> ExecuteBatchAsync<TItem>(
+        InquiryBatchCommand<TItem> command,
+        IEnumerable<TItem> items,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteBatchAsync(command, items, cancellationToken);
 
     /// <inheritdoc />
     public Task<T> ExecuteScalarAsync<T>(
@@ -306,12 +365,25 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteProcedureScalarAsync<T>(command, readBackParameterName, cancellationToken);
 
     /// <inheritdoc />
+    public Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteProcedureScalarAsync<T, TArgs>(command, readBackParameterName, cancellationToken);
+
+    /// <inheritdoc />
     public Task<T> ExecuteScalarAsync<T, TArgs>(
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
         CancellationToken cancellationToken = default)
         => ActivePipeline.ExecuteScalarAsync<T, TArgs>(commandText, args, bindParameters, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteScalarAsync<T, TArgs>(command, cancellationToken);
 
     /// <inheritdoc />
     public Task<IInquiryTransaction> BeginTransactionAsync(

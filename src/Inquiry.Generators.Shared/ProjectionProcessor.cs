@@ -67,6 +67,8 @@ internal static class ProjectionProcessor
 
         source.AppendLine($"internal sealed class {projection.ClassMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{projectionType}>");
         source.AppendLine("{");
+        source.AppendLine("    public bool IsInquirySequentialAccessSafe => true;");
+        source.AppendLine();
         source.AppendLine($"    public {projectionType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
         MaterializerEmitter.EmitMaterializeBody(source, projection.Columns, projectionType, sqlBuilder, indent: "        ");

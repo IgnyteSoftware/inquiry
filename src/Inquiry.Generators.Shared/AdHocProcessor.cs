@@ -71,6 +71,8 @@ internal static class AdHocProcessor
 
         source.AppendLine($"internal sealed class {adHoc.ClassMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{adHocType}>");
         source.AppendLine("{");
+        source.AppendLine("    public bool IsInquirySequentialAccessSafe => true;");
+        source.AppendLine();
         source.AppendLine($"    public {adHocType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
         MaterializerEmitter.EmitMaterializeBody(source, adHoc.Columns, adHocType, sqlBuilder, indent: "        ");

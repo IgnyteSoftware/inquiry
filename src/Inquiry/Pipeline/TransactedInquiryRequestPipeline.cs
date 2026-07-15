@@ -28,11 +28,9 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     // first row, silently suppressing the detection on providers that honour the hint (audit P2 #5).
     private const CommandBehavior SingleRowBehavior = CommandBehavior.SingleResult;
 
-    // The struct-materializer (generated-store) overloads add SequentialAccess so the provider streams
-    // each row forward-only instead of buffering it — generated materializers read every column once in
-    // ascending ordinal order, so this is safe and roughly halves large-result allocation. The
-    // class-materializer overloads keep the buffered behaviours, since a caller-supplied materializer may
-    // read columns out of order, which SequentialAccess forbids.
+    // Struct-materializer overloads always add SequentialAccess. Class-materializer overloads add it only
+    // when the materializer declares forward-only ordinal safety; arbitrary custom materializers default to
+    // buffered behavior because they may read columns out of order.
     private const CommandBehavior SequentialReadBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
     private const CommandBehavior SequentialSingleRowBehavior = CommandBehavior.SingleResult | CommandBehavior.SequentialAccess;
 
@@ -41,9 +39,12 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     private readonly IInquiryCommandInterceptor[] _interceptors;
     private readonly IInquiryConnectionFactory _connectionFactory;
     private readonly bool _prepareEnabled;
+    private readonly bool _autoPrepareConfigured;
 
     // Whole seconds from InquiryOptions.DefaultCommandTimeout; 0 = not configured (provider default).
     private readonly int _defaultCommandTimeoutSeconds;
+    private readonly int _maxBatchSize;
+    private readonly int _maxParametersPerCommand;
     // One atomic lifecycle: 0=open/idle, 1=open/busy, 2=terminal owner, 3=closed.
     private int _state;
 
@@ -58,11 +59,14 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         _transaction = transaction;
         _interceptors = interceptors;
         _connectionFactory = connectionFactory;
-        _prepareEnabled = (options?.PrepareStatements ?? PreparedStatementMode.Auto) == PreparedStatementMode.Auto
+        _autoPrepareConfigured = (options?.PrepareStatements ?? PreparedStatementMode.Auto) == PreparedStatementMode.Auto;
+        _prepareEnabled = _autoPrepareConfigured
             && _connectionFactory.SupportsPersistentPreparedStatements;
         _defaultCommandTimeoutSeconds = options?.DefaultCommandTimeout is { } timeout
             ? (int)Math.Ceiling(timeout.TotalSeconds)
             : 0;
+        _maxBatchSize = options?.MaxBatchSize ?? InquiryOptions.DefaultMaxBatchSize;
+        _maxParametersPerCommand = options?.MaxParametersPerCommand ?? InquiryOptions.DefaultMaxParametersPerCommand;
     }
 
     /// <summary>
@@ -166,6 +170,22 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     private bool HasInterceptors => _interceptors.Length > 0;
 
+    private bool HasActiveInterceptors
+    {
+        get
+        {
+            foreach (var interceptor in _interceptors)
+            {
+                if (interceptor is not IInquiryInterceptorActivation activation || activation.IsActive)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
     /// <summary>
     /// Creates a transaction-enlisted command and runs the factory's
     /// <see cref="IInquiryConnectionFactory.InitializeCommand"/> hook.
@@ -226,6 +246,39 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
+    /// <inheritdoc />
+    public async Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        var lease = EnterExclusiveOperation();
+        DbCommand? dbCommand = null;
+        DbDataReader? reader = null;
+        try
+        {
+            dbCommand = CreateCommand();
+            dbCommand.Transaction = _transaction;
+            dbCommand.CommandText = command.CommandText;
+            dbCommand.CommandType = command.CommandType;
+            command.BindParameters(dbCommand, command.Args);
+            _connectionFactory.FinalizeCommand(dbCommand);
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
+            return new InquiryGridReader(reader, dbCommand, ownedConnection: null, lease: lease);
+        }
+        catch (Exception primaryException)
+        {
+            var exceptions = new List<Exception> { primaryException };
+            try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
+            catch (Exception exception) { exceptions.Add(exception); }
+            try { lease.Dispose(); }
+            catch (Exception exception) { exceptions.Add(exception); }
+            InquiryCleanup.ThrowIfAny(exceptions);
+            throw;
+        }
+    }
+
     // ---- Class-materializer overloads (ad-hoc IInquiry path) -----------------------------
 
     /// <inheritdoc />
@@ -237,7 +290,6 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
-
         EnterInFlight();
         DbDataReader? reader = null;
         // Create the command INSIDE the try so a throw from CreateCommand()/InitializeCommand still runs
@@ -248,6 +300,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         Exception? primaryException = null;
         try
         {
+            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
             try
             {
                 dbCommand = CreateCommand();
@@ -274,7 +327,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             try
             {
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -344,10 +397,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
-
         EnterInFlight();
         try
         {
+            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
             var dbCommand = CreateCommand();
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             try { dbCommand.Transaction = _transaction; }
@@ -363,7 +416,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var reader = await dbCommand.ExecuteReaderAsync(ReadBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
                 var list = new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -400,10 +453,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
         if (materializer is null) throw new ArgumentNullException(nameof(materializer));
-
         EnterInFlight();
         try
         {
+            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialSingleRowBehavior : SingleRowBehavior;
             var dbCommand = CreateCommand();
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             try { dbCommand.Transaction = _transaction; }
@@ -419,7 +472,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var reader = await dbCommand.ExecuteReaderAsync(SingleRowBehavior, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -682,12 +735,34 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+    public IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
         TMaterializer materializer,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken);
+
+    public IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        command.Validate();
+        return QueryGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<T> QueryGeneratedCore<T, TArgs, TMaterializer>(
+        string commandText,
+        CommandType commandType,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
@@ -710,10 +785,11 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             InquiryCommand? interceptorCommand = null;
             try
             {
-                interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+                interceptorCommand = HasActiveInterceptors ? new InquiryCommand(commandText, commandType) : null;
                 dbCommand = CreateCommand();
                 dbCommand.Transaction = _transaction;
                 dbCommand.CommandText = commandText;
+                dbCommand.CommandType = commandType;
                 bindParameters(dbCommand, args);
                 _connectionFactory.FinalizeCommand(dbCommand);
             }
@@ -799,12 +875,36 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+    public Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
         TMaterializer materializer,
         CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryListGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken, -1);
+
+    public Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        command.Validate();
+        return QueryListGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken, capacityHint);
+    }
+
+    private async Task<IReadOnlyList<T>> QueryListGeneratedCore<T, TArgs, TMaterializer>(
+        string commandText,
+        CommandType commandType,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken,
+        int capacityHint)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
@@ -818,11 +918,12 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             try { dbCommand.Transaction = _transaction; }
             catch (Exception exception) { commandResources.Capture(exception); throw; }
-            var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+            var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(commandText, commandType) : null;
 
             try
             {
                 dbCommand.CommandText = commandText;
+                dbCommand.CommandType = commandType;
                 bindParameters(dbCommand, args);
                 _connectionFactory.FinalizeCommand(dbCommand);
                 if (interceptorCommand is not null)
@@ -834,7 +935,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
-                var list = new List<T>();
+                var list = capacityHint >= 0 ? new List<T>(capacityHint) : new List<T>();
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     list.Add(materializer.Materialize(reader));
@@ -861,12 +962,45 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
-    public async Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
+    public Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
         TMaterializer materializer,
         CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryValidatingSingleGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken);
+
+    public Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        command.Validate();
+        return QueryValidatingSingleGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken);
+    }
+
+    public Task<T?> QueryGeneratedSingleOrDefaultAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        command.Validate();
+        return QueryKnownSingleGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken);
+    }
+
+    private async Task<T?> QueryValidatingSingleGeneratedCore<T, TArgs, TMaterializer>(
+        string commandText,
+        CommandType commandType,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
@@ -880,11 +1014,12 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             try { dbCommand.Transaction = _transaction; }
             catch (Exception exception) { commandResources.Capture(exception); throw; }
-            var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+            var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(commandText, commandType) : null;
 
             try
             {
                 dbCommand.CommandText = commandText;
+                dbCommand.CommandType = commandType;
                 bindParameters(dbCommand, args);
                 _connectionFactory.FinalizeCommand(dbCommand);
                 if (interceptorCommand is not null)
@@ -974,11 +1109,27 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
-    public async Task<int> ExecuteAsync<TArgs>(
+    public Task<int> ExecuteAsync<TArgs>(
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
         CancellationToken cancellationToken = default)
+        => ExecuteGeneratedCore(commandText, CommandType.Text, args, bindParameters, cancellationToken);
+
+    public Task<int> ExecuteAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        return ExecuteGeneratedCore(command.CommandText, command.CommandType, command.Args, command.BindParameters, cancellationToken);
+    }
+
+    private async Task<int> ExecuteGeneratedCore<TArgs>(
+        string commandText,
+        CommandType commandType,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken)
     {
         if (commandText is null) throw new ArgumentNullException(nameof(commandText));
         if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
@@ -990,11 +1141,12 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             try { dbCommand.Transaction = _transaction; }
             catch (Exception exception) { commandResources.Capture(exception); throw; }
-            var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+            var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(commandText, commandType) : null;
 
             try
             {
                 dbCommand.CommandText = commandText;
+                dbCommand.CommandType = commandType;
                 bindParameters(dbCommand, args);
                 _connectionFactory.FinalizeCommand(dbCommand);
 
@@ -1128,12 +1280,15 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
-    /// <inheritdoc />
-    public async Task<T> ExecuteScalarAsync<T, TArgs>(
+    private async Task<T?> QueryKnownSingleGeneratedCore<T, TArgs, TMaterializer>(
         string commandText,
+        CommandType commandType,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
-        CancellationToken cancellationToken = default)
+        TMaterializer materializer,
+        CancellationToken cancellationToken)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
         if (commandText is null) throw new ArgumentNullException(nameof(commandText));
         if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
@@ -1145,11 +1300,144 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             try { dbCommand.Transaction = _transaction; }
             catch (Exception exception) { commandResources.Capture(exception); throw; }
-            var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
+            var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(commandText, commandType) : null;
 
             try
             {
                 dbCommand.CommandText = commandText;
+                dbCommand.CommandType = commandType;
+                bindParameters(dbCommand, args);
+                _connectionFactory.FinalizeCommand(dbCommand);
+                if (interceptorCommand is not null)
+                {
+                    await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(
+                    CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess,
+                    cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                    return default;
+                }
+
+                var result = materializer.Materialize(reader);
+                if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                return result;
+            }
+            catch (Exception exception)
+            {
+                commandResources.Capture(exception);
+                if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        if (string.IsNullOrWhiteSpace(readBackParameterName)) throw new ArgumentException("Read-back parameter name cannot be empty.", nameof(readBackParameterName));
+        readBackParameterName = InquiryParameterBinder.NormalizeName(readBackParameterName);
+
+        EnterInFlight();
+        try
+        {
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
+            var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(command.CommandText, command.CommandType) : null;
+
+            try
+            {
+                dbCommand.CommandText = command.CommandText;
+                dbCommand.CommandType = command.CommandType;
+                command.BindParameters(dbCommand, command.Args);
+                _connectionFactory.FinalizeCommand(dbCommand);
+                if (interceptorCommand is not null)
+                {
+                    await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+
+                var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
+                if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
+                return readBack;
+            }
+            catch (Exception exception)
+            {
+                commandResources.Capture(exception);
+                if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<T> ExecuteScalarAsync<T, TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+        => ExecuteScalarGeneratedCore<T, TArgs>(commandText, CommandType.Text, args, bindParameters, cancellationToken);
+
+    public Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        return ExecuteScalarGeneratedCore<T, TArgs>(command.CommandText, command.CommandType, command.Args, command.BindParameters, cancellationToken);
+    }
+
+    private async Task<T> ExecuteScalarGeneratedCore<T, TArgs>(
+        string commandText,
+        CommandType commandType,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken)
+    {
+        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+
+        EnterInFlight();
+        try
+        {
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try { dbCommand.Transaction = _transaction; }
+            catch (Exception exception) { commandResources.Capture(exception); throw; }
+            var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(commandText, commandType) : null;
+
+            try
+            {
+                dbCommand.CommandText = commandText;
+                dbCommand.CommandType = commandType;
                 bindParameters(dbCommand, args);
                 _connectionFactory.FinalizeCommand(dbCommand);
 
@@ -1191,14 +1479,11 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     /// <inheritdoc />
     /// <remarks>
-    /// When the connection factory allows batching and the provider supports
-    /// <see cref="DbConnection.CanCreateBatch"/> with parameter creation on
-    /// <see cref="DbBatchCommand"/>, all items execute in a single transaction-enlisted
-    /// <see cref="DbBatch"/> round trip. Interceptors do NOT fire on the DbBatch path — there is
-    /// no <see cref="DbCommand"/> to expose to them. The sequential fallback (one command per
-    /// item on the transaction's connection) fires interceptors per command as usual.
+    /// When available, bounded chunks execute through transaction-enlisted <see cref="DbBatch"/>
+    /// instances. Otherwise the pipeline reuses one command and parameter set. The transaction
+    /// operation lease is held across the entire batch.
     /// </remarks>
-    public async Task<int> ExecuteBatchAsync<TItem>(
+    public Task<int> ExecuteBatchAsync<TItem>(
         string commandText,
         IReadOnlyList<TItem> items,
         Action<InquiryParameterTarget, TItem> bindParameters,
@@ -1207,101 +1492,128 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         if (commandText is null) throw new ArgumentNullException(nameof(commandText));
         if (items is null) throw new ArgumentNullException(nameof(items));
         if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
-        if (items.Count == 0) return 0;
+        return ExecuteBatchAsync(new InquiryBatchCommand<TItem>(commandText, bindParameters), items, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> ExecuteBatchAsync<TItem>(
+        InquiryBatchCommand<TItem> command,
+        IEnumerable<TItem> items,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        if (items is null) throw new ArgumentNullException(nameof(items));
+        var executionMode = _connectionFactory.BatchExecutionMode;
+
+        using var chunks = new InquiryBatchChunkReader<TItem>(items,
+            command.GetEffectiveChunkSize(_maxBatchSize, _maxParametersPerCommand), cancellationToken);
+        if (!chunks.MoveNext(out var firstChunk)) return 0;
 
         EnterInFlight();
-        DbBatch? batch = null;
-        Exception? primaryException = null;
         try
         {
-            if (_connectionFactory.SupportsBatchExecution && _connection.CanCreateBatch)
-            {
-                // Probe: some providers expose DbBatch but not DbBatchCommand.CreateParameter;
-                // those fall back to the sequential path below.
-                batch = _connection.CreateBatch();
-                var firstCommand = batch.CreateBatchCommand();
-                if (firstCommand.CanCreateParameter)
-                {
-                    batch.Transaction = _transaction;
-                    if (_defaultCommandTimeoutSeconds > 0) batch.Timeout = _defaultCommandTimeoutSeconds;
-                    firstCommand.CommandText = commandText;
-                    bindParameters(new InquiryParameterTarget(firstCommand), items[0]);
-                    batch.BatchCommands.Add(firstCommand);
-                    for (var i = 1; i < items.Count; i++)
-                    {
-                        var batchCommand = batch.CreateBatchCommand();
-                        batchCommand.CommandText = commandText;
-                        bindParameters(new InquiryParameterTarget(batchCommand), items[i]);
-                        batch.BatchCommands.Add(batchCommand);
-                    }
+            var hasActiveInterceptors = HasActiveInterceptors;
+            Func<IReadOnlyList<TItem>, CancellationToken, Task<int>>? interceptedRows = hasActiveInterceptors
+                ? ExecuteInterceptedChunkAsync
+                : null;
+            Func<IReadOnlyList<TItem>, CancellationToken, Task<int>>? interceptedChunk = hasActiveInterceptors
+                ? ExecuteInterceptedWholeChunkAsync
+                : null;
+            var total = await InquiryBatchCommandExecutor.ExecuteAsync(
+                _connection, _transaction, _connectionFactory, executionMode, _defaultCommandTimeoutSeconds,
+                _prepareEnabled,
+                _autoPrepareConfigured && command.PreferPrepareOnce,
+                _maxParametersPerCommand,
+                command, chunks, firstChunk, interceptedRows, interceptedChunk, cancellationToken).ConfigureAwait(false);
+            chunks.Dispose();
+            return total;
 
-                    // DbBatch.ExecuteNonQueryAsync returns the summed rows affected across commands.
-                    return await batch.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            async Task<int> ExecuteInterceptedChunkAsync(IReadOnlyList<TItem> chunk, CancellationToken token)
+            {
+                var total = 0;
+                for (var i = 0; i < chunk.Count; i++)
+                {
+                    var dbCommand = CreateCommand();
+                    var resources = InquiryCommandResources.CreateScope(dbCommand);
+                    var interceptorCommand = new InquiryCommand(command.CommandText!, command.CommandType);
+                    try
+                    {
+                        dbCommand.Transaction = _transaction;
+                        dbCommand.CommandText = command.CommandText;
+                        dbCommand.CommandType = command.CommandType;
+                        command.BindItem!(new InquiryParameterTarget(dbCommand), chunk[i]);
+                        _connectionFactory.FinalizeCommand(dbCommand);
+                        await InvokeInitializedAsync(dbCommand, interceptorCommand, token).ConfigureAwait(false);
+                        await InvokeExecutingAsync(interceptorCommand, dbCommand, token).ConfigureAwait(false);
+                        await MaybePrepareAsync(dbCommand, token).ConfigureAwait(false);
+                        var affected = await dbCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                        await InvokeExecutedAsync(interceptorCommand, dbCommand, affected, token).ConfigureAwait(false);
+                        total += affected;
+                    }
+                    catch (Exception exception)
+                    {
+                        resources.Capture(exception);
+                        await InvokeFailedAsync(interceptorCommand, dbCommand, exception, token).ConfigureAwait(false);
+                        throw;
+                    }
+                    finally
+                    {
+                        await resources.DisposeAsync().ConfigureAwait(false);
+                    }
                 }
+
+                return total;
             }
 
-            // Sequential fallback: one command per item on the transaction's connection
-            // (mirrors ExecuteAsync<TArgs>).
-            var total = 0;
-            for (var i = 0; i < items.Count; i++)
+            async Task<int> ExecuteInterceptedWholeChunkAsync(IReadOnlyList<TItem> chunk, CancellationToken token)
             {
+                var commandText = command.GetChunkCommandText(chunk.Count);
                 var dbCommand = CreateCommand();
-                var commandResources = InquiryCommandResources.CreateScope(dbCommand);
-                try { dbCommand.Transaction = _transaction; }
-                catch (Exception exception) { commandResources.Capture(exception); throw; }
-                var interceptorCommand = HasInterceptors ? new InquiryCommand(commandText) : null;
-
+                var resources = InquiryCommandResources.CreateScope(dbCommand);
+                var interceptorCommand = new InquiryCommand(commandText, command.CommandType);
                 try
                 {
+                    dbCommand.Transaction = _transaction;
                     dbCommand.CommandText = commandText;
-                    bindParameters(new InquiryParameterTarget(dbCommand), items[i]);
+                    dbCommand.CommandType = command.CommandType;
+                    _connectionFactory.InitializeBatchChunkCommand(dbCommand, chunk.Count);
+                    command.BindChunk!(dbCommand, chunk);
                     _connectionFactory.FinalizeCommand(dbCommand);
-
-                    if (interceptorCommand is not null)
-                    {
-                        await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
-                        await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                    var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-
-                    if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
-                    total += recordsAffected;
+                    await InvokeInitializedAsync(dbCommand, interceptorCommand, token).ConfigureAwait(false);
+                    await InvokeExecutingAsync(interceptorCommand, dbCommand, token).ConfigureAwait(false);
+                    await MaybePrepareAsync(dbCommand, token).ConfigureAwait(false);
+                    var affected = await dbCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                    await InvokeExecutedAsync(interceptorCommand, dbCommand, affected, token).ConfigureAwait(false);
+                    return affected;
                 }
                 catch (Exception exception)
                 {
-                    commandResources.Capture(exception);
-                    if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    resources.Capture(exception);
+                    await InvokeFailedAsync(interceptorCommand, dbCommand, exception, token).ConfigureAwait(false);
                     throw;
                 }
                 finally
                 {
-                    await commandResources.DisposeAsync().ConfigureAwait(false);
+                    await resources.DisposeAsync().ConfigureAwait(false);
                 }
             }
-
-            return total;
         }
-        catch (Exception exception)
+        catch (Exception primaryException)
         {
-            primaryException = exception;
+            try { chunks.Dispose(); }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    "Inquiry batch execution failed and its source enumerator also failed to dispose.",
+                    primaryException,
+                    cleanupException);
+            }
+
             throw;
         }
         finally
         {
-            try
-            {
-                List<Exception>? cleanupExceptions = null;
-                try { if (batch is not null) await batch.DisposeAsync().ConfigureAwait(false); }
-                catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
-                if (primaryException is not null) InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
-                else InquiryCleanup.ThrowIfAny(cleanupExceptions);
-            }
-            finally
-            {
-                ExitInFlight();
-            }
+            ExitInFlight();
         }
     }
 
@@ -1364,14 +1676,20 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     {
         var context = new InquiryCommandContext(command, dbCommand);
         foreach (var interceptor in _interceptors)
+        {
+            if (interceptor is IInquiryInterceptorActivation { IsActive: false }) continue;
             await interceptor.CommandInitializedAsync(context, ct).ConfigureAwait(false);
+        }
     }
 
     private async ValueTask InvokeExecutingAsync(InquiryCommand cmd, DbCommand dbCmd, CancellationToken ct)
     {
         var context = new InquiryCommandContext(cmd, dbCmd);
         foreach (var interceptor in _interceptors)
+        {
+            if (interceptor is IInquiryInterceptorActivation { IsActive: false }) continue;
             await interceptor.CommandExecutingAsync(context, ct).ConfigureAwait(false);
+        }
     }
 
     private async ValueTask InvokeExecutedAsync(InquiryCommand cmd, DbCommand dbCmd, int? rows, CancellationToken ct)

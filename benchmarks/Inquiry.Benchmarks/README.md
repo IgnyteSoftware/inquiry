@@ -20,7 +20,8 @@ raw ADO.NET. Two suites:
   `benchmarks/Inquiry.Benchmarks.{PostgreSql,MySql,Oracle,SqlServer}` compile generated stores for one
   dialect at a time. PostgreSQL also includes `PreparedStatementBenchmarks`, which compares Inquiry
   `PreparedStatementMode.None` vs `Auto` on Npgsql for a generated simple point read and a stable ad-hoc
-  multi-join point read.
+  multi-join point read. SQL Server also includes `GeneratedAdHocSequentialAccessBenchmarks`, which
+  isolates generated ad-hoc interface dispatch, provider buffering, and partial stream consumption.
 
 ```powershell
 # Cross-dialect read suite (PostgreSQL + MySQL + SQL Server, needs Docker).
@@ -48,7 +49,8 @@ Two invariants keep the comparison honest:
 
 - **Matching `CommandBehavior`.** Inquiry's generated stores open readers with
   `CommandBehavior.SingleResult | SequentialAccess` for list reads and
-  `SingleResult | SingleRow | SequentialAccess` for single-row reads. `SequentialAccess` lets the
+  `SingleResult | SequentialAccess` for validating single-row reads. Generator-proven unique reads
+  additionally use `SingleRow`. `SequentialAccess` lets the
   provider stream each row forward-only instead of buffering it (Dapper passes equivalent flags) —
   this roughly halves allocation on large/wide reads, so without it the baseline would buffer while
   the wrappers stream and a wrapper would print a sub-1.00× allocation ratio (as SQL Server
@@ -102,8 +104,82 @@ a like-for-like comparison it is omitted (noted in each class's doc comment).
 | `EagerLoadingBenchmarks`         | EagerAll                  | Separate-query eager load of `Product.Category` vs a Dapper/ADO two-query-then-stitch of the same shape.    |
 | `PreparedStatementBenchmarks`    | SimplePointRead, MultiJoinPointRead | PostgreSQL-only comparison of Inquiry `PreparedStatementMode.None` vs `Auto` on generated and ad-hoc stable SQL. |
 
-`ParameterBindingBenchmarks` (Inquiry's parameter-binding path in isolation, no SQL execution)
-rounds out the suite.
+### Generated-command hot path (`ParameterBindingBenchmarks` / `GeneratedCommandPipelineBenchmarks`)
+
+`ParameterBindingBenchmarks` is the retained-command floor. It isolates generated-store dispatch and
+parameter binding from database execution, calling real source-generated `[InquiryExists]` store
+methods with four state shapes:
+
+- parameterless;
+- one scalar parameter;
+- eight scalar parameters, which forces C#'s nested `ValueTuple` lowering; and
+- one collection predicate using SQLite's generated JSON-array transport.
+
+The generated legs dispatch an `InquiryGeneratedCommand<TArgs>` to a benchmark `IInquiry` sink. The
+sink reuses one provider `DbCommand`, applies the generated static binder, and never opens a
+connection. Every boxed `InquiryCommand` overload throws, so the benchmark fails immediately if a
+generator change falls back to the allocating compatibility path. Each generated leg is compared
+with a direct static-binder floor that performs the same command reset, command-text assignment, and
+provider-parameter creation. `[MemoryDiagnoser]` reports managed allocation and
+`[DisassemblyDiagnoser]` writes JIT assembly reports for auditing closure, delegate, and tuple costs.
+
+`GeneratedCommandPipelineBenchmarks` is intentionally a separate end-to-end measurement. Its
+parameterless, one-parameter, and eight-parameter methods execute real SQL against shared in-memory
+SQLite through this complete route:
+
+`generated store -> DefaultInquiry -> built-in InquiryRequestPipeline -> SQLite`
+
+Setup separately invokes the same methods through a routing guard that forwards
+`InquiryGeneratedCommand<TArgs>` and throws immediately if generated code reaches a boxed
+`InquiryCommand` scalar overload; the guard is not present in measured operations. These measurements
+include connection open/close, provider command creation and disposal, parameter binding, SQLite
+execution, scalar conversion, and task completion. They are not binder-only allocation floors and
+should not be compared as if they were. Each parameter shape compares the no-interceptor baseline
+with registered-but-inactive telemetry and a minimal active custom interceptor. Setup executes and
+validates every SQL shape and verifies that the custom interceptor receives all three operations.
+
+```powershell
+# Retained-command binder/JIT floor. Omit --job Dry for publishable measurements and disassembly.
+dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks\Inquiry.Benchmarks.csproj -- --filter "*ParameterBindingBenchmarks*" --job Dry
+
+# Real generated-store -> DefaultInquiry -> built-in-pipeline execution and allocation smoke.
+dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks\Inquiry.Benchmarks.csproj -- --filter "*GeneratedCommandPipelineBenchmarks*" --job Dry
+```
+
+The explicit Windows RID overrides the benchmark project's Linux CI default; omit it when running on
+Linux. As with the other suites, a Dry result proves wiring but is not statistically meaningful.
+
+### Generated ad-hoc sequential access (`GeneratedAdHocSequentialAccessBenchmarks`)
+
+The SQL Server provider suite seeds 32 identically shaped wide rows: twelve ordered scalar columns followed
+by one 64 KiB `VARBINARY(MAX)` payload. Every measured SQL leg executes the same ordered `SELECT`;
+every fully-consumed leg materializes and checksums every scalar and every payload byte.
+
+- `MaterializerDispatch` invokes the generated class through a cached
+  `IInquiryEntityMaterializer<T>` and the generated struct through its constrained generic call over
+  the same in-memory `DataTableReader` row. It excludes DI, network, and provider I/O so the generated
+  materializer dispatch difference is visible in timing and disassembly.
+- `EndToEndAdHocPath` compares the public generated class/DI path with the generated struct-specialized
+  path over SQL Server. This intentionally measures their combined end-to-end overhead and is not
+  presented as isolated interface dispatch.
+- `InquiryBuffering` compares an otherwise-identical custom class materializer (buffered by default)
+  with the generated sequential-safe class.
+- `AdoBufferingFloor` compares raw ADO.NET `SingleResult` with
+  `SingleResult | SequentialAccess` over the same read loop.
+- `ConsumptionMode` compares buffered-list return with full async streaming.
+- `PartialStream` compares full enumeration with intentionally consuming one row and immediately
+  disposing the async enumerator; its result represents work avoided by early termination, not an
+  equal-cardinality speed ratio.
+
+Both `MemoryDiagnoser` and `DisassemblyDiagnoser` are enabled. The suite requires Docker and a SQL
+Server container. Omit `--job Dry` for publishable measurements and retained allocation/disassembly
+artifacts:
+
+```powershell
+dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks.SqlServer\Inquiry.Benchmarks.SqlServer.csproj -- --filter "*GeneratedAdHocSequentialAccessBenchmarks*"
+```
+
+The explicit Windows RID overrides the benchmark project's Linux CI default; omit it on Linux.
 
 ## Dataset size (`[Params(1000, 100000)]`)
 

@@ -38,6 +38,7 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
     public IDbContextFactory<OracleShipperContext> DbContextFactory => _dbContextFactory!;
 
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
@@ -82,6 +83,7 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
 
                 var services = new ServiceCollection()
                     .AddInquiry()
+                    .AddInquiryGeneratedStores()
                     .AddInquiryOracle(adminConnectionString)
                     // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
                     // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.

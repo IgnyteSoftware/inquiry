@@ -31,4 +31,8 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\BatchExecutionProbe.cs" Link="Shared\BatchExecutionProbe.cs" />
+  </ItemGroup>
 </Project>

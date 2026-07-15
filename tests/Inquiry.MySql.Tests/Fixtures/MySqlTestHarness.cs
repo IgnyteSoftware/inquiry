@@ -39,7 +39,9 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         string adminConnectionString,
         string ddl,
         string? namePrefix = null,
-        Action<string>? databaseCreated = null)
+        Action<string>? databaseCreated = null,
+        Action<IServiceCollection>? configureServices = null,
+        Action<InquiryOptions>? configureOptions = null)
     {
         var prefix = (namePrefix ?? "inquiry").ToLowerInvariant();
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
@@ -73,10 +75,20 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            var services = new ServiceCollection()
-                .AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly, typeof(VersionedItemStore).Assembly)
-                .AddInquiryMySql(connectionString)
-                .BuildServiceProvider();
+            var serviceCollection = new ServiceCollection();
+            var storeAssemblies = new[]
+            {
+                typeof(CustomerStore).Assembly,
+                typeof(GeneratedItemStore).Assembly,
+                typeof(VersionedItemStore).Assembly,
+            };
+            if (configureOptions is null)
+                serviceCollection.AddInquiry(storeAssemblies);
+            else
+                serviceCollection.AddInquiry(configureOptions, storeAssemblies);
+            serviceCollection.AddInquiryMySql(connectionString);
+            configureServices?.Invoke(serviceCollection);
+            var services = serviceCollection.BuildServiceProvider();
 
             return new MySqlTestHarness(adminConnectionString, databaseName, connectionString, services);
         }

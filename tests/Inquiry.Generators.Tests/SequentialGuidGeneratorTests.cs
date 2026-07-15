@@ -55,9 +55,9 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("if (doc.Id == global::System.Guid.Empty)", text);
         Assert.Contains("doc.Id = global::Inquiry.InquiryGuid.NewVersion7();", text);
 
-        // Batch insert: per-item pre-pass over the materialized list.
-        Assert.Contains("if (_list[_g].Id == global::System.Guid.Empty)", text);
-        Assert.Contains("_list[_g].Id = global::Inquiry.InquiryGuid.NewVersion7();", text);
+        // Batch insert: assignment happens exactly once in the chunk binder, with no full-list pre-pass.
+        Assert.Contains("if (_it.Id == global::System.Guid.Empty)", text);
+        Assert.Contains("_it.Id = global::Inquiry.InquiryGuid.NewVersion7();", text);
 
         // Exactly three assignment sites: Insert, Upsert, and the batch pre-pass. A regression
         // that drops one injection (e.g. the Upsert case) fails this count even though the

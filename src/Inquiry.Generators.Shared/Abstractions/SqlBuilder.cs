@@ -17,6 +17,7 @@ public enum ReferentialActionKind { NoAction, Restrict, Cascade, SetNull, SetDef
 public enum ReferentialActionEvent { Delete, Update }
 public enum ConstraintNameScope { Table, Schema }
 public enum IdentifierComparison { Ordinal, OrdinalIgnoreCase }
+public enum BatchInsertStrategy { SetBased, Row, Adaptive }
 
 /// <summary>
 /// Compile-time SQL builder consumed by the Inquiry source generator. One concrete subclass exists
@@ -200,6 +201,12 @@ public abstract class SqlBuilder
 
     // ---- Batch insert / update ---------------------------------------------------------
 
+    /// <summary>Internal generator strategy used for generated InsertAll descriptors.</summary>
+    public virtual BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.SetBased;
+
+    /// <summary>First chunk size routed to the row/DbBatch side of an adaptive insert descriptor.</summary>
+    public virtual int BatchInsertAdaptiveThreshold => int.MaxValue;
+
     /// <summary>
     /// Header of a multi-row batch <c>INSERT</c> — the <c>_sqlInsertAllPrefix</c> const emitted before the
     /// per-row value tuples. Default is the standard multi-row form <c>INSERT INTO t (cols) VALUES </c>.
@@ -221,6 +228,50 @@ public abstract class SqlBuilder
 
     /// <summary>Trailing text after all row tuples. Default empty; Oracle appends <c> SELECT 1 FROM dual</c>.</summary>
     public virtual string BatchInsertFooter => "";
+
+    /// <summary>
+    /// Dialect row-count ceiling for one generated multi-row insert statement. Parameter-count and
+    /// configured batch-size ceilings are applied independently by the generated operation.
+    /// </summary>
+    public virtual int BatchInsertMaxRowsPerCommand => int.MaxValue;
+
+    /// <summary>
+    /// Hard provider/protocol ceiling for bound parameters in one command. The generated descriptor
+    /// applies this even when a user configures a larger runtime parameter limit.
+    /// </summary>
+    public virtual int HardMaxParametersPerCommand => 65535;
+
+    /// <summary>Whether batch mutations may use provider array binding with one fixed DML command.</summary>
+    public virtual bool UsesArrayBindingForBatchMutations => false;
+
+    /// <summary>Whether UpdateAll may use a provider-specific set-based statement for eligible chunks.</summary>
+    public virtual bool SupportsSetBasedBatchUpdate => false;
+
+    /// <summary>SQL preceding the first SELECT row in a set-based UpdateAll derived table.</summary>
+    public virtual string BuildSetBasedBatchUpdateHeader(string? schema, string tableName)
+        => throw new System.NotSupportedException($"Set-based batch update is not supported by {DialectName}.");
+
+    /// <summary>SQL joining a set-based UpdateAll derived table to the target and assigning its values.</summary>
+    public virtual string BuildSetBasedBatchUpdateFooter(
+        string? schema,
+        string tableName,
+        IReadOnlyList<IColumn> keyColumns,
+        IReadOnlyList<IColumn> setColumns)
+        => throw new System.NotSupportedException($"Set-based batch update is not supported by {DialectName}.");
+
+    /// <summary>Emits the provider command assignment that establishes the array-bind row count.</summary>
+    public virtual string BuildArrayBindCountAssignment(string commandExpression, string countExpression)
+        => throw new System.NotSupportedException("This dialect does not support DML array binding.");
+
+    /// <summary>Builds a per-element size expression for provider array binding, or null when none is needed.</summary>
+    public virtual string? BuildArrayBindSizeExpression(string valueExpression, string valueVariable, IColumn column) => null;
+
+    /// <summary>Emits the provider-specific assignment for a variable-width array parameter's element sizes.</summary>
+    public virtual string BuildArrayBindSizeAssignment(string parameterExpression, string sizesExpression)
+        => throw new System.NotSupportedException("This dialect does not support per-element array bind sizes.");
+
+    /// <summary>Emits provider-only metadata needed before assigning an array parameter value.</summary>
+    public virtual string? BuildArrayBindParameterMetadata(string parameterExpression, IColumn column) => null;
 
     public string QuoteTable(string? schema, string tableName)
     {

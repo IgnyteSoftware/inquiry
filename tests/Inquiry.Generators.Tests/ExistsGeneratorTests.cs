@@ -50,8 +50,8 @@ public sealed partial class InquiryGeneratorTests
         var text = GetExistsWidgetStore(result);
 
         Assert.Contains("_sqlExists_AnyAsync = \"SELECT CASE WHEN EXISTS(SELECT 1 FROM \\\"TWidget\\\") THEN 1 ELSE 0 END\";", text);
-        // No criteria → no binder, command returned directly.
-        Assert.Contains("Inquiry.ExecuteScalarAsync<bool>(new global::Inquiry.Commands.InquiryCommand(_sqlExists_AnyAsync)", text);
+        // No criteria uses the allocation-free generated command with the cached static no-op binder.
+        Assert.Contains("Inquiry.ExecuteScalarAsync<bool, byte>(new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlExists_AnyAsync, default, static (_, _) => { })", text);
     }
 
     [Fact]
@@ -66,7 +66,9 @@ public sealed partial class InquiryGeneratorTests
         var text = GetExistsWidgetStore(result);
 
         Assert.Contains("_sqlExists_ByNameAsync = \"SELECT CASE WHEN EXISTS(SELECT 1 FROM \\\"TWidget\\\" WHERE \\\"Name\\\" = @Name) THEN 1 ELSE 0 END\";", text);
-        Assert.Contains("Inquiry.ExecuteScalarAsync<bool>(_cmd", text);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<string>(", text);
+        Assert.Contains("static (global::System.Data.Common.DbCommand _c, string _args) =>", text);
+        Assert.Contains("Inquiry.ExecuteScalarAsync<bool, string>(_cmd", text);
     }
 
     [Fact]
