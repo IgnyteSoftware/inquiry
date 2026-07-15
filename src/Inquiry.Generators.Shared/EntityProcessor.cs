@@ -959,6 +959,11 @@ internal static class EntityProcessor
 
     private static string ResolveMappedColumnName(IPropertySymbol property)
     {
+        // Priority matches the canonical coalesce in DiscoverColumns: Key > Column > FK > property name.
+        var keyAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryKeyAttribute");
+        if (keyAttr is not null)
+            return GeneratorHelpers.GetConstructorString(keyAttr) ?? property.Name;
+
         var columnAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
         if (columnAttr is not null)
             return GeneratorHelpers.GetConstructorString(columnAttr) ?? property.Name;
@@ -977,10 +982,6 @@ internal static class EntityProcessor
 
             return property.Name;
         }
-
-        var keyAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryKeyAttribute");
-        if (keyAttr is not null)
-            return GeneratorHelpers.GetConstructorString(keyAttr) ?? property.Name;
 
         return property.Name;
     }
