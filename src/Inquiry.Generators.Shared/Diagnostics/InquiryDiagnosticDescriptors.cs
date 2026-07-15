@@ -48,6 +48,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ070         Duplicate/colliding physical schema mapping [IN USE]
     //   INQ071–INQ077  Provider schema and artifact validation [IN USE]
     //   INQ078–INQ082  Value-converter model and construction validation [IN USE]
+    //   INQ083         Paged-result + Distinct conflict [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -450,6 +451,14 @@ internal static class InquiryDiagnosticDescriptors
         "INQ082",
         "Converter type needs a public parameterless constructor",
         "Converter type '{0}' must have a public parameterless constructor for InquiryConverterCache<TConverter>.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor PagedResultDistinctNotSupported = new(
+        "INQ083",
+        "InquiryPagedResult cannot be combined with Distinct",
+        "Method '{0}' returns InquiryPagedResult<T> which pairs a SELECT with a COUNT(*), but Distinct = true would make the count diverge from the deduplicated result set. Remove Distinct or use a non-paged return type.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
