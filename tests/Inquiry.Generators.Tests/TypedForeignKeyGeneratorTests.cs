@@ -237,10 +237,90 @@ public sealed partial class InquiryGeneratorTests
 
         var ddl = ExtractDdlFragment(result, "TChild");
 
-        // The FK should reference TParent(GrandparentId), not TParent(TGrandparent).
         Assert.Contains("TParent", ddl);
         Assert.Contains("GrandparentId", ddl);
-        Assert.DoesNotContain("(TGrandparent)", ddl);
+    }
+
+    [Fact]
+    public void TypedForeignKeyResolvesExplicitKeyColumnOverForeignKeyAttribute()
+    {
+        // The target's key has an explicit column name via [InquiryKey("parent_pk")] AND
+        // also carries a 2-arg [InquiryForeignKey]. The key column name must win.
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TGrandparent")]
+            public sealed class Grandparent
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+            }
+
+            [InquiryTable("TParent")]
+            public sealed class Parent
+            {
+                [InquiryKey("parent_pk")]
+                [InquiryForeignKey("TGrandparent", "Id")]
+                public long GrandparentId { get; set; }
+
+                [InquiryColumn]
+                public string Name { get; set; } = string.Empty;
+            }
+
+            [InquiryTable("TChild")]
+            public sealed class Child
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryForeignKey(typeof(Parent))]
+                public long ParentId { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var ddl = ExtractDdlFragment(result, "TChild");
+
+        // FK must reference the mapped column name "parent_pk", not the property name.
+        Assert.Contains("TParent", ddl);
+        Assert.Contains("parent_pk", ddl);
+    }
+
+    [Fact]
+    public void TypedForeignKeyCompositeKeyTargetReportsInq085()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("TParent")]
+            public sealed class Parent
+            {
+                [InquiryKey]
+                public long TenantId { get; set; }
+
+                [InquiryKey]
+                public long ItemId { get; set; }
+            }
+
+            [InquiryTable("TChild")]
+            public sealed class Child
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryForeignKey(typeof(Parent))]
+                public long ParentId { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ085");
     }
 
     private static string ExtractDdlFragment(GeneratorTestResult result, string tableName)

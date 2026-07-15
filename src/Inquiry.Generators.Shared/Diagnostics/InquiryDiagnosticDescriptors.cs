@@ -473,8 +473,8 @@ internal static class InquiryDiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor TypedForeignKeyTargetMissingKey = new(
         "INQ085",
-        "Typed foreign key target has no [InquiryKey]",
-        "The type '{0}' referenced in [InquiryForeignKey(typeof({0}))] has no property marked with [InquiryKey]. Add [InquiryKey] to the target entity's primary key, specify the column explicitly, or use the string overload.",
+        "Typed foreign key target has no single [InquiryKey]",
+        "The type '{0}' referenced in [InquiryForeignKey(typeof({0}))] has no single [InquiryKey] property. Add [InquiryKey] to exactly one property on the target, specify the column explicitly, or use the string overload.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
