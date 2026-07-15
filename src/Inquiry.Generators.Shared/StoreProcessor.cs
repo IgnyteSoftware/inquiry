@@ -216,12 +216,22 @@ internal static class StoreProcessor
         // type for projection resolution at emit; other select ops stay entity-typed.
         string? resultElementTypeFqn = null;
         bool returnsList;
+        var returnsPagedResult = false;
         if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
         {
-            returnsList = TryGetSelectElementType(method.ReturnType, out var selectElement, out var isList) && isList;
-            if (selectElement is not null)
+            if (IsTaskOfInquiryPagedResult(method.ReturnType, out var pagedElement))
             {
-                resultElementTypeFqn = selectElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                returnsList = true;
+                returnsPagedResult = true;
+                resultElementTypeFqn = pagedElement!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+            else
+            {
+                returnsList = TryGetSelectElementType(method.ReturnType, out var selectElement, out var isList) && isList;
+                if (selectElement is not null)
+                {
+                    resultElementTypeFqn = selectElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                }
             }
         }
         else
@@ -291,7 +301,7 @@ internal static class StoreProcessor
         if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
         {
             orderBy = ParseOrderBy(GeneratorHelpers.GetNamedString(attribute, "OrderBy"), method.Name, location, diagnostics);
-            if (GeneratorHelpers.GetNamedBool(attribute, "Paged"))
+            if (GeneratorHelpers.GetNamedBool(attribute, "Paged") || returnsPagedResult)
             {
                 pagination = Pagination.Offset;
             }
@@ -355,6 +365,7 @@ internal static class StoreProcessor
             AggregateFunction = aggregateFunction,
             AggregateColumn = aggregateColumn,
             ScalarResultType = scalarResultType,
+            ReturnsPagedResult = returnsPagedResult,
             ResultElementTypeFqn = resultElementTypeFqn,
             ProcedureReadBackName = procReadBackName,
             ProcedureReturnsValue = procReturnsValue,
@@ -671,7 +682,7 @@ internal static class StoreProcessor
             // [InquiryProjection] of it, so they are accepted by shape here (any named element) and
             // resolved against the projection registry at emit.
             StoreOperation.SelectAll or StoreOperation.SelectAllByField =>
-                TryGetSelectElementType(returnType, out _, out _),
+                TryGetSelectElementType(returnType, out _, out _) || IsTaskOfInquiryPagedResult(returnType, out _),
             StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
                 IsTaskOfReadOnlyList(returnType, entityType),
@@ -831,6 +842,29 @@ internal static class StoreProcessor
         }
 
         return SymbolEqualityComparer.Default.Equals(page.TypeArguments[0], entitySymbol);
+    }
+
+    private static bool IsTaskOfInquiryPagedResult(ITypeSymbol returnType, out INamedTypeSymbol? elementType)
+    {
+        elementType = null;
+        if (returnType is not INamedTypeSymbol task ||
+            !task.IsGenericType ||
+            task.TypeArguments.Length != 1 ||
+            task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Threading.Tasks.Task<TResult>")
+        {
+            return false;
+        }
+
+        if (task.TypeArguments[0] is not INamedTypeSymbol paged ||
+            !paged.IsGenericType ||
+            paged.TypeArguments.Length != 1 ||
+            paged.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::Inquiry.Paging.InquiryPagedResult<TEntity>")
+        {
+            return false;
+        }
+
+        elementType = paged.TypeArguments[0] as INamedTypeSymbol;
+        return elementType is not null;
     }
 
     private static ProcedureReturnKind ClassifyProcedureReturn(ITypeSymbol returnType, ITypeSymbol entityType)
@@ -1315,6 +1349,11 @@ internal static class StoreProcessor
                 if (selectPlan.Pagination == Pagination.Keyset)
                 {
                     AppendConstSql(source, selectPlan.SqlFieldName + "_first", BuildKeysetFirstPageSql(sqlBuilder, planCtx, selectPlan, method.Distinct));
+                }
+
+                if (method.ReturnsPagedResult)
+                {
+                    AppendConstSql(source, "_sqlCount_" + method.Name, sqlBuilder.BuildCountByFieldSql(planCtx, ToColumnList(fieldColumns)));
                 }
             }
         }
@@ -1824,6 +1863,12 @@ internal static class StoreProcessor
         {
             if (!TryResolveOrderColumns(context, method, entity, out var orderColumns))
             {
+                return false;
+            }
+
+            if (method.ReturnsPagedResult && method.Distinct)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PagedResultDistinctNotSupported, method.Location?.ToLocation(), method.Name));
                 return false;
             }
 
