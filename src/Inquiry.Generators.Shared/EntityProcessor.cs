@@ -185,11 +185,34 @@ internal static class EntityProcessor
         MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
+        source.AppendLine();
+
+        EmitColumnListConstants(source, entity, sqlBuilder);
 
         GeneratorHelpers.AppendNamespaceEnd(source, entity.Namespace);
 
         context.AddSource(entity.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
         return new EntityRegistration(entityType, entity.ClassMaterializerFullName);
+    }
+
+    private static void EmitColumnListConstants(StringBuilder source, EntityData entity, SqlBuilder sqlBuilder)
+    {
+        var columns = entity.Columns.AsImmutableArray();
+        var columnList = string.Join(", ", columns.Select(c => sqlBuilder.QuoteIdentifier(c.ColumnName)));
+
+        source.AppendLine($"public static partial class {entity.Name}InquirySql");
+        source.AppendLine("{");
+        source.AppendLine($"    public const string ColumnList = \"{GeneratorHelpers.Escape(columnList)}\";");
+
+        if (!entity.IsView)
+        {
+            var insertColumnList = string.Join(", ", columns
+                .Where(c => !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken && string.IsNullOrEmpty(c.ComputedExpression))
+                .Select(c => sqlBuilder.QuoteIdentifier(c.ColumnName)));
+            source.AppendLine($"    public const string InsertColumnList = \"{GeneratorHelpers.Escape(insertColumnList)}\";");
+        }
+
+        source.AppendLine("}");
     }
 
     private static List<ColumnData> DiscoverColumns(
