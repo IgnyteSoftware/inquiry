@@ -214,7 +214,7 @@ partial class ShipperStore
 
 ## Key generation: sequential GUIDs
 
-Random `Guid.NewGuid()` keys fragment clustered B-tree indexes — every insert lands at a random page. For client-supplied GUID keys, opt into time-ordered **UUID v7** generation:
+Random `Guid.NewGuid()` keys fragment clustered B-tree indexes — every insert lands at a random page. For client-supplied GUID keys, opt into time-ordered sequential generation:
 
 ```csharp
 [InquiryTable("Documents")]
@@ -227,17 +227,18 @@ public sealed class Document
 }
 ```
 
-Insert, upsert, and batch-insert methods then assign `InquiryGuid.NewVersion7()` whenever the key is unset (`Guid.Empty` or `null`):
+Insert, upsert, and batch-insert methods then assign a sequential GUID whenever the key is unset (`Guid.Empty` or `null`). The layout is **dialect-aware**: UUIDv7 on PostgreSQL, MySQL, MariaDB, SQLite, and Oracle; a SQL Server-optimized layout (timestamp in bytes [10..15], version 8) for `uniqueidentifier`, which compares those bytes first:
 
 ```csharp
 var doc = new Document { Title = "spec" };
 await store.InsertAsync(doc);
-// doc.Id is now a v7 GUID — time-ordered, observable by the caller, usable for follow-up reads.
+// doc.Id is now a sequential GUID — time-ordered for the target provider,
+// observable by the caller, usable for follow-up reads.
 ```
 
 - **Supplied keys win.** A non-empty key is never overwritten.
 - **The entity is mutated** so you see the generated key after the call — same ergonomics as a database-generated identity.
-- **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a v7 GUID. On .NET 9+ it delegates to `Guid.CreateVersion7()`; on .NET 8 it's an RFC 9562-conformant polyfill.
+- **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a UUIDv7. On .NET 9+ it delegates to `Guid.CreateVersion7()`; on .NET 8 it's an RFC 9562-conformant polyfill. For SQL Server-ordered keys, use `InquiryGuid.NewSqlServerSequential()`.
 - `SequentialGuid` requires a plain client-supplied `Guid`/`Guid?` key — combining it with `IsGenerated` or `UseDatabaseDefault`, or putting it on a non-Guid key, is a build-time error (`INQ047`).
 
 ## Derived query methods

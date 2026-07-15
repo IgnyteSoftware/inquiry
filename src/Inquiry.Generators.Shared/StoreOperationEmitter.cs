@@ -102,7 +102,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.Insert:
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ");
+                EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ", sqlBuilder);
                 EmitAuditAssignments(source, entity, firstParameter, isInsert: true, indent: "        ");
                 if (method.ReturnsEntity)
                 {
@@ -131,9 +131,9 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.Upsert:
                 AppendHeader(source, method, parameters, isAsync: false);
-                // An unset SequentialGuid key gets a fresh v7 before the upsert, making it an
-                // insert of a new row — same "default key generation" semantics as Insert.
-                EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ");
+                // An unset SequentialGuid key gets a fresh sequential GUID before the upsert,
+                // making it an insert of a new row — same "default key generation" semantics as Insert.
+                EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ", sqlBuilder);
                 // CreatedAt only lands via the insert branch (the conflict-branch SET excludes it),
                 // so the unset-stamp is correct for both outcomes; ModifiedAt is set on both.
                 EmitAuditAssignments(source, entity, firstParameter, isInsert: true, indent: "        ");
@@ -1504,7 +1504,7 @@ internal static class StoreOperationEmitter
             source.AppendLine("        _sqlInsert,");
             source.AppendLine("        static (_, _it) =>");
             source.AppendLine("        {");
-            EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ");
+            EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ", sqlBuilder);
             EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "            ");
             if (sqlBuilder.BatchInsertStrategy == BatchInsertStrategy.Row)
             {
@@ -1586,7 +1586,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("            for (var _r = 0; _r < _items.Count; _r++)");
         source.AppendLine("            {");
         source.AppendLine("                var _it = _items[_r];");
-        EmitSequentialGuidAssignment(source, entity, "_it", indent: "                ");
+        EmitSequentialGuidAssignment(source, entity, "_it", indent: "                ", sqlBuilder);
         EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "                ");
         for (var i = 0; i < insertable.Length; i++)
         {
@@ -1628,7 +1628,7 @@ internal static class StoreOperationEmitter
     {
         source.AppendLine("        static (_t, _it) =>");
         source.AppendLine("        {");
-        EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ");
+        EmitSequentialGuidAssignment(source, entity, "_it", indent: "            ", sqlBuilder);
         EmitAuditAssignments(source, entity, "_it", isInsert: true, indent: "            ");
         EmitTargetRowParameters(source, columns, sqlBuilder, "_it", indent: "            ");
         source.AppendLine("        }" + closingSuffix);
@@ -1674,7 +1674,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    var _it = _items[_i];");
         if (isInsert)
         {
-            EmitSequentialGuidAssignment(source, entity, "_it", indent + "    ");
+            EmitSequentialGuidAssignment(source, entity, "_it", indent + "    ", sqlBuilder);
         }
         EmitAuditAssignments(source, entity, "_it", isInsert, indent + "    ");
         for (var i = 0; i < columns.Count; i++)
@@ -2499,14 +2499,15 @@ internal static class StoreOperationEmitter
             : $"{access} == global::System.Guid.Empty";
 
     /// <summary>
-    /// Emits the unset-key check + v7 assignment for a single entity parameter:
-    /// <c>if (e.Key == Guid.Empty) e.Key = InquiryGuid.NewVersion7();</c> (null/empty for Guid?).
+    /// Emits the unset-key check + dialect-aware sequential GUID assignment for a single entity
+    /// parameter (null/empty for Guid?). The factory call is dialect-specific via
+    /// <see cref="SqlBuilder.SequentialGuidFactoryExpression"/>.
     /// Every [InquiryKey(SequentialGuid = true)] key is assigned (a composite key may flag more
     /// than one part). The assignment mutates the caller's entity so the generated key is
     /// observable after the call. INQ047 validation already cleared the flag for anything that
     /// is not a plain client-supplied Guid key.
     /// </summary>
-    private static void EmitSequentialGuidAssignment(StringBuilder source, EntityData entity, string parameter, string indent)
+    private static void EmitSequentialGuidAssignment(StringBuilder source, EntityData entity, string parameter, string indent, SqlBuilder sqlBuilder)
     {
         foreach (var key in entity.Keys.AsImmutableArray())
         {
@@ -2518,7 +2519,7 @@ internal static class StoreOperationEmitter
             var access = $"{parameter}.{key.PropertyName}";
             source.AppendLine($"{indent}if ({SequentialGuidUnsetCheck(key, access)})");
             source.AppendLine($"{indent}{{");
-            source.AppendLine($"{indent}    {access} = global::Inquiry.InquiryGuid.NewVersion7();");
+            source.AppendLine($"{indent}    {access} = {sqlBuilder.SequentialGuidFactoryExpression};");
             source.AppendLine($"{indent}}}");
             source.AppendLine();
         }
@@ -2595,7 +2596,7 @@ internal static class StoreOperationEmitter
             source.AppendLine("        {");
             source.AppendLine("            foreach (var _e in _source)");
             source.AppendLine("            {");
-            EmitSequentialGuidAssignment(source, entity, "_e", indent: "                ");
+            EmitSequentialGuidAssignment(source, entity, "_e", indent: "                ", sqlBuilder);
             EmitAuditAssignments(source, entity, "_e", isInsert: true, indent: "                ");
             source.AppendLine("                yield return _e;");
             source.AppendLine("            }");
