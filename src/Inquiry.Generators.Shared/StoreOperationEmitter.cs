@@ -1398,9 +1398,27 @@ internal static class StoreOperationEmitter
         AppendGeneratedStateAliases(source, method.Parameters, state, "                ");
         for (var i = 0; i < procParams.Length; i++)
         {
+            var p = procParams[i];
             source.AppendLine($"                var _p{i} = _c.CreateParameter();");
-            source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(procParams[i].Name))}\";");
-            source.AppendLine($"                _p{i}.Value = (object?){procParams[i].Name} ?? global::System.DBNull.Value;");
+            source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(p.Name))}\";");
+            if (p.DbTypeExpression is not null)
+            {
+                source.AppendLine($"                _p{i}.DbType = {p.DbTypeExpression};");
+            }
+            if (p.DeclaredLength > 0 && (p.IsStringType || p.IsBinaryType))
+            {
+                source.AppendLine($"                _p{i}.Size = {p.DeclaredLength.ToString(CultureInfo.InvariantCulture)};");
+            }
+            else if (p.DeclaredPrecision is > 0 and <= 38 && p.IsDecimalType)
+            {
+                source.AppendLine($"                _p{i}.Precision = {p.DeclaredPrecision.ToString(CultureInfo.InvariantCulture)};");
+                if (p.DeclaredScale > 0 && p.DeclaredScale <= p.DeclaredPrecision)
+                {
+                    source.AppendLine($"                _p{i}.Scale = {p.DeclaredScale.ToString(CultureInfo.InvariantCulture)};");
+                }
+            }
+            var valueExpr = p.ProcedureValueExpression ?? $"(object?){p.Name} ?? global::System.DBNull.Value";
+            source.AppendLine($"                _p{i}.Value = {valueExpr};");
             source.AppendLine($"                _c.Parameters.Add(_p{i});");
         }
 
