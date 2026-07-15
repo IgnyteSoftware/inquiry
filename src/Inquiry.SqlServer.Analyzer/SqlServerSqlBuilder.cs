@@ -423,4 +423,23 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // SQL Server extracts a JSON scalar with JSON_VALUE (returns the value as text).
     protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
         => "JSON_VALUE(" + quotedColumn + ", '" + jsonPath + "')";
+
+    public override string ApplyLockClause(string selectSql, SqlBuildContext context, int lockMode)
+    {
+        if (lockMode == 0) return selectSql;
+        var hint = lockMode switch
+        {
+            1 => " WITH (UPDLOCK, ROWLOCK)",
+            2 => " WITH (UPDLOCK, ROWLOCK, NOWAIT)",
+            3 => " WITH (UPDLOCK, ROWLOCK, READPAST)",
+            4 => " WITH (HOLDLOCK, ROWLOCK)",
+            _ => "",
+        };
+        var idx = selectSql.IndexOf(context.Table, System.StringComparison.Ordinal);
+        if (idx >= 0)
+        {
+            return selectSql.Insert(idx + context.Table.Length, hint);
+        }
+        return selectSql;
+    }
 }

@@ -75,6 +75,12 @@ internal sealed record StoreMethodData(
     public bool Distinct { get; init; }
 
     /// <summary>
+    /// For a select operation, the <c>LockMode</c> enum value (as its underlying int) so the
+    /// generated query appends a row-level lock clause. <c>0</c> means no locking.
+    /// </summary>
+    public int LockMode { get; init; }
+
+    /// <summary>
     /// For <see cref="StoreOperation.DeleteOneByKey"/>, whether <c>HardDelete = true</c> was set so
     /// a literal <c>DELETE</c> is emitted even when the entity declares a soft-delete column.
     /// </summary>

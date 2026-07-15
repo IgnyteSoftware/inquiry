@@ -124,4 +124,7 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
     protected override string GeneratedKeyClause(IColumn column) => "INTEGER PRIMARY KEY AUTOINCREMENT";
 
     protected override bool SupportsCreateIndexIfNotExists => true;
+
+    protected override string BuildLockSuffix(int lockMode)
+        => throw new System.NotSupportedException("SQLite does not support row-level locking.");
 }
