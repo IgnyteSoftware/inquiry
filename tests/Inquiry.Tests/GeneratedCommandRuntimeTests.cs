@@ -144,6 +144,29 @@ public sealed class GeneratedCommandRuntimeTests
         Assert.True(fallback.UsedValidatingSinglePath);
     }
 
+    [Fact]
+    public async Task DefaultInterfaceBatchFallbackUsesExecuteWithoutTakingTransactionOwnership()
+    {
+        IInquiry inquiry = new FallbackInquiry();
+        var command = new InquiryBatchCommand<int>(
+            "UPDATE Items SET Value = @value",
+            static (target, value) =>
+            {
+                var parameter = target.CreateParameter();
+                parameter.ParameterName = "@value";
+                parameter.Value = value;
+                target.AddParameter(parameter);
+            });
+
+        var affected = await inquiry.ExecuteBatchAsync(command, new[] { 11, 12, 13 });
+
+        var fallback = Assert.IsType<FallbackInquiry>(inquiry);
+        Assert.Equal(3, affected);
+        Assert.Equal(3, fallback.ExecuteCallCount);
+        Assert.Equal(0, fallback.BeginTransactionCallCount);
+        Assert.Equal(13L, fallback.ParameterValue);
+    }
+
     private readonly struct NullMaterializer : IInquiryEntityMaterializer<object>
     {
         public object Materialize(DbDataReader reader) => new();
@@ -181,6 +204,8 @@ public sealed class GeneratedCommandRuntimeTests
         public string? CommandText { get; private set; }
         public long? ParameterValue { get; private set; }
         public bool UsedValidatingSinglePath { get; private set; }
+        public int ExecuteCallCount { get; private set; }
+        public int BeginTransactionCallCount { get; private set; }
 
         public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
             where TEntity : class => throw new NotSupportedException();
@@ -212,9 +237,20 @@ public sealed class GeneratedCommandRuntimeTests
         }
 
         public Task<int> ExecuteAsync(InquiryCommand command, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CommandText = command.CommandText;
+            using var dbCommand = new SqliteCommand();
+            command.DbCommandBinder?.Invoke(dbCommand);
+            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value);
+            ExecuteCallCount++;
+            return Task.FromResult(1);
+        }
 
         public Task<IInquiryTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        {
+            BeginTransactionCallCount++;
+            throw new NotSupportedException();
+        }
     }
 }

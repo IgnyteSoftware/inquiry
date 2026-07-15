@@ -237,6 +237,12 @@ public interface IInquiry
     }
 
     /// <summary>Executes a generated batch descriptor over a bounded, single-pass input.</summary>
+    /// <remarks>
+    /// The default implementation dispatches each selected chunk or item through
+    /// <see cref="ExecuteAsync(InquiryCommand, CancellationToken)"/> without taking transaction
+    /// ownership. <see cref="DefaultInquiry"/> overrides this and delegates to the built-in
+    /// pipeline, which provides atomic non-ambient batch execution.
+    /// </remarks>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     async Task<int> ExecuteBatchAsync<TItem>(
         InquiryBatchCommand<TItem> command,
@@ -249,49 +255,20 @@ public interface IInquiry
             command.GetEffectiveChunkSize(MaxBatchSize, MaxParametersPerCommand), cancellationToken);
         if (!chunks.MoveNext(out var chunk)) return 0;
 
-        IInquiryTransaction? transaction = null;
         var total = 0;
-        Exception? primaryException = null;
-        List<Exception>? cleanupExceptions = null;
-        try
+        do
         {
-            transaction = await BeginTransactionAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            do
+            if (command.BindItem is null || command.ShouldUseChunk(chunk, MaxParametersPerCommand))
             {
-                if (command.BindItem is null || command.ShouldUseChunk(chunk, MaxParametersPerCommand))
-                {
-                    total += await transaction.ExecuteAsync(command.ForChunk(chunk).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    for (var i = 0; i < chunk.Count; i++)
-                        total += await transaction.ExecuteAsync(command.ForItem(chunk[i]).ToInquiryCommand(), cancellationToken).ConfigureAwait(false);
-                }
+                total += await ExecuteAsync(command.ForChunk(chunk), cancellationToken).ConfigureAwait(false);
             }
-            while (chunks.MoveNext(out chunk));
-
-            chunks.Dispose();
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            else
+            {
+                for (var i = 0; i < chunk.Count; i++)
+                    total += await ExecuteAsync(command.ForItem(chunk[i]), cancellationToken).ConfigureAwait(false);
+            }
         }
-        catch (Exception exception)
-        {
-            primaryException = exception;
-        }
-        finally
-        {
-            try { chunks.Dispose(); }
-            catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
-            try { if (transaction is not null) await transaction.DisposeAsync().ConfigureAwait(false); }
-            catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
-        }
-
-        if (primaryException is not null)
-        {
-            InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primaryException).Throw();
-        }
-
-        InquiryCleanup.ThrowIfAny(cleanupExceptions);
+        while (chunks.MoveNext(out chunk));
         return total;
     }
 
