@@ -36,6 +36,36 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="InquiryForeignKeyAttribute"/> class using a
+    /// type reference. The source generator resolves the table name from the target's
+    /// <see cref="InquiryTableAttribute"/> and the column from its <c>[InquiryKey]</c> property.
+    /// </summary>
+    public InquiryForeignKeyAttribute(Type referencedType)
+    {
+        ReferencedType = referencedType ?? throw new ArgumentNullException(nameof(referencedType));
+        ReferencedTable = null!;
+        ReferencedColumn = null!;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InquiryForeignKeyAttribute"/> class using a
+    /// type reference with an explicit referenced column (property name on the target entity).
+    /// </summary>
+    public InquiryForeignKeyAttribute(Type referencedType, string referencedColumn)
+    {
+        ReferencedType = referencedType ?? throw new ArgumentNullException(nameof(referencedType));
+        if (string.IsNullOrWhiteSpace(referencedColumn))
+            throw new ArgumentException("Referenced column cannot be empty.", nameof(referencedColumn));
+        ReferencedTable = null!;
+        ReferencedColumn = referencedColumn;
+    }
+
+    /// <summary>
+    /// Gets the referenced entity type when the type-safe constructor was used; otherwise <see langword="null"/>.
+    /// </summary>
+    public Type? ReferencedType { get; }
+
+    /// <summary>
     /// Gets the referenced table name.
     /// </summary>
     public string ReferencedTable { get; }

@@ -68,7 +68,7 @@ public sealed class AnalyzerReleaseCatalogTests
             .ToArray();
         Assert.DoesNotContain(active, static id => ReservedIds.Contains(id, StringComparer.Ordinal));
 
-        var expectedActive = Enumerable.Range(1, 83)
+        var expectedActive = Enumerable.Range(1, 85)
             .Select(static value => $"INQ{value:000}")
             .Except(ReservedIds, StringComparer.Ordinal)
             .OrderBy(static id => id, StringComparer.Ordinal)

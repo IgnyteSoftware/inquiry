@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ082. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ085. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -459,6 +459,22 @@ internal static class InquiryDiagnosticDescriptors
         "INQ083",
         "InquiryPagedResult cannot be combined with Distinct",
         "Method '{0}' returns InquiryPagedResult<T> which pairs a SELECT with a COUNT(*), but Distinct = true would make the count diverge from the deduplicated result set. Remove Distinct or use a non-paged return type.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor TypedForeignKeyTargetMissingTable = new(
+        "INQ084",
+        "Typed foreign key target lacks [InquiryTable]",
+        "The type '{0}' referenced in [InquiryForeignKey(typeof({0}))] is not mapped with [InquiryTable]. Add [InquiryTable] to the target entity or use the string overload.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor TypedForeignKeyTargetMissingKey = new(
+        "INQ085",
+        "Typed foreign key target has no [InquiryKey]",
+        "The type '{0}' referenced in [InquiryForeignKey(typeof({0}))] has no property marked with [InquiryKey]. Add [InquiryKey] to the target entity's primary key, specify the column explicitly, or use the string overload.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
