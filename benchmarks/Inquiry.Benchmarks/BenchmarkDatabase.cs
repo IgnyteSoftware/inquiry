@@ -52,6 +52,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     public ProductStore  Products  => _services.GetRequiredService<ProductStore>();
     public ShipperStore  Shippers  => _services.GetRequiredService<ShipperStore>();
     public RegionStore   Regions   => _services.GetRequiredService<RegionStore>();
+    public BatchMutationBenchmarkStore BatchMutations => _services.GetRequiredService<BatchMutationBenchmarkStore>();
 
     /// <summary>
     /// Seeds <paramref name="seedRows"/> rows of each benchmarked entity. Returns the freshly
@@ -67,12 +68,17 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
         {
             await connection.OpenAsync().ConfigureAwait(false);
             await using var command = connection.CreateCommand();
-            command.CommandText = NorthwindSchema.SqliteDdl;
+            command.CommandText = NorthwindSchema.SqliteDdl + """
+                CREATE TABLE InquiryBatchEvidence (
+                    Id INTEGER NOT NULL PRIMARY KEY,
+                    ValueText TEXT NOT NULL);
+                """;
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
         var services = new ServiceCollection()
             .AddInquiry()
+            .AddScoped<BatchMutationBenchmarkStore>()
             .AddInquirySqlite(connectionString)
             // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
             // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call. A pooled

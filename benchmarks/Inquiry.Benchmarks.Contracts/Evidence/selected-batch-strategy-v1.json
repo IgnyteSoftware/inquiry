@@ -1,0 +1,331 @@
+{
+  "schemaVersion": "inquiry-selected-batch-strategy-v1",
+  "cardinalities": [1, 10, 100, 1000],
+  "providers": [
+    {
+      "provider": "sqlite",
+      "benchmarkAssembly": "Inquiry.Benchmarks",
+      "benchmarkType": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks",
+      "provisional": true,
+      "capabilities": [],
+      "operations": [
+        {
+          "operation": "insert", "benchmarkCategory": "Insert", "selectedMethod": "Inquiry_SelectedInsertAll",
+          "productionExecutionMode": "generatedReusedRowPreferPrepareOnce", "sqlShape": "single-row-insert", "chunkPolicy": "configured-max-batch-size",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedInsert", "role": "directDriver", "capabilityId": null },
+            { "method": "Raw_PrecomputedMultiRowInsertFloor", "role": "precomputedTransportFloor", "capabilityId": null },
+            { "method": "Raw_EndToEndMultiRowInsert", "role": "endToEnd", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "update", "benchmarkCategory": "Update", "selectedMethod": "Inquiry_SelectedUpdateAll",
+          "productionExecutionMode": "generatedReusedCommand", "sqlShape": "single-row-update", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedUpdate", "role": "directDriver", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "delete", "benchmarkCategory": "Delete", "selectedMethod": "Inquiry_SelectedDeleteAll",
+          "productionExecutionMode": "generatedChunkBound", "sqlShape": "json-each-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
+            { "method": "Raw_PreSerializedJsonEachDeleteFloor", "role": "precomputedTransportFloor", "capabilityId": null },
+            { "method": "Raw_EndToEndJsonEachDelete", "role": "endToEnd", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "sqlserver",
+      "benchmarkAssembly": "Inquiry.Benchmarks.SqlServer",
+      "benchmarkType": "Inquiry.Benchmarks.SqlServer.BatchMutationStrategyBenchmarks",
+      "provisional": true,
+      "capabilities": [
+        {
+          "id": "db-batch", "probeMember": "CanCreateBatch", "supportedExecutionMode": "native-db-batch-comparison",
+          "fallbackExecutionMode": "native-comparison-unavailable",
+          "affectedMethods": ["Native_DbBatchInsert", "Native_DbBatchUpdate", "Native_DbBatchDelete"]
+        }
+      ],
+      "operations": [
+        {
+          "operation": "insert", "benchmarkCategory": "Insert", "selectedMethod": "Inquiry_SelectedInsertAll",
+          "productionExecutionMode": "generatedAdaptiveSetBasedBelow250DbBatchAtOrAbove250WithReusedFallback", "sqlShape": "multi-row-values-when-below-250-and-within-parameter-limit-otherwise-single-row-insert", "chunkPolicy": "configured-max-batch-size-capped-at-1000-with-independent-set-based-parameter-limit",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedInsert", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchInsert", "role": "nativeTransport", "capabilityId": "db-batch" },
+            { "method": "Raw_PrecomputedMultiRowInsertFloor", "role": "precomputedTransportFloor", "capabilityId": null },
+            { "method": "Raw_EndToEndMultiRowInsert", "role": "endToEnd", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "update", "benchmarkCategory": "Update", "selectedMethod": "Inquiry_SelectedUpdateAll",
+          "productionExecutionMode": "generatedDbBatch", "sqlShape": "single-row-update-db-batch", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedUpdate", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchUpdate", "role": "nativeTransport", "capabilityId": "db-batch" }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "delete", "benchmarkCategory": "Delete", "selectedMethod": "Inquiry_SelectedDeleteAll",
+          "productionExecutionMode": "generatedChunkBound", "sqlShape": "tvp-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchDelete", "role": "nativeTransport", "capabilityId": "db-batch" },
+            { "method": "Raw_PrecomputedTvpDeleteFloor", "role": "precomputedTransportFloor", "capabilityId": null },
+            { "method": "Raw_EndToEndTvpDelete", "role": "endToEnd", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "postgresql", "benchmarkAssembly": "Inquiry.Benchmarks.PostgreSql",
+      "benchmarkType": "Inquiry.Benchmarks.PostgreSql.BatchMutationStrategyBenchmarks", "provisional": false,
+      "capabilities": [],
+      "operations": [
+        {
+          "operation": "insert", "benchmarkCategory": "Insert", "selectedMethod": "Inquiry_SelectedInsertAll",
+          "productionExecutionMode": "generatedChunkBound", "sqlShape": "multi-row-values", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedInsert", "role": "directDriver", "capabilityId": null },
+            { "method": "Raw_PrecomputedMultiRowInsertFloor", "role": "precomputedTransportFloor", "capabilityId": null },
+            { "method": "Raw_EndToEndMultiRowInsert", "role": "endToEnd", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "update", "benchmarkCategory": "Update", "selectedMethod": "Inquiry_SelectedUpdateAll",
+          "productionExecutionMode": "generatedDbBatch", "sqlShape": "single-row-update-db-batch", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedUpdate", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_NpgsqlBatchUpdate", "role": "nativeTransport", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "delete", "benchmarkCategory": "Delete", "selectedMethod": "Inquiry_SelectedDeleteAll",
+          "productionExecutionMode": "generatedChunkBound", "sqlShape": "any-array-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
+            { "method": "Raw_AnyArrayDelete", "role": "alternativeTransport", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "mysql", "benchmarkAssembly": "Inquiry.Benchmarks.MySql",
+      "benchmarkType": "Inquiry.Benchmarks.MySql.BatchMutationStrategyBenchmarks", "provisional": false,
+      "capabilities": [],
+      "operations": [
+        {
+          "operation": "insert", "benchmarkCategory": "BatchInsert", "selectedMethod": "Inquiry_SelectedInsertAll",
+          "productionExecutionMode": "generatedChunkBound", "sqlShape": "multi-row-values", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedInsert", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchInsert", "role": "nativeTransport", "capabilityId": null },
+            { "method": "Raw_MultiRowInsertControl", "role": "control", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "update", "benchmarkCategory": "BatchUpdate", "selectedMethod": "Inquiry_SelectedUpdateAll",
+          "productionExecutionMode": "generatedSelectableHybrid", "sqlShape": "derived-table-join-with-db-batch-single-row-tail", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedUpdate", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchUpdate", "role": "nativeTransport", "capabilityId": null },
+            { "method": "Raw_CaseUpdateControl", "role": "control", "capabilityId": null },
+            { "method": "Raw_DerivedTableJoinControl", "role": "control", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "delete", "benchmarkCategory": "BatchDelete", "selectedMethod": "Inquiry_SelectedDeleteAll",
+          "productionExecutionMode": "generatedChunkBound", "sqlShape": "json-table-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchDelete", "role": "nativeTransport", "capabilityId": null },
+            { "method": "Raw_ExpandedInDeleteControl", "role": "control", "capabilityId": null },
+            { "method": "Raw_JsonTableDeleteControl", "role": "control", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "mariadb", "benchmarkAssembly": "Inquiry.Benchmarks.MariaDb",
+      "benchmarkType": "Inquiry.Benchmarks.MariaDb.BatchMutationStrategyBenchmarks", "provisional": false,
+      "capabilities": [],
+      "operations": [
+        {
+          "operation": "insert", "benchmarkCategory": "BatchInsert", "selectedMethod": "Inquiry_SelectedInsertAll",
+          "productionExecutionMode": "generatedChunkBound", "sqlShape": "multi-row-values", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedInsert", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchInsert", "role": "nativeTransport", "capabilityId": null },
+            { "method": "Raw_MultiRowInsertControl", "role": "control", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "update", "benchmarkCategory": "BatchUpdate", "selectedMethod": "Inquiry_SelectedUpdateAll",
+          "productionExecutionMode": "generatedSelectableHybrid", "sqlShape": "derived-table-join-with-db-batch-single-row-tail", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedUpdate", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchUpdate", "role": "nativeTransport", "capabilityId": null },
+            { "method": "Raw_CaseUpdateControl", "role": "control", "capabilityId": null },
+            { "method": "Raw_DerivedTableJoinControl", "role": "control", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "delete", "benchmarkCategory": "BatchDelete", "selectedMethod": "Inquiry_SelectedDeleteAll",
+          "productionExecutionMode": "generatedChunkBound", "sqlShape": "json-table-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
+            { "method": "Native_DbBatchDelete", "role": "nativeTransport", "capabilityId": null },
+            { "method": "Raw_ExpandedInDeleteControl", "role": "control", "capabilityId": null },
+            { "method": "Raw_JsonTableDeleteControl", "role": "control", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "oracle", "benchmarkAssembly": "Inquiry.Benchmarks.Oracle",
+      "benchmarkType": "Inquiry.Benchmarks.Oracle.BatchMutationStrategyBenchmarks", "provisional": false,
+      "capabilities": [],
+      "operations": [
+        {
+          "operation": "insert", "benchmarkCategory": "BatchInsert", "selectedMethod": "Inquiry_SelectedInsertAll",
+          "productionExecutionMode": "generatedArrayBinding", "sqlShape": "single-statement-array-binding-insert", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Insert_ReusedPreparedCommand", "role": "directDriver", "capabilityId": null },
+            { "method": "Insert_GeneratedChunkBinderControl", "role": "control", "capabilityId": null },
+            { "method": "Insert_DirectDriverArrayBindingFloor", "role": "directDriverFloor", "capabilityId": null },
+            { "method": "Insert_PreIssue180GeneratedInsertSelectControl", "role": "control", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "update", "benchmarkCategory": "BatchUpdate", "selectedMethod": "Inquiry_SelectedUpdateAll",
+          "productionExecutionMode": "generatedArrayBinding", "sqlShape": "single-statement-array-binding-update", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Update_ReusedPreparedCommand", "role": "directDriver", "capabilityId": null },
+            { "method": "Update_GeneratedChunkBinderControl", "role": "control", "capabilityId": null },
+            { "method": "Update_DirectDriverArrayBindingFloor", "role": "directDriverFloor", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        },
+        {
+          "operation": "delete", "benchmarkCategory": "BatchDelete", "selectedMethod": "Inquiry_SelectedDeleteAll",
+          "productionExecutionMode": "generatedArrayBinding", "sqlShape": "single-statement-array-binding-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "comparisons": [
+            { "method": "Delete_ReusedPreparedCommand", "role": "directDriver", "capabilityId": null },
+            { "method": "Delete_GeneratedChunkBinderControl", "role": "control", "capabilityId": null },
+            { "method": "Delete_DirectDriverArrayBindingFloor", "role": "directDriverFloor", "capabilityId": null },
+            { "method": "Delete_PreIssue180GeneratedJsonTableControl", "role": "control", "capabilityId": null }
+          ],
+          "cells": [
+            { "cardinality": 1, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 10, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 100, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] },
+            { "cardinality": 1000, "status": "pendingMeasurement", "confidence": "unmeasured", "runtimeCapabilities": null, "selectedEvidence": null, "comparisonEvidence": [] }
+          ]
+        }
+      ]
+    }
+  ]
+}

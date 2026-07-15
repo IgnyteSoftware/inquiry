@@ -13,8 +13,12 @@ namespace Inquiry.Stores;
 /// Rows stream to the server — no parameter cap applies on bulk-copy dialects (the batch-SQL
 /// fallback keeps its cap). Database-generated, database-default, and database-generated
 /// concurrency-token columns are omitted; sequential-GUID keys and auditing timestamps are stamped
-/// per row as the stream is enumerated. Bulk insert opens a dedicated connection and does
-/// <b>not</b> join an ambient Inquiry transaction; interceptors and telemetry do not observe it.
+/// per row as the stream is enumerated. On native bulk-copy dialects, bulk insert opens a dedicated
+/// connection that interceptors and telemetry do not observe; calls inside an ambient Inquiry
+/// transaction are rejected because that connection could not participate in rollback. Use
+/// <see cref="InquiryInsertAllAttribute"/> for transaction-bound rows. The SQLite and Oracle fallback
+/// uses the normal batch pipeline, so it participates in ambient transactions and is observed by
+/// interceptors and telemetry.
 /// On MySQL, <c>MySqlBulkCopy</c> requires <c>local_infile=1</c> on the server; the client-side
 /// <c>AllowLoadLocalInfile</c> flag is enabled automatically on the dedicated bulk-insert
 /// connection only (never on regular pipeline connections).

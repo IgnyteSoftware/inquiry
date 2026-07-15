@@ -1,3 +1,4 @@
+using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
@@ -42,6 +43,7 @@ internal static class ProjectionProcessor
 
         return new ProjectionData(
             FullyQualifiedName: symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            HintName: GeneratorHelpers.GetHintName(symbol, "InquiryProjection"),
             Name: symbol.Name,
             Namespace: symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToDisplayString(),
             EntityFullyQualifiedName: entityFqn,
@@ -54,7 +56,7 @@ internal static class ProjectionProcessor
             Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()));
     }
 
-    public static EntityRegistration EmitMaterializer(SourceProductionContext context, ProjectionData projection)
+    public static EntityRegistration EmitMaterializer(SourceProductionContext context, ProjectionData projection, SqlBuilder sqlBuilder)
     {
         var projectionType = projection.FullyQualifiedName;
 
@@ -65,9 +67,11 @@ internal static class ProjectionProcessor
 
         source.AppendLine($"internal sealed class {projection.ClassMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{projectionType}>");
         source.AppendLine("{");
+        source.AppendLine("    public bool IsInquirySequentialAccessSafe => true;");
+        source.AppendLine();
         source.AppendLine($"    public {projectionType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, projection.Columns, projectionType, indent: "        ");
+        MaterializerEmitter.EmitMaterializeBody(source, projection.Columns, projectionType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
         source.AppendLine();
@@ -76,13 +80,13 @@ internal static class ProjectionProcessor
         source.AppendLine("{");
         source.AppendLine($"    public {projectionType} Materialize(global::System.Data.Common.DbDataReader reader)");
         source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, projection.Columns, projectionType, indent: "        ");
+        MaterializerEmitter.EmitMaterializeBody(source, projection.Columns, projectionType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
 
         GeneratorHelpers.AppendNamespaceEnd(source, projection.Namespace);
 
-        context.AddSource($"{projection.Name}.InquiryProjection.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        context.AddSource(projection.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
         return new EntityRegistration(projectionType, projection.ClassMaterializerFullName);
     }
 

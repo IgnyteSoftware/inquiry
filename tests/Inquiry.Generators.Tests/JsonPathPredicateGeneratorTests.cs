@@ -114,7 +114,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetCatalogStore(result);
 
-        Assert.Contains("WHERE JSON_VALUE(Data, '$.status') = :status", text);
+        Assert.Contains("WHERE JSON_VALUE(Data, '$.status') = :iq1$status$25a16d83a85059", text);
     }
 
     [Theory]

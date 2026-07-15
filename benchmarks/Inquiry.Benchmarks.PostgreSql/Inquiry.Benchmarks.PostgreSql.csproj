@@ -1,7 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <BenchmarkEvidenceProvider>postgresql</BenchmarkEvidenceProvider>
+    <BenchmarkEvidenceLane>DeveloperProject</BenchmarkEvidenceLane>
+    <BenchmarkEvidenceProviderAssembly>Inquiry.PostgreSql</BenchmarkEvidenceProviderAssembly>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- BenchmarkDotNet requires Release-mode binaries. The csproj defaults stay in Debug; -->
@@ -12,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
@@ -25,6 +30,7 @@
 
   <ItemGroup>
     <!-- INQ014: exactly ONE dialect runtime per compilation. -->
+    <ProjectReference Include="..\Inquiry.Benchmarks.Contracts\Inquiry.Benchmarks.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
   </ItemGroup>
@@ -36,4 +42,6 @@
     <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
   </ItemGroup>
+
+  <Import Project="..\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />
 </Project>

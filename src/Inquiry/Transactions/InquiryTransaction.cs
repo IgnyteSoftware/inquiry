@@ -15,9 +15,11 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     private readonly TransactedInquiryRequestPipeline _pipeline;
     private readonly Action _onDetach;
     private readonly Action _onClose;
-    private bool _closed;
-    private bool _committed;
-    private bool _disposed;
+    private readonly object _lifecycleLock = new();
+    private static readonly TimeSpan CleanupTimeout = TimeSpan.FromSeconds(5);
+    private int _closed;
+    private Task? _terminalTask;
+    private Task? _disposeTask;
 
     internal InquiryTransaction(
         DbConnection connection,
@@ -61,9 +63,8 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     /// <inheritdoc />
     public override void ThrowIfClosed()
     {
-        // _closed is set on the first of Commit/Rollback/Dispose; _disposed is set by
-        // DisposeAsync. The union covers every terminal state of this transaction handle.
-        if (_closed || _disposed)
+        // _closed is atomically set when a commit, rollback, or disposal wins terminal ownership.
+        if (System.Threading.Volatile.Read(ref _closed) != 0)
         {
             throw new ObjectDisposedException(
                 nameof(InquiryTransaction),
@@ -75,89 +76,241 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     /// <inheritdoc />
     public override Task CommitAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfClosed();
-        var lease = _pipeline.EnterExclusiveOperation();
-        _onDetach();
-        return CommitCoreAsync(lease, cancellationToken);
+        lock (_lifecycleLock)
+        {
+            ThrowIfClosed();
+            var lease = _pipeline.EnterTerminalOperation(); // fail-fast while busy, without poisoning the handle
+            _onDetach();
+            Close();
+            return _terminalTask = CompleteTerminalAsync(lease, commit: true, cancellationToken);
+        }
     }
 
     /// <inheritdoc />
     public override Task RollbackAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfClosed();
-        var lease = _pipeline.EnterExclusiveOperation();
-        _onDetach();
-        return RollbackCoreAsync(lease, cancellationToken);
+        lock (_lifecycleLock)
+        {
+            ThrowIfClosed();
+            var lease = _pipeline.EnterTerminalOperation();
+            _onDetach();
+            Close();
+            return _terminalTask = CompleteTerminalAsync(lease, commit: false, cancellationToken);
+        }
     }
 
     /// <inheritdoc />
     public override ValueTask DisposeAsync()
     {
-        if (_disposed)
+        lock (_lifecycleLock)
         {
-            return default;
+            if (_disposeTask is not null) return new ValueTask(_disposeTask);
+
+            if (_terminalTask is null)
+            {
+                var lease = _pipeline.EnterTerminalOperation(); // busy disposal is rejected and retryable
+                _onDetach();
+                Close();
+                _terminalTask = CompleteDisposalAsync(lease);
+                _disposeTask = _terminalTask;
+                return new ValueTask(_disposeTask);
+            }
+
+            // A successful terminal operation defines the database outcome; only DisposeAsync owns
+            // ordinary resource cleanup. A failed terminal operation already performed its bounded
+            // rollback/cleanup and owns that aggregate failure, so disposal only observes it.
+            _disposeTask = DisposeAfterTerminalAsync(_terminalTask);
+            return new ValueTask(_disposeTask);
         }
-
-        _disposed = true;
-        _onDetach();
-        Close();
-
-        return DisposeCoreAsync();
     }
 
-    private async Task CommitCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease, CancellationToken cancellationToken)
+    private async Task CompleteTerminalAsync(
+        TransactedInquiryRequestPipeline.InFlightLease lease,
+        bool commit,
+        CancellationToken cancellationToken)
     {
         using (lease)
         {
             try
             {
-                await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-                _committed = true;
+                if (commit)
+                {
+                    await _transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
-            finally
+            catch (Exception primaryFailure)
             {
-                // Whether the underlying CommitAsync succeeded or threw, this handle is now finished:
-                // the captured slot must be closed (so straggler ambient store calls fail fast), and
-                // _closed must be set (so direct tx.X(...) calls trip ThrowIfClosed instead of
-                // silently operating on a corrupted transaction). If commit threw, _committed stays
-                // false and DisposeAsync will attempt a best-effort Rollback (already try/catch-wrapped).
-                Close();
+                var failures = new List<Exception> { primaryFailure };
+                await RollbackAndCleanupBoundedAsync(failures).ConfigureAwait(false);
+                ThrowFailures(failures, "The transaction terminal operation failed and provider cleanup also reported errors.");
             }
         }
     }
 
-    private async Task RollbackCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease, CancellationToken cancellationToken)
+    private async Task CompleteDisposalAsync(TransactedInquiryRequestPipeline.InFlightLease lease)
     {
         using (lease)
         {
-            try
-            {
-                await _transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                // Same as CommitAsync: even if the underlying RollbackAsync threw, the handle is done.
-                Close();
-            }
+            var failures = new List<Exception>();
+            await RollbackAndCleanupBoundedAsync(failures).ConfigureAwait(false);
+            ThrowFailures(failures, "Transaction disposal could not complete rollback and provider cleanup.");
         }
     }
 
-    private async ValueTask DisposeCoreAsync()
+    private async Task DisposeAfterTerminalAsync(Task terminalTask)
     {
-        if (!_committed)
+        try
         {
-            try
-            {
-                await _transaction.RollbackAsync().ConfigureAwait(false);
-            }
-            catch
-            {
-                // Rollback on dispose is best-effort; swallow to avoid masking real exceptions.
-            }
+            await terminalTask.ConfigureAwait(false);
+        }
+        catch
+        {
+            // The CommitAsync/RollbackAsync caller owns the primary failure and its cleanup
+            // aggregate. Re-observing it from await using would mask that original call site.
+            return;
         }
 
-        await _transaction.DisposeAsync().ConfigureAwait(false);
-        await _connection.DisposeAsync().ConfigureAwait(false);
+        var failures = new List<Exception>();
+        await DisposeProviderResourcesBoundedAsync(failures).ConfigureAwait(false);
+        ThrowFailures(failures, "The database transaction completed successfully, but provider resource cleanup failed.");
+    }
+
+    private async Task RollbackAndCleanupBoundedAsync(List<Exception> failures)
+    {
+        Task rollbackTask;
+        try
+        {
+            rollbackTask = _transaction.RollbackAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+            await DisposeProviderResourcesBoundedAsync(failures).ConfigureAwait(false);
+            return;
+        }
+
+        try
+        {
+            await rollbackTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            failures.Add(new TimeoutException(
+                $"Provider rollback did not complete within {CleanupTimeout.TotalSeconds:0} seconds; cleanup will continue sequentially in the background."));
+            _ = ContinueCleanupAfterRollbackAsync(rollbackTask);
+            return;
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+        }
+
+        await DisposeProviderResourcesBoundedAsync(failures).ConfigureAwait(false);
+    }
+
+    private async Task DisposeProviderResourcesBoundedAsync(List<Exception> failures)
+    {
+        Task transactionDisposeTask;
+        try
+        {
+            transactionDisposeTask = _transaction.DisposeAsync().AsTask();
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+            await DisposeConnectionBoundedAsync(failures).ConfigureAwait(false);
+            return;
+        }
+
+        try
+        {
+            await transactionDisposeTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            failures.Add(new TimeoutException(
+                $"Provider transaction disposal did not complete within {CleanupTimeout.TotalSeconds:0} seconds; connection cleanup will continue sequentially in the background."));
+            _ = ContinueConnectionCleanupAsync(transactionDisposeTask);
+            return;
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+        }
+
+        await DisposeConnectionBoundedAsync(failures).ConfigureAwait(false);
+    }
+
+    private async Task DisposeConnectionBoundedAsync(List<Exception> failures)
+    {
+        Task connectionDisposeTask;
+        try
+        {
+            connectionDisposeTask = _connection.DisposeAsync().AsTask();
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+            return;
+        }
+
+        try
+        {
+            await connectionDisposeTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            failures.Add(new TimeoutException(
+                $"Provider connection disposal did not complete within {CleanupTimeout.TotalSeconds:0} seconds; it will continue in the background."));
+            _ = ObserveBackgroundAsync(connectionDisposeTask);
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+        }
+    }
+
+    private async Task ContinueCleanupAfterRollbackAsync(Task rollbackTask)
+    {
+        try { await rollbackTask.ConfigureAwait(false); }
+        catch { }
+        await DisposeProviderResourcesUnboundedObservedAsync().ConfigureAwait(false);
+    }
+
+    private async Task ContinueConnectionCleanupAsync(Task transactionDisposeTask)
+    {
+        try { await transactionDisposeTask.ConfigureAwait(false); }
+        catch { }
+        try { await _connection.DisposeAsync().ConfigureAwait(false); }
+        catch { }
+    }
+
+    private async Task DisposeProviderResourcesUnboundedObservedAsync()
+    {
+        try { await _transaction.DisposeAsync().ConfigureAwait(false); }
+        catch { }
+        try { await _connection.DisposeAsync().ConfigureAwait(false); }
+        catch { }
+    }
+
+    private static async Task ObserveBackgroundAsync(Task task)
+    {
+        try { await task.ConfigureAwait(false); }
+        catch { }
+    }
+
+    private static void ThrowFailures(List<Exception> failures, string aggregateMessage)
+    {
+        if (failures.Count == 0) return;
+        if (failures.Count == 1)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+        }
+        throw new AggregateException(aggregateMessage, failures);
     }
 
     /// <summary>
@@ -167,8 +320,7 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     /// </summary>
     private void Close()
     {
-        if (_closed) return;
-        _closed = true;
+        if (System.Threading.Interlocked.Exchange(ref _closed, 1) != 0) return;
         _pipeline.MarkClosed();
         _onClose();
     }

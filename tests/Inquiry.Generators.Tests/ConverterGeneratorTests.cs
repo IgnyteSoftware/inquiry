@@ -79,6 +79,89 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("is null ? global::System.DBNull.Value", text);
     }
 
+    [Theory]
+    [InlineData("SqlServer", "global::System.Data.DbType.DateTime2", "global::System.Data.DbType.Guid")]
+    [InlineData("Oracle", "global::System.Data.DbType.DateTime", "global::System.Data.DbType.Binary")]
+    public void ConverterMetadataUsesFullProviderType(string dialect, string dateTimeDbType, string guidDbType)
+    {
+        const string source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            public readonly struct Token { }
+            public sealed class GuidConverter : IInquiryValueConverter<Token, Guid> { public Guid ToProvider(Token value) => default; public Token FromProvider(Guid value) => default; }
+            public sealed class BinaryConverter : IInquiryValueConverter<Token, byte[]> { public byte[] ToProvider(Token value) => Array.Empty<byte>(); public Token FromProvider(byte[] value) => default; }
+            public sealed class OffsetConverter : IInquiryValueConverter<Token, DateTimeOffset> { public DateTimeOffset ToProvider(Token value) => default; public Token FromProvider(DateTimeOffset value) => default; }
+            public sealed class DateConverter : IInquiryValueConverter<Token, DateTime> { public DateTime ToProvider(Token value) => default; public Token FromProvider(DateTime value) => default; }
+            [InquiryTable("Converted")]
+            public sealed class Converted
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(GuidConverter))] public Token GuidValue { get; set; }
+                [InquiryColumn(Converter = typeof(BinaryConverter))] public Token BinaryValue { get; set; }
+                [InquiryColumn(Converter = typeof(OffsetConverter))] public Token OffsetValue { get; set; }
+                [InquiryColumn(Converter = typeof(DateConverter))] public Token DateValue { get; set; }
+            }
+            public partial class ConvertedStore : InquiryStore<Converted>
+            {
+                [InquiryInsert] public partial Task<int> InsertAsync(Converted value, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: dialect);
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("ConvertedStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains(guidDbType, text);
+        if (dialect == "Oracle") Assert.DoesNotContain("global::System.Data.DbType.Guid", text);
+        Assert.Contains("global::System.Data.DbType.Binary", text);
+        Assert.Contains("global::System.Data.DbType.DateTimeOffset", text);
+        Assert.Contains(dateTimeDbType, text);
+    }
+
+    [Fact]
+    public void NonUnicodeConverterStringProviderBindsAnsiString()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            public readonly struct Code { }
+            public sealed class CodeConverter : IInquiryValueConverter<Code, string>
+            {
+                public string ToProvider(Code value) => string.Empty;
+                public Code FromProvider(string value) => default;
+            }
+            [InquiryTable("ConvertedCode")]
+            public sealed class ConvertedCode
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(IsUnicode = false, Converter = typeof(CodeConverter))] public Code Value { get; set; }
+            }
+            public partial class ConvertedCodeStore : InquiryStore<ConvertedCode>
+            {
+                [InquirySelectAllByField("Value")] public partial Task<IReadOnlyList<ConvertedCode>> SelectAsync(Code value, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("ConvertedCodeStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+        Assert.Contains("DbType.AnsiString", text);
+        Assert.DoesNotContain("DbType.String;", text);
+    }
+
     [Fact]
     public void ConverterColumnDdlUsesProviderType()
     {
@@ -231,6 +314,171 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ037");
+    }
+
+    [Fact]
+    public void ConverterWithUnsupportedProviderTypeReportsINQ038()
+    {
+        const string source = """
+            using Inquiry.Entities;
+            namespace Demo;
+            public sealed class Model { }
+            public sealed class Provider { }
+            public sealed class BadConverter : IInquiryValueConverter<Model, Provider>
+            {
+                public Provider ToProvider(Model model) => new();
+                public Model FromProvider(Provider provider) => new();
+            }
+            [InquiryTable("Bad")]
+            public sealed class Bad
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(BadConverter))] public Model Value { get; set; } = new();
+            }
+            """;
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ038");
+    }
+
+    [Fact]
+    public void NullableAndUnsupportedProviderTypesReportOneINQ038AndAreDiscarded()
+    {
+        const string source = """
+            #nullable enable
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+
+            public readonly record struct Token(int Value);
+            public sealed class Provider { }
+            public sealed class NullableGuidConverter : IInquiryValueConverter<Token, Guid?>
+            { public Guid? ToProvider(Token value) => null; public Token FromProvider(Guid? value) => default; }
+            public sealed class NullableBoolConverter : IInquiryValueConverter<Token, bool?>
+            { public bool? ToProvider(Token value) => null; public Token FromProvider(bool? value) => default; }
+            public sealed class NullableStringConverter : IInquiryValueConverter<Token, string?>
+            { public string? ToProvider(Token value) => null; public Token FromProvider(string? value) => default; }
+            public sealed class UnsupportedConverter : IInquiryValueConverter<Token, Provider>
+            { public Provider ToProvider(Token value) => new(); public Token FromProvider(Provider value) => default; }
+
+            [InquiryTable("BadProviders")]
+            public sealed class BadProviders
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(NullableGuidConverter))] public Token GuidValue { get; set; }
+                [InquiryColumn(Converter = typeof(NullableBoolConverter))] public Token BoolValue { get; set; }
+                [InquiryColumn(Converter = typeof(NullableStringConverter))] public Token StringValue { get; set; }
+                [InquiryColumn(Converter = typeof(UnsupportedConverter))] public Token CustomValue { get; set; }
+            }
+            public partial class BadProvidersStore : InquiryStore<BadProviders>
+            {
+                [InquiryInsert] public partial Task<int> InsertAsync(BadProviders value, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        var activeResult = Assert.Single(result.RunResult.Results, static generator => generator.GeneratedSources.Length > 0);
+        var diagnostics = activeResult.Diagnostics.Where(static d => d.Id == "INQ038").ToArray();
+        Assert.Equal(4, diagnostics.Length);
+        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("Guid?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("bool?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("string?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("Provider", StringComparison.Ordinal));
+
+        var generated = string.Join("\n", result.RunResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+        Assert.DoesNotContain("NullableGuidConverter", generated);
+        Assert.DoesNotContain("NullableBoolConverter", generated);
+        Assert.DoesNotContain("NullableStringConverter", generated);
+        Assert.DoesNotContain("UnsupportedConverter", generated);
+        Assert.DoesNotContain(result.Compilation.GetDiagnostics(),
+            static d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error && d.Id.StartsWith("CS", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NullableModelsWithNonNullableProvidersGuardConversionExactlyOnce()
+    {
+        const string source = """
+            #nullable enable
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            public readonly record struct Amount(decimal Value);
+            public sealed class Label { public string Value { get; set; } = string.Empty; }
+            public sealed class AmountConverter : IInquiryValueConverter<Amount, decimal>
+            { public decimal ToProvider(Amount value) => value.Value; public Amount FromProvider(decimal value) => new(value); }
+            public sealed class LabelConverter : IInquiryValueConverter<Label, string>
+            { public string ToProvider(Label value) => value.Value; public Label FromProvider(string value) => new() { Value = value }; }
+            [InquiryTable("NullableModels")]
+            public sealed class NullableModels
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(AmountConverter))] public Amount? Amount { get; set; }
+                [InquiryColumn(Converter = typeof(LabelConverter))] public Label? Label { get; set; }
+            }
+            public partial class NullableModelsStore : InquiryStore<NullableModels>
+            {
+                [InquiryInsert] public partial Task<int> InsertAsync(NullableModels value, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var entity = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("NullableModels.InquiryEntity.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        var store = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("NullableModelsStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Contains("reader.IsDBNull(1) ? (global::Demo.Amount?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.AmountConverter>.Instance.FromProvider(reader.GetDecimal(1))", entity);
+        Assert.Contains("reader.IsDBNull(2) ? null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.LabelConverter>.Instance.FromProvider(reader.GetString(2))", entity);
+        Assert.Contains("_e.Amount is null ? global::System.DBNull.Value", store);
+        Assert.Contains("_e.Label is null ? global::System.DBNull.Value", store);
+        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(store, "AmountConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(store, "LabelConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
+    }
+
+    [Fact]
+    public void GuidProviderConverterInUsesGuidJsonTableType()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            public readonly struct ExternalId { public ExternalId(Guid value) => Value = value; public Guid Value { get; } }
+            public sealed class ExternalIdConverter : IInquiryValueConverter<ExternalId, Guid>
+            {
+                public Guid ToProvider(ExternalId model) => model.Value;
+                public ExternalId FromProvider(Guid provider) => new ExternalId(provider);
+            }
+            [InquiryTable("Thing")]
+            public sealed class Thing
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Converter = typeof(ExternalIdConverter))] public ExternalId ExternalId { get; set; }
+            }
+            public partial class ThingStore : InquiryStore<Thing>
+            {
+                [InquirySelectAllByPredicate]
+                [InquiryWhere("ExternalId", Compare.In)]
+                public partial Task<IReadOnlyList<Thing>> ByIds(IReadOnlyList<ExternalId> ids, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "MySql");
+        AssertNoErrors(result);
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        Assert.Contains("COLUMNS(val CHAR(36) PATH '$')", text);
+        Assert.Contains("ExternalIdConverter>.Instance.ToProvider(_e)", text);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ038");
     }
 
     private const string ConverterInSource = """

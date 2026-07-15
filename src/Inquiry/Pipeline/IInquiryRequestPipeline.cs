@@ -154,10 +154,59 @@ internal interface IInquiryRequestPipeline
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
 
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryListAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken, capacityHint);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QuerySingleOrDefaultAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T?> QueryGeneratedSingleOrDefaultAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QuerySingleOrDefaultAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => QueryMultipleAsync(command.ToInquiryCommand(), cancellationToken);
+
     /// <summary>Executes a non-query command and returns the affected row count.</summary>
     Task<int> ExecuteAsync(
         InquiryCommand command,
         CancellationToken cancellationToken = default);
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<int> ExecuteAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ExecuteAsync(command.ToInquiryCommand(), cancellationToken);
 
     /// <summary>
     /// Executes a non-query command with parameters bound by a caller-supplied static delegate.
@@ -193,8 +242,7 @@ internal interface IInquiryRequestPipeline
     /// The default implementation loops over the existing
     /// <c>ExecuteAsync&lt;TArgs&gt;(string, TArgs, Action&lt;DbCommand, TArgs&gt;, …)</c> per item, so
     /// custom <c>IInquiryRequestPipeline</c> implementations stay source-compatible. The built-in
-    /// pipelines override this with a fast path that executes all items in a single
-    /// <see cref="DbBatch"/> round trip when the provider and connection factory support it.
+    /// pipelines override this with a bounded, atomic provider-selected fast path.
     /// </remarks>
     async Task<int> ExecuteBatchAsync<TItem>(
         string commandText,
@@ -219,6 +267,35 @@ internal interface IInquiryRequestPipeline
         return total;
     }
 
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    async Task<int> ExecuteBatchAsync<TItem>(
+        InquiryBatchCommand<TItem> command,
+        IEnumerable<TItem> items,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        if (items is null) throw new ArgumentNullException(nameof(items));
+
+        var total = 0;
+        using var chunks = new InquiryBatchChunkReader<TItem>(items,
+            command.GetEffectiveChunkSize(InquiryOptions.DefaultMaxBatchSize, InquiryOptions.DefaultMaxParametersPerCommand), cancellationToken);
+        while (chunks.MoveNext(out var chunk))
+        {
+            if (command.BindItem is null || command.ShouldUseChunk(
+                    chunk, InquiryOptions.DefaultMaxParametersPerCommand))
+            {
+                total += await ExecuteAsync(command.ForChunk(chunk), cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                for (var i = 0; i < chunk.Count; i++)
+                    total += await ExecuteAsync(command.ForItem(chunk[i]), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return total;
+    }
+
     /// <summary>Executes a command returning a single scalar value (e.g. COUNT/SUM/MIN/MAX).</summary>
     /// <remarks>A default-interface-method (throwing) so custom pipelines stay source-compatible; the
     /// built-in pipelines provide the real implementation.</remarks>
@@ -226,6 +303,12 @@ internal interface IInquiryRequestPipeline
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Scalar execution is implemented by the built-in Inquiry pipeline.");
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ExecuteScalarAsync<T>(command.ToInquiryCommand(), cancellationToken);
 
     /// <summary>
     /// Executes a command (typically a stored procedure) and returns the post-execution value of a
@@ -240,6 +323,13 @@ internal interface IInquiryRequestPipeline
         string readBackParameterName,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Stored-procedure output execution is implemented by the built-in Inquiry pipeline.");
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+        => ExecuteProcedureScalarAsync<T>(command.ToInquiryCommand(), readBackParameterName, cancellationToken);
 
     /// <summary>
     /// Scalar query with parameters bound by a caller-supplied static delegate (allocation-free

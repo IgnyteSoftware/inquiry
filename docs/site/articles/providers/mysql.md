@@ -1,5 +1,8 @@
 # MySQL
 
+MySQL schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck]`, and named foreign-key
+actions except `SetDefault`. Covering `Include` columns are rejected instead of being appended to the key.
+
 Package: `Inquiry.MySql`. Built on `MySqlConnector`.
 
 > **MariaDB users:** use the dedicated [`Inquiry.MariaDb` package](mariadb.md) instead. The MariaDB
@@ -41,7 +44,7 @@ services.AddInquiryMySql("Server=localhost;Database=app;User=app;Password=…");
 
 ## Notes
 
-- **`AllowUserVariables` and ad-hoc SQL:** Inquiry enables `AllowUserVariables=true` on MySQL connections (required for generated-key upserts that use `@_inquiry_genkey`). A side effect is that a **misspelled `@param`** in hand-written ad-hoc SQL (the `IInquiry.Query*`/`Execute*` `FormattableString` overloads or an `InquiryCommand`) is silently treated as a **NULL MySQL user variable** instead of throwing a "parameter not found" error. Generated store methods are unaffected — their SQL and parameter names are compile-time constants. If you write ad-hoc SQL against MySQL, double-check your parameter names; a typo will produce `NULL` values with no error. See [Security](../security.md#mysql-user-variables-caveat).
+- **`AllowUserVariables` and ad-hoc SQL:** Inquiry enables `AllowUserVariables=true` on MySQL connections (required for the collision-safe `@'__inquiry.generated-key'` capture used by non-auto database-default insert-returning). A side effect is that a **misspelled `@param`** in hand-written ad-hoc SQL (the `IInquiry.Query*`/`Execute*` `FormattableString` overloads or an `InquiryCommand`) is silently treated as a **NULL MySQL user variable** instead of throwing a "parameter not found" error. Generated store methods are unaffected — their SQL and parameter names are compile-time constants. If you write ad-hoc SQL against MySQL, double-check your parameter names; a typo will produce `NULL` values with no error. See [Security](../security.md#mysql-user-variables-caveat).
 - **Connection pooling:** the factory builds an app-lifetime `MySqlDataSource` (MySqlConnector's
   recommended pooled primitive) and opens connections from it — the foundation for future Aspire
   integration. The data source is disposed when the DI container shuts down.

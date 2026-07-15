@@ -1,131 +1,291 @@
-using System.Collections.Concurrent;
+using Inquiry.Commands;
+using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient.Server;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Data.Common;
-using Microsoft.Data.SqlClient;
-using Microsoft.Data.SqlClient.Server;
+using System.Runtime.CompilerServices;
 
 namespace Inquiry.SqlServer.Parameters;
 
-/// <summary>
-/// Runtime helper for <c>Compare.In</c> predicates on SQL Server. Binds the collection as a
-/// table-valued parameter (TVP): the SQL stays <c>col IN (SELECT [Value] FROM @name)</c> for
-/// every list length — constant command text, prepared-statement reuse, no per-element parameter
-/// cap. The SQL Server counterpart of PostgreSQL's <c>= ANY(@array)</c> via
-/// <see cref="Inquiry.Parameters.InquiryArrayParameter"/>.
-/// </summary>
+/// <summary>Binds an exact, pre-provisioned SQL Server table-valued parameter without schema I/O.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class InquiryTvpParameter
 {
-    private static readonly ConcurrentDictionary<string, byte> EnsuredTypes = new();
+    /// <summary>Throws for a collection binding that cannot be represented as an exact SQL Server TVP.</summary>
+    public static void BindUnsupported<T>(DbCommand command, string parameterName, IEnumerable<T>? values)
+    {
+        _ = command ?? throw new ArgumentNullException(nameof(command));
+        _ = parameterName ?? throw new ArgumentNullException(nameof(parameterName));
+        _ = values;
+        throw new NotSupportedException($"No TVP type mapping for {typeof(T).FullName}.");
+    }
+
+    /// <summary>Compatibility wrapper. Generated stores use the exact descriptor overload.</summary>
+    public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values, string typeName)
+        => Bind(command, parameterName, values, typeName, CompatibilityDescriptor<T>.Value);
 
     /// <summary>
-    /// Binds <paramref name="values"/> as a table-valued parameter named
-    /// <paramref name="parameterName"/>. A null or empty collection binds an empty TVP, which
-    /// matches no rows under <c>IN (SELECT …)</c> — the same semantics as an empty IN list.
-    /// Enum elements are coerced to their underlying integral type (matching the scalar binder).
+    /// Binds one exact TVP descriptor. Nonempty sources are peeked once and then retained as a
+    /// single-pass sequence; custom pipelines must call <see cref="InquiryCommandResources.Dispose"/>
+    /// in a finally block when abandoning or completing the command.
     /// </summary>
-    public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values)
+    public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values, string typeName, InquiryTvpDescriptor descriptor)
     {
-        if (command is null) throw new System.ArgumentNullException(nameof(command));
-        if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
+        if (command is null) throw new ArgumentNullException(nameof(command));
+        if (parameterName is null) throw new ArgumentNullException(nameof(parameterName));
+        if (typeName is null) throw new ArgumentNullException(nameof(typeName));
+        if (descriptor is null) throw new ArgumentNullException(nameof(descriptor));
+        ValidateTypeName(typeName);
 
-        var elementType = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-        var storageType = elementType.IsEnum ? System.Enum.GetUnderlyingType(elementType) : elementType;
-        var (typeName, sqlDbType, metaData) = ResolveTypeInfo(storageType);
-
-        EnsureType(command.Connection!, typeName, storageType);
-
-        var records = new List<SqlDataRecord>();
-
+        TvpRecordEnumerable<T>? owner = null;
+        object? parameterValue = null;
         if (values is not null)
         {
-            foreach (var value in values)
+            IEnumerator<T>? enumerator = null;
+            try
             {
-                if (value is null) continue;
-
-                object boxed = value;
-                if (elementType.IsEnum)
+                enumerator = values.GetEnumerator();
+                if (enumerator.MoveNext())
                 {
-                    boxed = System.Convert.ChangeType(boxed, storageType, System.Globalization.CultureInfo.InvariantCulture);
+                    owner = new TvpRecordEnumerable<T>(enumerator, descriptor);
+                    enumerator = null;
+                    try
+                    {
+                        InquiryCommandResources.Register(command, owner);
+                    }
+                    catch (Exception primaryException)
+                    {
+                        List<Exception>? cleanupExceptions = null;
+                        try { owner.Dispose(); }
+                        catch (Exception cleanupException) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, cleanupException); }
+                        InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
+                        throw;
+                    }
+                    parameterValue = owner;
                 }
-
-                boxed = boxed switch
+            }
+            catch (Exception primaryException)
+            {
+                List<Exception>? cleanupExceptions = null;
+                if (enumerator is not null)
                 {
-                    sbyte v  => (object)unchecked((byte)v),
-                    ushort v => (object)unchecked((short)v),
-                    uint v   => (object)unchecked((int)v),
-                    ulong v  => (object)unchecked((long)v),
-                    _ => boxed,
-                };
-
-                var record = new SqlDataRecord(metaData);
-                record.SetValue(0, boxed);
-                records.Add(record);
+                    try { enumerator.Dispose(); }
+                    catch (Exception cleanupException) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, cleanupException); }
+                }
+                InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
+                throw;
+            }
+            if (enumerator is not null)
+            {
+                enumerator.Dispose();
             }
         }
 
-        var parameter = new SqlParameter
+        try
         {
-            ParameterName = parameterName,
-            SqlDbType = SqlDbType.Structured,
-            TypeName = typeName,
-            Value = records.Count > 0 ? records : null,
-        };
-
-        command.Parameters.Add(parameter);
+            command.Parameters.Add(new SqlParameter
+            {
+                ParameterName = parameterName,
+                SqlDbType = SqlDbType.Structured,
+                TypeName = typeName,
+                Value = parameterValue,
+            });
+        }
+        catch (Exception primaryException)
+        {
+            List<Exception>? cleanupExceptions = null;
+            if (owner is not null)
+            {
+                try { InquiryCommandResources.Unregister(command, owner); }
+                catch (Exception cleanupException) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, cleanupException); }
+                try { owner.Dispose(); }
+                catch (Exception cleanupException) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, cleanupException); }
+            }
+            InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
+            throw;
+        }
     }
 
-    private static (string TypeName, SqlDbType SqlDbType, SqlMetaData MetaData) ResolveTypeInfo(System.Type storageType)
+    private static void ValidateTypeName(string typeName)
     {
-        return System.Type.GetTypeCode(storageType) switch
-        {
-            System.TypeCode.Boolean => ("Inquiry_BitList", SqlDbType.Bit, new SqlMetaData("Value", SqlDbType.Bit)),
-            System.TypeCode.Byte    => ("Inquiry_TinyIntList", SqlDbType.TinyInt, new SqlMetaData("Value", SqlDbType.TinyInt)),
-            System.TypeCode.Int16   => ("Inquiry_SmallIntList", SqlDbType.SmallInt, new SqlMetaData("Value", SqlDbType.SmallInt)),
-            System.TypeCode.Int32   => ("Inquiry_IntList", SqlDbType.Int, new SqlMetaData("Value", SqlDbType.Int)),
-            System.TypeCode.Int64   => ("Inquiry_BigIntList", SqlDbType.BigInt, new SqlMetaData("Value", SqlDbType.BigInt)),
-            System.TypeCode.Single  => ("Inquiry_RealList", SqlDbType.Real, new SqlMetaData("Value", SqlDbType.Real)),
-            System.TypeCode.Double  => ("Inquiry_FloatList", SqlDbType.Float, new SqlMetaData("Value", SqlDbType.Float)),
-            System.TypeCode.Decimal => ("Inquiry_DecimalList", SqlDbType.Decimal, new SqlMetaData("Value", SqlDbType.Decimal, 18, 2)),
-            System.TypeCode.String  => ("Inquiry_NVarCharList", SqlDbType.NVarChar, new SqlMetaData("Value", SqlDbType.NVarChar, SqlMetaData.Max)),
-            _ when storageType == typeof(System.Guid) => ("Inquiry_UniqueIdentifierList", SqlDbType.UniqueIdentifier, new SqlMetaData("Value", SqlDbType.UniqueIdentifier)),
-            _ when storageType == typeof(System.DateTime) => ("Inquiry_DateTime2List", SqlDbType.DateTime2, new SqlMetaData("Value", SqlDbType.DateTime2)),
-            _ when storageType == typeof(System.DateTimeOffset) => ("Inquiry_DateTimeOffsetList", SqlDbType.DateTimeOffset, new SqlMetaData("Value", SqlDbType.DateTimeOffset)),
-            _ => throw new System.NotSupportedException($"No TVP type mapping for {storageType.FullName}."),
-        };
+        var index = 0;
+        if (!ConsumeBracketedIdentifier(typeName, ref index) || index >= typeName.Length || typeName[index++] != '.' ||
+            !ConsumeBracketedIdentifier(typeName, ref index) || index != typeName.Length)
+            throw new ArgumentException("TVP type name must be a generated [schema].[type] name.", nameof(typeName));
     }
 
-    private static string ResolveSqlType(System.Type storageType)
+    private static bool ConsumeBracketedIdentifier(string value, ref int index)
     {
-        return System.Type.GetTypeCode(storageType) switch
+        if (index >= value.Length || value[index++] != '[') return false;
+        var contentLength = 0;
+        while (index < value.Length)
         {
-            System.TypeCode.Boolean => "BIT",
-            System.TypeCode.Byte    => "TINYINT",
-            System.TypeCode.Int16   => "SMALLINT",
-            System.TypeCode.Int32   => "INT",
-            System.TypeCode.Int64   => "BIGINT",
-            System.TypeCode.Single  => "REAL",
-            System.TypeCode.Double  => "FLOAT",
-            System.TypeCode.Decimal => "DECIMAL(18,2)",
-            System.TypeCode.String  => "NVARCHAR(MAX)",
-            _ when storageType == typeof(System.Guid) => "UNIQUEIDENTIFIER",
-            _ when storageType == typeof(System.DateTime) => "DATETIME2",
-            _ when storageType == typeof(System.DateTimeOffset) => "DATETIMEOFFSET",
-            _ => throw new System.NotSupportedException($"No SQL type mapping for {storageType.FullName}."),
-        };
+            if (value[index] != ']') { index++; contentLength++; continue; }
+            if (index + 1 < value.Length && value[index + 1] == ']') { index += 2; contentLength++; continue; }
+            index++;
+            return contentLength is > 0 and <= 128;
+        }
+        return false;
     }
 
-    private static void EnsureType(DbConnection connection, string typeName, System.Type storageType)
+    private sealed class TvpRecordEnumerable<T> : IEnumerable<SqlDataRecord>, IEnumerator<SqlDataRecord>, IInquiryExecutionResource
     {
-        if (EnsuredTypes.ContainsKey(typeName)) return;
+        private delegate void ValueWriterDelegate(SqlDataRecord record, T value, InquiryTvpDescriptor descriptor, int index);
+        private static readonly ValueWriterDelegate ValueWriter = CreateValueWriter();
+        private IEnumerator<T>? _source;
+        private readonly InquiryTvpDescriptor _descriptor;
+        private SqlDataRecord? _current;
+        private bool _first = true;
+        private bool _enumerated;
+        private int _index = -1;
 
-        var sqlType = ResolveSqlType(storageType);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"IF TYPE_ID(N'{typeName}') IS NULL CREATE TYPE [{typeName}] AS TABLE ([Value] {sqlType});";
-        cmd.ExecuteNonQuery();
+        public TvpRecordEnumerable(IEnumerator<T> source, InquiryTvpDescriptor descriptor)
+        {
+            _source = source;
+            _descriptor = descriptor;
+        }
 
-        EnsuredTypes.TryAdd(typeName, 0);
+        public SqlDataRecord Current => _current ?? throw new InvalidOperationException();
+        object IEnumerator.Current => Current;
+
+        public IEnumerator<SqlDataRecord> GetEnumerator()
+        {
+            if (_enumerated) throw new InvalidOperationException("A TVP parameter source can only be enumerated once.");
+            _enumerated = true;
+            return this;
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public bool MoveNext()
+        {
+            var source = _source;
+            if (source is null) return false;
+            try
+            {
+                var hasValue = _first || source.MoveNext();
+                _first = false;
+                if (!hasValue) { Dispose(); return false; }
+                _index++;
+                var record = new SqlDataRecord(_descriptor.MetadataArray);
+                Write(record, source.Current, _descriptor, _index);
+                _current = record;
+                return true;
+            }
+            catch (Exception primaryException)
+            {
+                List<Exception>? cleanupExceptions = null;
+                try { Dispose(); }
+                catch (Exception cleanupException) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, cleanupException); }
+                InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
+                throw;
+            }
+        }
+
+        public void Reset() => throw new NotSupportedException("TVP sources are single-pass.");
+
+        public void Dispose()
+        {
+            var source = Interlocked.Exchange(ref _source, null);
+            source?.Dispose();
+            _current = null;
+        }
+
+        private static void Write(SqlDataRecord record, T value, InquiryTvpDescriptor descriptor, int index)
+            => ValueWriter(record, value, descriptor, index);
+
+        private static ValueWriterDelegate CreateValueWriter()
+        {
+            if (typeof(T) == typeof(bool)) return static (r, v, _, _) => r.SetBoolean(0, Unsafe.As<T, bool>(ref v));
+            if (typeof(T) == typeof(byte)) return static (r, v, _, _) => r.SetByte(0, Unsafe.As<T, byte>(ref v));
+            if (typeof(T) == typeof(sbyte)) return static (r, v, _, _) => r.SetByte(0, unchecked((byte)Unsafe.As<T, sbyte>(ref v)));
+            if (typeof(T) == typeof(short)) return static (r, v, _, _) => r.SetInt16(0, Unsafe.As<T, short>(ref v));
+            if (typeof(T) == typeof(ushort)) return static (r, v, _, _) => r.SetInt16(0, unchecked((short)Unsafe.As<T, ushort>(ref v)));
+            if (typeof(T) == typeof(int)) return static (r, v, _, _) => r.SetInt32(0, Unsafe.As<T, int>(ref v));
+            if (typeof(T) == typeof(uint)) return static (r, v, _, _) => r.SetInt32(0, unchecked((int)Unsafe.As<T, uint>(ref v)));
+            if (typeof(T) == typeof(long)) return static (r, v, _, _) => r.SetInt64(0, Unsafe.As<T, long>(ref v));
+            if (typeof(T) == typeof(ulong)) return static (r, v, _, _) => r.SetInt64(0, unchecked((long)Unsafe.As<T, ulong>(ref v)));
+            if (typeof(T) == typeof(float)) return static (r, v, _, _) => r.SetFloat(0, Unsafe.As<T, float>(ref v));
+            if (typeof(T) == typeof(double)) return static (r, v, _, _) => r.SetDouble(0, Unsafe.As<T, double>(ref v));
+            if (typeof(T) == typeof(decimal)) return static (r, v, _, _) => r.SetDecimal(0, Unsafe.As<T, decimal>(ref v));
+            if (typeof(T) == typeof(Guid)) return static (r, v, _, _) => r.SetGuid(0, Unsafe.As<T, Guid>(ref v));
+            if (typeof(T) == typeof(DateTime)) return static (r, v, _, _) => r.SetDateTime(0, Unsafe.As<T, DateTime>(ref v));
+            if (typeof(T) == typeof(DateTimeOffset)) return static (r, v, _, _) => r.SetDateTimeOffset(0, Unsafe.As<T, DateTimeOffset>(ref v));
+            if (typeof(T) == typeof(DateOnly)) return static (r, v, _, _) => r.SetDateTime(0, Unsafe.As<T, DateOnly>(ref v).ToDateTime(TimeOnly.MinValue));
+            if (typeof(T) == typeof(TimeOnly)) return static (r, v, _, _) => r.SetTimeSpan(0, Unsafe.As<T, TimeOnly>(ref v).ToTimeSpan());
+            if (typeof(T) == typeof(char)) return static (r, v, _, _) => r.SetString(0, Unsafe.As<T, char>(ref v).ToString());
+
+            if (typeof(T) == typeof(bool?)) return static (r, v, d, i) => { var n = Unsafe.As<T, bool?>(ref v); if (n.HasValue) r.SetBoolean(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(byte?)) return static (r, v, d, i) => { var n = Unsafe.As<T, byte?>(ref v); if (n.HasValue) r.SetByte(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(sbyte?)) return static (r, v, d, i) => { var n = Unsafe.As<T, sbyte?>(ref v); if (n.HasValue) r.SetByte(0, unchecked((byte)n.GetValueOrDefault())); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(short?)) return static (r, v, d, i) => { var n = Unsafe.As<T, short?>(ref v); if (n.HasValue) r.SetInt16(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(ushort?)) return static (r, v, d, i) => { var n = Unsafe.As<T, ushort?>(ref v); if (n.HasValue) r.SetInt16(0, unchecked((short)n.GetValueOrDefault())); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(int?)) return static (r, v, d, i) => { var n = Unsafe.As<T, int?>(ref v); if (n.HasValue) r.SetInt32(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(uint?)) return static (r, v, d, i) => { var n = Unsafe.As<T, uint?>(ref v); if (n.HasValue) r.SetInt32(0, unchecked((int)n.GetValueOrDefault())); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(long?)) return static (r, v, d, i) => { var n = Unsafe.As<T, long?>(ref v); if (n.HasValue) r.SetInt64(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(ulong?)) return static (r, v, d, i) => { var n = Unsafe.As<T, ulong?>(ref v); if (n.HasValue) r.SetInt64(0, unchecked((long)n.GetValueOrDefault())); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(float?)) return static (r, v, d, i) => { var n = Unsafe.As<T, float?>(ref v); if (n.HasValue) r.SetFloat(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(double?)) return static (r, v, d, i) => { var n = Unsafe.As<T, double?>(ref v); if (n.HasValue) r.SetDouble(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(decimal?)) return static (r, v, d, i) => { var n = Unsafe.As<T, decimal?>(ref v); if (n.HasValue) r.SetDecimal(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(Guid?)) return static (r, v, d, i) => { var n = Unsafe.As<T, Guid?>(ref v); if (n.HasValue) r.SetGuid(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(DateTime?)) return static (r, v, d, i) => { var n = Unsafe.As<T, DateTime?>(ref v); if (n.HasValue) r.SetDateTime(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(DateTimeOffset?)) return static (r, v, d, i) => { var n = Unsafe.As<T, DateTimeOffset?>(ref v); if (n.HasValue) r.SetDateTimeOffset(0, n.GetValueOrDefault()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(DateOnly?)) return static (r, v, d, i) => { var n = Unsafe.As<T, DateOnly?>(ref v); if (n.HasValue) r.SetDateTime(0, n.GetValueOrDefault().ToDateTime(TimeOnly.MinValue)); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(TimeOnly?)) return static (r, v, d, i) => { var n = Unsafe.As<T, TimeOnly?>(ref v); if (n.HasValue) r.SetTimeSpan(0, n.GetValueOrDefault().ToTimeSpan()); else SetNull(r, d, i); };
+            if (typeof(T) == typeof(char?)) return static (r, v, d, i) => { var n = Unsafe.As<T, char?>(ref v); if (n.HasValue) r.SetString(0, n.GetValueOrDefault().ToString()); else SetNull(r, d, i); };
+
+            if (typeof(T) == typeof(string)) return static (r, v, d, i) => { var value = Unsafe.As<T, string?>(ref v); if (value is null) SetNull(r, d, i); else r.SetString(0, value); };
+            if (typeof(T) == typeof(byte[])) return static (r, v, d, i) =>
+            {
+                var bytes = Unsafe.As<T, byte[]?>(ref v);
+                if (bytes is null) SetNull(r, d, i);
+                else r.SetBytes(0, 0, bytes, 0, bytes.Length);
+            };
+
+            var nullableType = Nullable.GetUnderlyingType(typeof(T));
+            if (nullableType?.IsEnum == true) return CreateNullableEnumWriter(Enum.GetUnderlyingType(nullableType));
+            if (typeof(T).IsEnum) return CreateEnumWriter(Enum.GetUnderlyingType(typeof(T)));
+            throw new NotSupportedException($"No TVP value writer for {typeof(T).FullName}.");
+        }
+
+        private static ValueWriterDelegate CreateEnumWriter(Type underlying) => Type.GetTypeCode(underlying) switch
+        {
+            TypeCode.SByte => static (r, v, _, _) => r.SetByte(0, unchecked((byte)Unsafe.As<T, sbyte>(ref v))),
+            TypeCode.Byte => static (r, v, _, _) => r.SetByte(0, Unsafe.As<T, byte>(ref v)),
+            TypeCode.Int16 => static (r, v, _, _) => r.SetInt16(0, Unsafe.As<T, short>(ref v)),
+            TypeCode.UInt16 => static (r, v, _, _) => r.SetInt16(0, unchecked((short)Unsafe.As<T, ushort>(ref v))),
+            TypeCode.Int32 => static (r, v, _, _) => r.SetInt32(0, Unsafe.As<T, int>(ref v)),
+            TypeCode.UInt32 => static (r, v, _, _) => r.SetInt32(0, unchecked((int)Unsafe.As<T, uint>(ref v))),
+            TypeCode.Int64 => static (r, v, _, _) => r.SetInt64(0, Unsafe.As<T, long>(ref v)),
+            TypeCode.UInt64 => static (r, v, _, _) => r.SetInt64(0, unchecked((long)Unsafe.As<T, ulong>(ref v))),
+            _ => throw new NotSupportedException($"No TVP enum writer for {typeof(T).FullName}."),
+        };
+
+        private static ValueWriterDelegate CreateNullableEnumWriter(Type underlying) => Type.GetTypeCode(underlying) switch
+        {
+            TypeCode.SByte => static (r, v, d, i) => { var n = Unsafe.As<T, sbyte?>(ref v); if (n.HasValue) r.SetByte(0, unchecked((byte)n.GetValueOrDefault())); else SetNull(r, d, i); },
+            TypeCode.Byte => static (r, v, d, i) => { var n = Unsafe.As<T, byte?>(ref v); if (n.HasValue) r.SetByte(0, n.GetValueOrDefault()); else SetNull(r, d, i); },
+            TypeCode.Int16 => static (r, v, d, i) => { var n = Unsafe.As<T, short?>(ref v); if (n.HasValue) r.SetInt16(0, n.GetValueOrDefault()); else SetNull(r, d, i); },
+            TypeCode.UInt16 => static (r, v, d, i) => { var n = Unsafe.As<T, ushort?>(ref v); if (n.HasValue) r.SetInt16(0, unchecked((short)n.GetValueOrDefault())); else SetNull(r, d, i); },
+            TypeCode.Int32 => static (r, v, d, i) => { var n = Unsafe.As<T, int?>(ref v); if (n.HasValue) r.SetInt32(0, n.GetValueOrDefault()); else SetNull(r, d, i); },
+            TypeCode.UInt32 => static (r, v, d, i) => { var n = Unsafe.As<T, uint?>(ref v); if (n.HasValue) r.SetInt32(0, unchecked((int)n.GetValueOrDefault())); else SetNull(r, d, i); },
+            TypeCode.Int64 => static (r, v, d, i) => { var n = Unsafe.As<T, long?>(ref v); if (n.HasValue) r.SetInt64(0, n.GetValueOrDefault()); else SetNull(r, d, i); },
+            TypeCode.UInt64 => static (r, v, d, i) => { var n = Unsafe.As<T, ulong?>(ref v); if (n.HasValue) r.SetInt64(0, unchecked((long)n.GetValueOrDefault())); else SetNull(r, d, i); },
+            _ => throw new NotSupportedException($"No TVP nullable enum writer for {typeof(T).FullName}."),
+        };
+
+        private static void SetNull(SqlDataRecord record, InquiryTvpDescriptor descriptor, int index)
+        {
+            if (!descriptor.IsNullable) throw new InvalidOperationException($"TVP element at index {index} is null but the resolved Value column is NOT NULL.");
+            record.SetDBNull(0);
+        }
+    }
+
+    private static class CompatibilityDescriptor<T>
+    {
+        internal static readonly InquiryTvpDescriptor Value = InquiryTvpDescriptor.Compatibility(typeof(T));
     }
 }

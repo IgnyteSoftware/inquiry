@@ -7,7 +7,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.Oracle.Tests;
 
-[InquiryTable("Person")]
+[InquiryTable("Person", GenerateDdl = false)]
 public sealed class DerivedPerson
 {
     [InquiryKey(IsGenerated = true)]

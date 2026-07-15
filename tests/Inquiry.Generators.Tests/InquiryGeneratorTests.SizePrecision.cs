@@ -197,14 +197,13 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GetDocStoreText(result);
 
-        // The eager key binders build their parameters inline, so the declared length is threaded as a
-        // constructor argument (size: 64) rather than a `.Size = 64;` statement.
-        Assert.Contains("size: 64", generatedText);
+        // The allocation-free generated binder stamps the declared length directly on its DbParameter.
+        Assert.Contains("_p0.Size = 64;", generatedText);
+        Assert.Contains("_p1.Size = 64;", generatedText);
     }
 
-    // The decimal branch of the eager-key suffix emits a bare `precision: 18, scale: 2` constructor
-    // argument (the byte-range is guaranteed by the <= 38 gate, mirroring AppendSizePrecision). A
-    // declared-decimal key on an eager load must carry it for the same plan-cache parity.
+    // The allocation-free generated binder stamps precision/scale directly on its DbParameter. A
+    // declared-decimal key on an eager load must carry both for the same plan-cache parity.
     [Fact]
     public void SqlServer_EmitsPrecisionScaleOnEagerLoadDecimalKeyBinders()
     {
@@ -257,7 +256,10 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("InvoiceStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("precision: 18, scale: 2", generatedText);
+        Assert.Contains("_p0.Precision = 18;", generatedText);
+        Assert.Contains("_p0.Scale = 2;", generatedText);
+        Assert.Contains("_p1.Precision = 18;", generatedText);
+        Assert.Contains("_p1.Scale = 2;", generatedText);
     }
 
     [Theory]

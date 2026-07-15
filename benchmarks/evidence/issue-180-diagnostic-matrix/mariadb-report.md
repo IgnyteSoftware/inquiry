@@ -1,0 +1,80 @@
+```
+
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8737/25H2/2025Update/HudsonValley2)
+AMD Ryzen 7 9800X3D 4.70GHz, 1 CPU, 16 logical and 8 physical cores
+.NET SDK 10.0.301
+  [Host] : .NET 10.0.9 (10.0.9, 10.0.926.27113), X64 RyuJIT x86-64-v4
+
+Toolchain=InProcessEmitToolchain  InvocationCount=1  IterationCount=5
+LaunchCount=1  UnrollFactor=1  WarmupCount=2
+
+```
+| Method                      | Categories  | Rows | Mean       | Error      | StdDev    | Ratio | RatioSD | Allocated  | Alloc Ratio |
+|---------------------------- |------------ |----- |-----------:|-----------:|----------:|------:|--------:|-----------:|------------:|
+| **Inquiry_SelectedDeleteAll**   | **BatchDelete** | **1**    |   **3.648 ms** |  **0.1451 ms** | **0.0377 ms** |  **1.00** |    **0.01** |   **42.81 KB** |        **1.00** |
+| Direct_ReusedPreparedDelete | BatchDelete | 1    |   4.164 ms |  0.3541 ms | 0.0548 ms |  1.14 |    0.02 |   47.05 KB |        1.10 |
+| Native_DbBatchDelete        | BatchDelete | 1    |   3.733 ms |  0.3458 ms | 0.0898 ms |  1.02 |    0.02 |   46.52 KB |        1.09 |
+| Raw_ExpandedInDeleteControl | BatchDelete | 1    |   3.868 ms |  1.5546 ms | 0.2406 ms |  1.06 |    0.06 |   47.31 KB |        1.11 |
+| Raw_JsonTableDeleteControl  | BatchDelete | 1    |   3.713 ms |  1.5259 ms | 0.2361 ms |  1.02 |    0.06 |   46.56 KB |        1.09 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedDeleteAll**   | **BatchDelete** | **10**   |   **3.828 ms** |  **1.2306 ms** | **0.1904 ms** |  **1.00** |    **0.06** |   **48.73 KB** |        **1.00** |
+| Direct_ReusedPreparedDelete | BatchDelete | 10   |   9.697 ms |  3.5795 ms | 0.9296 ms |  2.54 |    0.25 |   62.73 KB |        1.29 |
+| Native_DbBatchDelete        | BatchDelete | 10   |   3.638 ms |  0.7791 ms | 0.1206 ms |  0.95 |    0.05 |   56.18 KB |        1.15 |
+| Raw_ExpandedInDeleteControl | BatchDelete | 10   |   3.496 ms |  0.4153 ms | 0.0643 ms |  0.92 |    0.04 |   50.41 KB |        1.03 |
+| Raw_JsonTableDeleteControl  | BatchDelete | 10   |   3.551 ms |  0.6534 ms | 0.1011 ms |  0.93 |    0.05 |   46.91 KB |        0.96 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedDeleteAll**   | **BatchDelete** | **100**  |   **5.475 ms** |  **1.4037 ms** | **0.3645 ms** |  **1.00** |    **0.08** |    **52.8 KB** |        **1.00** |
+| Direct_ReusedPreparedDelete | BatchDelete | 100  |  63.770 ms | 10.4152 ms | 2.7048 ms | 11.69 |    0.82 |  217.74 KB |        4.12 |
+| Native_DbBatchDelete        | BatchDelete | 100  |   6.850 ms |  2.3589 ms | 0.6126 ms |  1.26 |    0.13 |  192.34 KB |        3.64 |
+| Raw_ExpandedInDeleteControl | BatchDelete | 100  |   5.387 ms |  0.8059 ms | 0.2093 ms |  0.99 |    0.07 |   82.27 KB |        1.56 |
+| Raw_JsonTableDeleteControl  | BatchDelete | 100  |   5.339 ms |  0.6810 ms | 0.1769 ms |  0.98 |    0.06 |   51.45 KB |        0.97 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedDeleteAll**   | **BatchDelete** | **1000** |   **7.497 ms** |  **1.1367 ms** | **0.1759 ms** |  **1.00** |    **0.03** |  **114.24 KB** |        **1.00** |
+| Direct_ReusedPreparedDelete | BatchDelete | 1000 | 566.934 ms | 22.2622 ms | 3.4451 ms | 75.65 |    1.64 | 1757.55 KB |       15.38 |
+| Native_DbBatchDelete        | BatchDelete | 1000 |  16.857 ms |  6.9392 ms | 1.0738 ms |  2.25 |    0.14 | 1066.81 KB |        9.34 |
+| Raw_ExpandedInDeleteControl | BatchDelete | 1000 |   6.901 ms |  1.1705 ms | 0.1811 ms |  0.92 |    0.03 |  418.55 KB |        3.66 |
+| Raw_JsonTableDeleteControl  | BatchDelete | 1000 |   7.407 ms |  0.7854 ms | 0.2040 ms |  0.99 |    0.03 |   112.7 KB |        0.99 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedInsertAll**   | **BatchInsert** | **1**    |   **5.232 ms** |  **4.0476 ms** | **1.0512 ms** |  **1.03** |    **0.26** |   **48.83 KB** |        **1.00** |
+| Direct_ReusedPreparedInsert | BatchInsert | 1    |   5.485 ms |  4.2431 ms | 1.1019 ms |  1.08 |    0.27 |   48.63 KB |        1.00 |
+| Native_DbBatchInsert        | BatchInsert | 1    |   5.042 ms |  3.8985 ms | 1.0124 ms |  0.99 |    0.25 |   46.05 KB |        0.94 |
+| Raw_MultiRowInsertControl   | BatchInsert | 1    |   5.252 ms |  4.3315 ms | 1.1249 ms |  1.04 |    0.27 |   47.61 KB |        0.98 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedInsertAll**   | **BatchInsert** | **10**   |   **3.403 ms** |  **0.7654 ms** | **0.1184 ms** |  **1.00** |    **0.04** |   **57.02 KB** |        **1.00** |
+| Direct_ReusedPreparedInsert | BatchInsert | 10   |   9.349 ms |  4.0111 ms | 1.0417 ms |  2.75 |    0.29 |   64.13 KB |        1.12 |
+| Native_DbBatchInsert        | BatchInsert | 10   |   4.231 ms |  3.9459 ms | 1.0248 ms |  1.24 |    0.28 |   59.01 KB |        1.03 |
+| Raw_MultiRowInsertControl   | BatchInsert | 10   |   3.918 ms |  3.0526 ms | 0.7928 ms |  1.15 |    0.22 |   54.91 KB |        0.96 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedInsertAll**   | **BatchInsert** | **100**  |   **5.344 ms** |  **0.8021 ms** | **0.2083 ms** |  **1.00** |    **0.05** |  **141.93 KB** |        **1.00** |
+| Direct_ReusedPreparedInsert | BatchInsert | 100  |  58.197 ms |  2.5720 ms | 0.6679 ms | 10.90 |    0.40 |  218.83 KB |        1.54 |
+| Native_DbBatchInsert        | BatchInsert | 100  |   6.182 ms |  0.7899 ms | 0.2051 ms |  1.16 |    0.05 |   209.7 KB |        1.48 |
+| Raw_MultiRowInsertControl   | BatchInsert | 100  |   5.378 ms |  1.1135 ms | 0.1723 ms |  1.01 |    0.05 |  128.35 KB |        0.90 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedInsertAll**   | **BatchInsert** | **1000** |  **13.430 ms** |  **2.1982 ms** | **0.5709 ms** |  **1.00** |    **0.06** | **1070.77 KB** |        **1.00** |
+| Direct_ReusedPreparedInsert | BatchInsert | 1000 | 551.968 ms | 36.3842 ms | 9.4489 ms | 41.16 |    1.77 | 1797.91 KB |        1.68 |
+| Native_DbBatchInsert        | BatchInsert | 1000 |  22.295 ms |  7.3502 ms | 1.9088 ms |  1.66 |    0.15 | 1471.97 KB |        1.37 |
+| Raw_MultiRowInsertControl   | BatchInsert | 1000 |  12.937 ms |  3.2994 ms | 0.5106 ms |  0.96 |    0.05 |  851.92 KB |        0.80 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedUpdateAll**   | **BatchUpdate** | **1**    |   **3.624 ms** |  **1.6650 ms** | **0.2577 ms** |  **1.00** |    **0.09** |   **49.29 KB** |        **1.00** |
+| Direct_ReusedPreparedUpdate | BatchUpdate | 1    |   4.082 ms |  0.3153 ms | 0.0488 ms |  1.13 |    0.07 |   48.07 KB |        0.98 |
+| Native_DbBatchUpdate        | BatchUpdate | 1    |   3.580 ms |  0.3931 ms | 0.1021 ms |  0.99 |    0.06 |   44.72 KB |        0.91 |
+| Raw_CaseUpdateControl       | BatchUpdate | 1    |   3.505 ms |  0.6072 ms | 0.1577 ms |  0.97 |    0.07 |   47.73 KB |        0.97 |
+| Raw_DerivedTableJoinControl | BatchUpdate | 1    |   3.630 ms |  0.3742 ms | 0.0579 ms |  1.01 |    0.06 |   48.04 KB |        0.97 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedUpdateAll**   | **BatchUpdate** | **10**   |   **4.460 ms** |  **3.9851 ms** | **1.0349 ms** |  **1.04** |    **0.30** |   **58.79 KB** |        **1.00** |
+| Direct_ReusedPreparedUpdate | BatchUpdate | 10   |   9.395 ms |  0.8083 ms | 0.1251 ms |  2.19 |    0.43 |   65.05 KB |        1.11 |
+| Native_DbBatchUpdate        | BatchUpdate | 10   |   4.673 ms |  3.8784 ms | 1.0072 ms |  1.09 |    0.31 |   60.47 KB |        1.03 |
+| Raw_CaseUpdateControl       | BatchUpdate | 10   |   4.312 ms |  3.7146 ms | 0.9647 ms |  1.01 |    0.29 |   55.69 KB |        0.95 |
+| Raw_DerivedTableJoinControl | BatchUpdate | 10   |   3.454 ms |  0.6195 ms | 0.0959 ms |  0.81 |    0.16 |   55.28 KB |        0.94 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedUpdateAll**   | **BatchUpdate** | **100**  |   **5.725 ms** |  **0.5241 ms** | **0.1361 ms** |  **1.00** |    **0.03** |  **153.02 KB** |        **1.00** |
+| Direct_ReusedPreparedUpdate | BatchUpdate | 100  |  63.505 ms |  9.2357 ms | 1.4292 ms | 11.10 |    0.33 |  224.42 KB |        1.47 |
+| Native_DbBatchUpdate        | BatchUpdate | 100  |   7.338 ms |  4.8461 ms | 1.2585 ms |  1.28 |    0.20 |  202.54 KB |        1.32 |
+| Raw_CaseUpdateControl       | BatchUpdate | 100  |   5.732 ms |  1.1607 ms | 0.1796 ms |  1.00 |    0.04 |   140.6 KB |        0.92 |
+| Raw_DerivedTableJoinControl | BatchUpdate | 100  |   5.755 ms |  1.7988 ms | 0.2784 ms |  1.01 |    0.05 |  142.45 KB |        0.93 |
+|                             |             |      |            |            |           |       |         |            |             |
+| **Inquiry_SelectedUpdateAll**   | **BatchUpdate** | **1000** |  **15.185 ms** |  **3.7183 ms** | **0.5754 ms** |  **1.00** |    **0.05** | **1154.55 KB** |        **1.00** |
+| Direct_ReusedPreparedUpdate | BatchUpdate | 1000 | 590.272 ms |  9.3353 ms | 2.4243 ms | 38.92 |    1.35 | 1859.79 KB |        1.61 |
+| Native_DbBatchUpdate        | BatchUpdate | 1000 |  29.985 ms |  6.4017 ms | 1.6625 ms |  1.98 |    0.12 | 1442.82 KB |        1.25 |
+| Raw_CaseUpdateControl       | BatchUpdate | 1000 |  15.458 ms |  4.2476 ms | 1.1031 ms |  1.02 |    0.08 |  978.25 KB |        0.85 |
+| Raw_DerivedTableJoinControl | BatchUpdate | 1000 |  14.485 ms |  1.3399 ms | 0.3480 ms |  0.95 |    0.04 |  957.02 KB |        0.83 |

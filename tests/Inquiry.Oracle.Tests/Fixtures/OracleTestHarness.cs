@@ -1,5 +1,6 @@
 using Inquiry.DependencyInjection;
 using Inquiry.FeatureCatalog;
+using Inquiry.IntegrationTesting;
 using Inquiry.Northwind;
 using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.DependencyInjection;
@@ -18,73 +19,129 @@ internal sealed class OracleTestHarness : IAsyncDisposable
 {
     private readonly string _adminConnectionString;
     private readonly string _schemaUser;
-    private readonly string _schemaPassword;
+    private int _disposeState;
 
-    private OracleTestHarness(string adminConnectionString, string schemaUser, string schemaPassword, string connectionString, ServiceProvider services)
+    private OracleTestHarness(string adminConnectionString, string schemaUser, string connectionString, ServiceProvider services)
     {
         _adminConnectionString = adminConnectionString;
         _schemaUser = schemaUser;
-        _schemaPassword = schemaPassword;
         ConnectionString = connectionString;
         Services = services;
     }
 
     public string ConnectionString { get; }
 
+    internal string SchemaUser => _schemaUser;
+
+    internal Exception? CleanupFailure { get; private set; }
+
     public ServiceProvider Services { get; }
 
     public T GetRequiredService<T>() where T : notnull => Services.GetRequiredService<T>();
 
-    public static Task<OracleTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
-        => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.OracleDdl, namePrefix);
+    public static Task<OracleTestHarness> CreateAsync(
+        string adminConnectionString,
+        string? namePrefix = null,
+        Action<string>? userCreated = null,
+        CancellationToken cancellationToken = default,
+        Action<global::Inquiry.InquiryOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
+        => CreateFromDdlAsync(
+            adminConnectionString,
+            NorthwindSchema.OracleDdl,
+            namePrefix,
+            userCreated,
+            cancellationToken,
+            configureOptions,
+            configureServices);
 
-    public static async Task<OracleTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    public static async Task<OracleTestHarness> CreateFromDdlAsync(
+        string adminConnectionString,
+        string ddl,
+        string? namePrefix = null,
+        Action<string>? userCreated = null,
+        CancellationToken cancellationToken = default,
+        Action<global::Inquiry.InquiryOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var prefix = (namePrefix ?? "inquiry").ToUpperInvariant();
         var schemaUser = prefix + "_" + Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant();
         var schemaPassword = "Pw_" + Guid.NewGuid().ToString("N").Substring(0, 12);
-
-        await using (var admin = new OracleConnection(adminConnectionString))
-        {
-            await admin.OpenAsync();
-            await using (var create = admin.CreateCommand())
-            {
-                create.CommandText = $"CREATE USER {schemaUser} IDENTIFIED BY \"{schemaPassword}\"";
-                await create.ExecuteNonQueryAsync();
-            }
-
-            await using (var grant = admin.CreateCommand())
-            {
-                grant.CommandText = $"GRANT CONNECT, RESOURCE, UNLIMITED TABLESPACE TO {schemaUser}";
-                await grant.ExecuteNonQueryAsync();
-            }
-        }
-
-        var builder = new OracleConnectionStringBuilder(adminConnectionString)
+        var connectionString = new OracleConnectionStringBuilder(adminConnectionString)
         {
             UserID = schemaUser,
             Password = schemaPassword,
-        };
-        var connectionString = builder.ToString();
+        }.ToString();
+        var createWasAttempted = false;
 
-        await using (var db = new OracleConnection(connectionString))
+        try
         {
-            await db.OpenAsync();
-            // Oracle has no multi-statement batch; execute each CREATE separately.
-            foreach (var statement in SplitStatements(ddl))
+            await using (var admin = new OracleConnection(adminConnectionString))
             {
-                await using var cmd = db.CreateCommand();
-                cmd.CommandText = statement;
-                await cmd.ExecuteNonQueryAsync();
+                await admin.OpenAsync(cancellationToken);
+                await using (var create = admin.CreateCommand())
+                {
+                    create.CommandText = $"CREATE USER {schemaUser} IDENTIFIED BY \"{schemaPassword}\"";
+                    createWasAttempted = true;
+                    await create.ExecuteNonQueryAsync(cancellationToken);
+                    userCreated?.Invoke(schemaUser);
+                }
+
+                await using (var grant = admin.CreateCommand())
+                {
+                    grant.CommandText = $"GRANT CONNECT, RESOURCE, UNLIMITED TABLESPACE, CREATE VIEW TO {schemaUser}";
+                    await grant.ExecuteNonQueryAsync(cancellationToken);
+                }
             }
+
+            await using (var db = new OracleConnection(connectionString))
+            {
+                await db.OpenAsync(cancellationToken);
+                // Oracle has no multi-statement batch; execute each CREATE separately.
+                foreach (var statement in SplitStatements(ddl))
+                {
+                    await using var cmd = db.CreateCommand();
+                    cmd.CommandText = statement;
+                    await cmd.ExecuteNonQueryAsync(cancellationToken);
+                }
+            }
+
+            var services = new ServiceCollection();
+            if (configureOptions is null)
+            {
+                services.AddInquiry(
+                    typeof(CustomerStore).Assembly,
+                    typeof(VersionedItemStore).Assembly,
+                    typeof(OracleUnsupportedFixtureMarker).Assembly);
+            }
+            else
+            {
+                services.AddInquiry(
+                    configureOptions,
+                    typeof(CustomerStore).Assembly,
+                    typeof(VersionedItemStore).Assembly,
+                    typeof(OracleUnsupportedFixtureMarker).Assembly);
+            }
+
+            services.AddInquiryOracle(connectionString);
+            configureServices?.Invoke(services);
+            var serviceProvider = services.BuildServiceProvider();
+
+            return new OracleTestHarness(adminConnectionString, schemaUser, connectionString, serviceProvider);
         }
+        catch (Exception setupFailure)
+        {
+            if (createWasAttempted)
+            {
+                var cleanupFailure = await TryDropUserAsync(adminConnectionString, connectionString, schemaUser);
+                if (cleanupFailure is not null)
+                {
+                    setupFailure.Data["OracleTestHarness.CleanupException"] = cleanupFailure;
+                }
+            }
 
-        var services = new ServiceCollection()
-            .AddInquiry(typeof(CustomerStore).Assembly, typeof(VersionedItemStore).Assembly)
-            .AddInquiryOracle(connectionString)
-            .BuildServiceProvider();
-
-        return new OracleTestHarness(adminConnectionString, schemaUser, schemaPassword, connectionString, services);
+            throw;
+        }
     }
 
     private static IEnumerable<string> SplitStatements(string ddl)
@@ -101,22 +158,141 @@ internal sealed class OracleTestHarness : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await Services.DisposeAsync();
+        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
+        {
+            return;
+        }
 
-        // Force-close pooled connections so DROP USER doesn't fail with "user currently connected".
-        OracleConnection.ClearAllPools();
+        Exception? serviceFailure = null;
+        try
+        {
+            await Services.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            serviceFailure = ex;
+        }
+
+        CleanupFailure = await TryDropUserAsync(_adminConnectionString, ConnectionString, _schemaUser);
+        if (serviceFailure is not null)
+        {
+            if (CleanupFailure is not null)
+            {
+                serviceFailure.Data["OracleTestHarness.CleanupException"] = CleanupFailure;
+            }
+
+            throw serviceFailure;
+        }
+
+        if (CleanupFailure is not null && DockerRequirement.IsRequired())
+        {
+            throw new InvalidOperationException($"Failed to drop disposable Oracle schema {_schemaUser}.", CleanupFailure);
+        }
+    }
+
+    private static async Task<Exception?> TryDropUserAsync(
+        string adminConnectionString,
+        string userConnectionString,
+        string schemaUser)
+    {
+        var failures = new List<Exception>();
+        using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         try
         {
-            await using var admin = new OracleConnection(_adminConnectionString);
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            cmd.CommandText = $"DROP USER {_schemaUser} CASCADE";
-            await cmd.ExecuteNonQueryAsync();
+            await using var admin = new OracleConnection(adminConnectionString);
+            await admin.OpenAsync(cleanupCts.Token);
+            if (!await UserExistsAsync(admin, schemaUser, cleanupCts.Token))
+            {
+                return null;
+            }
+
+            while (true)
+            {
+                try
+                {
+                    using var userConnection = new OracleConnection(userConnectionString);
+                    OracleConnection.ClearPool(userConnection);
+                    await DisconnectUserSessionsAsync(admin, schemaUser, cleanupCts.Token);
+
+                    await using var cmd = admin.CreateCommand();
+                    cmd.CommandTimeout = 10;
+                    cmd.CommandText = $"DROP USER {schemaUser} CASCADE";
+                    await cmd.ExecuteNonQueryAsync(cleanupCts.Token);
+                    break;
+                }
+                catch (OracleException ex) when (ex.Number == 1918)
+                {
+                    // Another cleanup path already removed this disposable user.
+                    break;
+                }
+                catch (OracleException ex) when ((ex.Number == 1940 || ex.Number == 1013 || ex.Number == 604)
+                    && !cleanupCts.IsCancellationRequested)
+                {
+                    // ODP.NET can retain a just-disposed pooled session briefly, and a busy Oracle
+                    // instance can cancel recursive DROP work. Re-clear only this schema's pool,
+                    // disconnect only this disposable user's sessions, and retry within the bound.
+                    await Task.Delay(100, cleanupCts.Token);
+                }
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort cleanup. Don't fail the test on teardown.
+            failures.Add(ex);
         }
+
+        return failures.Count switch
+        {
+            0 => null,
+            1 => failures[0],
+            _ => new AggregateException(failures),
+        };
+    }
+
+    private static async Task DisconnectUserSessionsAsync(
+        OracleConnection admin,
+        string schemaUser,
+        CancellationToken cancellationToken)
+    {
+        var sessions = new List<(int Sid, int Serial)>();
+        await using (var query = admin.CreateCommand())
+        {
+            query.BindByName = true;
+            query.CommandTimeout = 10;
+            query.CommandText = "SELECT SID, SERIAL# FROM V$SESSION WHERE USERNAME = :username";
+            query.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
+            await using var reader = await query.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                sessions.Add((reader.GetInt32(0), reader.GetInt32(1)));
+        }
+
+        foreach (var session in sessions)
+        {
+            try
+            {
+                await using var disconnect = admin.CreateCommand();
+                disconnect.CommandTimeout = 10;
+                disconnect.CommandText = $"ALTER SYSTEM DISCONNECT SESSION '{session.Sid},{session.Serial}' IMMEDIATE";
+                await disconnect.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (OracleException exception) when (exception.Number is 30 or 31)
+            {
+                // The session closed or was already marked for termination between V$SESSION
+                // enumeration and ALTER SYSTEM. Either state is sufficient for this teardown pass.
+            }
+        }
+    }
+
+    private static async Task<bool> UserExistsAsync(
+        OracleConnection admin,
+        string schemaUser,
+        CancellationToken cancellationToken)
+    {
+        await using var command = admin.CreateCommand();
+        command.BindByName = true;
+        command.CommandTimeout = 10;
+        command.CommandText = "SELECT COUNT(*) FROM ALL_USERS WHERE USERNAME = :username";
+        command.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) != 0;
     }
 }

@@ -2,16 +2,7 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
-    <!--
-      Inquiry.Northwind is link-compiled here as the Oracle test fixture. Several of its store
-      methods (Product.UpsertAsync, Shipper.UpsertAsync, …) intentionally
-      cover the cross-dialect surface and fire INQ039 against Oracle — that diagnostic is the
-      point of the test: the Oracle generator emits a stub that throws NotSupportedException
-      at runtime, and there are tests that assert exactly that. Suppressing INQ039 at project
-      scope keeps the build clean so genuine new dialect-coverage regressions stand out.
-      Audit P2 #11.
-    -->
-    <NoWarn>$(NoWarn);INQ039</NoWarn>
+    <DefineConstants>$(DefineConstants);INQUIRY_ORACLE_TESTS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,12 +17,14 @@
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Oracle\Inquiry.Oracle.csproj" />
     <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
+    <ProjectReference Include="..\Inquiry.Oracle.UnsupportedFixtures\Inquiry.Oracle.UnsupportedFixtures.csproj" />
 
     <Compile Include="..\..\samples\Inquiry.Northwind\Models\**\*.cs" LinkBase="Northwind\Models" />
     <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
 
     <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
+    <Compile Include="..\Shared\BatchExecutionProbe.cs" LinkBase="Shared" />
     <!-- W9 full-text search is NOT supported on Oracle (generator emits INQ035); FullText is excluded. -->
     <!-- <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" /> -->
   </ItemGroup>

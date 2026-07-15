@@ -1,12 +1,52 @@
 using Inquiry.Generators.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Inquiry.SqlServer.Analyzer;
 
 internal sealed class SqlServerSqlBuilder : SqlBuilder
 {
+    public override BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.Adaptive;
+    public override int BatchInsertAdaptiveThreshold => 250;
+
+    // SQL Server rejects a VALUES table-value constructor with more than 1,000 rows.
+    public override int BatchInsertMaxRowsPerCommand => 1000;
+
+    // Documented SQL Server stored-procedure/command parameter ceiling.
+    public override int HardMaxParametersPerCommand => 2100;
+
+    public override CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
+        => context.ProviderSpecialType switch
+        {
+            Microsoft.CodeAnalysis.SpecialType.System_SByte => new($"unchecked((global::System.Byte)({context.ValueExpression}))", "global::System.Byte", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt16 => new($"unchecked((global::System.Int16)({context.ValueExpression}))", "global::System.Int16", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt32 => new($"unchecked((global::System.Int32)({context.ValueExpression}))", "global::System.Int32", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt64 => new($"unchecked((global::System.Int64)({context.ValueExpression}))", "global::System.Int64", true),
+            _ => new(context.ValueExpression, context.ProviderTypeName, false),
+        };
+
     public override string DialectName => "SqlServer";
+    public override string ProviderId => "sqlserver";
+    // Stable conservative envelope for the commonly case-insensitive SQL Server collations.
+    public override string GetPhysicalIdentifierSortKey(string identifier) => FoldAscii(identifier, upper: true);
+    public override string GetProviderArtifactKind(CollectionParameterArtifact artifact) => "tvp";
+
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+    public override bool SupportsIndexIncludeColumns => true;
+    public override bool SupportsCheckConstraints => true;
+    public override ConstraintNameScope IndexNameScope => ConstraintNameScope.Table;
+    public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull or ReferentialActionKind.SetDefault;
+
+    public override bool SupportsDatabaseGeneratedConcurrencyToken => true;
+
+    public override string SequentialGuidFactoryExpression => "global::Inquiry.InquiryGuid.NewSqlServerSequential()";
+
+    protected override string CountExpression => "COUNT_BIG(*)";
 
     /// <summary>
     /// SQL Server keys its plan cache on the <c>sp_executesql</c> parameter signature, so generated
@@ -29,6 +69,19 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     /// <inheritdoc />
     public override string ArrayParameterBinderFqn => "global::Inquiry.SqlServer.Parameters.InquiryTvpParameter";
+
+    public override CollectionParameterResolution ResolveCollectionParameter(CollectionParameterContext context)
+        => SqlServerTvpResolver.Resolve(this, context);
+
+    public override string BuildCollectionParameterBinding(CollectionParameterBindingContext context)
+    {
+        var artifact = context.Resolution.Artifact
+            ?? throw new System.InvalidOperationException("A successful SQL Server TVP resolution must include an artifact.");
+        return $"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, \"{EscapeLiteral(artifact.RuntimeTypeName)}\", {artifact.RuntimeDescriptorFieldName});";
+    }
+
+    private static string EscapeLiteral(string value)
+        => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     public override string QuoteIdentifier(string identifier)
         => "[" + identifier.Replace("]", "]]") + "]";
@@ -205,7 +258,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // triggered tables).
     private string DeclareOutputTable(SqlBuildContext context)
         => "DECLARE @_out TABLE (" + string.Join(", ", context.Columns.Select(c =>
-            QuoteIdentifier(c.ColumnName) + " " + MapColumnType(c))) + ");";
+            QuoteIdentifier(c.ColumnName) + " " + (c.IsDatabaseGeneratedToken ? "BINARY(8)" : MapColumnType(c)))) + ");";
 
     private string SelectFromOutput(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM @_out";
@@ -214,7 +267,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     {
         var keyColumn = context.QuotedKeyColumns[0];
         var keyParameter = context.KeyParameters[0];
-        var output = returning ? " OUTPUT " + InsertedColumns(context) + " INTO @_out" : string.Empty;
+        var output = returning
+            ? " OUTPUT " + InsertedColumns(context) + " INTO @_out (" + context.SelectColumns + ")"
+            : string.Empty;
 
         var generatedInsert = context.InsertableColumns.Count == 0
             ? "INSERT INTO " + context.Table + output + " DEFAULT VALUES; "
@@ -237,11 +292,15 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         string elseBranch;
         if (context.SetClauses.Length == 0)
         {
-            elseBranch =
-                "BEGIN TRANSACTION; " +
-                "IF NOT EXISTS (SELECT 1 FROM " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) WHERE " + keyColumn + " = " + keyParameter + ") " +
-                "INSERT INTO " + context.Table + " (" + explicitInsertCols + ")" + output + " VALUES (" + explicitInsertParams + "); " +
-                "COMMIT TRANSACTION; ";
+            elseBranch = BuildGeneratedKeyEmptySetBranch(
+                context,
+                returning,
+                keyColumn,
+                keyParameter,
+                explicitInsertCols,
+                explicitInsertParams,
+                output,
+                isIdentity);
         }
         else
         {
@@ -261,11 +320,64 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             "END " +
             "ELSE " +
             "BEGIN " +
-            identityOn +
+            (context.SetClauses.Length == 0 ? string.Empty : identityOn) +
             elseBranch +
-            identityOff +
+            (context.SetClauses.Length == 0 ? string.Empty : identityOff) +
             "END" +
             trailing;
+    }
+
+    private string BuildGeneratedKeyEmptySetBranch(
+        SqlBuildContext context,
+        bool returning,
+        string keyColumn,
+        string keyParameter,
+        string explicitInsertColumns,
+        string explicitInsertParameters,
+        string output,
+        bool isIdentity)
+    {
+        var identityOn = isIdentity
+            ? "SET IDENTITY_INSERT " + context.Table + " ON; SET @_inquiry_identity_insert = 1; "
+            : string.Empty;
+        var identityOff = isIdentity
+            ? "SET IDENTITY_INSERT " + context.Table + " OFF; SET @_inquiry_identity_insert = 0; "
+            : string.Empty;
+        var identityCleanup = isIdentity
+            ? "IF @_inquiry_identity_insert = 1 " +
+              "BEGIN TRY SET IDENTITY_INSERT " + context.Table + " OFF; SET @_inquiry_identity_insert = 0; END TRY BEGIN CATCH END CATCH; "
+            : string.Empty;
+        var insert =
+            identityOn +
+            "INSERT INTO " + context.Table + " (" + explicitInsertColumns + ")" + output +
+            " VALUES (" + explicitInsertParameters + "); " +
+            identityOff;
+
+        var lockAndInsert = returning
+            ? "INSERT INTO @_out (" + context.SelectColumns + ") " +
+              "SELECT " + context.SelectColumns + " FROM " + context.Table +
+              " WITH (UPDLOCK, SERIALIZABLE) WHERE " + keyColumn + " = " + keyParameter + "; " +
+              "IF @@ROWCOUNT = 0 BEGIN " + insert + "END; "
+            : "IF NOT EXISTS (SELECT 1 FROM " + context.Table + " WITH (UPDLOCK, SERIALIZABLE) WHERE " +
+              keyColumn + " = " + keyParameter + ") BEGIN " + insert + "END; ";
+
+        return
+            "DECLARE @_inquiry_started_transaction bit = 0; " +
+            "DECLARE @_inquiry_identity_insert bit = 0; " +
+            "DECLARE @_inquiry_savepoint_created bit = 0; " +
+            "DECLARE @_inquiry_savepoint nvarchar(32) = N'InquiryUpsert_' + RIGHT(REPLACE(CONVERT(nvarchar(36), NEWID()), N'-', N''), 16); " +
+            "BEGIN TRY " +
+            "IF @@TRANCOUNT = 0 BEGIN BEGIN TRANSACTION; SET @_inquiry_started_transaction = 1; END " +
+            "ELSE BEGIN SAVE TRANSACTION @_inquiry_savepoint; SET @_inquiry_savepoint_created = 1; END; " +
+            lockAndInsert +
+            "IF @_inquiry_started_transaction = 1 COMMIT TRANSACTION; " +
+            "END TRY " +
+            "BEGIN CATCH " +
+            identityCleanup +
+            "IF @_inquiry_started_transaction = 1 BEGIN IF XACT_STATE() <> 0 ROLLBACK TRANSACTION; END " +
+            "ELSE IF @_inquiry_savepoint_created = 1 AND XACT_STATE() = 1 ROLLBACK TRANSACTION @_inquiry_savepoint; " +
+            "THROW; " +
+            "END CATCH; ";
     }
 
     private static string JoinSql(string first, string rest)
@@ -280,34 +392,25 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // VARCHAR(MAX), which cannot be keyed or indexed (see MapColumnType).
     protected override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 4000 : 8000;
 
-    protected override string MapColumnType(IColumn column) => column.TypeClass switch
-    {
-        DbTypeClass.Boolean => "BIT",
-        DbTypeClass.Byte => "TINYINT",
-        DbTypeClass.Int16 => "SMALLINT",
-        DbTypeClass.Int32 => "INT",
-        DbTypeClass.Int64 => "BIGINT",
-        DbTypeClass.Single => "REAL",
-        DbTypeClass.Double => "FLOAT",
-        DbTypeClass.Decimal => "DECIMAL(" + DecimalSpec(column, 18, 2) + ")",
-        DbTypeClass.DateTime => "DATETIME2",
-        DbTypeClass.DateTimeOffset => "DATETIMEOFFSET",
-        DbTypeClass.DateOnly => "DATE",
-        DbTypeClass.TimeOnly => "TIME",
-        DbTypeClass.Guid => "UNIQUEIDENTIFIER",
-        DbTypeClass.ByteArray => "VARBINARY(MAX)",
+    protected override string MapColumnType(IColumn column)
+        => SqlServerTvpResolver.InferredColumnDdl(column);
+
         // A declared Length beyond the fixed-width ceiling (nvarchar 4000 / varchar 8000) is not a legal
         // bounded type — NVARCHAR(5000) is a DDL error — so it maps to the MAX type instead of emitting
         // invalid SQL. For a regular column that yields valid DDL; for a string KEY or indexed column the
         // MAX type cannot be keyed/indexed, which INQ031/INQ032 now report (the over-ceiling case is folded
         // into MapsToUnboundedString via MaxBoundedStringLength).
-        _ => column.Length > 0 && column.Length <= MaxBoundedStringLength(column.IsUnicode)
-            ? (column.IsUnicode ? "NVARCHAR(" + column.Length + ")" : "VARCHAR(" + column.Length + ")")
-            : (column.IsUnicode ? "NVARCHAR(MAX)" : "VARCHAR(MAX)"),
-    };
+
+    protected override string ColumnType(IColumn column)
+        => column.IsDatabaseGeneratedToken ? "ROWVERSION" : base.ColumnType(column);
 
     protected override string GeneratedKeyClause(IColumn column)
         => MapColumnType(column) + " IDENTITY(1,1) PRIMARY KEY";
+
+    // The shared feature catalog uses the ANSI concatenation operator in computed expressions.
+    // SQL Server spells string concatenation with +.
+    public override string RenderComputedExpression(string expression)
+        => SqlExpressionLexer.Analyze(expression, SqlExpressionCommentPolicy.Standard, true).RenderedExpression;
 
     protected override string WrapCreateTable(SqlBuildContext context, string body)
     {

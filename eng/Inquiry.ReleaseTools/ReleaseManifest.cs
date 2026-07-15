@@ -1,0 +1,45 @@
+using System.Text.Json.Serialization;
+
+namespace Inquiry.ReleaseTools;
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ReleaseManifest(
+    [property: JsonRequired] string SchemaVersion,
+    [property: JsonRequired] string PackageVersion,
+    [property: JsonRequired] string Tag,
+    [property: JsonRequired] IReadOnlyList<ReleasePackage> Packages,
+    [property: JsonRequired] ReleaseAssets Assets);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ReleasePackage(
+    [property: JsonRequired] string Id,
+    [property: JsonRequired] string Project,
+    [property: JsonRequired] IReadOnlyDictionary<string, string> Dependencies,
+    [property: JsonRequired] IReadOnlyList<string> LibTfms,
+    [property: JsonRequired] IReadOnlyList<string> Analyzers,
+    [property: JsonRequired] IReadOnlyList<string> AnalyzerSymbols);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ReleaseAssets(
+    [property: JsonRequired] string LicenseExpression,
+    [property: JsonRequired] string Readme,
+    [property: JsonRequired] string Icon,
+    [property: JsonRequired] string RepositoryUrl,
+    [property: JsonRequired] string RepositoryBranch,
+    [property: JsonRequired] bool RequireSymbols,
+    [property: JsonRequired] bool RequireSourceLink);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(ReleaseManifest))]
+[JsonSerializable(typeof(CiRequiredContract))]
+internal sealed partial class ReleaseJsonContext : JsonSerializerContext;
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CiRequiredContract(
+    [property: JsonRequired] string SchemaVersion,
+    [property: JsonRequired] IReadOnlyList<CiRequiredJob> RequiredJobs);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CiRequiredJob(
+    [property: JsonRequired] string Job,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? Matrix);

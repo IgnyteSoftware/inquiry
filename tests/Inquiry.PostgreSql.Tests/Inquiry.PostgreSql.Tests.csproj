@@ -15,6 +15,7 @@
     <PackageReference Include="Xunit.SkippableFact" />
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Testing\Inquiry.Testing.csproj" />
     <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
 
     <Compile Include="..\..\samples\Inquiry.Northwind\Models\**\*.cs" LinkBase="Northwind\Models" />
@@ -22,7 +23,9 @@
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
 
     <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
+    <Compile Include="..\Inquiry.UpdateActionCatalog\*.cs" LinkBase="UpdateActionCatalog" />
     <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" />
+    <Compile Include="..\Shared\BatchExecutionProbe.cs" Link="Shared\BatchExecutionProbe.cs" />
   </ItemGroup>
 
   <ItemGroup>

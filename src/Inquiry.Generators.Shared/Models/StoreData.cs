@@ -10,6 +10,7 @@ namespace Inquiry.Generators.Models;
 /// </summary>
 internal sealed record StoreData(
     string Name,
+    string HintName,
     string? Namespace,
     string FullyQualifiedName,
     string EntityFullyQualifiedName,

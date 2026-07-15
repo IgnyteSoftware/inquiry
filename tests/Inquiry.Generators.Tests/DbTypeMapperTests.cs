@@ -68,6 +68,27 @@ public sealed class DbTypeMapperTests
     }
 
     [Theory]
+    [InlineData("global::System.Byte[]", true, "global::System.Data.DbType.Binary")]
+    [InlineData("global::System.DateTimeOffset", false, "global::System.Data.DbType.DateTimeOffset")]
+    public void MapsNonSpecialPortableTypes(string displayName, bool isByteArray, string expected)
+    {
+        var type = new TypeData(
+            DisplayName: displayName,
+            NonNullableDisplayName: displayName,
+            SpecialType: SpecialType.None,
+            EnumUnderlyingSpecialType: SpecialType.None,
+            IsNullable: false,
+            IsValueType: !isByteArray,
+            IsGuid: false,
+            IsEnum: false)
+        {
+            IsByteArray = isByteArray,
+        };
+
+        Assert.Equal(expected, DbTypeMapper.TryGetDbTypeExpression(type));
+    }
+
+    [Theory]
     [InlineData(SpecialType.System_Int32, "global::System.Data.DbType.Int32")]
     [InlineData(SpecialType.System_Byte, "global::System.Data.DbType.Byte")]
     [InlineData(SpecialType.System_Int64, "global::System.Data.DbType.Int64")]

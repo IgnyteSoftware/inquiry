@@ -12,6 +12,7 @@ namespace Inquiry.Generators.Models;
 /// </summary>
 internal sealed record EntityData(
     string FullyQualifiedName,
+    string HintName,
     string Name,
     string? Namespace,
     string TableName,
@@ -26,6 +27,9 @@ internal sealed record EntityData(
     bool IsMapped,
     EquatableArray<DiagnosticData> Diagnostics)
 {
+    public LocationData? Location { get; init; }
+    public EquatableArray<IndexData> Indexes { get; init; }
+    public EquatableArray<CheckConstraintData> Checks { get; init; }
     /// <summary>
     /// The entity's single <c>[InquirySoftDelete]</c> column, or null when none is declared. Cached
     /// here so the store emitter can decide delete→update routing and SELECT filtering without rescanning.
@@ -43,6 +47,7 @@ internal sealed record EntityData(
     /// entity's foreign-key columns (<see cref="InquiryTableAttribute.GenerateForeignKeys"/>). Default true.
     /// </summary>
     public bool GenerateForeignKeys { get; init; } = true;
+    public bool GenerateDdl { get; init; } = true;
 
     /// <summary>
     /// Whether this entity maps a database <c>[InquiryView]</c> rather than a table: it is read-only

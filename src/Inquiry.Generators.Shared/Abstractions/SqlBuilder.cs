@@ -1,9 +1,23 @@
 using System.Collections.Generic;
+using System.Linq;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Abstractions;
+
+public enum CyclicForeignKeyStrategy
+{
+    ReportDiagnostic,
+    Inline,
+    AlterTable,
+}
+
+public enum ReferentialActionKind { NoAction, Restrict, Cascade, SetNull, SetDefault }
+public enum ReferentialActionEvent { Delete, Update }
+public enum ConstraintNameScope { Table, Schema }
+public enum IdentifierComparison { Ordinal, OrdinalIgnoreCase }
+public enum BatchInsertStrategy { SetBased, Row, Adaptive }
 
 /// <summary>
 /// Compile-time SQL builder consumed by the Inquiry source generator. One concrete subclass exists
@@ -22,30 +36,144 @@ namespace Inquiry.Generators.Abstractions;
 public abstract class SqlBuilder
 {
     public abstract string DialectName { get; }
+    public abstract string ProviderId { get; }
+    protected virtual SqlExpressionCommentPolicy ComputedExpressionCommentPolicy => SqlExpressionCommentPolicy.Standard;
+
+    public virtual IReadOnlyList<string> ValidateComputedExpression(string expression)
+        => SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false).Failures;
+
+    public virtual string RenderComputedExpression(string expression) => expression;
+    public virtual bool ComputedColumnDeclaresStoreType => false;
+    public virtual bool RequiresBoundedComputedStrings => false;
+    protected virtual bool DefaultExpressionPrecedesInlineConstraints => false;
+    public virtual string? GetSchemaManifestStoreType(IColumn column)
+        => !string.IsNullOrEmpty(column.ComputedExpression) && !ComputedColumnDeclaresStoreType ? null : ColumnType(column);
+    /// <summary>Returns the provider's stable physical-name ordering key for manifest output.</summary>
+    public virtual string GetPhysicalIdentifierSortKey(string identifier) => identifier;
+
+    /// <summary>
+    /// The fully-qualified factory call emitted for <c>[InquiryKey(SequentialGuid = true)]</c>.
+    /// Default is UUIDv7; SQL Server overrides to a layout whose timestamp lands in the bytes
+    /// <c>uniqueidentifier</c> compares first.
+    /// </summary>
+    public virtual string SequentialGuidFactoryExpression => "global::Inquiry.InquiryGuid.NewVersion7()";
+
+    protected static string FoldAscii(string identifier, bool upper)
+    {
+        var chars = identifier.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (upper && chars[i] is >= 'a' and <= 'z') chars[i] = (char)(chars[i] - ('a' - 'A'));
+            else if (!upper && chars[i] is >= 'A' and <= 'Z') chars[i] = (char)(chars[i] + ('a' - 'A'));
+        }
+        return new string(chars);
+    }
+    public virtual string GetProviderArtifactKind(CollectionParameterArtifact artifact) => "collection-type";
+    public virtual string GetProviderArtifactSignature(CollectionParameterArtifact artifact) => artifact.ElementSignature;
+    public virtual string RenderDefaultExpression(string expression) => expression;
+    public virtual string RenderCheckExpression(string expression) => expression;
+
+    /// <summary>Whether this provider has a native database-generated concurrency-token contract.</summary>
+    public virtual bool SupportsDatabaseGeneratedConcurrencyToken => false;
+
+    public virtual CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.ReportDiagnostic;
+    public virtual bool SupportsIndexIncludeColumns => false;
+    public virtual bool SupportsCheckConstraints => false;
+    public virtual ConstraintNameScope ForeignKeyConstraintNameScope => ConstraintNameScope.Schema;
+    public virtual ConstraintNameScope IndexNameScope => ConstraintNameScope.Schema;
+    public virtual ConstraintNameScope CheckConstraintNameScope => ConstraintNameScope.Schema;
+    public virtual IdentifierComparison IndexNameComparison => IdentifierComparison.Ordinal;
+    public virtual IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.Ordinal;
+    public virtual IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.Ordinal;
+    public virtual bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event)
+        => action == ReferentialActionKind.NoAction;
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
+    public virtual string RuntimeParameterName(string logicalName) => "@" + logicalName;
+    public virtual string RuntimeParameterNameFromSql(string sqlParameterName) => sqlParameterName;
+    public virtual string StoredProcedureParameterName(string formalName)
+        => formalName.Length > 0 && formalName[0] is '@' or ':' or '$' or '?' ? formalName : "@" + formalName;
+    public virtual string BatchInsertSqlParameterPrefix => "@p";
+    public virtual string BatchInsertRuntimeParameterPrefix => "@p";
+
+    /// <summary>Returns a deployment artifact required to bind this collection column, if any.</summary>
+    public virtual CollectionParameterResolution ResolveCollectionParameter(CollectionParameterContext context)
+        => new(null, null);
+
+    /// <summary>Emits the provider-specific runtime call for one previously resolved collection transport.</summary>
+    public virtual string BuildCollectionParameterBinding(CollectionParameterBindingContext context)
+        => $"{ArrayParameterBinderFqn}.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression});";
+
+    public virtual CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
+        => new(context.ValueExpression, context.ProviderTypeName, false);
+
+    /// <summary>Returns the direct typed reader expression for one provider primitive.</summary>
+    public virtual string BuildReaderExpression(ReaderExpressionContext context)
+    {
+        var ordinal = context.Ordinal;
+        if (context.ProviderIsGuid) return $"reader.GetGuid({ordinal})";
+        if (context.ProviderIsDateOnly) return $"reader.GetFieldValue<global::System.DateOnly>({ordinal})";
+        if (context.ProviderIsTimeOnly) return $"reader.GetFieldValue<global::System.TimeOnly>({ordinal})";
+        if (context.ProviderIsByteArray) return $"reader.GetFieldValue<global::System.Byte[]>({ordinal})";
+
+        return context.ProviderSpecialType switch
+        {
+            SpecialType.System_String => $"reader.GetString({ordinal})",
+            SpecialType.System_Boolean => $"reader.GetBoolean({ordinal})",
+            SpecialType.System_Byte => $"reader.GetByte({ordinal})",
+            SpecialType.System_Char => $"reader.GetChar({ordinal})",
+            SpecialType.System_Int16 => $"reader.GetInt16({ordinal})",
+            SpecialType.System_Int32 => $"reader.GetInt32({ordinal})",
+            SpecialType.System_Int64 => $"reader.GetInt64({ordinal})",
+            SpecialType.System_Single => $"reader.GetFloat({ordinal})",
+            SpecialType.System_Double => $"reader.GetDouble({ordinal})",
+            SpecialType.System_Decimal => $"reader.GetDecimal({ordinal})",
+            SpecialType.System_DateTime => $"reader.GetDateTime({ordinal})",
+            _ => $"reader.GetFieldValue<{context.ProviderTypeName}>({ordinal})",
+        };
+    }
+
+    /// <summary>Transforms a provider value expression at generation time. The portable default is identity.</summary>
+    public virtual string BuildParameterValueExpression(ParameterValueExpressionContext context)
+        => context.ValueExpression;
+
+    /// <summary>
+    /// Returns the CLR type name produced by <see cref="BuildParameterValueExpression"/>. Providers
+    /// that bridge a model/provider primitive to a different ADO value type must override this in
+    /// lockstep with the value-expression transformation.
+    /// </summary>
+    public virtual string BuildParameterValueTypeName(ParameterValueExpressionContext context)
+        => context.ProviderTypeName;
 
     /// <summary>
     /// The fully-qualified <c>System.Data.DbType</c> expression bound onto a generated parameter for a
     /// column of the given <paramref name="type"/>, or <c>null</c> when no portable DbType applies (the
-    /// provider then infers it). Routes <see cref="System.DateTime"/> through
-    /// <see cref="DateTimeDbTypeExpression"/> — the one mapping that varies by dialect — and delegates
-    /// everything else to the portable <see cref="DbTypeMapper"/>.
+    /// provider then infers it). Routes provider-sensitive mappings through their virtual expression
+    /// properties and delegates everything else to the portable <see cref="DbTypeMapper"/>.
     /// </summary>
     internal string? MapDbTypeExpression(TypeData type, bool isUnicode = true)
-        => type.SpecialType == SpecialType.System_DateTime
-            ? DateTimeDbTypeExpression
-            : DbTypeMapper.TryGetDbTypeExpression(type, isUnicode);
+    {
+        if (type.IsGuid) return GuidDbTypeExpression;
+        if (type.SpecialType == SpecialType.System_Boolean) return BooleanDbTypeExpression;
+        if (type.SpecialType == SpecialType.System_DateTime) return DateTimeDbTypeExpression;
+        if (type.IsDateOnly) return DateOnlyDbTypeExpression;
+        if (type.IsTimeOnly) return TimeOnlyDbTypeExpression;
+        if (type.NonNullableDisplayName == "global::System.DateTimeOffset") return DateTimeOffsetDbTypeExpression;
+        return DbTypeMapper.TryGetDbTypeExpression(type, isUnicode);
+    }
 
     /// <summary>
     /// As <see cref="MapDbTypeExpression"/> but for a value converter's provider
-    /// <see cref="SpecialType"/>; the same dialect substitution for <see cref="System.DateTime"/>
-    /// applies.
+    /// <see cref="SpecialType"/>; the same dialect substitutions for <see cref="System.Boolean"/> and
+    /// <see cref="System.DateTime"/> apply.
     /// </summary>
-    internal string? MapDbTypeExpressionForSpecialType(SpecialType specialType)
-        => specialType == SpecialType.System_DateTime
-            ? DateTimeDbTypeExpression
-            : DbTypeMapper.TryGetDbTypeForSpecialType(specialType);
+    internal string? MapDbTypeExpressionForSpecialType(SpecialType specialType, bool isUnicode = true)
+        => specialType switch
+        {
+            SpecialType.System_Boolean => BooleanDbTypeExpression,
+            SpecialType.System_DateTime => DateTimeDbTypeExpression,
+            _ => DbTypeMapper.TryGetDbTypeForSpecialType(specialType, isUnicode),
+        };
 
     /// <summary>
     /// The DbType expression emitted for a <see cref="System.DateTime"/> parameter. Default
@@ -56,6 +184,15 @@ public abstract class SqlBuilder
     /// range").
     /// </summary>
     public virtual string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime2";
+
+    /// <summary>The DbType expression emitted for a <see cref="System.Guid"/> parameter.</summary>
+    public virtual string GuidDbTypeExpression => "global::System.Data.DbType.Guid";
+
+    /// <summary>The DbType expression emitted for a <see cref="System.Boolean"/> parameter.</summary>
+    public virtual string BooleanDbTypeExpression => "global::System.Data.DbType.Boolean";
+    public virtual string? DateOnlyDbTypeExpression => "global::System.Data.DbType.Date";
+    public virtual string? TimeOnlyDbTypeExpression => "global::System.Data.DbType.Time";
+    public virtual string? DateTimeOffsetDbTypeExpression => "global::System.Data.DbType.DateTimeOffset";
 
     /// <summary>
     /// Whether generated binders emit <c>Size</c> (variable-length string) and <c>Precision</c>/
@@ -71,11 +208,17 @@ public abstract class SqlBuilder
 
     // ---- Batch insert / update ---------------------------------------------------------
 
+    /// <summary>Internal generator strategy used for generated InsertAll descriptors.</summary>
+    public virtual BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.SetBased;
+
+    /// <summary>First chunk size routed to the row/DbBatch side of an adaptive insert descriptor.</summary>
+    public virtual int BatchInsertAdaptiveThreshold => int.MaxValue;
+
     /// <summary>
     /// Header of a multi-row batch <c>INSERT</c> — the <c>_sqlInsertAllPrefix</c> const emitted before the
     /// per-row value tuples. Default is the standard multi-row form <c>INSERT INTO t (cols) VALUES </c>.
-    /// Oracle overrides with <c>INSERT ALL </c> (its multi-row insert repeats <c>INTO t (cols) VALUES (…)</c>
-    /// per row and ends with a <c>SELECT … FROM dual</c>).
+    /// Oracle overrides with one <c>INSERT INTO … SELECT … FROM dual UNION ALL …</c>
+    /// statement so identity sequences advance once per source row.
     /// </summary>
     public virtual string BuildBatchInsertHeader(SqlBuildContext context)
         => "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") VALUES ";
@@ -85,12 +228,57 @@ public abstract class SqlBuilder
     /// <c>INTO t (cols) VALUES (</c> per row.
     /// </summary>
     public virtual string BuildBatchInsertRowOpen(SqlBuildContext context) => "(";
+    public virtual string BatchInsertRowClose => ")";
 
     /// <summary>Separator placed between row tuples. Default <c>,</c> (multi-row VALUES); Oracle uses a space.</summary>
     public virtual string BatchInsertRowSeparator => ",";
 
     /// <summary>Trailing text after all row tuples. Default empty; Oracle appends <c> SELECT 1 FROM dual</c>.</summary>
     public virtual string BatchInsertFooter => "";
+
+    /// <summary>
+    /// Dialect row-count ceiling for one generated multi-row insert statement. Parameter-count and
+    /// configured batch-size ceilings are applied independently by the generated operation.
+    /// </summary>
+    public virtual int BatchInsertMaxRowsPerCommand => int.MaxValue;
+
+    /// <summary>
+    /// Hard provider/protocol ceiling for bound parameters in one command. The generated descriptor
+    /// applies this even when a user configures a larger runtime parameter limit.
+    /// </summary>
+    public virtual int HardMaxParametersPerCommand => 65535;
+
+    /// <summary>Whether batch mutations may use provider array binding with one fixed DML command.</summary>
+    public virtual bool UsesArrayBindingForBatchMutations => false;
+
+    /// <summary>Whether UpdateAll may use a provider-specific set-based statement for eligible chunks.</summary>
+    public virtual bool SupportsSetBasedBatchUpdate => false;
+
+    /// <summary>SQL preceding the first SELECT row in a set-based UpdateAll derived table.</summary>
+    public virtual string BuildSetBasedBatchUpdateHeader(string? schema, string tableName)
+        => throw new System.NotSupportedException($"Set-based batch update is not supported by {DialectName}.");
+
+    /// <summary>SQL joining a set-based UpdateAll derived table to the target and assigning its values.</summary>
+    public virtual string BuildSetBasedBatchUpdateFooter(
+        string? schema,
+        string tableName,
+        IReadOnlyList<IColumn> keyColumns,
+        IReadOnlyList<IColumn> setColumns)
+        => throw new System.NotSupportedException($"Set-based batch update is not supported by {DialectName}.");
+
+    /// <summary>Emits the provider command assignment that establishes the array-bind row count.</summary>
+    public virtual string BuildArrayBindCountAssignment(string commandExpression, string countExpression)
+        => throw new System.NotSupportedException("This dialect does not support DML array binding.");
+
+    /// <summary>Builds a per-element size expression for provider array binding, or null when none is needed.</summary>
+    public virtual string? BuildArrayBindSizeExpression(string valueExpression, string valueVariable, IColumn column) => null;
+
+    /// <summary>Emits the provider-specific assignment for a variable-width array parameter's element sizes.</summary>
+    public virtual string BuildArrayBindSizeAssignment(string parameterExpression, string sizesExpression)
+        => throw new System.NotSupportedException("This dialect does not support per-element array bind sizes.");
+
+    /// <summary>Emits provider-only metadata needed before assigning an array parameter value.</summary>
+    public virtual string? BuildArrayBindParameterMetadata(string parameterExpression, IColumn column) => null;
 
     public string QuoteTable(string? schema, string tableName)
     {
@@ -116,6 +304,59 @@ public abstract class SqlBuilder
         var inPredicate = QuoteIdentifier(childFilterColumnName) + " IN (" + subquery + ")";
         return "SELECT " + childContext.SelectColumns + " FROM " + childContext.Table
             + " WHERE " + AppendWhere(inPredicate, childContext.ActiveRowPredicate);
+    }
+
+    /// <summary>
+    /// Builds the parameterless many-to-many child SELECT used by an all-eager load. Only children
+    /// connected to an eligible parent through an eligible junction row are returned. The child key
+    /// is driven by a junction-key subquery so providers can seek the child primary key.
+    /// </summary>
+    internal string BuildManyToManySelectAllFilteredSql(
+        SqlBuildContext childContext,
+        SqlBuildContext junctionContext,
+        SqlBuildContext parentContext,
+        string childKeyColumnName,
+        string junctionChildForeignKeyColumnName,
+        string junctionParentForeignKeyColumnName,
+        string parentKeyColumnName)
+    {
+        var j = QuoteIdentifier("__j");
+        var parentSubquery = "SELECT " + QuoteIdentifier(parentKeyColumnName)
+            + " FROM " + parentContext.Table
+            + WhereSuffix(parentContext.ActiveRowPredicate);
+        var junctionPredicate = junctionContext.QualifyActiveRowPredicate(j);
+        junctionPredicate = AppendWhere(junctionPredicate,
+            j + "." + QuoteIdentifier(junctionParentForeignKeyColumnName) + " IN (" + parentSubquery + ")");
+        var junctionKeySubquery = "SELECT " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumnName)
+            + " FROM " + junctionContext.Table + " " + j
+            + WhereSuffix(junctionPredicate);
+        var childKeyPredicate = QuoteIdentifier(childKeyColumnName) + " IN (" + junctionKeySubquery + ")";
+
+        return "SELECT " + childContext.SelectColumns + " FROM " + childContext.Table
+            + " WHERE " + AppendWhere(childContext.ActiveRowPredicate, childKeyPredicate);
+    }
+
+    internal string BuildManyToManyJunctionAllFilteredSql(
+        SqlBuildContext junctionContext,
+        SqlBuildContext parentContext,
+        SqlBuildContext childContext,
+        string junctionParentForeignKeyColumnName,
+        string parentKeyColumnName,
+        string junctionChildForeignKeyColumnName,
+        string childKeyColumnName)
+    {
+        var parentSubquery = "SELECT " + QuoteIdentifier(parentKeyColumnName)
+            + " FROM " + parentContext.Table
+            + WhereSuffix(parentContext.ActiveRowPredicate);
+        var childSubquery = "SELECT " + QuoteIdentifier(childKeyColumnName)
+            + " FROM " + childContext.Table
+            + WhereSuffix(childContext.ActiveRowPredicate);
+        var where = AppendWhere(junctionContext.ActiveRowPredicate,
+            QuoteIdentifier(junctionParentForeignKeyColumnName) + " IN (" + parentSubquery + ")");
+        where = AppendWhere(where,
+            QuoteIdentifier(junctionChildForeignKeyColumnName) + " IN (" + childSubquery + ")");
+        return "SELECT " + junctionContext.SelectColumns + " FROM " + junctionContext.Table
+            + " WHERE " + where;
     }
 
     public abstract string BuildSelectByKeySql(SqlBuildContext context);
@@ -145,9 +386,34 @@ public abstract class SqlBuilder
         string childKeyColumn,
         string junctionParentForeignKeyColumn,
         string parentParameterName)
+        => BuildManyToManySelectByParentSqlCore(
+            childContext, childColumns, QuoteTable(junctionSchema, junctionTable), string.Empty,
+            junctionChildForeignKeyColumn, childKeyColumn, junctionParentForeignKeyColumn, parentParameterName);
+
+    internal string BuildManyToManySelectByParentSql(
+        SqlBuildContext childContext,
+        IReadOnlyList<IColumn> childColumns,
+        SqlBuildContext junctionContext,
+        string junctionChildForeignKeyColumn,
+        string childKeyColumn,
+        string junctionParentForeignKeyColumn,
+        string parentParameterName)
+        => BuildManyToManySelectByParentSqlCore(
+            childContext, childColumns, junctionContext.Table,
+            junctionContext.QualifyActiveRowPredicate(QuoteIdentifier("__j")),
+            junctionChildForeignKeyColumn, childKeyColumn, junctionParentForeignKeyColumn, parentParameterName);
+
+    private string BuildManyToManySelectByParentSqlCore(
+        SqlBuildContext childContext,
+        IReadOnlyList<IColumn> childColumns,
+        string junctionTable,
+        string junctionActiveRowPredicate,
+        string junctionChildForeignKeyColumn,
+        string childKeyColumn,
+        string junctionParentForeignKeyColumn,
+        string parentParameterName)
     {
         var j = QuoteIdentifier("__j");
-        var junctionQuoted = QuoteTable(junctionSchema, junctionTable);
         var childCols = new System.Text.StringBuilder();
         for (var i = 0; i < childColumns.Count; i++)
         {
@@ -160,11 +426,13 @@ public abstract class SqlBuilder
         }
 
         var where = j + "." + QuoteIdentifier(junctionParentForeignKeyColumn) + " = " + ParameterName(parentParameterName);
+        where = AppendWhere(where, junctionActiveRowPredicate);
+        where = AppendWhere(where, childContext.QualifiedActiveRowPredicate);
         return "SELECT " + childCols.ToString()
             + " FROM " + childContext.Table
-            + " INNER JOIN " + junctionQuoted + " " + j
+            + " INNER JOIN " + junctionTable + " " + j
             + " ON " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumn) + " = " + childContext.Table + "." + QuoteIdentifier(childKeyColumn)
-            + " WHERE " + AppendWhere(where, childContext.QualifiedActiveRowPredicate);
+            + " WHERE " + where;
     }
 
     /// <summary>
@@ -236,6 +504,10 @@ public abstract class SqlBuilder
 
     public abstract string BuildDeleteByKeySql(SqlBuildContext context);
 
+    /// <summary>Builds a single-row delete that returns the deleted entity.</summary>
+    public virtual string BuildDeleteByKeyReturningSql(SqlBuildContext context)
+        => throw new System.NotSupportedException("DELETE RETURNING is not supported by this dialect.");
+
     // ---- Soft delete -------------------------------------------------------------------
 
     /// <summary>
@@ -274,6 +546,13 @@ public abstract class SqlBuilder
             + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
 
     /// <summary>
+    /// Builds a soft-delete update that returns the affected entity. Dialects must opt in because
+    /// support for UPDATE RETURNING differs independently from DELETE RETURNING.
+    /// </summary>
+    public virtual string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
+        => throw new System.NotSupportedException("Soft-delete returning requires UPDATE RETURNING, which is not supported by this dialect.");
+
+    /// <summary>
     /// Builds the restore UPDATE (clear the soft-delete indicator) by key. Concrete and inherited by
     /// every provider, mirroring <see cref="BuildSoftDeleteByKeySql"/>.
     /// </summary>
@@ -308,8 +587,22 @@ public abstract class SqlBuilder
     /// concrete and inherited by every provider; it composes the soft-delete active filter via
     /// <see cref="WhereSuffix"/> so a count excludes soft-deleted rows when applicable.
     /// </summary>
+    protected virtual string CountExpression => "COUNT(*)";
+
     public virtual string BuildCountSql(SqlBuildContext context)
-        => "SELECT COUNT(*) FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
+        => "SELECT " + CountExpression + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
+
+    public virtual string BuildCountByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
+    {
+        if (filterColumns.Count == 0)
+            return BuildCountSql(context);
+
+        var parts = new string[filterColumns.Count];
+        for (var i = 0; i < filterColumns.Count; i++)
+            parts[i] = QuoteIdentifier(filterColumns[i].ColumnName) + " = " + ParameterName(filterColumns[i].PropertyName);
+        var where = string.Join(" AND ", parts);
+        return "SELECT " + CountExpression + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
+    }
 
     /// <summary>
     /// Builds an existence test (<c>[InquiryExists]</c>): <c>SELECT CASE WHEN EXISTS(SELECT 1 FROM … WHERE
@@ -346,7 +639,7 @@ public abstract class SqlBuilder
     /// filter composed when the entity has soft delete.
     /// </summary>
     public virtual string BuildGroupCountSql(SqlBuildContext context, string quotedColumn)
-        => "SELECT " + quotedColumn + ", COUNT(*) FROM " + context.Table
+        => "SELECT " + quotedColumn + ", " + CountExpression + " FROM " + context.Table
             + WhereSuffix(context.ActiveRowPredicate)
             + " GROUP BY " + quotedColumn;
 
@@ -497,6 +790,11 @@ public abstract class SqlBuilder
             }
 
             var def = QuoteIdentifier(column.ColumnName) + " " + ColumnType(column);
+            if (DefaultExpressionPrecedesInlineConstraints && !string.IsNullOrEmpty(column.DefaultExpression))
+            {
+                def += " DEFAULT " + column.DefaultExpression;
+            }
+
             if (!compositeKey && column.IsKey)
             {
                 def += " PRIMARY KEY";
@@ -507,7 +805,7 @@ public abstract class SqlBuilder
                 def += " NOT NULL";
             }
 
-            if (!string.IsNullOrEmpty(column.DefaultExpression))
+            if (!DefaultExpressionPrecedesInlineConstraints && !string.IsNullOrEmpty(column.DefaultExpression))
             {
                 def += " DEFAULT " + column.DefaultExpression;
             }
@@ -520,11 +818,26 @@ public abstract class SqlBuilder
             lines.Add("PRIMARY KEY (" + string.Join(", ", context.QuotedKeyColumns) + ")");
         }
 
-        if (context.GenerateForeignKeys)
+        if (context.NormalizedChecks is not null)
+        {
+            foreach (var check in context.NormalizedChecks)
+                lines.Add("CONSTRAINT " + QuoteIdentifier(check.EmittedName ?? check.RequestedName!) + " CHECK (" + check.Expression + ")");
+        }
+
+        if (context.GenerateForeignKeys && context.NormalizedForeignKeys is not null)
+        {
+            foreach (var foreignKey in context.NormalizedForeignKeys)
+            {
+                if (context.SuppressedForeignKeyColumns?.Contains(foreignKey.LocalColumn) == true) continue;
+                lines.Add(BuildForeignKeyConstraintBody(foreignKey, includeConstraintKeyword: !string.IsNullOrEmpty(foreignKey.EmittedName)));
+            }
+        }
+        else if (context.GenerateForeignKeys)
         {
             foreach (var column in context.Columns)
             {
-                if (string.IsNullOrEmpty(column.ForeignKeyTable) || string.IsNullOrEmpty(column.ForeignKeyColumn))
+                if (string.IsNullOrEmpty(column.ForeignKeyTable) || string.IsNullOrEmpty(column.ForeignKeyColumn)
+                    || context.SuppressedForeignKeyColumns?.Contains(column.ColumnName) == true)
                 {
                     continue;
                 }
@@ -537,6 +850,32 @@ public abstract class SqlBuilder
         return WrapCreateTable(context, string.Join(",\n    ", lines));
     }
 
+    internal virtual string BuildAddForeignKeySql(ForeignKeyConstraintData foreignKey)
+        => "ALTER TABLE " + QuoteTable(foreignKey.LocalSchema, foreignKey.LocalTable)
+            + " ADD CONSTRAINT " + QuoteIdentifier(foreignKey.EmittedName!)
+            + " " + BuildForeignKeyConstraintBody(foreignKey, includeConstraintKeyword: false);
+
+    private string BuildForeignKeyConstraintBody(ForeignKeyConstraintData foreignKey, bool includeConstraintKeyword)
+        => (includeConstraintKeyword ? "CONSTRAINT " + QuoteIdentifier(foreignKey.EmittedName!) + " " : string.Empty)
+            + "FOREIGN KEY (" + QuoteIdentifier(foreignKey.LocalColumn) + ") REFERENCES "
+            + QuoteTable(foreignKey.ReferencedSchema, foreignKey.ReferencedTable)
+            + "(" + QuoteIdentifier(foreignKey.ReferencedColumn) + ")"
+            + RenderReferentialActionClause(ReferentialActionEvent.Delete, (ReferentialActionKind)foreignKey.OnDelete)
+            + RenderReferentialActionClause(ReferentialActionEvent.Update, (ReferentialActionKind)foreignKey.OnUpdate);
+
+    protected virtual string RenderReferentialActionClause(ReferentialActionEvent @event, ReferentialActionKind action)
+        => action == ReferentialActionKind.NoAction ? string.Empty
+            : " ON " + (@event == ReferentialActionEvent.Delete ? "DELETE" : "UPDATE") + " " + RenderReferentialActionToken(action);
+
+    protected virtual string RenderReferentialActionToken(ReferentialActionKind action) => action switch
+    {
+        ReferentialActionKind.Restrict => "RESTRICT",
+        ReferentialActionKind.Cascade => "CASCADE",
+        ReferentialActionKind.SetNull => "SET NULL",
+        ReferentialActionKind.SetDefault => "SET DEFAULT",
+        _ => string.Empty,
+    };
+
     /// <summary>
     /// Builds the <c>CREATE INDEX</c> statements for the entity — one per column flagged
     /// <see cref="IColumn.IsIndexed"/> or <see cref="IColumn.IsUnique"/>. The index name defaults to
@@ -545,6 +884,22 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual IReadOnlyList<string> BuildCreateIndexSql(SqlBuildContext context)
     {
+        if (context.NormalizedIndexes is not null)
+        {
+            var normalized = new List<string>();
+            foreach (var index in context.NormalizedIndexes)
+            {
+                var unique = index.IsUnique ? "UNIQUE " : string.Empty;
+                var guard = SupportsCreateIndexIfNotExists ? "IF NOT EXISTS " : string.Empty;
+                var keys = string.Join(", ", index.KeyColumns.AsImmutableArray().Select(column => QuoteIdentifier(column)));
+                var include = index.IncludeColumns.Count > 0
+                    ? " INCLUDE (" + string.Join(", ", index.IncludeColumns.AsImmutableArray().Select(column => QuoteIdentifier(column))) + ")"
+                    : string.Empty;
+                normalized.Add("CREATE " + unique + "INDEX " + guard + QuoteIdentifier(index.EmittedName ?? index.RequestedName!)
+                    + " ON " + context.Table + " (" + keys + ")" + include);
+            }
+            return normalized;
+        }
         var statements = new List<string>();
         foreach (var column in context.Columns)
         {
@@ -606,7 +961,7 @@ public abstract class SqlBuilder
            && (column.Length == 0 || column.Length > MaxBoundedStringLength(column.IsUnicode));
 
     /// <summary>The physical column type: the explicit <see cref="IColumn.SqlType"/> override if set, else <see cref="MapColumnType"/>.</summary>
-    protected string ColumnType(IColumn column)
+    protected virtual string ColumnType(IColumn column)
         => string.IsNullOrEmpty(column.SqlType) ? MapColumnType(column) : column.SqlType!;
 
     /// <summary>
@@ -617,6 +972,7 @@ public abstract class SqlBuilder
     /// </summary>
     protected virtual string RenderComputedColumn(IColumn column)
         => "AS (" + column.ComputedExpression + ")";
+
 
     /// <summary>
     /// Renders the <c>precision, scale</c> body for a decimal column type, using the column's declared

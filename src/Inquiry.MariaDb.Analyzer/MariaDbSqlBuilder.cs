@@ -1,4 +1,6 @@
 using Inquiry.Generators.Abstractions;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Inquiry.MariaDb.Analyzer;
 
@@ -11,47 +13,32 @@ namespace Inquiry.MariaDb.Analyzer;
 /// </summary>
 internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
 {
-    public override string DialectName => "MariaDb";
-
-    // ---- JSON_TABLE IN optimization (#170) --------------------------------------------------
-
-    public override bool UseArrayInParameters => true;
-
-    public override string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryJsonArrayParameter";
-
-    protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
+    protected override SqlExpressionCommentPolicy ComputedExpressionCommentPolicy => SqlExpressionCommentPolicy.MariaDb;
+    public override IReadOnlyList<string> ValidateComputedExpression(string expression)
     {
-        var colType = elementType switch
-        {
-            DbTypeClass.Boolean or DbTypeClass.Byte or DbTypeClass.Int16
-                or DbTypeClass.Int32 or DbTypeClass.Int64 => "SIGNED",
-            DbTypeClass.Single or DbTypeClass.Double => "DOUBLE",
-            DbTypeClass.Decimal => "DECIMAL(65,30)",
-            DbTypeClass.Guid => "CHAR(36)",
-            _ => "CHAR(255)",
-        };
-
-        return quotedColumn + " IN (SELECT jt.val FROM JSON_TABLE(" + parameterName
-            + ", '$[*]' COLUMNS(val " + colType + " PATH '$')) jt)";
+        var analysis = SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false);
+        if (!analysis.HasConcatenationOperator) return analysis.Failures;
+        return analysis.Failures.Concat(new[] { "contains ambiguous '||'; use CONCAT(...), OR, or a mariadb override" }).ToArray();
     }
+    public override string DialectName => "MariaDb";
+    public override string ProviderId => "mariadb";
+
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+    public override bool SupportsCheckConstraints => true;
+    public override ConstraintNameScope IndexNameScope => ConstraintNameScope.Table;
+    public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
 
     // ---- Native RETURNING (#58) -------------------------------------------------------------
 
     public override string BuildInsertReturningSql(SqlBuildContext context)
-    {
-        if (DatabaseMaySupplyKey(context) && context.KeyColumns[0].TypeClass == DbTypeClass.Guid)
-        {
-            var keyColumn = context.QuotedKeyColumns[0];
-            var keyValue = "COALESCE(" + context.KeyParameters[0] + ", UUID())";
-            var cols = string.IsNullOrEmpty(context.InsertColumns) ? keyColumn : keyColumn + ", " + context.InsertColumns;
-            var vals = string.IsNullOrEmpty(context.InsertParameters) ? keyValue : keyValue + ", " + context.InsertParameters;
-
-            return "INSERT INTO " + context.Table + " (" + cols + ") VALUES (" + vals + ") RETURNING " + context.SelectColumns;
-        }
-
-        return BuildInsertSql(context) + " RETURNING " + context.SelectColumns;
-    }
+        => BuildInsertSql(context) + " RETURNING " + context.SelectColumns;
 
     public override string BuildUpsertReturningSql(SqlBuildContext context)
         => BuildUpsertSql(context) + " RETURNING " + context.SelectColumns;
+
+    public override string BuildDeleteByKeyReturningSql(SqlBuildContext context)
+        => BuildDeleteByKeySql(context) + " RETURNING " + context.SelectColumns;
 }

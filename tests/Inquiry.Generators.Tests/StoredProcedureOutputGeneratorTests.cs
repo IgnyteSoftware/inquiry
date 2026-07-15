@@ -45,12 +45,19 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // Input param, then the OUTPUT param with DbType + Output direction. A decimal output
-        // stamps precision/scale so SqlClient doesn't round the read-back value to scale 0.
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@category\", (object?)category ?? global::System.DBNull.Value),", text);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Total\", global::System.DBNull.Value, dbType: global::System.Data.DbType.Decimal, direction: global::System.Data.ParameterDirection.Output, precision: (byte)38, scale: (byte)10),", text);
+        // The static generated binder creates the input and OUTPUT parameters without an
+        // InquiryParameter array. Decimal metadata prevents SqlClient rounding the read-back value.
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<string>(", text);
+        Assert.Contains("static (global::System.Data.Common.DbCommand _c, string _args) =>", text);
+        Assert.Contains("_p0.ParameterName = \"@category\";", text);
+        Assert.Contains("_p0.Value = (object?)category ?? global::System.DBNull.Value;", text);
+        Assert.Contains("_p1.ParameterName = \"@Total\";", text);
+        Assert.Contains("_p1.Direction = global::System.Data.ParameterDirection.Output;", text);
+        Assert.Contains("_p1.DbType = global::System.Data.DbType.Decimal;", text);
+        Assert.Contains("_p1.Precision = (byte)38;", text);
+        Assert.Contains("_p1.Scale = (byte)10;", text);
         Assert.Contains("global::System.Data.CommandType.StoredProcedure);", text);
-        Assert.Contains("Inquiry.ExecuteProcedureScalarAsync<decimal>(_cmd, \"@Total\", ", text);
+        Assert.Contains("Inquiry.ExecuteProcedureScalarAsync<decimal, string>(_cmd, \"@Total\", ", text);
     }
 
     [Fact]
@@ -68,8 +75,12 @@ public sealed partial class InquiryGeneratorTests
         var text = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
         // An explicit @-prefixed name is kept; string output gets Size = -1.
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@Name\", global::System.DBNull.Value, dbType: global::System.Data.DbType.String, direction: global::System.Data.ParameterDirection.Output, size: -1),", text);
-        Assert.Contains("Inquiry.ExecuteProcedureScalarAsync<string?>(_cmd, \"@Name\", ", text);
+        Assert.Contains("_p1.ParameterName = \"@Name\";", text);
+        Assert.Contains("_p1.Value = global::System.DBNull.Value;", text);
+        Assert.Contains("_p1.DbType = global::System.Data.DbType.String;", text);
+        Assert.Contains("_p1.Direction = global::System.Data.ParameterDirection.Output;", text);
+        Assert.Contains("_p1.Size = -1;", text);
+        Assert.Contains("Inquiry.ExecuteProcedureScalarAsync<string?, long>(_cmd, \"@Name\", ", text);
     }
 
     [Fact]
@@ -86,8 +97,10 @@ public sealed partial class InquiryGeneratorTests
 
         var text = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@__inquiry_return\", 0, direction: global::System.Data.ParameterDirection.ReturnValue),", text);
-        Assert.Contains("Inquiry.ExecuteProcedureScalarAsync<int>(_cmd, \"@__inquiry_return\", ", text);
+        Assert.Contains("_p1.ParameterName = \"@__inquiry_return\";", text);
+        Assert.Contains("_p1.Value = 0;", text);
+        Assert.Contains("_p1.Direction = global::System.Data.ParameterDirection.ReturnValue;", text);
+        Assert.Contains("Inquiry.ExecuteProcedureScalarAsync<int, long>(_cmd, \"@__inquiry_return\", ", text);
     }
 
     [Fact]
@@ -105,7 +118,13 @@ public sealed partial class InquiryGeneratorTests
         var text = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
         Assert.DoesNotContain("global::System.Array.Empty<global::Inquiry.Parameters.InquiryParameter>()", text);
-        Assert.Contains("new global::Inquiry.Parameters.InquiryParameter(\"@N\", global::System.DBNull.Value, dbType: global::System.Data.DbType.Int64, direction: global::System.Data.ParameterDirection.Output),", text);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(", text);
+        Assert.Contains("static (global::System.Data.Common.DbCommand _c, byte _args) =>", text);
+        Assert.Contains("_p0.ParameterName = \"@N\";", text);
+        Assert.Contains("_p0.Value = global::System.DBNull.Value;", text);
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.Int64;", text);
+        Assert.Contains("_p0.Direction = global::System.Data.ParameterDirection.Output;", text);
+        Assert.Contains("Inquiry.ExecuteProcedureScalarAsync<long, byte>(_cmd, \"@N\", ", text);
     }
 
     [Fact]

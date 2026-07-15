@@ -59,12 +59,14 @@ public sealed record SaleNote          // records work — use init properties,
 
 ## What the generator emits
 
-For each `[InquiryAdHoc]` type: a materializer reading the properties by ordinal, in a `{Name}.InquiryAdHoc.g.cs` file, plus a registration line in `AddInquiryGeneratedStores()`:
+For each `[InquiryAdHoc]` type: a materializer reading the properties by ordinal, in a `{MetadataIdentity}.InquiryAdHoc.g.cs` file (namespace-qualified, with containing types separated by `+`, and generic arity backticks preserved as part of the CLR metadata identity, such as ``Outer`1+Inner`2``), plus a registration line in `AddInquiryGeneratedStores()`:
 
 ```csharp
 internal sealed class CategorySalesInquiryAdHocMaterializer
     : IInquiryEntityMaterializer<CategorySales>
 {
+    public bool IsInquirySequentialAccessSafe => true;
+
     public CategorySales Materialize(DbDataReader reader)
     {
         return new CategorySales
@@ -78,6 +80,12 @@ internal sealed class CategorySalesInquiryAdHocMaterializer
 ```
 
 That DI registration is what the ad-hoc `IInquiry.Query*` path resolves at runtime — without it, querying an unregistered type throws. Registration goes through the same `AddInquiryGeneratedStores()` (or assembly-scanning `AddInquiry(Assembly[])`) call you already make; nothing extra to wire.
+
+Because generated materializers read every value in ascending ordinal order, Inquiry opens their
+readers with `CommandBehavior.SequentialAccess`. Wide rows and large final columns can therefore be
+consumed without the provider buffering the complete row first, including when `QueryAsync<T>` is
+stopped early. Hand-written `IInquiryEntityMaterializer<T>` implementations remain buffered by
+default, so existing materializers that read columns out of order keep working safely.
 
 ## Constraints
 

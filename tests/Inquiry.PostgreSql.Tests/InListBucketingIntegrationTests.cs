@@ -18,7 +18,7 @@ public sealed class InListBucketingIntegrationTests
     public InListBucketingIntegrationTests(PostgreSqlContainerFixture fixture) => _fixture = fixture;
 
     private const string ProductsDdl = """
-        CREATE TABLE "Products" ("ProductID" SERIAL PRIMARY KEY, "ProductName" TEXT NOT NULL, "UnitPrice" NUMERIC, "UnitsInStock" SMALLINT, "CategoryID" INT NULL, "Discontinued" BOOLEAN NOT NULL DEFAULT FALSE)
+        CREATE TABLE "Products" ("ProductID" SERIAL PRIMARY KEY, "ProductName" TEXT NOT NULL, "SupplierID" INT NULL, "CategoryID" INT NULL, "QuantityPerUnit" TEXT NULL, "UnitPrice" NUMERIC, "UnitsInStock" SMALLINT, "UnitsOnOrder" SMALLINT NULL, "ReorderLevel" SMALLINT NULL, "Discontinued" BOOLEAN NOT NULL DEFAULT FALSE)
         """;
 
     private async Task<PostgreSqlTestHarness> SeedAsync()

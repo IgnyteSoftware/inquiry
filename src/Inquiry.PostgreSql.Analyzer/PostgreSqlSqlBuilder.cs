@@ -6,7 +6,40 @@ namespace Inquiry.PostgreSql.Analyzer;
 
 internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 {
+    public override bool ComputedColumnDeclaresStoreType => true;
+
+    public override string BuildParameterValueExpression(ParameterValueExpressionContext context)
+        => context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_DateTime
+            ? $"global::System.DateTime.SpecifyKind({context.ValueExpression}, global::System.DateTimeKind.Unspecified)"
+            : base.BuildParameterValueExpression(context);
+
+    public override CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
+        => context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_DateTime
+            ? new(
+                $"global::System.DateTime.SpecifyKind({context.ValueExpression}, global::System.DateTimeKind.Unspecified)",
+                "global::System.DateTime",
+                true)
+            : UnsignedCollectionElement(context);
+
+    private static CollectionElementExpression UnsignedCollectionElement(CollectionElementExpressionContext context)
+        => context.ProviderSpecialType switch
+        {
+            Microsoft.CodeAnalysis.SpecialType.System_SByte => new($"unchecked((global::System.Int16)(global::System.Byte)({context.ValueExpression}))", "global::System.Int16", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt16 => new($"unchecked((global::System.Int16)({context.ValueExpression}))", "global::System.Int16", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt32 => new($"unchecked((global::System.Int32)({context.ValueExpression}))", "global::System.Int32", true),
+            Microsoft.CodeAnalysis.SpecialType.System_UInt64 => new($"unchecked((global::System.Int64)({context.ValueExpression}))", "global::System.Int64", true),
+            _ => new(context.ValueExpression, context.ProviderTypeName, false),
+        };
+
     public override string DialectName => "PostgreSql";
+    public override string ProviderId => "postgresql";
+
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+    public override bool SupportsIndexIncludeColumns => true;
+    public override bool SupportsCheckConstraints => true;
+    public override ConstraintNameScope ForeignKeyConstraintNameScope => ConstraintNameScope.Table;
+    public override ConstraintNameScope CheckConstraintNameScope => ConstraintNameScope.Table;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is >= ReferentialActionKind.NoAction and <= ReferentialActionKind.SetDefault;
 
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";

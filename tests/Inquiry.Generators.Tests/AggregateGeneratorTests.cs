@@ -9,6 +9,27 @@ namespace Inquiry.Generators.Tests;
 public sealed partial class InquiryGeneratorTests
 {
     [Fact]
+    public void SqlServerCountUsesCountBig()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+            namespace Demo;
+            [InquiryTable("TOrg")] public sealed class Org { [InquiryKey] public long Id { get; set; } }
+            public partial class OrgStore : InquiryStore<Org>
+            {
+                [InquiryCount] public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("OrgStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        Assert.Contains("SELECT COUNT_BIG(*)", tree.GetText().ToString());
+    }
+    [Fact]
     public void CountEmitsScalarCountSql()
     {
         const string source = """
@@ -40,7 +61,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("private const string _sqlCount = \"SELECT COUNT(*) FROM \\\"TOrg\\\"\";", text);
-        Assert.Contains("return Inquiry.ExecuteScalarAsync<long>(new global::Inquiry.Commands.InquiryCommand(_sqlCount)", text);
+        Assert.Contains("return Inquiry.ExecuteScalarAsync<long, byte>(new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlCount, default, static (_, _) => { })", text);
     }
 
     [Fact]
@@ -81,7 +102,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("private const string _sqlAgg_SumAsync = \"SELECT SUM(\\\"Amount\\\") FROM \\\"TSale\\\"\";", text);
-        Assert.Contains("return Inquiry.ExecuteScalarAsync<decimal?>(new global::Inquiry.Commands.InquiryCommand(_sqlAgg_SumAsync)", text);
+        Assert.Contains("return Inquiry.ExecuteScalarAsync<decimal?, byte>(new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlAgg_SumAsync, default, static (_, _) => { })", text);
         Assert.Contains("private const string _sqlAgg_MaxAsync = \"SELECT MAX(\\\"Amount\\\") FROM \\\"TSale\\\"\";", text);
     }
 

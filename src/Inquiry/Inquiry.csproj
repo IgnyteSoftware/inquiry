@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-    <Description>Core abstractions and attributes for the Inquiry source-generated micro-ORM. Reference one of the Inquiry.* provider packages (Inquiry.Sqlite, Inquiry.SqlServer, Inquiry.PostgreSql) to enable code generation.</Description>
+    <Description>Core abstractions and attributes for the Inquiry source-generated micro-ORM. Reference an Inquiry provider package to enable compile-time store generation for SQLite, SQL Server, PostgreSQL, MySQL, MariaDB, or Oracle.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Runs the trim/AOT analyzers and stamps the trimming/AOT-compatibility metadata. -->

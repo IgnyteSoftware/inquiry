@@ -8,11 +8,13 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <IsPackable>false</IsPackable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <NoWarn>$(NoWarn);RS1032;RS1036;RS2008</NoWarn>
+    <NoWarn>$(NoWarn);RS1032;RS1036</NoWarn>
+    <!-- Microsoft.CodeAnalysis.Analyzers auto-adds AnalyzerReleases.*.md as AdditionalFiles. -->
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
     <ProjectReference Include="..\Inquiry.Generators.Shared\Inquiry.Generators.Shared.csproj" PrivateAssets="all" />
+    <Compile Include="..\Inquiry.Oracle.Shared\OracleBindName.cs" Link="OracleBindName.cs" />
   </ItemGroup>
 </Project>

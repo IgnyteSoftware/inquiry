@@ -43,4 +43,11 @@ public sealed class InquiryTableAttribute : Attribute
     /// constraints for columns mapped with <see cref="InquiryForeignKeyAttribute"/>. Default true.
     /// </summary>
     public bool GenerateForeignKeys { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether this mapping participates in generated assembly schema DDL. Set to
+    /// <see langword="false"/> when the physical table is managed by hand-authored migrations or
+    /// another canonical mapping. Stores and materializers are unaffected. Default true.
+    /// </summary>
+    public bool GenerateDdl { get; set; } = true;
 }

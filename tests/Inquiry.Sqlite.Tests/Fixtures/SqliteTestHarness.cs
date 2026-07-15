@@ -50,7 +50,12 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
     /// FK enforcement. Use for the rare tests that intentionally insert orphan-FK rows.
     /// Defaults to true (FK enforcement on), matching Microsoft.Data.Sqlite's default.
     /// </param>
-    public static async Task<SqliteTestHarness> CreateAsync(string schemaDdl, string? namePrefix = null, bool foreignKeys = true)
+    public static async Task<SqliteTestHarness> CreateAsync(
+        string schemaDdl,
+        string? namePrefix = null,
+        bool foreignKeys = true,
+        Action<InquiryOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var prefix = namePrefix ?? "Inquiry";
         var connectionString = new SqliteConnectionStringBuilder
@@ -70,10 +75,14 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
             await cmd.ExecuteNonQueryAsync();
         }
 
-        var services = new ServiceCollection()
-            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly)
-            .AddInquirySqlite(connectionString)
-            .BuildServiceProvider();
+        var serviceCollection = new ServiceCollection();
+        if (configureOptions is null)
+            serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
+        else
+            serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
+        serviceCollection.AddInquirySqlite(connectionString);
+        configureServices?.Invoke(serviceCollection);
+        var services = serviceCollection.BuildServiceProvider();
 
         return new SqliteTestHarness(connectionString, keeper, services);
     }

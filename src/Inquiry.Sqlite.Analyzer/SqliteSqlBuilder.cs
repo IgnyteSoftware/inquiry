@@ -6,7 +6,22 @@ namespace Inquiry.Sqlite.Analyzer;
 
 internal sealed class SqliteSqlBuilder : SqlBuilder
 {
+    public override BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.Row;
+
+    // SQLite 3.32+ defaults SQLITE_MAX_VARIABLE_NUMBER to 32,766.
+    public override int HardMaxParametersPerCommand => 32766;
+
     public override string DialectName => "Sqlite";
+    public override string ProviderId => "sqlite";
+    // SQLite identifiers compare ASCII case-insensitively by default. Non-ASCII remains exact.
+    public override string GetPhysicalIdentifierSortKey(string identifier) => FoldAscii(identifier, upper: true);
+
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.Inline;
+    public override bool SupportsCheckConstraints => true;
+    public override ConstraintNameScope ForeignKeyConstraintNameScope => ConstraintNameScope.Table;
+    public override ConstraintNameScope CheckConstraintNameScope => ConstraintNameScope.Table;
+    public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is >= ReferentialActionKind.NoAction and <= ReferentialActionKind.SetDefault;
 
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";

@@ -35,38 +35,79 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
     public static Task<SqlServerTestHarness> CreateAsync(string adminConnectionString, string? namePrefix = null)
         => CreateFromDdlAsync(adminConnectionString, NorthwindSchema.SqlServerDdl, namePrefix);
 
-    public static async Task<SqlServerTestHarness> CreateFromDdlAsync(string adminConnectionString, string ddl, string? namePrefix = null)
+    public static async Task<SqlServerTestHarness> CreateFromDdlAsync(
+        string adminConnectionString,
+        string ddl,
+        string? namePrefix = null,
+        bool provisionProviderArtifacts = true,
+        Action<string>? databaseCreated = null,
+        Action<IServiceCollection>? configureServices = null,
+        Action<InquiryOptions>? configureOptions = null)
     {
         var prefix = namePrefix ?? "Inquiry";
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
+        var wasCreated = false;
 
-        await using (var admin = new SqlConnection(adminConnectionString))
+        try
         {
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            cmd.CommandText = $"CREATE DATABASE [{databaseName}];";
-            await cmd.ExecuteNonQueryAsync();
+            await using (var admin = new SqlConnection(adminConnectionString))
+            {
+                await admin.OpenAsync();
+                await using var cmd = admin.CreateCommand();
+                cmd.CommandText = $"CREATE DATABASE [{databaseName.Replace("]", "]]", StringComparison.Ordinal)}];";
+                await cmd.ExecuteNonQueryAsync();
+                wasCreated = true;
+                databaseCreated?.Invoke(databaseName);
+            }
+
+            var connectionString = new SqlConnectionStringBuilder(adminConnectionString)
+            {
+                InitialCatalog = databaseName,
+            }.ToString();
+
+            await using (var db = new SqlConnection(connectionString))
+            {
+                await db.OpenAsync();
+                if (provisionProviderArtifacts)
+                {
+                    await using var artifacts = db.CreateCommand();
+                    artifacts.CommandText = global::Inquiry.Generated.InquiryGeneratedSchema.ProviderArtifactsDdl;
+                    await artifacts.ExecuteNonQueryAsync();
+                }
+
+                await using var cmd = db.CreateCommand();
+                cmd.CommandText = ddl;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            var serviceCollection = new ServiceCollection();
+            if (configureOptions is null)
+                serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+            else
+                serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+            serviceCollection.AddInquirySqlServer(connectionString);
+            configureServices?.Invoke(serviceCollection);
+            var services = serviceCollection.BuildServiceProvider();
+
+            return new SqlServerTestHarness(adminConnectionString, databaseName, connectionString, services);
         }
-
-        var connectionString = new SqlConnectionStringBuilder(adminConnectionString)
+        catch (Exception setupException) when (wasCreated)
         {
-            InitialCatalog = databaseName,
-        }.ToString();
+            SqlConnection.ClearAllPools();
+            try
+            {
+                await DropDatabaseAsync(adminConnectionString, databaseName);
+            }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    $"SQL Server test database '{databaseName}' setup and cleanup both failed.",
+                    setupException,
+                    cleanupException);
+            }
 
-        await using (var db = new SqlConnection(connectionString))
-        {
-            await db.OpenAsync();
-            await using var cmd = db.CreateCommand();
-            cmd.CommandText = ddl;
-            await cmd.ExecuteNonQueryAsync();
+            throw;
         }
-
-        var services = new ServiceCollection()
-            .AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly)
-            .AddInquirySqlServer(connectionString)
-            .BuildServiceProvider();
-
-        return new SqlServerTestHarness(adminConnectionString, databaseName, connectionString, services);
     }
 
     public async ValueTask DisposeAsync()
@@ -78,20 +119,28 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
 
         try
         {
-            await using var admin = new SqlConnection(_adminConnectionString);
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            cmd.CommandText =
-                $"IF DB_ID(N'{_databaseName}') IS NOT NULL " +
-                $"BEGIN " +
-                $"  ALTER DATABASE [{_databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; " +
-                $"  DROP DATABASE [{_databaseName}]; " +
-                $"END;";
-            await cmd.ExecuteNonQueryAsync();
+            await DropDatabaseAsync(_adminConnectionString, _databaseName);
         }
         catch
         {
             // Best-effort cleanup. Don't fail the test on teardown.
         }
+    }
+
+    private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)
+    {
+        var literalName = databaseName.Replace("'", "''", StringComparison.Ordinal);
+        var quotedName = databaseName.Replace("]", "]]", StringComparison.Ordinal);
+
+        await using var admin = new SqlConnection(adminConnectionString);
+        await admin.OpenAsync();
+        await using var cmd = admin.CreateCommand();
+        cmd.CommandText =
+            $"IF DB_ID(N'{literalName}') IS NOT NULL " +
+            $"BEGIN " +
+            $"  ALTER DATABASE [{quotedName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; " +
+            $"  DROP DATABASE [{quotedName}]; " +
+            $"END;";
+        await cmd.ExecuteNonQueryAsync();
     }
 }

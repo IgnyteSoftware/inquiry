@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <!-- Every INQ039 in this fixture-only assembly is asserted by OracleGeneratorTests. -->
+    <NoWarn>$(NoWarn);INQ039</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Oracle\Inquiry.Oracle.csproj" />
+  </ItemGroup>
+</Project>

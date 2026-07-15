@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-    <Description>MySQL/MariaDB provider for Inquiry. Bundles the MySQL-flavoured source generator (Inquiry.MySql.Analyzer) so referencing this package alone enables store SQL generation.</Description>
+    <Description>MySQL provider for Inquiry. Bundles the MySQL-flavoured source generator (Inquiry.MySql.Analyzer) so referencing this package alone enables store SQL generation.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Runs the trim/AOT analyzers and stamps the trimming/AOT-compatibility metadata. -->
@@ -24,6 +24,7 @@
   <Target Name="_ResolveAnalyzerDlls" BeforeTargets="_GetPackageFiles">
     <MSBuild Projects="..\Inquiry.MySql.Analyzer\Inquiry.MySql.Analyzer.csproj"
              Targets="GetTargetPath"
+             RemoveProperties="TargetFramework;TargetFrameworks;RuntimeIdentifier;SelfContained"
              Properties="Configuration=$(Configuration)">
       <Output TaskParameter="TargetOutputs" ItemName="_AnalyzerTargetPath" />
     </MSBuild>

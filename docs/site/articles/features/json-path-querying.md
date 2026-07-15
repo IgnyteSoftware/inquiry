@@ -57,5 +57,5 @@ All six extract the value **as text**, so the comparison is textual and the boun
 ## See also
 
 - [JSON columns](json-columns.md) — storing structured data as JSON with `[InquiryJson]`.
-- [CRUD](crud.md#predicate-queries) — the `[InquiryWhere]` predicate model this extends.
+- [CRUD](crud.md#derived-query-methods) — the `[InquiryWhere]` predicate model this extends.
 - [Soft delete](soft-delete.md) / [Global query filters](global-filters.md) — the active-row filters a JSON-path criterion composes with.
