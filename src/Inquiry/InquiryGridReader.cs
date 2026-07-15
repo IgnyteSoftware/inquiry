@@ -1,5 +1,6 @@
 using Inquiry.Commands;
 using Inquiry.Materialization;
+using Inquiry.Pipeline;
 using System.Data.Common;
 
 namespace Inquiry;
@@ -106,6 +107,23 @@ public sealed class InquiryGridReader : IAsyncDisposable
 
         await AdvanceAsync(cancellationToken).ConfigureAwait(false);
         return list;
+    }
+
+    /// <summary>
+    /// Reads the first column of the first row of the current result set as <typeparamref name="T"/>
+    /// (or <c>default(T)</c> when empty or null), then advances to the next result set.
+    /// </summary>
+    public async Task<T> ReadScalarAsync<T>(CancellationToken cancellationToken = default)
+    {
+        EnsureResultSet();
+        var result = default(T);
+        if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result = ScalarConvert.From<T>(_reader.GetValue(0));
+        }
+
+        await AdvanceAsync(cancellationToken).ConfigureAwait(false);
+        return result!;
     }
 
     private void EnsureResultSet()
