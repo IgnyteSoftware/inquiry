@@ -228,7 +228,7 @@ internal static class EntityProcessor
                 columnAttribute is not null && GeneratorHelpers.GetNamedBool(columnAttribute, "UseDatabaseDefault") ||
                 foreignKeyAttribute is not null && GeneratorHelpers.GetNamedBool(foreignKeyAttribute, "UseDatabaseDefault");
 
-            // SequentialGuid assigns InquiryGuid.NewVersion7() into the property on insert/upsert,
+            // SequentialGuid assigns a dialect-aware sequential GUID into the property on insert/upsert,
             // so the key must be a plain client-supplied Guid (INQ047 otherwise; flag cleared so
             // emission never produces an invalid assignment).
             if (isSequentialGuid && (!typeData.IsGuid || isGenerated || useDatabaseDefault))

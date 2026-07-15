@@ -51,6 +51,13 @@ public abstract class SqlBuilder
     /// <summary>Returns the provider's stable physical-name ordering key for manifest output.</summary>
     public virtual string GetPhysicalIdentifierSortKey(string identifier) => identifier;
 
+    /// <summary>
+    /// The fully-qualified factory call emitted for <c>[InquiryKey(SequentialGuid = true)]</c>.
+    /// Default is UUIDv7; SQL Server overrides to a layout whose timestamp lands in the bytes
+    /// <c>uniqueidentifier</c> compares first.
+    /// </summary>
+    public virtual string SequentialGuidFactoryExpression => "global::Inquiry.InquiryGuid.NewVersion7()";
+
     protected static string FoldAscii(string identifier, bool upper)
     {
         var chars = identifier.ToCharArray();

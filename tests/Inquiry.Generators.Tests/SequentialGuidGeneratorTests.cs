@@ -4,7 +4,7 @@ namespace Inquiry.Generators.Tests;
 
 /// <summary>
 /// Sequential GUID keys: <c>[InquiryKey(SequentialGuid = true)]</c> makes insert/upsert/insert-all
-/// assign <c>InquiryGuid.NewVersion7()</c> when the key is unset, leaving supplied keys untouched.
+/// assign a dialect-aware sequential GUID when the key is unset, leaving supplied keys untouched.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
@@ -63,6 +63,33 @@ public sealed partial class InquiryGeneratorTests
         // that drops one injection (e.g. the Upsert case) fails this count even though the
         // Contains assertions above would still match the surviving sites.
         Assert.Equal(3, text.Split("global::Inquiry.InquiryGuid.NewVersion7();").Length - 1);
+    }
+
+    [Fact]
+    public void SqlServerDialectEmitsSqlServerSequentialFactory()
+    {
+        var result = RunGenerator(SequentialGuidSource, dialect: "SqlServer");
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("global::Inquiry.InquiryGuid.NewSqlServerSequential();", text);
+        Assert.DoesNotContain("global::Inquiry.InquiryGuid.NewVersion7();", text);
+        Assert.Equal(4, text.Split("global::Inquiry.InquiryGuid.NewSqlServerSequential();").Length - 1);
+    }
+
+    [Fact]
+    public void PostgreSqlDialectEmitsV7Factory()
+    {
+        var result = RunGenerator(SequentialGuidSource, dialect: "PostgreSql");
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("global::Inquiry.InquiryGuid.NewVersion7();", text);
+        Assert.DoesNotContain("global::Inquiry.InquiryGuid.NewSqlServerSequential();", text);
     }
 
     [Fact]

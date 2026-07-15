@@ -65,4 +65,52 @@ public sealed class InquiryGuidTests
             Assert.True(seen.Add(InquiryGuid.NewVersion7()));
         }
     }
+
+    [Fact]
+    public void NewSqlServerSequentialHasVersion8AndVariantBits()
+    {
+        var guid = InquiryGuid.NewSqlServerSequential();
+        var bytes = guid.ToByteArray(bigEndian: true);
+
+        Assert.Equal(0x80, bytes[6] & 0xF0); // version nibble = 8
+        Assert.Equal(0x80, bytes[8] & 0xC0); // RFC variant 10xx
+    }
+
+    [Fact]
+    public void NewSqlServerSequentialTimestampInBytes10To15()
+    {
+        var before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var guid = InquiryGuid.NewSqlServerSequential();
+        var after = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var bytes = guid.ToByteArray(bigEndian: true);
+        long timestamp = 0;
+        for (var i = 10; i < 16; i++)
+        {
+            timestamp = (timestamp << 8) | bytes[i];
+        }
+
+        Assert.InRange(timestamp, before, after);
+    }
+
+    [Fact]
+    public void NewSqlServerSequentialSortsAscendingUnderSqlGuidOrdering()
+    {
+        var first = new System.Data.SqlTypes.SqlGuid(InquiryGuid.NewSqlServerSequential());
+        System.Threading.Thread.Sleep(15);
+        var second = new System.Data.SqlTypes.SqlGuid(InquiryGuid.NewSqlServerSequential());
+
+        Assert.True(first.CompareTo(second) < 0,
+            $"SQL Server ordering regressed: {first.Value} should sort before {second.Value}.");
+    }
+
+    [Fact]
+    public void NewSqlServerSequentialIsUnique()
+    {
+        var seen = new System.Collections.Generic.HashSet<Guid>();
+        for (var i = 0; i < 1000; i++)
+        {
+            Assert.True(seen.Add(InquiryGuid.NewSqlServerSequential()));
+        }
+    }
 }
