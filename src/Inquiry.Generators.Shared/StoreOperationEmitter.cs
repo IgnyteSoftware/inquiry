@@ -48,7 +48,7 @@ internal static class StoreOperationEmitter
         if (selectPlan is not null &&
             (selectPlan.Pagination == Pagination.Offset || method.Operation == StoreOperation.SelectAllByField))
         {
-            AppendHeader(source, method, parameters, isAsync: false);
+            AppendHeader(source, method, parameters, isAsync: method.ReturnsPagedResult);
             EmitOffsetPaged(source, sqlBuilder, method, fieldColumns, selectPlan, entityType, structMat, cancellation);
             source.AppendLine("    }");
             return;
@@ -1163,7 +1163,44 @@ internal static class StoreOperationEmitter
         }
 
         source.AppendLine("            });");
-        source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{pagedCapacityArg});");
+
+        if (method.ReturnsPagedResult)
+        {
+            source.AppendLine($"        var _items = await Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{pagedCapacityArg}).ConfigureAwait(false);");
+
+            if (fieldColumns.Count == 0)
+            {
+                source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand("_sqlCount_" + method.Name)}, {cancellation}).ConfigureAwait(false);");
+            }
+            else
+            {
+                source.AppendLine($"        var _countCmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
+                source.AppendLine($"            _sqlCount_{method.Name},");
+                source.AppendLine($"            {state.Value},");
+                source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
+                source.AppendLine("            {");
+                AppendGeneratedStateAliases(source, method.Parameters, state, "                ");
+                var cpi = 0;
+                for (var i = 0; i < fieldColumns.Count; i++)
+                {
+                    var arg = method.Parameters[i].Name;
+                    source.AppendLine($"                var _p{cpi} = _c.CreateParameter();");
+                    source.AppendLine($"                _p{cpi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(fieldColumns[i].PropertyName))}\";");
+                    AppendColumnParameterMetadata(source, fieldColumns[i], sqlBuilder, $"_p{cpi}", "                ", predicate: true);
+                    source.AppendLine($"                _p{cpi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg, sqlBuilder)};");
+                    source.AppendLine($"                _c.Parameters.Add(_p{cpi});");
+                    cpi++;
+                }
+                source.AppendLine("            });");
+                source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, {state.Type}>(_countCmd, {cancellation}).ConfigureAwait(false);");
+            }
+
+            source.AppendLine($"        return new global::Inquiry.Paging.InquiryPagedResult<{entityType}>(_items, _total);");
+        }
+        else
+        {
+            source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{pagedCapacityArg});");
+        }
     }
 
     /// <summary>

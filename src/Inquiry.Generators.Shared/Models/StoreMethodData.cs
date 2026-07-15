@@ -57,6 +57,12 @@ internal sealed record StoreMethodData(
     public bool KeysetDescending { get; init; }
 
     /// <summary>
+    /// Whether the method returns <c>Task&lt;InquiryPagedResult&lt;T&gt;&gt;</c>: paired offset-paged
+    /// SELECT + COUNT sharing the same WHERE clause.
+    /// </summary>
+    public bool ReturnsPagedResult { get; init; }
+
+    /// <summary>
     /// For a select operation, whether <c>IncludeDeleted = true</c> was set so the soft-delete
     /// active filter is suppressed. Ignored for entities without a soft-delete column.
     /// </summary>

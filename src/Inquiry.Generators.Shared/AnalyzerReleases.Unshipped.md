@@ -82,3 +82,4 @@ INQ079 | Inquiry | Error | Converter type cannot be abstract
 INQ080 | Inquiry | Error | Converter type must be closed
 INQ081 | Inquiry | Error | Converter type is inaccessible
 INQ082 | Inquiry | Error | Converter type needs a public parameterless constructor
+INQ083 | Inquiry | Error | InquiryPagedResult cannot be combined with Distinct
