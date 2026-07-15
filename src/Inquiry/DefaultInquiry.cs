@@ -97,21 +97,27 @@ internal sealed class DefaultInquiry : IInquiry
 
             if (slot.State == AmbientTransactionSlotState.Closed)
             {
-                throw new ObjectDisposedException(
-                    "Inquiry ambient transaction",
-                    "This async flow captured an Inquiry transaction that has already been committed, rolled back, or disposed. " +
-                    "Start a new operation after the transaction scope, or await child work before closing the transaction.");
+                throw CreateClosedAmbientTransactionException();
             }
 
             return _defaultPipeline;
         }
     }
 
+    private static ObjectDisposedException CreateClosedAmbientTransactionException()
+        => new(
+            "Inquiry ambient transaction",
+            "This async flow captured an Inquiry transaction that has already been committed, rolled back, or disposed. " +
+            "Start a new operation after the transaction scope, or await child work before closing the transaction.");
+
     /// <inheritdoc />
     public bool ThrowOnConcurrencyConflict => _options?.ThrowOnConcurrencyConflict ?? false;
 
     /// <inheritdoc />
     public int MaxParametersPerCommand => _options?.MaxParametersPerCommand ?? InquiryOptions.DefaultMaxParametersPerCommand;
+
+    /// <inheritdoc />
+    public int MaxBatchSize => _options?.MaxBatchSize ?? InquiryOptions.DefaultMaxBatchSize;
 
     /// <inheritdoc />
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -225,6 +231,49 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(commandText, args, bindParameters, materializer, cancellationToken);
 
     /// <inheritdoc />
+    public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryListAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken, capacityHint);
+
+    /// <inheritdoc />
+    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TEntity?> QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
+
+    /// <inheritdoc />
     public Task<long> BulkInsertAsync<TEntity>(
         Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
@@ -233,6 +282,20 @@ internal sealed class DefaultInquiry : IInquiry
     {
         if (definition is null) throw new ArgumentNullException(nameof(definition));
         if (rows is null) throw new ArgumentNullException(nameof(rows));
+
+        var ambientSlot = _ambientSlot.Value;
+        if (ambientSlot?.State == AmbientTransactionSlotState.Closed)
+        {
+            throw CreateClosedAmbientTransactionException();
+        }
+
+        if (ambientSlot?.Pipeline is not null)
+        {
+            throw new InvalidOperationException(
+                "Native bulk insert cannot run inside an Inquiry transaction because it uses a dedicated connection " +
+                "and would not participate in rollback. Use [InquiryInsertAll] for transaction-bound inserts, or " +
+                "run [InquiryBulkInsert] outside the transaction.");
+        }
 
         var copier = _serviceProvider.GetService<Inquiry.BulkCopy.IInquiryBulkCopier>()
             ?? throw new InvalidOperationException(
@@ -262,12 +325,25 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteAsync(commandText, args, bindParameters, cancellationToken);
 
     /// <inheritdoc />
+    public Task<int> ExecuteAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteAsync(command, cancellationToken);
+
+    /// <inheritdoc />
     public Task<int> ExecuteBatchAsync<TItem>(
         string commandText,
         IReadOnlyList<TItem> items,
         Action<InquiryParameterTarget, TItem> bindParameters,
         CancellationToken cancellationToken = default)
-        => ActivePipeline.ExecuteBatchAsync(commandText, items, bindParameters, cancellationToken);
+        => ExecuteBatchAsync(new InquiryBatchCommand<TItem>(commandText, bindParameters), items, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<int> ExecuteBatchAsync<TItem>(
+        InquiryBatchCommand<TItem> command,
+        IEnumerable<TItem> items,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteBatchAsync(command, items, cancellationToken);
 
     /// <inheritdoc />
     public Task<T> ExecuteScalarAsync<T>(
@@ -289,12 +365,25 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteProcedureScalarAsync<T>(command, readBackParameterName, cancellationToken);
 
     /// <inheritdoc />
+    public Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteProcedureScalarAsync<T, TArgs>(command, readBackParameterName, cancellationToken);
+
+    /// <inheritdoc />
     public Task<T> ExecuteScalarAsync<T, TArgs>(
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
         CancellationToken cancellationToken = default)
         => ActivePipeline.ExecuteScalarAsync<T, TArgs>(commandText, args, bindParameters, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteScalarAsync<T, TArgs>(command, cancellationToken);
 
     /// <inheritdoc />
     public Task<IInquiryTransaction> BeginTransactionAsync(

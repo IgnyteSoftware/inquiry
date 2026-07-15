@@ -7,7 +7,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.PostgreSql.Tests;
 
-[InquiryTable("Person")]
+[InquiryTable("Person", GenerateDdl = false)]
 public sealed class DerivedPerson
 {
     [InquiryKey(IsGenerated = true)]

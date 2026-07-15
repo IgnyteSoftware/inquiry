@@ -60,6 +60,8 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("class CustomerSummaryInquiryProjectionMaterializer", text);
         Assert.Contains("readonly struct CustomerSummaryInquiryProjectionStructMaterializer", text);
+        Assert.Contains("public bool IsInquirySequentialAccessSafe => true;", text);
+        Assert.DoesNotContain("IInquiryEntityMaterializer<global::Demo.CustomerSummary>.IsInquirySequentialAccessSafe", text);
         Assert.Contains("Id = reader.GetString(0)", text);
         Assert.Contains("Name = reader.GetString(1)", text);
     }
@@ -74,7 +76,8 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("private const string _sqlProj_ListSummariesAsync = \"SELECT \\\"Id\\\", \\\"CompanyName\\\" FROM \\\"Customer\\\"\";", text);
-        Assert.Contains("Inquiry.QueryListAsync<global::Demo.CustomerSummary, global::Demo.CustomerSummaryInquiryProjectionStructMaterializer>(", text);
+        Assert.Contains("Inquiry.QueryListAsync<global::Demo.CustomerSummary, byte, global::Demo.CustomerSummaryInquiryProjectionStructMaterializer>(", text);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlProj_ListSummariesAsync, default, static (_, _) => { })", text);
     }
 
     [Fact]
@@ -245,7 +248,8 @@ public sealed partial class InquiryGeneratorTests
         var storeText = store.GetText().ToString();
         Assert.Contains("private const string _sqlProj_StreamViewsAsync = \"SELECT \\\"Note\\\", \\\"Status\\\" FROM \\\"Item\\\"\";", storeText);
         // Streaming → QueryAsync, not QueryListAsync.
-        Assert.Contains("Inquiry.QueryAsync<global::Demo.ItemView, global::Demo.ItemViewInquiryProjectionStructMaterializer>(", storeText);
+        Assert.Contains("Inquiry.QueryAsync<global::Demo.ItemView, byte, global::Demo.ItemViewInquiryProjectionStructMaterializer>(", storeText);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlProj_StreamViewsAsync, default, static (_, _) => { })", storeText);
     }
 
     [Fact]

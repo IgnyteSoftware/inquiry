@@ -4,10 +4,12 @@ using Inquiry.Northwind;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.DependencyInjection;
+using Inquiry.Materialization;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.MsSql;
+using Inquiry.Benchmarks.Contracts.Fixtures;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
@@ -23,6 +25,9 @@ namespace Inquiry.Benchmarks.SqlServer;
 /// </summary>
 public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
 {
+    public const int SequentialAdHocRowCount = 32;
+    public const int SequentialAdHocPayloadSize = 64 * 1024;
+
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static MsSqlContainer? _container;
     private static ServiceProvider? _services;
@@ -43,6 +48,9 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
     public ProductStore Products => _services!.GetRequiredService<ProductStore>();
     public CategoryStore Categories => _services!.GetRequiredService<CategoryStore>();
+    public BenchmarkM2MOrderStore ManyToManyOrders => _services!.GetRequiredService<BenchmarkM2MOrderStore>();
+    public IInquiry Inquiry => _services!.GetRequiredService<IInquiry>();
+    public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
@@ -54,7 +62,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
         {
             if (_container is null)
             {
-                var container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest")
+                var container = new MsSqlBuilder(DatabaseImageCatalog.GetRequired("sqlserver").Reference)
                     .Build();
                 await container.StartAsync().ConfigureAwait(false);
                 var connectionString = container.GetConnectionString();
@@ -63,13 +71,33 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                 {
                     await connection.OpenAsync().ConfigureAwait(false);
                     await using var command = connection.CreateCommand();
-                    command.CommandText = NorthwindSchema.SqlServerDdl;
+                    command.CommandText = NorthwindSchema.SqlServerDdl
+                        + global::Inquiry.Generated.InquiryGeneratedSchema.ProviderArtifactsDdl
+                        + """
+                        CREATE TABLE BenchmarkM2MOrder (Id BIGINT IDENTITY(1,1) PRIMARY KEY, Name NVARCHAR(200) NOT NULL);
+                        CREATE TABLE BenchmarkM2MProduct (Id BIGINT IDENTITY(1,1) PRIMARY KEY, Title NVARCHAR(200) NOT NULL);
+                        CREATE TABLE BenchmarkM2MOrderProduct (OrderId BIGINT NOT NULL, ProductId BIGINT NOT NULL, PRIMARY KEY (OrderId, ProductId));
+                        CREATE TABLE BenchmarkSequentialAdHoc (
+                            Id INT NOT NULL PRIMARY KEY,
+                            C01 INT NOT NULL, C02 INT NOT NULL, C03 INT NOT NULL,
+                            C04 INT NOT NULL, C05 INT NOT NULL, C06 INT NOT NULL,
+                            C07 INT NOT NULL, C08 INT NOT NULL, C09 INT NOT NULL,
+                            C10 INT NOT NULL, C11 INT NOT NULL, C12 INT NOT NULL,
+                            Payload VARBINARY(MAX) NOT NULL);
+                        CREATE TABLE InquiryBatchEvidence (
+                            Id INT NOT NULL PRIMARY KEY,
+                            ValueText NVARCHAR(100) NOT NULL);
+                        CREATE TYPE InquiryBatchEvidenceIdList AS TABLE (
+                            Id INT NOT NULL PRIMARY KEY);
+                        """;
                     await command.ExecuteNonQueryAsync().ConfigureAwait(false);
                 }
 
                 var services = new ServiceCollection()
                     .AddInquiry()
+                    .AddInquiryGeneratedStores()
                     .AddInquirySqlServer(connectionString)
+                    .AddSingleton<IInquiryEntityMaterializer<BufferedSequentialBenchmarkRow>, BufferedSequentialBenchmarkRowMaterializer>()
                     // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
                     // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
                     .AddDbContextFactory<SqlServerShipperContext>(options => options.UseSqlServer(connectionString))
@@ -160,6 +188,83 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                 pName.Value  = $"Product {i}";
                 pCat.Value   = categoryIds[i % categoryIds.Count];
                 pPrice.Value = 10m + (i % 100);
+                await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        // M:N eager evidence: two eligible parents, eight participating children, and rowCount
+        // unrelated children. The old-shape control therefore materializes rowCount + 8 children;
+        // Inquiry's generated child-key IN query materializes only the eight participating rows.
+        var orderIds = new List<long>();
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = (SqlTransaction)tx;
+            insert.CommandText =
+                "INSERT INTO BenchmarkM2MOrder (Name) OUTPUT inserted.Id VALUES (@name);";
+            var pName = insert.Parameters.Add("@name", System.Data.SqlDbType.NVarChar, 200);
+            for (var i = 0; i < 2; i++)
+            {
+                pName.Value = "Order " + i;
+                orderIds.Add((long)(await insert.ExecuteScalarAsync().ConfigureAwait(false))!);
+            }
+        }
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = (SqlTransaction)tx;
+            command.CommandText = """
+                INSERT INTO BenchmarkM2MProduct (Title) OUTPUT inserted.Id VALUES (@title);
+                """;
+            var pTitle = command.Parameters.Add("@title", System.Data.SqlDbType.NVarChar, 200);
+            var participatingIds = new List<long>();
+            for (var i = 0; i < rowCount + 8; i++)
+            {
+                pTitle.Value = i < 8 ? "Participating " + i : "Unrelated " + (i - 8);
+                var id = (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
+                if (i < 8) participatingIds.Add(id);
+            }
+
+            command.CommandText =
+                "INSERT INTO BenchmarkM2MOrderProduct (OrderId, ProductId) VALUES (@orderId, @productId);";
+            command.Parameters.Clear();
+            var pOrderId = command.Parameters.Add("@orderId", System.Data.SqlDbType.BigInt);
+            var pProductId = command.Parameters.Add("@productId", System.Data.SqlDbType.BigInt);
+            for (var i = 0; i < participatingIds.Count; i++)
+            {
+                pOrderId.Value = orderIds[i % orderIds.Count];
+                pProductId.Value = participatingIds[i];
+                await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = (SqlTransaction)tx;
+            insert.CommandText =
+                "INSERT INTO BenchmarkSequentialAdHoc (Id, C01, C02, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, Payload) " +
+                "VALUES (@id, @c01, @c02, @c03, @c04, @c05, @c06, @c07, @c08, @c09, @c10, @c11, @c12, @payload);";
+            var idParameter = insert.Parameters.Add("@id", System.Data.SqlDbType.Int);
+            var scalarParameters = new SqlParameter[12];
+            for (var ordinal = 1; ordinal <= scalarParameters.Length; ordinal++)
+            {
+                scalarParameters[ordinal - 1] = insert.Parameters.Add($"@c{ordinal:00}", System.Data.SqlDbType.Int);
+            }
+            var payloadParameter = insert.Parameters.Add("@payload", System.Data.SqlDbType.VarBinary, -1);
+
+            for (var id = 1; id <= SequentialAdHocRowCount; id++)
+            {
+                idParameter.Value = id;
+                for (var ordinal = 1; ordinal <= scalarParameters.Length; ordinal++)
+                {
+                    scalarParameters[ordinal - 1].Value = id * 100 + ordinal;
+                }
+
+                var payload = new byte[SequentialAdHocPayloadSize];
+                for (var index = 0; index < payload.Length; index++)
+                {
+                    payload[index] = (byte)((id * 31 + index) & 0xff);
+                }
+                payloadParameter.Value = payload;
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

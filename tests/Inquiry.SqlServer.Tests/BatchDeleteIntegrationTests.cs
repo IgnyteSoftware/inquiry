@@ -34,7 +34,8 @@ public partial class GadgetStore : InquiryStore<Gadget>
 [Collection(SqlServerCollection.Name)]
 public sealed class BatchDeleteIntegrationTests
 {
-    private const string Ddl = "CREATE TABLE [Gadget] ([Id] INT IDENTITY(1,1) PRIMARY KEY, [Name] NVARCHAR(MAX) NOT NULL);";
+    private const string Ddl =
+        "CREATE TABLE [Gadget] ([Id] INT IDENTITY(1,1) PRIMARY KEY, [Name] NVARCHAR(MAX) NOT NULL);";
 
     private readonly SqlServerContainerFixture _fixture;
     public BatchDeleteIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;

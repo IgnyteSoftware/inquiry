@@ -87,13 +87,14 @@ public sealed partial class InquiryGeneratorTests
 
         // Read paths dispatch through the struct-materializer overloads so the JIT can specialize
         // per concrete TMaterializer and inline the Materialize call. Streaming SelectAll /
-        // SelectAllByField (IAsyncEnumerable) use the 2-arg struct QueryAsync overload.
-        Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>", generatedText);
+        // SelectAllByField (IAsyncEnumerable) use the generated-command struct QueryAsync overload.
+        Assert.Contains("Inquiry.QueryAsync<global::Demo.Organization, byte, global::Demo.OrganizationInquiryEntityStructMaterializer>", generatedText);
 
         // SelectByKey binds the key via the allocation-free static-delegate fast path: a 3-arg
-        // QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer> with an inline static binder —
+        // QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer> with an inline static binder —
         // no InquiryParameter[] / InquiryCommand allocation per call.
-        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::System.Guid, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.Contains("Inquiry.QueryGeneratedSingleOrDefaultAsync<global::Demo.Organization, global::System.Guid, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<global::System.Guid>(", generatedText);
         Assert.Contains("static (_cmd, _key) =>", generatedText);
         Assert.Contains("_p0.ParameterName = \"@Key\";", generatedText);
 
@@ -103,8 +104,9 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_p1.DbType = global::System.Data.DbType.String;", generatedText);
         Assert.Contains("_p2.DbType = global::System.Data.DbType.Boolean;", generatedText);
 
-        // Returning InsertReturning binds the whole entity via the same fast path (TArgs = entity).
-        Assert.Contains("Inquiry.QuerySingleOrDefaultAsync<global::Demo.Organization, global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        // Returning InsertReturning binds the whole entity through the generated guaranteed-single path.
+        Assert.Contains("Inquiry.QueryGeneratedSingleOrDefaultAsync<global::Demo.Organization, global::Demo.Organization, global::Demo.OrganizationInquiryEntityStructMaterializer>(", generatedText);
+        Assert.Contains("new global::Inquiry.Commands.InquiryGeneratedCommand<global::Demo.Organization>(", generatedText);
         Assert.Contains("static (_cmd, _e) =>", generatedText);
 
         // Non-returning Insert/Update/Delete use the allocation-free ExecuteAsync<TArgs> fast path.
@@ -142,6 +144,8 @@ public sealed partial class InquiryGeneratorTests
         // specialize the pipeline body per concrete TMaterializer).
         Assert.Contains("internal sealed class OrganizationInquiryEntityMaterializer", generatedEntityText);
         Assert.Contains("internal readonly struct OrganizationInquiryEntityStructMaterializer", generatedEntityText);
+        Assert.Contains("public bool IsInquirySequentialAccessSafe => true;", generatedEntityText);
+        Assert.DoesNotContain("IInquiryEntityMaterializer<global::Demo.Organization>.IsInquirySequentialAccessSafe", generatedEntityText);
 
         var generatedServices = Assert.Single(
             result.RunResult.GeneratedTrees,
@@ -1697,11 +1701,11 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void MySqlGeneratedGuidKeyUpsertUsesServerSideUuidUserVariable()
+    public void MySqlDefaultGuidKeyInsertReturningUsesServerSideUuidCapture()
     {
         // A database-generated GUID key (UseDatabaseDefault) cannot use LAST_INSERT_ID() (that only
         // tracks AUTO_INCREMENT). The builder generates the GUID server-side via UUID(), captured in a
-        // @_inquiry_genkey user variable, so the emulated returning SELECT can read the row back by it.
+        // collision-safe quoted user variable, so the emulated returning SELECT can read the row back by it.
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -1745,13 +1749,12 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("GuidItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        // Non-returning: COALESCE(@Id, UUID()) supplies the key (explicit passes through, null generates).
-        Assert.Contains("private const string _sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\";", generatedText);
-        // Returning: capture the key in a user variable, then SELECT the row back by it.
-        Assert.Contains("private const string _sqlUpsertReturning = \"SET @_inquiry_genkey = COALESCE(@Id, UUID()); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
+        // The null-key runtime branch uses ordinary INSERT; this upsert SQL handles only explicit keys.
+        Assert.Contains("private const string _sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@Id, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\";", generatedText);
+        Assert.Contains("private const string _sqlUpsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@Id, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @Id\";", generatedText);
         // Insert-returning (the null-key upsert branch + any explicit InsertReturning) uses the same
         // user-variable capture, without ON DUPLICATE KEY UPDATE — so it can read back the generated GUID.
-        Assert.Contains("private const string _sqlInsertReturning = \"SET @_inquiry_genkey = COALESCE(@Id, UUID()); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@_inquiry_genkey, @Name); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @_inquiry_genkey\";", generatedText);
+        Assert.Contains("private const string _sqlInsertReturning = \"SET @'__inquiry.generated-key' = UUID(); INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@'__inquiry.generated-key', @Name); SELECT `Id`, `Name` FROM `TGuidItem` WHERE `Id` = @'__inquiry.generated-key'\";", generatedText);
         // LAST_INSERT_ID() is only for AUTO_INCREMENT — it must NOT appear for a GUID key.
         Assert.DoesNotContain("LAST_INSERT_ID", generatedText);
     }
@@ -1814,7 +1817,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void MariaDbGuidKeyReturningEliminatesUserVariable()
     {
-        // #58: MariaDB's native RETURNING eliminates the @_inquiry_genkey user variable
+        // #58: MariaDB's native RETURNING eliminates MySQL's generated-key capture variable
         // that MySQL needs for emulated GUID-key returning (and the AllowUserVariables dependency).
         const string source = """
             using System;
@@ -1861,9 +1864,9 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("GuidItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var generatedText = generatedStore.GetText().ToString();
 
-        Assert.Contains("_sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\"", generatedText);
-        Assert.Contains("_sqlUpsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`) RETURNING `Id`, `Name`\"", generatedText);
-        Assert.Contains("_sqlInsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (COALESCE(@Id, UUID()), @Name) RETURNING `Id`, `Name`\"", generatedText);
+        Assert.Contains("_sqlUpsert = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@Id, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`)\"", generatedText);
+        Assert.Contains("_sqlUpsertReturning = \"INSERT INTO `TGuidItem` (`Id`, `Name`) VALUES (@Id, @Name) ON DUPLICATE KEY UPDATE `Name` = VALUES(`Name`) RETURNING `Id`, `Name`\"", generatedText);
+        Assert.Contains("_sqlInsertReturning = \"INSERT INTO `TGuidItem` (`Name`) VALUES (@Name) RETURNING `Id`, `Name`\"", generatedText);
         Assert.DoesNotContain("@_inquiry_genkey", generatedText);
         Assert.DoesNotContain("LAST_INSERT_ID", generatedText);
     }
@@ -1884,7 +1887,7 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val SIGNED PATH '$')) jt)\"", generatedText);
+        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val INT PATH '$')) jt)\"", generatedText);
         Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
         Assert.DoesNotContain("InquiryInExpansion", generatedText);
     }
@@ -1904,7 +1907,7 @@ public sealed partial class InquiryGeneratorTests
 
         var generatedText = GeneratedProductStoreText(result);
 
-        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val SIGNED PATH '$')) jt)\"", generatedText);
+        Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val INT PATH '$')) jt)\"", generatedText);
         Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
         Assert.DoesNotContain("InquiryInExpansion", generatedText);
     }
@@ -1995,8 +1998,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("OrganizationStore.InquiryStore.g.cs", StringComparison.Ordinal));
-        // Materializers don't depend on the dialect and should still be emitted.
-        Assert.Contains(
+        // Provider-aware materializers must not be emitted from an arbitrarily elected generator.
+        Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("Organization.InquiryEntity.g.cs", StringComparison.Ordinal));
     }
@@ -2537,7 +2540,14 @@ public sealed partial class InquiryGeneratorTests
         }
     }
 
-    private static GeneratorTestResult RunGenerator(string source, string? dialect = "Sqlite", string[]? enableDiagnostics = null)
+    private static GeneratorTestResult RunGenerator(
+        string source,
+        string? dialect = "Sqlite",
+        string[]? enableDiagnostics = null,
+        bool includeFallbackGenerator = false,
+        ReportDiagnostic? unsupportedOperationSeverity = null,
+        SyntaxTreeOptionsProvider? syntaxTreeOptionsProvider = null,
+        IReadOnlyDictionary<string, ReportDiagnostic>? additionalDiagnosticOptions = null)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
         var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
@@ -2557,14 +2567,33 @@ public sealed partial class InquiryGeneratorTests
 
         // Off-by-default diagnostics (e.g. the INQ061 DDL lint) are suppressed unless a consumer opts in
         // via .editorconfig; mirror that opt-in here so a lint test can assert the diagnostic surfaces.
-        if (enableDiagnostics is { Length: > 0 })
+        if (enableDiagnostics is { Length: > 0 } || unsupportedOperationSeverity is not null ||
+            additionalDiagnosticOptions is { Count: > 0 })
         {
             // Diagnostic IDs are case-insensitive; de-dupe so a caller passing the same id twice (in any
             // casing) doesn't throw from the dictionary build.
-            compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(
-                enableDiagnostics
+            var diagnosticOptions = enableDiagnostics is { Length: > 0 }
+                ? enableDiagnostics
                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(static id => id, static _ => ReportDiagnostic.Info, StringComparer.OrdinalIgnoreCase));
+                    .ToDictionary(static id => id, static _ => ReportDiagnostic.Info, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, ReportDiagnostic>(StringComparer.OrdinalIgnoreCase);
+            if (unsupportedOperationSeverity is { } severity)
+            {
+                diagnosticOptions["INQ039"] = severity;
+            }
+            if (additionalDiagnosticOptions is not null)
+            {
+                foreach (var (diagnosticId, action) in additionalDiagnosticOptions)
+                {
+                    diagnosticOptions[diagnosticId] = action;
+                }
+            }
+            compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(
+                diagnosticOptions);
+        }
+        if (syntaxTreeOptionsProvider is not null)
+        {
+            compilationOptions = compilationOptions.WithSyntaxTreeOptionsProvider(syntaxTreeOptionsProvider);
         }
 
         var compilation = CSharpCompilation.Create(
@@ -2576,7 +2605,7 @@ public sealed partial class InquiryGeneratorTests
         // Each provider's analyzer ships a self-contained generator; drive all three to mirror a
         // real consumer that has referenced multiple provider packages. Each generator runs the
         // same arbitration logic and at most one of them emits (the one whose dialect matches).
-        var generators = new Microsoft.CodeAnalysis.ISourceGenerator[]
+        var generators = new List<Microsoft.CodeAnalysis.ISourceGenerator>
         {
             new global::Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator(),
             new global::Inquiry.SqlServer.Analyzer.InquirySqlServerGenerator().AsSourceGenerator(),
@@ -2585,6 +2614,10 @@ public sealed partial class InquiryGeneratorTests
             new global::Inquiry.MariaDb.Analyzer.InquiryMariaDbGenerator().AsSourceGenerator(),
             new global::Inquiry.Oracle.Analyzer.InquiryOracleGenerator().AsSourceGenerator(),
         };
+        if (includeFallbackGenerator)
+        {
+            generators.Add(new FallbackInquiryGenerator().AsSourceGenerator());
+        }
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 

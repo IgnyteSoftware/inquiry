@@ -7,9 +7,9 @@ using Inquiry.Northwind.Stores;
 namespace Inquiry.MariaDb.Tests;
 
 /// <summary>
-/// Live coverage of IN-list bucketing and its NOT IN counterpart against real MariaDB: the expansion pads
-/// each list to the next power of two by repeating an element, and these round-trips prove the padded SQL
-/// returns the correct rows on a real engine across bucket boundaries.
+/// Live coverage of JSON_TABLE-backed IN collections and scalar-expanded NOT IN collections against
+/// real MariaDB. These round-trips prove both provider shapes return the correct rows across collection
+/// cardinalities.
 /// </summary>
 [Collection(MariaDbCollection.Name)]
 public sealed class InListBucketingIntegrationTests
@@ -18,7 +18,18 @@ public sealed class InListBucketingIntegrationTests
     public InListBucketingIntegrationTests(MariaDbContainerFixture fixture) => _fixture = fixture;
 
     private const string ProductsDdl = """
-        CREATE TABLE `Products` (`ProductID` INT AUTO_INCREMENT PRIMARY KEY, `ProductName` VARCHAR(255) NOT NULL, `UnitPrice` DECIMAL(18,2), `UnitsInStock` SMALLINT, `CategoryID` INT NULL, `Discontinued` TINYINT(1) NOT NULL DEFAULT 0)
+        CREATE TABLE `Products` (
+            `ProductID` INT AUTO_INCREMENT PRIMARY KEY,
+            `ProductName` VARCHAR(40) NOT NULL,
+            `SupplierID` INT NULL,
+            `CategoryID` INT NULL,
+            `QuantityPerUnit` LONGTEXT NULL,
+            `UnitPrice` DECIMAL(19,4),
+            `UnitsInStock` SMALLINT,
+            `UnitsOnOrder` SMALLINT NULL DEFAULT 0,
+            `ReorderLevel` SMALLINT NULL DEFAULT 0,
+            `Discontinued` TINYINT(1) NOT NULL DEFAULT 0
+        )
         """;
 
     private async Task<MariaDbTestHarness> SeedAsync()
@@ -37,14 +48,14 @@ public sealed class InListBucketingIntegrationTests
     }
 
     [SkippableFact]
-    public async Task InListBucketBoundaries_ReturnCorrectRowsAcrossCardinalities()
+    public async Task InJsonTableCollections_ReturnCorrectRowsAcrossCardinalities()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await SeedAsync();
         var products = harness.GetRequiredService<ProductStore>();
 
-        // Cardinalities 1,2,3,5,9 -> buckets 1,2,4,8,16. Each list holds category 1 plus non-matching
-        // filler ids, so the matched set must be exactly category 1's two products for every cardinality.
+        // Each collection is sent as one JSON array parameter and expanded through JSON_TABLE. Every
+        // collection holds category 1 plus non-matching filler ids, so every result is the same two rows.
         foreach (var k in new[] { 1, 2, 3, 5, 9 })
         {
             var ids = new List<int> { 1 };
@@ -58,14 +69,14 @@ public sealed class InListBucketingIntegrationTests
             Assert.All(matched, p => Assert.Equal(1, p.CategoryID));
         }
 
-        // A pure-duplicate list (bucket 4, padded by repeating the value) never widens the match set.
+        // Duplicate JSON array elements never widen the match set.
         var dup = await products.InCategoriesAsync(new List<int> { 1, 1, 1 });
         Assert.Equal(2, dup.Count);
         Assert.All(dup, p => Assert.Equal(1, p.CategoryID));
     }
 
     [SkippableFact]
-    public async Task NotInListBucketing_ExcludesCorrectSetAndEmptyMatchesAll()
+    public async Task ScalarExpandedNotIn_ExcludesCorrectSetAndEmptyMatchesAll()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await SeedAsync();
@@ -77,7 +88,7 @@ public sealed class InListBucketingIntegrationTests
         Assert.Equal(2, notC2.Count);
         Assert.All(notC2, p => Assert.Equal(1, p.CategoryID));
 
-        // A padded NOT IN (bucket 4, repeating 2) excludes the same set.
+        // Scalar NOT IN expansion pads this collection by repeating 2 and still excludes the same set.
         var notC2Padded = await products.NotInCategoriesAsync(new List<int> { 2, 2, 2 });
         Assert.Equal(2, notC2Padded.Count);
         Assert.All(notC2Padded, p => Assert.Equal(1, p.CategoryID));

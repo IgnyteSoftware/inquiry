@@ -80,6 +80,7 @@ internal static class StoreProcessor
 
         return new StoreData(
             Name: storeSymbol.Name,
+            HintName: GeneratorHelpers.GetHintName(storeSymbol, "InquiryStore"),
             Namespace: storeSymbol.ContainingNamespace.IsGlobalNamespace ? null : storeSymbol.ContainingNamespace.ToDisplayString(),
             FullyQualifiedName: storeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             EntityFullyQualifiedName: entityType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -105,7 +106,7 @@ internal static class StoreProcessor
             return null;
         }
 
-        var returnsEntity = operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert &&
+        var returnsEntity = operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert or StoreOperation.DeleteOneByKey &&
             GeneratorHelpers.GetNamedBool(attribute, "ReturnEntity");
 
         if (!HasSupportedReturnType(operation, method.ReturnType, entityType, returnsEntity, attribute))
@@ -215,12 +216,22 @@ internal static class StoreProcessor
         // type for projection resolution at emit; other select ops stay entity-typed.
         string? resultElementTypeFqn = null;
         bool returnsList;
+        var returnsPagedResult = false;
         if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
         {
-            returnsList = TryGetSelectElementType(method.ReturnType, out var selectElement, out var isList) && isList;
-            if (selectElement is not null)
+            if (IsTaskOfInquiryPagedResult(method.ReturnType, out var pagedElement))
             {
-                resultElementTypeFqn = selectElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                returnsList = true;
+                returnsPagedResult = true;
+                resultElementTypeFqn = pagedElement!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+            else
+            {
+                returnsList = TryGetSelectElementType(method.ReturnType, out var selectElement, out var isList) && isList;
+                if (selectElement is not null)
+                {
+                    resultElementTypeFqn = selectElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                }
             }
         }
         else
@@ -290,7 +301,7 @@ internal static class StoreProcessor
         if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
         {
             orderBy = ParseOrderBy(GeneratorHelpers.GetNamedString(attribute, "OrderBy"), method.Name, location, diagnostics);
-            if (GeneratorHelpers.GetNamedBool(attribute, "Paged"))
+            if (GeneratorHelpers.GetNamedBool(attribute, "Paged") || returnsPagedResult)
             {
                 pagination = Pagination.Offset;
             }
@@ -354,6 +365,7 @@ internal static class StoreProcessor
             AggregateFunction = aggregateFunction,
             AggregateColumn = aggregateColumn,
             ScalarResultType = scalarResultType,
+            ReturnsPagedResult = returnsPagedResult,
             ResultElementTypeFqn = resultElementTypeFqn,
             ProcedureReadBackName = procReadBackName,
             ProcedureReturnsValue = procReturnsValue,
@@ -433,6 +445,8 @@ internal static class StoreProcessor
         GeneratorHelpers.IsCancellationToken(parameter.Type))
     {
         ElementComparisonDisplay = GetEnumerableElementComparisonDisplay(parameter.Type),
+        ElementNonNullableComparisonDisplay = GetEnumerableElementType(parameter.Type)?.NonNullableDisplayName,
+        ElementIsNullable = GetEnumerableElementType(parameter.Type)?.IsNullable == true,
         DefaultValueLiteral = GetDefaultValueLiteral(parameter),
     };
 
@@ -493,6 +507,15 @@ internal static class StoreProcessor
     /// element-type validation.
     /// </summary>
     private static string? GetEnumerableElementComparisonDisplay(ITypeSymbol type)
+        => GetEnumerableElementSymbol(type)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+    private static TypeData? GetEnumerableElementType(ITypeSymbol type)
+    {
+        var element = GetEnumerableElementSymbol(type);
+        return element is null ? null : TypeData.Create(element, element.NullableAnnotation);
+    }
+
+    private static ITypeSymbol? GetEnumerableElementSymbol(ITypeSymbol type)
     {
         if (type.SpecialType == SpecialType.System_String)
         {
@@ -509,9 +532,7 @@ internal static class StoreProcessor
             enumerable = named;
         }
 
-        return enumerable is { TypeArguments.Length: 1 }
-            ? enumerable.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-            : null;
+        return enumerable is { TypeArguments.Length: 1 } ? enumerable.TypeArguments[0] : null;
     }
 
     /// <summary>
@@ -661,7 +682,7 @@ internal static class StoreProcessor
             // [InquiryProjection] of it, so they are accepted by shape here (any named element) and
             // resolved against the projection registry at emit.
             StoreOperation.SelectAll or StoreOperation.SelectAllByField =>
-                TryGetSelectElementType(returnType, out _, out _),
+                TryGetSelectElementType(returnType, out _, out _) || IsTaskOfInquiryPagedResult(returnType, out _),
             StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
                 IsTaskOfReadOnlyList(returnType, entityType),
@@ -676,6 +697,8 @@ internal static class StoreProcessor
             StoreOperation.Insert or StoreOperation.Upsert =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             StoreOperation.Update when returnsEntity =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
+            StoreOperation.DeleteOneByKey when returnsEntity =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
             StoreOperation.Update or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Boolean),
@@ -821,6 +844,29 @@ internal static class StoreProcessor
         return SymbolEqualityComparer.Default.Equals(page.TypeArguments[0], entitySymbol);
     }
 
+    private static bool IsTaskOfInquiryPagedResult(ITypeSymbol returnType, out INamedTypeSymbol? elementType)
+    {
+        elementType = null;
+        if (returnType is not INamedTypeSymbol task ||
+            !task.IsGenericType ||
+            task.TypeArguments.Length != 1 ||
+            task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Threading.Tasks.Task<TResult>")
+        {
+            return false;
+        }
+
+        if (task.TypeArguments[0] is not INamedTypeSymbol paged ||
+            !paged.IsGenericType ||
+            paged.TypeArguments.Length != 1 ||
+            paged.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::Inquiry.Paging.InquiryPagedResult<TEntity>")
+        {
+            return false;
+        }
+
+        elementType = paged.TypeArguments[0] as INamedTypeSymbol;
+        return elementType is not null;
+    }
+
     private static ProcedureReturnKind ClassifyProcedureReturn(ITypeSymbol returnType, ITypeSymbol entityType)
     {
         if (GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType))
@@ -843,12 +889,14 @@ internal static class StoreProcessor
 
     // ---- Emit (combined output stage) ----------------------------------------------------
 
-    public static StoreRegistration? Emit(
+    public static StoreEmissionResult? Emit(
         SourceProductionContext context,
         StoreData store,
         IReadOnlyDictionary<string, EntityData> entities,
         IReadOnlyDictionary<string, ProjectionData> projections,
-        SqlBuilder sqlBuilder)
+        SqlBuilder sqlBuilder,
+        bool emitUnsupportedOperationStubs,
+        ISet<string>? invalidEntityNames = null)
     {
         if (!store.IsEmittable)
         {
@@ -862,7 +910,15 @@ internal static class StoreProcessor
                 store.Location?.ToLocation(),
                 store.Name,
                 StripGlobalPrefix(store.EntityFullyQualifiedName)));
-            return null;
+            return EmitInvalidEntityStore(context, store);
+        }
+        if (invalidEntityNames is not null && (entity.Relations.AsImmutableArray().Any(relation => invalidEntityNames.Contains(relation.ChildEntityFullyQualifiedName)
+                || relation.JunctionEntityFullyQualifiedName is not null && invalidEntityNames.Contains(relation.JunctionEntityFullyQualifiedName))
+            || store.Methods.AsImmutableArray().Any(method => method.ResultElementTypeFqn is not null && invalidEntityNames.Contains(method.ResultElementTypeFqn))))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoreEntityNotMapped,
+                store.Location?.ToLocation(), store.Name, "a return or relation dependency with an invalid computed expression"));
+            return EmitInvalidEntityStore(context, store);
         }
 
         // Resolve the parent's relation → child-entity map up-front so per-method validation can
@@ -964,14 +1020,11 @@ internal static class StoreProcessor
         }
 
         // a database-managed concurrency token (e.g. rowversion) is only supported on dialects with a
-        // native row-version type — currently SQL Server. On any other dialect it has no portable
-        // semantics, so reject it at emit (reusing INQ006; the reserved block is fully claimed by the
-        // entity-level INQ028/INQ029). Upsert on a token entity has unclear conflict semantics in v1, so
-        // it is likewise rejected.
-        if (entity.ConcurrencyToken is { IsDatabaseGeneratedToken: true } && sqlBuilder.DialectName != "SqlServer")
+        // native row-version type — currently SQL Server. Schema emission owns the property-located
+        // INQ068 diagnostic; this remains as defensive suppression so no unsupported store is emitted.
+        // Upsert on a token entity has unclear conflict semantics in v1, so it is likewise rejected.
+        if (entity.ConcurrencyToken is { IsDatabaseGeneratedToken: true } && !sqlBuilder.SupportsDatabaseGeneratedConcurrencyToken)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.InvalidParameters, store.Location?.ToLocation(), store.Name));
             return null;
         }
 
@@ -983,7 +1036,72 @@ internal static class StoreProcessor
         }
 
         var entityColumns = ToColumnList(entity.Columns);
-        var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns);
+        var mappedProperties = entity.Columns.AsImmutableArray().Select(static c => c.PropertyName).ToArray();
+        var primaryKeyProperties = entity.Keys.AsImmutableArray().Select(static c => c.PropertyName).ToArray();
+        var hasSecondaryUniqueConstraint = entity.Columns.AsImmutableArray().Any(static c => c.IsUnique && !c.IsKey) ||
+            entity.Indexes.AsImmutableArray().Any(index =>
+            {
+                if (!index.IsUnique) return false;
+                var logicalKeys = index.LogicalKeyProperties.AsImmutableArray();
+                if (logicalKeys.Length == 0 ||
+                    logicalKeys.Distinct(System.StringComparer.Ordinal).Count() != logicalKeys.Length ||
+                    logicalKeys.Any(key => !mappedProperties.Contains(key, System.StringComparer.Ordinal)))
+                {
+                    return false;
+                }
+
+                // A unique index containing the complete primary key cannot win while the full PK
+                // differs, so it does not make MySQL's explicit-key returning lookup ambiguous.
+                return !primaryKeyProperties.All(key => logicalKeys.Contains(key, System.StringComparer.Ordinal));
+            });
+        var ctx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
+            hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint);
+
+        var collectionResolutions = ImmutableArray.CreateBuilder<CollectionParameterResolution>();
+        var deleteAllCollectionResolutions = new Dictionary<StoreMethodData, CollectionParameterResolution>();
+        var collectionErrors = new Dictionary<StoreMethodData, string>();
+        foreach (var item in valid)
+        {
+            if (item.Method.Operation == StoreOperation.DeleteAll)
+            {
+                deleteAllCollectionResolutions[item.Method] = ResolveCollection(
+                    item.Method, entity.Keys[0], item.Method.Parameters[0].ElementIsNullable);
+            }
+
+            if (item.PredicatePlan is null) continue;
+            foreach (var binding in item.PredicatePlan.Bindings)
+            {
+                if (!binding.IsCollection || binding.IsNegatedCollection) continue;
+                binding.CollectionResolution = ResolveCollection(item.Method, binding.Column, binding.ElementIsNullable);
+            }
+        }
+
+        CollectionParameterResolution ResolveCollection(StoreMethodData method, ColumnData column, bool elementIsNullable)
+        {
+            var resolution = sqlBuilder.ResolveCollectionParameter(
+                new CollectionParameterContext(entity.Schema, method.Name, column, elementIsNullable));
+            if (resolution.IsValid)
+            {
+                collectionResolutions.Add(resolution);
+                return resolution;
+            }
+            var diagnostic = resolution.Diagnostic!;
+            if (collectionErrors.ContainsKey(method)) return resolution;
+
+            collectionErrors.Add(method, diagnostic.FailureMessage);
+            var location = diagnostic.Facet switch
+            {
+                "SqlType" => column.SqlTypeLocation,
+                "Length" => column.LengthLocation,
+                "Precision" => column.PrecisionLocation,
+                "Scale" => column.ScaleLocation,
+                "IsUnicode" => column.IsUnicodeLocation,
+                _ => method.Location,
+            };
+            context.ReportDiagnostic(Diagnostic.Create(diagnostic.Descriptor, location?.ToLocation(),
+                diagnostic.MessageArguments.Cast<object>().ToArray()));
+            return resolution;
+        }
 
         // [InquiryGlobalFilter] columns: a projection's column subset omits them, so they must be passed
         // explicitly to projection contexts (like the soft-delete column) to keep the active-row filter intact.
@@ -994,7 +1112,8 @@ internal static class StoreProcessor
         // there is no soft-delete column this is identical to ctx and is never used.
         var hasSoftDelete = entity.SoftDeleteColumn is not null;
         var ctxIncludeDeleted = hasSoftDelete
-            ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns, suppressSoftDelete: true)
+            ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
+                suppressSoftDelete: true, hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint)
             : ctx;
         SqlBuildContext CtxFor(StoreMethodData m) => hasSoftDelete && m.IncludeDeleted ? ctxIncludeDeleted : ctx;
 
@@ -1016,8 +1135,13 @@ internal static class StoreProcessor
              m.Method.Operation == StoreOperation.SelectAllEager));
         var needsSelectByKey = valid.Any(m => UsesSharedSelect(m) && m.Method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
         var needsInsert = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && !m.Method.ReturnsEntity) ||
-            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity);
-        // UpdateAll reuses the single-row _sqlUpdate const (one UPDATE per item via the batch API).
+            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity) ||
+            valid.Any(m => (m.Method.Operation == StoreOperation.InsertAll ||
+                (m.Method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy)) &&
+                (sqlBuilder.UsesArrayBindingForBatchMutations ||
+                 sqlBuilder.BatchInsertStrategy != BatchInsertStrategy.SetBased ||
+                 ctx.InsertableColumns.Count == 0));
+        // UpdateAll keeps the single-row SQL for the default path and guarded provider fallbacks.
         var needsUpdate = valid.Any(static m =>
             (m.Method.Operation == StoreOperation.Update && !m.Method.ReturnsEntity) ||
             m.Method.Operation == StoreOperation.UpdateAll);
@@ -1030,8 +1154,10 @@ internal static class StoreProcessor
         // delete routing. The shared _sqlDeleteByKey is the "default" delete statement: a literal
         // DELETE for an ordinary entity, or the soft UPDATE for a soft-delete entity. A HardDelete method
         // on a soft-delete entity additionally needs a separate literal-DELETE const so both can coexist.
-        var needsDeleteByKey = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && !(m.Method.HardDelete && hasSoftDelete));
-        var needsHardDeleteByKey = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.HardDelete);
+        var needsDeleteByKey = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && !m.Method.ReturnsEntity && !(m.Method.HardDelete && hasSoftDelete));
+        var needsHardDeleteByKey = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && !m.Method.ReturnsEntity && m.Method.HardDelete);
+        var needsDeleteReturning = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.ReturnsEntity && (!hasSoftDelete || m.Method.HardDelete));
+        var needsSoftDeleteReturning = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.ReturnsEntity && !m.Method.HardDelete);
         var needsRestore = valid.Any(static m => m.Method.Operation == StoreOperation.RestoreOneByKey);
         var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count);
         // A [InquiryBulkInsert] on a dialect without a native bulk-copy API compiles down to the
@@ -1073,19 +1199,65 @@ internal static class StoreProcessor
         var insertReturningError = TryBuildDegradableConst(source, "_sqlInsertReturning", needsInsertReturning, () => sqlBuilder.BuildInsertReturningSql(ctx));
         var updateReturningError = TryBuildDegradableConst(source, "_sqlUpdateReturning", needsUpdateReturning, () => sqlBuilder.BuildUpdateReturningSql(ctx));
         var upsertReturningError = TryBuildDegradableConst(source, "_sqlUpsertReturning", needsUpsertReturning, () => sqlBuilder.BuildUpsertReturningSql(ctx));
+        var deleteReturningError = TryBuildDegradableConst(source, "_sqlDeleteReturning", needsDeleteReturning, () => sqlBuilder.BuildDeleteByKeyReturningSql(ctx));
+        var softDeleteReturningError = TryBuildDegradableConst(source, "_sqlSoftDeleteReturning", needsSoftDeleteReturning, () => sqlBuilder.BuildSoftDeleteByKeyReturningSql(ctx));
         if (needsDeleteByKey) AppendConstSql(source, "_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsHardDeleteByKey) AppendConstSql(source, "_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
         if (needsRestore) AppendConstSql(source, "_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
         if (needsCount) AppendConstSql(source, "_sqlCount", sqlBuilder.BuildCountSql(ctx));
         // InsertAll is supported on every dialect via the SqlBuilder batch-insert shape hooks (Oracle emits
-        // INSERT ALL … SELECT FROM dual; everyone else multi-row VALUES). The header + per-row open are
+        // INSERT INTO … SELECT … FROM dual UNION ALL; everyone else uses multi-row VALUES). The header + per-row open are
         // baked consts the emitter assembles at runtime. DeleteAll uses the IN-expansion path (every dialect).
-        if (needsInsertAll)
+        if (needsInsertAll && sqlBuilder.BatchInsertStrategy != BatchInsertStrategy.Row)
         {
             AppendConstSql(source, "_sqlInsertAllPrefix", sqlBuilder.BuildBatchInsertHeader(ctx));
             AppendConstSql(source, "_sqlInsertAllRowOpen", sqlBuilder.BuildBatchInsertRowOpen(ctx));
         }
-        if (needsDeleteAll) AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
+        if (needsDeleteAll)
+        {
+            // Retain the set-based collection SQL as a benchmark/control shape. Array-binding
+            // dialects execute the fixed single-key DML through _sqlDeleteAllItem in production.
+            AppendConstSql(source, "_sqlDeleteAll", hasSoftDelete ? sqlBuilder.BuildSoftDeleteAllByKeysSql(ctx) : sqlBuilder.BuildDeleteAllByKeysSql(ctx));
+            if (sqlBuilder.UsesArrayBindingForBatchMutations)
+            {
+                AppendConstSql(source, "_sqlDeleteAllItem", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
+            }
+        }
+
+        // Provider descriptor fields must be initialized before any cached batch descriptor captures
+        // them. C# correctly treats a later static field as potentially null while an earlier field
+        // initializer is running, even when the later field's declared type is non-nullable.
+        foreach (var artifact in collectionResolutions
+            .Where(static resolution => resolution.Artifact is not null)
+            .Select(static resolution => resolution.Artifact!)
+            .GroupBy(static artifact => artifact.RuntimeDescriptorFieldName, StringComparer.Ordinal)
+            .Select(static group => group.First()))
+        {
+            source.AppendLine();
+            source.AppendLine($"    private static readonly {artifact.RuntimeDescriptorTypeName} {artifact.RuntimeDescriptorFieldName} = {artifact.RuntimeDescriptorExpression};");
+        }
+
+        // Batch descriptors are immutable generated support values. Keep them on the store type so
+        // every invocation reuses the same static binder delegate instead of constructing batch
+        // command state per call.
+        foreach (var (method, _, _, _) in valid)
+        {
+            if (method.Operation == StoreOperation.InsertAll ||
+                (method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy))
+            {
+                StoreOperationEmitter.EmitInsertAllSupport(source, method, entity, sqlBuilder);
+            }
+            else if (method.Operation == StoreOperation.UpdateAll)
+            {
+                StoreOperationEmitter.EmitUpdateAllDescriptor(source, method, entity, sqlBuilder);
+            }
+            else if (method.Operation == StoreOperation.DeleteAll &&
+                deleteAllCollectionResolutions.TryGetValue(method, out var resolution) &&
+                resolution.IsValid)
+            {
+                StoreOperationEmitter.EmitDeleteAllDescriptor(source, method, entity, sqlBuilder, resolution);
+            }
+        }
 
         foreach (var fieldColumns in byFieldOps)
         {
@@ -1178,6 +1350,11 @@ internal static class StoreProcessor
                 {
                     AppendConstSql(source, selectPlan.SqlFieldName + "_first", BuildKeysetFirstPageSql(sqlBuilder, planCtx, selectPlan, method.Distinct));
                 }
+
+                if (method.ReturnsPagedResult)
+                {
+                    AppendConstSql(source, "_sqlCount_" + method.Name, sqlBuilder.BuildCountByFieldSql(planCtx, ToColumnList(fieldColumns)));
+                }
             }
         }
 
@@ -1232,6 +1409,8 @@ internal static class StoreProcessor
         // drops the eager method — so no valid eager method remains and this block is skipped.
         var hasEagerMethod = valid.Any(static m =>
             m.Method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager);
+        var hasIncludeDeletedSelectAllEager = hasSoftDelete && valid.Any(static m =>
+            m.Method.Operation == StoreOperation.SelectAllEager && m.Method.IncludeDeleted);
         if (relationChildEntities.Count > 0 && hasEagerMethod)
         {
             var emittedRelations = new HashSet<string>();
@@ -1256,19 +1435,35 @@ internal static class StoreProcessor
 
                 if (relation.IsManyToMany)
                 {
-                    // M:N consts: the single-parent JOIN through the junction, plus the two batch selects
-                    // (all children + all junction rows) the all-eager loader assembles in memory.
+                    // M:N consts: the single-parent JOIN through the junction, plus the two filtered batch
+                    // selects the all-eager loader assembles in memory.
                     var junctionEntity = relationJunctionEntities[relation.PropertyName];
                     var junctionParentFkColumn = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!.ColumnName;
                     var junctionChildFkColumn = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!.ColumnName;
                     var junctionCtx = new SqlBuildContext(sqlBuilder, junctionEntity.Schema, junctionEntity.TableName, ToColumnList(junctionEntity.Columns));
 
                     AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildManyToManySelectByParentSql(
-                        childCtx, ToColumnList(childEntity.Columns), junctionEntity.Schema, junctionEntity.TableName,
+                        childCtx, ToColumnList(childEntity.Columns), junctionCtx,
                         junctionChildFkColumn, childEntity.Keys[0].ColumnName, junctionParentFkColumn, entity.Keys[0].PropertyName));
-                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_All", sqlBuilder.BuildSelectAllSql(childCtx));
+                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_All",
+                        sqlBuilder.BuildManyToManySelectAllFilteredSql(
+                            childCtx, junctionCtx, ctx, childEntity.Keys[0].ColumnName,
+                            junctionChildFkColumn, junctionParentFkColumn, entity.Keys[0].ColumnName));
                     AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction",
-                        sqlBuilder.BuildSelectAllFilteredSql(junctionCtx, junctionParentFkColumn, ctx, entity.Keys[0].ColumnName));
+                        sqlBuilder.BuildManyToManyJunctionAllFilteredSql(
+                            junctionCtx, ctx, childCtx, junctionParentFkColumn, entity.Keys[0].ColumnName,
+                            junctionChildFkColumn, childEntity.Keys[0].ColumnName));
+                    if (hasIncludeDeletedSelectAllEager)
+                    {
+                        AppendConstSql(source, "_sql_" + relation.PropertyName + "_All_IncludeDeleted",
+                            sqlBuilder.BuildManyToManySelectAllFilteredSql(
+                                childCtx, junctionCtx, ctxIncludeDeleted, childEntity.Keys[0].ColumnName,
+                                junctionChildFkColumn, junctionParentFkColumn, entity.Keys[0].ColumnName));
+                        AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction_IncludeDeleted",
+                            sqlBuilder.BuildManyToManyJunctionAllFilteredSql(
+                                junctionCtx, ctxIncludeDeleted, childCtx, junctionParentFkColumn,
+                                entity.Keys[0].ColumnName, junctionChildFkColumn, childEntity.Keys[0].ColumnName));
+                    }
                     continue;
                 }
 
@@ -1283,6 +1478,12 @@ internal static class StoreProcessor
                 AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildSelectByFieldSql(childCtx, new List<IColumn> { filterColumn }));
                 AppendConstSql(source, "_sql_" + relation.PropertyName + "_All",
                     sqlBuilder.BuildSelectAllFilteredSql(childCtx, filterColumn.ColumnName, ctx, parentKeyColumn));
+                if (hasIncludeDeletedSelectAllEager)
+                {
+                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_All_IncludeDeleted",
+                        sqlBuilder.BuildSelectAllFilteredSql(
+                            childCtx, filterColumn.ColumnName, ctxIncludeDeleted, parentKeyColumn));
+                }
             }
         }
 
@@ -1326,18 +1527,34 @@ internal static class StoreProcessor
                 StoreOperation.Insert when method.ReturnsEntity => insertReturningError,
                 StoreOperation.Update when method.ReturnsEntity => updateReturningError,
                 // Returning upsert uses _sqlUpsertReturning, or _sqlInsertReturning on the null-key path.
-                StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ?? insertReturningError,
+                StoreOperation.Upsert when method.ReturnsEntity => upsertReturningError ??
+                    (nullableDatabaseSuppliedKeyUpsert ? insertReturningError : null),
+                StoreOperation.DeleteOneByKey when method.ReturnsEntity && hasSoftDelete && !method.HardDelete => softDeleteReturningError,
+                StoreOperation.DeleteOneByKey when method.ReturnsEntity => deleteReturningError,
                 // Non-returning upsert uses _sqlUpsert (throws for a generated-key MERGE on Oracle).
                 StoreOperation.Upsert => upsertError,
                 _ => null,
             };
+            // The provider diagnostic was already reported at the precise invalid facet above. Still
+            // emit a safe body without adding the generic INQ039 for the same transport failure.
+            if (collectionErrors.TryGetValue(method, out var collectionError))
+            {
+                if (emitUnsupportedOperationStubs)
+                {
+                    StoreOperationEmitter.EmitUnsupportedStub(source, method, collectionError);
+                }
+                continue;
+            }
             if (unsupportedReason is not null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     InquiryDiagnosticDescriptors.DialectOperationNotSupported,
                     method.Location?.ToLocation(),
                     method.Name, sqlBuilder.DialectName, unsupportedReason));
-                StoreOperationEmitter.EmitUnsupportedStub(source, method, unsupportedReason);
+                if (emitUnsupportedOperationStubs)
+                {
+                    StoreOperationEmitter.EmitUnsupportedStub(source, method, unsupportedReason);
+                }
                 continue;
             }
 
@@ -1345,12 +1562,14 @@ internal static class StoreProcessor
             {
                 // Project: select the projection's columns and materialize the projection type.
                 StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
-                    sqlBuilder, "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
+                    sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null,
+                    "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
             }
             else
             {
                 baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
-                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities, sqlBuilder, baseSelectField);
+                StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
+                    sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null, baseSelectField);
             }
         }
 
@@ -1367,8 +1586,39 @@ internal static class StoreProcessor
 
         GeneratorHelpers.AppendNamespaceEnd(source, store.Namespace);
 
-        context.AddSource($"{store.Name}.InquiryStore.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
-        return new StoreRegistration(store.FullyQualifiedName, interfaceFullyQualifiedName);
+        context.AddSource(store.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
+        return new StoreEmissionResult(
+            new StoreRegistration(store.FullyQualifiedName, interfaceFullyQualifiedName),
+            collectionResolutions
+                .Where(static resolution => resolution.Artifact is not null)
+                .Select(static resolution => resolution.Artifact!)
+                .ToImmutableArray());
+    }
+
+    private static StoreEmissionResult EmitInvalidEntityStore(SourceProductionContext context, StoreData store)
+    {
+        const string reason = "The store depends on an entity whose provider-specific mapping is invalid; see the preceding Inquiry diagnostic.";
+        var source = new StringBuilder();
+        source.AppendLine("// <auto-generated />");
+        source.AppendLine("#nullable enable");
+        GeneratorHelpers.AppendNamespaceStart(source, store.Namespace);
+        source.AppendLine(store.GenerateInterface ? $"partial class {store.Name} : I{store.Name}" : $"partial class {store.Name}");
+        source.AppendLine("{");
+        source.AppendLine($"    public {store.Name}(global::Inquiry.IInquiry inquiry)");
+        source.AppendLine("        : base(inquiry)");
+        source.AppendLine("    {");
+        source.AppendLine("    }");
+        foreach (var method in store.Methods) { source.AppendLine(); StoreOperationEmitter.EmitUnsupportedStub(source, method, reason); }
+        source.AppendLine("}");
+        string? interfaceName = null;
+        if (store.GenerateInterface)
+        {
+            interfaceName = store.Namespace is null ? $"global::I{store.Name}" : $"global::{store.Namespace}.I{store.Name}";
+            EmitStoreInterface(source, store, store.Methods.AsImmutableArray());
+        }
+        GeneratorHelpers.AppendNamespaceEnd(source, store.Namespace);
+        context.AddSource(store.HintName, SourceText.From(source.ToString(), Encoding.UTF8));
+        return new StoreEmissionResult(new StoreRegistration(store.FullyQualifiedName, interfaceName), ImmutableArray<CollectionParameterArtifact>.Empty);
     }
 
     /// <summary>
@@ -1613,6 +1863,12 @@ internal static class StoreProcessor
         {
             if (!TryResolveOrderColumns(context, method, entity, out var orderColumns))
             {
+                return false;
+            }
+
+            if (method.ReturnsPagedResult && method.Distinct)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PagedResultDistinctNotSupported, method.Location?.ToLocation(), method.Name));
                 return false;
             }
 
@@ -1872,8 +2128,10 @@ internal static class StoreProcessor
                 {
                     // IN/NOT IN match the collection element against the column's non-nullable type: a set
                     // of values to test membership against is never itself nullable.
-                    var element = method.Parameters[paramIndex].ElementComparisonDisplay;
-                    if (element is null || element != column.Type.NonNullableDisplayName)
+                    var parameter = method.Parameters[paramIndex];
+                    var element = parameter.ElementNonNullableComparisonDisplay;
+                    if (element is null || element != column.Type.NonNullableDisplayName ||
+                        (!column.IsNullable && parameter.ElementIsNullable))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateInRequiresCollection, method.Location?.ToLocation(), method.Name, predicate.Field));
                         return false;
@@ -1888,7 +2146,9 @@ internal static class StoreProcessor
                     // exactly — ':name' on Oracle, '@name' elsewhere. FinalizeCommand only renames
                     // parameters, not the text, so it cannot bridge a mismatch here. NOT IN always uses the
                     // sentinel path (isNegatedCollection) so its empty-collection rewrite is dialect-uniform.
-                    bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column, isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn));
+                    bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column,
+                        isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn,
+                        elementIsNullable: parameter.ElementIsNullable));
                     paramIndex += 1;
                     hasIn = true;
                     break;

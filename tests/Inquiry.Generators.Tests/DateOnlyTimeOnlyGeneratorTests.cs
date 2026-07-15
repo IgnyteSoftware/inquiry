@@ -62,6 +62,21 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void OracleDateOnlyTimeOnlyColumnsUseProviderBridges()
+    {
+        var result = RunGenerator(DateTimeOnlySource, dialect: "Oracle");
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("Event.InquiryEntity.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("DateOnly.FromDateTime(reader.GetDateTime(1))", text);
+        Assert.Contains("TimeOnly.FromTimeSpan(reader.GetFieldValue<global::System.TimeSpan>(2))", text);
+        Assert.Contains("reader.IsDBNull(3) ? (global::System.DateOnly?)null : global::System.DateOnly.FromDateTime(reader.GetDateTime(3))", text);
+        Assert.Contains("reader.IsDBNull(4) ? (global::System.TimeOnly?)null : global::System.TimeOnly.FromTimeSpan(reader.GetFieldValue<global::System.TimeSpan>(4))", text);
+    }
+
+    [Fact]
     public void DateOnlyTimeOnlyParametersStampDateAndTimeDbTypes()
     {
         var result = RunGenerator(DateTimeOnlySource);
@@ -98,10 +113,10 @@ public sealed partial class InquiryGeneratorTests
         var ddl = ExtractSchemaDdl(result);
 
         Assert.Contains("[EventDate] DATE NOT NULL", ddl);
-        Assert.Contains("[StartTime] TIME NOT NULL", ddl);
+        Assert.Contains("[StartTime] TIME(7) NOT NULL", ddl);
         Assert.Contains("[EndDate] DATE,", ddl);
-        Assert.Contains("[EndTime] TIME", ddl);
-        Assert.DoesNotContain("[EndTime] TIME NOT NULL", ddl);
+        Assert.Contains("[EndTime] TIME(7)", ddl);
+        Assert.DoesNotContain("[EndTime] TIME(7) NOT NULL", ddl);
     }
 
     [Fact]

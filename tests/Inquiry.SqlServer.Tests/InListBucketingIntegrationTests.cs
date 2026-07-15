@@ -11,6 +11,7 @@ namespace Inquiry.SqlServer.Tests;
 /// power-of-two bucket, so a workload issuing many different IN cardinalities reuses a small fixed set of
 /// cached plans instead of one per length — without changing which rows match.
 /// </summary>
+/// <remarks>#199 replaces SQL Server bucketing with one stable TVP command and parameter signature.</remarks>
 [Collection(SqlServerCollection.Name)]
 public sealed class InListBucketingIntegrationTests
 {
@@ -18,7 +19,7 @@ public sealed class InListBucketingIntegrationTests
     public InListBucketingIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
 
     [SkippableFact]
-    public async Task InListCardinalitiesCollapseToPowerOfTwoBucketsAndPreserveResults()
+    public async Task InListCardinalitiesUseOneTvpSignatureAndPreserveResults()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "inbucket");
@@ -50,7 +51,7 @@ public sealed class InListBucketingIntegrationTests
         Assert.All(justC1, p => Assert.Equal(c1, p.CategoryID));
 
         var distinctSignatures = await DistinctInSignaturesAsync(harness.ConnectionString);
-        Assert.Equal(5, distinctSignatures);
+        Assert.Equal(1, distinctSignatures);
     }
 
     // Distinct parameterized IN statement texts cached for THIS database (isolated by the dbid plan
@@ -67,7 +68,8 @@ public sealed class InListBucketingIntegrationTests
             CROSS APPLY sys.dm_exec_sql_text(cp.plan_handle) st
             CROSS APPLY sys.dm_exec_plan_attributes(cp.plan_handle) pa
             WHERE pa.attribute = 'dbid' AND pa.value = DB_ID()
-              AND st.text LIKE '%@categoryID0%'
+              AND st.text LIKE '%Products%'
+              AND st.text LIKE '%Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c%'
               AND st.text NOT LIKE '%dm_exec%';
             """;
         return (int)(await cmd.ExecuteScalarAsync())!;

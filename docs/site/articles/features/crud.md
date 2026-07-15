@@ -214,7 +214,7 @@ partial class ShipperStore
 
 ## Key generation: sequential GUIDs
 
-Random `Guid.NewGuid()` keys fragment clustered B-tree indexes — every insert lands at a random page. For client-supplied GUID keys, opt into time-ordered **UUID v7** generation:
+Random `Guid.NewGuid()` keys fragment clustered B-tree indexes — every insert lands at a random page. For client-supplied GUID keys, opt into time-ordered sequential generation:
 
 ```csharp
 [InquiryTable("Documents")]
@@ -227,17 +227,18 @@ public sealed class Document
 }
 ```
 
-Insert, upsert, and batch-insert methods then assign `InquiryGuid.NewVersion7()` whenever the key is unset (`Guid.Empty` or `null`):
+Insert, upsert, and batch-insert methods then assign a sequential GUID whenever the key is unset (`Guid.Empty` or `null`). The layout is **dialect-aware**: UUIDv7 on PostgreSQL, MySQL, MariaDB, SQLite, and Oracle; a SQL Server-optimized layout (timestamp in bytes [10..15], version 8) for `uniqueidentifier`, which compares those bytes first:
 
 ```csharp
 var doc = new Document { Title = "spec" };
 await store.InsertAsync(doc);
-// doc.Id is now a v7 GUID — time-ordered, observable by the caller, usable for follow-up reads.
+// doc.Id is now a sequential GUID — time-ordered for the target provider,
+// observable by the caller, usable for follow-up reads.
 ```
 
 - **Supplied keys win.** A non-empty key is never overwritten.
 - **The entity is mutated** so you see the generated key after the call — same ergonomics as a database-generated identity.
-- **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a v7 GUID. On .NET 9+ it delegates to `Guid.CreateVersion7()`; on .NET 8 it's an RFC 9562-conformant polyfill.
+- **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a UUIDv7. On .NET 9+ it delegates to `Guid.CreateVersion7()`; on .NET 8 it's an RFC 9562-conformant polyfill. For SQL Server-ordered keys, use `InquiryGuid.NewSqlServerSequential()`.
 - `SequentialGuid` requires a plain client-supplied `Guid`/`Guid?` key — combining it with `IsGenerated` or `UseDatabaseDefault`, or putting it on a non-Guid key, is a build-time error (`INQ047`).
 
 ## Derived query methods
@@ -279,24 +280,31 @@ Upsert atomicity differs per dialect; the table below pins what each provider do
 |---|---|---|
 | SQLite | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` (the key is included in the INSERT) — single statement, atomic |
 | PostgreSQL | `INSERT ... ON CONFLICT (...) DO UPDATE` — single statement, atomic | `INSERT ... ON CONFLICT (key) DO UPDATE` on the explicit-key branch — atomic (the explicit key is supplied, so no sequence value is consumed) |
-| MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Integer `AUTO_INCREMENT` key: same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo — atomic. GUID key (`UseDatabaseDefault`): generated server-side via `COALESCE(@key, UUID())`, captured in a `@_inquiry_genkey` user variable so the emulated returning can read it back — atomic. |
-| MariaDB | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Same `ON DUPLICATE KEY UPDATE` with `COALESCE(@key, UUID())` — atomic. Native `RETURNING` reads the row back directly (no user variable or trailing SELECT needed). |
+| MySQL | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Integer `AUTO_INCREMENT` key: same `ON DUPLICATE KEY UPDATE` with `LAST_INSERT_ID(key)` echo. Non-auto `UseDatabaseDefault` key: null routes through insert; an explicit key uses ordinary upsert and selects by that key. A declared secondary unique constraint makes return-entity upsert ambiguous and produces `INQ039`; non-returning upsert remains supported. |
+| MariaDB | `INSERT ... ON DUPLICATE KEY UPDATE` — single statement, atomic | Null routes through native insert-returning; explicit keys use the ordinary upsert. Native `RETURNING` reads the actual inserted or updated row directly (no user variable or trailing SELECT needed). |
 | SQL Server | `UPDATE … IF @@ROWCOUNT = 0 INSERT` inside `BEGIN/COMMIT TRANSACTION` with `UPDLOCK, SERIALIZABLE` table hints — serializes concurrent same-key upserts, atomic with no duplicate-key race | Same update-first pattern on the explicit-key branch — atomic (the null/generate branch is a plain INSERT) |
-| Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ039` warning + throwing stub): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead |
+| Oracle | `MERGE` — same race-condition class as SQL Server's `MERGE` | Not supported (`INQ039` build error): the join key is `NULL` on a generated-key upsert so `MERGE` can never match — use explicit Insert/Update instead. Configuring `INQ039` as a warning or `none` project-wide opts every unsupported project method into a throwing runtime stub. |
 
 What the contract guarantees, on every dialect: **N concurrent upserts of the same key always end with exactly one row whose state matches one of the inputs**. The integration test `UpsertConcurrencyTests.ConcurrentUpsertsOfSameKeyEndInOneRowMatchingOneInput` pins this against each live provider.
 
 What it does **not** guarantee on every dialect: that every parallel upsert succeeds. On Oracle, a duplicate-key failure on one parallel call is a known engine-level race and surfaces as an exception (SQL Server uses an update-first pattern with `UPDLOCK, SERIALIZABLE` hints, so all parallel upserts succeed). If your app must serialize on Oracle, wrap the upsert in an explicit transaction with an appropriate isolation level (`SERIALIZABLE`, or `READ COMMITTED` plus an advisory lock).
 
-On **MySQL**, a database-generated GUID key (a `Guid?` property with `UseDatabaseDefault = true`, e.g. a
-`CHAR(36) DEFAULT (UUID())` column) is supported: because MySQL has no `RETURNING` and `LAST_INSERT_ID()`
-only tracks `AUTO_INCREMENT`, Inquiry generates the value server-side with `UUID()`, captures it in a
-`@_inquiry_genkey` user variable, and selects the row back by it. Inquiry therefore enables
-`AllowUserVariables=true` on MySQL connections automatically. **MariaDB** uses native
-`INSERT…RETURNING` instead, so it does not need the user variable or `AllowUserVariables`.
+On **MySQL**, a non-`AUTO_INCREMENT` database-default key used by insert-returning must declare a
+standalone scalar `DefaultExpression` matching the deployed schema (for example, `"(UUID())"`). Inquiry
+evaluates that expression once into `@'__inquiry.generated-key'`, inserts the captured value, and selects
+the row by the same value. `Guid` keys retain `UUID()` as a compatibility fallback. Insert-returning
+intentionally ignores an entity's supplied value for a `UseDatabaseDefault` key. A nullable upsert with
+a null key takes that insert path; an explicit key uses the ordinary upsert and selects by `@key`.
+Because MySQL cannot safely identify a different primary key that wins a declared secondary-unique
+conflict, that return-entity shape produces `INQ039`; use non-returning upsert or model the conflict
+explicitly. Inquiry enables `AllowUserVariables=true` on MySQL connections for the capture batch.
+**MariaDB** uses native `INSERT…RETURNING` instead, so it does not need the user variable or
+`AllowUserVariables`.
 
-On **MySQL** and **MariaDB**, an empty-SET upsert (an entity with only key columns and nothing to update) uses
-`ON DUPLICATE KEY UPDATE key = key` — a no-op — because MySQL has no `DO NOTHING` equivalent.
+On **MySQL** and **MariaDB**, an empty-SET upsert (an entity with only key columns and nothing to update)
+must still emit an assignment because MySQL has no `DO NOTHING` equivalent. Client/non-auto keys use
+the no-op `ON DUPLICATE KEY UPDATE key = key`; an `AUTO_INCREMENT` key uses
+`key = LAST_INSERT_ID(key)` once so returning paths can recover the winning key.
 The returning variant (`ReturnEntity = true`) therefore returns the matched row on conflict rather
 than `null`, unlike PostgreSQL, SQLite, and SQL Server which return `null` when no columns are
 modified. Design for this if your code branches on the returning upsert's null/non-null result.

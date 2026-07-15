@@ -1,5 +1,9 @@
 # Oracle
 
+Oracle schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck]`, and named foreign keys
+with delete `Cascade` or `SetNull`. Covering `Include`, update actions, `Restrict`, and `SetDefault` are
+rejected because Oracle cannot represent them faithfully.
+
 Package: `Inquiry.Oracle`. Built on `Oracle.ManagedDataAccess.Core`.
 
 ## Install
@@ -39,15 +43,25 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 
 - **Connection factory does provider-specific fixups:** `BindByName = true` (so `:name` references bind by name, not position), `@`-to-`:` parameter renaming, and OUT-parameter binding for `RETURNING ... INTO` blocks.
 - **`INSERT ALL` for batch inserts:** Oracle doesn't support multi-row `VALUES`. The generator emits `INSERT ALL INTO t (...) VALUES (...) INTO t (...) VALUES (...) SELECT 1 FROM dual`.
-- **`UpdateAll` runs through the runtime batch API** — Oracle has no multi-row `UPDATE … VALUES`, so the generator emits the ordinary single-row `UPDATE` (`_sqlUpdate`) executed once per item via `Inquiry.ExecuteBatchAsync` (sequentially on one connection — Oracle's driver exposes no `DbBatch`). No `INQ039` warning, no throwing stub.
+- **`UpdateAll` runs through the runtime batch API** — Oracle has no multi-row `UPDATE … VALUES`, so the generator emits the ordinary single-row `UPDATE` (`_sqlUpdate`) executed once per item via `Inquiry.ExecuteBatchAsync` (sequentially on one connection — Oracle's driver exposes no `DbBatch`). No `INQ039` diagnostic or throwing stub.
 - **Full-text search is unsupported** — `[InquiryFullTextSearch]` is not implemented for Oracle in v1; the generator reports compile-time error `INQ035` (full-text search is available only on PostgreSQL, SQL Server, MySQL, and MariaDB). No `CONTAINS(...)` SQL is emitted.
-- **`Upsert` with DB-generated key** — the upsert path requires a known key. For a DB-generated key, use `InsertAsync` for new rows and `UpdateAsync` for existing ones; `UpsertAsync` is a throwing stub in that scenario.
+- **`Upsert` with DB-generated key** — the upsert path requires a known key. For a DB-generated key, use `InsertAsync` for new rows and `UpdateAsync` for existing ones; `UpsertAsync` produces the `INQ039` build error. Configuring `INQ039` as a warning or `none` project-wide opts every unsupported project method into a throwing runtime stub.
 - **Cloud transient-fault retry:** set `Compatibility = OracleCompatibility.CloudHosted` in the
   options overload to enable exponential-backoff retry on transient connection-open errors (instance
   unavailable, TNS listener down, connection lost). Tunable via `MaxAttempts`, `RetryBaseDelay`, and
   `RetryMaxDelay`. Disabled by default (`OracleCompatibility.None`).
 - **Prepared statements:** the default `PreparedStatementMode.Auto` is a silent no-op for Oracle (no per-command `Prepare()`). It isn't needed: ODP.NET has a pool-level statement (cursor) cache whose **self-tuning is on by default**, so cursors already survive across Inquiry's per-operation pooled connections with no configuration. Inquiry sets no `Statement Cache Size` in the connection string — the default is already optimal (measured; see [Prepared statements](../features/prepared-statements.md)).
 - **Stored-procedure result sets** (today) require an OUT `SYS_REFCURSOR` parameter, which the generator doesn't yet emit. Either use a `FUNCTION` that `RETURN SYS_REFCURSOR`, or wait for the planned stored-procedure expansion.
+
+## Temporal values
+
+`DateOnly` binds as a midnight `DateTime` with `DbType.Date`. `TimeOnly` binds as `TimeSpan` without an explicit `DbType`, allowing ODP.NET to infer `INTERVAL DAY TO SECOND`. `DateTimeOffset` binds unchanged as `TIMESTAMP WITH TIME ZONE`. Generated readers reverse these bridges. ODP.NET normalizes interval fractions to microsecond precision (10 .NET ticks), while numeric offsets such as `-04:30` are preserved.
+
+## GUID and boolean values
+
+Oracle stores `Guid` columns as `RAW(16)` and boolean columns as `NUMBER(1)`. Generated binders set `DbType.Binary` for GUIDs and `DbType.Int32` for booleans before assigning the original CLR value. ODP.NET then preserves `Guid` identity and writes `false`/`true` as `0`/`1`; generated readers return them through `GetGuid` and `GetBoolean`. The generator does not allocate a GUID byte array or replace a boolean with an integer value. Nullable and value-converted columns use the same provider metadata.
+
+`IN` predicates retain the single-JSON-parameter path. The generated `JSON_TABLE` projection converts canonical GUID strings to ODP.NET's `RAW(16)` byte order and JSON booleans to `0`/`1`; `NOT IN` expands elements with the same `DbType.Binary`/`DbType.Int32` metadata used by scalar predicates.
 
 ## Testing
 

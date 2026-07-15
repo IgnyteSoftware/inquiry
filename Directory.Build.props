@@ -16,6 +16,7 @@
     <Authors>Inquiry Contributors</Authors>
     <Company>Inquiry Contributors</Company>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
 
     <!-- SourceLink: embed commit metadata so NuGet consumers can step into source -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -23,8 +24,8 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
-    <!-- MinVer: version derived from nearest git tag (v8.0.0 → 8.0.0) -->
-    <MinVerMinimumMajorMinor>8.0</MinVerMinimumMajorMinor>
+    <!-- MinVer: version derived from nearest git tag (v1.0.0 → 1.0.0) -->
+    <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,5 +35,6 @@
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

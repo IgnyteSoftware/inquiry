@@ -1,0 +1,67 @@
+<Project>
+  <PropertyGroup>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath Condition="'$(CompilerGeneratedFilesOutputPath)' == ''">$(MSBuildProjectDirectory)\obj\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\generated</CompilerGeneratedFilesOutputPath>
+    <BenchmarkSelectedAssetsManifestPath Condition="'$(BenchmarkSelectedAssetsManifestPath)' == ''">obj\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\selected-assets.tsv</BenchmarkSelectedAssetsManifestPath>
+  </PropertyGroup>
+
+  <Target Name="WriteBenchmarkSelectedAssetsManifest" AfterTargets="Build" DependsOnTargets="ResolveReferences"
+      Condition="'$(TargetFramework)' != '' and '$(IsCrossTargetingBuild)' != 'true' and '$(ArtifactsPath)' == ''">
+    <Error Condition="'$(BenchmarkEvidenceProvider)' == ''" Text="BenchmarkEvidenceProvider is required." />
+    <Error Condition="'$(BenchmarkEvidenceLane)' == ''" Text="BenchmarkEvidenceLane is required." />
+    <Error Condition="'$(RuntimeIdentifier)' == ''" Text="A RuntimeIdentifier is required for exact benchmark asset evidence." />
+
+    <ItemGroup>
+      <_BenchmarkCompilerReference Include="@(ReferencePath)"
+          Condition="'%(ReferencePath.Extension)' == '.dll'" />
+      <_BenchmarkNativeAsset Include="@(ReferenceCopyLocalPaths)"
+          Condition="'%(ReferenceCopyLocalPaths.AssetType)' == 'native' or '%(ReferenceCopyLocalPaths.Extension)' == '.so' or '%(ReferenceCopyLocalPaths.Extension)' == '.dylib'" />
+      <_BenchmarkRuntimeAsset Include="@(ReferenceCopyLocalPaths)"
+          Condition="'%(ReferenceCopyLocalPaths.AssetType)' != 'native' and '%(ReferenceCopyLocalPaths.Extension)' == '.dll' and '%(ReferenceCopyLocalPaths.Filename)' != 'Inquiry' and '%(ReferenceCopyLocalPaths.Filename)' != '$(BenchmarkEvidenceProviderAssembly)'" />
+      <_BenchmarkAnalyzerAsset Include="@(Analyzer)"
+          Condition="'%(Analyzer.Extension)' == '.dll'" />
+      <_BenchmarkGeneratedAsset Include="$(CompilerGeneratedFilesOutputPath)\**\*.cs" />
+      <_BenchmarkHostAsset Include="$(TargetPath)" Condition="'$(TargetExt)' == '.dll'" />
+      <_BenchmarkProductAsset Include="@(ReferenceCopyLocalPaths)"
+          Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll' and ('%(ReferenceCopyLocalPaths.Filename)' == 'Inquiry' or '%(ReferenceCopyLocalPaths.Filename)' == '$(BenchmarkEvidenceProviderAssembly)')" />
+      <_BenchmarkProviderProduct Include="@(_BenchmarkProductAsset)"
+          Condition="'%(_BenchmarkProductAsset.Filename)' == '$(BenchmarkEvidenceProviderAssembly)'" />
+      <_BenchmarkCoreProduct Include="@(_BenchmarkProductAsset)"
+          Condition="'%(_BenchmarkProductAsset.Filename)' == 'Inquiry'" />
+      <_BenchmarkInquiryAnalyzer Include="@(_BenchmarkAnalyzerAsset)"
+          Condition="'%(_BenchmarkAnalyzerAsset.Filename)' == '$(BenchmarkEvidenceProviderAssembly).Analyzer'" />
+    </ItemGroup>
+
+    <Error Condition="'@(_BenchmarkCoreProduct)' == '' or '@(_BenchmarkProviderProduct)' == ''"
+        Text="Exact benchmark evidence requires Inquiry.dll and the configured provider DLL." />
+    <Error Condition="'@(_BenchmarkInquiryAnalyzer)' == ''"
+        Text="Exact benchmark evidence requires the provider's Inquiry analyzer DLL." />
+    <Error Condition="'@(_BenchmarkGeneratedAsset)' == ''"
+        Text="Exact benchmark evidence requires actual compiler-generated Inquiry source output." />
+
+    <WriteLinesToFile File="$(BenchmarkSelectedAssetsManifestPath)"
+        Lines="inquiry-msbuild-selected-assets-v1&#x9;$(BenchmarkEvidenceProvider)&#x9;$(BenchmarkEvidenceLane)&#x9;$(TargetFramework)&#x9;$(RuntimeIdentifier)"
+        Overwrite="true" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(BenchmarkSelectedAssetsManifestPath)"
+        Lines="@(_BenchmarkCompilerReference->'CompilerReference&#x9;compiler:%(NuGetPackageId)&#x9;%(FullPath)')"
+        Overwrite="false" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(BenchmarkSelectedAssetsManifestPath)"
+        Lines="@(_BenchmarkRuntimeAsset->'Runtime&#x9;runtime:%(NuGetPackageId)&#x9;%(FullPath)')"
+        Overwrite="false" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(BenchmarkSelectedAssetsManifestPath)"
+        Lines="@(_BenchmarkNativeAsset->'Native&#x9;native:%(NuGetPackageId)&#x9;%(FullPath)')"
+        Overwrite="false" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(BenchmarkSelectedAssetsManifestPath)"
+        Lines="@(_BenchmarkAnalyzerAsset->'Analyzer&#x9;analyzer:%(NuGetPackageId)&#x9;%(FullPath)')"
+        Overwrite="false" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(BenchmarkSelectedAssetsManifestPath)"
+        Lines="@(_BenchmarkGeneratedAsset->'GeneratedSource&#x9;compiler-generated&#x9;%(FullPath)')"
+        Overwrite="false" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(BenchmarkSelectedAssetsManifestPath)"
+        Lines="@(_BenchmarkHostAsset->'HostAssembly&#x9;benchmark-host&#x9;%(FullPath)')"
+        Overwrite="false" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(BenchmarkSelectedAssetsManifestPath)"
+        Lines="@(_BenchmarkProductAsset->'ProductAssembly&#x9;inquiry-product&#x9;%(FullPath)')"
+        Overwrite="false" Encoding="UTF-8" />
+  </Target>
+</Project>

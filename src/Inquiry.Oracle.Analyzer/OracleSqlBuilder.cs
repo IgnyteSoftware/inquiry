@@ -1,7 +1,7 @@
 using Inquiry.Generators.Abstractions;
+using Inquiry.Oracle.Shared;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 
 namespace Inquiry.Oracle.Analyzer;
@@ -37,7 +37,57 @@ namespace Inquiry.Oracle.Analyzer;
 /// </summary>
 internal sealed class OracleSqlBuilder : SqlBuilder
 {
+    public override bool UsesArrayBindingForBatchMutations => true;
+
+    public override string BuildArrayBindCountAssignment(string commandExpression, string countExpression)
+        => $"((global::Oracle.ManagedDataAccess.Client.OracleCommand){commandExpression}).ArrayBindCount = {countExpression};";
+
+    public override string? BuildArrayBindSizeExpression(string valueExpression, string valueVariable, IColumn column)
+        => column.TypeClass switch
+        {
+            DbTypeClass.String => $"{valueExpression} is string {valueVariable} ? {valueVariable}.Length : 0",
+            DbTypeClass.ByteArray => $"{valueExpression} is byte[] {valueVariable} ? {valueVariable}.Length : 0",
+            _ => null,
+        };
+
+    public override string BuildArrayBindSizeAssignment(string parameterExpression, string sizesExpression)
+        => $"((global::Oracle.ManagedDataAccess.Client.OracleParameter){parameterExpression}).ArrayBindSize = {sizesExpression};";
+
+    public override string? BuildArrayBindParameterMetadata(string parameterExpression, IColumn column)
+        => column.TypeClass == DbTypeClass.TimeOnly
+            ? $"((global::Oracle.ManagedDataAccess.Client.OracleParameter){parameterExpression}).OracleDbType = global::Oracle.ManagedDataAccess.Client.OracleDbType.IntervalDS;"
+            : null;
+
+    public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
+    public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override string DialectName => "Oracle";
+    public override string ProviderId => "oracle";
+    // Oracle requires DEFAULT before inline constraints such as NOT NULL.
+    protected override bool DefaultExpressionPrecedesInlineConstraints => true;
+    // Legal unquoted names fold to uppercase; names which require quotes retain exact identity.
+    public override string GetPhysicalIdentifierSortKey(string identifier)
+        => RequiresQuoting(identifier) ? "1\0" + identifier : "0\0" + FoldAscii(identifier, upper: true);
+
+    public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
+    public override bool SupportsCheckConstraints => true;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event)
+        => @event == ReferentialActionEvent.Update ? action == ReferentialActionKind.NoAction : action is ReferentialActionKind.NoAction or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
+
+    public override string BuildReaderExpression(ReaderExpressionContext context)
+    {
+        if (context.ProviderIsDateOnly)
+        {
+            return $"global::System.DateOnly.FromDateTime(reader.GetDateTime({context.Ordinal}))";
+        }
+
+        if (context.ProviderIsTimeOnly)
+        {
+            return $"global::System.TimeOnly.FromTimeSpan(reader.GetFieldValue<global::System.TimeSpan>({context.Ordinal}))";
+        }
+
+        return base.BuildReaderExpression(context);
+    }
 
     /// <summary>
     /// Oracle cannot return multiple result sets from a <c>;</c>-separated batch in a plain
@@ -64,12 +114,16 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     /// etc. Leading-underscore names move into a generated-safe namespace instead of being trimmed, so
     /// <c>offset</c>, <c>_offset</c>, and <c>__offset</c> remain distinct.
     /// </summary>
-    public override string ParameterName(string logicalName) => ":" + SafeBindName(logicalName);
-
-    private static string SafeBindName(string logicalName)
-        => !string.IsNullOrEmpty(logicalName) && logicalName[0] == '_'
-            ? "inq$" + logicalName.Length.ToString(CultureInfo.InvariantCulture) + "$" + logicalName
-            : logicalName;
+    public override string ParameterName(string logicalName) => ":" + OracleBindName.Encode(logicalName);
+    public override string RuntimeParameterName(string logicalName) => OracleBindName.Encode(logicalName);
+    public override string RuntimeParameterNameFromSql(string sqlParameterName)
+        => sqlParameterName.Length > 0 && (sqlParameterName[0] == ':' || sqlParameterName[0] == '@')
+            ? sqlParameterName.Substring(1)
+            : sqlParameterName;
+    public override string StoredProcedureParameterName(string formalName)
+        => formalName.Length > 0 && formalName[0] is '@' or ':' or '$' or '?'
+            ? formalName.Substring(1)
+            : formalName;
 
     /// <summary>
     /// ODP.NET's <c>OracleParameter.set_DbType</c> rejects <c>DbType.DateTime2</c> ("Value does not fall
@@ -80,6 +134,41 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     /// <c>Order.OrderDate</c>) throws.
     /// </summary>
     public override string DateTimeDbTypeExpression => "global::System.Data.DbType.DateTime";
+
+    // ODP.NET accepts the original CLR values when their metadata matches RAW(16)/NUMBER(1).
+    public override string GuidDbTypeExpression => "global::System.Data.DbType.Binary";
+    public override string BooleanDbTypeExpression => "global::System.Data.DbType.Int32";
+    public override string? TimeOnlyDbTypeExpression => null;
+
+    public override string BuildParameterValueExpression(ParameterValueExpressionContext context)
+    {
+        if (context.ProviderIsDateOnly)
+        {
+            return $"{context.ValueExpression}.ToDateTime(global::System.TimeOnly.MinValue)";
+        }
+
+        if (context.ProviderIsTimeOnly)
+        {
+            return $"{context.ValueExpression}.ToTimeSpan()";
+        }
+
+        return base.BuildParameterValueExpression(context);
+    }
+
+    public override string BuildParameterValueTypeName(ParameterValueExpressionContext context)
+    {
+        if (context.ProviderIsDateOnly)
+        {
+            return "global::System.DateTime";
+        }
+
+        if (context.ProviderIsTimeOnly)
+        {
+            return "global::System.TimeSpan";
+        }
+
+        return base.BuildParameterValueTypeName(context);
+    }
 
     public override string CurrentTimestampExpression => "SYS_EXTRACT_UTC(SYSTIMESTAMP)";
 
@@ -313,21 +402,34 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle's VARCHAR2 caps at 4000 bytes; NVARCHAR2 caps at 2000 characters under the default
     // AL16UTF16 national charset (2 bytes/char × 2000 = 4000 bytes internal limit).
     protected override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 2000 : 4000;
+    public override bool RequiresBoundedComputedStrings => true;
 
-    // ---- Batch insert (INSERT ALL) -----------------------------------------------------------
-    // Oracle has no multi-row VALUES; its set-based multi-row insert is
-    //   INSERT ALL INTO t (cols) VALUES (...) INTO t (cols) VALUES (...) SELECT 1 FROM dual
-    // — a single INSERT statement, so ExecuteNonQuery still returns the total inserted-row count. The row
-    // parameters take the ':' sigil via ParameterName; OracleInquiryConnectionFactory.FinalizeCommand
-    // reconciles the binder's '@p{r}_{c}' names by BindByName.
-    public override string BuildBatchInsertHeader(SqlBuildContext context) => "INSERT ALL ";
+    protected override string RenderComputedColumn(IColumn column)
+    {
+        if (column.TypeClass != DbTypeClass.String)
+            return base.RenderComputedColumn(column);
+
+        var type = column.IsUnicode ? "NVARCHAR2" : "VARCHAR2";
+        return "AS (CAST(" + column.ComputedExpression + " AS " + type + "(" +
+            column.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")))";
+    }
+
+    // ---- Batch insert (single-table INSERT SELECT) -------------------------------------------
+    // Oracle has no multi-row VALUES. A multitable INSERT ALL evaluates a sequence only once for
+    // the source row, so it cannot safely populate several identity rows. Emit one single-table
+    // INSERT fed by SELECT ... FROM dual UNION ALL instead; each SELECT is an independent source row.
+    public override string BuildBatchInsertHeader(SqlBuildContext context)
+        => "INSERT INTO " + context.Table + " (" + context.InsertColumns + ") ";
 
     public override string BuildBatchInsertRowOpen(SqlBuildContext context)
-        => "INTO " + context.Table + " (" + context.InsertColumns + ") VALUES (";
+        => "SELECT ";
 
-    public override string BatchInsertRowSeparator => " ";
+    public override string BatchInsertRowClose => " FROM dual";
+    public override string BatchInsertRowSeparator => " UNION ALL ";
+    public override string BatchInsertSqlParameterPrefix => ":iq1$b";
+    public override string BatchInsertRuntimeParameterPrefix => "iq1$b";
 
-    public override string BatchInsertFooter => " SELECT 1 FROM dual";
+    public override string BatchInsertFooter => string.Empty;
 
     protected override string MapColumnType(IColumn column) => column.TypeClass switch
     {
@@ -372,8 +474,13 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     {
         var (colType, selectExpr) = elementType switch
         {
-            DbTypeClass.Guid => ("VARCHAR2(36)", "HEXTORAW(REPLACE(jt.val, '-', ''))"),
-            DbTypeClass.Boolean => ("NUMBER(1)", "jt.val"),
+            // ODP.NET stores a CLR Guid in .NET's mixed-endian byte layout: reverse the byte order of
+            // the first 4/2/2-byte fields from the canonical JSON string, leaving the final 8 bytes as-is.
+            DbTypeClass.Guid => ("VARCHAR2(36)", "HEXTORAW(SUBSTR(jt.val, 7, 2) || SUBSTR(jt.val, 5, 2) || SUBSTR(jt.val, 3, 2) || SUBSTR(jt.val, 1, 2) || SUBSTR(jt.val, 12, 2) || SUBSTR(jt.val, 10, 2) || SUBSTR(jt.val, 17, 2) || SUBSTR(jt.val, 15, 2) || SUBSTR(jt.val, 20, 4) || SUBSTR(jt.val, 25, 12))"),
+            // Project JSON true/false as text, then map it explicitly. This works on the advertised
+            // Oracle 12c+ range; the newer ALLOW BOOLEAN TO NUMBER CONVERSION clause is not portable
+            // across that full range.
+            DbTypeClass.Boolean => ("VARCHAR2(5)", "CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END"),
             DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 => ("NUMBER(10)", "jt.val"),
             DbTypeClass.Int64 => ("NUMBER(19)", "jt.val"),
             DbTypeClass.Single => ("BINARY_FLOAT", "jt.val"),

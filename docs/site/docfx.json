@@ -6,6 +6,7 @@
           "src": "../../src",
           "files": [
             "Inquiry/Inquiry.csproj",
+            "Inquiry.Testing/Inquiry.Testing.csproj",
             "Inquiry.Sqlite/Inquiry.Sqlite.csproj",
             "Inquiry.SqlServer/Inquiry.SqlServer.csproj",
             "Inquiry.PostgreSql/Inquiry.PostgreSql.csproj",

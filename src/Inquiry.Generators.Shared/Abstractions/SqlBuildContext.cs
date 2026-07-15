@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Inquiry.Generators.Models;
 
 namespace Inquiry.Generators.Abstractions;
 
@@ -15,6 +16,12 @@ namespace Inquiry.Generators.Abstractions;
 /// </remarks>
 public sealed class SqlBuildContext
 {
+    private readonly IReadOnlyList<string> _activeRowPredicateTerms;
+
+    internal ISet<string>? SuppressedForeignKeyColumns { get; init; }
+    internal IReadOnlyList<ForeignKeyConstraintData>? NormalizedForeignKeys { get; init; }
+    internal IReadOnlyList<IndexData>? NormalizedIndexes { get; init; }
+    internal IReadOnlyList<CheckConstraintData>? NormalizedChecks { get; init; }
     /// <param name="suppressSoftDelete">
     /// When true, the soft-delete term is dropped from <see cref="ActiveRowPredicate"/> so SELECTs built
     /// from this context are not filtered by the soft-delete indicator (any global-filter terms still
@@ -37,6 +44,11 @@ public sealed class SqlBuildContext
     /// passed explicitly to keep the active-row filter intact. Null (the default) for entity contexts,
     /// which detect their global-filter columns from <paramref name="columns"/>.
     /// </param>
+    /// <param name="hasSecondaryUniqueConstraint">
+    /// Whether the entity declares any unique constraint beyond its primary key. Providers whose
+    /// upsert-returning emulation cannot identify a row after a secondary-unique conflict use this
+    /// metadata to degrade that operation instead of returning the wrong row.
+    /// </param>
     public SqlBuildContext(
         SqlBuilder builder,
         string? schema,
@@ -45,12 +57,14 @@ public sealed class SqlBuildContext
         bool suppressSoftDelete = false,
         bool generateForeignKeys = true,
         IColumn? softDeletePredicateColumn = null,
-        IReadOnlyList<IColumn>? globalFilterPredicateColumns = null)
+        IReadOnlyList<IColumn>? globalFilterPredicateColumns = null,
+        bool hasSecondaryUniqueConstraint = false)
     {
         Columns = columns;
         RawSchema = schema;
         RawTableName = tableName;
         GenerateForeignKeys = generateForeignKeys;
+        HasSecondaryUniqueConstraint = hasSecondaryUniqueConstraint;
         KeyColumns = columns.Where(c => c.IsKey).ToArray();
         // A database-managed token (rowversion) is supplied by the database, so exclude it from INSERT.
         // A server-computed column is calculated by the database expression, so exclude it too.
@@ -127,6 +141,7 @@ public sealed class SqlBuildContext
 
         ActiveRowPredicate = string.Join(" AND ", activeRowPredicates);
         QualifiedActiveRowPredicate = string.Join(" AND ", qualifiedActiveRowPredicates);
+        _activeRowPredicateTerms = activeRowPredicates;
 
         // Optimistic concurrency. The single token column (if any) drives the WHERE predicate every
         // UPDATE/DELETE AND-composes (against the original value, @token) and — for the ORM-managed form
@@ -167,6 +182,9 @@ public sealed class SqlBuildContext
     /// <summary>Whether <c>BuildCreateTableSql</c> should emit FOREIGN KEY constraints.</summary>
     public bool GenerateForeignKeys { get; }
 
+    /// <summary>Whether the entity declares a unique constraint other than its primary key.</summary>
+    public bool HasSecondaryUniqueConstraint { get; }
+
     public IReadOnlyList<IColumn> Columns { get; }
     public IReadOnlyList<IColumn> KeyColumns { get; }
     public IReadOnlyList<IColumn> InsertableColumns { get; }
@@ -192,6 +210,14 @@ public sealed class SqlBuildContext
     /// (e.g. many-to-many JOINs) where an unqualified column name would be ambiguous.
     /// </summary>
     public string QualifiedActiveRowPredicate { get; } = string.Empty;
+
+    /// <summary>
+    /// Returns <see cref="ActiveRowPredicate"/> qualified by an already-quoted table or alias.
+    /// This keeps aliased joins structural: callers supply a dialect-quoted qualifier and never
+    /// rewrite the generated predicate text.
+    /// </summary>
+    internal string QualifyActiveRowPredicate(string quotedQualifier)
+        => string.Join(" AND ", _activeRowPredicateTerms.Select(term => quotedQualifier + "." + term));
 
     /// <summary>The SET-clause body that marks a row deleted (<c>"IsDeleted" = 1</c> / <c>"DeletedAt" = CURRENT_TIMESTAMP</c>). Empty when no soft-delete column.</summary>
     public string SoftDeleteSetClause { get; } = string.Empty;

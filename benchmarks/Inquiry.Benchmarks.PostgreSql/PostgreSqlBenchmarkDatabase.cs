@@ -39,6 +39,7 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
     public IDbContextFactory<PgShipperContext> DbContextFactory => _dbContextFactory!;
 
     public ShipperStore Shippers => GetRequiredService<ShipperStore>(PreparedStatementMode.None);
+    public BatchMutationBenchmarkStore BatchMutations => GetRequiredService<BatchMutationBenchmarkStore>(PreparedStatementMode.Auto);
 
     public T GetRequiredService<T>(PreparedStatementMode mode)
         where T : notnull
@@ -68,7 +69,11 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
                 {
                     await connection.OpenAsync().ConfigureAwait(false);
                     await using var command = connection.CreateCommand();
-                    command.CommandText = NorthwindSchema.PostgreSqlDdl;
+                    command.CommandText = NorthwindSchema.PostgreSqlDdl + """
+                        CREATE TABLE "InquiryBatchEvidence" (
+                            "Id" integer NOT NULL PRIMARY KEY,
+                            "ValueText" varchar(100) NOT NULL);
+                        """;
                     await command.ExecuteNonQueryAsync().ConfigureAwait(false);
                 }
 
@@ -77,6 +82,7 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
 
                 var servicesWithoutPreparation = new ServiceCollection()
                     .AddInquiry(options => options.PrepareStatements = PreparedStatementMode.None, typeof(ShipperStore).Assembly)
+                    .AddInquiryGeneratedStores()
                     .AddInquiryPostgreSql(connectionStringWithoutPreparation)
                     // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
                     // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call.
@@ -85,6 +91,7 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
 
                 var servicesWithPreparation = new ServiceCollection()
                     .AddInquiry(options => options.PrepareStatements = PreparedStatementMode.Auto, typeof(ShipperStore).Assembly)
+                    .AddInquiryGeneratedStores()
                     .AddInquiryPostgreSql(connectionStringWithPreparation)
                     .BuildServiceProvider();
 

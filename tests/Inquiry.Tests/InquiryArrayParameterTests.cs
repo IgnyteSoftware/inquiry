@@ -12,6 +12,40 @@ namespace Inquiry.Tests;
 /// </summary>
 public sealed class InquiryArrayParameterTests
 {
+    private enum UnsignedColor : uint { High = 3_000_000_000u, Max = uint.MaxValue }
+
+    [Fact]
+    public void UnsignedInputsBecomeTypedSignedPartnerArrays()
+    {
+        Assert.Equal(new short[] { 128, 255 }, Assert.IsType<short[]>(InquiryArrayParameter.ToArrayValue(new sbyte[] { sbyte.MinValue, -1 })));
+        Assert.Equal(new short[] { unchecked((short)40_000), -1 }, Assert.IsType<short[]>(InquiryArrayParameter.ToArrayValue(new ushort[] { 40_000, ushort.MaxValue })));
+        Assert.Equal(new int[] { unchecked((int)3_000_000_000u), -1 }, Assert.IsType<int[]>(InquiryArrayParameter.ToArrayValue(new uint[] { 3_000_000_000u, uint.MaxValue })));
+        Assert.Equal(new long[] { long.MinValue, -1 }, Assert.IsType<long[]>(InquiryArrayParameter.ToArrayValue(new ulong[] { 1UL << 63, ulong.MaxValue })));
+        Assert.Empty(Assert.IsType<int[]>(InquiryArrayParameter.ToArrayValue(System.Array.Empty<uint>())));
+    }
+
+    [Fact]
+    public void NullableAndUnsignedEnumInputsRetainStaticSignedTypes()
+    {
+        Assert.Equal(new int?[] { null, -1 }, Assert.IsType<int?[]>(InquiryArrayParameter.ToArrayValue(new uint?[] { null, uint.MaxValue })));
+        Assert.Equal(new int?[] { null, null }, Assert.IsType<int?[]>(InquiryArrayParameter.ToArrayValue(new uint?[] { null, null })));
+        Assert.Equal(new int[] { unchecked((int)3_000_000_000u), -1 }, Assert.IsType<int[]>(InquiryArrayParameter.ToArrayValue(new[] { UnsignedColor.High, UnsignedColor.Max })));
+    }
+
+    [Fact]
+    public void DirectUnsignedFallbackEnumeratesLazyInputExactlyOnce()
+    {
+        var enumerations = 0;
+        IEnumerable<uint> Values()
+        {
+            enumerations++;
+            yield return uint.MaxValue;
+        }
+
+        Assert.Equal(new[] { -1 }, Assert.IsType<int[]>(InquiryArrayParameter.ToArrayValue(Values())));
+        Assert.Equal(1, enumerations);
+    }
+
     private enum Color { Red = 1, Green = 2 }
 
     private enum BigFlag : long { A = 5, B = 6 }

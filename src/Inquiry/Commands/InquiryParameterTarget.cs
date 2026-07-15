@@ -18,6 +18,7 @@ public readonly struct InquiryParameterTarget
 {
     private readonly DbCommand? _command;
     private readonly DbBatchCommand? _batchCommand;
+    private readonly InquiryParameterReuseState? _reuseState;
 
     /// <summary>
     /// Initializes a target that binds parameters onto a <see cref="DbCommand"/>.
@@ -26,6 +27,7 @@ public readonly struct InquiryParameterTarget
     {
         _command = command;
         _batchCommand = null;
+        _reuseState = null;
     }
 
     /// <summary>
@@ -35,6 +37,14 @@ public readonly struct InquiryParameterTarget
     {
         _command = null;
         _batchCommand = batchCommand;
+        _reuseState = null;
+    }
+
+    internal InquiryParameterTarget(InquiryParameterReuseState reuseState)
+    {
+        _command = null;
+        _batchCommand = null;
+        _reuseState = reuseState;
     }
 
     /// <summary>
@@ -43,20 +53,69 @@ public readonly struct InquiryParameterTarget
     /// The parameter is not added until <see cref="AddParameter"/> is called.
     /// </summary>
     public DbParameter CreateParameter()
-        => _command is not null ? _command.CreateParameter() : _batchCommand!.CreateParameter();
+        => _reuseState is not null
+            ? _reuseState.CreateParameter()
+            : _command is not null ? _command.CreateParameter() : _batchCommand!.CreateParameter();
 
     /// <summary>
     /// Adds <paramref name="parameter"/> to the wrapped command's parameter collection.
     /// </summary>
     public void AddParameter(DbParameter parameter)
     {
-        if (_command is not null)
+        if (_reuseState is not null)
+        {
+            _reuseState.AddParameter(parameter);
+        }
+        else if (_command is not null)
         {
             _command.Parameters.Add(parameter);
         }
         else
         {
             _batchCommand!.Parameters.Add(parameter);
+        }
+    }
+}
+
+internal sealed class InquiryParameterReuseState
+{
+    private readonly DbCommand _command;
+    private int _index;
+    private DbParameter? _created;
+
+    internal InquiryParameterReuseState(DbCommand command) => _command = command;
+
+    internal void BeginItem()
+    {
+        _index = 0;
+        _created = null;
+    }
+
+    internal DbParameter CreateParameter()
+    {
+        if (_index >= _command.Parameters.Count)
+        {
+            throw new InvalidOperationException("A batch row binder changed the command parameter shape between items.");
+        }
+
+        return _created = _command.Parameters[_index++];
+    }
+
+    internal void AddParameter(DbParameter parameter)
+    {
+        if (!ReferenceEquals(parameter, _created))
+        {
+            throw new InvalidOperationException("A batch row binder must add the parameter returned by CreateParameter.");
+        }
+
+        _created = null;
+    }
+
+    internal void CompleteItem()
+    {
+        if (_created is not null || _index != _command.Parameters.Count)
+        {
+            throw new InvalidOperationException("A batch row binder changed the command parameter shape between items.");
         }
     }
 }

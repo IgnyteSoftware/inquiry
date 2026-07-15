@@ -47,7 +47,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryTableAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax,
-                transform: static (ctx, ct) => EntityProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
+                transform: static (ctx, ct) => EntityProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ctx.SemanticModel.Compilation, ct))
             .WithTrackingName(EntitiesTrackingName)
             .Collect();
 
@@ -58,7 +58,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryViewAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-                transform: static (ctx, ct) => EntityProcessor.ExtractView((INamedTypeSymbol)ctx.TargetSymbol, ct))
+                transform: static (ctx, ct) => EntityProcessor.ExtractView((INamedTypeSymbol)ctx.TargetSymbol, ctx.SemanticModel.Compilation, ct))
             .WithTrackingName(ViewsTrackingName)
             .Collect();
 
@@ -102,7 +102,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         // assemblies), so it re-projects on every edit — but into a tiny equatable value, so the
         // output stage still caches whenever ownership is unchanged.
         var ownership = context.CompilationProvider
-            .Select((compilation, _) => ResolveOwnership(compilation))
+            .Select((compilation, cancellationToken) => ResolveOwnership(compilation, cancellationToken))
             .WithTrackingName(OwnershipTrackingName);
 
         var combined = allEntities.Combine(stores).Combine(projections).Combine(adHocs).Combine(ownership);
@@ -191,6 +191,22 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             }
         }
 
+        if (!entities.Any(static entity => entity.IsMapped) && stores.IsEmpty && projections.IsEmpty && adHocs.IsEmpty) return;
+        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower or DialectOwnershipKind.UnknownFollower) return;
+        if (ownership.Kind == DialectOwnershipKind.UnknownLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectUnknown, null,
+                FormatDialectForDiagnostic(ownership.UnknownDialect), string.IsNullOrWhiteSpace(ownership.AmbiguousDialects) ? "<none>" : ownership.AmbiguousDialects));
+            return;
+        }
+        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectAmbiguous, null, ownership.AmbiguousDialects));
+            return;
+        }
+
+        var sqlBuilder = CreateSqlBuilder();
+        entities = ResolveComputedExpressions(context, entities, sqlBuilder, out var computedInvalidEntityNames);
         var mappedEntities = new Dictionary<string, EntityData>();
         foreach (var entity in entities)
         {
@@ -230,32 +246,17 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             return;
         }
 
-        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower or DialectOwnershipKind.UnknownFollower)
-        {
-            return;
-        }
-
-        if (ownership.Kind == DialectOwnershipKind.UnknownLeader)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.DialectUnknown,
-                location: null,
-                FormatDialectForDiagnostic(ownership.UnknownDialect),
-                string.IsNullOrWhiteSpace(ownership.AmbiguousDialects) ? "<none>" : ownership.AmbiguousDialects));
-            return;
-        }
-
         var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistration>();
         foreach (var entity in mappedEntities.Values)
         {
-            entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity));
+            entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity, sqlBuilder));
         }
 
         // projection materializers register and emit exactly like entity materializers (same
         // IInquiryEntityMaterializer<T> contract), so they share the registration set.
         foreach (var projection in mappedProjections.Values)
         {
-            entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection));
+            entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection, sqlBuilder));
         }
 
         // ad-hoc DTO materializers share the registration set too. They are dialect-independent
@@ -263,43 +264,53 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         // the other materializers.
         foreach (var adHoc in mappedAdHocs.Values)
         {
-            entityRegistrations.Add(AdHocProcessor.EmitMaterializer(context, adHoc));
+            entityRegistrations.Add(AdHocProcessor.EmitMaterializer(context, adHoc, sqlBuilder));
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
+        var collectionArtifacts = ImmutableArray.CreateBuilder<CollectionParameterArtifact>();
 
-        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
+        foreach (var store in stores)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.DialectAmbiguous,
-                location: null,
-                ownership.AmbiguousDialects));
-        }
-        else
-        {
-            var sqlBuilder = CreateSqlBuilder();
-            foreach (var store in stores)
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            foreach (var diagnostic in store.Diagnostics)
             {
-                context.CancellationToken.ThrowIfCancellationRequested();
-
-                foreach (var diagnostic in store.Diagnostics)
-                {
-                    context.ReportDiagnostic(diagnostic.ToDiagnostic());
-                }
-
-                var registration = StoreProcessor.Emit(context, store, mappedEntities, mappedProjections, sqlBuilder);
-                if (registration is not null)
-                {
-                    storeRegistrations.Add(registration);
-                }
+                context.ReportDiagnostic(diagnostic.ToDiagnostic());
             }
 
-            // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
-            // entity array (source order) filtered to mapped entities so emission is deterministic.
-            // Views are defined in the database, not created by Inquiry — exclude them from DDL.
-            var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
-            SchemaEmitter.Emit(context, schemaEntities, sqlBuilder);
+            var emission = StoreProcessor.Emit(
+                context,
+                store,
+                mappedEntities,
+                mappedProjections,
+                sqlBuilder,
+                ownership.EmitUnsupportedOperationStubs,
+                computedInvalidEntityNames);
+            if (emission is not null)
+            {
+                storeRegistrations.Add(emission.Registration);
+                collectionArtifacts.AddRange(emission.Artifacts);
+            }
         }
+
+        // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
+        // entity array (source order) filtered to mapped entities so emission is deterministic.
+        // Views are defined in the database, not created by Inquiry — exclude them from DDL.
+        var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
+        var providerArtifacts = collectionArtifacts
+            .GroupBy(static artifact => artifact.Identity, System.StringComparer.Ordinal)
+            .Select(static group => group.First())
+            .OrderBy(static artifact => artifact.Schema, System.StringComparer.Ordinal)
+            .ThenBy(static artifact => artifact.Name, System.StringComparer.Ordinal)
+            .ToArray();
+        if (!string.IsNullOrEmpty(ownership.ManifestMetadataCollisionKey))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaManifestMetadataCollision,
+                null, ownership.ManifestMetadataCollisionKey));
+        }
+        SchemaEmitter.Emit(context, schemaEntities, sqlBuilder, providerArtifacts,
+            emitManifestMetadata: string.IsNullOrEmpty(ownership.ManifestMetadataCollisionKey));
 
         if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)
         {
@@ -314,6 +325,87 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     /// side — a reversed relation (INQ058), and a composite-key child (INQ041). A relation whose
     /// child type isn't a mapped entity is left alone (the emit path tolerates it).
     /// </summary>
+    private static ImmutableArray<EntityData> ResolveComputedExpressions(SourceProductionContext context, ImmutableArray<EntityData> entities, SqlBuilder builder,
+        out HashSet<string> computedInvalidEntityNames)
+    {
+        computedInvalidEntityNames = new HashSet<string>(System.StringComparer.Ordinal);
+        var resolved = ImmutableArray.CreateBuilder<EntityData>(entities.Length);
+        foreach (var entity in entities)
+        {
+            var valid = entity.IsMapped;
+            var columns = ImmutableArray.CreateBuilder<ColumnData>(entity.Columns.Count);
+            foreach (var column in entity.Columns)
+            {
+                var fallback = column.ComputedExpression;
+                var overrides = column.ComputedExpressionOverrides.AsImmutableArray();
+                var selected = fallback;
+                var selectedLocation = column.ComputedExpressionLocation ?? column.Location;
+                var reasons = new List<(LocationData? Location, string Reason)>();
+                foreach (var item in overrides)
+                {
+                    if (!IsValidProviderId(item.ProviderId)) reasons.Add((item.ProviderIdLocation, "provider id is invalid; use lowercase ASCII [a-z][a-z0-9.-]{0,63}"));
+                    if (string.IsNullOrWhiteSpace(item.Expression)) reasons.Add((item.ExpressionLocation, "override expression is empty or whitespace"));
+                }
+                foreach (var duplicate in overrides.Where(item => IsValidProviderId(item.ProviderId)).GroupBy(static item => item.ProviderId, System.StringComparer.Ordinal).Where(static group => group.Count() > 1))
+                    reasons.Add((duplicate.Skip(1).First().ExpressionLocation, "more than one override declares provider '" + duplicate.Key + "'"));
+                if (overrides.Length > 0 && string.IsNullOrWhiteSpace(fallback)) reasons.Add((overrides[0].ExpressionLocation, "a provider override requires a non-empty InquiryColumn.Computed fallback"));
+                var providerOverride = overrides.FirstOrDefault(item => item.ProviderId == builder.ProviderId);
+                if (providerOverride is not null) { selected = providerOverride.Expression; selectedLocation = providerOverride.ExpressionLocation; }
+                if (fallback is not null || overrides.Length > 0)
+                {
+                    if (string.IsNullOrWhiteSpace(selected))
+                    {
+                        if (providerOverride is null) reasons.Add((selectedLocation, "expression is empty or whitespace"));
+                    }
+                    else
+                    {
+                        var failures = builder.ValidateComputedExpression(selected!);
+                        if (failures.Count > 0) reasons.Add((selectedLocation, string.Join("; ", failures)));
+                        if (builder.RequiresBoundedComputedStrings && column.TypeClass == DbTypeClass.String)
+                        {
+                            var maxLength = builder.MaxBoundedStringLength(column.IsUnicode);
+                            if (column.Length <= 0 || column.Length > maxLength)
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(
+                                    InquiryDiagnosticDescriptors.ComputedStringRequiresBoundedLength,
+                                    selectedLocation?.ToLocation(),
+                                    entity.FullyQualifiedName + "." + column.PropertyName,
+                                    maxLength));
+                                valid = false;
+                                computedInvalidEntityNames.Add(entity.FullyQualifiedName);
+                                selected = null;
+                            }
+                        }
+                    }
+                }
+                foreach (var reason in reasons)
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ComputedExpressionInvalid,
+                        reason.Location?.ToLocation(), entity.FullyQualifiedName + "." + column.PropertyName, builder.ProviderId, reason.Reason));
+                if (reasons.Count > 0) { valid = false; computedInvalidEntityNames.Add(entity.FullyQualifiedName); }
+                columns.Add(column with { ComputedExpression = reasons.Count == 0 && selected is not null ? builder.RenderComputedExpression(selected) : selected });
+            }
+            var finalColumns = columns.ToImmutable();
+            ColumnData? Find(ColumnData? original) => original is null ? null : finalColumns.FirstOrDefault(column => column.PropertyName == original.PropertyName);
+            resolved.Add(entity with
+            {
+                Columns = new EquatableArray<ColumnData>(finalColumns),
+                Keys = new EquatableArray<ColumnData>(entity.Keys.AsImmutableArray().Select(key => finalColumns.First(column => column.PropertyName == key.PropertyName)).ToImmutableArray()),
+                SoftDeleteColumn = Find(entity.SoftDeleteColumn),
+                ConcurrencyToken = Find(entity.ConcurrencyToken),
+                IsMapped = valid,
+            });
+        }
+        return resolved.ToImmutable();
+    }
+
+    private static bool IsValidProviderId(string value)
+    {
+        if (value.Length is < 1 or > 64 || value[0] is < 'a' or > 'z') return false;
+        for (var i = 1; i < value.Length; i++)
+            if (!(value[i] is >= 'a' and <= 'z' or >= '0' and <= '9' or '.' or '-')) return false;
+        return true;
+    }
+
     private static void ValidateRelations(SourceProductionContext context, Dictionary<string, EntityData> mappedEntities)
     {
         foreach (var entity in mappedEntities.Values)
@@ -393,7 +485,66 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         return null;
     }
 
-    private DialectOwnership ResolveOwnership(Compilation compilation)
+    private DialectOwnership ResolveOwnership(Compilation compilation, CancellationToken cancellationToken)
+    {
+        var ownership = ResolveDialectOwnership(compilation) with
+        {
+            EmitUnsupportedOperationStubs = ShouldEmitUnsupportedOperationStubs(compilation, cancellationToken),
+        };
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != "System.Reflection.AssemblyMetadataAttribute"
+                || attribute.ConstructorArguments.Length == 0
+                || attribute.ConstructorArguments[0].Value is not string key
+                || !key.StartsWith("Inquiry.SchemaManifest.", System.StringComparison.Ordinal)) continue;
+            return ownership with { ManifestMetadataCollisionKey = key };
+        }
+        return ownership;
+    }
+
+    private static bool ShouldEmitUnsupportedOperationStubs(
+        Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        var fallback = compilation.Options.SpecificDiagnosticOptions.TryGetValue("INQ039", out var compilationAction)
+            ? compilationAction
+            : ReportDiagnostic.Default;
+        var provider = compilation.Options.SyntaxTreeOptionsProvider;
+        if (provider is null)
+        {
+            return IsUnsupportedOperationStubOptIn(fallback);
+        }
+
+        if (provider.TryGetGlobalDiagnosticValue("INQ039", cancellationToken, out var globalAction))
+        {
+            fallback = globalAction;
+        }
+
+        ReportDiagnostic? uniformAction = null;
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var action = provider.TryGetDiagnosticValue(tree, "INQ039", cancellationToken, out var treeAction)
+                    ? treeAction
+                    : fallback;
+            if (!IsUnsupportedOperationStubOptIn(action) ||
+                uniformAction is { } previousAction && previousAction != action)
+            {
+                return false;
+            }
+
+            uniformAction = action;
+        }
+
+        return uniformAction is { } resolvedAction
+            ? IsUnsupportedOperationStubOptIn(resolvedAction)
+            : IsUnsupportedOperationStubOptIn(fallback);
+    }
+
+    private static bool IsUnsupportedOperationStubOptIn(ReportDiagnostic action)
+        => action is not ReportDiagnostic.Default and not ReportDiagnostic.Error;
+
+    private DialectOwnership ResolveDialectOwnership(Compilation compilation)
     {
         var referencedNames = compilation.SourceModule.ReferencedAssemblySymbols
             .SelectMany(ReadDialectName)
@@ -483,15 +634,25 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     private enum DialectOwnershipKind { Owned, NotMine, AmbiguousLeader, AmbiguousFollower, UnknownLeader, UnknownFollower }
 
-    private readonly record struct DialectOwnership(DialectOwnershipKind Kind, string AmbiguousDialects, string UnknownDialect)
+    private readonly record struct DialectOwnership(
+        DialectOwnershipKind Kind,
+        string AmbiguousDialects,
+        string UnknownDialect,
+        string ManifestMetadataCollisionKey,
+        bool EmitUnsupportedOperationStubs)
     {
         public DialectOwnership(DialectOwnershipKind kind)
-            : this(kind, string.Empty, string.Empty)
+            : this(kind, string.Empty, string.Empty, string.Empty, false)
         {
         }
 
         public DialectOwnership(DialectOwnershipKind kind, string ambiguousDialects)
-            : this(kind, ambiguousDialects, string.Empty)
+            : this(kind, ambiguousDialects, string.Empty, string.Empty, false)
+        {
+        }
+
+        public DialectOwnership(DialectOwnershipKind kind, string ambiguousDialects, string unknownDialect)
+            : this(kind, ambiguousDialects, unknownDialect, string.Empty, false)
         {
         }
     }

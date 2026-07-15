@@ -1,44 +1,128 @@
 # Roadmap
 
-> This page lists **open** work only — known issues, security follow-ups, performance ideas, and planned
-> enhancements. Resolved items are summarized at the [bottom](#recently-resolved). Nothing here blocks
-> `main`: the library builds and every test suite passes.
+> Inquiry's first public release will be **1.0.0**. Package versioning is independent of the .NET 8
+> runtime floor.
 >
-> **Last reconciled against the code:** 2026-07-09.
+> Inquiry is the **compile-time .NET micro-ORM**: generated constant SQL, binders, and materializers;
+> predictable allocations; NativeAOT support; and explicit, validated SQL escape hatches. It is not
+> trying to become a stateful ORM with change tracking or a runtime LINQ provider.
+>
+> **Last reconciled against source and GitHub:** 2026-07-14 after completing #179, #180, and #181. All
+> providers are restored; [#171](https://github.com/JakeOverstreet/inquiry/issues/171) records that
+> completed restoration gate.
 
-## Known issues & correctness
+## Current release status
 
-- *No open correctness issues are currently known.* All previously tracked items (#122, #130, #157, #159)
-  are resolved — see [Recently resolved](#recently-resolved).
+**1.0.0 is not release-ready.** Provider restoration is complete: Oracle returned to the required
+matrix in [#216](https://github.com/JakeOverstreet/inquiry/pull/216), SQL Server's release-gating path was hardened in [#218](https://github.com/JakeOverstreet/inquiry/pull/218), and two consecutive full CI
+runs are green at 20/20 required checks each. Both runs include all 15 PostgreSQL, MySQL, MariaDB,
+SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs with Docker failures configured to
+fail closed.
 
-## Security
+[#220](https://github.com/JakeOverstreet/inquiry/pull/220) installed the immutable release-engineering foundation: an exact-commit detached-worktree pack,
+the canonical nine-package manifest, package/bundle and CI-contract verification, package producer and
+independent verifier jobs, and the `ci-required-v1` aggregate required gate. Public promotion is still
+disabled. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and
+analyzer release tracking, isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
+SBOM/provenance/dependency evidence, hosted versioned documentation, changelog/release notes,
+release/support/security policies and repository rulesets, and protected promotion plus resumable publishing.
 
-- *No open security follow-ups are currently known.* The formal Codex Security repository scan has been run;
-  validated findings were fixed in `318ee5f` and summarized in [Security](../articles/security.md).
+The fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security diff scan and threat-model review found and fixed a custom-shell CI bypass.
+The post-fix scan reported no remaining reportable findings; this does not replace the remaining
+release evidence and governance work tracked in [#89](https://github.com/JakeOverstreet/inquiry/issues/89).
 
-## Performance & optimization
+The generated execution-path tranche ([#179](https://github.com/JakeOverstreet/inquiry/issues/179),
+[#180](https://github.com/JakeOverstreet/inquiry/issues/180), and
+[#181](https://github.com/JakeOverstreet/inquiry/issues/181)) is complete. Immutable generated commands,
+sequential-safe generated ad-hoc materializers, and bounded provider-selected batch transports passed
+114/114 focused live tests across all six providers and .NET 8/9/10. The retained 72-cell diagnostic
+strategy record is published in the [batch mutation diagnostic matrix](batch-mutation-diagnostic-matrix.md);
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87) still owns authoritative release-grade evidence.
+[#225](https://github.com/JakeOverstreet/inquiry/pull/225) merged a SQL Server collection-benchmark
+tranche that advances [#69](https://github.com/JakeOverstreet/inquiry/issues/69) and
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87), but both issues remain open for their broader
+acceptance criteria. [#226](https://github.com/JakeOverstreet/inquiry/pull/226) merged the many-to-many
+child-filter correction and closed [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
+[#68](https://github.com/JakeOverstreet/inquiry/issues/68) is closed with the Roslyn 4.8 hold policy recorded.
 
-> The items below came out of the 2026-06-12 competitive feature-gap research (vs EF Core, XPO,
-> Dapper + ecosystem, and the JS/TS ORMs) and are ordered by expected impact. (`DbBatch` pipeline
-> support shipped — see [Recently resolved](#recently-resolved).)
+## Product contract
 
-- **~~Single-round-trip eager loading (#70)~~** *(resolved 2026-07-09)*. See
-  [Recently resolved](#recently-resolved).
-- **~~MariaDB-native INSERT RETURNING (#58)~~** *(resolved 2026-07-09)*. See
-  [Recently resolved](#recently-resolved).
-- **~~MySQL `JSON_TABLE` IN optimization (#169)~~** *(resolved 2026-07-09)*. See
-  [Recently resolved](#recently-resolved).
-- **~~MariaDB `JSON_TABLE` IN optimization (#170)~~** *(resolved 2026-07-09)*. See
-  [Recently resolved](#recently-resolved).
+For 1.0, "feature complete" means:
 
-## Planned features & enhancements
+- Production-grade CRUD, static querying, relationships, transactions, bulk/batch operations,
+  observability, resiliency, testing, and schema workflows.
+- Generated SQL remains statically shaped, provider-correct, parameterized, and NativeAOT-compatible.
+- Unsupported provider capabilities fail clearly at build time rather than through generated throwing stubs.
+- Complex workloads can use validated ad-hoc SQL without leaving Inquiry's materialization, transaction,
+  telemetry, and testing surfaces.
+- Performance claims are workload-scoped and backed by reproducible current benchmarks; raw ADO.NET is
+  treated as the implementation floor.
 
-> Items marked *(gap research 2026-06-12)* came out of the competitive feature-gap analysis vs
-> EF Core, XPO, Dapper + ecosystem, and the JS/TS ORMs (Prisma, Drizzle, TypeORM, Sequelize, Kysely).
-> Items marked *(adoption review 2026-06-12)* came out of the follow-up "what do companies actually
-> hit" review; the first four are the highest-leverage adoption items on this page. Items marked
-> *(integration research 2026-06-12)* came out of the cross-framework integration/DX research
-> (Aspire, MassTransit/Wolverine, Spring/Micronaut, Rails/Laravel/Ecto, sqlc/sqlx/Atlas).
+## 1.0 release gates
+
+1. **Correctness:** all unit, generator, SQLite, and live provider suites pass on every supported TFM;
+   transaction, cancellation, concurrency, schema, batch, bulk, and failover behavior have live coverage.
+2. **Public contract:** public API/APICompat baseline, analyzer diagnostic release tracking, provider
+   capability diagnostics, and a reviewed compatibility policy are checked in.
+3. **Performance:** corrected baselines and current competitors cover CRUD, streaming, eager/M:N,
+   collections, paging, batch/bulk, transactions, cold/warm startup, and concurrency; stable regression
+   budgets guard latency and allocations.
+4. **Packaging:** clean projects consume the actual nine `.nupkg` files on .NET 8/9/10 and NativeAOT;
+   SourceLink, symbols, metadata, icon, provenance, and dependency/security evidence are verified.
+5. **Documentation and governance:** hosted versioned docs match generated behavior, the tracker and roadmap
+   agree, release/support/security policies are published, and required review/status checks protect releases.
+
+## Priority index
+
+GitHub issue state, priority labels, and the [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1)
+are authoritative for acceptance criteria. As reconciled on 2026-07-14, GitHub has **32 open issues**:
+**27 prioritized for 1.0 (4 P0, 18 P1, and 5 P2)** and five planned for post-1.0 work. All 27 prioritized
+issues are assigned to the `1.0.0` milestone.
+
+### P0 — stop-ship
+
+| Workstream | Issues |
+|---|---|
+| Broken/partial provider features | [#69](https://github.com/JakeOverstreet/inquiry/issues/69) |
+| Benchmark truth and release engineering | [#87](https://github.com/JakeOverstreet/inquiry/issues/87), [#89](https://github.com/JakeOverstreet/inquiry/issues/89) |
+| Sequential-key correctness | [#214](https://github.com/JakeOverstreet/inquiry/issues/214) |
+
+### P1 — must complete for 1.0
+
+| Workstream | Issues |
+|---|---|
+| Eager loading and relationship correctness | [#70](https://github.com/JakeOverstreet/inquiry/issues/70), [#80](https://github.com/JakeOverstreet/inquiry/issues/80) |
+| Scaffolding and live/offline validation | [#72](https://github.com/JakeOverstreet/inquiry/issues/72), [#79](https://github.com/JakeOverstreet/inquiry/issues/79) |
+| Query composition, tenant safety, and locking | [#82](https://github.com/JakeOverstreet/inquiry/issues/82), [#177](https://github.com/JakeOverstreet/inquiry/issues/177), [#178](https://github.com/JakeOverstreet/inquiry/issues/178) |
+| Stored procedures | [#78](https://github.com/JakeOverstreet/inquiry/issues/78), [#188](https://github.com/JakeOverstreet/inquiry/issues/188) |
+| Generated query and model contracts | [#210](https://github.com/JakeOverstreet/inquiry/issues/210), [#211](https://github.com/JakeOverstreet/inquiry/issues/211), [#212](https://github.com/JakeOverstreet/inquiry/issues/212), [#219](https://github.com/JakeOverstreet/inquiry/issues/219) |
+| ASP.NET Core auditing integration | [#213](https://github.com/JakeOverstreet/inquiry/issues/213) |
+| First-party provider authoring and conformance | [#184](https://github.com/JakeOverstreet/inquiry/issues/184) |
+| Execution-path performance and semantics | [#86](https://github.com/JakeOverstreet/inquiry/issues/86), [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
+| End-to-end cancellation | [#156](https://github.com/JakeOverstreet/inquiry/issues/156) |
+
+### P2 — target for 1.0 if release gates stay healthy
+
+- Project templates and Aspire integration: [#63](https://github.com/JakeOverstreet/inquiry/issues/63),
+  [#71](https://github.com/JakeOverstreet/inquiry/issues/71).
+- Explain and testing ergonomics: [#73](https://github.com/JakeOverstreet/inquiry/issues/73).
+- Named databases/providers: [#85](https://github.com/JakeOverstreet/inquiry/issues/85).
+- Large-solution incremental-generator performance: [#182](https://github.com/JakeOverstreet/inquiry/issues/182).
+
+### Planned for 1.x or demand-driven
+
+- Audit trail/entity validation [#76](https://github.com/JakeOverstreet/inquiry/issues/76), read replicas
+  [#77](https://github.com/JakeOverstreet/inquiry/issues/77), composable CTE/set operations
+  [#81](https://github.com/JakeOverstreet/inquiry/issues/81), provider-native/vector types
+  [#83](https://github.com/JakeOverstreet/inquiry/issues/83), and verified cloud modes
+  [#88](https://github.com/JakeOverstreet/inquiry/issues/88).
+- Additional engines are added only with user demand and live CI; MariaDB satisfied and closed the previous
+  engine-count issue.
+
+## Detailed feature backlog
+
+The sections below preserve research and implementation context. The priority index and GitHub issue
+acceptance criteria supersede any older wording that describes an initial implementation as fully complete.
 
 - **Aspire integration package** *(integration research 2026-06-12)*. An `Inquiry.Aspire` client
   integration in the standard shape every mainstream data library now ships: resolve the
@@ -64,18 +148,22 @@
   (Django `QuerySet.explain()` analog).
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
+- **First-party provider authoring kit and conformance suite**
+  ([#184](https://github.com/JakeOverstreet/inquiry/issues/184)). Replace the current copy-an-existing-
+  provider workflow with a scaffold, shared analyzer-pack/test MSBuild plumbing, reusable provider
+  registration and resilient-open composition, and source-linked cross-provider contract tests. Generated
+  stores must remain source-compiled inside each provider test assembly so every dialect analyzer is
+  exercised. The 1.0 scope is first-party providers in this repository; a stable public third-party
+  provider SDK remains a separate post-1.0 product decision.
 - **~~DDL safety lint — more rules~~** *(resolved 2026-07-09)*. See [Recently resolved](#recently-resolved).
-- **Testing follow-ups: transaction sandbox + data factories** *(adoption review 2026-06-12)*.
-  The store interfaces and the `Inquiry.Testing` package (SQLite fixture, recording interceptor,
-  Respawn reset) shipped — see [Recently resolved](#recently-resolved) and
-  [Testing](../articles/features/testing.md). Remaining scope: an **Ecto-style SQL sandbox**
-  (each test inside a rolled-back transaction with connection ownership, enabling parallel
-  database tests) and **factory_bot/Laravel-style test-data factories** (states/sequences,
-  Bogus-compatible).
-- **Release engineering & governance — remaining scope** *(adoption review 2026-06-12)*. Package
-  icon and a published versioning / breaking-change / support-window policy document. (RepositoryUrl,
-  SourceLink, symbol packages, package readme, MinVer tag-based versioning, and the pack/publish
-  workflow shipped — see [Recently resolved](#recently-resolved).)
+- **~~Testing follow-ups: transaction sandbox + data factories~~** *(resolved 2026-07-14)*.
+  See [Recently resolved](#recently-resolved) and [Testing](../articles/features/testing.md).
+- **Release engineering & governance — remaining scope** *(reconciled 2026-07-14)*. [#220](https://github.com/JakeOverstreet/inquiry/pull/220) shipped
+  exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
+  and the versioned required CI gate. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and analyzer release tracking,
+  isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
+  SBOM/provenance/dependency evidence, hosted versioned docs, changelog/release notes,
+  release/support/security policies and repository rulesets, protected promotion, and a resumable publisher.
 - **Default interceptor library — remaining scope** *(gap research 2026-06-12)*. The
   `Inquiry.Interceptors` package shipped with slow-query warning logging and sqlcommenter
   trace-context tagging (see [Recently resolved](#recently-resolved)); the command-text assertion
@@ -97,8 +185,9 @@
   largest onboarding lever for existing databases.
 - **Many-to-many relations — auto-managed junction** *(gap research 2026-06-12)*. Eager-loading M:N
   through an explicitly-mapped junction shipped — see [Recently resolved](#recently-resolved). Remaining:
-  an *auto-managed* / implicit junction table (no hand-written junction entity), composite-key related
-  entities, and applying the child's soft-delete/global filters to the eager M:N collection.
+  an *auto-managed* / implicit junction table (no hand-written junction entity) and composite-key related
+  entities. Child, junction, and parent soft-delete/global filters are already applied to all-parent eager
+  M:N result sets.
 - **CTEs and set operations** *(gap research 2026-06-12)*. `WITH` / `UNION` / `INTERSECT` / `EXCEPT`
   composition in the predicate/select model (Kysely-style); ad-hoc SQL covers this today.
 - **Parameterized & named query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. The
@@ -146,19 +235,23 @@
   connection-open / pool-wait instruments.
 ## Test coverage & hardening
 
-- **~~Port SQLite-only integration tests to server dialects (#154)~~** *(resolved 2026-07-09)*. See
-  [Recently resolved](#recently-resolved).
-- **~~Oracle has zero test coverage for `[InquiryBulkInsert]` (#155)~~** *(resolved 2026-07-10)*. See
-  [Recently resolved](#recently-resolved).
-- **~~CancellationToken propagation never verified against real databases (#156)~~** *(resolved
-  2026-07-09)*. See [Recently resolved](#recently-resolved).
-- **~~Single-row all-types bulk-insert test matrix (#134)~~** *(resolved 2026-07-10)*. See
-  [Recently resolved](#recently-resolved).
-- **~~Guard Oracle `:rc` ref-cursor finalize-once invariant (#136)~~** *(resolved 2026-07-09)*. See
-  [Recently resolved](#recently-resolved).
-- **~~Generator polish (#135)~~** *(resolved 2026-07-10)*. See [Recently resolved](#recently-resolved).
+- The SQLite-only feature suites and Oracle bulk fallback coverage were added in
+  [#154](https://github.com/JakeOverstreet/inquiry/issues/154) and
+  [#155](https://github.com/JakeOverstreet/inquiry/issues/155); both tracking issues are closed.
+- The all-types bulk matrix is green on every provider and
+  [#134](https://github.com/JakeOverstreet/inquiry/issues/134) is closed.
+- **Open:** verify cancellation through generated/IInquiry operations rather than direct provider commands
+  ([#156](https://github.com/JakeOverstreet/inquiry/issues/156)).
+- Analyzer diagnostic release tracking and generator output-identity hardening are complete;
+  [#135](https://github.com/JakeOverstreet/inquiry/issues/135) and
+  [#176](https://github.com/JakeOverstreet/inquiry/issues/176) are closed.
+- The Oracle `:rc` finalize-once guard shipped and [#136](https://github.com/JakeOverstreet/inquiry/issues/136)
+  is closed.
+- The provider-restoration gate is complete and
+  [#171](https://github.com/JakeOverstreet/inquiry/issues/171) closed after two consecutive 20/20
+  full CI runs passed all 15 live provider/TFM legs.
 
-### Explicitly not planned
+## Explicitly out of scope for 1.0
 
 - **PostgreSQL PG17 MERGE…RETURNING for generated-key upsert (#60).** Closed — the existing dual-CTE
   `INSERT … ON CONFLICT` approach is correct, performant, and avoids the PG17 minimum-version gate.
@@ -167,8 +260,8 @@
   Inquiry emits initial `CREATE TABLE` DDL only (`InquiryGeneratedSchema.Ddl`).
 - **NoSQL / document engines** (Cosmos DB, MongoDB) — they don't fit a SQL-generating, schema-bound,
   JOIN/eager-loading model.
-- **JOIN-based or lazy eager loading** — Inquiry's separate-query eager loading is the recommended
-  high-performance pattern by design.
+- **Lazy loading and transparent graph tracking** — explicit generated eager methods remain the contract;
+  provider-specific JOIN shapes may be considered later only when benchmarks justify them.
 - **Inheritance mapping (TPH/TPT), dynamic/untyped rows, shadow properties** — all pull toward
   runtime-shaped mapping, against the compile-time, source-generated ethos (gap research 2026-06-12).
 - **Data-browser GUIs** (Prisma/Drizzle Studio analogs) — a library concern, not an ORM concern; use
@@ -187,21 +280,51 @@
 
 ## Recently resolved
 
-Since the 2026-06-03 internal review, the following were fixed (each with regression tests) and are **not**
-open:
+This archive records when an initial capability landed. It does **not** override the priority index or
+GitHub: several capabilities exposed follow-up correctness/performance work and remain open under a
+new or reframed issue.
 
-- **Generator polish (#135, 2026-07-10).** `ProjectionProcessor.Extract` and `AdHocProcessor.Extract`
+- **Generated execution hot path (#179, 2026-07-14).** Parameterless generated operations bypass
+  `InquiryCommand`; predicate, paging, keyset, and aggregate paths carry immutable value state through
+  static binders; known-unique generated reads use the guaranteed-single-row path while the public
+  validating API still rejects duplicates. Allocation and disassembly benchmarks cover parameterless,
+  one-parameter, and multi-parameter execution with inactive and active interceptor states.
+
+- **Generated ad-hoc sequential access (#181, 2026-07-14).** Generated materializers now advertise an
+  internal ordinal-safe capability, preserving `SequentialAccess` for generated ad-hoc lists and streams
+  without changing arbitrary custom materializers. SQL Server, PostgreSQL, and MySQL wide-row/live-stream
+  tests and interface/buffering/allocation/partial-consumption benchmarks cover the contract.
+
+- **Bounded provider-selected batch execution (#180, 2026-07-14).** Generated insert/update/delete batches
+  stream through bounded chunks, participate in ambient transactions, and use one owned transaction when
+  non-ambient. Providers select multi-row SQL, native `DbBatch`, key-set SQL, reused prepared commands, or
+  Oracle array binding with interceptor-safe fallbacks. The [diagnostic matrix](batch-mutation-diagnostic-matrix.md)
+  retains 300 measurements across all six providers, three operations, and 1/10/100/1,000 rows; #87 retains
+  the stricter authoritative release-evidence gate.
+
+- **Roslyn version policy (#68, 2026-07-14).** Roslyn remains pinned at 4.8 because Inquiry uses only
+  incremental-generator APIs available on the .NET 8 floor. Upgrade when a concrete compiler capability,
+  compatibility fix, or supported-SDK requirement justifies the analyzer-host compatibility cost.
+
+- **Generator polish foundation (#135, 2026-07-10).** `ProjectionProcessor.Extract` and `AdHocProcessor.Extract`
   now accept `CancellationToken` (matching `EntityProcessor.Extract`) and call
   `ThrowIfCancellationRequested()` in their column-discovery loops. The diagnostic-ID registry
-  comment corrected: INQ036–INQ037 are in use; INQ038 is reserved, not assigned. RS2008 suppression
-  retained — these are bundled source generators, not standalone diagnostic analyzers.
+  comment corrected: INQ036–INQ037 were in use and INQ038 was reserved at that point. Analyzer release
+  tracking subsequently completed and [#135](https://github.com/JakeOverstreet/inquiry/issues/135) is closed.
 
-- **Single-row all-types bulk-insert test matrix (#134, 2026-07-10).** Added
+- **MySQL-family type-correct JSON collections (#169, 2026-07-10).** MySQL and MariaDB now share
+  one `JSON_TABLE` mapping, the runtime writes AOT-safe invariant JSON for supported scalars,
+  nullable elements are retained, binary values use base64, enum/converter collections use their
+  provider representation, and INQ038 rejects unsupported converter provider types.
+
+- **All-types bulk-insert matrix completed (#134, 2026-07-13).** Added
   `BulkAllTypesItem` entity to the shared FeatureCatalog with one column per provider-primitive
   category (int, decimal, bool, Guid, DateTime, string, string?, byte[], enum, converter) and
   `BulkAllTypesIntegrationTests` to all six providers. Each test bulk-inserts a single row and
   asserts every type round-trips through the provider's bulk-copy path (native copier on PG/SS/MySQL/
-  MariaDB, batch-INSERT fallback on SQLite/Oracle).
+  MariaDB, batch-INSERT fallback on SQLite/Oracle). The final Docker-required matrix passed on all six
+  providers across net8/net9/net10, and [#134](https://github.com/JakeOverstreet/inquiry/issues/134)
+  is closed.
 
 - **Oracle `[InquiryBulkInsert]` fallback test coverage (#155, 2026-07-10).** Added
   `BulkInsertFallbackIntegrationTests` to the Oracle test project, verifying the multi-row batch
@@ -214,13 +337,13 @@ open:
   checks `oracleCommand.Parameters.Contains("rc")` before adding the `:rc` OUT ref-cursor parameter,
   preventing a duplicate bind if the method is called twice on the same command.
 
-- **CancellationToken propagation integration tests (#156, 2026-07-09).** Added
+- **Provider cancellation probes (#156, 2026-07-09).** Added
   `CancellationTokenPropagationTests` to all five server-backed providers (PostgreSQL, SQL Server,
   MySQL, MariaDB, Oracle). Each test opens a connection via `IInquiryConnectionFactory`, starts a
   long-running operation (`pg_sleep` / `WAITFOR DELAY` / `SLEEP` / `DBMS_SESSION.SLEEP`), cancels
   the token after 500ms, and asserts the provider throws `OperationCanceledException` (or Oracle's
-  `ORA-01013`). Closes the gap where pipeline-level unit tests verified token threading but no
-  integration test verified actual provider-level cancellation.
+  `ORA-01013`). End-to-end generated/IInquiry pipeline propagation remains open in
+  [#156](https://github.com/JakeOverstreet/inquiry/issues/156).
 
 - **MySQL and MariaDB `DbDataSource` refactor (2026-07-09).** `MySqlInquiryConnectionFactory` and
   `MariaDbInquiryConnectionFactory` now build and own one app-lifetime `MySqlDataSource` (a
@@ -238,7 +361,7 @@ open:
   etc.). Options classes gain `MaxAttempts`, `RetryBaseDelay`, and `RetryMaxDelay` properties
   matching the PostgreSQL/SQL Server pattern. All six providers now have retry + failover parity.
 
-- **Oracle single-round-trip eager loading (#70, 2026-07-09).** Shipped for all five dialects.
+- **Oracle single-round-trip eager-loading foundation (#70, 2026-07-09).** Shipped the core grid path.
   Oracle wraps the batched parent + child SELECTs in a PL/SQL anonymous block using
   `DBMS_SQL.RETURN_RESULT` (12c+ implicit result sets): `DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR
   <parent>; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR <child>; DBMS_SQL.RETURN_RESULT(c); END;`. ODP.NET
@@ -246,27 +369,27 @@ open:
   `InquiryGridReader` runtime is unchanged — the entire change is in the generator layer. Three
   virtual hooks on `SqlBuilder` (`MultiResultBatchPrefix`, `MultiResultBatchSeparator`,
   `MultiResultBatchSuffix`) let Oracle inject the wrapper while the other four dialects keep the
-  default `;`-separated batch unchanged.
+  default `;`-separated batch unchanged. Reference-relation fallbacks, allocation work, exact command-count
+  tests, and representative benchmarks remain in [#70](https://github.com/JakeOverstreet/inquiry/issues/70).
 
-- **MySQL and MariaDB `JSON_TABLE` IN optimization (#169, #170, 2026-07-09).** `MySqlSqlBuilder`
-  and `MariaDbSqlBuilder` now override `UseArrayInParameters`, `ArrayParameterBinderFqn`, and
-  `RenderIn` with MySQL 8.0+ / MariaDB 10.6+ `JSON_TABLE`: IN collections bind as a single JSON
+- **MySQL and MariaDB `JSON_TABLE` IN optimization (#169, #170, 2026-07-09).** The shared
+  `MySqlFamilySqlBuilder` uses MySQL 8.0+ / MariaDB 10.6+ `JSON_TABLE`: IN collections bind as a single JSON
   array parameter (`InquiryJsonArrayParameter`) and the SQL uses
   `col IN (SELECT jt.val FROM JSON_TABLE(@param, '$[*]' COLUMNS(val TYPE PATH '$')) jt)` — constant
   SQL, no per-element parameter cap, one cached plan for all cardinalities. Type-specific COLUMNS
-  (`SIGNED` for integers, `DOUBLE` for floats, `DECIMAL(65,30)` for decimals, `CHAR(36)` for GUIDs,
-  `CHAR(255)` for strings) ensure correct comparison semantics. All five server dialects now use
+  (matching integer/float/decimal/temporal types, `CHAR(36)` for GUIDs, non-truncating text, and
+  base64 decoding for binary) ensure correct comparison semantics. All five server dialects now use
   array-style IN binding (PostgreSQL `= ANY`, SQL Server TVPs, SQLite `json_each`, Oracle/MySQL/MariaDB
   `JSON_TABLE`). NOT IN remains on per-element sentinel expansion across all dialects.
 
-- **MariaDB-native INSERT RETURNING (#58, 2026-07-09).** `MariaDbSqlBuilder` now overrides
+- **MariaDB-native INSERT RETURNING foundation (#58, 2026-07-09).** `MariaDbSqlBuilder` now overrides
   `BuildInsertReturningSql` and `BuildUpsertReturningSql` with MariaDB 10.5+ native
   `INSERT…RETURNING` / `INSERT…ON DUPLICATE KEY UPDATE…RETURNING`, halving round trips for these
   operations. `UPDATE…RETURNING` is not supported by MariaDB, so the update path keeps the emulated
-  two-statement batch from `MySqlFamilySqlBuilder`. Database-supplied GUID keys use inline
-  `COALESCE(@key, UUID())` in the insert values, letting `RETURNING` capture the generated key
-  directly — eliminating the `@_inquiry_genkey` user variable and the `AllowUserVariables`
-  connection-string requirement that the MySQL emulated path needs.
+  two-statement batch from `MySqlFamilySqlBuilder`. Null database-default keys route through native
+  insert-returning, while explicit-key upserts bind the supplied key and native `RETURNING` reads the
+  actual row, including an unambiguous secondary-unique conflict. DELETE RETURNING also shipped;
+  [#58](https://github.com/JakeOverstreet/inquiry/issues/58) is closed.
 
 - **Split MySQL and MariaDB into independent dialect providers (#168, 2026-07-09).** The MySQL builder
   body moved to a shared `MySqlFamilySqlBuilder` in `Inquiry.Generators.Shared`; `MySqlSqlBuilder` and
@@ -275,13 +398,14 @@ open:
   `AddInquiryMariaDb` DI overloads, `[assembly: InquiryDialect("MariaDb")]`). The full MySQL integration
   suite is cloned to `tests/Inquiry.MariaDb.Tests` against a Testcontainers `mariadb:11.4` image, and
   MariaDb joined the CI provider matrix. Unblocked #58, #169, and #170.
-- **Table-valued parameters for SQL Server (#69, 2026-07-09).** SQL Server IN collections
+- **Table-valued-parameter foundation for SQL Server (#69, 2026-07-09).** SQL Server IN collections
   (`Compare.In` predicates and `[InquiryDeleteAll]`) now bind as table-valued parameters (TVPs)
   instead of per-element sentinel expansion. The SQL stays constant across list lengths
   (`col IN (SELECT [Value] FROM @param)`) — one cached plan for all cardinalities, no per-element
   parameter cap, and no power-of-two bucketing overhead. TVP table types (`Inquiry_IntList`,
-  `Inquiry_BigIntList`, etc.) are auto-created on first use. The SQL Server counterpart of
-  PostgreSQL's `= ANY(@array)` shipped earlier.
+  `Inquiry_BigIntList`, etc.) are auto-created on first use. Query-time synchronous DDL, database-unsafe
+  caching, incomplete type metadata, stored-procedure support, and allocations remain open in
+  [#69](https://github.com/JakeOverstreet/inquiry/issues/69).
 - **SQLite `json_each` and Oracle `JSON_TABLE` IN optimization (2026-07-09).** Extends the #69 IN
   collection optimization to the remaining viable engines. SQLite uses
   `col IN (SELECT value FROM json_each(@param))` (available since SQLite 3.38.0); Oracle uses
@@ -298,7 +422,8 @@ open:
 - **Grouped aggregate read shape (#65, 2026-07-09).** `[InquiryGroupCount("Column")]` emits
   `SELECT col, COUNT(*) FROM t GROUP BY col` and returns `Task<IReadOnlyList<GroupCount<TKey>>>`.
   The "counts by status" / "orders per customer" dashboard primitive. Per-method inline materializer
-  generated for type-safe key reading. Composes with soft-delete filters.
+  generated for type-safe key reading. Cross-provider count-value materialization is consolidated in
+  [#174](https://github.com/JakeOverstreet/inquiry/issues/174).
 - **DISTINCT support on select and projection read shapes (#66, 2026-07-08).** `Distinct = true` on
   `[InquirySelectAll]`, `[InquirySelectAllByField]`, and `[InquirySelectAllByPredicate]` emits
   `SELECT DISTINCT` in the const SQL. Works on all five dialects, composes with soft-delete filters,
@@ -309,17 +434,26 @@ open:
   `UPDLOCK, SERIALIZABLE` table hints. Eliminates MERGE's plan-cache bloat and deadlock risks while
   maintaining atomicity via key-range locks. All three upsert variants (standard, empty-SET, generated-key)
   converted; concurrency-tested.
-- **SelectAllEager child table full scan eliminated (#57, 2026-07-08).** The `_All` and M:N `_Junction`
-  eager-loading consts now use a subquery filter (`WHERE fk IN (SELECT pk FROM parent)`) to scope child
-  rows to the parent result set at the SQL level — no runtime parameters needed, preserves the grid path.
-  Turns an O(child-table) scan into an indexed range read on all five dialects.
-- **Release engineering — packaging infrastructure (2026-07-08).** `RepositoryUrl` placeholder replaced
+- **SelectAllEager collection/junction filtering (#57, 2026-07-14).** Collection `_All` and M:N
+  `_Junction` eager-loading consts use a parent subquery, while the M:N child `_All` const now uses a
+  parameterless child-key `IN` subquery over eligible junction and parent rows. Child, junction, and parent
+  soft-delete/global filters are composed structurally, preserving the grid path without runtime key
+  expansion. Covered by generated-SQL assertions and live suites for SQLite, SQL Server, PostgreSQL,
+  MySQL, MariaDB, and Oracle; SQL Server performance evidence is in
+  [`EagerLoadingBenchmarks.cs`](../../../benchmarks/Inquiry.Benchmarks.SqlServer/EagerLoadingBenchmarks.cs).
+- **Release engineering — immutable packaging and required CI gate (#220, 2026-07-14).** `RepositoryUrl` placeholder replaced
   with the real GitHub URL; `RepositoryType`, `PackageProjectUrl` added. SourceLink
   (`Microsoft.SourceLink.GitHub`) embeds commit metadata and the `.snupkg` symbol packages enable
-  step-through debugging. Root `README.md` wired as the NuGet package readme for all 8 shippable
-  packages. MinVer tag-based versioning (`v8.0.0` tag → version `8.0.0`) with
-  `MinVerMinimumMajorMinor=8.0`. Tag-triggered `release.yml` workflow packs and pushes to NuGet.org.
-  Benchmark and sample projects marked non-packable.
+  step-through debugging. Root `README.md` wired as the NuGet package readme for all 9 shippable
+  packages. MinVer tag-based versioning is configured for the first public release (`v1.0.0` tag →
+  version `1.0.0`) with `MinVerMinimumMajorMinor=1.0`. The unsafe tag-triggered rebuild-and-wildcard-push
+  workflow has been removed. A canonical nine-package manifest, exact-commit detached-worktree pack,
+  package/bundle verifier, package producer and independent verifier jobs, and versioned
+  `ci-required-v1` aggregate required gate are in place. APICompat/analyzer release tracking,
+  isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
+  SBOM/provenance/dependency evidence, hosted versioned docs, changelog/release notes, policies/rulesets,
+  protected promotion, and resumable publication remain release-blocking under #89. Benchmark and sample
+  projects remain non-packable.
 - **PostgreSQL bulk COPY typed writes (#122, 2026-07-08).** The binary copier now threads
   `System.Data.DbType` through `InquiryBulkInsertDefinition.ColumnTypes` (populated at compile time by
   the source generator), maps them to `NpgsqlDbType` in `PostgreSqlBulkCopier.MapColumnTypes`, and calls
@@ -439,12 +573,14 @@ open:
 - **Many-to-many relations `[InquiryManyToMany]` (2026-06-13):** eager-loading a M:N association through
   a mapped junction (link) entity. The single-parent eager load (`[InquirySelectOneByKeyEager]`) joins
   the related rows through the junction filtered by the parent key; the all-parents load
-  (`[InquirySelectAllEager]`) assembles every parent's collection **in memory from two queries** (all
-  children + all junction rows) — no N+1 — reusing the child's and junction's existing materializers. The
-  JOIN is ANSI-uniform across all five dialects (space alias for Oracle, table-qualified child columns).
+  (`[InquirySelectAllEager]`) assembles every parent's collection in memory from parameterless child and
+  junction result sets scoped to eligible parents. The child query uses a child-key `IN` subquery over
+  eligible junction rows, so unrelated and child/junction/parent-filtered rows are not materialized — no
+  N+1 and no runtime key expansion. The JOIN and filtered batch shapes are ANSI-uniform across all six
+  dialects (space alias for Oracle, table-qualified child columns).
   Misconfiguration (non-collection nav, unmapped junction/child, missing junction FK property, composite
-  child key) is **`INQ063`**. Generator snapshots across dialects + live SQLite round-trip (single-eager,
-  all-eager, empty collection). Writing associations is through the junction entity's own store. See
+  child key) is **`INQ063`**. Generator assertions and live coverage span SQLite, SQL Server, PostgreSQL,
+  MySQL, MariaDB, and Oracle. Writing associations is through the junction entity's own store. See
   [Many-to-many relations](../articles/features/many-to-many.md).
 
 - **Negated predicate operators `Compare.NotLike` / `Compare.NotBetween` / `Compare.NotIn` (2026-06-13):**
@@ -548,8 +684,8 @@ open:
   `InquiryBulkInsertDefinition<T>` with converter/enum-aware ordinal accessors), returning
   `Task<long>` rows written with no parameter cap; SQLite/Oracle compile the method down to the
   multi-row batch insert. Sequential-GUID keys and auditing timestamps stamp per row as the
-  stream is enumerated; bulk insert uses a dedicated connection (no ambient transaction,
-  documented). Live tests on all five dialects via the shared `BulkItem` catalog fixture, and
+  stream is enumerated; bulk insert uses a dedicated connection and is rejected inside ambient
+  Inquiry transactions. Live tests on all five dialects via the shared `BulkItem` catalog fixture, and
   `BulkInsertBenchmarks` (PostgreSQL) compares chunked `VALUES` batches vs one binary `COPY`.
   See [Bulk insert](../articles/features/bulk-insert.md).
 - **Inquiry.Interceptors package (2026-06-13):** opt-in companion package with
@@ -638,6 +774,13 @@ open:
   and **first-class `DateOnly`/`TimeOnly` mapping** (materializer reads, `DbType.Date`/`Time`
   stamping, `CREATE TABLE` column types on all five dialects, Oracle `TimeOnly` as
   `INTERVAL DAY(0) TO SECOND(7)`), plus the IDE-squiggles troubleshooting docs.
+- **Testing sandbox and entity factories (2026-07-14):** `InquirySandbox` runs each callback in a
+  fresh DI scope and non-committable outer transaction, preserves user exceptions, and rolls back on
+  success, failure, and cancellation. Generated transactional stores resolved inside the callback share
+  the ambient transaction; native `[InquiryBulkInsert]` is rejected because its dedicated connection
+  cannot participate in rollback. Independent runs can execute concurrently on server databases.
+  `EntityFactory<T>` adds independent thread-safe sequences, ordered named states, deterministic
+  `BuildMany`, and delegate-based Bogus compatibility without coupling entity construction to store types.
 - **Production-readiness round (2026-06-12):** `InquiryOptions.DefaultCommandTimeout` applies a
   global command timeout (explicit `InquiryCommand.CommandTimeout` still wins); an ASP.NET Core
   health check (`AddHealthChecks().AddInquiry()`) opens a connection through the registered
@@ -681,9 +824,11 @@ open:
   same-key upserts no longer throw a spurious duplicate-key error;
   covered by live concurrency + `uniqueidentifier`/`gen_random_uuid()` key tests. SQLite + MySQL parity is
   now **test-proven** (live generate + concurrency tests). MySQL additionally supports a **database-generated
-  GUID key**: a `Guid?` `UseDatabaseDefault` key is generated server-side via `UUID()` (captured in a
-  `@_inquiry_genkey` user variable for the emulated returning), so Inquiry enables `AllowUserVariables=true`
-  on MySQL connections by default. (Oracle generated-key upsert remains unsupported, tracked separately.)
+  non-auto database-default key**: null-key upserts route through insert, while explicit-key upserts bind
+  and select by the supplied key. MySQL insert-returning evaluates a declared standalone scalar
+  `DefaultExpression` once into the collision-safe `@'__inquiry.generated-key'` user variable; `Guid`
+  keys retain a `UUID()` fallback. Inquiry therefore enables `AllowUserVariables=true` on MySQL
+  connections by default. (Oracle generated-key upsert remains unsupported, tracked separately.)
 - **Providers:** Oracle ref-cursor detection requires the generated `:rc` bind, so it no longer
   misclassifies ad-hoc PL/SQL.
 - **Dependency injection:** generated `AddInquiryGeneratedStores()` registration is explicit, so
@@ -692,10 +837,10 @@ open:
   registering two providers in one container now fails fast with a clear message.
 - **Hardening:** sample DB credentials are labeled local-dev-only with an `INQUIRY_SAMPLE_DB` override;
   the known build-warning sources are scoped-suppressed (production projects are warnings-as-errors).
-- **CI:** Oracle moved into the integration matrix (net8.0/net9.0); CI emits TRX artifacts.
+- **CI:** Oracle moved into the integration matrix (net8.0/net9.0/net10.0); CI emits TRX artifacts.
 - **CI hardening:** a provider suite that can't start its Docker container now FAILS CI (via the
   `INQUIRY_REQUIRE_DOCKER` guard) instead of silently skipping; a new scheduled weekly workflow runs the
-  full provider × net8.0/net9.0/net10.0 matrix (the normal integration matrix stays net8.0/net9.0).
+  full provider × net8.0/net9.0/net10.0 matrix (the normal integration matrix now enforces the same 15 legs).
 - **Formal security scan:** the Codex Security repository scan completed during pre-release hardening.
   Findings were fixed with regression coverage for lazy batch parameter-cap enforcement, MySQL
   update-returning concurrency behavior, and Oracle generated bind-name collisions.

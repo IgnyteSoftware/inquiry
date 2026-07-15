@@ -14,8 +14,32 @@ using System.Diagnostics.Metrics;
 
 namespace Inquiry.Tests;
 
+[CollectionDefinition("Inquiry telemetry", DisableParallelization = true)]
+public sealed class InquiryTelemetryCollection
+{
+}
+
+[Collection("Inquiry telemetry")]
 public sealed class InquiryTelemetryTests
 {
+    [Fact]
+    public void TelemetryActivationTracksObserversWithoutCaching()
+    {
+        var interceptor = new InquiryTelemetryInterceptor(new InquiryTelemetryOptions(), loggerFactory: null);
+        Assert.False(interceptor.IsActive);
+
+        var activities = new List<Activity>();
+        using (CreateActivityListener(activities))
+        {
+            Assert.True(interceptor.IsActive);
+        }
+
+        Assert.False(interceptor.IsActive);
+        Assert.True(new InquiryTelemetryInterceptor(
+            new InquiryTelemetryOptions(),
+            new RecordingLoggerFactory()).IsActive);
+    }
+
     [Fact]
     public async Task TelemetryInterceptorEmitsSpanWithDatabaseSemanticTags()
     {
@@ -154,6 +178,67 @@ public sealed class InquiryTelemetryTests
         Assert.IsType<InquiryTelemetryInterceptor>(interceptor);
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task TelemetryCompletesActivityWhenListenerDetachesMidFlight(bool generated, bool transacted, bool fails)
+    {
+        Activity? started = null;
+        ActivityListener? listener = null;
+        listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == InquiryTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStarted = activity =>
+            {
+                started = activity;
+                listener!.Dispose();
+            },
+        };
+        using var listenerScope = listener;
+        ActivitySource.AddActivityListener(listener);
+
+        var execution = ExecuteCommandAsync(
+                transacted,
+                new IInquiryCommandInterceptor[] { new InquiryTelemetryInterceptor(new InquiryTelemetryOptions(), loggerFactory: null) },
+                generated,
+                fails);
+        if (fails)
+        {
+            await Assert.ThrowsAsync<SqliteException>(() => execution);
+        }
+        else
+        {
+            await execution;
+        }
+
+        var activity = Assert.IsType<Activity>(started);
+        Assert.True(activity.Duration > TimeSpan.Zero);
+        Assert.Equal(fails ? ActivityStatusCode.Error : ActivityStatusCode.Unset, activity.Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TelemetryIgnoresUnmatchedCompletionWhenListenerAttachesMidFlight(bool transacted)
+    {
+        var telemetry = new InquiryTelemetryInterceptor(new InquiryTelemetryOptions(), loggerFactory: null);
+        using var attachingInterceptor = new ListenerAttachingInterceptor();
+
+        await ExecuteCommandAsync(
+            transacted,
+            new IInquiryCommandInterceptor[] { telemetry, attachingInterceptor },
+            generated: true);
+
+        Assert.Empty(attachingInterceptor.StartedActivities);
+    }
+
     private static ActivityListener CreateActivityListener(List<Activity> stopped)
     {
         var listener = new ActivityListener
@@ -170,6 +255,46 @@ public sealed class InquiryTelemetryTests
         };
         ActivitySource.AddActivityListener(listener);
         return listener;
+    }
+
+    private static async Task ExecuteCommandAsync(
+        bool transacted,
+        IInquiryCommandInterceptor[] interceptors,
+        bool generated,
+        bool fails = false)
+    {
+        var factory = new TelemetryTestConnectionFactory("Data Source=:memory:");
+        if (!transacted)
+        {
+            var pipeline = new InquiryRequestPipeline(factory, interceptors);
+            await ExecuteAsync(pipeline, generated, fails);
+            return;
+        }
+
+        await using var connection = await factory.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        var transactedPipeline = new TransactedInquiryRequestPipeline(
+            connection,
+            transaction,
+            interceptors,
+            factory,
+            options: null);
+        await ExecuteAsync(transactedPipeline, generated, fails);
+    }
+
+    private static Task<int> ExecuteAsync(IInquiryRequestPipeline pipeline, bool generated, bool fails)
+    {
+        if (generated)
+        {
+            return pipeline.ExecuteAsync(new InquiryGeneratedCommand<byte>(
+                fails ? "SELECT * FROM NoSuchTable" : "SELECT 1",
+                default,
+                static (_, _) => { }));
+        }
+
+        return fails
+            ? pipeline.ExecuteAsync(new InquiryCommand("SELECT * FROM NoSuchTable"))
+            : pipeline.ExecuteAsync(new InquiryCommand("SELECT 1"));
     }
 
     private static async Task<(IInquiryRequestPipeline Pipeline, SqliteConnection Keeper)> CreatePipelineAsync(
@@ -244,5 +369,26 @@ public sealed class InquiryTelemetryTests
                 }
             }
         }
+    }
+
+    private sealed class ListenerAttachingInterceptor : IInquiryCommandInterceptor, IDisposable
+    {
+        private ActivityListener? _listener;
+
+        public List<Activity> StartedActivities { get; } = new();
+
+        public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
+        {
+            _listener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == InquiryTelemetry.ActivitySourceName,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStarted = StartedActivities.Add,
+            };
+            ActivitySource.AddActivityListener(_listener);
+            return ValueTask.CompletedTask;
+        }
+
+        public void Dispose() => _listener?.Dispose();
     }
 }

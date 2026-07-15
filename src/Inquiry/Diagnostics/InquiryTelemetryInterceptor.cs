@@ -20,7 +20,7 @@ namespace Inquiry.Diagnostics;
 /// streaming query whose enumeration is abandoned early no completion notification fires, so that
 /// span is dropped rather than recorded with a fabricated duration.
 /// </remarks>
-internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor
+internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, IInquiryInterceptorActivation
 {
     private readonly InquiryTelemetryOptions _options;
     private readonly ILogger _logger;
@@ -44,8 +44,19 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor
         _logger = loggerFactory?.CreateLogger("Inquiry.Command") ?? NullLogger.Instance;
     }
 
+    public bool IsActive
+        => InquiryTelemetry.ActivitySource.HasListeners()
+            || InquiryTelemetry.CommandDuration.Enabled
+            || _logger.IsEnabled(LogLevel.Debug)
+            || _logger.IsEnabled(LogLevel.Error);
+
     public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
     {
+        if (!IsActive)
+        {
+            return ValueTask.CompletedTask;
+        }
+
         var state = new CommandState
         {
             DbSystem = MapDbSystem(context.Command),

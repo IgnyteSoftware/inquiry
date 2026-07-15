@@ -1,6 +1,7 @@
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.Tests.Fixtures;
+using static Inquiry.PostgreSql.Tests.Fixtures.PostgreSqlNorthwindSql;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -9,9 +10,6 @@ public sealed class TransactionIntegrationTests
 {
     private readonly PostgreSqlContainerFixture _fixture;
     public TransactionIntegrationTests(PostgreSqlContainerFixture fixture) => _fixture = fixture;
-
-    private static FormattableString InsertCustomer(string customerId, string companyName, string country)
-        => $"INSERT INTO Customers (CustomerID, CompanyName, Country) VALUES ({customerId}, {companyName}, {country})";
 
     [SkippableFact]
     public async Task CommittedTransactionPersistsChanges()
@@ -75,7 +73,7 @@ public sealed class TransactionIntegrationTests
         await inquiry.ExecuteInTransactionAsync(async tx =>
         {
             await store.InsertAsync(new Customer { CustomerID = "HELP1", CompanyName = "Helper" });
-            await tx.ExecuteAsync($"UPDATE Customers SET Country = {"USA"} WHERE CustomerID = {"HELP1"}");
+            await tx.ExecuteAsync(UpdateCustomerCountry("HELP1", "USA"));
         });
 
         var loaded = await store.SelectByKeyAsync("HELP1");
@@ -113,7 +111,7 @@ public sealed class TransactionIntegrationTests
         var insertedCount = await inquiry.ExecuteInTransactionAsync(async tx =>
         {
             await tx.ExecuteAsync(InsertCustomer("HELP3", "Returned", "USA"));
-            return await tx.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Customers WHERE CustomerID = {"HELP3"}");
+            return await tx.ExecuteScalarAsync<long>(CountCustomer("HELP3"));
         });
 
         Assert.Equal(1L, insertedCount);
@@ -424,8 +422,7 @@ public sealed class TransactionIntegrationTests
         await tx.CommitAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => tx.QueryListAsync<Customer>(
-                $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers"));
+            () => tx.QueryListAsync<Customer>(SelectCustomers()));
     }
 
     [SkippableFact]
@@ -504,8 +501,7 @@ public sealed class TransactionIntegrationTests
         await store.InsertAsync(new Customer { CustomerID = "READ1", CompanyName = "Read Me" });
 
         await using var tx = await inquiry.BeginTransactionAsync();
-        var loaded = await tx.QuerySingleOrDefaultAsync<Customer>(
-            $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers WHERE CustomerID = {"READ1"}");
+        var loaded = await tx.QuerySingleOrDefaultAsync<Customer>(SelectCustomer("READ1"));
 
         Assert.NotNull(loaded);
         Assert.Equal("Read Me", loaded!.CompanyName);

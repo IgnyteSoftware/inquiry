@@ -15,13 +15,14 @@ namespace Inquiry.Generators.Models;
 /// </remarks>
 internal sealed record ColumnData : IColumn
 {
+    public LocationData? Location { get; init; }
     public required string PropertyName { get; init; }
     public required string ColumnName { get; init; }
     public required TypeData Type { get; init; }
     public bool IsKey { get; init; }
     public bool IsGenerated { get; init; }
 
-    /// <summary>Insert/upsert assigns a v7 GUID when this key is unset ([InquiryKey(SequentialGuid = true)]).</summary>
+    /// <summary>Insert/upsert assigns a sequential GUID when this key is unset ([InquiryKey(SequentialGuid = true)]).</summary>
     public bool IsSequentialGuid { get; init; }
 
     /// <summary>[InquiryCreatedAt]: stamped on insert when unset; excluded from UPDATE SET and bind.</summary>
@@ -55,18 +56,36 @@ internal sealed record ColumnData : IColumn
     public DbTypeClass TypeClass { get; init; }
     public bool IsNullable { get; init; }
     public string? SqlType { get; init; }
+    public LocationData? SqlTypeLocation { get; init; }
+    public string ProviderClrTypeName { get; init; } = string.Empty;
+    public bool ProviderValueIsNullable { get; init; }
     public int Length { get; init; }
+    public bool IsLengthSpecified { get; init; }
+    public LocationData? LengthLocation { get; init; }
     public int Precision { get; init; }
+    public bool IsPrecisionSpecified { get; init; }
+    public LocationData? PrecisionLocation { get; init; }
     public int Scale { get; init; }
+    public bool IsScaleSpecified { get; init; }
+    public LocationData? ScaleLocation { get; init; }
     public string? DefaultExpression { get; init; }
+    public LocationData? DefaultExpressionLocation { get; init; }
+    public LocationData? UseDatabaseDefaultLocation { get; init; }
 
     /// <summary>Raw SQL expression for a server-computed column ([InquiryColumn(Computed = …)]), or null.</summary>
     public string? ComputedExpression { get; init; }
+    public LocationData? ComputedExpressionLocation { get; init; }
+    public Inquiry.Generators.Infrastructure.EquatableArray<ComputedExpressionOverrideData> ComputedExpressionOverrides { get; init; }
     public string? ForeignKeyTable { get; init; }
     public string? ForeignKeySchema { get; init; }
     public string? ForeignKeyColumn { get; init; }
+    public string? ForeignKeyConstraintName { get; init; }
+    public int ForeignKeyOnDelete { get; init; }
+    public int ForeignKeyOnUpdate { get; init; }
     public bool IsIndexed { get; init; }
     public bool IsUnicode { get; init; } = true;
+    public bool IsUnicodeSpecified { get; init; }
+    public LocationData? IsUnicodeLocation { get; init; }
     public bool IsUnique { get; init; }
     public string? IndexName { get; init; }
 

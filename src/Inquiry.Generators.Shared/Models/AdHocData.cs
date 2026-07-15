@@ -9,6 +9,7 @@ namespace Inquiry.Generators.Models;
 /// </summary>
 internal sealed record AdHocData(
     string FullyQualifiedName,
+    string HintName,
     string Name,
     string? Namespace,
     EquatableArray<ColumnData> Columns,

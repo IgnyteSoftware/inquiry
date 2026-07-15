@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Inquiry.Commands;
 
 namespace Inquiry.Connections;
 
@@ -53,4 +54,13 @@ public interface IInquiryConnectionFactory
     /// through the sequential per-command path instead.
     /// </summary>
     bool SupportsBatchExecution => true;
+
+    /// <summary>Gets the provider-selected batch execution strategy.</summary>
+    InquiryBatchExecutionMode BatchExecutionMode
+        => SupportsBatchExecution ? InquiryBatchExecutionMode.DbBatch : InquiryBatchExecutionMode.ReusedCommand;
+
+    /// <summary>Initializes a provider batch command before the generated whole-chunk binder runs.</summary>
+    void InitializeBatchChunkCommand(DbCommand command, int itemCount)
+    {
+    }
 }

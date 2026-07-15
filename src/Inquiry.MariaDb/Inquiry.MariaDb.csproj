@@ -24,6 +24,7 @@
   <Target Name="_ResolveAnalyzerDlls" BeforeTargets="_GetPackageFiles">
     <MSBuild Projects="..\Inquiry.MariaDb.Analyzer\Inquiry.MariaDb.Analyzer.csproj"
              Targets="GetTargetPath"
+             RemoveProperties="TargetFramework;TargetFrameworks;RuntimeIdentifier;SelfContained"
              Properties="Configuration=$(Configuration)">
       <Output TaskParameter="TargetOutputs" ItemName="_AnalyzerTargetPath" />
     </MSBuild>

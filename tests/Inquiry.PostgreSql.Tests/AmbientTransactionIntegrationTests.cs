@@ -1,6 +1,7 @@
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.Tests.Fixtures;
+using static Inquiry.PostgreSql.Tests.Fixtures.PostgreSqlNorthwindSql;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -214,8 +215,7 @@ public sealed class AmbientTransactionIntegrationTests
 
         await using var tx = await inquiry.BeginTransactionAsync();
 
-        var streaming = tx.QueryAsync<Customer>(
-            $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers");
+        var streaming = tx.QueryAsync<Customer>(SelectCustomers());
         var enumerator = streaming.GetAsyncEnumerator();
         try
         {
