@@ -592,6 +592,18 @@ public abstract class SqlBuilder
     public virtual string BuildCountSql(SqlBuildContext context)
         => "SELECT " + CountExpression + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
+    public virtual string BuildCountByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
+    {
+        if (filterColumns.Count == 0)
+            return BuildCountSql(context);
+
+        var parts = new string[filterColumns.Count];
+        for (var i = 0; i < filterColumns.Count; i++)
+            parts[i] = QuoteIdentifier(filterColumns[i].ColumnName) + " = " + ParameterName(filterColumns[i].PropertyName);
+        var where = string.Join(" AND ", parts);
+        return "SELECT " + CountExpression + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
+    }
+
     /// <summary>
     /// Builds an existence test (<c>[InquiryExists]</c>): <c>SELECT CASE WHEN EXISTS(SELECT 1 FROM … WHERE
     /// …) THEN 1 ELSE 0 END</c>, returning <c>1</c>/<c>0</c> the runtime coerces to <see cref="bool"/>. The
