@@ -13,4 +13,11 @@ public sealed class InquirySelectOneByKeyAttribute : Attribute
     /// query is emitted unfiltered so a soft-deleted row can be returned.
     /// </summary>
     public bool IncludeDeleted { get; set; }
+
+    /// <summary>
+    /// Gets or sets the row-level lock mode for the generated query. The default is
+    /// <see cref="InquiryLockMode.None"/> (no locking). Use within a transaction to acquire
+    /// pessimistic locks on the selected rows.
+    /// </summary>
+    public InquiryLockMode LockMode { get; set; }
 }

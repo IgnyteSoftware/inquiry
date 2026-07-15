@@ -337,6 +337,10 @@ internal static class StoreProcessor
             GeneratorHelpers.GetNamedBool(attribute, "Distinct");
         var hardDelete = operation is StoreOperation.DeleteOneByKey or StoreOperation.DeleteByPredicate &&
             GeneratorHelpers.GetNamedBool(attribute, "HardDelete");
+        var lockMode = operation is StoreOperation.SelectAll or StoreOperation.SelectOneByKey
+            or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
+            ? GeneratorHelpers.GetNamedInt(attribute, "LockMode") ?? 0
+            : 0;
 
         return new StoreMethodData(
             Name: method.Name,
@@ -358,6 +362,7 @@ internal static class StoreProcessor
             IncludeDeleted = includeDeleted,
             Distinct = distinct,
             HardDelete = hardDelete,
+            LockMode = lockMode,
             TopByOrderColumn = topByOrderColumn,
             TopByOrderDescending = topByOrderDescending,
             GroupCountColumn = groupCountColumn,
@@ -1128,7 +1133,7 @@ internal static class StoreProcessor
         // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. A method that
         // opts into IncludeDeleted gets its own unfiltered per-method const instead of the shared one.
         bool UsesSharedSelect((StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan) m)
-            => !(hasSoftDelete && m.Method.IncludeDeleted) && !m.Method.Distinct;
+            => !(hasSoftDelete && m.Method.IncludeDeleted) && !m.Method.Distinct && m.Method.LockMode == 0;
 
         var needsSelectAll = valid.Any(m => UsesSharedSelect(m) &&
             ((m.Method.Operation == StoreOperation.SelectAll && m.SelectPlan is null) ||
@@ -1264,11 +1269,18 @@ internal static class StoreProcessor
             AppendConstSql(source, "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns), sqlBuilder.BuildSelectByFieldSql(ctx, ToColumnList(fieldColumns)));
         }
 
+        var lockErrors = new Dictionary<string, string>(System.StringComparer.Ordinal);
         foreach (var (method, _, predicatePlan, _) in valid)
         {
             if (method.Operation == StoreOperation.SelectAllByPredicate && predicatePlan is not null)
             {
-                AppendConstSql(source, "_sqlPredicate_" + method.Name, sqlBuilder.BuildSelectByPredicateSql(CtxFor(method), predicatePlan.Predicates, method.Distinct));
+                var predSql = sqlBuilder.BuildSelectByPredicateSql(CtxFor(method), predicatePlan.Predicates, method.Distinct);
+                if (method.LockMode != 0)
+                {
+                    var lockError = TryApplyLockClause(ref predSql, sqlBuilder, CtxFor(method), method);
+                    if (lockError is not null) { lockErrors[method.Name] = lockError; continue; }
+                }
+                AppendConstSql(source, "_sqlPredicate_" + method.Name, predSql);
             }
             else if (method.Operation == StoreOperation.Exists && predicatePlan is not null)
             {
@@ -1341,7 +1353,13 @@ internal static class StoreProcessor
                         softDeletePredicateColumn: entity.SoftDeleteColumn,
                         globalFilterPredicateColumns: entityGlobalFilters)
                     : CtxFor(method);
-                AppendConstSql(source, selectPlan.SqlFieldName, BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan, method.Distinct));
+                var planSql = BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan, method.Distinct);
+                if (method.LockMode != 0)
+                {
+                    var lockError = TryApplyLockClause(ref planSql, sqlBuilder, planCtx, method);
+                    if (lockError is not null) { lockErrors[method.Name] = lockError; continue; }
+                }
+                AppendConstSql(source, selectPlan.SqlFieldName, planSql);
 
                 // Keyset paging emits a second const: the first-page (null-cursor) query has no cursor
                 // predicate, so the seek query above can use the plain sargable `key > @cursor` (index seek)
@@ -1359,10 +1377,10 @@ internal static class StoreProcessor
         }
 
         // emit a per-method base SELECT const for each non-plan select that needs one: IncludeDeleted
-        // on a soft-delete entity (unfiltered), Distinct (SELECT DISTINCT), or both.
+        // on a soft-delete entity (unfiltered), Distinct (SELECT DISTINCT), LockMode, or any combination.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
-            var needsPerMethodSql = (hasSoftDelete && method.IncludeDeleted) || method.Distinct;
+            var needsPerMethodSql = (hasSoftDelete && method.IncludeDeleted) || method.Distinct || method.LockMode != 0;
             if (!needsPerMethodSql || selectPlan is not null)
             {
                 continue;
@@ -1376,7 +1394,13 @@ internal static class StoreProcessor
                 case StoreOperation.SelectAllEager:
                 {
                     var field = "_sqlSelectAll_" + method.Name;
-                    AppendConstSql(source, field, sqlBuilder.BuildSelectAllSql(methodCtx, method.Distinct));
+                    var sql = sqlBuilder.BuildSelectAllSql(methodCtx, method.Distinct);
+                    if (method.LockMode != 0)
+                    {
+                        var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
+                        if (lockError is not null) { lockErrors[method.Name] = lockError; break; }
+                    }
+                    AppendConstSql(source, field, sql);
                     baseSelectFields[method.Name] = field;
                     break;
                 }
@@ -1385,7 +1409,13 @@ internal static class StoreProcessor
                 case StoreOperation.SelectOneByKeyEager:
                 {
                     var field = "_sqlSelectByKey_" + method.Name;
-                    AppendConstSql(source, field, sqlBuilder.BuildSelectByKeySql(methodCtx));
+                    var sql = sqlBuilder.BuildSelectByKeySql(methodCtx);
+                    if (method.LockMode != 0)
+                    {
+                        var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
+                        if (lockError is not null) { lockErrors[method.Name] = lockError; break; }
+                    }
+                    AppendConstSql(source, field, sql);
                     baseSelectFields[method.Name] = field;
                     break;
                 }
@@ -1393,7 +1423,13 @@ internal static class StoreProcessor
                 case StoreOperation.SelectAllByField when fieldColumns.Count > 0:
                 {
                     var field = "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns) + "_" + method.Name;
-                    AppendConstSql(source, field, sqlBuilder.BuildSelectByFieldSql(methodCtx, ToColumnList(fieldColumns), method.Distinct));
+                    var sql = sqlBuilder.BuildSelectByFieldSql(methodCtx, ToColumnList(fieldColumns), method.Distinct);
+                    if (method.LockMode != 0)
+                    {
+                        var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
+                        if (lockError is not null) { lockErrors[method.Name] = lockError; break; }
+                    }
+                    AppendConstSql(source, field, sql);
                     baseSelectFields[method.Name] = field;
                     break;
                 }
@@ -1535,6 +1571,10 @@ internal static class StoreProcessor
                 StoreOperation.Upsert => upsertError,
                 _ => null,
             };
+            if (unsupportedReason is null && lockErrors.TryGetValue(method.Name, out var lockError))
+            {
+                unsupportedReason = lockError;
+            }
             // The provider diagnostic was already reported at the precise invalid facet above. Still
             // emit a safe body without adding the generic INQ039 for the same transport failure.
             if (collectionErrors.TryGetValue(method, out var collectionError))
@@ -2437,6 +2477,19 @@ internal static class StoreProcessor
         try
         {
             AppendConstSql(source, fieldName, build());
+            return null;
+        }
+        catch (System.NotSupportedException ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    private static string? TryApplyLockClause(ref string sql, SqlBuilder sqlBuilder, SqlBuildContext context, StoreMethodData method)
+    {
+        try
+        {
+            sql = sqlBuilder.ApplyLockClause(sql, context, method.LockMode);
             return null;
         }
         catch (System.NotSupportedException ex)
