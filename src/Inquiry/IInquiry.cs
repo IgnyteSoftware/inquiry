@@ -251,24 +251,43 @@ public interface IInquiry
     {
         command.Validate();
         if (items is null) throw new ArgumentNullException(nameof(items));
-        using var chunks = new InquiryBatchChunkReader<TItem>(items,
+        var chunks = new InquiryBatchChunkReader<TItem>(items,
             command.GetEffectiveChunkSize(MaxBatchSize, MaxParametersPerCommand), cancellationToken);
-        if (!chunks.MoveNext(out var chunk)) return 0;
-
         var total = 0;
-        do
+        Exception? primaryException = null;
+        List<Exception>? cleanupExceptions = null;
+        try
         {
-            if (command.BindItem is null || command.ShouldUseChunk(chunk, MaxParametersPerCommand))
+            while (chunks.MoveNext(out var chunk))
             {
-                total += await ExecuteAsync(command.ForChunk(chunk), cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                for (var i = 0; i < chunk.Count; i++)
-                    total += await ExecuteAsync(command.ForItem(chunk[i]), cancellationToken).ConfigureAwait(false);
+                if (command.BindItem is null || command.ShouldUseChunk(chunk, MaxParametersPerCommand))
+                {
+                    total += await ExecuteAsync(command.ForChunk(chunk), cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    for (var i = 0; i < chunk.Count; i++)
+                        total += await ExecuteAsync(command.ForItem(chunk[i]), cancellationToken).ConfigureAwait(false);
+                }
             }
         }
-        while (chunks.MoveNext(out chunk));
+        catch (Exception exception)
+        {
+            primaryException = exception;
+        }
+        finally
+        {
+            try { chunks.Dispose(); }
+            catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
+        }
+
+        if (primaryException is not null)
+        {
+            InquiryCleanup.ThrowIfCleanupFailed(primaryException, cleanupExceptions);
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primaryException).Throw();
+        }
+
+        InquiryCleanup.ThrowIfAny(cleanupExceptions);
         return total;
     }
 

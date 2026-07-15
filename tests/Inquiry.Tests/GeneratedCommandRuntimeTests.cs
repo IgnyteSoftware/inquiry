@@ -167,9 +167,51 @@ public sealed class GeneratedCommandRuntimeTests
         Assert.Equal(13L, fallback.ParameterValue);
     }
 
+    [Fact]
+    public async Task DefaultInterfaceBatchFallbackPreservesExecutionFailureWhenSourceDisposeAlsoFails()
+    {
+        var primary = new InvalidOperationException("execute failed");
+        IInquiry inquiry = new FallbackInquiry(primary);
+        var command = new InquiryBatchCommand<int>(
+            "UPDATE Items SET Value = @value",
+            static (target, value) =>
+            {
+                var parameter = target.CreateParameter();
+                parameter.ParameterName = "@value";
+                parameter.Value = value;
+                target.AddParameter(parameter);
+            });
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(
+            () => inquiry.ExecuteBatchAsync(command, new ThrowingDisposeEnumerable<int>([11])));
+
+        Assert.Collection(
+            exception.InnerExceptions,
+            item => Assert.Same(primary, item),
+            item => Assert.Equal("enumerator dispose failed", item.Message));
+        Assert.Equal(0, Assert.IsType<FallbackInquiry>(inquiry).BeginTransactionCallCount);
+    }
+
     private readonly struct NullMaterializer : IInquiryEntityMaterializer<object>
     {
         public object Materialize(DbDataReader reader) => new();
+    }
+
+    private sealed class ThrowingDisposeEnumerable<T>(IReadOnlyList<T> items) : IEnumerable<T>
+    {
+        public IEnumerator<T> GetEnumerator() => new Enumerator(items);
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private sealed class Enumerator(IReadOnlyList<T> items) : IEnumerator<T>
+        {
+            private int _index = -1;
+
+            public T Current => items[_index];
+            object System.Collections.IEnumerator.Current => Current!;
+            public bool MoveNext() => ++_index < items.Count;
+            public void Reset() => throw new NotSupportedException();
+            public void Dispose() => throw new InvalidOperationException("enumerator dispose failed");
+        }
     }
 
     private sealed class CommandTypeInterceptor : IInquiryCommandInterceptor
@@ -201,6 +243,10 @@ public sealed class GeneratedCommandRuntimeTests
 
     private sealed class FallbackInquiry : IInquiry
     {
+        private readonly Exception? _executeException;
+
+        internal FallbackInquiry(Exception? executeException = null) => _executeException = executeException;
+
         public string? CommandText { get; private set; }
         public long? ParameterValue { get; private set; }
         public bool UsedValidatingSinglePath { get; private set; }
@@ -239,6 +285,7 @@ public sealed class GeneratedCommandRuntimeTests
         public Task<int> ExecuteAsync(InquiryCommand command, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (_executeException is not null) return Task.FromException<int>(_executeException);
             CommandText = command.CommandText;
             using var dbCommand = new SqliteCommand();
             command.DbCommandBinder?.Invoke(dbCommand);
