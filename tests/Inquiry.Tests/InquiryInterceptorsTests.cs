@@ -169,4 +169,95 @@ public sealed class InquiryInterceptorsTests
         Assert.Equal(1L, count);
         Assert.DoesNotContain("/*", harness.Captured.LastCommandText);
     }
+
+    [Fact]
+    public async Task NPlusOneWarnsAtThresholdInsideScope()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        using (InquiryNPlusOneScope.BeginScope())
+        {
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        }
+
+        var warning = Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+        Assert.Contains("N+1", warning);
+        Assert.Contains("SELECT COUNT(*) FROM Item", warning);
+    }
+
+    [Fact]
+    public async Task NPlusOneStaysSilentOutsideScope()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+
+        Assert.DoesNotContain(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NPlusOneStaysSilentBelowThreshold()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 3));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        using (InquiryNPlusOneScope.BeginScope())
+        {
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        }
+
+        Assert.DoesNotContain(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NPlusOneDistinctSqlDoesNotAccumulate()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        using (InquiryNPlusOneScope.BeginScope())
+        {
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item WHERE Name = 'a'");
+        }
+
+        Assert.DoesNotContain(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NPlusOneStripsTrailingSqlCommenterTag()
+    {
+        await using var harness = await CreateHarnessAsync(s =>
+        {
+            s.AddInquirySqlCommenter("test-app");
+            s.AddInquiryNPlusOneDetection(threshold: 2);
+        });
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = static source => source.Name == "NPlusOneTest",
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var source = new ActivitySource("NPlusOneTest");
+
+        using (InquiryNPlusOneScope.BeginScope())
+        {
+            // Each execution gets a different traceparent, but the fingerprint should match.
+            using (source.StartActivity("op1"))
+                await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            using (source.StartActivity("op2"))
+                await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        }
+
+        var warning = Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+        Assert.Contains("N+1", warning);
+    }
 }

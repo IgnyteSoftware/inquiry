@@ -41,4 +41,19 @@ public static class InquiryInterceptorsServiceCollectionExtensions
         services.AddSingleton<IInquiryCommandInterceptor>(new SqlCommenterInterceptor(applicationName));
         return services;
     }
+
+    /// <summary>
+    /// Detects N+1 query patterns within an <see cref="InquiryNPlusOneScope"/>. When the same SQL
+    /// fingerprint executes <paramref name="threshold"/> times inside a scope, a warning is logged
+    /// exactly once. Outside a scope the interceptor is a single null check — zero cost.
+    /// </summary>
+    public static IServiceCollection AddInquiryNPlusOneDetection(this IServiceCollection services, int threshold = 2)
+    {
+        if (services is null) throw new ArgumentNullException(nameof(services));
+
+        services.AddSingleton<IInquiryCommandInterceptor>(provider => new NPlusOneDetectionInterceptor(
+            provider.GetRequiredService<ILogger<NPlusOneDetectionInterceptor>>(),
+            threshold));
+        return services;
+    }
 }
