@@ -66,6 +66,33 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SqlServerDialectEmitsSqlServerSequentialFactory()
+    {
+        var result = RunGenerator(SequentialGuidSource, dialect: "SqlServer");
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("global::Inquiry.InquiryGuid.NewSqlServerSequential();", text);
+        Assert.DoesNotContain("global::Inquiry.InquiryGuid.NewVersion7();", text);
+        Assert.Equal(4, text.Split("global::Inquiry.InquiryGuid.NewSqlServerSequential();").Length - 1);
+    }
+
+    [Fact]
+    public void PostgreSqlDialectEmitsV7Factory()
+    {
+        var result = RunGenerator(SequentialGuidSource, dialect: "PostgreSql");
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        Assert.Contains("global::Inquiry.InquiryGuid.NewVersion7();", text);
+        Assert.DoesNotContain("global::Inquiry.InquiryGuid.NewSqlServerSequential();", text);
+    }
+
+    [Fact]
     public void NullableSequentialGuidKeyChecksNullAndEmpty()
     {
         const string source = """

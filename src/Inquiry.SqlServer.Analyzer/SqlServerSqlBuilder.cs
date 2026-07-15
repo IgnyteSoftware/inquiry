@@ -44,6 +44,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override bool SupportsDatabaseGeneratedConcurrencyToken => true;
 
+    public override string SequentialGuidFactoryExpression => "global::Inquiry.InquiryGuid.NewSqlServerSequential()";
+
     protected override string CountExpression => "COUNT_BIG(*)";
 
     /// <summary>

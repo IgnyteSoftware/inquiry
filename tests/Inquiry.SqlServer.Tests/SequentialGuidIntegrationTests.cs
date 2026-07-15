@@ -58,7 +58,7 @@ public sealed class SequentialGuidIntegrationTests
         await store.InsertAsync(doc);
 
         Assert.NotEqual(Guid.Empty, doc.Id);
-        Assert.Equal(0x70, doc.Id.ToByteArray(bigEndian: true)[6] & 0xF0);
+        Assert.Equal(0x80, doc.Id.ToByteArray(bigEndian: true)[6] & 0xF0);
 
         var loaded = await store.SelectByKeyAsync(doc.Id);
         Assert.NotNull(loaded);
@@ -98,6 +98,28 @@ public sealed class SequentialGuidIntegrationTests
         await store.UpsertAsync(doc);
         Assert.Equal("updated", (await store.SelectByKeyAsync(doc.Id))!.Title);
         Assert.Single(await store.SelectAllAsync());
+    }
+
+    [SkippableFact]
+    public async Task InsertedKeysAreClusteredIndexFriendly()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "seqguid");
+        var store = harness.GetRequiredService<SeqDocStore>();
+
+        var ids = new List<Guid>();
+        for (var i = 0; i < 20; i++)
+        {
+            var doc = new SeqDoc { Title = $"doc-{i}" };
+            await store.InsertAsync(doc);
+            ids.Add(doc.Id);
+            if (i % 5 == 0) await Task.Delay(15);
+        }
+
+        var serverOrdered = (await store.SelectAllAsync()).Select(d => d.Id).ToList();
+        var clientOrdered = ids.OrderBy(id => new System.Data.SqlTypes.SqlGuid(id)).ToList();
+
+        Assert.Equal(clientOrdered, serverOrdered);
     }
 
     [SkippableFact]
