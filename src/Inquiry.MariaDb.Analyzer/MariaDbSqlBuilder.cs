@@ -41,4 +41,13 @@ internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
 
     public override string BuildDeleteByKeyReturningSql(SqlBuildContext context)
         => BuildDeleteByKeySql(context) + " RETURNING " + context.SelectColumns;
+
+    protected override string BuildLockSuffix(int lockMode) => lockMode switch
+    {
+        1 => " FOR UPDATE",
+        2 => " FOR UPDATE NOWAIT",
+        3 => " FOR UPDATE SKIP LOCKED",
+        4 => " LOCK IN SHARE MODE",
+        _ => "",
+    };
 }

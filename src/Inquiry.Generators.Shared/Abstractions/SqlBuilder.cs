@@ -1185,4 +1185,36 @@ public abstract class SqlBuilder
     /// method down to the multi-row batch-insert body instead. Default false.
     /// </summary>
     public virtual bool SupportsBulkCopy => false;
+
+    // ---- Pessimistic locking ----------------------------------------------------------------
+
+    /// <summary>
+    /// Applies a row-level lock clause to a completed SELECT statement. The base implementation
+    /// appends the trailing lock suffix (<c>FOR UPDATE</c>, <c>FOR SHARE</c>, etc.); SQL Server
+    /// overrides to inject a table hint (<c>WITH (UPDLOCK, ROWLOCK)</c>) after the FROM table.
+    /// <paramref name="lockMode"/> maps to the <c>InquiryLockMode</c> enum values (0 = None).
+    /// Throws <see cref="System.NotSupportedException"/> when the dialect does not support locking
+    /// (SQLite) — the caller catches and degrades to INQ039.
+    /// </summary>
+    public virtual string ApplyLockClause(string selectSql, SqlBuildContext context, int lockMode)
+    {
+        if (lockMode == 0) return selectSql;
+        return selectSql + BuildLockSuffix(lockMode);
+    }
+
+    /// <summary>
+    /// Returns the trailing lock clause for the given <paramref name="lockMode"/>. The base
+    /// implementation covers the standard <c>FOR UPDATE</c> / <c>FOR SHARE</c> syntax used by
+    /// PostgreSQL, MySQL, and Oracle. MariaDB overrides <c>FOR SHARE</c> → <c>LOCK IN SHARE MODE</c>.
+    /// SQL Server overrides to empty (it uses table hints via <see cref="ApplyLockClause"/>).
+    /// SQLite overrides to throw.
+    /// </summary>
+    protected virtual string BuildLockSuffix(int lockMode) => lockMode switch
+    {
+        1 => " FOR UPDATE",
+        2 => " FOR UPDATE NOWAIT",
+        3 => " FOR UPDATE SKIP LOCKED",
+        4 => " FOR SHARE",
+        _ => "",
+    };
 }

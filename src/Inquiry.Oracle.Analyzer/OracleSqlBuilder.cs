@@ -502,4 +502,13 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle requires a FROM clause; a CASE/EXISTS scalar selects FROM DUAL.
     public override string BuildExistsSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
         => base.BuildExistsSql(context, predicates) + " FROM DUAL";
+
+    protected override string BuildLockSuffix(int lockMode) => lockMode switch
+    {
+        1 => " FOR UPDATE",
+        2 => " FOR UPDATE NOWAIT",
+        3 => " FOR UPDATE SKIP LOCKED",
+        4 => throw new System.NotSupportedException("Oracle does not support FOR SHARE locking."),
+        _ => "",
+    };
 }
