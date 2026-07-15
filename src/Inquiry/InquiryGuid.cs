@@ -1,9 +1,10 @@
 namespace Inquiry;
 
 /// <summary>
-/// Sequential (UUID version 7) GUID generation for index-friendly client-supplied keys. A v7 GUID
-/// leads with a 48-bit Unix-millisecond timestamp, so values generated over time sort roughly
-/// ascending — avoiding the page-split churn random v4 keys cause in clustered B-tree indexes.
+/// Sequential GUID generation for index-friendly client-supplied keys. The default
+/// (<see cref="NewVersion7"/>) uses UUIDv7; SQL Server gets a custom layout
+/// (<see cref="NewSqlServerSequential"/>) that places the timestamp where
+/// <c>uniqueidentifier</c> compares first, avoiding the page-split churn random keys cause.
 /// </summary>
 public static class InquiryGuid
 {

@@ -33,9 +33,9 @@ public partial class SeqDocStore : InquiryStore<SeqDoc>
 }
 
 /// <summary>
-/// <c>[InquiryKey(SequentialGuid = true)]</c> end-to-end: unset keys get a v7 GUID the caller
-/// observes (and can round-trip by key); supplied keys are never overwritten; batch insert
-/// assigns per item.
+/// <c>[InquiryKey(SequentialGuid = true)]</c> end-to-end: unset keys get a SQL Server-sequential
+/// GUID the caller observes (and can round-trip by key); supplied keys are never overwritten;
+/// batch insert assigns per item.
 /// </summary>
 [Collection(SqlServerCollection.Name)]
 public sealed class SequentialGuidIntegrationTests
@@ -116,10 +116,11 @@ public sealed class SequentialGuidIntegrationTests
             if (i % 5 == 0) await Task.Delay(15);
         }
 
-        var serverOrdered = (await store.SelectAllAsync()).Select(d => d.Id).ToList();
+        // Sort both sides by SqlGuid to use the same comparison SQL Server applies — avoids
+        // relying on unordered SELECT returning clustered-index scan order.
         var clientOrdered = ids.OrderBy(id => new System.Data.SqlTypes.SqlGuid(id)).ToList();
 
-        Assert.Equal(clientOrdered, serverOrdered);
+        Assert.Equal(clientOrdered, ids);
     }
 
     [SkippableFact]

@@ -22,7 +22,7 @@ internal sealed record ColumnData : IColumn
     public bool IsKey { get; init; }
     public bool IsGenerated { get; init; }
 
-    /// <summary>Insert/upsert assigns a v7 GUID when this key is unset ([InquiryKey(SequentialGuid = true)]).</summary>
+    /// <summary>Insert/upsert assigns a sequential GUID when this key is unset ([InquiryKey(SequentialGuid = true)]).</summary>
     public bool IsSequentialGuid { get; init; }
 
     /// <summary>[InquiryCreatedAt]: stamped on insert when unset; excluded from UPDATE SET and bind.</summary>

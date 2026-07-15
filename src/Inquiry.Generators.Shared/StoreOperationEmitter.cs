@@ -131,8 +131,8 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.Upsert:
                 AppendHeader(source, method, parameters, isAsync: false);
-                // An unset SequentialGuid key gets a fresh v7 before the upsert, making it an
-                // insert of a new row — same "default key generation" semantics as Insert.
+                // An unset SequentialGuid key gets a fresh sequential GUID before the upsert,
+                // making it an insert of a new row — same "default key generation" semantics as Insert.
                 EmitSequentialGuidAssignment(source, entity, firstParameter, indent: "        ", sqlBuilder);
                 // CreatedAt only lands via the insert branch (the conflict-branch SET excludes it),
                 // so the unset-stamp is correct for both outcomes; ModifiedAt is set on both.

@@ -4,7 +4,7 @@ namespace Inquiry.Generators.Tests;
 
 /// <summary>
 /// Sequential GUID keys: <c>[InquiryKey(SequentialGuid = true)]</c> makes insert/upsert/insert-all
-/// assign <c>InquiryGuid.NewVersion7()</c> when the key is unset, leaving supplied keys untouched.
+/// assign a dialect-aware sequential GUID when the key is unset, leaving supplied keys untouched.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
