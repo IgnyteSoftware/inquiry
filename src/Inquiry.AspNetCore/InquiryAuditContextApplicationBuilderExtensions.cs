@@ -16,6 +16,10 @@ public static class InquiryAuditContextApplicationBuilderExtensions
     /// <see cref="HttpContext"/>; when omitted, the middleware defaults to
     /// <see cref="ClaimTypes.NameIdentifier"/>.
     /// </summary>
+    /// <remarks>
+    /// Register this middleware <b>after</b> <c>UseAuthentication</c> so that
+    /// <see cref="HttpContext.User"/> is populated when the resolver runs.
+    /// </remarks>
     public static IApplicationBuilder UseInquiryAuditContext(
         this IApplicationBuilder app,
         Func<HttpContext, string?>? userResolver = null)
