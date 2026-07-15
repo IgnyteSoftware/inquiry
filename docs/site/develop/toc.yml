@@ -2,6 +2,8 @@
   href: project-status.md
 - name: Roadmap
   href: roadmap.md
+- name: Batch performance evidence
+  href: batch-mutation-diagnostic-matrix.md
 - name: Contributing
   href: contributing.md
 - name: Adding a provider

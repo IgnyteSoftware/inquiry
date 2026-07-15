@@ -86,8 +86,8 @@ Oracle array binding is used for generated mutation shapes that supply an array 
 one, such as `DEFAULT VALUES` inserts, reuse the fixed row command. A provider error during array binding
 is surfaced; Inquiry does not retry writes through a different transport after execution has started.
 
-For the measurement scope and limitations behind the current SQLite and SQL Server insert choices, see
-the [batch insert strategy diagnostic decision](https://github.com/JakeOverstreet/inquiry/issues/180).
+For the measured provider matrix, exact commands, retained reports, and diagnostic limitations behind
+these choices, see the [batch mutation diagnostic matrix](../../develop/batch-mutation-diagnostic-matrix.md).
 
 ## Interceptors and fallbacks
 
