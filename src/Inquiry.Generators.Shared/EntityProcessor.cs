@@ -436,7 +436,8 @@ internal static class EntityProcessor
                 computedExpression = null;
             }
 
-            var (foreignKeySchema, foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(foreignKeyAttribute);
+            var (foreignKeySchema, foreignKeyTable, foreignKeyColumn) = ReadForeignKeyReference(
+                foreignKeyAttribute, diagnostics, property.Locations.FirstOrDefault());
 
             // a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
             // converter) maps a non-primitive property to/from a provider primitive.
@@ -835,11 +836,16 @@ internal static class EntityProcessor
     }
 
     /// <summary>
-    /// Extracts the referenced (schema, table, column) from an <c>[InquiryForeignKey]</c>. The 2-arg form is
-    /// <c>(referencedTable, referencedColumn)</c>; the 3-arg form is <c>(localColumn, referencedTable,
-    /// referencedColumn)</c>. Returns (null, null, null) when the property has no foreign-key attribute.
+    /// Extracts the referenced (schema, table, column) from an <c>[InquiryForeignKey]</c>. The 2-arg string
+    /// form is <c>(referencedTable, referencedColumn)</c>; the 3-arg form is <c>(localColumn, referencedTable,
+    /// referencedColumn)</c>. The 1-arg typed form is <c>(typeof(T))</c> and the 2-arg typed form is
+    /// <c>(typeof(T), referencedColumn)</c>. Returns (null, null, null) when the property has no foreign-key
+    /// attribute.
     /// </summary>
-    private static (string?, string?, string?) ReadForeignKeyReference(AttributeData? foreignKeyAttribute)
+    private static (string?, string?, string?) ReadForeignKeyReference(
+        AttributeData? foreignKeyAttribute,
+        ImmutableArray<DiagnosticData>.Builder? diagnostics = null,
+        Location? location = null)
     {
         if (foreignKeyAttribute is null)
         {
@@ -848,6 +854,8 @@ internal static class EntityProcessor
 
         var args = foreignKeyAttribute.ConstructorArguments;
         var schema = GeneratorHelpers.GetNamedString(foreignKeyAttribute, "ReferencedSchema");
+
+        // 3-arg string form: (localColumn, referencedTable, referencedColumn)
         if (args.Length == 3)
         {
             return (schema, args[1].Value as string, args[2].Value as string);
@@ -855,10 +863,126 @@ internal static class EntityProcessor
 
         if (args.Length == 2)
         {
+            // 2-arg typed form: (typeof(T), referencedColumn)
+            if (args[0].Kind == TypedConstantKind.Type && args[0].Value is INamedTypeSymbol targetType2)
+            {
+                var columnOverride = args[1].Value as string;
+                return ResolveTypedForeignKey(targetType2, columnOverride, schema, diagnostics, location);
+            }
+
+            // 2-arg string form: (referencedTable, referencedColumn)
             return (schema, args[0].Value as string, args[1].Value as string);
         }
 
+        // 1-arg typed form: (typeof(T))
+        if (args.Length == 1 && args[0].Kind == TypedConstantKind.Type && args[0].Value is INamedTypeSymbol targetType1)
+        {
+            return ResolveTypedForeignKey(targetType1, null, schema, diagnostics, location);
+        }
+
         return (null, null, null);
+    }
+
+    private static (string?, string?, string?) ResolveTypedForeignKey(
+        INamedTypeSymbol targetType,
+        string? columnOverride,
+        string? schema,
+        ImmutableArray<DiagnosticData>.Builder? diagnostics,
+        Location? location)
+    {
+        var tableAttribute = GeneratorHelpers.GetEntityAttribute(targetType, "InquiryTableAttribute");
+        if (tableAttribute is null)
+        {
+            diagnostics?.Add(DiagnosticData.Create(
+                InquiryDiagnosticDescriptors.TypedForeignKeyTargetMissingTable,
+                location,
+                targetType.Name));
+            return (null, null, null);
+        }
+
+        var tableName = GeneratorHelpers.GetConstructorString(tableAttribute) ?? targetType.Name;
+        schema ??= GeneratorHelpers.GetNamedString(tableAttribute, "Schema");
+
+        if (columnOverride is not null)
+        {
+            // Column override is a property name on the target — resolve its mapped column name.
+            var resolvedColumn = ResolveTargetColumn(targetType, columnOverride);
+            return (schema, tableName, resolvedColumn ?? columnOverride);
+        }
+
+        // Default: resolve the target's [InquiryKey] property.
+        var keyColumn = ResolveTargetKeyColumn(targetType);
+        if (keyColumn is null)
+        {
+            diagnostics?.Add(DiagnosticData.Create(
+                InquiryDiagnosticDescriptors.TypedForeignKeyTargetMissingKey,
+                location,
+                targetType.Name));
+            return (null, null, null);
+        }
+
+        return (schema, tableName, keyColumn);
+    }
+
+    private static string? ResolveTargetKeyColumn(INamedTypeSymbol targetType)
+    {
+        string? firstKey = null;
+        var keyCount = 0;
+
+        foreach (var member in targetType.GetMembers().OfType<IPropertySymbol>())
+        {
+            var keyAttr = GeneratorHelpers.GetEntityAttribute(member, "InquiryKeyAttribute");
+            if (keyAttr is not null)
+            {
+                keyCount++;
+                if (firstKey is null)
+                    firstKey = ResolveMappedColumnName(member);
+            }
+        }
+
+        // Composite keys are ambiguous — require an explicit column override.
+        return keyCount == 1 ? firstKey : null;
+    }
+
+    private static string? ResolveTargetColumn(INamedTypeSymbol targetType, string propertyName)
+    {
+        foreach (var member in targetType.GetMembers().OfType<IPropertySymbol>())
+        {
+            if (!string.Equals(member.Name, propertyName, StringComparison.Ordinal))
+                continue;
+
+            return ResolveMappedColumnName(member);
+        }
+
+        return null;
+    }
+
+    private static string ResolveMappedColumnName(IPropertySymbol property)
+    {
+        var columnAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
+        if (columnAttr is not null)
+            return GeneratorHelpers.GetConstructorString(columnAttr) ?? property.Name;
+
+        var fkAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryForeignKeyAttribute");
+        if (fkAttr is not null)
+        {
+            // 3-arg form: (localColumn, refTable, refCol) — arg[0] is the local column name.
+            // 2-arg and 1-arg forms default to the property name.
+            if (fkAttr.ConstructorArguments.Length == 3 &&
+                fkAttr.ConstructorArguments[0].Value is string explicitColumn &&
+                !string.IsNullOrWhiteSpace(explicitColumn))
+            {
+                return explicitColumn;
+            }
+
+            return property.Name;
+        }
+
+        var keyAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryKeyAttribute");
+        if (keyAttr is not null)
+            return GeneratorHelpers.GetConstructorString(keyAttr) ?? property.Name;
+
+        return property.Name;
     }
 
     private static List<RelationData> DiscoverRelations(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
