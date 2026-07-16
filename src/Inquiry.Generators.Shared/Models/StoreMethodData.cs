@@ -15,6 +15,12 @@ internal enum ProcedureReturnKind
     /// result (driven by <c>[InquiryStoredProcedure(OutputParameter=…/ReturnsValue=true)]</c>).
     /// </summary>
     TaskOfOutputScalar,
+
+    /// <summary>
+    /// <c>Task&lt;(IReadOnlyList&lt;A&gt;, IReadOnlyList&lt;B&gt;, …)&gt;</c> surfacing multiple typed result
+    /// sets from a stored procedure via <c>QueryMultipleAsync</c> and <c>InquiryGridReader</c>.
+    /// </summary>
+    TaskOfMultipleResultSets,
 }
 
 /// <summary>
@@ -160,4 +166,11 @@ internal sealed record StoreMethodData(
     /// OUTPUT parameter. Null when the method does not use INOUT.
     /// </summary>
     public string? ProcedureInOutParameterName { get; init; }
+
+    /// <summary>
+    /// For <see cref="ProcedureReturnKind.TaskOfMultipleResultSets"/>, the fully-qualified entity
+    /// type names for each result set in order. Each element maps to one
+    /// <c>IReadOnlyList&lt;T&gt;</c> in the return tuple. Empty for non-multi-result methods.
+    /// </summary>
+    public EquatableArray<string> ProcedureResultSetTypeFqns { get; init; } = EquatableArray<string>.Empty;
 }

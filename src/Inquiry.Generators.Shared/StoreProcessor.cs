@@ -246,10 +246,18 @@ internal static class StoreProcessor
         string? procOutputDbType = null;
         var procOutputIsString = false;
         var procOutputIsDecimal = false;
+        var procResultSetTypeFqns = ImmutableArray<string>.Empty;
         if (operation == StoreOperation.StoredProcedure)
         {
             if (HasScalarProcedureOutput(attribute))
             {
+                if (TryGetProcedureResultSetElements(method.ReturnType, out _))
+                {
+                    diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
+                        "OutputParameter/ReturnsValue cannot be combined with a multi-result-set return type."));
+                    return null;
+                }
+
                 // The return shape was already validated as Task<TScalar> by HasSupportedReturnType.
                 var scalarSymbol = ((INamedTypeSymbol)method.ReturnType).TypeArguments[0];
                 scalarResultType = scalarSymbol.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
@@ -285,6 +293,11 @@ internal static class StoreProcessor
                 }
 
                 procedureReturn = ProcedureReturnKind.TaskOfOutputScalar;
+            }
+            else if (TryGetProcedureResultSetElements(method.ReturnType, out var resultSetElements))
+            {
+                procedureReturn = ProcedureReturnKind.TaskOfMultipleResultSets;
+                procResultSetTypeFqns = resultSetElements.Select(static s => s.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).ToImmutableArray();
             }
             else
             {
@@ -336,10 +349,10 @@ internal static class StoreProcessor
                 return null;
             }
 
-            if (procedureReturn == ProcedureReturnKind.TaskOfOutputScalar)
+            if (procedureReturn is ProcedureReturnKind.TaskOfOutputScalar or ProcedureReturnKind.TaskOfMultipleResultSets)
             {
                 diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
-                    "IsInputOutput cannot be combined with OutputParameter or ReturnsValue."));
+                    "IsInputOutput cannot be combined with OutputParameter, ReturnsValue, or a multi-result-set return type."));
                 return null;
             }
 
@@ -414,6 +427,7 @@ internal static class StoreProcessor
             ProcedureOutputIsString = procOutputIsString,
             ProcedureOutputIsDecimal = procOutputIsDecimal,
             ProcedureInOutParameterName = procInOutParameterName,
+            ProcedureResultSetTypeFqns = new EquatableArray<string>(procResultSetTypeFqns),
         };
     }
 
@@ -828,6 +842,8 @@ internal static class StoreProcessor
             // in discovery. Without it, the classic IAsyncEnumerable/Task<Entity?>/Task<int> shapes.
             StoreOperation.StoredProcedure when HasScalarProcedureOutput(attribute) || hasInputOutputParameter =>
                 IsTaskOfSingleTypeArgument(returnType),
+            StoreOperation.StoredProcedure when TryGetProcedureResultSetElements(returnType, out _) =>
+                true,
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
             _ => false,
@@ -838,6 +854,46 @@ internal static class StoreProcessor
     private static bool HasScalarProcedureOutput(AttributeData attribute)
         => !string.IsNullOrEmpty(GeneratorHelpers.GetNamedString(attribute, "OutputParameter"))
             || GeneratorHelpers.GetNamedBool(attribute, "ReturnsValue");
+
+    /// <summary>
+    /// Attempts to parse <c>Task&lt;(IReadOnlyList&lt;A&gt;, IReadOnlyList&lt;B&gt;, …)&gt;</c> return types
+    /// for multi-result-set stored procedures. Returns the element type symbols (A, B, …) in order.
+    /// </summary>
+    private static bool TryGetProcedureResultSetElements(ITypeSymbol returnType, out ImmutableArray<ITypeSymbol> elementTypes)
+    {
+        elementTypes = ImmutableArray<ITypeSymbol>.Empty;
+        if (returnType is not INamedTypeSymbol task || !task.IsGenericType || task.TypeArguments.Length != 1
+            || task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Threading.Tasks.Task<TResult>")
+        {
+            return false;
+        }
+
+        var inner = task.TypeArguments[0] as INamedTypeSymbol;
+        if (inner is null || !inner.IsTupleType || inner.TupleElements.Length < 2)
+        {
+            return false;
+        }
+
+        var builder = ImmutableArray.CreateBuilder<ITypeSymbol>(inner.TupleElements.Length);
+        foreach (var element in inner.TupleElements)
+        {
+            if (element.Type is not INamedTypeSymbol listType || !listType.IsGenericType || listType.TypeArguments.Length != 1)
+            {
+                return false;
+            }
+
+            var listFqn = listType.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (listFqn != "global::System.Collections.Generic.IReadOnlyList<T>")
+            {
+                return false;
+            }
+
+            builder.Add(listType.TypeArguments[0]);
+        }
+
+        elementTypes = builder.MoveToImmutable();
+        return true;
+    }
 
     /// <summary>True when any non-CT parameter carries <c>[InquiryParameter(IsInputOutput = true)]</c>.</summary>
     private static bool HasInputOutputParameter(IMethodSymbol method)
@@ -1029,7 +1085,8 @@ internal static class StoreProcessor
         }
         if (invalidEntityNames is not null && (entity.Relations.AsImmutableArray().Any(relation => invalidEntityNames.Contains(relation.ChildEntityFullyQualifiedName)
                 || relation.JunctionEntityFullyQualifiedName is not null && invalidEntityNames.Contains(relation.JunctionEntityFullyQualifiedName))
-            || store.Methods.AsImmutableArray().Any(method => method.ResultElementTypeFqn is not null && invalidEntityNames.Contains(method.ResultElementTypeFqn))))
+            || store.Methods.AsImmutableArray().Any(method => method.ResultElementTypeFqn is not null && invalidEntityNames.Contains(method.ResultElementTypeFqn)
+                || method.ProcedureResultSetTypeFqns.AsImmutableArray().Any(fqn => invalidEntityNames.Contains(fqn)))))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoreEntityNotMapped,
                 store.Location?.ToLocation(), store.Name, "a return or relation dependency with an invalid computed expression"));
@@ -1708,18 +1765,32 @@ internal static class StoreProcessor
                 continue;
             }
 
+            if (method.ProcedureReturn == ProcedureReturnKind.TaskOfMultipleResultSets)
+            {
+                var missingType = method.ProcedureResultSetTypeFqns.AsImmutableArray().FirstOrDefault(fqn => !entities.ContainsKey(fqn));
+                if (missingType is not null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid,
+                        method.Location?.ToLocation(),
+                        method.Name,
+                        $"result-set type '{StripGlobalPrefix(missingType)}' is not a mapped [InquiryTable] entity."));
+                    continue;
+                }
+            }
+
             if (projectionMethods.TryGetValue(method.Name, out var projection))
             {
                 // Project: select the projection's columns and materialize the projection type.
                 StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
                     sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null,
-                    "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName);
+                    "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName, entities: entities);
             }
             else
             {
                 baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
                 StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
-                    sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null, baseSelectField);
+                    sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null, baseSelectField, entities: entities);
             }
         }
 

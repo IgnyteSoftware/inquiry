@@ -31,7 +31,8 @@ internal static class StoreOperationEmitter
         CollectionParameterResolution? deleteAllCollectionResolution = null,
         string? baseSelectField = null,
         string? resultTypeOverride = null,
-        string? structMatOverride = null)
+        string? structMatOverride = null,
+        IReadOnlyDictionary<string, EntityData>? entities = null)
     {
         // a projection-returning select overrides the materialized result type and its struct
         // materializer; all other operations use the store's entity.
@@ -391,7 +392,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.StoredProcedure:
-                EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, structMat, cancellation);
+                EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, structMat, cancellation, entities);
                 break;
         }
     }
@@ -1380,10 +1381,11 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
     }
 
-    private static void EmitStoredProcedure(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string structMat, string cancellation)
+    private static void EmitStoredProcedure(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string structMat, string cancellation, IReadOnlyDictionary<string, EntityData>? entities = null)
     {
         var procParams = Take(method.Parameters, method.Parameters.Count - 1).ToArray();
         var isAsyncEnum = method.ProcedureReturn == ProcedureReturnKind.AsyncEnumerableOfEntity;
+        var isMultiResult = method.ProcedureReturn == ProcedureReturnKind.TaskOfMultipleResultSets;
         var isAsync = !isAsyncEnum;
         var hasScalarOutput = method.ProcedureReturn == ProcedureReturnKind.TaskOfOutputScalar;
         var state = new GeneratedCommandState(method.Parameters);
@@ -1463,23 +1465,44 @@ internal static class StoreOperationEmitter
         source.AppendLine("            },");
         source.AppendLine("            global::System.Data.CommandType.StoredProcedure);");
 
-        switch (method.ProcedureReturn)
+        if (isMultiResult)
         {
-            case ProcedureReturnKind.AsyncEnumerableOfEntity:
-                source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation});");
-                break;
-            case ProcedureReturnKind.TaskOfEntity:
-                source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}).ConfigureAwait(false);");
-                break;
-            case ProcedureReturnKind.TaskOfInt:
-                source.AppendLine($"        return await Inquiry.ExecuteAsync(_cmd, {cancellation}).ConfigureAwait(false);");
-                break;
-            case ProcedureReturnKind.TaskOfOutputScalar:
-                source.AppendLine($"        return await Inquiry.ExecuteProcedureScalarAsync<{method.ScalarResultType}, {state.Type}>(_cmd, \"{GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(method.ProcedureReadBackName!))}\", {cancellation}).ConfigureAwait(false);");
-                break;
+            EmitMultiResultSetReturn(source, method, state, cancellation, entities!);
+        }
+        else
+        {
+            switch (method.ProcedureReturn)
+            {
+                case ProcedureReturnKind.AsyncEnumerableOfEntity:
+                    source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation});");
+                    break;
+                case ProcedureReturnKind.TaskOfEntity:
+                    source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}).ConfigureAwait(false);");
+                    break;
+                case ProcedureReturnKind.TaskOfInt:
+                    source.AppendLine($"        return await Inquiry.ExecuteAsync(_cmd, {cancellation}).ConfigureAwait(false);");
+                    break;
+                case ProcedureReturnKind.TaskOfOutputScalar:
+                    source.AppendLine($"        return await Inquiry.ExecuteProcedureScalarAsync<{method.ScalarResultType}, {state.Type}>(_cmd, \"{GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(method.ProcedureReadBackName!))}\", {cancellation}).ConfigureAwait(false);");
+                    break;
+            }
         }
 
         source.AppendLine("    }");
+    }
+
+    private static void EmitMultiResultSetReturn(StringBuilder source, StoreMethodData method, GeneratedCommandState state, string cancellation, IReadOnlyDictionary<string, EntityData> entities)
+    {
+        var fqns = method.ProcedureResultSetTypeFqns.AsImmutableArray();
+        source.AppendLine($"        await using var _grid = await Inquiry.QueryMultipleAsync<{state.Type}>(_cmd, {cancellation}).ConfigureAwait(false);");
+        for (var i = 0; i < fqns.Length; i++)
+        {
+            var fqn = fqns[i];
+            var structMat = entities[fqn].StructMaterializerFullName;
+            source.AppendLine($"        var _r{i} = await _grid.ReadListAsync<{fqn}, {structMat}>(default, {cancellation}).ConfigureAwait(false);");
+        }
+        var tupleElements = string.Join(", ", Enumerable.Range(0, fqns.Length).Select(static i => $"_r{i}"));
+        source.AppendLine($"        return ({tupleElements});");
     }
 
     /// <summary>
