@@ -443,17 +443,82 @@ internal static class StoreProcessor
         return segments.ToArray();
     }
 
-    private static ParameterData ToParameterData(IParameterSymbol parameter) => new(
-        parameter.Name,
-        parameter.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat),
-        parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-        GeneratorHelpers.IsCancellationToken(parameter.Type))
+    private static ParameterData ToParameterData(IParameterSymbol parameter)
     {
-        ElementComparisonDisplay = GetEnumerableElementComparisonDisplay(parameter.Type),
-        ElementNonNullableComparisonDisplay = GetEnumerableElementType(parameter.Type)?.NonNullableDisplayName,
-        ElementIsNullable = GetEnumerableElementType(parameter.Type)?.IsNullable == true,
-        DefaultValueLiteral = GetDefaultValueLiteral(parameter),
-    };
+        var paramAttr = parameter.GetAttributes().FirstOrDefault(
+            static a => a.AttributeClass?.Name == "InquiryParameterAttribute"
+                && a.AttributeClass.ContainingNamespace?.ToDisplayString() == KnownSymbols.StoreAttributeNamespace);
+
+        var isUnicode = paramAttr is not null
+            ? GeneratorHelpers.GetNamedBool(paramAttr, "IsUnicode", defaultValue: true)
+            : true;
+
+        var typeData = TypeData.Create(parameter.Type, parameter.NullableAnnotation);
+        var dbType = DbTypeMapper.TryGetDbTypeExpression(typeData, isUnicode);
+
+        return new(
+            parameter.Name,
+            parameter.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat),
+            parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            GeneratorHelpers.IsCancellationToken(parameter.Type))
+        {
+            ElementComparisonDisplay = GetEnumerableElementComparisonDisplay(parameter.Type),
+            ElementNonNullableComparisonDisplay = GetEnumerableElementType(parameter.Type)?.NonNullableDisplayName,
+            ElementIsNullable = GetEnumerableElementType(parameter.Type)?.IsNullable == true,
+            DefaultValueLiteral = GetDefaultValueLiteral(parameter),
+            DbTypeExpression = dbType,
+            IsStringType = typeData.SpecialType == SpecialType.System_String,
+            IsDecimalType = typeData.SpecialType == SpecialType.System_Decimal,
+            IsBinaryType = typeData.IsByteArray,
+            DeclaredLength = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Length") : null) ?? 0,
+            DeclaredIsUnicode = isUnicode,
+            DeclaredPrecision = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Precision") : null) ?? 0,
+            DeclaredScale = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Scale") : null) ?? 0,
+            ProcedureValueExpression = BuildProcedureValueExpression(parameter.Name, typeData),
+        };
+    }
+
+    private static string? BuildProcedureValueExpression(string name, TypeData typeData)
+    {
+        if (typeData.IsEnum)
+        {
+            var (castType, unchecked_) = typeData.EnumUnderlyingSpecialType switch
+            {
+                SpecialType.System_Byte   => ("byte",  false),
+                SpecialType.System_SByte  => ("byte",  true),
+                SpecialType.System_Int16  => ("short", false),
+                SpecialType.System_UInt16 => ("short", true),
+                SpecialType.System_Int32  => ("int",   false),
+                SpecialType.System_UInt32 => ("int",   true),
+                SpecialType.System_Int64  => ("long",  false),
+                SpecialType.System_UInt64 => ("long",  true),
+                _                         => ("int",   false),
+            };
+            var cast = unchecked_ ? $"unchecked(({castType}){name})" : $"({castType}){name}";
+            var castValue = unchecked_ ? $"unchecked(({castType}){name}.Value)" : $"({castType}){name}.Value";
+            return typeData.IsNullable
+                ? $"{name}.HasValue ? (object){castValue} : global::System.DBNull.Value"
+                : $"(object){cast}";
+        }
+
+        var reinterpreted = typeData.SpecialType switch
+        {
+            SpecialType.System_SByte  => ("byte",  true),
+            SpecialType.System_UInt16 => ("short", true),
+            SpecialType.System_UInt32 => ("int",   true),
+            SpecialType.System_UInt64 => ("long",  true),
+            _ => (null, false),
+        };
+        if (reinterpreted is { Item1: not null })
+        {
+            var (castType, _) = reinterpreted;
+            return typeData.IsNullable
+                ? $"{name}.HasValue ? (object)unchecked(({castType}){name}.Value) : global::System.DBNull.Value"
+                : $"(object)unchecked(({castType}){name})";
+        }
+
+        return null;
+    }
 
     private static bool HasGenerateInterfaceAttribute(INamedTypeSymbol storeSymbol)
         => storeSymbol.GetAttributes().Any(static a =>

@@ -34,4 +34,40 @@ internal sealed record ParameterData(
     /// interface signatures, which carry the defaults so optional arguments survive interface calls.
     /// </summary>
     public string? DefaultValueLiteral { get; init; }
+
+    /// <summary>
+    /// Fully-qualified <c>System.Data.DbType</c> expression inferred from the CLR type (e.g.
+    /// <c>"global::System.Data.DbType.Int32"</c>), or null when the type has no portable mapping.
+    /// Populated for stored-procedure input parameters so the generator emits <c>DbType</c>.
+    /// </summary>
+    public string? DbTypeExpression { get; init; }
+
+    /// <summary>Whether the parameter's CLR type is a string type (for Size emission).</summary>
+    public bool IsStringType { get; init; }
+
+    /// <summary>Whether the parameter's CLR type is a decimal type (for Precision/Scale emission).</summary>
+    public bool IsDecimalType { get; init; }
+
+    /// <summary>Whether the parameter's CLR type is a binary type (byte[], for Size emission).</summary>
+    public bool IsBinaryType { get; init; }
+
+    /// <summary>Declared length from <c>[InquiryParameter(Length = …)]</c>, or 0.</summary>
+    public int DeclaredLength { get; init; }
+
+    /// <summary>Whether the parameter is Unicode from <c>[InquiryParameter(IsUnicode = …)]</c>. Default true.</summary>
+    public bool DeclaredIsUnicode { get; init; } = true;
+
+    /// <summary>Declared precision from <c>[InquiryParameter(Precision = …)]</c>, or 0.</summary>
+    public int DeclaredPrecision { get; init; }
+
+    /// <summary>Declared scale from <c>[InquiryParameter(Scale = …)]</c>, or 0.</summary>
+    public int DeclaredScale { get; init; }
+
+    /// <summary>
+    /// Precomputed value expression for stored-procedure parameter binding. Includes casts for
+    /// enums (to underlying integer) and unsigned types (unchecked reinterpret to signed partner),
+    /// matching the column-binder convention. Null when no special casting is needed (the emitter
+    /// falls back to the default <c>(object?)name ?? DBNull.Value</c> pattern).
+    /// </summary>
+    public string? ProcedureValueExpression { get; init; }
 }
