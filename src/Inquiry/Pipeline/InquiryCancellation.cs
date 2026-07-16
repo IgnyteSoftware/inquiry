@@ -12,4 +12,12 @@ internal static class InquiryCancellation
         OperationCanceledException exception,
         CancellationToken callerToken)
         => new(exception.Message, exception, callerToken);
+
+    internal static void ThrowIfRequiresCallerToken(
+        Exception exception,
+        CancellationToken callerToken)
+    {
+        if (exception is OperationCanceledException oce && RequiresCallerToken(oce, callerToken))
+            throw AssociateWithCallerToken(oce, callerToken);
+    }
 }

@@ -1,10 +1,12 @@
 using Inquiry.Commands;
 using Inquiry.Connections;
+using Inquiry.Diagnostics;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Parameters;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace Inquiry.Pipeline;
@@ -146,6 +148,35 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         return default;
     }
 
+    private static (Activity? activity, long startTimestamp) StartGridActivity(DbCommand dbCommand)
+    {
+        if (!InquiryTelemetry.ActivitySource.HasListeners() && !InquiryTelemetry.CommandDuration.Enabled)
+            return (null, 0);
+
+        var startTimestamp = Stopwatch.GetTimestamp();
+        Activity? activity = null;
+        if (InquiryTelemetry.ActivitySource.HasListeners())
+        {
+            activity = InquiryTelemetry.ActivitySource.StartActivity("BATCH", ActivityKind.Client);
+            if (activity is not null)
+            {
+                var dbSystem = dbCommand.GetType().Name switch
+                {
+                    "SqliteCommand" => "sqlite",
+                    "SqlCommand" => "microsoft.sql_server",
+                    "NpgsqlCommand" => "postgresql",
+                    "MySqlCommand" => "mysql",
+                    "OracleCommand" => "oracle.db",
+                    _ => "other_sql",
+                };
+                activity.SetTag("db.system.name", dbSystem);
+                activity.SetTag("db.operation.name", "BATCH");
+            }
+        }
+
+        return (activity, startTimestamp);
+    }
+
     // ---- Class-materializer overloads (ad-hoc IInquiry path) -----------------------------
 
     /// <inheritdoc />
@@ -178,6 +209,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
             }
@@ -192,6 +224,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             {
                 commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                 throw;
             }
 
@@ -206,6 +239,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
 
@@ -220,6 +254,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
 
@@ -236,6 +271,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
             }
@@ -281,6 +317,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return list;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
@@ -336,6 +380,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return result;
         }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
+        }
         catch (Exception exception)
         {
             commandResources.Capture(exception);
@@ -358,18 +410,48 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         DbCommand? dbCommand = null;
         DbDataReader? reader = null;
+        Activity? activity = null;
         try
         {
             dbCommand = CreateCommand(connection);
             InitializeCommandSync(dbCommand, command);
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            // SequentialAccess (forward-only per row) but NOT SingleResult — the grid reader needs
-            // NextResult. Interceptors are bypassed (the lifetime spans multiple reads, like bulk insert).
+            long startTimestamp;
+            (activity, startTimestamp) = StartGridActivity(dbCommand);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
-            return new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null);
+            var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null,
+                activity, startTimestamp);
+            activity = null;
+            return grid;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Error, normalized.Message);
+            activity?.Dispose();
+            var exceptions = new List<Exception> { normalized };
+            try
+            {
+                if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) { exceptions.Add(ex); }
+            if (dbCommand is not null)
+            {
+                try { InquiryCommandResources.Dispose(dbCommand); }
+                catch (Exception ex) { exceptions.Add(ex); }
+                try { await dbCommand.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception ex) { exceptions.Add(ex); }
+            }
+            try { await connection.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception ex) { exceptions.Add(ex); }
+            InquiryCleanup.ThrowIfAny(exceptions);
+            throw;
         }
         catch (Exception primaryException)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, primaryException.Message);
+            activity?.Dispose();
             var exceptions = new List<Exception> { primaryException };
             try
             {
@@ -399,6 +481,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         DbCommand? dbCommand = null;
         DbDataReader? reader = null;
+        Activity? activity = null;
         try
         {
             dbCommand = CreateCommand(connection);
@@ -407,11 +490,39 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             command.BindParameters(dbCommand, command.Args);
             _connectionFactory.FinalizeCommand(dbCommand);
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            long startTimestamp;
+            (activity, startTimestamp) = StartGridActivity(dbCommand);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
-            return new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null);
+            var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null,
+                activity, startTimestamp);
+            activity = null;
+            return grid;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Error, normalized.Message);
+            activity?.Dispose();
+            var exceptions = new List<Exception> { normalized };
+            try { if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception ex) { exceptions.Add(ex); }
+            if (dbCommand is not null)
+            {
+                try { InquiryCommandResources.Dispose(dbCommand); }
+                catch (Exception ex) { exceptions.Add(ex); }
+                try { await dbCommand.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception ex) { exceptions.Add(ex); }
+            }
+            try { await connection.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception ex) { exceptions.Add(ex); }
+            InquiryCleanup.ThrowIfAny(exceptions);
+            throw;
         }
         catch (Exception primaryException)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, primaryException.Message);
+            activity?.Dispose();
             var exceptions = new List<Exception> { primaryException };
             try { if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false); }
             catch (Exception exception) { exceptions.Add(exception); }
@@ -463,6 +574,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
             }
@@ -477,6 +589,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             {
                 commandResources.Capture(exception);
                 if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                 throw;
             }
 
@@ -491,6 +604,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
 
@@ -505,6 +619,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
 
@@ -521,6 +636,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
             }
@@ -566,6 +682,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return list;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
@@ -619,6 +743,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return result;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
@@ -683,7 +815,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 bindParameters(dbCommand, args);
                 _connectionFactory.FinalizeCommand(dbCommand);
             }
-            catch (Exception exception) { commandResources.Capture(exception); throw; }
+            catch (Exception exception) { commandResources.Capture(exception); InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken); throw; }
             if (interceptorCommand is not null)
             {
                 try
@@ -695,6 +827,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
             }
@@ -709,6 +842,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             {
                 commandResources.Capture(exception);
                 if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                 throw;
             }
 
@@ -723,6 +857,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
 
@@ -737,6 +872,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
 
@@ -753,6 +889,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     commandResources.Capture(exception);
                     await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                    InquiryCancellation.ThrowIfRequiresCallerToken(exception, cancellationToken);
                     throw;
                 }
             }
@@ -830,6 +967,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return list;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
@@ -925,6 +1070,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return result;
         }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
+        }
         catch (Exception exception)
         {
             commandResources.Capture(exception);
@@ -960,6 +1113,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return recordsAffected;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
@@ -1004,6 +1165,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             // OperationCanceledException carrying an internal/default token. Preserve the public
             // Inquiry contract by associating the failure with the caller token that reached ADO.NET.
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
             if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
             throw normalized;
         }
@@ -1052,6 +1214,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return readBack;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (HasInterceptors) await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
@@ -1111,6 +1281,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return result;
         }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
+        }
         catch (Exception exception)
         {
             commandResources.Capture(exception);
@@ -1154,6 +1332,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return readBack;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
@@ -1221,6 +1407,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
             if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
             throw normalized;
         }
@@ -1288,6 +1475,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return recordsAffected;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            commandResources.Capture(normalized);
+            if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
@@ -1429,6 +1624,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                     await resources.DisposeAsync().ConfigureAwait(false);
                 }
             }
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            primaryException = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            throw primaryException;
         }
         catch (Exception exception)
         {
