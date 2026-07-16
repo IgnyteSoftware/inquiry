@@ -83,11 +83,108 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("await foreach (var _c in Inquiry.QueryAsync<", text);
     }
 
+    private const string MixedRelationEagerSource = """
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("Author")]
+        public sealed class Author
+        {
+            [InquiryKey] public int Id { get; set; }
+            [InquiryColumn] public string Name { get; set; } = string.Empty;
+        }
+
+        [InquiryTable("Tag")]
+        public sealed class Tag
+        {
+            [InquiryKey] public int Id { get; set; }
+            [InquiryColumn] public int PostId { get; set; }
+            [InquiryColumn] public string Label { get; set; } = string.Empty;
+        }
+
+        [InquiryTable("Post")]
+        public sealed class Post
+        {
+            [InquiryKey] public int Id { get; set; }
+            [InquiryColumn] public int AuthorId { get; set; }
+
+            [InquiryRelation(nameof(AuthorId))]
+            public Author? Author { get; set; }
+
+            [InquiryRelation(nameof(Tag.PostId))]
+            public IReadOnlyList<Tag> Tags { get; set; } = new List<Tag>();
+        }
+
+        public partial class PostStore : InquiryStore<Post>
+        {
+            [InquirySelectOneByKeyEager]
+            public partial Task<Post?> GetWithRelationsAsync(int id, CancellationToken ct = default);
+        }
+        """;
+
+    [Theory]
+    [InlineData("Sqlite")]
+    [InlineData("SqlServer")]
+    [InlineData("PostgreSql")]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    public void SelectOneByKeyEager_MixedCollectionAndReference_UsesOneGridCommand(string dialect)
+    {
+        var result = RunGenerator(MixedRelationEagerSource, dialect: dialect);
+        Assert.Empty(result.GeneratorDiagnostics);
+
+        var text = GetPostStoreText(result);
+
+        // One grid command containing all three result sets.
+        Assert.Contains("Inquiry.QueryMultipleAsync(", text);
+
+        // Reference relation uses the _ByKey subquery const and ReadGeneratedSingleOrDefaultAsync.
+        Assert.Contains("_sql_Author_ByKey", text);
+        Assert.Contains("_grid.ReadGeneratedSingleOrDefaultAsync<", text);
+
+        // Collection relation uses the standard const and ReadListAsync.
+        Assert.Contains("_sql_Tags", text);
+        Assert.Contains("_grid.ReadListAsync<", text);
+
+        // Two parameters: parent key + collection FK (reference relation reuses parent key via subquery).
+        Assert.Contains("_p0.ParameterName", text);
+        Assert.Contains("_p1.ParameterName", text);
+        Assert.DoesNotContain("_p2", text);
+    }
+
+    [Fact]
+    public void SelectOneByKeyEager_MixedCollectionAndReference_UsesOneGridCommand_Oracle()
+    {
+        var result = RunGenerator(MixedRelationEagerSource, dialect: "Oracle");
+        Assert.Empty(result.GeneratorDiagnostics);
+
+        var text = GetPostStoreText(result);
+
+        Assert.Contains("Inquiry.QueryMultipleAsync(", text);
+        Assert.Contains("_sql_Author_ByKey", text);
+        Assert.Contains("_grid.ReadGeneratedSingleOrDefaultAsync<", text);
+        Assert.Contains("_grid.ReadListAsync<", text);
+        Assert.Contains("DBMS_SQL.RETURN_RESULT", text);
+    }
+
     private static string GetRegionStoreText(GeneratorTestResult result)
     {
         var generatedStore = Assert.Single(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("RegionStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        return generatedStore.GetText().ToString();
+    }
+
+    private static string GetPostStoreText(GeneratorTestResult result)
+    {
+        var generatedStore = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("PostStore.InquiryStore.g.cs", StringComparison.Ordinal));
         return generatedStore.GetText().ToString();
     }
 }

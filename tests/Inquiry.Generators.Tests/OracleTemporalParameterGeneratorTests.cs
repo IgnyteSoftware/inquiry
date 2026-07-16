@@ -238,13 +238,16 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_p0.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_key).ToDateTime(global::System.TimeOnly.MinValue);", convertedGrid);
         Assert.Contains("_p1.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_key).ToDateTime(global::System.TimeOnly.MinValue);", convertedGrid);
 
-        Assert.Contains("_p.Value = (object)_arg.ToTimeSpan();", directSeparate);
-        Assert.Contains("_p.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_arg).ToDateTime(global::System.TimeOnly.MinValue);", directSeparate);
-        Assert.Contains("_entity.OwnerId,", directSeparate);
+        // Reference relations now use the grid path with a scalar subquery — one param only.
+        Assert.Contains("_p0.Value = (object)_key.ToTimeSpan();", directSeparate);
+        Assert.DoesNotContain("_p1", directSeparate);
+        Assert.DoesNotContain("_entity.OwnerId,", directSeparate);
+        Assert.Contains("ReadGeneratedSingleOrDefaultAsync<", directSeparate);
 
-        Assert.Contains("_p.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessTimeConverter>.Instance.ToProvider(_arg).ToTimeSpan();", convertedSeparate);
-        Assert.Contains("_p.Value = (object)_arg.ToTimeSpan();", convertedSeparate);
-        Assert.Contains("_entity.OwnerId,", convertedSeparate);
+        Assert.Contains("_p0.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessTimeConverter>.Instance.ToProvider(_key).ToTimeSpan();", convertedSeparate);
+        Assert.DoesNotContain("_p1", convertedSeparate);
+        Assert.DoesNotContain("_entity.OwnerId,", convertedSeparate);
+        Assert.Contains("ReadGeneratedSingleOrDefaultAsync<", convertedSeparate);
     }
 
     [Theory]
@@ -271,11 +274,14 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_p1.Value = (object?)_key ?? global::System.DBNull.Value;", directGrid);
         Assert.Contains("_p0.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_key);", convertedGrid);
         Assert.Contains("_p1.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_key);", convertedGrid);
-        Assert.Contains("_p.DbType = global::System.Data.DbType.Time;", directSeparate);
-        Assert.Contains("_p.Value = (object?)_arg ?? global::System.DBNull.Value;", directSeparate);
-        Assert.Contains("_p.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessDateConverter>.Instance.ToProvider(_arg);", directSeparate);
-        Assert.Contains("_p.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessTimeConverter>.Instance.ToProvider(_arg);", convertedSeparate);
-        Assert.Contains("_p.Value = (object?)_arg ?? global::System.DBNull.Value;", convertedSeparate);
+        // Reference relations now use the grid path — one parent key param, no FK param.
+        Assert.Contains("_p0.DbType = global::System.Data.DbType.Time;", directSeparate);
+        Assert.Contains("_p0.Value = (object?)_key ?? global::System.DBNull.Value;", directSeparate);
+        Assert.DoesNotContain("_p1", directSeparate);
+        Assert.Contains("ReadGeneratedSingleOrDefaultAsync<", directSeparate);
+        Assert.Contains("_p0.Value = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.BusinessTimeConverter>.Instance.ToProvider(_key);", convertedSeparate);
+        Assert.DoesNotContain("_p1", convertedSeparate);
+        Assert.Contains("ReadGeneratedSingleOrDefaultAsync<", convertedSeparate);
 
         foreach (var text in new[] { directGrid, convertedGrid, directSeparate, convertedSeparate })
         {

@@ -1681,6 +1681,11 @@ internal static class StoreProcessor
                 AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildSelectByFieldSql(childCtx, new List<IColumn> { filterColumn }));
                 AppendConstSql(source, "_sql_" + relation.PropertyName + "_All",
                     sqlBuilder.BuildSelectAllFilteredSql(childCtx, filterColumn.ColumnName, ctx, parentKeyColumn));
+                if (!relation.IsCollection && !relation.IsManyToMany)
+                {
+                    AppendConstSql(source, "_sql_" + relation.PropertyName + "_ByKey",
+                        sqlBuilder.BuildSelectByKeySubquerySql(childCtx, filterColumn.ColumnName, ctx, parentKeyColumn));
+                }
                 if (hasIncludeDeletedSelectAllEager)
                 {
                     AppendConstSql(source, "_sql_" + relation.PropertyName + "_All_IncludeDeleted",

@@ -316,6 +316,20 @@ public abstract class SqlBuilder
             + " WHERE " + AppendWhere(inPredicate, childContext.ActiveRowPredicate);
     }
 
+    public string BuildSelectByKeySubquerySql(
+        SqlBuildContext childContext,
+        string childKeyColumnName,
+        SqlBuildContext parentContext,
+        string parentForeignKeyColumnName)
+    {
+        var subquery = "SELECT " + QuoteIdentifier(parentForeignKeyColumnName)
+            + " FROM " + parentContext.Table
+            + " WHERE " + AppendWhere(parentContext.KeyWhereClause, parentContext.ActiveRowPredicate);
+        var predicate = QuoteIdentifier(childKeyColumnName) + " = (" + subquery + ")";
+        return "SELECT " + childContext.SelectColumns + " FROM " + childContext.Table
+            + " WHERE " + AppendWhere(predicate, childContext.ActiveRowPredicate);
+    }
+
     /// <summary>
     /// Builds the parameterless many-to-many child SELECT used by an all-eager load. Only children
     /// connected to an eligible parent through an eligible junction row are returned. The child key

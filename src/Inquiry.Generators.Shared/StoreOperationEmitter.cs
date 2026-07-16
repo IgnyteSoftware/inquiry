@@ -2181,17 +2181,16 @@ internal static class StoreOperationEmitter
 
     private static void EmitSelectOneByKeyEager(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
     {
-        // Single-round-trip (grid) path when EVERY relation is key-filterable — a collection or many-to-many
-        // child filtered by the parent key, so it folds into one multi-result command (parent + children in
-        // one round trip, the Dapper QueryMultiple / multi-result-set stored-proc shape). A belongs-to
-        // (reference) relation filters by a parent column value known only after the parent materializes, so
-        // entities with one keep the multi-round-trip path. The grid path also requires a dialect that can
-        // return multiple result sets from one command — a ;-separated batch on most dialects, Oracle's
-        // DBMS_SQL.RETURN_RESULT PL/SQL wrapper via the MultiResultBatch* hooks.
+        // Single-round-trip (grid) path when EVERY relation can be expressed with the input key alone:
+        // collection and many-to-many children filter by the parent key directly; reference (belongs-to)
+        // children use a scalar subquery (SELECT parentFK FROM parent WHERE parentPK = @key) so the
+        // value is resolved server-side without materializing the parent first. The grid path requires a
+        // dialect that can return multiple result sets from one command — a ;-separated batch on most
+        // dialects, Oracle's DBMS_SQL.RETURN_RESULT PL/SQL wrapper via the MultiResultBatch* hooks.
         var allKeyFilterable = entity.Relations.Count > 0 && sqlBuilder.SupportsMultiResultBatch;
         foreach (var relation in entity.Relations)
         {
-            if (!relationChildEntities.ContainsKey(relation.PropertyName) || !(relation.IsCollection || relation.IsManyToMany))
+            if (!relationChildEntities.ContainsKey(relation.PropertyName))
             {
                 allKeyFilterable = false;
                 break;
@@ -2250,22 +2249,26 @@ internal static class StoreOperationEmitter
         AppendHeader(source, method, parameters, isAsync: true);
 
         // Combined command text: parent SELECT + each child SELECT, joined via the dialect's batch hooks.
+        // Collection and M:N relations use the by-FK const; reference (belongs-to) relations use the
+        // _ByKey subquery const so the FK value is resolved server-side in the same round trip.
         var sqlFields = new List<string> { parentSelectField };
         foreach (var relation in entity.Relations)
         {
-            sqlFields.Add($"_sql_{relation.PropertyName}");
+            var suffix = relation.IsCollection || relation.IsManyToMany ? "" : "_ByKey";
+            sqlFields.Add($"_sql_{relation.PropertyName}{suffix}");
         }
         AppendGridCommandText(source, sqlBuilder, sqlFields);
 
-        // Deduped parameters, all bound to the input key value: the parent key, plus each collection
-        // relation's FK param. Many-to-many children filter by the parent-key param, so they add nothing.
+        // Deduped parameters, all bound to the input key value. Non-M:N collection children filter by
+        // their own FK param; M:N and reference children use the parent-key param (already first).
         var paramNames = new List<string> { parentKeyProp };
         foreach (var relation in entity.Relations)
         {
-            var paramName = relation.IsManyToMany ? parentKeyProp : relation.ForeignKeyProperty;
-            if (!paramNames.Contains(paramName))
+            if (relation.IsCollection && !relation.IsManyToMany)
             {
-                paramNames.Add(paramName);
+                var paramName = relation.ForeignKeyProperty;
+                if (!paramNames.Contains(paramName))
+                    paramNames.Add(paramName);
             }
         }
 
@@ -2293,7 +2296,10 @@ internal static class StoreOperationEmitter
         foreach (var relation in entity.Relations)
         {
             var childEntity = relationChildEntities[relation.PropertyName];
-            source.AppendLine($"            _entity.{relation.PropertyName} = await _grid.ReadListAsync<{childEntity.FullyQualifiedName}, {childEntity.StructMaterializerFullName}>(default, {cancellation}).ConfigureAwait(false);");
+            if (relation.IsCollection || relation.IsManyToMany)
+                source.AppendLine($"            _entity.{relation.PropertyName} = await _grid.ReadListAsync<{childEntity.FullyQualifiedName}, {childEntity.StructMaterializerFullName}>(default, {cancellation}).ConfigureAwait(false);");
+            else
+                source.AppendLine($"            _entity.{relation.PropertyName} = await _grid.ReadGeneratedSingleOrDefaultAsync<{childEntity.FullyQualifiedName}, {childEntity.StructMaterializerFullName}>(default, {cancellation}).ConfigureAwait(false);");
         }
         source.AppendLine("        }");
         source.AppendLine("        return _entity;");
@@ -2392,7 +2398,6 @@ internal static class StoreOperationEmitter
                 ? $"        foreach (var {loopVar} in await _grid.ReadListAsync<{rowType}, {rowStructMat}>(default, {cancellation}).ConfigureAwait(false))"
                 : $"        await foreach (var {loopVar} in Inquiry.QueryAsync<{rowType}, byte, {rowStructMat}>({EmptyGeneratedCommand(sqlField)}, default, {cancellation}).ConfigureAwait(false))");
 
-        source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
         if (useGrid)
         {
             // The combined command is parameterless: the child _All / _Junction selects use subquery
@@ -2410,10 +2415,11 @@ internal static class StoreOperationEmitter
             source.AppendLine("        await using var _grid = await Inquiry.QueryMultipleAsync(");
             source.AppendLine($"            {EmptyGeneratedCommand("_sql")},");
             source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
-            source.AppendLine($"        _entities.AddRange(await _grid.ReadListAsync<{entityType}, {parentStructMat}>(default, {cancellation}).ConfigureAwait(false));");
+            source.AppendLine($"        var _entities = await _grid.ReadListAsync<{entityType}, {parentStructMat}>(default, {cancellation}).ConfigureAwait(false);");
         }
         else
         {
+            source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
             source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}, byte, {parentStructMat}>({EmptyGeneratedCommand(parentSelectField)}, default, {cancellation}).ConfigureAwait(false))");
             source.AppendLine("            _entities.Add(_e);");
         }
@@ -2450,7 +2456,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"            _childByKey_{relation.PropertyName}[{NonNullableValueExpression(childKey.Type, $"_c.{childKey.PropertyName}")}] = _c;");
                 source.AppendLine("        }");
 
-                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>();");
+                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>(_entities.Count);");
                 AppendRowLoop("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
                 source.AppendLine("        {");
                 if (jChildFk.Type.IsNullable)
@@ -2478,7 +2484,7 @@ internal static class StoreOperationEmitter
                 var childFkNullable = childFkColumn?.Type.IsNullable ?? false;
                 var fkKeyType = childFkColumn?.Type.NonNullableDisplayName ?? "object";
 
-                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{fkKeyType}, global::System.Collections.Generic.List<{childType}>>();");
+                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{fkKeyType}, global::System.Collections.Generic.List<{childType}>>(_entities.Count);");
                 AppendRowLoop("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                 source.AppendLine("        {");
                 if (childFkNullable)
@@ -2504,7 +2510,7 @@ internal static class StoreOperationEmitter
                 var childKeyNullable = childEntity.Keys[0].Type.IsNullable;
                 var parentKeyType = childEntity.Keys[0].Type.NonNullableDisplayName;
 
-                source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, {childType}>();");
+                source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, {childType}>(_entities.Count);");
                 if (childKeyNullable)
                 {
                     AppendRowLoop("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
