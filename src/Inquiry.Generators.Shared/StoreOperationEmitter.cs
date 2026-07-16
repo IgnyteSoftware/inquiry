@@ -1390,10 +1390,18 @@ internal static class StoreOperationEmitter
         var hasScalarOutput = method.ProcedureReturn == ProcedureReturnKind.TaskOfOutputScalar;
         var state = new GeneratedCommandState(method.Parameters);
 
+        var returnsRows = method.ProcedureReturn is ProcedureReturnKind.AsyncEnumerableOfEntity
+            or ProcedureReturnKind.TaskOfEntity or ProcedureReturnKind.TaskOfMultipleResultSets;
+        var resultSetCount = isMultiResult ? method.ProcedureResultSetTypeFqns.Count : 1;
+        var refCursorCall = returnsRows
+            ? sqlBuilder.BuildProcedureReaderCall(method.ProcedureName!, procParams.Select(static p => p.Name).ToList(), resultSetCount)
+            : null;
+
         AppendHeader(source, method, parameters, isAsync: isAsync);
 
+        var commandText = refCursorCall ?? method.ProcedureName!;
         source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
-        source.AppendLine($"            \"{GeneratorHelpers.Escape(method.ProcedureName!)}\",");
+        source.AppendLine($"            \"{GeneratorHelpers.Escape(commandText)}\",");
         source.AppendLine($"            {state.Value},");
         source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
         source.AppendLine("            {");
@@ -1402,7 +1410,10 @@ internal static class StoreOperationEmitter
         {
             var p = procParams[i];
             source.AppendLine($"                var _p{i} = _c.CreateParameter();");
-            source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(p.Name))}\";");
+            var paramName = refCursorCall is not null
+                ? sqlBuilder.RuntimeParameterName(p.Name)
+                : sqlBuilder.StoredProcedureParameterName(p.Name);
+            source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(paramName)}\";");
             if (p.DbTypeExpression is not null)
             {
                 source.AppendLine($"                _p{i}.DbType = {p.DbTypeExpression};");
@@ -1463,7 +1474,10 @@ internal static class StoreOperationEmitter
             source.AppendLine($"                _c.Parameters.Add(_p{index});");
         }
         source.AppendLine("            },");
-        source.AppendLine("            global::System.Data.CommandType.StoredProcedure);");
+        var commandTypeExpr = refCursorCall is not null
+            ? "global::System.Data.CommandType.Text"
+            : "global::System.Data.CommandType.StoredProcedure";
+        source.AppendLine($"            {commandTypeExpr});");
 
         if (isMultiResult)
         {

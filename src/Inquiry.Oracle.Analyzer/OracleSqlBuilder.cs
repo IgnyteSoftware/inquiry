@@ -126,6 +126,47 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             : formalName;
 
     /// <summary>
+    /// Oracle stored procedures cannot return result sets directly; the caller must pass an
+    /// <c>OUT SYS_REFCURSOR</c> parameter. Rather than requiring users to declare cursor parameters
+    /// in C#, the generator wraps entity-returning procedure calls in a PL/SQL block that declares
+    /// local cursor variables, passes them to the procedure, and surfaces each one through
+    /// <c>DBMS_SQL.RETURN_RESULT</c> (12c+ implicit result sets). ODP.NET exposes implicit results
+    /// through <c>ExecuteReader</c>/<c>NextResult</c>, so the shared reader pipeline consumes them
+    /// unchanged. The block never references <c>:rc</c>, so <c>FinalizeCommand</c>'s returning-block
+    /// detection does not fire.
+    /// </summary>
+    public override string? BuildProcedureReaderCall(string procedureName, IReadOnlyList<string> parameterNames, int resultSetCount)
+    {
+        var sb = new System.Text.StringBuilder("DECLARE ");
+        for (var i = 0; i < resultSetCount; i++)
+        {
+            if (i > 0) sb.Append(' ');
+            sb.Append('c').Append(i).Append(" SYS_REFCURSOR;");
+        }
+        sb.Append(" BEGIN ").Append(procedureName).Append('(');
+
+        var argIndex = 0;
+        for (var i = 0; i < parameterNames.Count; i++)
+        {
+            if (argIndex++ > 0) sb.Append(", ");
+            sb.Append(':').Append(OracleBindName.Encode(parameterNames[i]));
+        }
+        for (var i = 0; i < resultSetCount; i++)
+        {
+            if (argIndex++ > 0) sb.Append(", ");
+            sb.Append('c').Append(i);
+        }
+        sb.Append("); ");
+
+        for (var i = 0; i < resultSetCount; i++)
+        {
+            sb.Append("DBMS_SQL.RETURN_RESULT(c").Append(i).Append("); ");
+        }
+        sb.Append("END;");
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// ODP.NET's <c>OracleParameter.set_DbType</c> rejects <c>DbType.DateTime2</c> ("Value does not fall
     /// within the expected range"), so a <see cref="System.DateTime"/> parameter binds
     /// <c>DbType.DateTime</c> — which Oracle accepts and binds to its DATE/TIMESTAMP types — instead of

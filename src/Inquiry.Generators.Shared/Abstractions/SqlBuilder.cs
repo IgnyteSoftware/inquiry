@@ -93,6 +93,16 @@ public abstract class SqlBuilder
     public virtual string RuntimeParameterNameFromSql(string sqlParameterName) => sqlParameterName;
     public virtual string StoredProcedureParameterName(string formalName)
         => formalName.Length > 0 && formalName[0] is '@' or ':' or '$' or '?' ? formalName : "@" + formalName;
+
+    /// <summary>
+    /// Wraps a stored procedure call in a provider-specific block that surfaces OUT REF CURSOR
+    /// results through implicit result sets (<c>DBMS_SQL.RETURN_RESULT</c>). Returns <c>null</c>
+    /// when the provider handles stored procedure result sets natively (all providers except Oracle).
+    /// When non-null, the emitter uses <c>CommandType.Text</c> with the returned command text and
+    /// text-mode parameter naming (<see cref="ParameterName"/>).
+    /// </summary>
+    public virtual string? BuildProcedureReaderCall(string procedureName, IReadOnlyList<string> parameterNames, int resultSetCount)
+        => null;
     public virtual string BatchInsertSqlParameterPrefix => "@p";
     public virtual string BatchInsertRuntimeParameterPrefix => "@p";
 
