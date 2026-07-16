@@ -160,21 +160,34 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             activity = InquiryTelemetry.ActivitySource.StartActivity("BATCH", ActivityKind.Client);
             if (activity is not null)
             {
-                var dbSystem = dbCommand.GetType().Name switch
-                {
-                    "SqliteCommand" => "sqlite",
-                    "SqlCommand" => "microsoft.sql_server",
-                    "NpgsqlCommand" => "postgresql",
-                    "MySqlCommand" => "mysql",
-                    "OracleCommand" => "oracle.db",
-                    _ => "other_sql",
-                };
+                var dbSystem = InquiryTelemetry.MapDbSystem(dbCommand);
                 activity.SetTag("db.system.name", dbSystem);
                 activity.SetTag("db.operation.name", "BATCH");
             }
         }
 
         return (activity, startTimestamp);
+    }
+
+    private static void RecordGridFailure(Activity? activity, DbCommand? dbCommand, long startTimestamp, Exception exception)
+    {
+        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+
+        if (startTimestamp != 0 && dbCommand is not null)
+        {
+            InquiryTelemetry.CommandDuration.Record(
+                Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+                new KeyValuePair<string, object?>("db.system.name", InquiryTelemetry.MapDbSystem(dbCommand)),
+                new KeyValuePair<string, object?>("db.operation.name", "BATCH"),
+                new KeyValuePair<string, object?>("error.type", errorType));
+        }
+
+        if (activity is not null)
+        {
+            activity.SetTag("error.type", errorType);
+            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            activity.Dispose();
+        }
     }
 
     // ---- Class-materializer overloads (ad-hoc IInquiry path) -----------------------------
@@ -411,12 +424,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         DbCommand? dbCommand = null;
         DbDataReader? reader = null;
         Activity? activity = null;
+        long startTimestamp = 0;
         try
         {
             dbCommand = CreateCommand(connection);
             InitializeCommandSync(dbCommand, command);
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            long startTimestamp;
             (activity, startTimestamp) = StartGridActivity(dbCommand);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
             var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null,
@@ -428,8 +441,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-            activity?.SetStatus(ActivityStatusCode.Error, normalized.Message);
-            activity?.Dispose();
+            RecordGridFailure(activity, dbCommand, startTimestamp, normalized);
             var exceptions = new List<Exception> { normalized };
             try
             {
@@ -450,8 +462,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch (Exception primaryException)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, primaryException.Message);
-            activity?.Dispose();
+            RecordGridFailure(activity, dbCommand, startTimestamp, primaryException);
             var exceptions = new List<Exception> { primaryException };
             try
             {
@@ -482,6 +493,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         DbCommand? dbCommand = null;
         DbDataReader? reader = null;
         Activity? activity = null;
+        long startTimestamp = 0;
         try
         {
             dbCommand = CreateCommand(connection);
@@ -490,7 +502,6 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             command.BindParameters(dbCommand, command.Args);
             _connectionFactory.FinalizeCommand(dbCommand);
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            long startTimestamp;
             (activity, startTimestamp) = StartGridActivity(dbCommand);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
             var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null,
@@ -502,8 +513,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-            activity?.SetStatus(ActivityStatusCode.Error, normalized.Message);
-            activity?.Dispose();
+            RecordGridFailure(activity, dbCommand, startTimestamp, normalized);
             var exceptions = new List<Exception> { normalized };
             try { if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false); }
             catch (Exception ex) { exceptions.Add(ex); }
@@ -521,8 +531,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch (Exception primaryException)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, primaryException.Message);
-            activity?.Dispose();
+            RecordGridFailure(activity, dbCommand, startTimestamp, primaryException);
             var exceptions = new List<Exception> { primaryException };
             try { if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false); }
             catch (Exception exception) { exceptions.Add(exception); }

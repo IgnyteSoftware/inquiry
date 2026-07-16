@@ -155,15 +155,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
     /// Maps the concrete ADO.NET command type to the OpenTelemetry <c>db.system.name</c> value, so
     /// telemetry works with any registered provider without per-provider wiring.
     /// </summary>
-    private static string MapDbSystem(DbCommand command) => command.GetType().Name switch
-    {
-        "SqliteCommand" => "sqlite",
-        "SqlCommand" => "microsoft.sql_server",
-        "NpgsqlCommand" => "postgresql",
-        "MySqlCommand" => "mysql",
-        "OracleCommand" => "oracle.db",
-        _ => "other_sql",
-    };
+    private static string MapDbSystem(DbCommand command) => InquiryTelemetry.MapDbSystem(command);
 
     /// <summary>Extracts the leading SQL keyword (SELECT/INSERT/...) as the span/log operation name.</summary>
     private static string OperationName(string commandText)

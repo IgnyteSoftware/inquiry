@@ -1,7 +1,9 @@
 using Inquiry.Commands;
+using Inquiry.Diagnostics;
 using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using System.Data.Common;
+using System.Diagnostics;
 
 namespace Inquiry;
 
@@ -16,9 +18,8 @@ namespace Inquiry;
 /// <remarks>
 /// Result sets must be read exactly once, in declaration order, with the matching entity + materializer.
 /// Reads use <see cref="System.Data.CommandBehavior.SequentialAccess"/> (generated materializers read each
-/// column once in ascending ordinal order), so a forward-only read of each set is safe. This path bypasses
-/// command interceptors / telemetry — its lifetime spans multiple reads, so there is no single
-/// command-executed moment to surface (the same trade-off the bulk-insert path makes).
+/// column once in ascending ordinal order), so a forward-only read of each set is safe. When telemetry is
+/// enabled, the grid span covers the entire reader lifetime — from command execution to disposal.
 /// </remarks>
 public sealed class InquiryGridReader : IAsyncDisposable
 {
@@ -26,15 +27,21 @@ public sealed class InquiryGridReader : IAsyncDisposable
     private readonly DbCommand _command;
     private readonly DbConnection? _ownedConnection;
     private readonly IDisposable? _lease;
+    private readonly Activity? _activity;
+    private readonly long _startTimestamp;
     private bool _hasResultSet;
     private bool _disposed;
+    private bool _faulted;
 
-    internal InquiryGridReader(DbDataReader reader, DbCommand command, DbConnection? ownedConnection, IDisposable? lease)
+    internal InquiryGridReader(DbDataReader reader, DbCommand command, DbConnection? ownedConnection, IDisposable? lease,
+        Activity? activity = null, long startTimestamp = 0)
     {
         _reader = reader;
         _command = command;
         _ownedConnection = ownedConnection;
         _lease = lease;
+        _activity = activity;
+        _startTimestamp = startTimestamp;
         _hasResultSet = true;
     }
 
@@ -49,22 +56,30 @@ public sealed class InquiryGridReader : IAsyncDisposable
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
     {
         EnsureResultSet();
-        TEntity? result = null;
-        if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            result = materializer.Materialize(_reader);
-            // Match QuerySingleOrDefaultAsync: a "single" read rejects a second row rather than silently
-            // truncating the set. SequentialAccess only forbids re-reading columns, not advancing rows, so
-            // the materializer has already consumed row 1's columns and this Read just probes for a second.
+            TEntity? result = null;
             if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                throw new InvalidOperationException(
-                    "ReadSingleOrDefaultAsync expected zero or one row, but the result set returned multiple rows.");
+                result = materializer.Materialize(_reader);
+                // Match QuerySingleOrDefaultAsync: a "single" read rejects a second row rather than silently
+                // truncating the set. SequentialAccess only forbids re-reading columns, not advancing rows, so
+                // the materializer has already consumed row 1's columns and this Read just probes for a second.
+                if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException(
+                        "ReadSingleOrDefaultAsync expected zero or one row, but the result set returned multiple rows.");
+                }
             }
-        }
 
-        await AdvanceAsync(cancellationToken).ConfigureAwait(false);
-        return result;
+            await AdvanceAsync(cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            RecordFailure(exception);
+            throw;
+        }
     }
 
     /// <summary>
@@ -79,14 +94,22 @@ public sealed class InquiryGridReader : IAsyncDisposable
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
     {
         EnsureResultSet();
-        TEntity? result = null;
-        if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            result = materializer.Materialize(_reader);
-        }
+            TEntity? result = null;
+            if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                result = materializer.Materialize(_reader);
+            }
 
-        await AdvanceAsync(cancellationToken).ConfigureAwait(false);
-        return result;
+            await AdvanceAsync(cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            RecordFailure(exception);
+            throw;
+        }
     }
 
     /// <summary>
@@ -99,14 +122,22 @@ public sealed class InquiryGridReader : IAsyncDisposable
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
     {
         EnsureResultSet();
-        var list = new List<TEntity>();
-        while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            list.Add(materializer.Materialize(_reader));
-        }
+            var list = new List<TEntity>();
+            while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                list.Add(materializer.Materialize(_reader));
+            }
 
-        await AdvanceAsync(cancellationToken).ConfigureAwait(false);
-        return list;
+            await AdvanceAsync(cancellationToken).ConfigureAwait(false);
+            return list;
+        }
+        catch (Exception exception)
+        {
+            RecordFailure(exception);
+            throw;
+        }
     }
 
     /// <summary>
@@ -116,14 +147,22 @@ public sealed class InquiryGridReader : IAsyncDisposable
     public async Task<T> ReadScalarAsync<T>(CancellationToken cancellationToken = default)
     {
         EnsureResultSet();
-        var result = default(T);
-        if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            result = ScalarConvert.From<T>(_reader.GetValue(0));
-        }
+            var result = default(T);
+            if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                result = ScalarConvert.From<T>(_reader.GetValue(0));
+            }
 
-        await AdvanceAsync(cancellationToken).ConfigureAwait(false);
-        return result!;
+            await AdvanceAsync(cancellationToken).ConfigureAwait(false);
+            return result!;
+        }
+        catch (Exception exception)
+        {
+            RecordFailure(exception);
+            throw;
+        }
     }
 
     private void EnsureResultSet()
@@ -148,7 +187,25 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
 
         _disposed = true;
+
         List<Exception>? exceptions = null;
+        try
+        {
+            if (_startTimestamp != 0)
+            {
+                var dbSystem = MapDbSystem(_command);
+                if (!_faulted)
+                {
+                    InquiryTelemetry.CommandDuration.Record(
+                        Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
+                        new KeyValuePair<string, object?>("db.system.name", dbSystem),
+                        new KeyValuePair<string, object?>("db.operation.name", "BATCH"));
+                }
+
+                _activity?.Dispose();
+            }
+        }
+        catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
         try
         {
             await _reader.DisposeAsync().ConfigureAwait(false);
@@ -170,4 +227,24 @@ public sealed class InquiryGridReader : IAsyncDisposable
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
         InquiryCleanup.ThrowIfAny(exceptions);
     }
+
+    internal void RecordFailure(Exception exception)
+    {
+        if (_startTimestamp == 0 || _faulted) return;
+        _faulted = true;
+        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+        var dbSystem = MapDbSystem(_command);
+        InquiryTelemetry.CommandDuration.Record(
+            Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
+            new KeyValuePair<string, object?>("db.system.name", dbSystem),
+            new KeyValuePair<string, object?>("db.operation.name", "BATCH"),
+            new KeyValuePair<string, object?>("error.type", errorType));
+        if (_activity is { } activity)
+        {
+            activity.SetTag("error.type", errorType);
+            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+        }
+    }
+
+    private static string MapDbSystem(DbCommand command) => InquiryTelemetry.MapDbSystem(command);
 }

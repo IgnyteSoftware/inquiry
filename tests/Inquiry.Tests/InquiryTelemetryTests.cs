@@ -3,6 +3,7 @@ using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Inquiry.Diagnostics;
 using Inquiry.Interceptors;
+using Inquiry.Materialization;
 using Inquiry.Parameters;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
@@ -321,6 +322,146 @@ public sealed class InquiryTelemetryTests
             new TelemetryTestConnectionFactory(connectionString),
             new IInquiryCommandInterceptor[] { new InquiryTelemetryInterceptor(options, loggerFactory) });
         return (pipeline, keeper);
+    }
+
+    [Fact]
+    public async Task GridReaderEmitsSpanCoveringFullLifetime()
+    {
+        var activities = new List<Activity>();
+        using var listener = CreateActivityListener(activities);
+
+        var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
+        await using var _k = keeper;
+
+        await using (var grid = await pipeline.QueryMultipleAsync(
+            new InquiryCommand("SELECT * FROM Items; SELECT COUNT(*) FROM Items")))
+        {
+            await grid.ReadListAsync<SimpleItem, SimpleItemMaterializer>(default);
+            await grid.ReadScalarAsync<long>();
+        }
+
+        var gridActivity = Assert.Single(activities, a => a.DisplayName == "BATCH");
+        Assert.Equal(ActivityKind.Client, gridActivity.Kind);
+        Assert.Equal("sqlite", gridActivity.GetTagItem("db.system.name"));
+        Assert.Equal("BATCH", gridActivity.GetTagItem("db.operation.name"));
+        Assert.NotEqual(ActivityStatusCode.Error, gridActivity.Status);
+        Assert.True(gridActivity.Duration > TimeSpan.Zero);
+    }
+
+    [Fact]
+    public async Task GridReaderRecordsDurationMetric()
+    {
+        var measurements = new List<(double Value, Dictionary<string, object?> Tags)>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+                l.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
+        {
+            var tagMap = new Dictionary<string, object?>();
+            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
+            lock (measurements) measurements.Add((value, tagMap));
+        });
+        meterListener.Start();
+
+        var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
+        await using var _k = keeper;
+
+        await using (var grid = await pipeline.QueryMultipleAsync(new InquiryCommand("SELECT 1")))
+        {
+            await grid.ReadScalarAsync<long>();
+        }
+
+        meterListener.Dispose();
+
+        var gridMeasurement = Assert.Single(measurements, m => (string?)m.Tags["db.operation.name"] == "BATCH");
+        Assert.True(gridMeasurement.Value >= 0);
+        Assert.Equal("sqlite", gridMeasurement.Tags["db.system.name"]);
+    }
+
+    [Fact]
+    public async Task GridReaderExecutionFailureRecordsErrorMetricAndSpan()
+    {
+        var activities = new List<Activity>();
+        using var listener = CreateActivityListener(activities);
+
+        var measurements = new List<(double Value, Dictionary<string, object?> Tags)>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+                l.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
+        {
+            var tagMap = new Dictionary<string, object?>();
+            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
+            lock (measurements) measurements.Add((value, tagMap));
+        });
+        meterListener.Start();
+
+        var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
+        await using var _k = keeper;
+
+        await Assert.ThrowsAsync<SqliteException>(
+            () => pipeline.QueryMultipleAsync(new InquiryCommand("SELECT * FROM NoSuchTable")));
+
+        meterListener.Dispose();
+
+        var gridActivity = Assert.Single(activities, a => a.DisplayName == "BATCH");
+        Assert.Equal(ActivityStatusCode.Error, gridActivity.Status);
+        Assert.Equal(typeof(SqliteException).FullName, gridActivity.GetTagItem("error.type"));
+
+        var gridMeasurement = Assert.Single(measurements, m => (string?)m.Tags["db.operation.name"] == "BATCH");
+        Assert.Equal(typeof(SqliteException).FullName, gridMeasurement.Tags["error.type"]);
+    }
+
+    [Fact]
+    public async Task GridReaderReadFailureRecordsErrorMetricOnce()
+    {
+        var measurements = new List<(double Value, Dictionary<string, object?> Tags)>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+                l.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
+        {
+            var tagMap = new Dictionary<string, object?>();
+            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
+            lock (measurements) measurements.Add((value, tagMap));
+        });
+        meterListener.Start();
+
+        var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
+        await using var _k = keeper;
+
+        await pipeline.ExecuteAsync(new InquiryCommand(
+            "INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'A', 1), (2, 'B', 0)"));
+
+        await using (var grid = await pipeline.QueryMultipleAsync(
+            new InquiryCommand("SELECT * FROM Items")))
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => grid.ReadSingleOrDefaultAsync<SimpleItem, SimpleItemMaterializer>(default));
+        }
+
+        meterListener.Dispose();
+
+        var batchMeasurements = measurements.Where(m => (string?)m.Tags["db.operation.name"] == "BATCH").ToList();
+        var errorMeasurement = Assert.Single(batchMeasurements, m => m.Tags.ContainsKey("error.type"));
+        Assert.Equal(typeof(InvalidOperationException).FullName, errorMeasurement.Tags["error.type"]);
+    }
+
+    private sealed record SimpleItem(int Id, string Name, bool IsActive);
+
+    private struct SimpleItemMaterializer : IInquiryEntityMaterializer<SimpleItem>
+    {
+        public SimpleItem Materialize(DbDataReader reader)
+            => new(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2));
     }
 
     private sealed class TelemetryTestConnectionFactory : IInquiryConnectionFactory

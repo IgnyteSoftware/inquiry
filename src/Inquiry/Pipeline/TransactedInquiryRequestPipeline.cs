@@ -1,10 +1,12 @@
 using Inquiry.Commands;
 using Inquiry.Connections;
+using Inquiry.Diagnostics;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Parameters;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace Inquiry.Pipeline;
@@ -224,20 +226,27 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         var lease = EnterExclusiveOperation();
         DbCommand? dbCommand = null;
         DbDataReader? reader = null;
+        Activity? activity = null;
+        long startTimestamp = 0;
         try
         {
             dbCommand = CreateCommand();
             dbCommand.Transaction = _transaction;
             InitializeCommandSync(dbCommand, command);
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            (activity, startTimestamp) = StartGridActivity(dbCommand);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
             // Shared connection — the grid does NOT own/dispose it; it releases the lease on dispose.
-            return new InquiryGridReader(reader, dbCommand, ownedConnection: null, lease: lease);
+            var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: null, lease: lease,
+                activity, startTimestamp);
+            activity = null;
+            return grid;
         }
         catch (OperationCanceledException exception)
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            RecordGridFailure(activity, dbCommand, startTimestamp, normalized);
             var exceptions = new List<Exception> { normalized };
             try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
             catch (Exception ex) { exceptions.Add(ex); }
@@ -248,6 +257,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch (Exception primaryException)
         {
+            RecordGridFailure(activity, dbCommand, startTimestamp, primaryException);
             var exceptions = new List<Exception> { primaryException };
             try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
             catch (Exception exception) { exceptions.Add(exception); }
@@ -267,6 +277,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         var lease = EnterExclusiveOperation();
         DbCommand? dbCommand = null;
         DbDataReader? reader = null;
+        Activity? activity = null;
+        long startTimestamp = 0;
         try
         {
             dbCommand = CreateCommand();
@@ -276,13 +288,18 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             command.BindParameters(dbCommand, command.Args);
             _connectionFactory.FinalizeCommand(dbCommand);
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            (activity, startTimestamp) = StartGridActivity(dbCommand);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
-            return new InquiryGridReader(reader, dbCommand, ownedConnection: null, lease: lease);
+            var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: null, lease: lease,
+                activity, startTimestamp);
+            activity = null;
+            return grid;
         }
         catch (OperationCanceledException exception)
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            RecordGridFailure(activity, dbCommand, startTimestamp, normalized);
             var exceptions = new List<Exception> { normalized };
             try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
             catch (Exception ex) { exceptions.Add(ex); }
@@ -293,6 +310,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch (Exception primaryException)
         {
+            RecordGridFailure(activity, dbCommand, startTimestamp, primaryException);
             var exceptions = new List<Exception> { primaryException };
             try { await DisposeReaderAndCommandAsync(reader, dbCommand).ConfigureAwait(false); }
             catch (Exception exception) { exceptions.Add(exception); }
@@ -1762,6 +1780,48 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     // ---- Shared helpers --------------------------------------------------------------
+
+    private static (Activity? activity, long startTimestamp) StartGridActivity(DbCommand dbCommand)
+    {
+        if (!InquiryTelemetry.ActivitySource.HasListeners() && !InquiryTelemetry.CommandDuration.Enabled)
+            return (null, 0);
+
+        var startTimestamp = Stopwatch.GetTimestamp();
+        Activity? activity = null;
+        if (InquiryTelemetry.ActivitySource.HasListeners())
+        {
+            activity = InquiryTelemetry.ActivitySource.StartActivity("BATCH", ActivityKind.Client);
+            if (activity is not null)
+            {
+                var dbSystem = InquiryTelemetry.MapDbSystem(dbCommand);
+                activity.SetTag("db.system.name", dbSystem);
+                activity.SetTag("db.operation.name", "BATCH");
+            }
+        }
+
+        return (activity, startTimestamp);
+    }
+
+    private static void RecordGridFailure(Activity? activity, DbCommand? dbCommand, long startTimestamp, Exception exception)
+    {
+        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+
+        if (startTimestamp != 0 && dbCommand is not null)
+        {
+            InquiryTelemetry.CommandDuration.Record(
+                Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+                new KeyValuePair<string, object?>("db.system.name", InquiryTelemetry.MapDbSystem(dbCommand)),
+                new KeyValuePair<string, object?>("db.operation.name", "BATCH"),
+                new KeyValuePair<string, object?>("error.type", errorType));
+        }
+
+        if (activity is not null)
+        {
+            activity.SetTag("error.type", errorType);
+            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            activity.Dispose();
+        }
+    }
 
     private static async ValueTask DisposeReaderAndCommandAsync(
         DbDataReader? reader,

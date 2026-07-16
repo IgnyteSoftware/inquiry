@@ -42,4 +42,14 @@ public static class InquiryTelemetry
         "db.client.operation.duration",
         unit: "s",
         description: "Duration of database commands executed by the Inquiry pipeline.");
+
+    internal static string MapDbSystem(System.Data.Common.DbCommand command) => command.GetType().Name switch
+    {
+        "SqliteCommand" => "sqlite",
+        "SqlCommand" => "microsoft.sql_server",
+        "NpgsqlCommand" => "postgresql",
+        "MySqlCommand" => "mysql",
+        "OracleCommand" => "oracle.db",
+        _ => "other_sql",
+    };
 }
