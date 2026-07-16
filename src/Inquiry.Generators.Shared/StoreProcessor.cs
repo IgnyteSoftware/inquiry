@@ -109,7 +109,8 @@ internal static class StoreProcessor
         var returnsEntity = operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert or StoreOperation.DeleteOneByKey &&
             GeneratorHelpers.GetNamedBool(attribute, "ReturnEntity");
 
-        if (!HasSupportedReturnType(operation, method.ReturnType, entityType, returnsEntity, attribute))
+        var hasInOutParam = operation == StoreOperation.StoredProcedure && HasInputOutputParameter(method);
+        if (!HasSupportedReturnType(operation, method.ReturnType, entityType, returnsEntity, attribute, hasInOutParam))
         {
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.UnsupportedReturnType, location, method.Name, method.ReturnType.ToDisplayString()));
             return null;
@@ -324,6 +325,41 @@ internal static class StoreProcessor
 
         var parameters = method.Parameters.Select(ToParameterData).ToImmutableArray();
 
+        string? procInOutParameterName = null;
+        if (operation == StoreOperation.StoredProcedure && hasInOutParam)
+        {
+            var inOutParams = parameters.Where(static p => p.IsInputOutput && !p.IsCancellationToken).ToArray();
+            if (inOutParams.Length > 1)
+            {
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
+                    "at most one parameter may be marked IsInputOutput."));
+                return null;
+            }
+
+            if (procedureReturn == ProcedureReturnKind.TaskOfOutputScalar)
+            {
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
+                    "IsInputOutput cannot be combined with OutputParameter or ReturnsValue."));
+                return null;
+            }
+
+            var inOut = inOutParams[0];
+
+            var scalarSymbol = ((INamedTypeSymbol)method.ReturnType).TypeArguments[0];
+            var returnTypeFqn = scalarSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (returnTypeFqn != inOut.ComparisonDisplay)
+            {
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
+                    "the INOUT parameter type must match the Task<T> return type argument."));
+                return null;
+            }
+
+            procInOutParameterName = inOut.Name;
+            procReadBackName = NormalizeParameterName(inOut.Name);
+            procedureReturn = ProcedureReturnKind.TaskOfOutputScalar;
+            scalarResultType = scalarSymbol.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
+        }
+
         // IncludeDeleted opts a SELECT out of the soft-delete filter; HardDelete keeps a literal
         // DELETE on a soft-delete entity. Both are read regardless of operation (no-ops where the named
         // argument is absent) — routing decides where they matter.
@@ -377,6 +413,7 @@ internal static class StoreProcessor
             ProcedureOutputDbType = procOutputDbType,
             ProcedureOutputIsString = procOutputIsString,
             ProcedureOutputIsDecimal = procOutputIsDecimal,
+            ProcedureInOutParameterName = procInOutParameterName,
         };
     }
 
@@ -473,6 +510,7 @@ internal static class StoreProcessor
             DeclaredLength = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Length") : null) ?? 0,
             DeclaredIsUnicode = isUnicode,
             DeclaredPrecision = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Precision") : null) ?? 0,
+            IsInputOutput = paramAttr is not null && GeneratorHelpers.GetNamedBool(paramAttr, "IsInputOutput"),
             DeclaredScale = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Scale") : null) ?? 0,
             ProcedureValueExpression = BuildProcedureValueExpression(parameter.Name, typeData),
         };
@@ -744,7 +782,7 @@ internal static class StoreProcessor
         => storeSymbol.DeclaringSyntaxReferences.Any(static r =>
             r.GetSyntax() is ClassDeclarationSyntax cls && cls.Modifiers.Any(SyntaxKind.PartialKeyword));
 
-    private static bool HasSupportedReturnType(StoreOperation operation, ITypeSymbol returnType, ITypeSymbol entityType, bool returnsEntity, AttributeData attribute)
+    private static bool HasSupportedReturnType(StoreOperation operation, ITypeSymbol returnType, ITypeSymbol entityType, bool returnsEntity, AttributeData attribute, bool hasInputOutputParameter = false)
     {
         return operation switch
         {
@@ -788,7 +826,7 @@ internal static class StoreProcessor
             // With OutputParameter/ReturnsValue, the method shape is Task<TScalar> for any single
             // scalar T; the detailed validation (mutual exclusion, RETURN-must-be-int) emits INQ051
             // in discovery. Without it, the classic IAsyncEnumerable/Task<Entity?>/Task<int> shapes.
-            StoreOperation.StoredProcedure when HasScalarProcedureOutput(attribute) =>
+            StoreOperation.StoredProcedure when HasScalarProcedureOutput(attribute) || hasInputOutputParameter =>
                 IsTaskOfSingleTypeArgument(returnType),
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
@@ -800,6 +838,13 @@ internal static class StoreProcessor
     private static bool HasScalarProcedureOutput(AttributeData attribute)
         => !string.IsNullOrEmpty(GeneratorHelpers.GetNamedString(attribute, "OutputParameter"))
             || GeneratorHelpers.GetNamedBool(attribute, "ReturnsValue");
+
+    /// <summary>True when any non-CT parameter carries <c>[InquiryParameter(IsInputOutput = true)]</c>.</summary>
+    private static bool HasInputOutputParameter(IMethodSymbol method)
+        => method.Parameters.Any(static p => !GeneratorHelpers.IsCancellationToken(p.Type) && p.GetAttributes().Any(
+            static a => a.AttributeClass?.Name == "InquiryParameterAttribute"
+                && a.AttributeClass.ContainingNamespace?.ToDisplayString() == KnownSymbols.StoreAttributeNamespace
+                && GeneratorHelpers.GetNamedBool(a, "IsInputOutput")));
 
     private static bool IsEnumerableOfEntity(ParameterData parameter, EntityData entity)
         => IsEnumerableOfType(parameter, entity.FullyQualifiedName);

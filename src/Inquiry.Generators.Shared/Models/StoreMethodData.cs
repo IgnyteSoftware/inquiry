@@ -152,4 +152,12 @@ internal sealed record StoreMethodData(
     /// (e.g. 19.75 → 20), so a high-fidelity scale is stamped to preserve fractional digits.
     /// </summary>
     public bool ProcedureOutputIsDecimal { get; init; }
+
+    /// <summary>
+    /// For an INOUT parameter (<c>[InquiryParameter(IsInputOutput = true)]</c>), the C# parameter
+    /// name that doubles as the read-back parameter. When set, the emitter stamps
+    /// <c>ParameterDirection.InputOutput</c> on this input parameter instead of creating a separate
+    /// OUTPUT parameter. Null when the method does not use INOUT.
+    /// </summary>
+    public string? ProcedureInOutParameterName { get; init; }
 }

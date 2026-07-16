@@ -1405,11 +1405,11 @@ internal static class StoreOperationEmitter
             {
                 source.AppendLine($"                _p{i}.DbType = {p.DbTypeExpression};");
             }
-            if (p.DeclaredLength > 0 && (p.IsStringType || p.IsBinaryType))
+            if (p.DeclaredLength > 0 && (p.IsStringType || p.IsBinaryType) && !p.IsInputOutput)
             {
                 source.AppendLine($"                _p{i}.Size = {p.DeclaredLength.ToString(CultureInfo.InvariantCulture)};");
             }
-            else if (p.DeclaredPrecision is > 0 and <= 38 && p.IsDecimalType)
+            else if (p.DeclaredPrecision is > 0 and <= 38 && p.IsDecimalType && !p.IsInputOutput)
             {
                 source.AppendLine($"                _p{i}.Precision = {p.DeclaredPrecision.ToString(CultureInfo.InvariantCulture)};");
                 if (p.DeclaredScale > 0 && p.DeclaredScale <= p.DeclaredPrecision)
@@ -1417,12 +1417,28 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"                _p{i}.Scale = {p.DeclaredScale.ToString(CultureInfo.InvariantCulture)};");
                 }
             }
+            if (p.IsInputOutput)
+            {
+                source.AppendLine($"                _p{i}.Direction = global::System.Data.ParameterDirection.InputOutput;");
+                if (p.IsStringType || p.IsBinaryType)
+                {
+                    var size = p.DeclaredLength > 0 ? p.DeclaredLength.ToString(CultureInfo.InvariantCulture) : "-1";
+                    source.AppendLine($"                _p{i}.Size = {size};");
+                }
+                else if (p.IsDecimalType)
+                {
+                    var precision = p.DeclaredPrecision is > 0 and <= 38 ? p.DeclaredPrecision : 38;
+                    var scale = p.DeclaredScale > 0 && p.DeclaredScale <= precision ? p.DeclaredScale : 10;
+                    source.AppendLine($"                _p{i}.Precision = {precision.ToString(CultureInfo.InvariantCulture)};");
+                    source.AppendLine($"                _p{i}.Scale = {scale.ToString(CultureInfo.InvariantCulture)};");
+                }
+            }
             var valueExpr = p.ProcedureValueExpression ?? $"(object?){p.Name} ?? global::System.DBNull.Value";
             source.AppendLine($"                _p{i}.Value = {valueExpr};");
             source.AppendLine($"                _c.Parameters.Add(_p{i});");
         }
 
-        if (hasScalarOutput)
+        if (hasScalarOutput && method.ProcedureInOutParameterName is null)
         {
             var index = procParams.Length;
             source.AppendLine($"                var _p{index} = _c.CreateParameter();");

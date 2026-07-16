@@ -51,6 +51,9 @@ internal sealed record ParameterData(
     /// <summary>Whether the parameter's CLR type is a binary type (byte[], for Size emission).</summary>
     public bool IsBinaryType { get; init; }
 
+    /// <summary>Whether this parameter is an input/output parameter (<c>[InquiryParameter(IsInputOutput = true)]</c>).</summary>
+    public bool IsInputOutput { get; init; }
+
     /// <summary>Declared length from <c>[InquiryParameter(Length = …)]</c>, or 0.</summary>
     public int DeclaredLength { get; init; }
 

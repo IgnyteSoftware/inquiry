@@ -53,4 +53,14 @@ public sealed class InquiryParameterAttribute : Attribute
     /// (the default) means the scale is not declared.
     /// </summary>
     public int Scale { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating that this parameter is an input/output parameter
+    /// (<c>ParameterDirection.InputOutput</c>). The caller's value is sent to the stored procedure,
+    /// and the procedure's modified value is read back as the method's <c>Task&lt;T&gt;</c> result.
+    /// At most one parameter per method may be marked as input/output, and it is mutually exclusive
+    /// with <see cref="InquiryStoredProcedureAttribute.OutputParameter"/> and
+    /// <see cref="InquiryStoredProcedureAttribute.ReturnsValue"/>.
+    /// </summary>
+    public bool IsInputOutput { get; set; }
 }
