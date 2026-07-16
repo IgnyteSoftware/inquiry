@@ -1,0 +1,596 @@
+#nullable enable
+const Inquiry.Diagnostics.InquiryTelemetry.ActivitySourceName = "Inquiry" -> string!
+const Inquiry.Diagnostics.InquiryTelemetry.MeterName = "Inquiry" -> string!
+const Inquiry.InquiryOptions.DefaultMaxBatchSize = 1000 -> int
+const Inquiry.InquiryOptions.DefaultMaxParametersPerCommand = 2000 -> int
+Inquiry.BulkCopy.IInquiryBulkCopier
+Inquiry.BulkCopy.IInquiryBulkCopier.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Columns.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.ColumnTypes.get -> System.Collections.Generic.IReadOnlyList<System.Data.DbType>?
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.FieldTypes.get -> System.Collections.Generic.IReadOnlyList<System.Type!>?
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.GetValue.get -> System.Func<TEntity!, int, object!>!
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue) -> void
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes) -> void
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes, System.Type![]? fieldTypes) -> void
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Schema.get -> string?
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Table.get -> string!
+Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>
+Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.InquiryBulkRowReader(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows) -> void
+Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.RowsRead.get -> long
+Inquiry.Commands.InquiryBatchCommand<TItem>
+Inquiry.Commands.InquiryBatchCommand<TItem>.BindChunk.get -> System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>?
+Inquiry.Commands.InquiryBatchCommand<TItem>.BindItem.get -> System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>?
+Inquiry.Commands.InquiryBatchCommand<TItem>.CommandText.get -> string?
+Inquiry.Commands.InquiryBatchCommand<TItem>.CommandTextFactory.get -> System.Func<int, string!>?
+Inquiry.Commands.InquiryBatchCommand<TItem>.CommandType.get -> System.Data.CommandType
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand() -> void
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Data.CommandType commandType = System.Data.CommandType.Text, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>? bindChunk = null) -> void
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Data.CommandType commandType, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>? bindChunk, bool preferPrepareOnce) -> void
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Func<int, string!>! chunkCommandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, System.Func<System.Collections.Generic.IReadOnlyList<TItem>!, bool>! useChunk, int parametersPerItem, int maxItemsPerCommand = 2147483647, System.Data.CommandType commandType = System.Data.CommandType.Text) -> void
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Func<int, string!>! chunkCommandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, System.Func<System.Collections.Generic.IReadOnlyList<TItem>!, bool>! useChunk, int parametersPerItem, int maxItemsPerCommand, System.Data.CommandType commandType, int setBasedMaxItemsPerCommand) -> void
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(System.Func<int, string!>! commandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, int parametersPerItem, int maxItemsPerCommand = 2147483647, System.Data.CommandType commandType = System.Data.CommandType.Text) -> void
+Inquiry.Commands.InquiryBatchCommand<TItem>.MaxItemsPerCommand.get -> int
+Inquiry.Commands.InquiryBatchCommand<TItem>.ParametersPerItem.get -> int
+Inquiry.Commands.InquiryBatchCommand<TItem>.PreferPrepareOnce.get -> bool
+Inquiry.Commands.InquiryBatchCommand<TItem>.SetBasedMaxItemsPerCommand.get -> int
+Inquiry.Commands.InquiryBatchCommand<TItem>.UseChunk.get -> System.Func<System.Collections.Generic.IReadOnlyList<TItem>!, bool>?
+Inquiry.Commands.InquiryBatchExecutionMode
+Inquiry.Commands.InquiryBatchExecutionMode.ArrayBinding = 2 -> Inquiry.Commands.InquiryBatchExecutionMode
+Inquiry.Commands.InquiryBatchExecutionMode.DbBatch = 0 -> Inquiry.Commands.InquiryBatchExecutionMode
+Inquiry.Commands.InquiryBatchExecutionMode.ReusedCommand = 1 -> Inquiry.Commands.InquiryBatchExecutionMode
+Inquiry.Commands.InquiryCommand
+Inquiry.Commands.InquiryCommand.CommandText.get -> string!
+Inquiry.Commands.InquiryCommand.CommandTimeout.get -> int?
+Inquiry.Commands.InquiryCommand.CommandType.get -> System.Data.CommandType?
+Inquiry.Commands.InquiryCommand.DbCommandBinder.get -> System.Action<System.Data.Common.DbCommand!>?
+Inquiry.Commands.InquiryCommand.InquiryCommand(string! commandText, System.Action<System.Data.Common.DbCommand!>! dbCommandBinder, System.Data.CommandType? commandType = null, int? commandTimeout = null) -> void
+Inquiry.Commands.InquiryCommand.InquiryCommand(string! commandText, System.Collections.Generic.IReadOnlyList<Inquiry.Parameters.InquiryParameter>! parameters, System.Data.CommandType? commandType = null, int? commandTimeout = null) -> void
+Inquiry.Commands.InquiryCommand.InquiryCommand(string! commandText, System.Data.CommandType? commandType = null, int? commandTimeout = null) -> void
+Inquiry.Commands.InquiryCommand.Parameters.get -> System.Collections.Generic.IReadOnlyList<Inquiry.Parameters.InquiryParameter>!
+Inquiry.Commands.InquiryCommandContext
+Inquiry.Commands.InquiryCommandContext.Command.get -> System.Data.Common.DbCommand!
+Inquiry.Commands.InquiryCommandContext.InquiryCommand.get -> Inquiry.Commands.InquiryCommand!
+Inquiry.Commands.InquiryCommandContext.InquiryCommandContext(Inquiry.Commands.InquiryCommand! commandDefinition, System.Data.Common.DbCommand! command) -> void
+Inquiry.Commands.InquiryCommandExecutedContext
+Inquiry.Commands.InquiryCommandExecutedContext.InquiryCommandExecutedContext(Inquiry.Commands.InquiryCommand! commandDefinition, System.Data.Common.DbCommand! command, int? recordsAffected) -> void
+Inquiry.Commands.InquiryCommandExecutedContext.RecordsAffected.get -> int?
+Inquiry.Commands.InquiryCommandFailedContext
+Inquiry.Commands.InquiryCommandFailedContext.Exception.get -> System.Exception!
+Inquiry.Commands.InquiryCommandFailedContext.InquiryCommandFailedContext(Inquiry.Commands.InquiryCommand! commandDefinition, System.Data.Common.DbCommand! command, System.Exception! exception) -> void
+Inquiry.Commands.InquiryCommandResources
+Inquiry.Commands.InquiryGeneratedCommand<TArgs>
+Inquiry.Commands.InquiryGeneratedCommand<TArgs>.Args.get -> TArgs
+Inquiry.Commands.InquiryGeneratedCommand<TArgs>.BindParameters.get -> System.Action<System.Data.Common.DbCommand!, TArgs>!
+Inquiry.Commands.InquiryGeneratedCommand<TArgs>.CommandText.get -> string!
+Inquiry.Commands.InquiryGeneratedCommand<TArgs>.CommandType.get -> System.Data.CommandType
+Inquiry.Commands.InquiryGeneratedCommand<TArgs>.InquiryGeneratedCommand() -> void
+Inquiry.Commands.InquiryGeneratedCommand<TArgs>.InquiryGeneratedCommand(string! commandText, TArgs args, System.Action<System.Data.Common.DbCommand!, TArgs>! bindParameters, System.Data.CommandType commandType = System.Data.CommandType.Text) -> void
+Inquiry.Commands.InquiryParameterTarget
+Inquiry.Commands.InquiryParameterTarget.AddParameter(System.Data.Common.DbParameter! parameter) -> void
+Inquiry.Commands.InquiryParameterTarget.CreateParameter() -> System.Data.Common.DbParameter!
+Inquiry.Commands.InquiryParameterTarget.InquiryParameterTarget() -> void
+Inquiry.Connections.IInquiryConnectionFactory
+Inquiry.Connections.IInquiryConnectionFactory.BatchExecutionMode.get -> Inquiry.Commands.InquiryBatchExecutionMode
+Inquiry.Connections.IInquiryConnectionFactory.FinalizeCommand(System.Data.Common.DbCommand! command) -> void
+Inquiry.Connections.IInquiryConnectionFactory.InitializeBatchChunkCommand(System.Data.Common.DbCommand! command, int itemCount) -> void
+Inquiry.Connections.IInquiryConnectionFactory.InitializeCommand(System.Data.Common.DbCommand! command) -> void
+Inquiry.Connections.IInquiryConnectionFactory.OpenConnectionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Data.Common.DbConnection!>
+Inquiry.Connections.IInquiryConnectionFactory.SupportsBatchExecution.get -> bool
+Inquiry.Connections.IInquiryConnectionFactory.SupportsPersistentPreparedStatements.get -> bool
+Inquiry.Converters.InquiryJsonConverter<T>
+Inquiry.Converters.InquiryJsonConverter<T>.FromProvider(string! provider) -> T
+Inquiry.Converters.InquiryJsonConverter<T>.InquiryJsonConverter() -> void
+Inquiry.Converters.InquiryJsonConverter<T>.ToProvider(T model) -> string!
+Inquiry.DependencyInjection.IInquiryServiceRegistration
+Inquiry.DependencyInjection.IInquiryServiceRegistration.AddServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Inquiry.DependencyInjection.InquiryHealthChecksBuilderExtensions
+Inquiry.DependencyInjection.InquiryServiceCollectionExtensions
+Inquiry.DependencyInjection.InquiryTelemetryServiceCollectionExtensions
+Inquiry.Diagnostics.InquiryTelemetry
+Inquiry.Diagnostics.InquiryTelemetryOptions
+Inquiry.Diagnostics.InquiryTelemetryOptions.InquiryTelemetryOptions() -> void
+Inquiry.Diagnostics.InquiryTelemetryOptions.RecordCommandText.get -> bool
+Inquiry.Diagnostics.InquiryTelemetryOptions.RecordCommandText.set -> void
+Inquiry.Entities.IInquiryValueConverter<TModel, TProvider>
+Inquiry.Entities.IInquiryValueConverter<TModel, TProvider>.FromProvider(TProvider provider) -> TModel
+Inquiry.Entities.IInquiryValueConverter<TModel, TProvider>.ToProvider(TModel model) -> TProvider
+Inquiry.Entities.InquiryAdHocAttribute
+Inquiry.Entities.InquiryAdHocAttribute.InquiryAdHocAttribute() -> void
+Inquiry.Entities.InquiryCheckAttribute
+Inquiry.Entities.InquiryCheckAttribute.Expression.get -> string!
+Inquiry.Entities.InquiryCheckAttribute.InquiryCheckAttribute(string! expression) -> void
+Inquiry.Entities.InquiryCheckAttribute.Name.get -> string?
+Inquiry.Entities.InquiryCheckAttribute.Name.set -> void
+Inquiry.Entities.InquiryColumnAttribute
+Inquiry.Entities.InquiryColumnAttribute.Computed.get -> string?
+Inquiry.Entities.InquiryColumnAttribute.Computed.set -> void
+Inquiry.Entities.InquiryColumnAttribute.Converter.get -> System.Type?
+Inquiry.Entities.InquiryColumnAttribute.Converter.set -> void
+Inquiry.Entities.InquiryColumnAttribute.DefaultExpression.get -> string?
+Inquiry.Entities.InquiryColumnAttribute.DefaultExpression.set -> void
+Inquiry.Entities.InquiryColumnAttribute.IndexName.get -> string?
+Inquiry.Entities.InquiryColumnAttribute.IndexName.set -> void
+Inquiry.Entities.InquiryColumnAttribute.InquiryColumnAttribute() -> void
+Inquiry.Entities.InquiryColumnAttribute.InquiryColumnAttribute(string! name) -> void
+Inquiry.Entities.InquiryColumnAttribute.IsIndexed.get -> bool
+Inquiry.Entities.InquiryColumnAttribute.IsIndexed.set -> void
+Inquiry.Entities.InquiryColumnAttribute.IsUnicode.get -> bool
+Inquiry.Entities.InquiryColumnAttribute.IsUnicode.set -> void
+Inquiry.Entities.InquiryColumnAttribute.IsUnique.get -> bool
+Inquiry.Entities.InquiryColumnAttribute.IsUnique.set -> void
+Inquiry.Entities.InquiryColumnAttribute.Length.get -> int
+Inquiry.Entities.InquiryColumnAttribute.Length.set -> void
+Inquiry.Entities.InquiryColumnAttribute.Name.get -> string?
+Inquiry.Entities.InquiryColumnAttribute.Precision.get -> int
+Inquiry.Entities.InquiryColumnAttribute.Precision.set -> void
+Inquiry.Entities.InquiryColumnAttribute.Scale.get -> int
+Inquiry.Entities.InquiryColumnAttribute.Scale.set -> void
+Inquiry.Entities.InquiryColumnAttribute.SqlType.get -> string?
+Inquiry.Entities.InquiryColumnAttribute.SqlType.set -> void
+Inquiry.Entities.InquiryColumnAttribute.UseDatabaseDefault.get -> bool
+Inquiry.Entities.InquiryColumnAttribute.UseDatabaseDefault.set -> void
+Inquiry.Entities.InquiryComputedExpressionAttribute
+Inquiry.Entities.InquiryComputedExpressionAttribute.Expression.get -> string!
+Inquiry.Entities.InquiryComputedExpressionAttribute.InquiryComputedExpressionAttribute(string! providerId, string! expression) -> void
+Inquiry.Entities.InquiryComputedExpressionAttribute.ProviderId.get -> string!
+Inquiry.Entities.InquiryConcurrencyTokenAttribute
+Inquiry.Entities.InquiryConcurrencyTokenAttribute.DatabaseGenerated.get -> bool
+Inquiry.Entities.InquiryConcurrencyTokenAttribute.DatabaseGenerated.set -> void
+Inquiry.Entities.InquiryConcurrencyTokenAttribute.InquiryConcurrencyTokenAttribute() -> void
+Inquiry.Entities.InquiryConcurrencyTokenAttribute.InquiryConcurrencyTokenAttribute(string! name) -> void
+Inquiry.Entities.InquiryConverterCache<TConverter>
+Inquiry.Entities.InquiryConverterDispatcher<TConverter, TModel, TProvider>
+Inquiry.Entities.InquiryCreatedAtAttribute
+Inquiry.Entities.InquiryCreatedAtAttribute.InquiryCreatedAtAttribute() -> void
+Inquiry.Entities.InquiryCreatedAtAttribute.InquiryCreatedAtAttribute(string! name) -> void
+Inquiry.Entities.InquiryCreatedByAttribute
+Inquiry.Entities.InquiryCreatedByAttribute.InquiryCreatedByAttribute() -> void
+Inquiry.Entities.InquiryCreatedByAttribute.InquiryCreatedByAttribute(string! name) -> void
+Inquiry.Entities.InquiryEnumAsStringAttribute
+Inquiry.Entities.InquiryEnumAsStringAttribute.InquiryEnumAsStringAttribute() -> void
+Inquiry.Entities.InquiryForeignKeyAttribute
+Inquiry.Entities.InquiryForeignKeyAttribute.ConstraintName.get -> string?
+Inquiry.Entities.InquiryForeignKeyAttribute.ConstraintName.set -> void
+Inquiry.Entities.InquiryForeignKeyAttribute.InquiryForeignKeyAttribute(string! columnName, string! referencedTable, string! referencedColumn) -> void
+Inquiry.Entities.InquiryForeignKeyAttribute.InquiryForeignKeyAttribute(string! referencedTable, string! referencedColumn) -> void
+Inquiry.Entities.InquiryForeignKeyAttribute.InquiryForeignKeyAttribute(System.Type! referencedType) -> void
+Inquiry.Entities.InquiryForeignKeyAttribute.InquiryForeignKeyAttribute(System.Type! referencedType, string! referencedColumn) -> void
+Inquiry.Entities.InquiryForeignKeyAttribute.OnDelete.get -> Inquiry.Entities.InquiryReferentialAction
+Inquiry.Entities.InquiryForeignKeyAttribute.OnDelete.set -> void
+Inquiry.Entities.InquiryForeignKeyAttribute.OnUpdate.get -> Inquiry.Entities.InquiryReferentialAction
+Inquiry.Entities.InquiryForeignKeyAttribute.OnUpdate.set -> void
+Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedColumn.get -> string!
+Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedSchema.get -> string?
+Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedSchema.set -> void
+Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedTable.get -> string!
+Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedType.get -> System.Type?
+Inquiry.Entities.InquiryGlobalFilterAttribute
+Inquiry.Entities.InquiryGlobalFilterAttribute.InquiryGlobalFilterAttribute() -> void
+Inquiry.Entities.InquiryGlobalFilterAttribute.KeepWhen.get -> bool
+Inquiry.Entities.InquiryGlobalFilterAttribute.KeepWhen.set -> void
+Inquiry.Entities.InquiryIndexAttribute
+Inquiry.Entities.InquiryIndexAttribute.Include.get -> string![]!
+Inquiry.Entities.InquiryIndexAttribute.Include.set -> void
+Inquiry.Entities.InquiryIndexAttribute.InquiryIndexAttribute(params string![]! properties) -> void
+Inquiry.Entities.InquiryIndexAttribute.IsUnique.get -> bool
+Inquiry.Entities.InquiryIndexAttribute.IsUnique.set -> void
+Inquiry.Entities.InquiryIndexAttribute.Name.get -> string?
+Inquiry.Entities.InquiryIndexAttribute.Name.set -> void
+Inquiry.Entities.InquiryIndexAttribute.Properties.get -> string![]!
+Inquiry.Entities.InquiryJsonAttribute
+Inquiry.Entities.InquiryJsonAttribute.InquiryJsonAttribute() -> void
+Inquiry.Entities.InquiryKeyAttribute
+Inquiry.Entities.InquiryKeyAttribute.InquiryKeyAttribute() -> void
+Inquiry.Entities.InquiryKeyAttribute.InquiryKeyAttribute(string! name) -> void
+Inquiry.Entities.InquiryKeyAttribute.IsGenerated.get -> bool
+Inquiry.Entities.InquiryKeyAttribute.IsGenerated.set -> void
+Inquiry.Entities.InquiryKeyAttribute.SequentialGuid.get -> bool
+Inquiry.Entities.InquiryKeyAttribute.SequentialGuid.set -> void
+Inquiry.Entities.InquiryManyToManyAttribute
+Inquiry.Entities.InquiryManyToManyAttribute.ChildForeignKeyProperty.get -> string!
+Inquiry.Entities.InquiryManyToManyAttribute.InquiryManyToManyAttribute(System.Type! junctionEntity, string! parentForeignKeyProperty, string! childForeignKeyProperty) -> void
+Inquiry.Entities.InquiryManyToManyAttribute.JunctionEntity.get -> System.Type!
+Inquiry.Entities.InquiryManyToManyAttribute.ParentForeignKeyProperty.get -> string!
+Inquiry.Entities.InquiryModifiedAtAttribute
+Inquiry.Entities.InquiryModifiedAtAttribute.InquiryModifiedAtAttribute() -> void
+Inquiry.Entities.InquiryModifiedAtAttribute.InquiryModifiedAtAttribute(string! name) -> void
+Inquiry.Entities.InquiryModifiedByAttribute
+Inquiry.Entities.InquiryModifiedByAttribute.InquiryModifiedByAttribute() -> void
+Inquiry.Entities.InquiryModifiedByAttribute.InquiryModifiedByAttribute(string! name) -> void
+Inquiry.Entities.InquiryProjectionAttribute
+Inquiry.Entities.InquiryProjectionAttribute.EntityType.get -> System.Type!
+Inquiry.Entities.InquiryProjectionAttribute.InquiryProjectionAttribute(System.Type! entityType) -> void
+Inquiry.Entities.InquiryReferentialAction
+Inquiry.Entities.InquiryReferentialAction.Cascade = 2 -> Inquiry.Entities.InquiryReferentialAction
+Inquiry.Entities.InquiryReferentialAction.NoAction = 0 -> Inquiry.Entities.InquiryReferentialAction
+Inquiry.Entities.InquiryReferentialAction.Restrict = 1 -> Inquiry.Entities.InquiryReferentialAction
+Inquiry.Entities.InquiryReferentialAction.SetDefault = 4 -> Inquiry.Entities.InquiryReferentialAction
+Inquiry.Entities.InquiryReferentialAction.SetNull = 3 -> Inquiry.Entities.InquiryReferentialAction
+Inquiry.Entities.InquiryRelationAttribute
+Inquiry.Entities.InquiryRelationAttribute.ForeignKeyProperty.get -> string!
+Inquiry.Entities.InquiryRelationAttribute.InquiryRelationAttribute(string! foreignKeyProperty) -> void
+Inquiry.Entities.InquirySoftDeleteAttribute
+Inquiry.Entities.InquirySoftDeleteAttribute.InquirySoftDeleteAttribute() -> void
+Inquiry.Entities.InquiryTableAttribute
+Inquiry.Entities.InquiryTableAttribute.GenerateDdl.get -> bool
+Inquiry.Entities.InquiryTableAttribute.GenerateDdl.set -> void
+Inquiry.Entities.InquiryTableAttribute.GenerateForeignKeys.get -> bool
+Inquiry.Entities.InquiryTableAttribute.GenerateForeignKeys.set -> void
+Inquiry.Entities.InquiryTableAttribute.InquiryTableAttribute() -> void
+Inquiry.Entities.InquiryTableAttribute.InquiryTableAttribute(string! name) -> void
+Inquiry.Entities.InquiryTableAttribute.Name.get -> string?
+Inquiry.Entities.InquiryTableAttribute.Schema.get -> string?
+Inquiry.Entities.InquiryTableAttribute.Schema.init -> void
+Inquiry.Entities.InquiryViewAttribute
+Inquiry.Entities.InquiryViewAttribute.InquiryViewAttribute() -> void
+Inquiry.Entities.InquiryViewAttribute.InquiryViewAttribute(string! viewName) -> void
+Inquiry.Entities.InquiryViewAttribute.Schema.get -> string?
+Inquiry.Entities.InquiryViewAttribute.Schema.set -> void
+Inquiry.Entities.InquiryViewAttribute.ViewName.get -> string?
+Inquiry.GroupCount<TKey>
+Inquiry.GroupCount<TKey>.Count.get -> long
+Inquiry.GroupCount<TKey>.GroupCount(TKey key, long count) -> void
+Inquiry.GroupCount<TKey>.Key.get -> TKey
+Inquiry.IInquiry
+Inquiry.IInquiry.BeginTransactionAsync(System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Transactions.IInquiryTransaction!>!
+Inquiry.IInquiry.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
+Inquiry.IInquiry.ExecuteAsync(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Inquiry.IInquiry.ExecuteAsync(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Inquiry.IInquiry.ExecuteAsync<TArgs>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Inquiry.IInquiry.ExecuteAsync<TArgs>(string! commandText, TArgs args, System.Action<System.Data.Common.DbCommand!, TArgs>! bindParameters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Inquiry.IInquiry.ExecuteBatchAsync<TItem>(Inquiry.Commands.InquiryBatchCommand<TItem> command, System.Collections.Generic.IEnumerable<TItem>! items, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Inquiry.IInquiry.ExecuteBatchAsync<TItem>(string! commandText, System.Collections.Generic.IReadOnlyList<TItem>! items, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindParameters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Inquiry.IInquiry.ExecuteInTransactionAsync(System.Func<Inquiry.Transactions.IInquiryTransaction!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.IInquiry.ExecuteInTransactionAsync(System.Func<Inquiry.Transactions.IInquiryTransaction!, System.Threading.Tasks.Task!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.IInquiry.ExecuteInTransactionAsync<TResult>(System.Func<Inquiry.Transactions.IInquiryTransaction!, System.Threading.CancellationToken, System.Threading.Tasks.Task<TResult>!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResult>!
+Inquiry.IInquiry.ExecuteInTransactionAsync<TResult>(System.Func<Inquiry.Transactions.IInquiryTransaction!, System.Threading.Tasks.Task<TResult>!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResult>!
+Inquiry.IInquiry.ExecuteProcedureScalarAsync<T, TArgs>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, string! readBackParameterName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.IInquiry.ExecuteProcedureScalarAsync<T>(Inquiry.Commands.InquiryCommand! command, string! readBackParameterName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.IInquiry.ExecuteScalarAsync<T, TArgs>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.IInquiry.ExecuteScalarAsync<T, TArgs>(string! commandText, TArgs args, System.Action<System.Data.Common.DbCommand!, TArgs>! bindParameters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.IInquiry.ExecuteScalarAsync<T>(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.IInquiry.ExecuteScalarAsync<T>(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.IInquiry.MaxBatchSize.get -> int
+Inquiry.IInquiry.MaxParametersPerCommand.get -> int
+Inquiry.IInquiry.QueryAsync<TEntity, TArgs, TMaterializer>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Inquiry.IInquiry.QueryAsync<TEntity, TArgs, TMaterializer>(string! commandText, TArgs args, System.Action<System.Data.Common.DbCommand!, TArgs>! bindParameters, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Inquiry.IInquiry.QueryAsync<TEntity, TMaterializer>(Inquiry.Commands.InquiryCommand! command, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Inquiry.IInquiry.QueryAsync<TEntity>(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Inquiry.IInquiry.QueryAsync<TEntity>(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Inquiry.IInquiry.QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.IInquiry.QueryListAsync<TEntity, TArgs, TMaterializer>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken), int capacityHint = -1) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TEntity!>!>!
+Inquiry.IInquiry.QueryListAsync<TEntity, TArgs, TMaterializer>(string! commandText, TArgs args, System.Action<System.Data.Common.DbCommand!, TArgs>! bindParameters, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TEntity!>!>!
+Inquiry.IInquiry.QueryListAsync<TEntity, TMaterializer>(Inquiry.Commands.InquiryCommand! command, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken), int capacityHint = -1) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TEntity!>!>!
+Inquiry.IInquiry.QueryListAsync<TEntity>(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TEntity!>!>!
+Inquiry.IInquiry.QueryListAsync<TEntity>(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TEntity!>!>!
+Inquiry.IInquiry.QueryMultipleAsync(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.InquiryGridReader!>!
+Inquiry.IInquiry.QueryMultipleAsync<TArgs>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.InquiryGridReader!>!
+Inquiry.IInquiry.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.IInquiry.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(string! commandText, TArgs args, System.Action<System.Data.Common.DbCommand!, TArgs>! bindParameters, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.IInquiry.QuerySingleOrDefaultAsync<TEntity, TMaterializer>(Inquiry.Commands.InquiryCommand! command, TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.IInquiry.QuerySingleOrDefaultAsync<TEntity>(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.IInquiry.QuerySingleOrDefaultAsync<TEntity>(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.IInquiry.ThrowOnConcurrencyConflict.get -> bool
+Inquiry.InquiryAuditContext
+Inquiry.InquiryAuditContext.Scope
+Inquiry.InquiryAuditContext.Scope.Dispose() -> void
+Inquiry.InquiryAuditContext.Scope.Scope() -> void
+Inquiry.InquiryConcurrencyException
+Inquiry.InquiryConcurrencyException.InquiryConcurrencyException() -> void
+Inquiry.InquiryConcurrencyException.InquiryConcurrencyException(string! message) -> void
+Inquiry.InquiryConcurrencyException.InquiryConcurrencyException(string! message, System.Exception! innerException) -> void
+Inquiry.InquiryDialectAttribute
+Inquiry.InquiryDialectAttribute.InquiryDialectAttribute(string! name) -> void
+Inquiry.InquiryDialectAttribute.Name.get -> string!
+Inquiry.InquiryGridReader
+Inquiry.InquiryGridReader.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Inquiry.InquiryGridReader.ReadGeneratedSingleOrDefaultAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.InquiryGridReader.ReadListAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.List<TEntity!>!>!
+Inquiry.InquiryGridReader.ReadScalarAsync<T>(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.InquiryGridReader.ReadSingleOrDefaultAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.InquiryGuid
+Inquiry.InquiryOptions
+Inquiry.InquiryOptions.DefaultCommandTimeout.get -> System.TimeSpan?
+Inquiry.InquiryOptions.DefaultCommandTimeout.set -> void
+Inquiry.InquiryOptions.InquiryOptions() -> void
+Inquiry.InquiryOptions.MaxBatchSize.get -> int
+Inquiry.InquiryOptions.MaxBatchSize.set -> void
+Inquiry.InquiryOptions.MaxParametersPerCommand.get -> int
+Inquiry.InquiryOptions.MaxParametersPerCommand.set -> void
+Inquiry.InquiryOptions.PrepareStatements.get -> Inquiry.PreparedStatementMode
+Inquiry.InquiryOptions.PrepareStatements.set -> void
+Inquiry.InquiryOptions.ThrowOnConcurrencyConflict.get -> bool
+Inquiry.InquiryOptions.ThrowOnConcurrencyConflict.set -> void
+Inquiry.InquirySql
+Inquiry.Interceptors.IInquiryCommandInterceptor
+Inquiry.Interceptors.IInquiryCommandInterceptor.CommandExecutedAsync(Inquiry.Commands.InquiryCommandExecutedContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Interceptors.IInquiryCommandInterceptor.CommandExecutingAsync(Inquiry.Commands.InquiryCommandContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Interceptors.IInquiryCommandInterceptor.CommandFailedAsync(Inquiry.Commands.InquiryCommandFailedContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Interceptors.IInquiryCommandInterceptor.CommandInitializedAsync(Inquiry.Commands.InquiryCommandContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Materialization.IInquiryEntityMaterializer<TEntity>
+Inquiry.Materialization.IInquiryEntityMaterializer<TEntity>.IsInquirySequentialAccessSafe.get -> bool
+Inquiry.Materialization.IInquiryEntityMaterializer<TEntity>.Materialize(System.Data.Common.DbDataReader! reader) -> TEntity!
+Inquiry.Paging.InquiryPage<TEntity, TCursor>
+Inquiry.Paging.InquiryPage<TEntity, TCursor>.HasMore.get -> bool
+Inquiry.Paging.InquiryPage<TEntity, TCursor>.InquiryPage() -> void
+Inquiry.Paging.InquiryPage<TEntity, TCursor>.InquiryPage(System.Collections.Generic.IReadOnlyList<TEntity!>! items, TCursor? nextCursor, bool hasMore) -> void
+Inquiry.Paging.InquiryPage<TEntity, TCursor>.Items.get -> System.Collections.Generic.IReadOnlyList<TEntity!>!
+Inquiry.Paging.InquiryPage<TEntity, TCursor>.NextCursor.get -> TCursor?
+Inquiry.Paging.InquiryPagedResult<TEntity>
+Inquiry.Paging.InquiryPagedResult<TEntity>.InquiryPagedResult() -> void
+Inquiry.Paging.InquiryPagedResult<TEntity>.InquiryPagedResult(System.Collections.Generic.IReadOnlyList<TEntity!>! items, long totalCount) -> void
+Inquiry.Paging.InquiryPagedResult<TEntity>.Items.get -> System.Collections.Generic.IReadOnlyList<TEntity!>!
+Inquiry.Paging.InquiryPagedResult<TEntity>.TotalCount.get -> long
+Inquiry.Parameters.InquiryArrayParameter
+Inquiry.Parameters.InquiryInExpansion
+Inquiry.Parameters.InquiryJsonArrayParameter
+Inquiry.Parameters.InquiryParameter
+Inquiry.Parameters.InquiryParameter.DbType.get -> System.Data.DbType?
+Inquiry.Parameters.InquiryParameter.Direction.get -> System.Data.ParameterDirection?
+Inquiry.Parameters.InquiryParameter.Equals(Inquiry.Parameters.InquiryParameter other) -> bool
+Inquiry.Parameters.InquiryParameter.InquiryParameter() -> void
+Inquiry.Parameters.InquiryParameter.InquiryParameter(string! name, object? value, System.Data.DbType? dbType = null, System.Data.ParameterDirection? direction = null, int? size = null, byte? precision = null, byte? scale = null) -> void
+Inquiry.Parameters.InquiryParameter.Name.get -> string!
+Inquiry.Parameters.InquiryParameter.Precision.get -> byte?
+Inquiry.Parameters.InquiryParameter.Scale.get -> byte?
+Inquiry.Parameters.InquiryParameter.Size.get -> int?
+Inquiry.Parameters.InquiryParameter.Value.get -> object?
+Inquiry.PreparedStatementMode
+Inquiry.PreparedStatementMode.Auto = 1 -> Inquiry.PreparedStatementMode
+Inquiry.PreparedStatementMode.None = 0 -> Inquiry.PreparedStatementMode
+Inquiry.Seeding.IInquiryDataSeeder
+Inquiry.Seeding.IInquiryDataSeeder.SeedAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.Seeding.InquirySeedingExtensions
+Inquiry.Stores.Compare
+Inquiry.Stores.Compare.Between = 8 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.Equal = 0 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.GreaterThan = 2 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.GreaterThanOrEqual = 3 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.In = 7 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.IsNotNull = 10 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.IsNull = 9 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.LessThan = 4 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.LessThanOrEqual = 5 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.Like = 6 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.NotBetween = 12 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.NotEqual = 1 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.NotIn = 13 -> Inquiry.Stores.Compare
+Inquiry.Stores.Compare.NotLike = 11 -> Inquiry.Stores.Compare
+Inquiry.Stores.InquiryAggregateAttribute
+Inquiry.Stores.InquiryAggregateAttribute.Column.get -> string!
+Inquiry.Stores.InquiryAggregateAttribute.Function.get -> Inquiry.Stores.InquiryAggregateFunction
+Inquiry.Stores.InquiryAggregateAttribute.InquiryAggregateAttribute(Inquiry.Stores.InquiryAggregateFunction function, string! column) -> void
+Inquiry.Stores.InquiryAggregateFunction
+Inquiry.Stores.InquiryAggregateFunction.Avg = 1 -> Inquiry.Stores.InquiryAggregateFunction
+Inquiry.Stores.InquiryAggregateFunction.Max = 3 -> Inquiry.Stores.InquiryAggregateFunction
+Inquiry.Stores.InquiryAggregateFunction.Min = 2 -> Inquiry.Stores.InquiryAggregateFunction
+Inquiry.Stores.InquiryAggregateFunction.Sum = 0 -> Inquiry.Stores.InquiryAggregateFunction
+Inquiry.Stores.InquiryBulkInsertAttribute
+Inquiry.Stores.InquiryBulkInsertAttribute.InquiryBulkInsertAttribute() -> void
+Inquiry.Stores.InquiryCountAttribute
+Inquiry.Stores.InquiryCountAttribute.InquiryCountAttribute() -> void
+Inquiry.Stores.InquiryDeleteAllAttribute
+Inquiry.Stores.InquiryDeleteAllAttribute.InquiryDeleteAllAttribute() -> void
+Inquiry.Stores.InquiryDeleteOneByKeyAttribute
+Inquiry.Stores.InquiryDeleteOneByKeyAttribute.HardDelete.get -> bool
+Inquiry.Stores.InquiryDeleteOneByKeyAttribute.HardDelete.set -> void
+Inquiry.Stores.InquiryDeleteOneByKeyAttribute.InquiryDeleteOneByKeyAttribute() -> void
+Inquiry.Stores.InquiryDeleteOneByKeyAttribute.ReturnEntity.get -> bool
+Inquiry.Stores.InquiryDeleteOneByKeyAttribute.ReturnEntity.set -> void
+Inquiry.Stores.InquiryDeleteWhereAttribute
+Inquiry.Stores.InquiryDeleteWhereAttribute.HardDelete.get -> bool
+Inquiry.Stores.InquiryDeleteWhereAttribute.HardDelete.set -> void
+Inquiry.Stores.InquiryDeleteWhereAttribute.InquiryDeleteWhereAttribute() -> void
+Inquiry.Stores.InquiryExistsAttribute
+Inquiry.Stores.InquiryExistsAttribute.InquiryExistsAttribute() -> void
+Inquiry.Stores.InquiryFullTextSearchAttribute
+Inquiry.Stores.InquiryFullTextSearchAttribute.Columns.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Inquiry.Stores.InquiryFullTextSearchAttribute.InquiryFullTextSearchAttribute(params string![]! columns) -> void
+Inquiry.Stores.InquiryGenerateInterfaceAttribute
+Inquiry.Stores.InquiryGenerateInterfaceAttribute.InquiryGenerateInterfaceAttribute() -> void
+Inquiry.Stores.InquiryGroupCountAttribute
+Inquiry.Stores.InquiryGroupCountAttribute.Column.get -> string!
+Inquiry.Stores.InquiryGroupCountAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquiryGroupCountAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquiryGroupCountAttribute.InquiryGroupCountAttribute(string! column) -> void
+Inquiry.Stores.InquiryInsertAllAttribute
+Inquiry.Stores.InquiryInsertAllAttribute.InquiryInsertAllAttribute() -> void
+Inquiry.Stores.InquiryInsertAttribute
+Inquiry.Stores.InquiryInsertAttribute.InquiryInsertAttribute() -> void
+Inquiry.Stores.InquiryInsertAttribute.ReturnEntity.get -> bool
+Inquiry.Stores.InquiryInsertAttribute.ReturnEntity.set -> void
+Inquiry.Stores.InquiryKeysetPageAttribute
+Inquiry.Stores.InquiryKeysetPageAttribute.Direction.get -> Inquiry.Stores.KeysetDirection
+Inquiry.Stores.InquiryKeysetPageAttribute.Direction.set -> void
+Inquiry.Stores.InquiryKeysetPageAttribute.InquiryKeysetPageAttribute(params string![]! keyFields) -> void
+Inquiry.Stores.InquiryKeysetPageAttribute.KeyFields.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquiryLockMode.None = 0 -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquiryLockMode.Share = 4 -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquiryLockMode.Update = 1 -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquiryLockMode.UpdateNoWait = 2 -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquiryLockMode.UpdateSkipLocked = 3 -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquiryParameterAttribute
+Inquiry.Stores.InquiryParameterAttribute.InquiryParameterAttribute() -> void
+Inquiry.Stores.InquiryParameterAttribute.IsInputOutput.get -> bool
+Inquiry.Stores.InquiryParameterAttribute.IsInputOutput.set -> void
+Inquiry.Stores.InquiryParameterAttribute.IsUnicode.get -> bool
+Inquiry.Stores.InquiryParameterAttribute.IsUnicode.set -> void
+Inquiry.Stores.InquiryParameterAttribute.Length.get -> int
+Inquiry.Stores.InquiryParameterAttribute.Length.set -> void
+Inquiry.Stores.InquiryParameterAttribute.Precision.get -> int
+Inquiry.Stores.InquiryParameterAttribute.Precision.set -> void
+Inquiry.Stores.InquiryParameterAttribute.Scale.get -> int
+Inquiry.Stores.InquiryParameterAttribute.Scale.set -> void
+Inquiry.Stores.InquiryParameterAttribute.TvpTypeName.get -> string?
+Inquiry.Stores.InquiryParameterAttribute.TvpTypeName.set -> void
+Inquiry.Stores.InquiryRestoreOneByKeyAttribute
+Inquiry.Stores.InquiryRestoreOneByKeyAttribute.InquiryRestoreOneByKeyAttribute() -> void
+Inquiry.Stores.InquirySelectAllAttribute
+Inquiry.Stores.InquirySelectAllAttribute.Distinct.get -> bool
+Inquiry.Stores.InquirySelectAllAttribute.Distinct.set -> void
+Inquiry.Stores.InquirySelectAllAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquirySelectAllAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquirySelectAllAttribute.InquirySelectAllAttribute() -> void
+Inquiry.Stores.InquirySelectAllAttribute.LockMode.get -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquirySelectAllAttribute.LockMode.set -> void
+Inquiry.Stores.InquirySelectAllAttribute.OrderBy.get -> string?
+Inquiry.Stores.InquirySelectAllAttribute.OrderBy.set -> void
+Inquiry.Stores.InquirySelectAllAttribute.Paged.get -> bool
+Inquiry.Stores.InquirySelectAllAttribute.Paged.set -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Distinct.get -> bool
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Distinct.set -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Fields.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Inquiry.Stores.InquirySelectAllByFieldAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquirySelectAllByFieldAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute.InquirySelectAllByFieldAttribute() -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute.InquirySelectAllByFieldAttribute(params string![]! fields) -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute.LockMode.get -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquirySelectAllByFieldAttribute.LockMode.set -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute.OrderBy.get -> string?
+Inquiry.Stores.InquirySelectAllByFieldAttribute.OrderBy.set -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Paged.get -> bool
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Paged.set -> void
+Inquiry.Stores.InquirySelectAllByPredicateAttribute
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.Distinct.get -> bool
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.Distinct.set -> void
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.InquirySelectAllByPredicateAttribute() -> void
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.LockMode.get -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.LockMode.set -> void
+Inquiry.Stores.InquirySelectAllEagerAttribute
+Inquiry.Stores.InquirySelectAllEagerAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquirySelectAllEagerAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquirySelectAllEagerAttribute.InquirySelectAllEagerAttribute() -> void
+Inquiry.Stores.InquirySelectOneByKeyAttribute
+Inquiry.Stores.InquirySelectOneByKeyAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquirySelectOneByKeyAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquirySelectOneByKeyAttribute.InquirySelectOneByKeyAttribute() -> void
+Inquiry.Stores.InquirySelectOneByKeyAttribute.LockMode.get -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquirySelectOneByKeyAttribute.LockMode.set -> void
+Inquiry.Stores.InquirySelectOneByKeyEagerAttribute
+Inquiry.Stores.InquirySelectOneByKeyEagerAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquirySelectOneByKeyEagerAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquirySelectOneByKeyEagerAttribute.InquirySelectOneByKeyEagerAttribute() -> void
+Inquiry.Stores.InquirySelectTopByOrderAttribute
+Inquiry.Stores.InquirySelectTopByOrderAttribute.Column.get -> string!
+Inquiry.Stores.InquirySelectTopByOrderAttribute.Descending.get -> bool
+Inquiry.Stores.InquirySelectTopByOrderAttribute.Descending.set -> void
+Inquiry.Stores.InquirySelectTopByOrderAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquirySelectTopByOrderAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquirySelectTopByOrderAttribute.InquirySelectTopByOrderAttribute(string! column) -> void
+Inquiry.Stores.InquiryStore<TEntity>
+Inquiry.Stores.InquiryStore<TEntity>.Inquiry.get -> Inquiry.IInquiry!
+Inquiry.Stores.InquiryStore<TEntity>.InquiryStore(Inquiry.IInquiry! inquiry) -> void
+Inquiry.Stores.InquiryStoredProcedureAttribute
+Inquiry.Stores.InquiryStoredProcedureAttribute.InquiryStoredProcedureAttribute(string! procedureName) -> void
+Inquiry.Stores.InquiryStoredProcedureAttribute.OutputParameter.get -> string?
+Inquiry.Stores.InquiryStoredProcedureAttribute.OutputParameter.set -> void
+Inquiry.Stores.InquiryStoredProcedureAttribute.ProcedureName.get -> string!
+Inquiry.Stores.InquiryStoredProcedureAttribute.ReturnsValue.get -> bool
+Inquiry.Stores.InquiryStoredProcedureAttribute.ReturnsValue.set -> void
+Inquiry.Stores.InquiryUpdateAllAttribute
+Inquiry.Stores.InquiryUpdateAllAttribute.InquiryUpdateAllAttribute() -> void
+Inquiry.Stores.InquiryUpdateAttribute
+Inquiry.Stores.InquiryUpdateAttribute.InquiryUpdateAttribute() -> void
+Inquiry.Stores.InquiryUpdateAttribute.ReturnEntity.get -> bool
+Inquiry.Stores.InquiryUpdateAttribute.ReturnEntity.set -> void
+Inquiry.Stores.InquiryUpdateWhereAttribute
+Inquiry.Stores.InquiryUpdateWhereAttribute.InquiryUpdateWhereAttribute(params string![]! setFields) -> void
+Inquiry.Stores.InquiryUpdateWhereAttribute.SetFields.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Inquiry.Stores.InquiryUpsertAttribute
+Inquiry.Stores.InquiryUpsertAttribute.InquiryUpsertAttribute() -> void
+Inquiry.Stores.InquiryUpsertAttribute.ReturnEntity.get -> bool
+Inquiry.Stores.InquiryUpsertAttribute.ReturnEntity.set -> void
+Inquiry.Stores.InquiryWhereAttribute
+Inquiry.Stores.InquiryWhereAttribute.Field.get -> string!
+Inquiry.Stores.InquiryWhereAttribute.InquiryWhereAttribute(string! field, Inquiry.Stores.Compare op = Inquiry.Stores.Compare.Equal) -> void
+Inquiry.Stores.InquiryWhereAttribute.JsonPath.get -> string?
+Inquiry.Stores.InquiryWhereAttribute.JsonPath.set -> void
+Inquiry.Stores.InquiryWhereAttribute.Op.get -> Inquiry.Stores.Compare
+Inquiry.Stores.InquiryWhereAttribute.Or.get -> bool
+Inquiry.Stores.InquiryWhereAttribute.Or.set -> void
+Inquiry.Stores.KeysetDirection
+Inquiry.Stores.KeysetDirection.Backward = 1 -> Inquiry.Stores.KeysetDirection
+Inquiry.Stores.KeysetDirection.Forward = 0 -> Inquiry.Stores.KeysetDirection
+Inquiry.Transactions.IInquiryTransaction
+Inquiry.Transactions.IInquiryTransaction.BeginTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Transactions.IInquiryTransaction!>!
+Inquiry.Transactions.IInquiryTransaction.CommitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.Transactions.IInquiryTransaction.Connection.get -> System.Data.Common.DbConnection!
+Inquiry.Transactions.IInquiryTransaction.ExecuteAsync(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Inquiry.Transactions.IInquiryTransaction.ExecuteAsync(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Inquiry.Transactions.IInquiryTransaction.ExecuteScalarAsync<T>(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.Transactions.IInquiryTransaction.ExecuteScalarAsync<T>(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
+Inquiry.Transactions.IInquiryTransaction.IsolationLevel.get -> System.Data.IsolationLevel
+Inquiry.Transactions.IInquiryTransaction.QueryAsync<TEntity>(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Inquiry.Transactions.IInquiryTransaction.QueryAsync<TEntity>(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Inquiry.Transactions.IInquiryTransaction.QueryListAsync<TEntity>(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TEntity!>!>!
+Inquiry.Transactions.IInquiryTransaction.QueryListAsync<TEntity>(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TEntity!>!>!
+Inquiry.Transactions.IInquiryTransaction.QuerySingleOrDefaultAsync<TEntity>(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.Transactions.IInquiryTransaction.QuerySingleOrDefaultAsync<TEntity>(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.Transactions.IInquiryTransaction.RollbackAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.Transactions.IInquiryTransaction.ThrowIfClosed() -> void
+Inquiry.Transactions.IInquiryTransaction.Transaction.get -> System.Data.Common.DbTransaction!
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.Depth.get -> int
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.FieldCount.get -> int
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetBoolean(int ordinal) -> bool
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetByte(int ordinal) -> byte
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length) -> long
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetChar(int ordinal) -> char
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length) -> long
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetDataTypeName(int ordinal) -> string!
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetDateTime(int ordinal) -> System.DateTime
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetDecimal(int ordinal) -> decimal
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetDouble(int ordinal) -> double
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetEnumerator() -> System.Collections.IEnumerator!
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetFieldType(int ordinal) -> System.Type!
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetFloat(int ordinal) -> float
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetGuid(int ordinal) -> System.Guid
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetInt16(int ordinal) -> short
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetInt32(int ordinal) -> int
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetInt64(int ordinal) -> long
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetName(int ordinal) -> string!
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetOrdinal(string! name) -> int
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetString(int ordinal) -> string!
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetValue(int ordinal) -> object!
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetValues(object![]! values) -> int
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.HasRows.get -> bool
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.IsClosed.get -> bool
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.IsDBNull(int ordinal) -> bool
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.NextResult() -> bool
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.Read() -> bool
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.RecordsAffected.get -> int
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.this[int ordinal].get -> object!
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.this[string! name].get -> object!
+override Inquiry.Parameters.InquiryParameter.Equals(object? obj) -> bool
+override Inquiry.Parameters.InquiryParameter.GetHashCode() -> int
+static Inquiry.Commands.InquiryCommandResources.Dispose(System.Data.Common.DbCommand! command) -> void
+static Inquiry.DependencyInjection.InquiryHealthChecksBuilderExtensions.AddInquiry(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder, string! name = "inquiry", Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus? failureStatus = null, System.Collections.Generic.IEnumerable<string!>? tags = null) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+static Inquiry.DependencyInjection.InquiryServiceCollectionExtensions.AddInquiry(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.DependencyInjection.InquiryServiceCollectionExtensions.AddInquiry(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, params System.Reflection.Assembly![]! additionalAssemblies) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.DependencyInjection.InquiryServiceCollectionExtensions.AddInquiry(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Inquiry.InquiryOptions!>! configureOptions) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.DependencyInjection.InquiryServiceCollectionExtensions.AddInquiry(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Inquiry.InquiryOptions!>! configureOptions, params System.Reflection.Assembly![]! additionalAssemblies) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.DependencyInjection.InquiryTelemetryServiceCollectionExtensions.AddInquiryTelemetry(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Inquiry.Diagnostics.InquiryTelemetryOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.Entities.InquiryConverterDispatcher<TConverter, TModel, TProvider>.FromProvider(TProvider provider) -> TModel
+static Inquiry.Entities.InquiryConverterDispatcher<TConverter, TModel, TProvider>.ToProvider(TModel model) -> TProvider
+static Inquiry.InquiryAuditContext.BeginScope(string? user) -> Inquiry.InquiryAuditContext.Scope
+static Inquiry.InquiryAuditContext.CurrentUser.get -> string?
+static Inquiry.InquiryGuid.NewSqlServerSequential() -> System.Guid
+static Inquiry.InquiryGuid.NewVersion7() -> System.Guid
+static Inquiry.InquirySql.Sql(System.FormattableString! commandText, System.Data.CommandType? commandType = null, int? commandTimeout = null) -> Inquiry.Commands.InquiryCommand!
+static Inquiry.Parameters.InquiryArrayParameter.Bind<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values) -> void
+static Inquiry.Parameters.InquiryInExpansion.Expand<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values) -> void
+static Inquiry.Parameters.InquiryInExpansion.Expand<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values, int maxParameterCount) -> void
+static Inquiry.Parameters.InquiryInExpansion.Expand<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType, int? size = null, byte? precision = null, byte? scale = null) -> void
+static Inquiry.Parameters.InquiryInExpansion.ExpandNotIn<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values) -> void
+static Inquiry.Parameters.InquiryInExpansion.ExpandNotIn<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values, int maxParameterCount) -> void
+static Inquiry.Parameters.InquiryInExpansion.ExpandNotIn<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType, int? size = null, byte? precision = null, byte? scale = null) -> void
+static Inquiry.Parameters.InquiryJsonArrayParameter.Bind<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values) -> void
+static Inquiry.Parameters.InquiryParameter.operator !=(Inquiry.Parameters.InquiryParameter left, Inquiry.Parameters.InquiryParameter right) -> bool
+static Inquiry.Parameters.InquiryParameter.operator ==(Inquiry.Parameters.InquiryParameter left, Inquiry.Parameters.InquiryParameter right) -> bool
+static Inquiry.Seeding.InquirySeedingExtensions.AddInquirySeeder<TSeeder>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.Seeding.InquirySeedingExtensions.SeedInquiryAsync(this System.IServiceProvider! serviceProvider, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static readonly Inquiry.Entities.InquiryConverterCache<TConverter>.Instance -> TConverter

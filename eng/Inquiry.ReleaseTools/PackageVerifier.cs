@@ -203,7 +203,7 @@ public static class PackageVerifier
     {
         var relative = Normalize(Path.GetRelativePath(root, path));
         var segments = relative.Split('/');
-        return segments.Any(segment => segment is ".git" or ".claude" or "bin" or "obj");
+        return segments.Any(segment => segment is ".git" or ".claude" or ".artifacts" or "artifacts" or "bin" or "obj");
     }
 
     private static (bool IsPackable, string PackageId) EvaluateProject(string projectPath)

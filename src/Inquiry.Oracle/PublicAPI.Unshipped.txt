@@ -1,0 +1,21 @@
+#nullable enable
+Inquiry.Oracle.DependencyInjection.OracleInquiryServiceCollectionExtensions
+Inquiry.Oracle.OracleCompatibility
+Inquiry.Oracle.OracleCompatibility.CloudHosted = 1 -> Inquiry.Oracle.OracleCompatibility
+Inquiry.Oracle.OracleCompatibility.None = 0 -> Inquiry.Oracle.OracleCompatibility
+Inquiry.Oracle.OracleInquiryOptions
+Inquiry.Oracle.OracleInquiryOptions.Compatibility.get -> Inquiry.Oracle.OracleCompatibility
+Inquiry.Oracle.OracleInquiryOptions.Compatibility.set -> void
+Inquiry.Oracle.OracleInquiryOptions.FailoverConnectionString.get -> string?
+Inquiry.Oracle.OracleInquiryOptions.FailoverConnectionString.set -> void
+Inquiry.Oracle.OracleInquiryOptions.MaxAttempts.get -> int
+Inquiry.Oracle.OracleInquiryOptions.MaxAttempts.set -> void
+Inquiry.Oracle.OracleInquiryOptions.OracleInquiryOptions() -> void
+Inquiry.Oracle.OracleInquiryOptions.RetryBaseDelay.get -> System.TimeSpan
+Inquiry.Oracle.OracleInquiryOptions.RetryBaseDelay.set -> void
+Inquiry.Oracle.OracleInquiryOptions.RetryMaxDelay.get -> System.TimeSpan
+Inquiry.Oracle.OracleInquiryOptions.RetryMaxDelay.set -> void
+static Inquiry.Oracle.DependencyInjection.OracleInquiryServiceCollectionExtensions.AddInquiryOracle(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.Oracle.DependencyInjection.OracleInquiryServiceCollectionExtensions.AddInquiryOracle(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Inquiry.Oracle.OracleInquiryOptions!>! configure, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.Oracle.DependencyInjection.OracleInquiryServiceCollectionExtensions.AddInquiryOracle(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.Oracle.DependencyInjection.OracleInquiryServiceCollectionExtensions.AddInquiryOracle(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString, System.Action<Inquiry.Oracle.OracleInquiryOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

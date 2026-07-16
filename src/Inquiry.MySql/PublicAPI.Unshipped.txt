@@ -1,0 +1,21 @@
+#nullable enable
+Inquiry.MySql.DependencyInjection.MySqlInquiryServiceCollectionExtensions
+Inquiry.MySql.MySqlCompatibility
+Inquiry.MySql.MySqlCompatibility.CloudHosted = 1 -> Inquiry.MySql.MySqlCompatibility
+Inquiry.MySql.MySqlCompatibility.None = 0 -> Inquiry.MySql.MySqlCompatibility
+Inquiry.MySql.MySqlInquiryOptions
+Inquiry.MySql.MySqlInquiryOptions.Compatibility.get -> Inquiry.MySql.MySqlCompatibility
+Inquiry.MySql.MySqlInquiryOptions.Compatibility.set -> void
+Inquiry.MySql.MySqlInquiryOptions.FailoverConnectionString.get -> string?
+Inquiry.MySql.MySqlInquiryOptions.FailoverConnectionString.set -> void
+Inquiry.MySql.MySqlInquiryOptions.MaxAttempts.get -> int
+Inquiry.MySql.MySqlInquiryOptions.MaxAttempts.set -> void
+Inquiry.MySql.MySqlInquiryOptions.MySqlInquiryOptions() -> void
+Inquiry.MySql.MySqlInquiryOptions.RetryBaseDelay.get -> System.TimeSpan
+Inquiry.MySql.MySqlInquiryOptions.RetryBaseDelay.set -> void
+Inquiry.MySql.MySqlInquiryOptions.RetryMaxDelay.get -> System.TimeSpan
+Inquiry.MySql.MySqlInquiryOptions.RetryMaxDelay.set -> void
+static Inquiry.MySql.DependencyInjection.MySqlInquiryServiceCollectionExtensions.AddInquiryMySql(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.MySql.DependencyInjection.MySqlInquiryServiceCollectionExtensions.AddInquiryMySql(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Inquiry.MySql.MySqlInquiryOptions!>! configure, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.MySql.DependencyInjection.MySqlInquiryServiceCollectionExtensions.AddInquiryMySql(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.MySql.DependencyInjection.MySqlInquiryServiceCollectionExtensions.AddInquiryMySql(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString, System.Action<Inquiry.MySql.MySqlInquiryOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

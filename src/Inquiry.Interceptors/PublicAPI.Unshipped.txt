@@ -1,0 +1,19 @@
+#nullable enable
+Inquiry.DependencyInjection.InquiryInterceptorsServiceCollectionExtensions
+Inquiry.Interceptors.InquiryNPlusOneScope
+Inquiry.Interceptors.InquiryNPlusOneScope.Dispose() -> void
+Inquiry.Interceptors.NPlusOneDetectionInterceptor
+Inquiry.Interceptors.NPlusOneDetectionInterceptor.CommandExecutingAsync(Inquiry.Commands.InquiryCommandContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Interceptors.NPlusOneDetectionInterceptor.NPlusOneDetectionInterceptor(Microsoft.Extensions.Logging.ILogger<Inquiry.Interceptors.NPlusOneDetectionInterceptor!>! logger, int threshold) -> void
+Inquiry.Interceptors.SlowQueryLoggingInterceptor
+Inquiry.Interceptors.SlowQueryLoggingInterceptor.CommandExecutedAsync(Inquiry.Commands.InquiryCommandExecutedContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Interceptors.SlowQueryLoggingInterceptor.CommandExecutingAsync(Inquiry.Commands.InquiryCommandContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Interceptors.SlowQueryLoggingInterceptor.CommandFailedAsync(Inquiry.Commands.InquiryCommandFailedContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Interceptors.SlowQueryLoggingInterceptor.SlowQueryLoggingInterceptor(Microsoft.Extensions.Logging.ILogger<Inquiry.Interceptors.SlowQueryLoggingInterceptor!>! logger, System.TimeSpan threshold) -> void
+Inquiry.Interceptors.SqlCommenterInterceptor
+Inquiry.Interceptors.SqlCommenterInterceptor.CommandExecutingAsync(Inquiry.Commands.InquiryCommandContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Interceptors.SqlCommenterInterceptor.SqlCommenterInterceptor(string? applicationName = null) -> void
+static Inquiry.DependencyInjection.InquiryInterceptorsServiceCollectionExtensions.AddInquiryNPlusOneDetection(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, int threshold = 2) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.DependencyInjection.InquiryInterceptorsServiceCollectionExtensions.AddInquirySlowQueryLogging(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.TimeSpan? threshold = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.DependencyInjection.InquiryInterceptorsServiceCollectionExtensions.AddInquirySqlCommenter(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string? applicationName = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.Interceptors.InquiryNPlusOneScope.BeginScope() -> Inquiry.Interceptors.InquiryNPlusOneScope!
