@@ -1,7 +1,6 @@
-using Inquiry.Connections;
+using Inquiry.Northwind.Models;
+using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.Tests.Fixtures;
-using Microsoft.Data.SqlClient;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -12,99 +11,137 @@ public sealed class CancellationTokenPropagationTests
 
     public CancellationTokenPropagationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
 
+    private static CancellationToken PreCancelled => new(canceled: true);
+
     [SkippableFact]
-    public async Task DirectSqlClientCancellationStopsInFlightCommandPromptly()
+    public async Task InquiryPipelineCancellationStopsInFlightOperationPromptly()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancel");
-        var factory = harness.GetRequiredService<IInquiryConnectionFactory>();
+        SqlServerTestHarness? harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancel");
 
-        await using var connection = await factory.OpenConnectionAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = "WAITFOR DELAY '00:00:30'";
-
-        using var cts = new CancellationTokenSource();
-        cts.CancelAfter(TimeSpan.FromMilliseconds(500));
-
-        var execution = command.ExecuteNonQueryAsync(cts.Token);
-        var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(10)));
-        if (completed != execution)
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        try
         {
-            cts.Cancel();
-            Exception? cleanupFailure = null;
-            Exception? terminalOutcome = null;
-            try
+            var inquiry = harness.GetRequiredService<IInquiry>();
+            var execution = inquiry.ExecuteAsync($"WAITFOR DELAY '00:00:30'", cts.Token);
+
+            var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(10)));
+            if (completed != execution)
             {
-                command.Cancel();
-                await connection.CloseAsync();
-            }
-            catch (Exception exception)
-            {
-                cleanupFailure = exception;
+                cts.Cancel();
+                var cleanup = ObserveAndDisposeAsync(execution, harness);
+                harness = null;
+
+                var cleanupCompleted = await Task.WhenAny(cleanup, Task.Delay(TimeSpan.FromSeconds(15)));
+                if (cleanupCompleted != cleanup)
+                {
+                    ObserveLateFault(cleanup);
+                    Assert.Fail("Inquiry pipeline did not observe cancellation within 15 seconds.");
+                }
+
+                await cleanup;
+                Assert.Fail("Inquiry pipeline did not observe cancellation within the 10-second watchdog.");
             }
 
-            var observed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(5)));
-            if (observed == execution)
+            var outcome = await Record.ExceptionAsync(() => execution);
+            Assert.True(cts.IsCancellationRequested);
+            Assert.True(
+                outcome is OperationCanceledException canceled && canceled.CancellationToken == cts.Token,
+                $"Expected OperationCanceledException with caller token, got {outcome?.GetType().Name ?? "successful completion"}: {outcome?.Message}");
+        }
+        finally
+        {
+            if (harness is not null)
+                await harness.DisposeAsync();
+        }
+    }
+
+    [SkippableFact]
+    public async Task GeneratedSelectAll_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelSelect");
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => store.SelectAllAsync(PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task GeneratedInsert_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelInsert");
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => store.InsertAsync(new Customer { CustomerID = "CANC1", CompanyName = "Cancelled" }, PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task GeneratedStreaming_PreCancelled_ThrowsOnFirstMoveNext()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelStream");
+        var store = harness.GetRequiredService<OrderStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in store.SelectAllAsync(PreCancelled))
             {
-                terminalOutcome = await Record.ExceptionAsync(() => execution);
+            }
+        });
+    }
+
+    [SkippableFact]
+    public async Task IInquiry_ExecuteScalarAsync_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelScalar");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => inquiry.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM [Customers]", PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task IInquiry_BeginTransactionAsync_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelTx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await using var tx = await inquiry.BeginTransactionAsync(cancellationToken: PreCancelled);
+        });
+    }
+
+    private static async Task ObserveAndDisposeAsync(Task execution, SqlServerTestHarness harness)
+    {
+        try
+        {
+            var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(2)));
+            if (completed == execution)
+            {
+                try { await execution; }
+                catch { }
             }
             else
             {
-                _ = execution.ContinueWith(
-                    static task => _ = task.Exception,
-                    CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default);
+                ObserveLateFault(execution);
             }
-
-            Assert.Fail(
-                "Direct SqlClient execution did not observe cancellation within 10 seconds. " +
-                $"Cleanup failure: {cleanupFailure?.ToString() ?? "none"}. " +
-                $"Terminal outcome after cleanup: {terminalOutcome?.ToString() ?? (observed == execution ? "completed" : "still running")}");
         }
-
-        var outcome = await Record.ExceptionAsync(() => execution);
-
-        Assert.True(cts.IsCancellationRequested);
-        switch (outcome)
+        finally
         {
-            case OperationCanceledException:
-                break;
-            case SqlException exception when IsSqlClientCancellation(exception):
-                break;
-            case null:
-                Assert.Fail("The 30-second SqlClient command completed instead of observing cancellation.");
-                break;
-            default:
-                Assert.Fail($"Unexpected cancellation outcome: {outcome}");
-                break;
+            await harness.DisposeAsync();
         }
     }
 
-    private static bool IsSqlClientCancellation(SqlException exception)
-    {
-        // Microsoft.Data.SqlClient 7.0.1 reports command cancellation as two SqlErrors: the discarded-results
-        // warning and the cancellation itself. Across net8/net9/net10 both use this structured tuple, so the
-        // individual provider cancellation phrase is also required to distinguish the second error.
-        if (exception.Errors.Count != 2)
-        {
-            return false;
-        }
-
-        var hasCancellationError = false;
-        foreach (SqlError error in exception.Errors)
-        {
-            if (error.Number != 0 || error.Class != 11 || error.State != 0)
-            {
-                return false;
-            }
-
-            if (error.Message.Contains("Operation cancelled by user.", StringComparison.Ordinal))
-            {
-                hasCancellationError = true;
-            }
-        }
-
-        return hasCancellationError;
-    }
+    private static void ObserveLateFault(Task task)
+        => _ = task.ContinueWith(
+            static completed => _ = completed.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 }

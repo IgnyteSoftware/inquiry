@@ -1,3 +1,5 @@
+using Inquiry.Northwind.Models;
+using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.Tests.Fixtures;
 using Oracle.ManagedDataAccess.Client;
 
@@ -9,6 +11,69 @@ public sealed class CancellationTokenPropagationTests
     private readonly OracleContainerFixture _fixture;
 
     public CancellationTokenPropagationTests(OracleContainerFixture fixture) => _fixture = fixture;
+
+    private static CancellationToken PreCancelled => new(canceled: true);
+
+    [SkippableFact]
+    public async Task GeneratedSelectAll_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelSelect");
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => store.SelectAllAsync(PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task GeneratedInsert_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelInsert");
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => store.InsertAsync(new Customer { CustomerID = "CANC1", CompanyName = "Cancelled" }, PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task IInquiry_ExecuteScalarAsync_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelScalar");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM \"Customers\"", PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task GeneratedStreaming_PreCancelled_ThrowsOnFirstMoveNext()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelStream");
+        var store = harness.GetRequiredService<OrderStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in store.SelectAllAsync(PreCancelled))
+            {
+            }
+        });
+    }
+
+    [SkippableFact]
+    public async Task IInquiry_BeginTransactionAsync_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelTx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await using var tx = await inquiry.BeginTransactionAsync(cancellationToken: PreCancelled);
+        });
+    }
 
     [SkippableFact]
     public async Task InquiryPipelineCancellationStopsInFlightOperationPromptly()

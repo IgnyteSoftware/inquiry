@@ -1,6 +1,6 @@
-using Inquiry.Connections;
+using Inquiry.Northwind.Models;
+using Inquiry.Northwind.Stores;
 using Inquiry.MySql.Tests.Fixtures;
-using Xunit;
 
 namespace Inquiry.MySql.Tests;
 
@@ -11,129 +11,132 @@ public sealed class CancellationTokenPropagationTests
 
     public CancellationTokenPropagationTests(MySqlContainerFixture fixture) => _fixture = fixture;
 
+    private static CancellationToken PreCancelled => new(canceled: true);
+
     [SkippableFact]
-    public async Task DirectMySqlConnectorCancellationStopsInFlightCommandPromptly()
+    public async Task InquiryPipelineCancellationStopsInFlightOperationPromptly()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancel");
-        var factory = harness.GetRequiredService<IInquiryConnectionFactory>();
+        MySqlTestHarness? harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancel");
 
-        var connection = await factory.OpenConnectionAsync();
-        var command = connection.CreateCommand();
-        command.CommandText = "SELECT SLEEP(30)";
-
-        using var cts = new CancellationTokenSource();
-        cts.CancelAfter(TimeSpan.FromMilliseconds(500));
-
-        var ownershipTransferred = false;
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
         try
         {
-            var execution = command.ExecuteScalarAsync(cts.Token);
+            var inquiry = harness.GetRequiredService<IInquiry>();
+            var execution = inquiry.ExecuteScalarAsync<long>($"SELECT SLEEP(30)", cts.Token);
+
             var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(10)));
             if (completed != execution)
             {
                 cts.Cancel();
-                ownershipTransferred = true;
-                var cleanup = Task.Run(async () =>
-                {
-                    try
-                    {
-                        command.Cancel();
-                    }
-                    finally
-                    {
-                        try
-                        {
-                            await command.DisposeAsync();
-                        }
-                        finally
-                        {
-                            await connection.DisposeAsync();
-                        }
-                    }
-                });
+                var cleanup = ObserveAndDisposeAsync(execution, harness);
+                harness = null;
 
-                var cleanupGuard = Task.Delay(TimeSpan.FromSeconds(1));
-                var cleanupObserved = await Task.WhenAny(cleanup, cleanupGuard);
-                var cleanupFailure = cleanupObserved == cleanup
-                    ? await Record.ExceptionAsync(() => cleanup)
-                    : null;
-                if (cleanupObserved != cleanup)
+                var cleanupCompleted = await Task.WhenAny(cleanup, Task.Delay(TimeSpan.FromSeconds(15)));
+                if (cleanupCompleted != cleanup)
                 {
                     ObserveLateFault(cleanup);
+                    Assert.Fail("Inquiry pipeline did not observe cancellation within 15 seconds.");
                 }
 
-                object? terminalResult = null;
-                Exception? terminalOutcome = null;
-                var executionObserved = await Task.WhenAny(execution, cleanupGuard);
-                if (executionObserved == execution)
-                {
-                    terminalOutcome = await Record.ExceptionAsync(async () =>
-                    {
-                        terminalResult = await execution;
-                    });
-                }
-                else
-                {
-                    ObserveLateFault(execution);
-                }
-
-                Assert.Fail(
-                    "Direct MySqlConnector execution did not observe cancellation within 10 seconds. " +
-                    $"Cleanup failure: {cleanupFailure?.ToString() ?? (cleanupObserved == cleanup ? "none" : "cleanup still running")}. " +
-                    $"Terminal outcome after cleanup: {terminalOutcome?.ToString() ?? (executionObserved == execution ? $"result {terminalResult ?? "<null>"}" : "still running")}");
+                await cleanup;
+                Assert.Fail("Inquiry pipeline did not observe cancellation within the 10-second watchdog.");
             }
 
-            object? result = null;
-            var outcome = await Record.ExceptionAsync(async () =>
-            {
-                result = await execution;
-            });
-
+            var outcome = await Record.ExceptionAsync(() => execution);
             Assert.True(cts.IsCancellationRequested);
-            switch (outcome)
+            Assert.True(
+                outcome is OperationCanceledException canceled && canceled.CancellationToken == cts.Token,
+                $"Expected OperationCanceledException with caller token, got {outcome?.GetType().Name ?? "successful completion"}: {outcome?.Message}");
+        }
+        finally
+        {
+            if (harness is not null)
+                await harness.DisposeAsync();
+        }
+    }
+
+    [SkippableFact]
+    public async Task GeneratedSelectAll_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelSelect");
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => store.SelectAllAsync(PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task GeneratedInsert_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelInsert");
+        var store = harness.GetRequiredService<CustomerStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => store.InsertAsync(new Customer { CustomerID = "CANC1", CompanyName = "Cancelled" }, PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task GeneratedStreaming_PreCancelled_ThrowsOnFirstMoveNext()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelStream");
+        var store = harness.GetRequiredService<OrderStore>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in store.SelectAllAsync(PreCancelled))
             {
-                case OperationCanceledException exception when exception.CancellationToken == cts.Token:
-                    break;
-                case null when IsScalarInterruptionResult(result):
-                    break;
-                case null:
-                    Assert.Fail($"Unexpected MySqlConnector cancellation result: {result ?? "<null>"}.");
-                    break;
-                default:
-                    Assert.Fail($"Unexpected MySqlConnector cancellation outcome: {outcome}");
-                    break;
+            }
+        });
+    }
+
+    [SkippableFact]
+    public async Task IInquiry_ExecuteScalarAsync_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelScalar");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM `Customers`", PreCancelled));
+    }
+
+    [SkippableFact]
+    public async Task IInquiry_BeginTransactionAsync_PreCancelled_Throws()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "cancelTx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await using var tx = await inquiry.BeginTransactionAsync(cancellationToken: PreCancelled);
+        });
+    }
+
+    private static async Task ObserveAndDisposeAsync(Task execution, MySqlTestHarness harness)
+    {
+        try
+        {
+            var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(2)));
+            if (completed == execution)
+            {
+                try { await execution; }
+                catch { }
+            }
+            else
+            {
+                ObserveLateFault(execution);
             }
         }
         finally
         {
-            if (!ownershipTransferred)
-            {
-                try
-                {
-                    await command.DisposeAsync();
-                }
-                finally
-                {
-                    await connection.DisposeAsync();
-                }
-            }
+            await harness.DisposeAsync();
         }
     }
-
-    private static bool IsScalarInterruptionResult(object? result) => result switch
-    {
-        byte value => value == 1,
-        sbyte value => value == 1,
-        short value => value == 1,
-        ushort value => value == 1,
-        int value => value == 1,
-        uint value => value == 1,
-        long value => value == 1,
-        ulong value => value == 1,
-        decimal value => value == 1,
-        _ => false,
-    };
 
     private static void ObserveLateFault(Task task)
         => _ = task.ContinueWith(
