@@ -7,7 +7,7 @@
 > predictable allocations; NativeAOT support; and explicit, validated SQL escape hatches. It is not
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
-> **Last reconciled against source and GitHub:** 2026-07-14 after completing #179, #180, and #181. All
+> **Last reconciled against source and GitHub:** 2026-07-16. All
 > providers are restored; [#171](https://github.com/JakeOverstreet/inquiry/issues/171) records that
 > completed restoration gate.
 
@@ -75,8 +75,8 @@ For 1.0, "feature complete" means:
 ## Priority index
 
 GitHub issue state, priority labels, and the [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1)
-are authoritative for acceptance criteria. As reconciled on 2026-07-14, GitHub has **32 open issues**:
-**27 prioritized for 1.0 (4 P0, 18 P1, and 5 P2)** and five planned for post-1.0 work. All 27 prioritized
+are authoritative for acceptance criteria. As reconciled on 2026-07-16, GitHub has **22 open issues**:
+**17 prioritized for 1.0 (3 P0, 9 P1, and 5 P2)** and five planned for post-1.0 work. All 17 prioritized
 issues are assigned to the `1.0.0` milestone.
 
 ### P0 — stop-ship
@@ -85,7 +85,6 @@ issues are assigned to the `1.0.0` milestone.
 |---|---|
 | Broken/partial provider features | [#69](https://github.com/JakeOverstreet/inquiry/issues/69) |
 | Benchmark truth and release engineering | [#87](https://github.com/JakeOverstreet/inquiry/issues/87), [#89](https://github.com/JakeOverstreet/inquiry/issues/89) |
-| Sequential-key correctness | [#214](https://github.com/JakeOverstreet/inquiry/issues/214) |
 
 ### P1 — must complete for 1.0
 
@@ -93,13 +92,9 @@ issues are assigned to the `1.0.0` milestone.
 |---|---|
 | Eager loading and relationship correctness | [#70](https://github.com/JakeOverstreet/inquiry/issues/70), [#80](https://github.com/JakeOverstreet/inquiry/issues/80) |
 | Scaffolding and live/offline validation | [#72](https://github.com/JakeOverstreet/inquiry/issues/72), [#79](https://github.com/JakeOverstreet/inquiry/issues/79) |
-| Query composition, tenant safety, and locking | [#82](https://github.com/JakeOverstreet/inquiry/issues/82), [#177](https://github.com/JakeOverstreet/inquiry/issues/177), [#178](https://github.com/JakeOverstreet/inquiry/issues/178) |
-| Stored procedures | [#78](https://github.com/JakeOverstreet/inquiry/issues/78), [#188](https://github.com/JakeOverstreet/inquiry/issues/188) |
-| Generated query and model contracts | [#210](https://github.com/JakeOverstreet/inquiry/issues/210), [#211](https://github.com/JakeOverstreet/inquiry/issues/211), [#212](https://github.com/JakeOverstreet/inquiry/issues/212), [#219](https://github.com/JakeOverstreet/inquiry/issues/219) |
-| ASP.NET Core auditing integration | [#213](https://github.com/JakeOverstreet/inquiry/issues/213) |
+| Query composition and tenant safety | [#82](https://github.com/JakeOverstreet/inquiry/issues/82), [#177](https://github.com/JakeOverstreet/inquiry/issues/177) |
 | First-party provider authoring and conformance | [#184](https://github.com/JakeOverstreet/inquiry/issues/184) |
 | Execution-path performance and semantics | [#86](https://github.com/JakeOverstreet/inquiry/issues/86), [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
-| End-to-end cancellation | [#156](https://github.com/JakeOverstreet/inquiry/issues/156) |
 
 ### P2 — target for 1.0 if release gates stay healthy
 
@@ -158,12 +153,14 @@ acceptance criteria supersede any older wording that describes an initial implem
 - **~~DDL safety lint — more rules~~** *(resolved 2026-07-09)*. See [Recently resolved](#recently-resolved).
 - **~~Testing follow-ups: transaction sandbox + data factories~~** *(resolved 2026-07-14)*.
   See [Recently resolved](#recently-resolved) and [Testing](../articles/features/testing.md).
-- **Release engineering & governance — remaining scope** *(reconciled 2026-07-14)*. [#220](https://github.com/JakeOverstreet/inquiry/pull/220) shipped
+- **Release engineering & governance — remaining scope** *(reconciled 2026-07-16)*. [#220](https://github.com/JakeOverstreet/inquiry/pull/220) shipped
   exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
-  and the versioned required CI gate. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and analyzer release tracking,
+  and the versioned required CI gate. Governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), the
+  public API baseline (PublicApiAnalyzers + EnablePackageValidation), and package verification fixes
+  have shipped. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and analyzer release tracking,
   isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
-  SBOM/provenance/dependency evidence, hosted versioned docs, changelog/release notes,
-  release/support/security policies and repository rulesets, protected promotion, and a resumable publisher.
+  SBOM/provenance/dependency evidence, hosted versioned docs, repository rulesets, protected
+  promotion, and a resumable publisher.
 - **Default interceptor library — remaining scope** *(gap research 2026-06-12)*. The
   `Inquiry.Interceptors` package shipped with slow-query warning logging and sqlcommenter
   trace-context tagging (see [Recently resolved](#recently-resolved)); the command-text assertion
@@ -175,10 +172,13 @@ acceptance criteria supersede any older wording that describes an initial implem
   mutations + transactions to the primary (Drizzle `withReplicas` / Sequelize / TypeORM semantics).
   No mainstream .NET ORM ships this; Inquiry already has the connection-factory and failover chassis
   to build on.
-- **Stored-procedure INOUT parameters & multi-result-set** *(gap research 2026-06-12)*. Scalar
-  OUTPUT parameters and the integer RETURN value now surface as a `Task<TScalar>` result (see
-  [Recently resolved](#recently-resolved)); the remaining gaps are INOUT parameters (a value passed
-  in *and* read back), multiple result sets, stored-procedure TVP parameters, and Oracle `OUT REF CURSOR`.
+- **~~Stored-procedure INOUT parameters & multi-result-set~~** *(resolved 2026-07-15)*. See
+  [Recently resolved](#recently-resolved). INOUT parameters, multi-result-set stored procedures,
+  Oracle `OUT REF CURSOR`, and stored-procedure metadata generation are all shipped;
+  [#78](https://github.com/JakeOverstreet/inquiry/issues/78) and
+  [#188](https://github.com/JakeOverstreet/inquiry/issues/188) are closed.
+  Stored-procedure TVP parameters remain open in
+  [#69](https://github.com/JakeOverstreet/inquiry/issues/69).
 - **Database-first scaffolding CLI** *(gap research 2026-06-12)*. A `dotnet inquiry scaffold` tool
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
@@ -240,8 +240,8 @@ acceptance criteria supersede any older wording that describes an initial implem
   [#155](https://github.com/JakeOverstreet/inquiry/issues/155); both tracking issues are closed.
 - The all-types bulk matrix is green on every provider and
   [#134](https://github.com/JakeOverstreet/inquiry/issues/134) is closed.
-- **Open:** verify cancellation through generated/IInquiry operations rather than direct provider commands
-  ([#156](https://github.com/JakeOverstreet/inquiry/issues/156)).
+- End-to-end cancellation through generated/IInquiry operations is complete;
+  [#156](https://github.com/JakeOverstreet/inquiry/issues/156) is closed.
 - Analyzer diagnostic release tracking and generator output-identity hardening are complete;
   [#135](https://github.com/JakeOverstreet/inquiry/issues/135) and
   [#176](https://github.com/JakeOverstreet/inquiry/issues/176) are closed.
@@ -283,6 +283,45 @@ acceptance criteria supersede any older wording that describes an initial implem
 This archive records when an initial capability landed. It does **not** override the priority index or
 GitHub: several capabilities exposed follow-up correctness/performance work and remain open under a
 new or reframed issue.
+
+- **SequentialGuid sort-order fix (#214, 2026-07-15).** `SequentialGuidGenerator` now writes the
+  timestamp bytes in big-endian order within the RFC 9562 `unix_ts_ms` field, matching SQL Server's
+  `uniqueidentifier` comparison semantics so time-ordered GUIDs sort chronologically.
+
+- **Stored-procedure INOUT, multi-result-set, and Oracle REF CURSOR (#78, #188, 2026-07-15).**
+  INOUT parameters (value passed in *and* read back), multi-result-set stored procedures, Oracle
+  `OUT REF CURSOR`, and stored-procedure metadata source generation are all shipped. Stored-procedure
+  TVP parameters remain open in [#69](https://github.com/JakeOverstreet/inquiry/issues/69).
+
+- **End-to-end cancellation (#156, 2026-07-15).** Cancellation now propagates through generated
+  operations and the `IInquiry` pipeline, not just direct provider commands. All provider suites
+  exercise the cancellation path end-to-end.
+
+- **Pessimistic row-level locking (#178, 2026-07-15).** `InquiryLockMode` controls `FOR UPDATE` /
+  `WITH (UPDLOCK, ROWLOCK)` / `FOR UPDATE` (Oracle) locking on generated read methods. Composes
+  with predicates and the active-row filter.
+
+- **Column-list constants (#210, 2026-07-15).** Generated stores emit `const string` column lists
+  for raw SQL queries.
+
+- **InquiryPagedResult (#211, 2026-07-15).** Paired SELECT + COUNT return shape for offset-paged
+  queries.
+
+- **Typed FK attribute (#212, 2026-07-15).** Strongly-typed foreign-key attribute for relation
+  declarations.
+
+- **Generated query contracts (#219, 2026-07-15).** Generated interfaces and contracts for query
+  operations.
+
+- **ASP.NET Core audit-context middleware (#213, 2026-07-15).** `Inquiry.AspNetCore` ships middleware
+  that sets `InquiryAuditContext.CurrentUser` from the ambient `ClaimsPrincipal` per request. The
+  package is not part of the nine-package 1.0 release manifest (non-packable).
+
+- **Release governance documents (#89 partial, 2026-07-15).** SECURITY.md, SUPPORT.md, and
+  CHANGELOG.md shipped. Public API baseline established with `Microsoft.CodeAnalysis.PublicApiAnalyzers`
+  and `EnablePackageValidation`. Package verification fixes applied (`.artifacts` path filter,
+  `Inquiry.AspNetCore` marked non-packable). [#89](https://github.com/JakeOverstreet/inquiry/issues/89)
+  remains open for remaining release-engineering steps.
 
 - **Generated execution hot path (#179, 2026-07-14).** Parameterless generated operations bypass
   `InquiryCommand`; predicate, paging, keyset, and aggregate paths carry immutable value state through
@@ -342,8 +381,8 @@ new or reframed issue.
   MySQL, MariaDB, Oracle). Each test opens a connection via `IInquiryConnectionFactory`, starts a
   long-running operation (`pg_sleep` / `WAITFOR DELAY` / `SLEEP` / `DBMS_SESSION.SLEEP`), cancels
   the token after 500ms, and asserts the provider throws `OperationCanceledException` (or Oracle's
-  `ORA-01013`). End-to-end generated/IInquiry pipeline propagation remains open in
-  [#156](https://github.com/JakeOverstreet/inquiry/issues/156).
+  `ORA-01013`). End-to-end generated/IInquiry pipeline propagation subsequently completed;
+  [#156](https://github.com/JakeOverstreet/inquiry/issues/156) is closed.
 
 - **MySQL and MariaDB `DbDataSource` refactor (2026-07-09).** `MySqlInquiryConnectionFactory` and
   `MariaDbInquiryConnectionFactory` now build and own one app-lifetime `MySqlDataSource` (a
@@ -674,9 +713,8 @@ new or reframed issue.
   a new `IInquiry.ExecuteProcedureScalarAsync<T>` pipeline seam (both pipelines). The two knobs are
   mutually exclusive and a RETURN value must be `Task<int>` (new INQ051). Provider-uniform via
   `CommandType.StoredProcedure`; live-proven on SQL Server (`OUTPUT` + `RETURN` procs), plus generator
-  snapshots. INOUT/multi-result-set/Oracle ref-cursor remain open (TVPs shipped for IN-collection
-  binding — see [Recently resolved](#recently-resolved) — but stored-procedure TVP parameters are not
-  yet supported). See
+  snapshots. INOUT, multi-result-set, and Oracle REF CURSOR shipped in #78/#188 (see above);
+  stored-procedure TVP parameters remain open in #69. See
   [Stored procedures](../articles/features/stored-procedures.md).
 - **Provider-native bulk copy (2026-06-13):** `[InquiryBulkInsert]` streams rows through
   `SqlBulkCopy` / Npgsql binary `COPY` / `MySqlBulkCopy` (new `IInquiryBulkCopier` registered by

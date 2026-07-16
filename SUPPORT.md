@@ -42,3 +42,10 @@ Behavioral bug fixes that correct documented-but-wrong behavior are not consider
 | MySQL          | `Inquiry.MySql`      | `MySqlConnector`              |
 | MariaDB        | `Inquiry.MariaDb`    | `MySqlConnector`              |
 | Oracle         | `Inquiry.Oracle`     | `Oracle.ManagedDataAccess.Core` |
+
+## Companion packages
+
+| Package              | Purpose                                                        |
+|----------------------|----------------------------------------------------------------|
+| `Inquiry.Interceptors` | Slow-query logging, sqlcommenter trace-context tagging, N+1 detection |
+| `Inquiry.Testing`      | SQLite fixture, recording interceptor, entity factory, transaction sandbox, Respawn reset |

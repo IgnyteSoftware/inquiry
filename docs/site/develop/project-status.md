@@ -3,27 +3,23 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code and GitHub:** 2026-07-14 after completing #179, #180, and #181.
+**Last reconciled against the code and GitHub:** 2026-07-16.
 
-**1.0.0 is not release-ready.** GitHub has 32 open issues: 27 carry a 1.0 priority label
-(4 P0, 18 P1, and 5 P2) and are assigned to the `1.0.0` milestone; five are explicitly planned for
+**1.0.0 is not release-ready.** GitHub has 22 open issues: 17 carry a 1.0 priority label
+(3 P0, 9 P1, and 5 P2) and are assigned to the `1.0.0` milestone; five are explicitly planned for
 1.x or demand-driven work. The [Roadmap](roadmap.md) records the complete priority inventory.
 
-Delivery is active but incomplete. The generated execution-path tranche
-([#179](https://github.com/JakeOverstreet/inquiry/issues/179),
-[#180](https://github.com/JakeOverstreet/inquiry/issues/180), and
-[#181](https://github.com/JakeOverstreet/inquiry/issues/181)) is complete: immutable generated commands
-remove boxed command and captured-binder work, generated ad-hoc materializers retain sequential access,
-and batch mutations use bounded provider-selected transports with explicit atomicity. The final live gate
-passed 114/114 focused tests across all six providers and .NET 8/9/10; the measured 72-cell strategy record
-is published in the [batch mutation diagnostic matrix](batch-mutation-diagnostic-matrix.md).
-[#225](https://github.com/JakeOverstreet/inquiry/pull/225) merged a SQL Server collection-benchmark
-tranche that advances [#69](https://github.com/JakeOverstreet/inquiry/issues/69) and
-[#87](https://github.com/JakeOverstreet/inquiry/issues/87); both issues remain open for their broader
-acceptance criteria. [#226](https://github.com/JakeOverstreet/inquiry/pull/226) merged the many-to-many
-child-filter correction and closed [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
-[#68](https://github.com/JakeOverstreet/inquiry/issues/68) is also closed after recording the decision to
-hold Roslyn at 4.8 until a concrete compiler capability requires an upgrade.
+Delivery is active. Since 2026-07-14, ten prioritized issues have closed: #214 (SequentialGuid sort
+order), #78 (stored-procedure INOUT / multi-result-set / Oracle REF CURSOR), #156 (end-to-end
+cancellation), #178 (pessimistic row-level locking), #188 (stored-procedure metadata), #210 (column-list
+constants), #211 (InquiryPagedResult), #212 (typed FK attribute), #213 (ASP.NET Core audit-context
+middleware), and #219 (generated query contracts). [#89](https://github.com/JakeOverstreet/inquiry/issues/89)
+shipped governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), public API baseline
+(PublicApiAnalyzers + EnablePackageValidation), and package verification fixes but remains open for
+remaining release-engineering steps.
+[#69](https://github.com/JakeOverstreet/inquiry/issues/69) advanced with SQL Server TVP binding but
+remains open for broader acceptance criteria.
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87) remains open for authoritative benchmarks.
 
 ## Supported database engines (6, all live-tested)
 

@@ -14,10 +14,11 @@ Inquiry is an experimental **.NET 8+** source-generated micro-ORM. You write att
 | --- | --- |
 | `src/Inquiry` | Public runtime: `IInquiry` facade, attributes, command/parameter types, transactions, options, and the DI extension `AddInquiry()`. Ships no SQL; the request pipeline is internal. |
 | `src/Inquiry.Generators.Shared` | Roslyn incremental source-generator framework. Discovers entities and stores; emits materializers, generated stores, the DI registration class, and `InquiryGeneratedSchema.Ddl`. Owns the per-dialect `SqlBuilder` hierarchy. Bundled privately into each provider analyzer. |
-| `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,Oracle}.Analyzer` | Per-dialect Roslyn analyzers — each a `[Generator]` that bundles the shared framework and emits only when its dialect matches the resolved `[InquiryDialect]`. |
-| `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,Oracle}` | Per-dialect runtime providers: `AddInquiry<Dialect>(...)` DI extension, provider options, internal connection factory, and the `[assembly: InquiryDialect("...")]` marker. |
-| `src/Inquiry.Interceptors` | Opt-in companion: slow-query warning logging and sqlcommenter trace-context tagging. |
-| `src/Inquiry.Testing` | Test helpers: SQLite fixture, recording command interceptor with assertion helpers, and Respawn reset wrapper. |
+| `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,MariaDb,Oracle}.Analyzer` | Per-dialect Roslyn analyzers — each a `[Generator]` that bundles the shared framework and emits only when its dialect matches the resolved `[InquiryDialect]`. |
+| `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,MariaDb,Oracle}` | Per-dialect runtime providers: `AddInquiry<Dialect>(...)` DI extension, provider options, internal connection factory, and the `[assembly: InquiryDialect("...")]` marker. |
+| `src/Inquiry.AspNetCore` | ASP.NET Core audit-context middleware that stamps `CreatedBy`/`ModifiedBy` from the current user identity. |
+| `src/Inquiry.Interceptors` | Opt-in companion: slow-query warning logging, sqlcommenter trace-context tagging, and N+1 query detection. |
+| `src/Inquiry.Testing` | Test helpers: SQLite fixture, recording command interceptor, entity factory, transaction sandbox, and Respawn reset wrapper. |
 | `tests/…` | Core runtime tests, source-generator tests, the shared `Inquiry.IntegrationTesting` and `Inquiry.FeatureCatalog` support libraries, and per-dialect end-to-end suites (SQLite in-process; the rest via Testcontainers). |
 | `samples/Inquiry.Northwind` | Shared classic-Northwind entities, stores, and per-provider DDL consumed by the samples and integration tests. |
 | `samples/Inquiry.Sample` | Runnable ASP.NET Core sample exercising CRUD, upsert, transactions, and eager loading on SQLite. |
@@ -73,7 +74,7 @@ The method bodies, the SQL `const string`s, the materializers, and the DI wiring
 dotnet run --project samples\Inquiry.Sample\Inquiry.Sample.csproj
 ```
 
-The sample seeds an in-process SQLite database, exposes a small HTML dashboard at `/`, and a handful of JSON endpoints under `/api/...` that exercise CRUD, upsert, eager loading, and a transactional insert.
+The sample seeds a database (SQLite by default; configurable to SQL Server or PostgreSQL via `Inquiry:Provider`), serves a Blazor Server dashboard at `/`, and exercises CRUD, upsert, eager loading, and a transactional insert.
 
 ## Running the tests
 

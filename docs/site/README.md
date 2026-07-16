@@ -30,7 +30,7 @@ Output lands in `docs/site/_site/`. Open `docs/site/_site/index.html` directly i
 
 ## What's in here
 
-- **`docfx.json`** — the build config. Lists the five public packages whose XML doc comments become the API reference.
+- **`docfx.json`** — the build config. Lists the public packages whose XML doc comments become the API reference.
 - **`index.md`** — site landing page.
 - **`toc.yml`** — top-level navigation.
 - **`articles/`** — the hand-written conceptual content (getting started, how-it-works, features, providers, architecture).

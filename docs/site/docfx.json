@@ -11,7 +11,9 @@
             "Inquiry.SqlServer/Inquiry.SqlServer.csproj",
             "Inquiry.PostgreSql/Inquiry.PostgreSql.csproj",
             "Inquiry.MySql/Inquiry.MySql.csproj",
-            "Inquiry.Oracle/Inquiry.Oracle.csproj"
+            "Inquiry.MariaDb/Inquiry.MariaDb.csproj",
+            "Inquiry.Oracle/Inquiry.Oracle.csproj",
+            "Inquiry.Interceptors/Inquiry.Interceptors.csproj"
           ]
         }
       ],

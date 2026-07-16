@@ -1,6 +1,6 @@
 # Adding a provider
 
-A provider is two projects mirroring the existing ones (SQLite / SQL Server / PostgreSQL / MySQL / Oracle):
+A provider is two projects mirroring the existing ones (SQLite / SQL Server / PostgreSQL / MySQL / MariaDB / Oracle):
 
 - **`Inquiry.<Dialect>`** (runtime) — the connection factory, the `AddInquiry<Dialect>(…)` DI extension, and
   `[assembly: InquiryDialect("<Dialect>")]`.
