@@ -59,7 +59,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
 
         var state = new CommandState
         {
-            DbSystem = MapDbSystem(context.Command),
+            DbSystem = InquiryTelemetry.MapDbSystem(context.Command),
             Operation = OperationName(context.Command.CommandText),
             StartTimestamp = Stopwatch.GetTimestamp(),
         };
@@ -150,12 +150,6 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         Log.Failed(_logger, context.Exception, state.Operation, elapsed.TotalMilliseconds);
         return ValueTask.CompletedTask;
     }
-
-    /// <summary>
-    /// Maps the concrete ADO.NET command type to the OpenTelemetry <c>db.system.name</c> value, so
-    /// telemetry works with any registered provider without per-provider wiring.
-    /// </summary>
-    private static string MapDbSystem(DbCommand command) => InquiryTelemetry.MapDbSystem(command);
 
     /// <summary>Extracts the leading SQL keyword (SELECT/INSERT/...) as the span/log operation name.</summary>
     private static string OperationName(string commandText)

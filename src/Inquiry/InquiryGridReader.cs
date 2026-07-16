@@ -193,7 +193,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         {
             if (_startTimestamp != 0)
             {
-                var dbSystem = MapDbSystem(_command);
+                var dbSystem = InquiryTelemetry.MapDbSystem(_command);
                 if (!_faulted)
                 {
                     InquiryTelemetry.CommandDuration.Record(
@@ -233,7 +233,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         if (_startTimestamp == 0 || _faulted) return;
         _faulted = true;
         var errorType = exception.GetType().FullName ?? exception.GetType().Name;
-        var dbSystem = MapDbSystem(_command);
+        var dbSystem = InquiryTelemetry.MapDbSystem(_command);
         InquiryTelemetry.CommandDuration.Record(
             Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
@@ -245,6 +245,4 @@ public sealed class InquiryGridReader : IAsyncDisposable
             activity.SetStatus(ActivityStatusCode.Error, exception.Message);
         }
     }
-
-    private static string MapDbSystem(DbCommand command) => InquiryTelemetry.MapDbSystem(command);
 }
