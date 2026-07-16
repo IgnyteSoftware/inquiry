@@ -114,6 +114,12 @@ public abstract class SqlBuilder
     public virtual string BuildCollectionParameterBinding(CollectionParameterBindingContext context)
         => $"{ArrayParameterBinderFqn}.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression});";
 
+    /// <summary>
+    /// Resolves a stored-procedure TVP parameter's descriptor metadata. Returns null when the
+    /// provider does not support TVP parameters on stored procedures.
+    /// </summary>
+    public virtual ProcedureTvpResolution? ResolveProcedureTvp(ProcedureTvpContext context) => null;
+
     public virtual CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
         => new(context.ValueExpression, context.ProviderTypeName, false);
 

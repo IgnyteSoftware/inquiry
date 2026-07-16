@@ -63,4 +63,12 @@ public sealed class InquiryParameterAttribute : Attribute
     /// <see cref="InquiryStoredProcedureAttribute.ReturnsValue"/>.
     /// </summary>
     public bool IsInputOutput { get; set; }
+
+    /// <summary>
+    /// Gets or sets the schema-qualified SQL Server table type name for a table-valued parameter
+    /// (TVP). Required on <c>IEnumerable&lt;T&gt;</c> / <c>IReadOnlyList&lt;T&gt;</c> parameters
+    /// of <see cref="InquiryStoredProcedureAttribute"/> methods. The name must be bracket-quoted
+    /// (<c>[dbo].[MyIdList]</c>); the type must already exist in the target database.
+    /// </summary>
+    public string? TvpTypeName { get; set; }
 }

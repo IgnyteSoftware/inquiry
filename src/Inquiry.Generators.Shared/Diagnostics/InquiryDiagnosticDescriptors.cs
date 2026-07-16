@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ085. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -49,6 +49,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ071–INQ077  Provider schema and artifact validation [IN USE]
     //   INQ078–INQ082  Value-converter model and construction validation [IN USE]
     //   INQ083         Paged-result + Distinct conflict [IN USE]
+    //   INQ086         Stored-procedure TVP binding     (collection param on sproc: missing TvpTypeName, unsupported provider, or type mapping failure) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -774,6 +775,11 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor SchemaManifestMetadataCollision = new(
         "INQ075", "Schema manifest assembly metadata key is already declared",
         "Assembly metadata key '{0}' is reserved for Inquiry schema-manifest transport. Remove the user declaration.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor StoredProcedureTvpInvalid = new(
+        "INQ086", "Stored-procedure collection parameter TVP binding is invalid",
+        "Stored-procedure method '{0}' collection parameter '{1}': {2}",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
 }

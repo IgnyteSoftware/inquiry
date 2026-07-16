@@ -73,4 +73,16 @@ internal sealed record ParameterData(
     /// falls back to the default <c>(object?)name ?? DBNull.Value</c> pattern).
     /// </summary>
     public string? ProcedureValueExpression { get; init; }
+
+    /// <summary>
+    /// Schema-qualified SQL Server TVP type name from <c>[InquiryParameter(TvpTypeName = …)]</c>,
+    /// required for collection parameters on stored-procedure methods. Null for non-TVP parameters.
+    /// </summary>
+    public string? TvpTypeName { get; init; }
+
+    /// <summary>
+    /// The <see cref="Inquiry.Generators.Abstractions.DbTypeClass"/> of the collection element type,
+    /// or null when this parameter is not a collection. Populated for stored-procedure TVP resolution.
+    /// </summary>
+    public Inquiry.Generators.Abstractions.DbTypeClass? ElementDbTypeClass { get; init; }
 }

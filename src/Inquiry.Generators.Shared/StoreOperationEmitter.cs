@@ -32,7 +32,8 @@ internal static class StoreOperationEmitter
         string? baseSelectField = null,
         string? resultTypeOverride = null,
         string? structMatOverride = null,
-        IReadOnlyDictionary<string, EntityData>? entities = null)
+        IReadOnlyDictionary<string, EntityData>? entities = null,
+        IReadOnlyDictionary<string, (ProcedureTvpResolution Resolution, string FieldName)>? procedureTvpBindings = null)
     {
         // a projection-returning select overrides the materialized result type and its struct
         // materializer; all other operations use the store's entity.
@@ -392,7 +393,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.StoredProcedure:
-                EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, structMat, cancellation, entities);
+                EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, structMat, cancellation, entities, procedureTvpBindings);
                 break;
         }
     }
@@ -1381,7 +1382,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
     }
 
-    private static void EmitStoredProcedure(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string structMat, string cancellation, IReadOnlyDictionary<string, EntityData>? entities = null)
+    private static void EmitStoredProcedure(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string structMat, string cancellation, IReadOnlyDictionary<string, EntityData>? entities = null, IReadOnlyDictionary<string, (ProcedureTvpResolution Resolution, string FieldName)>? procedureTvpBindings = null)
     {
         var procParams = Take(method.Parameters, method.Parameters.Count - 1).ToArray();
         var isAsyncEnum = method.ProcedureReturn == ProcedureReturnKind.AsyncEnumerableOfEntity;
@@ -1409,6 +1410,15 @@ internal static class StoreOperationEmitter
         for (var i = 0; i < procParams.Length; i++)
         {
             var p = procParams[i];
+            if (p.ElementComparisonDisplay is not null && procedureTvpBindings is not null &&
+                procedureTvpBindings.TryGetValue(p.Name, out var tvpBinding))
+            {
+                var tvpParamName = refCursorCall is not null
+                    ? sqlBuilder.RuntimeParameterName(p.Name)
+                    : sqlBuilder.StoredProcedureParameterName(p.Name);
+                source.AppendLine($"                {tvpBinding.Resolution.BinderFqn}.Bind(_c, \"{GeneratorHelpers.Escape(tvpParamName)}\", {p.Name}, \"{GeneratorHelpers.Escape(p.TvpTypeName!)}\", {tvpBinding.FieldName});");
+                continue;
+            }
             source.AppendLine($"                var _p{i} = _c.CreateParameter();");
             var paramName = refCursorCall is not null
                 ? sqlBuilder.RuntimeParameterName(p.Name)

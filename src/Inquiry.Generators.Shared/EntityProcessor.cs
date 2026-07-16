@@ -611,7 +611,7 @@ internal static class EntityProcessor
     /// Collapses a CLR type into the dialect-neutral <see cref="DbTypeClass"/> the DDL builder maps
     /// to a physical type. Enums collapse to their underlying integer class so DDL never special-cases them.
     /// </summary>
-    private static DbTypeClass MapTypeClass(TypeData type)
+    internal static DbTypeClass MapTypeClass(TypeData type)
     {
         if (type.IsByteArray) return DbTypeClass.ByteArray;
         if (type.IsGuid) return DbTypeClass.Guid;

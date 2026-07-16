@@ -507,6 +507,8 @@ internal static class StoreProcessor
         var typeData = TypeData.Create(parameter.Type, parameter.NullableAnnotation);
         var dbType = DbTypeMapper.TryGetDbTypeExpression(typeData, isUnicode);
 
+        var elementTypeData = GetEnumerableElementType(parameter.Type);
+
         return new(
             parameter.Name,
             parameter.Type.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat),
@@ -514,8 +516,8 @@ internal static class StoreProcessor
             GeneratorHelpers.IsCancellationToken(parameter.Type))
         {
             ElementComparisonDisplay = GetEnumerableElementComparisonDisplay(parameter.Type),
-            ElementNonNullableComparisonDisplay = GetEnumerableElementType(parameter.Type)?.NonNullableDisplayName,
-            ElementIsNullable = GetEnumerableElementType(parameter.Type)?.IsNullable == true,
+            ElementNonNullableComparisonDisplay = elementTypeData?.NonNullableDisplayName,
+            ElementIsNullable = elementTypeData?.IsNullable == true,
             DefaultValueLiteral = GetDefaultValueLiteral(parameter),
             DbTypeExpression = dbType,
             IsStringType = typeData.SpecialType == SpecialType.System_String,
@@ -527,7 +529,17 @@ internal static class StoreProcessor
             IsInputOutput = paramAttr is not null && GeneratorHelpers.GetNamedBool(paramAttr, "IsInputOutput"),
             DeclaredScale = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Scale") : null) ?? 0,
             ProcedureValueExpression = BuildProcedureValueExpression(parameter.Name, typeData),
+            TvpTypeName = paramAttr is not null ? GeneratorHelpers.GetNamedString(paramAttr, "TvpTypeName") : null,
+            ElementDbTypeClass = elementTypeData is not null ? MapElementDbTypeClass(elementTypeData) : null,
         };
+    }
+
+    private static DbTypeClass? MapElementDbTypeClass(TypeData type)
+    {
+        var result = EntityProcessor.MapTypeClass(type);
+        if (result == DbTypeClass.String && type.SpecialType is not SpecialType.System_String and not SpecialType.System_Char)
+            return null;
+        return result;
     }
 
     private static string? BuildProcedureValueExpression(string name, TypeData typeData)
@@ -1275,6 +1287,76 @@ internal static class StoreProcessor
             return resolution;
         }
 
+        var sprocTvpResolutions = new Dictionary<StoreMethodData, Dictionary<string, (ProcedureTvpResolution Resolution, string FieldName)>>();
+        foreach (var item in valid)
+        {
+            if (item.Method.Operation != StoreOperation.StoredProcedure) continue;
+            var paramCount = item.Method.Parameters.Count - 1;
+            for (var pi = 0; pi < paramCount; pi++)
+            {
+                var p = item.Method.Parameters[pi];
+                if (p.ElementComparisonDisplay is null || p.IsBinaryType) continue;
+                if (collectionErrors.ContainsKey(item.Method)) break;
+                if (p.TvpTypeName is null)
+                {
+                    if (!collectionErrors.ContainsKey(item.Method))
+                    {
+                        collectionErrors.Add(item.Method, $"collection parameter '{p.Name}' requires [InquiryParameter(TvpTypeName = ...)]");
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, item.Method.Location?.ToLocation(),
+                            item.Method.Name, p.Name, "TvpTypeName is required for collection parameters on stored-procedure methods"));
+                    }
+                    continue;
+                }
+                if (p.ElementDbTypeClass is null)
+                {
+                    if (!collectionErrors.ContainsKey(item.Method))
+                    {
+                        collectionErrors.Add(item.Method, $"collection parameter '{p.Name}' has an unsupported element type");
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, item.Method.Location?.ToLocation(),
+                            item.Method.Name, p.Name, "the collection element type has no supported TVP mapping"));
+                    }
+                    continue;
+                }
+                var tvpContext = new ProcedureTvpContext(
+                    item.Method.Name, p.Name, p.TvpTypeName,
+                    p.ElementDbTypeClass.Value, p.ElementIsNullable,
+                    p.DeclaredIsUnicode, p.DeclaredLength, p.DeclaredPrecision, p.DeclaredScale);
+                var tvpResolution = sqlBuilder.ResolveProcedureTvp(tvpContext);
+                if (tvpResolution is null)
+                {
+                    if (!collectionErrors.ContainsKey(item.Method))
+                    {
+                        collectionErrors.Add(item.Method, "this provider does not support TVP parameters on stored procedures");
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, item.Method.Location?.ToLocation(),
+                            item.Method.Name, p.Name, "the active database provider does not support TVP parameters on stored procedures"));
+                    }
+                    continue;
+                }
+                if (!tvpResolution.IsValid)
+                {
+                    var diag = tvpResolution.Diagnostic!;
+                    if (!collectionErrors.ContainsKey(item.Method))
+                    {
+                        collectionErrors.Add(item.Method, diag.FailureMessage);
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, item.Method.Location?.ToLocation(),
+                            item.Method.Name, p.Name, diag.FailureMessage));
+                    }
+                    continue;
+                }
+                var fieldName = "_sprocTvp_" + item.Method.Name + "_" + p.Name;
+                if (!sprocTvpResolutions.TryGetValue(item.Method, out var dict))
+                {
+                    dict = new Dictionary<string, (ProcedureTvpResolution, string)>();
+                    sprocTvpResolutions[item.Method] = dict;
+                }
+                dict[p.Name] = (tvpResolution, fieldName);
+            }
+        }
+
         // [InquiryGlobalFilter] columns: a projection's column subset omits them, so they must be passed
         // explicitly to projection contexts (like the soft-delete column) to keep the active-row filter intact.
         var entityGlobalFilters = entityColumns.Where(static c => c.IsGlobalFilter).ToList();
@@ -1407,6 +1489,16 @@ internal static class StoreProcessor
         {
             source.AppendLine();
             source.AppendLine($"    private static readonly {artifact.RuntimeDescriptorTypeName} {artifact.RuntimeDescriptorFieldName} = {artifact.RuntimeDescriptorExpression};");
+        }
+
+        foreach (var kvp in sprocTvpResolutions)
+        {
+            foreach (var entry in kvp.Value)
+            {
+                var (resolution, fieldName) = entry.Value;
+                source.AppendLine();
+                source.AppendLine($"    private static readonly {resolution.DescriptorTypeFqn} {fieldName} = {resolution.DescriptorExpression};");
+            }
         }
 
         // Batch descriptors are immutable generated support values. Keep them on the store type so
@@ -1789,13 +1881,15 @@ internal static class StoreProcessor
                 // Project: select the projection's columns and materialize the projection type.
                 StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
                     sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null,
-                    "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName, entities: entities);
+                    "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName, entities: entities,
+                    procedureTvpBindings: sprocTvpResolutions.TryGetValue(method, out var tvpBindings) ? tvpBindings : null);
             }
             else
             {
                 baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
                 StoreOperationEmitter.Emit(source, method, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
-                    sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null, baseSelectField, entities: entities);
+                    sqlBuilder, deleteAllCollectionResolutions.TryGetValue(method, out var deleteResolution) ? deleteResolution : null, baseSelectField, entities: entities,
+                    procedureTvpBindings: sprocTvpResolutions.TryGetValue(method, out var tvpBindings2) ? tvpBindings2 : null);
             }
         }
 

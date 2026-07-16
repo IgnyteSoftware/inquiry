@@ -80,6 +80,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         return $"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, \"{EscapeLiteral(artifact.RuntimeTypeName)}\", {artifact.RuntimeDescriptorFieldName});";
     }
 
+    public override ProcedureTvpResolution? ResolveProcedureTvp(ProcedureTvpContext context)
+        => SqlServerTvpResolver.ResolveProcedure(context);
+
     private static string EscapeLiteral(string value)
         => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 

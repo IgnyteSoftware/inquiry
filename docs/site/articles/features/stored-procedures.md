@@ -113,6 +113,19 @@ For multi-result stored procedures, declare one `OUT SYS_REFCURSOR` per result s
 
 > **Every cursor must be opened.** If a procedure conditionally skips opening a cursor, `DBMS_SQL.RETURN_RESULT` raises ORA-29478 at runtime. Ensure every declared `OUT SYS_REFCURSOR` is opened on every code path (open an empty cursor with `OPEN p_cursor FOR SELECT … WHERE 1 = 0` for the no-data case).
 
-## Limitations (today)
+## Table-valued parameters on stored procedures
 
-- **No table-valued parameters in stored procedure calls.** TVPs are used internally for SQL Server `Compare.In` and `[InquiryDeleteAll]` collections, but stored procedure methods cannot yet accept TVP parameters directly.
+SQL Server stored procedures can accept `IEnumerable<T>` parameters as TVPs. Annotate the parameter with `[InquiryParameter(TvpTypeName = "[schema].[TypeName]")]` to specify the user-defined table type:
+
+```csharp
+[InquiryStoredProcedure("usp_BulkLookup")]
+partial Task<int> BulkLookupAsync(
+    [InquiryParameter(TvpTypeName = "[dbo].[IntList]")] IEnumerable<int> ids,
+    CancellationToken cancellationToken = default);
+```
+
+The generator resolves the element type's physical SQL Server mapping at compile time and emits an `InquiryTvpParameter.Bind` call with a cached `InquiryTvpDescriptor`. The user-defined type must already exist on the target database — the generator does not emit DDL for procedure TVP types (unlike `Compare.In` / `[InquiryDeleteAll]` collections, whose types are fully managed).
+
+Omitting `TvpTypeName` on a collection parameter reports `INQ086`. Non-SQL Server providers do not currently support TVP parameters on stored procedures.
+
+## Limitations (today)

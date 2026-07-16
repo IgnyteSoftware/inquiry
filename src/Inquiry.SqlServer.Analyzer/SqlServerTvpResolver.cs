@@ -262,6 +262,101 @@ internal static class SqlServerTvpResolver
         return false;
     }
 
+    /// <summary>
+    /// Resolves a stored-procedure TVP parameter's descriptor from its element <see cref="DbTypeClass"/>
+    /// and declared facets, without requiring an <see cref="IColumn"/>.
+    /// </summary>
+    internal static ProcedureTvpResolution ResolveProcedure(ProcedureTvpContext context)
+    {
+        if (!TryInferFromDbTypeClass(context.ElementTypeClass, context.IsUnicode, context.Length,
+                context.Precision, context.Scale, out var physical, out var error, out var facet))
+        {
+            return new(null, null, null, new CollectionParameterDiagnostic(
+                InvalidMapping, facet, error ?? $"element type class '{context.ElementTypeClass}' has no exact TVP mapping",
+                ImmutableArray.Create(context.OperationName, context.ParameterName, error ?? "unsupported element type")));
+        }
+
+        var nullable = context.ElementIsNullable;
+        var descriptor = "global::Inquiry.SqlServer.Parameters.InquiryTvpDescriptor.Get(\"" + physical!.DescriptorKind + "\", " +
+            physical.Length.ToString(CultureInfo.InvariantCulture) + "L, " +
+            physical.Precision.ToString(CultureInfo.InvariantCulture) + ", " +
+            physical.Scale.ToString(CultureInfo.InvariantCulture) + ", " + (nullable ? "true" : "false") +
+            ") ?? throw new global::System.InvalidOperationException(\"SQL Server TVP descriptor resolution returned null.\")";
+
+        return new(descriptor, "global::Inquiry.SqlServer.Parameters.InquiryTvpDescriptor", "global::Inquiry.SqlServer.Parameters.InquiryTvpParameter", null);
+    }
+
+    private static bool TryInferFromDbTypeClass(DbTypeClass typeClass, bool isUnicode, int length,
+        int precision, int scale, out PhysicalType? physical, out string? error, out string? facet)
+    {
+        error = null;
+        facet = null;
+        physical = typeClass switch
+        {
+            DbTypeClass.Boolean => Simple("bit", "BIT", "bit"),
+            DbTypeClass.Byte => Simple("tinyint", "TINYINT", "tinyint", precision: 3),
+            DbTypeClass.Int16 => Simple("smallint", "SMALLINT", "smallint", precision: 5),
+            DbTypeClass.Int32 => Simple("int", "INT", "int", precision: 10),
+            DbTypeClass.Int64 => Simple("bigint", "BIGINT", "bigint", precision: 19),
+            DbTypeClass.Single => Simple("real", "REAL", "real", precision: 24),
+            DbTypeClass.Double => Simple("float(53)", "FLOAT", "float", precision: 53),
+            DbTypeClass.String => Text(isUnicode, length),
+            DbTypeClass.Guid => Simple("uniqueidentifier", "UNIQUEIDENTIFIER", "uniqueidentifier"),
+            DbTypeClass.DateOnly => Simple("date", "DATE", "date"),
+            DbTypeClass.ByteArray => Binary(length),
+            _ => null,
+        };
+        if (physical is not null) return true;
+
+        if (typeClass == DbTypeClass.Decimal)
+        {
+            if (precision is < 0 or > 38 && precision != 0)
+            {
+                error = "decimal precision must be 1..38";
+                facet = "Precision";
+                return false;
+            }
+            if (precision == 0 && scale > 0)
+            {
+                error = "decimal Scale requires an explicit Precision";
+                facet = "Scale";
+                return false;
+            }
+            var p = precision > 0 ? precision : 18;
+            var s = precision > 0 ? scale : 2;
+            if (s < 0 || s > p)
+            {
+                error = $"decimal scale must be 0..{p}";
+                facet = "Scale";
+                return false;
+            }
+            physical = Decimal(p, s);
+            return true;
+        }
+
+        if (typeClass is DbTypeClass.DateTime or DbTypeClass.DateTimeOffset or DbTypeClass.TimeOnly)
+        {
+            var s = scale > 0 ? scale : 7;
+            if (s is < 0 or > 7)
+            {
+                error = "temporal scale must be 0..7";
+                facet = "Scale";
+                return false;
+            }
+            var name = typeClass switch
+            {
+                DbTypeClass.DateTime => "datetime2",
+                DbTypeClass.DateTimeOffset => "datetimeoffset",
+                _ => "time",
+            };
+            physical = Temporal(name, s);
+            return true;
+        }
+
+        error = $"element type class '{typeClass}' has no exact TVP mapping";
+        return false;
+    }
+
     private static bool IsCompatible(DbTypeClass type, PhysicalType physical) => type switch
     {
         DbTypeClass.Boolean => physical.SystemType == "bit",

@@ -85,3 +85,4 @@ INQ082 | Inquiry | Error | Converter type needs a public parameterless construct
 INQ083 | Inquiry | Error | InquiryPagedResult cannot be combined with Distinct
 INQ084 | Inquiry | Error | Typed foreign key target lacks [InquiryTable]
 INQ085 | Inquiry | Error | Typed foreign key target has no [InquiryKey]
+INQ086 | Inquiry | Error | Stored-procedure collection parameter TVP binding is invalid
