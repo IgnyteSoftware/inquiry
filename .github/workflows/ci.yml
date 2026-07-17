@@ -102,6 +102,25 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  benchmark-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Build benchmarks (Release)
+        run: dotnet build benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release
+      - name: Smoke-run one benchmark (dry run)
+        run: |
+          dotnet run --project benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release -f net8.0 -- \
+            --filter "*ShipperCrudBenchmarks.SelectAll_AdoNet*" \
+            --job Dry \
+            --exporters json
+
   package-producer:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -183,7 +202,7 @@ jobs:
   ci-required-v1:
     name: ci-required-v1
     if: always()
-    needs: [build-and-unit, aot-smoke, integration, package-producer, package-verifier]
+    needs: [build-and-unit, aot-smoke, integration, benchmark-smoke, package-producer, package-verifier]
     runs-on: ubuntu-latest
     steps:
       - name: Enforce every required job and matrix leg
@@ -191,11 +210,13 @@ jobs:
           BUILD_AND_UNIT_RESULT: ${{ needs.build-and-unit.result }}
           AOT_SMOKE_RESULT: ${{ needs.aot-smoke.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
+          BENCHMARK_SMOKE_RESULT: ${{ needs.benchmark-smoke.result }}
           PACKAGE_PRODUCER_RESULT: ${{ needs.package-producer.result }}
           PACKAGE_VERIFIER_RESULT: ${{ needs.package-verifier.result }}
         run: |
           test "$BUILD_AND_UNIT_RESULT" = success
           test "$AOT_SMOKE_RESULT" = success
           test "$INTEGRATION_RESULT" = success
+          test "$BENCHMARK_SMOKE_RESULT" = success
           test "$PACKAGE_PRODUCER_RESULT" = success
           test "$PACKAGE_VERIFIER_RESULT" = success
