@@ -2,7 +2,11 @@ using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
+using Inquiry.Benchmarks.LinqToDb;
+using Inquiry.Benchmarks.RepoDB;
 using Inquiry.Northwind.Models;
+using LinqToDB;
+using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,6 +33,7 @@ public class PaginationBenchmarks
 {
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
+    private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
     [Params(1000, 100000)] public int Rows;
@@ -42,6 +47,7 @@ public class PaginationBenchmarks
     {
         _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
+        _linqToDbOptions = _db.LinqToDbOptions;
         _offset = Rows / 2;   // deep page so OFFSET cost is realistic
         _after  = Rows / 2;   // keyset seek point
     }
@@ -112,6 +118,32 @@ public class PaginationBenchmarks
     }
 
     [BenchmarkCategory("OffsetPage"), Benchmark]
+    public async Task<int> OffsetPage_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>()
+            .OrderBy(p => p.ProductID)
+            .Skip(_offset)
+            .Take(PageSize)
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("OffsetPage"), Benchmark]
+    public async Task<int> OffsetPage_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.BatchQueryAsync<RdProduct>(
+            connection,
+            page: _offset / PageSize,
+            rowsPerBatch: PageSize,
+            orderBy: RepoDb.OrderField.Parse(new { ProductID = RepoDb.Enumerations.Order.Ascending }),
+            where: (object)null!)).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("OffsetPage"), Benchmark]
     public async Task<int> OffsetPage_Inquiry()
     {
         var list = await _db.Products.PageByIdAsync(offset: _offset, limit: PageSize);
@@ -149,6 +181,18 @@ public class PaginationBenchmarks
         await connection.OpenAsync();
         var list = (await connection.QueryAsync<Product>(
             KeysetSqlAt, new { after = _after, limit = PageSize + 1 })).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("KeysetPage"), Benchmark]
+    public async Task<int> KeysetPage_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>()
+            .Where(p => p.ProductID > _after)
+            .OrderBy(p => p.ProductID)
+            .Take(PageSize + 1)
+            .ToListAsync();
         return list.Count;
     }
 

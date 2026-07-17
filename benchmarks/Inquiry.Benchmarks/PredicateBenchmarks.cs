@@ -2,7 +2,11 @@ using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
+using Inquiry.Benchmarks.LinqToDb;
+using Inquiry.Benchmarks.RepoDB;
 using Inquiry.Northwind.Models;
+using LinqToDB;
+using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,6 +31,7 @@ public class PredicateBenchmarks
 {
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
+    private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
     [Params(1000, 100000)] public int Rows;
@@ -40,6 +45,7 @@ public class PredicateBenchmarks
     {
         _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
+        _linqToDbOptions = _db.LinqToDbOptions;
     }
 
     [GlobalCleanup]
@@ -106,6 +112,30 @@ public class PredicateBenchmarks
     }
 
     [BenchmarkCategory("Search"), Benchmark]
+    public async Task<int> Search_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>()
+            .Where(p => p.UnitPrice >= MinPrice && Sql.Like(p.ProductName, NamePattern))
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("Search"), Benchmark]
+    public async Task<int> Search_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.QueryAsync<RdProduct>(connection,
+            new RepoDb.QueryGroup(new[]
+            {
+                new RepoDb.QueryField("UnitPrice", RepoDb.Enumerations.Operation.GreaterThanOrEqual, MinPrice),
+                new RepoDb.QueryField("ProductName", RepoDb.Enumerations.Operation.Like, NamePattern),
+            }))).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("Search"), Benchmark]
     public async Task<int> Search_Inquiry()
     {
         var list = await _db.Products.SearchAsync(MinPrice, NamePattern);
@@ -156,6 +186,16 @@ public class PredicateBenchmarks
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var list = await ctx.Products.AsNoTracking()
             .Where(p => CategoryIdsNullable.Contains(p.CategoryID))
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("InList"), Benchmark]
+    public async Task<int> InList_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>()
+            .Where(p => CategoryIds.Contains(p.CategoryID!.Value))
             .ToListAsync();
         return list.Count;
     }

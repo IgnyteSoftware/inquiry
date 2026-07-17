@@ -55,3 +55,13 @@ public sealed class RdProduct
     [Map("Discontinued")]
     public bool Discontinued { get; set; }
 }
+
+[Map("Region")]
+public sealed class RdRegion
+{
+    [Primary, Map("RegionID")]
+    public int RegionID { get; set; }
+
+    [Map("RegionDescription")]
+    public string RegionDescription { get; set; } = "";
+}

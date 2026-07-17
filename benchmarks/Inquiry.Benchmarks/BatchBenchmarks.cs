@@ -1,7 +1,11 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
+using Inquiry.Benchmarks.LinqToDb;
+using Inquiry.Benchmarks.RepoDB;
 using Inquiry.Northwind.Models;
+using LinqToDB;
+using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 
 namespace Inquiry.Benchmarks;
@@ -30,6 +34,7 @@ public class BatchBenchmarks
 
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
+    private DataOptions _linqToDbOptions = null!;
 
     // Scaled by BatchSize so each iteration's RegionID window is disjoint from every other's.
     private int _iterationCounter;
@@ -39,6 +44,7 @@ public class BatchBenchmarks
     {
         _db = BenchmarkDatabase.CreateAsync().GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
+        _linqToDbOptions = _db.LinqToDbOptions;
     }
 
     [GlobalCleanup]
@@ -102,6 +108,29 @@ public class BatchBenchmarks
         }
         await tx.CommitAsync();
         return affected;
+    }
+
+    [BenchmarkCategory("BatchInsert"), Benchmark]
+    public async Task<int> BatchInsert_LinqToDb()
+    {
+        var batch = BuildBatch();
+        await using var dc = new DataConnection(_linqToDbOptions);
+        await using var tx = await dc.BeginTransactionAsync();
+        int affected = 0;
+        foreach (var region in batch)
+            affected += await dc.InsertAsync(new L2Region { RegionID = region.RegionID, RegionDescription = region.RegionDescription });
+        await tx.CommitAsync();
+        return affected;
+    }
+
+    [BenchmarkCategory("BatchInsert"), Benchmark]
+    public async Task<int> BatchInsert_RepoDb()
+    {
+        var batch = BuildBatch();
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var rdBatch = batch.Select(r => new RdRegion { RegionID = r.RegionID, RegionDescription = r.RegionDescription }).ToList();
+        return await RepoDb.DbConnectionExtension.InsertAllAsync(connection, rdBatch);
     }
 
     [BenchmarkCategory("BatchInsert"), Benchmark]

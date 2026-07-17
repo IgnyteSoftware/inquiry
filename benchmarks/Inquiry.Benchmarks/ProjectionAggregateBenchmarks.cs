@@ -2,7 +2,11 @@ using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
+using Inquiry.Benchmarks.LinqToDb;
+using Inquiry.Benchmarks.RepoDB;
 using Inquiry.Northwind.Models;
+using LinqToDB;
+using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,6 +35,7 @@ public class ProjectionAggregateBenchmarks
 {
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
+    private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
     [Params(1000, 100000)] public int Rows;
@@ -40,6 +45,7 @@ public class ProjectionAggregateBenchmarks
     {
         _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
+        _linqToDbOptions = _db.LinqToDbOptions;
     }
 
     [GlobalCleanup]
@@ -91,6 +97,16 @@ public class ProjectionAggregateBenchmarks
     }
 
     [BenchmarkCategory("Projection"), Benchmark]
+    public async Task<int> Projection_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>()
+            .Select(p => new { p.ProductID, p.ProductName, p.UnitPrice })
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("Projection"), Benchmark]
     public async Task<int> Projection_Inquiry()
     {
         var list = await _db.Products.SummariesAsync();
@@ -127,6 +143,21 @@ public class ProjectionAggregateBenchmarks
     }
 
     [BenchmarkCategory("Count"), Benchmark]
+    public async Task<long> Count_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.GetTable<L2Product>().CountAsync();
+    }
+
+    [BenchmarkCategory("Count"), Benchmark]
+    public async Task<long> Count_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.CountAllAsync<RdProduct>(connection);
+    }
+
+    [BenchmarkCategory("Count"), Benchmark]
     public async Task<long> Count_Inquiry() => await _db.Products.CountAsync();
 
     // ---- Sum (SUM(UnitPrice)) -----------------------------------------------------------
@@ -151,6 +182,21 @@ public class ProjectionAggregateBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         return await connection.ExecuteScalarAsync<decimal?>(SumSql);
+    }
+
+    [BenchmarkCategory("Sum"), Benchmark]
+    public async Task<decimal?> Sum_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.GetTable<L2Product>().SumAsync(p => p.UnitPrice);
+    }
+
+    [BenchmarkCategory("Sum"), Benchmark]
+    public async Task<object?> Sum_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.SumAllAsync<RdProduct>(connection, new RepoDb.Field("UnitPrice"));
     }
 
     // note: EF Core's SQLite provider cannot translate a decimal aggregate (UnitPrice is decimal;
@@ -182,9 +228,24 @@ public class ProjectionAggregateBenchmarks
         return await connection.ExecuteScalarAsync<double?>(AvgSql);
     }
 
+    [BenchmarkCategory("Avg"), Benchmark]
+    public async Task<decimal?> Avg_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.GetTable<L2Product>().AverageAsync(p => p.UnitPrice);
+    }
+
+    [BenchmarkCategory("Avg"), Benchmark]
+    public async Task<object?> Avg_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.AverageAllAsync<RdProduct>(connection, new RepoDb.Field("UnitPrice"));
+    }
+
     // note: EF Core SQLite cannot translate a decimal aggregate, so the EF Avg arm is omitted on
     // SQLite (included on the networked dialects). ProductStore also has no generated
-    // [InquiryAggregate(Avg)] method — so on SQLite this category is ADO + Dapper only.
+    // [InquiryAggregate(Avg)] method — so on SQLite this category is ADO + Dapper + linq2db + RepoDb only.
 
     // ---- Min (MIN(UnitPrice)) -----------------------------------------------------------
 
@@ -209,9 +270,24 @@ public class ProjectionAggregateBenchmarks
         return await connection.ExecuteScalarAsync<decimal?>(MinSql);
     }
 
+    [BenchmarkCategory("Min"), Benchmark]
+    public async Task<decimal?> Min_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.GetTable<L2Product>().MinAsync(p => p.UnitPrice);
+    }
+
+    [BenchmarkCategory("Min"), Benchmark]
+    public async Task<object?> Min_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.MinAllAsync<RdProduct>(connection, new RepoDb.Field("UnitPrice"));
+    }
+
     // note: EF Core SQLite cannot translate a decimal aggregate, so the EF Min arm is omitted on
     // SQLite (included on the networked dialects). ProductStore also has no generated
-    // [InquiryAggregate(Min)] method — so on SQLite this category is ADO + Dapper only.
+    // [InquiryAggregate(Min)] method — so on SQLite this category is ADO + Dapper + linq2db + RepoDb only.
 
     // ---- Max (MAX(UnitPrice)) -----------------------------------------------------------
 
@@ -234,6 +310,21 @@ public class ProjectionAggregateBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         return await connection.ExecuteScalarAsync<decimal?>(MaxSql);
+    }
+
+    [BenchmarkCategory("Max"), Benchmark]
+    public async Task<decimal?> Max_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.GetTable<L2Product>().MaxAsync(p => p.UnitPrice);
+    }
+
+    [BenchmarkCategory("Max"), Benchmark]
+    public async Task<object?> Max_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.MaxAllAsync<RdProduct>(connection, new RepoDb.Field("UnitPrice"));
     }
 
     // note: EF Core SQLite cannot translate a decimal aggregate, so the EF Max arm is omitted on

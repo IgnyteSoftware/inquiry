@@ -1,5 +1,7 @@
 using LinqToDB.Mapping;
 
+#pragma warning disable CA1707
+
 namespace Inquiry.Benchmarks.LinqToDb;
 
 [Table("Shippers")]
@@ -54,4 +56,14 @@ public sealed class L2Product
 
     [Column("Discontinued"), NotNull]
     public bool Discontinued { get; set; }
+}
+
+[Table("Region")]
+public sealed class L2Region
+{
+    [PrimaryKey, Column("RegionID")]
+    public int RegionID { get; set; }
+
+    [Column("RegionDescription"), NotNull]
+    public string RegionDescription { get; set; } = "";
 }
