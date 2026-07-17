@@ -94,7 +94,9 @@ public class StreamingBenchmarks
     [BenchmarkCategory("BufferedRead"), Benchmark]
     public async Task<int> BufferedRead_Inquiry()
     {
+#pragma warning disable INQ048 // Static SQL constant, no user input
         var list = await _db.Inquiry.QueryListAsync<Product>(new InquiryCommand(SelectAllSql));
+#pragma warning restore INQ048
         return list.Count;
     }
 
@@ -127,7 +129,9 @@ public class StreamingBenchmarks
     public async Task<int> StreamingRead_Inquiry()
     {
         var count = 0;
+#pragma warning disable INQ048 // Static SQL constant, no user input
         await foreach (var _ in _db.Inquiry.QueryAsync<Product>(new InquiryCommand(SelectAllSql)))
+#pragma warning restore INQ048
             count++;
         return count;
     }
