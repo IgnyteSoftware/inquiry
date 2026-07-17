@@ -1,4 +1,11 @@
 using BenchmarkDotNet.Running;
+using Inquiry.Benchmarks;
+
+if (args.Contains("--capture-plans", StringComparer.OrdinalIgnoreCase))
+{
+    await QueryPlanCapture.RunAsync();
+    return;
+}
 
 // Default: run every benchmark. Pass `--filter *Customer*` etc. to scope a run.
 // Examples:
