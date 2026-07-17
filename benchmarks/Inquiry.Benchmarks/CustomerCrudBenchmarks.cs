@@ -3,7 +3,11 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
 using Inquiry.Benchmarks.Ef;
+using Inquiry.Benchmarks.LinqToDb;
+using Inquiry.Benchmarks.RepoDB;
 using Inquiry.Northwind.Models;
+using LinqToDB;
+using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +24,7 @@ public class CustomerCrudBenchmarks
 {
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
+    private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
     [Params(1000, 100000)] public int Rows;
@@ -36,6 +41,7 @@ public class CustomerCrudBenchmarks
     {
         _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
+        _linqToDbOptions = _db.LinqToDbOptions;
     }
 
     [GlobalCleanup]
@@ -95,6 +101,23 @@ public class CustomerCrudBenchmarks
     }
 
     [BenchmarkCategory("SelectAll"), Benchmark]
+    public async Task<int> SelectAll_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Customer>().ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectAll"), Benchmark]
+    public async Task<int> SelectAll_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.QueryAllAsync<RdCustomer>(connection)).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Inquiry()
     {
         var list = await _db.Customers.SelectAllAsync();
@@ -134,6 +157,21 @@ public class CustomerCrudBenchmarks
     }
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
+    public async Task<L2Customer?> SelectByKey_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.GetTable<L2Customer>().FirstOrDefaultAsync(c => c.CustomerID == TargetCustomerId);
+    }
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
+    public async Task<RdCustomer?> SelectByKey_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return (await RepoDb.DbConnectionExtension.QueryAsync<RdCustomer>(connection, TargetCustomerId)).FirstOrDefault();
+    }
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
     public async Task<Customer?> SelectByKey_Inquiry()
         => await _db.Customers.SelectByKeyAsync(TargetCustomerId);
 
@@ -169,6 +207,24 @@ public class CustomerCrudBenchmarks
     {
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var list = await ctx.Customers.AsNoTracking().Where(c => c.Country == TargetCountry).ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectByField"), Benchmark]
+    public async Task<int> SelectByField_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Customer>().Where(c => c.Country == TargetCountry).ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectByField"), Benchmark]
+    public async Task<int> SelectByField_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.QueryAsync<RdCustomer>(connection,
+            new RepoDb.QueryGroup(new RepoDb.QueryField("Country", TargetCountry)))).AsList();
         return list.Count;
     }
 
@@ -230,6 +286,36 @@ public class CustomerCrudBenchmarks
     }
 
     [BenchmarkCategory("Insert"), Benchmark]
+    public async Task<int> Insert_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.InsertAsync(new L2Customer
+        {
+            CustomerID  = NextInsertId(),
+            CompanyName = "Bench Co",
+            ContactName = "Bench Contact",
+            Country     = "USA",
+            City        = "Bench City",
+        });
+    }
+
+    [BenchmarkCategory("Insert"), Benchmark]
+    public async Task<object?> Insert_RepoDb()
+    {
+        var id = NextInsertId();
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.InsertAsync(connection, new RdCustomer
+        {
+            CustomerID  = id,
+            CompanyName = "Bench Co",
+            ContactName = "Bench Contact",
+            Country     = "USA",
+            City        = "Bench City",
+        });
+    }
+
+    [BenchmarkCategory("Insert"), Benchmark]
     public async Task<int> Insert_Inquiry()
         => await _db.Customers.InsertAsync(new Customer
         {
@@ -280,6 +366,35 @@ public class CustomerCrudBenchmarks
         entity.Country     = "USA";
         entity.City        = "Updated City";
         return await ctx.SaveChangesAsync();
+    }
+
+    [BenchmarkCategory("Update"), Benchmark]
+    public async Task<int> Update_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.UpdateAsync(new L2Customer
+        {
+            CustomerID  = TargetCustomerId,
+            CompanyName = "Updated Co",
+            ContactName = "Updated Contact",
+            Country     = "USA",
+            City        = "Updated City",
+        });
+    }
+
+    [BenchmarkCategory("Update"), Benchmark]
+    public async Task<int> Update_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdCustomer
+        {
+            CustomerID  = TargetCustomerId,
+            CompanyName = "Updated Co",
+            ContactName = "Updated Contact",
+            Country     = "USA",
+            City        = "Updated City",
+        });
     }
 
     [BenchmarkCategory("Update"), Benchmark]
@@ -356,6 +471,35 @@ public class CustomerCrudBenchmarks
             "    Country     = excluded.Country, " +
             "    City        = excluded.City;",
             TargetCustomerId, "Upserted Co", "Upserted Contact", "USA", "Upserted City");
+    }
+
+    [BenchmarkCategory("Upsert"), Benchmark]
+    public async Task<int> Upsert_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.InsertOrReplaceAsync(new L2Customer
+        {
+            CustomerID  = TargetCustomerId,
+            CompanyName = "Upserted Co",
+            ContactName = "Upserted Contact",
+            Country     = "USA",
+            City        = "Upserted City",
+        });
+    }
+
+    [BenchmarkCategory("Upsert"), Benchmark]
+    public async Task<object?> Upsert_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.MergeAsync(connection, new RdCustomer
+        {
+            CustomerID  = TargetCustomerId,
+            CompanyName = "Upserted Co",
+            ContactName = "Upserted Contact",
+            Country     = "USA",
+            City        = "Upserted City",
+        });
     }
 
     [BenchmarkCategory("Upsert"), Benchmark]

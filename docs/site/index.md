@@ -49,7 +49,7 @@ partial class ShipperStore
 ## Why Inquiry
 
 - **Zero runtime SQL building.** The query strings are `const string`s in your assembly — no interpolation, no `StringBuilder`, no LINQ provider, no expression trees at runtime. The provider is told exactly what to execute.
-- **Apples-to-apples performance with raw ADO.NET.** Generated readers use `CommandBehavior.SequentialAccess` and per-call struct materializers — measured allocation matches hand-written ADO.NET on every provider, beating Dapper and EF Core.
+- **Apples-to-apples performance with raw ADO.NET.** Generated readers use `CommandBehavior.SequentialAccess` and per-call struct materializers — on buffered CRUD workloads (select-all, point reads, insert, update, upsert), measured allocation matches hand-written ADO.NET. See the [benchmark suite](https://github.com/JakeOverstreet/inquiry/tree/main/benchmarks) for workload-scoped evidence and methodology.
 - **Six real databases, identical surface.** Sqlite, SQL Server, PostgreSQL, MySQL, MariaDB, Oracle — same attributes, same store API. The per-dialect generator picks the right SQL flavor at compile time.
 - **Schema you can deploy.** The generator also emits `InquiryGeneratedSchema.Ddl` — your CREATE TABLE statements, in dependency order, per dialect. Use it for tests, migrations, or first-run bootstrap.
 - **Diagnostics at compile time, not at 3 AM.** Bad column name? Missing key? Unsupported return shape? You get an `INQxxx` diagnostic at build, with a source location.

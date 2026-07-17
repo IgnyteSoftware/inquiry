@@ -5,9 +5,11 @@ using Inquiry.Northwind;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Sqlite.DependencyInjection;
+using LinqToDB;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using RepoDb;
 
 namespace Inquiry.Benchmarks;
 
@@ -31,12 +33,13 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     private readonly string _databasePath;
     private readonly ServiceProvider _services;
 
-    private BenchmarkDatabase(string databasePath, string connectionString, ServiceProvider services, IDbContextFactory<NorthwindDbContext> dbContextFactory, int seedRows)
+    private BenchmarkDatabase(string databasePath, string connectionString, ServiceProvider services, IDbContextFactory<NorthwindDbContext> dbContextFactory, DataOptions linqToDbOptions, int seedRows)
     {
         _databasePath = databasePath;
         ConnectionString = connectionString;
         _services = services;
         DbContextFactory = dbContextFactory;
+        LinqToDbOptions = linqToDbOptions;
         RowCount = seedRows;
     }
 
@@ -46,6 +49,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     public int RowCount { get; }
 
     public IDbContextFactory<NorthwindDbContext> DbContextFactory { get; }
+    public DataOptions LinqToDbOptions { get; }
 
     public IInquiry Inquiry => _services.GetRequiredService<IInquiry>();
     public CustomerStore Customers => _services.GetRequiredService<CustomerStore>();
@@ -88,7 +92,9 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             .BuildServiceProvider();
 
         var dbContextFactory = services.GetRequiredService<IDbContextFactory<NorthwindDbContext>>();
-        var harness = new BenchmarkDatabase(databasePath, connectionString, services, dbContextFactory, seedRows);
+        var linqToDbOptions = new DataOptions().UseSQLite(connectionString);
+        GlobalConfiguration.Setup().UseSqlite();
+        var harness = new BenchmarkDatabase(databasePath, connectionString, services, dbContextFactory, linqToDbOptions, seedRows);
 
         await harness.SeedAsync().ConfigureAwait(false);
         return harness;

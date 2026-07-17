@@ -18,6 +18,9 @@
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
     <PackageReference Include="Dapper" />
+    <PackageReference Include="linq2db" />
+    <PackageReference Include="RepoDb" />
+    <PackageReference Include="RepoDb.Sqlite.Microsoft" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />

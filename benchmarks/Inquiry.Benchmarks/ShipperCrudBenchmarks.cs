@@ -3,7 +3,11 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
 using Inquiry.Benchmarks.Ef;
+using Inquiry.Benchmarks.LinqToDb;
+using Inquiry.Benchmarks.RepoDB;
 using Inquiry.Northwind.Models;
+using LinqToDB;
+using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +25,7 @@ public class ShipperCrudBenchmarks
 {
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
+    private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
     [Params(1000, 100000)] public int Rows;
@@ -33,6 +38,7 @@ public class ShipperCrudBenchmarks
     {
         _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
+        _linqToDbOptions = _db.LinqToDbOptions;
     }
 
     [GlobalCleanup]
@@ -78,6 +84,23 @@ public class ShipperCrudBenchmarks
     }
 
     [BenchmarkCategory("SelectAll"), Benchmark]
+    public async Task<int> SelectAll_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Shipper>().ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectAll"), Benchmark]
+    public async Task<int> SelectAll_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.QueryAllAsync<RdShipper>(connection)).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Inquiry()
     {
         var list = await _db.Shippers.SelectAllAsync();
@@ -117,6 +140,21 @@ public class ShipperCrudBenchmarks
     }
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
+    public async Task<L2Shipper?> SelectByKey_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.GetTable<L2Shipper>().FirstOrDefaultAsync(s => s.ShipperID == TargetShipperId);
+    }
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
+    public async Task<RdShipper?> SelectByKey_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return (await RepoDb.DbConnectionExtension.QueryAsync<RdShipper>(connection, TargetShipperId)).FirstOrDefault();
+    }
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
     public async Task<Shipper?> SelectByKey_Inquiry()
         => await _db.Shippers.SelectByKeyAsync(TargetShipperId);
 
@@ -152,6 +190,24 @@ public class ShipperCrudBenchmarks
     {
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var list = await ctx.Shippers.AsNoTracking().Where(s => s.CompanyName == TargetCompanyName).ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectByField"), Benchmark]
+    public async Task<int> SelectByField_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Shipper>().Where(s => s.CompanyName == TargetCompanyName).ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectByField"), Benchmark]
+    public async Task<int> SelectByField_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.QueryAsync<RdShipper>(connection,
+            new RepoDb.QueryGroup(new RepoDb.QueryField("CompanyName", TargetCompanyName)))).AsList();
         return list.Count;
     }
 
@@ -195,6 +251,21 @@ public class ShipperCrudBenchmarks
     }
 
     [BenchmarkCategory("Insert"), Benchmark]
+    public async Task<int> Insert_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.InsertAsync(new L2Shipper { CompanyName = "Bench Shipper", Phone = "555-0000" });
+    }
+
+    [BenchmarkCategory("Insert"), Benchmark]
+    public async Task<object?> Insert_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.InsertAsync(connection, new RdShipper { CompanyName = "Bench Shipper", Phone = "555-0000" });
+    }
+
+    [BenchmarkCategory("Insert"), Benchmark]
     public async Task<int> Insert_Inquiry()
         => await _db.Shippers.InsertAsync(new Shipper { CompanyName = "Bench Shipper", Phone = "555-0000" });
 
@@ -231,6 +302,31 @@ public class ShipperCrudBenchmarks
         entity.CompanyName = "Updated Shipper";
         entity.Phone       = "555-9999";
         return await ctx.SaveChangesAsync();
+    }
+
+    [BenchmarkCategory("Update"), Benchmark]
+    public async Task<int> Update_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.UpdateAsync(new L2Shipper
+        {
+            ShipperID   = TargetShipperId,
+            CompanyName = "Updated Shipper",
+            Phone       = "555-9999",
+        });
+    }
+
+    [BenchmarkCategory("Update"), Benchmark]
+    public async Task<int> Update_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdShipper
+        {
+            ShipperID   = TargetShipperId,
+            CompanyName = "Updated Shipper",
+            Phone       = "555-9999",
+        });
     }
 
     [BenchmarkCategory("Update"), Benchmark]
@@ -284,6 +380,31 @@ public class ShipperCrudBenchmarks
             "    CompanyName = excluded.CompanyName, " +
             "    Phone       = excluded.Phone;",
             TargetShipperId, "Upserted Shipper", "555-1234");
+    }
+
+    [BenchmarkCategory("Upsert"), Benchmark]
+    public async Task<int> Upsert_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.InsertOrReplaceAsync(new L2Shipper
+        {
+            ShipperID   = TargetShipperId,
+            CompanyName = "Upserted Shipper",
+            Phone       = "555-1234",
+        });
+    }
+
+    [BenchmarkCategory("Upsert"), Benchmark]
+    public async Task<object?> Upsert_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.MergeAsync(connection, new RdShipper
+        {
+            ShipperID   = TargetShipperId,
+            CompanyName = "Upserted Shipper",
+            Phone       = "555-1234",
+        });
     }
 
     [BenchmarkCategory("Upsert"), Benchmark]

@@ -3,7 +3,11 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
 using Inquiry.Benchmarks.Ef;
+using Inquiry.Benchmarks.LinqToDb;
+using Inquiry.Benchmarks.RepoDB;
 using Inquiry.Northwind.Models;
+using LinqToDB;
+using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +24,7 @@ public class ProductCrudBenchmarks
 {
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
+    private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
     [Params(1000, 100000)] public int Rows;
@@ -34,6 +39,7 @@ public class ProductCrudBenchmarks
     {
         _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
+        _linqToDbOptions = _db.LinqToDbOptions;
     }
 
     [GlobalCleanup]
@@ -91,6 +97,23 @@ public class ProductCrudBenchmarks
     }
 
     [BenchmarkCategory("SelectAll"), Benchmark]
+    public async Task<int> SelectAll_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>().ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectAll"), Benchmark]
+    public async Task<int> SelectAll_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.QueryAllAsync<RdProduct>(connection)).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectAll"), Benchmark]
     public async Task<int> SelectAll_Inquiry()
     {
         var list = await _db.Products.SelectAllAsync();
@@ -130,6 +153,21 @@ public class ProductCrudBenchmarks
     }
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
+    public async Task<L2Product?> SelectByKey_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.GetTable<L2Product>().FirstOrDefaultAsync(p => p.ProductID == TargetProductId);
+    }
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
+    public async Task<RdProduct?> SelectByKey_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return (await RepoDb.DbConnectionExtension.QueryAsync<RdProduct>(connection, TargetProductId)).FirstOrDefault();
+    }
+
+    [BenchmarkCategory("SelectByKey"), Benchmark]
     public async Task<Product?> SelectByKey_Inquiry()
         => await _db.Products.SelectByKeyAsync(TargetProductId);
 
@@ -165,6 +203,24 @@ public class ProductCrudBenchmarks
     {
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var list = await ctx.Products.AsNoTracking().Where(p => p.CategoryID == TargetCategoryId).ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectByField"), Benchmark]
+    public async Task<int> SelectByField_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>().Where(p => p.CategoryID == TargetCategoryId).ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("SelectByField"), Benchmark]
+    public async Task<int> SelectByField_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.QueryAsync<RdProduct>(connection,
+            new RepoDb.QueryGroup(new RepoDb.QueryField("CategoryID", TargetCategoryId)))).AsList();
         return list.Count;
     }
 
@@ -220,6 +276,35 @@ public class ProductCrudBenchmarks
     }
 
     [BenchmarkCategory("Insert"), Benchmark]
+    public async Task<int> Insert_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.InsertAsync(new L2Product
+        {
+            ProductName  = "Bench Product",
+            CategoryID   = TargetCategoryId,
+            UnitPrice    = 9.99m,
+            UnitsInStock = 42,
+            Discontinued = false,
+        });
+    }
+
+    [BenchmarkCategory("Insert"), Benchmark]
+    public async Task<object?> Insert_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.InsertAsync(connection, new RdProduct
+        {
+            ProductName  = "Bench Product",
+            CategoryID   = TargetCategoryId,
+            UnitPrice    = 9.99m,
+            UnitsInStock = 42,
+            Discontinued = false,
+        });
+    }
+
+    [BenchmarkCategory("Insert"), Benchmark]
     public async Task<int> Insert_Inquiry()
         => await _db.Products.InsertAsync(new Product
         {
@@ -271,6 +356,37 @@ public class ProductCrudBenchmarks
         entity.UnitsInStock = 7;
         entity.Discontinued = false;
         return await ctx.SaveChangesAsync();
+    }
+
+    [BenchmarkCategory("Update"), Benchmark]
+    public async Task<int> Update_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.UpdateAsync(new L2Product
+        {
+            ProductID    = TargetProductId,
+            ProductName  = "Updated Product",
+            CategoryID   = TargetCategoryId,
+            UnitPrice    = 19.99m,
+            UnitsInStock = 7,
+            Discontinued = false,
+        });
+    }
+
+    [BenchmarkCategory("Update"), Benchmark]
+    public async Task<int> Update_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdProduct
+        {
+            ProductID    = TargetProductId,
+            ProductName  = "Updated Product",
+            CategoryID   = TargetCategoryId,
+            UnitPrice    = 19.99m,
+            UnitsInStock = 7,
+            Discontinued = false,
+        });
     }
 
     [BenchmarkCategory("Update"), Benchmark]
@@ -341,6 +457,37 @@ public class ProductCrudBenchmarks
             "    UnitsInStock = excluded.UnitsInStock, " +
             "    Discontinued = excluded.Discontinued;",
             TargetProductId, "Upserted Product", TargetCategoryId, 29.99m, (short)3);
+    }
+
+    [BenchmarkCategory("Upsert"), Benchmark]
+    public async Task<int> Upsert_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        return await dc.InsertOrReplaceAsync(new L2Product
+        {
+            ProductID    = TargetProductId,
+            ProductName  = "Upserted Product",
+            CategoryID   = TargetCategoryId,
+            UnitPrice    = 29.99m,
+            UnitsInStock = 3,
+            Discontinued = false,
+        });
+    }
+
+    [BenchmarkCategory("Upsert"), Benchmark]
+    public async Task<object?> Upsert_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        return await RepoDb.DbConnectionExtension.MergeAsync(connection, new RdProduct
+        {
+            ProductID    = TargetProductId,
+            ProductName  = "Upserted Product",
+            CategoryID   = TargetCategoryId,
+            UnitPrice    = 29.99m,
+            UnitsInStock = 3,
+            Discontinued = false,
+        });
     }
 
     [BenchmarkCategory("Upsert"), Benchmark]
