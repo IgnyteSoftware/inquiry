@@ -298,10 +298,12 @@ public sealed class EvidenceContractTests
         }, SourceArtifactManifestCatalog.PackageIds);
         var providers = new[] { "sqlite", "sqlserver", "postgresql", "mysql", "mariadb", "oracle" };
         Assert.Equal(providers, SourceArtifactManifestCatalog.Providers);
-        var expectedLanes = providers.SelectMany(provider => new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
-            (Provider: provider, RuntimeTfm: runtimeTfm, Lane: BenchmarkSourceLane.DeveloperProject))).ToArray();
+        var rids = SourceArtifactManifestCatalog.RuntimeIdentifiers;
+        var expectedLanes = providers.SelectMany(provider => rids.SelectMany(rid =>
+            new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
+                (Provider: provider, RuntimeTfm: runtimeTfm, Rid: rid, Lane: BenchmarkSourceLane.DeveloperProject)))).ToArray();
         Assert.Equal(expectedLanes, SourceArtifactManifestCatalog.Manifests.Select(static manifest =>
-            (manifest.Provider, manifest.RuntimeTfm, manifest.Lane)));
+            (manifest.Provider, manifest.RuntimeTfm, manifest.RuntimeIdentifier, manifest.Lane)));
         var packageError = Assert.Throws<ArgumentOutOfRangeException>(() => SourceArtifactManifestCatalog.GetRequired(
             "sqlite", BenchmarkSourceMode.PackageConsumer, "net8.0"));
         Assert.Equal("mode", packageError.ParamName);
@@ -310,8 +312,10 @@ public sealed class EvidenceContractTests
         foreach (var manifest in SourceArtifactManifestCatalog.Manifests)
         {
             Assert.Equal(ResolvedDependencyManifest.RequiredSelectionRule, manifest.ResolvedDependencyScope);
-            Assert.Equal(TestData.RuntimeIdentifier, manifest.RuntimeIdentifier);
-            var target = $"{manifest.RuntimeTfm}/{TestData.RuntimeIdentifier}";
+            Assert.Contains(manifest.RuntimeIdentifier, rids);
+            if (!StringComparer.Ordinal.Equals(manifest.RuntimeIdentifier, TestData.RuntimeIdentifier))
+                continue;
+            var target = $"{manifest.RuntimeTfm}/{manifest.RuntimeIdentifier}";
             Assert.Equal($"source-artifacts-v1/{manifest.Provider}/DeveloperProject/{target}", manifest.Id);
             Assert.Equal(new[]
             {
