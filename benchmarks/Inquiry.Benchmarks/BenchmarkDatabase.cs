@@ -83,8 +83,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
         }
 
         var services = new ServiceCollection()
-            .AddInquiry()
-            .AddScoped<BatchMutationBenchmarkStore>()
+            .AddInquiry(typeof(ShipperStore).Assembly, typeof(BenchmarkDatabase).Assembly)
             .AddInquirySqlite(connectionString)
             // Non-pooled: each CreateDbContext builds a fresh context, so EF pays per-operation
             // setup the same way ADO/Dapper/Inquiry each open a fresh connection per call. A pooled

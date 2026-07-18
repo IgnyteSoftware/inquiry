@@ -2,7 +2,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows'))">win-x64</RuntimeIdentifier>
     <BenchmarkEvidenceProvider>sqlite</BenchmarkEvidenceProvider>
     <BenchmarkEvidenceLane>DeveloperProject</BenchmarkEvidenceLane>
     <BenchmarkEvidenceProviderAssembly>Inquiry.Sqlite</BenchmarkEvidenceProviderAssembly>

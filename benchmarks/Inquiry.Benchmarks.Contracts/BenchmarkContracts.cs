@@ -94,9 +94,12 @@ public static class SourceArtifactManifestCatalog
     public static IReadOnlyList<string> Providers { get; } =
         ["sqlite", "sqlserver", "postgresql", "mysql", "mariadb", "oracle"];
 
+    public static IReadOnlyList<string> RuntimeIdentifiers { get; } = ["linux-x64", "win-x64"];
+
     public static IReadOnlyList<SourceArtifactManifest> Manifests { get; } =
-        Providers.SelectMany(provider => new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
-            Create(provider, runtimeTfm))).ToArray();
+        Providers.SelectMany(provider => RuntimeIdentifiers.SelectMany(rid =>
+            new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
+                Create(provider, runtimeTfm, rid)))).ToArray();
 
     public const string ReleaseRuntimeIdentifier = "linux-x64";
 
@@ -126,12 +129,11 @@ public static class SourceArtifactManifestCatalog
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown source mode."),
     };
 
-    private static SourceArtifactManifest Create(string provider, string runtimeTfm)
+    private static SourceArtifactManifest Create(string provider, string runtimeTfm, string runtimeIdentifier = ReleaseRuntimeIdentifier)
     {
         const BenchmarkSourceLane lane = BenchmarkSourceLane.DeveloperProject;
         if (!Providers.Contains(provider, StringComparer.Ordinal))
             throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown provider.");
-        var runtimeIdentifier = ReleaseRuntimeIdentifier;
         var target = $"{runtimeTfm}/{runtimeIdentifier}";
         SourceArtifactExpectation[] artifacts =
         [
