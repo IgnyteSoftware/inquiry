@@ -2,6 +2,7 @@ using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
+using Inquiry.Benchmarks.Ef;
 using Inquiry.Benchmarks.LinqToDb;
 using Inquiry.Commands;
 using Inquiry.Northwind.Models;
@@ -92,6 +93,14 @@ public class StreamingBenchmarks
     }
 
     [BenchmarkCategory("BufferedRead"), Benchmark]
+    public async Task<int> BufferedRead_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        var list = await ctx.Products.AsNoTracking().ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("BufferedRead"), Benchmark]
     public async Task<int> BufferedRead_Inquiry()
     {
 #pragma warning disable INQ048 // Static SQL constant, no user input
@@ -112,6 +121,16 @@ public class StreamingBenchmarks
         var count = 0;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync()) { ReadProduct(reader); count++; }
+        return count;
+    }
+
+    [BenchmarkCategory("StreamingRead"), Benchmark]
+    public async Task<int> StreamingRead_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        var count = 0;
+        await foreach (var _ in ctx.Products.AsNoTracking().AsAsyncEnumerable())
+            count++;
         return count;
     }
 

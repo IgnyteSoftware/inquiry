@@ -2,6 +2,7 @@ using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
+using Inquiry.Benchmarks.Ef;
 using Inquiry.Benchmarks.LinqToDb;
 using Inquiry.Benchmarks.RepoDB;
 using Inquiry.Northwind.Models;
@@ -89,6 +90,22 @@ public class ConcurrencyBenchmarks
         }
         var results = await Task.WhenAll(tasks);
         return results.Count(r => r is not null);
+    }
+
+    [BenchmarkCategory("ConcurrentPointRead"), Benchmark]
+    public async Task<int> ConcurrentPointRead_EfCore()
+    {
+        var tasks = new Task<EfShipper?>[Concurrency];
+        for (int i = 0; i < Concurrency; i++)
+            tasks[i] = Task.Run(EfCorePointRead);
+        var results = await Task.WhenAll(tasks);
+        return results.Count(r => r is not null);
+    }
+
+    private async Task<EfShipper?> EfCorePointRead()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        return await ctx.Shippers.AsNoTracking().FirstOrDefaultAsync(s => s.ShipperID == TargetShipperId);
     }
 
     [BenchmarkCategory("ConcurrentPointRead"), Benchmark]
