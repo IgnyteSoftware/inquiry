@@ -113,7 +113,9 @@ jobs:
             8.0.x
             10.0.x
       - name: Build benchmarks (Release)
-        run: dotnet build benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release
+        run: |
+          dotnet build benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release
+          dotnet build benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj -c Release
       - name: Smoke-run one benchmark (dry run)
         run: |
           dotnet run --project benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release -f net8.0 -- \
