@@ -1,7 +1,10 @@
+using Inquiry.Interceptors;
 using Inquiry.Northwind;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Sqlite.Tests.Fixtures;
+using Inquiry.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -264,5 +267,89 @@ public sealed class EagerLoadingIntegrationTests
         Assert.Equal(2, all.Count);
         Assert.Equal("Beverages", all.Single(p => p.ProductName == "Chai").Category?.CategoryName);
         Assert.Null(all.Single(p => p.ProductName == "Uncategorized").Category);
+    }
+
+    // ---- Command-count assertions: the grid path (QueryMultipleAsync) bypasses the interceptor,
+    // so zero intercepted commands + correct data proves one grid round trip was used. ----
+
+    [Fact]
+    public async Task SelectOneByKeyEagerUsesGridPath()
+    {
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerGrid",
+            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        recorder.Clear();
+
+        var loaded = await regionStore.SelectByKeyWithTerritoriesAsync(1);
+
+        Assert.NotNull(loaded);
+        Assert.Single(loaded.Territories!);
+        Assert.Empty(recorder.Commands);
+    }
+
+    [Fact]
+    public async Task SelectAllEagerUsesGridPath()
+    {
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerGrid",
+            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        recorder.Clear();
+
+        var all = await regionStore.SelectAllWithTerritoriesAsync().ToListAsync();
+
+        Assert.Single(all);
+        Assert.Single(all[0].Territories!);
+        Assert.Empty(recorder.Commands);
+    }
+
+    [Fact]
+    public async Task SelectOneByKeyEagerWithReferenceUsesGridPath()
+    {
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerGrid",
+            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        recorder.Clear();
+
+        var loaded = await territoryStore.SelectByKeyWithRegionAsync("T1");
+
+        Assert.NotNull(loaded);
+        Assert.NotNull(loaded.Region);
+        Assert.Equal("Eastern", loaded.Region!.RegionDescription);
+        Assert.Empty(recorder.Commands);
+    }
+
+    [Fact]
+    public async Task SelectAllEagerWithReferenceUsesGridPath()
+    {
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerGrid",
+            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        recorder.Clear();
+
+        var all = await territoryStore.SelectAllWithRegionAsync().ToListAsync();
+
+        Assert.Single(all);
+        Assert.NotNull(all[0].Region);
+        Assert.Empty(recorder.Commands);
     }
 }

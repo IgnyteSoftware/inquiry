@@ -1571,9 +1571,10 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 {
                     var dbCommand = CreateCommand(connection);
                     var resources = InquiryCommandResources.CreateScope(dbCommand);
-                    var interceptorCommand = new InquiryCommand(command.CommandText!, command.CommandType);
+                    InquiryCommand? interceptorCommand = null;
                     try
                     {
+                        interceptorCommand = new InquiryCommand(command.CommandText!, command.CommandType);
                         dbCommand.Transaction = transaction;
                         dbCommand.CommandText = command.CommandText;
                         dbCommand.CommandType = command.CommandType;
@@ -1589,7 +1590,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                     catch (Exception exception)
                     {
                         resources.Capture(exception);
-                        await InvokeFailedAsync(interceptorCommand, dbCommand, exception, token).ConfigureAwait(false);
+                        if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, token).ConfigureAwait(false);
                         throw;
                     }
                     finally
@@ -1606,9 +1607,10 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 var commandText = command.GetChunkCommandText(chunk.Count);
                 var dbCommand = CreateCommand(connection);
                 var resources = InquiryCommandResources.CreateScope(dbCommand);
-                var interceptorCommand = new InquiryCommand(commandText, command.CommandType);
+                InquiryCommand? interceptorCommand = null;
                 try
                 {
+                    interceptorCommand = new InquiryCommand(commandText, command.CommandType);
                     dbCommand.Transaction = transaction;
                     dbCommand.CommandText = commandText;
                     dbCommand.CommandType = command.CommandType;
@@ -1625,7 +1627,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 catch (Exception exception)
                 {
                     resources.Capture(exception);
-                    await InvokeFailedAsync(interceptorCommand, dbCommand, exception, token).ConfigureAwait(false);
+                    if (interceptorCommand is not null) await InvokeFailedAsync(interceptorCommand, dbCommand, exception, token).ConfigureAwait(false);
                     throw;
                 }
                 finally

@@ -285,6 +285,7 @@ Inquiry.InquiryDialectAttribute.InquiryDialectAttribute(string! name) -> void
 Inquiry.InquiryDialectAttribute.Name.get -> string!
 Inquiry.InquiryGridReader
 Inquiry.InquiryGridReader.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Inquiry.InquiryGridReader.ReadForEachAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Action<TEntity!>! action, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Inquiry.InquiryGridReader.ReadGeneratedSingleOrDefaultAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
 Inquiry.InquiryGridReader.ReadListAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.List<TEntity!>!>!
 Inquiry.InquiryGridReader.ReadScalarAsync<T>(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!

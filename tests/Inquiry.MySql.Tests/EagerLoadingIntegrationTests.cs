@@ -1,6 +1,10 @@
+using Inquiry.Interceptors;
 using Inquiry.MySql.Tests.Fixtures;
+using Inquiry.Northwind;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
+using Inquiry.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.MySql.Tests;
 
@@ -303,5 +307,100 @@ public sealed class EagerLoadingIntegrationTests
         Assert.Equal(2, all.Count);
         Assert.Equal("Beverages", all.Single(p => p.ProductName == "Chai").Category?.CategoryName);
         Assert.Null(all.Single(p => p.ProductName == "Uncategorized").Category);
+    }
+
+    // ---- Command-count tests: eager loads use the grid path (single round trip) ----
+
+    [SkippableFact]
+    public async Task SelectOneByKeyEagerUsesGridPath()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
+            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        recorder.Clear();
+
+        var loaded = await regionStore.SelectByKeyWithTerritoriesAsync(1);
+
+        Assert.NotNull(loaded);
+        Assert.Single(loaded.Territories!);
+        Assert.Empty(recorder.Commands);
+    }
+
+    [SkippableFact]
+    public async Task SelectAllEagerUsesGridPath()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
+            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        recorder.Clear();
+
+        var all = await regionStore.SelectAllWithTerritoriesAsync().ToListAsync();
+
+        Assert.Single(all);
+        Assert.Single(all[0].Territories!);
+        Assert.Empty(recorder.Commands);
+    }
+
+    [SkippableFact]
+    public async Task SelectOneByKeyEagerWithReferenceUsesGridPath()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
+            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        recorder.Clear();
+
+        var loaded = await territoryStore.SelectByKeyWithRegionAsync("T1");
+
+        Assert.NotNull(loaded);
+        Assert.NotNull(loaded.Region);
+        Assert.Equal("Eastern", loaded.Region!.RegionDescription);
+        Assert.Empty(recorder.Commands);
+    }
+
+    [SkippableFact]
+    public async Task SelectAllEagerWithReferenceUsesGridPath()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
+            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        recorder.Clear();
+
+        var all = await territoryStore.SelectAllWithRegionAsync().ToListAsync();
+
+        Assert.Single(all);
+        Assert.NotNull(all[0].Region);
+        Assert.Empty(recorder.Commands);
     }
 }

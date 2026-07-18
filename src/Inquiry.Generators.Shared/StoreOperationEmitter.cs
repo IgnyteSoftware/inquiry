@@ -2401,12 +2401,32 @@ internal static class StoreOperationEmitter
             ? "_IncludeDeleted"
             : string.Empty;
 
-        // Emits the opener for iterating one relation's rows: from the grid (the next pre-read result set) on
-        // the single-round-trip path, or a per-relation query on the fallback path. The loop body is identical.
-        void AppendRowLoop(string loopVar, string rowType, string rowStructMat, string sqlField)
-            => source.AppendLine(useGrid
-                ? $"        foreach (var {loopVar} in await _grid.ReadListAsync<{rowType}, {rowStructMat}>(default, {cancellation}).ConfigureAwait(false))"
-                : $"        await foreach (var {loopVar} in Inquiry.QueryAsync<{rowType}, byte, {rowStructMat}>({EmptyGeneratedCommand(sqlField)}, default, {cancellation}).ConfigureAwait(false))");
+        // On the grid path, child result sets stream through ReadForEachAsync so no intermediate
+        // list is allocated — rows go directly into grouping dictionaries. The lambda uses
+        // return instead of continue to skip a row.
+        var skipRow = useGrid ? "return" : "continue";
+
+        void AppendChildLoopOpen(string loopVar, string rowType, string rowStructMat, string sqlField)
+        {
+            if (useGrid)
+            {
+                source.AppendLine($"        await _grid.ReadForEachAsync<{rowType}, {rowStructMat}>(default, {loopVar} =>");
+                source.AppendLine("        {");
+            }
+            else
+            {
+                source.AppendLine($"        await foreach (var {loopVar} in Inquiry.QueryAsync<{rowType}, byte, {rowStructMat}>({EmptyGeneratedCommand(sqlField)}, default, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine("        {");
+            }
+        }
+
+        void AppendChildLoopClose()
+        {
+            if (useGrid)
+                source.AppendLine($"        }}, {cancellation}).ConfigureAwait(false);");
+            else
+                source.AppendLine("        }");
+        }
 
         if (useGrid)
         {
@@ -2456,35 +2476,33 @@ internal static class StoreOperationEmitter
                 var jChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!;
                 var parentKeyType = entity.Keys[0].Type.NonNullableDisplayName;
 
-                source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>();");
-                AppendRowLoop("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
-                source.AppendLine("        {");
+                source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>(_entities.Count);");
+                AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                 if (childKey.Type.IsNullable)
                 {
-                    source.AppendLine($"            if (_c.{childKey.PropertyName} is null) continue;");
+                    source.AppendLine($"            if (_c.{childKey.PropertyName} is null) {skipRow};");
                 }
                 source.AppendLine($"            _childByKey_{relation.PropertyName}[{NonNullableValueExpression(childKey.Type, $"_c.{childKey.PropertyName}")}] = _c;");
-                source.AppendLine("        }");
+                AppendChildLoopClose();
 
                 source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>(_entities.Count);");
-                AppendRowLoop("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
-                source.AppendLine("        {");
+                AppendChildLoopOpen("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
                 if (jChildFk.Type.IsNullable)
                 {
-                    source.AppendLine($"            if (_j.{jChildFk.PropertyName} is null) continue;");
+                    source.AppendLine($"            if (_j.{jChildFk.PropertyName} is null) {skipRow};");
                 }
                 if (jParentFk.Type.IsNullable)
                 {
-                    source.AppendLine($"            if (_j.{jParentFk.PropertyName} is null) continue;");
+                    source.AppendLine($"            if (_j.{jParentFk.PropertyName} is null) {skipRow};");
                 }
-                source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jChildFk.Type, $"_j.{jChildFk.PropertyName}")}, out var _child)) continue;");
+                source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jChildFk.Type, $"_j.{jChildFk.PropertyName}")}, out var _child)) {skipRow};");
                 source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}, out var _grp))");
                 source.AppendLine("            {");
                 source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
                 source.AppendLine($"                _grouped_{relation.PropertyName}[{NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}] = _grp;");
                 source.AppendLine("            }");
                 source.AppendLine("            _grp.Add(_child);");
-                source.AppendLine("        }");
+                AppendChildLoopClose();
                 continue;
             }
 
@@ -2495,11 +2513,10 @@ internal static class StoreOperationEmitter
                 var fkKeyType = childFkColumn?.Type.NonNullableDisplayName ?? "object";
 
                 source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{fkKeyType}, global::System.Collections.Generic.List<{childType}>>(_entities.Count);");
-                AppendRowLoop("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
-                source.AppendLine("        {");
+                AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                 if (childFkNullable)
                 {
-                    source.AppendLine($"            if (_c.{relation.ForeignKeyProperty} is null) continue;");
+                    source.AppendLine($"            if (_c.{relation.ForeignKeyProperty} is null) {skipRow};");
                     source.AppendLine($"            var _fkVal = {NonNullableValueExpression(childFkColumn!.Type, $"_c.{relation.ForeignKeyProperty}")};");
                 }
                 else
@@ -2512,7 +2529,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                _grouped_{relation.PropertyName}[_fkVal] = _grp;");
                 source.AppendLine("            }");
                 source.AppendLine("            _grp.Add(_c);");
-                source.AppendLine("        }");
+                AppendChildLoopClose();
             }
             else
             {
@@ -2521,19 +2538,13 @@ internal static class StoreOperationEmitter
                 var parentKeyType = childEntity.Keys[0].Type.NonNullableDisplayName;
 
                 source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, {childType}>(_entities.Count);");
+                AppendChildLoopOpen("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                 if (childKeyNullable)
                 {
-                    AppendRowLoop("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
-                    source.AppendLine("        {");
-                    source.AppendLine($"            if (_p.{relatedKeyProperty} is null) continue;");
-                    source.AppendLine($"            _parents_{relation.PropertyName}[{NonNullableValueExpression(childEntity.Keys[0].Type, $"_p.{relatedKeyProperty}")}] = _p;");
-                    source.AppendLine("        }");
+                    source.AppendLine($"            if (_p.{relatedKeyProperty} is null) {skipRow};");
                 }
-                else
-                {
-                    AppendRowLoop("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
-                    source.AppendLine($"            _parents_{relation.PropertyName}[_p.{relatedKeyProperty}] = _p;");
-                }
+                source.AppendLine($"            _parents_{relation.PropertyName}[{(childKeyNullable ? NonNullableValueExpression(childEntity.Keys[0].Type, $"_p.{relatedKeyProperty}") : $"_p.{relatedKeyProperty}")}] = _p;");
+                AppendChildLoopClose();
             }
         }
 

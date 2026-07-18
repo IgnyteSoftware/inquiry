@@ -24,7 +24,6 @@ public sealed class TvpResourceLifetimePipelineTests
     [InlineData(FastPath.Single)]
     [InlineData(FastPath.Scalar)]
     [InlineData(FastPath.Execute)]
-    [InlineData(FastPath.SequentialBatch)]
     public async Task InterceptorCommandConstructionFailureReleasesFastPathResources(FastPath fastPath)
     {
         var dbCommand = new ThrowingPrepareCommand();
@@ -40,6 +39,23 @@ public sealed class TvpResourceLifetimePipelineTests
         Assert.NotNull(factory.LastConnection);
         Assert.Equal(1, factory.LastConnection.DisposeCount);
         Assert.Equal(1, resource.DisposeCount);
+    }
+
+    [Fact]
+    public async Task SequentialBatchRejectsWhitespaceCommandTextBeforeAcquiringResources()
+    {
+        var dbCommand = new ThrowingPrepareCommand();
+        var resource = new CountingResource();
+        var factory = new FakeConnectionFactory(dbCommand, resource);
+        var pipeline = new InquiryRequestPipeline(
+            factory,
+            new IInquiryCommandInterceptor[] { new NoopInterceptor() });
+
+        await Assert.ThrowsAsync<ArgumentException>(() => InvokeWhitespaceFastPathAsync(pipeline, FastPath.SequentialBatch));
+
+        Assert.False(dbCommand.IsDisposed);
+        Assert.Null(factory.LastConnection);
+        Assert.Equal(0, resource.DisposeCount);
     }
 
     [Fact]

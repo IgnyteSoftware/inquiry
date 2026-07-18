@@ -113,6 +113,36 @@ public sealed class InquiryGridReader : IAsyncDisposable
     }
 
     /// <summary>
+    /// Materializes each row of the current result set and passes it to <paramref name="action"/> without
+    /// buffering an intermediate list, then advances to the next result set. Used by generated eager-load
+    /// stores to build grouping dictionaries directly from the reader.
+    /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public async Task ReadForEachAsync<TEntity, TMaterializer>(
+        TMaterializer materializer,
+        Action<TEntity> action,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+    {
+        EnsureResultSet();
+        try
+        {
+            while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                action(materializer.Materialize(_reader));
+            }
+
+            await AdvanceAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            RecordFailure(exception);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Materializes the current result set into a list, then advances to the next result set.
     /// </summary>
     public async Task<List<TEntity>> ReadListAsync<TEntity, TMaterializer>(

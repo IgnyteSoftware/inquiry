@@ -16,6 +16,7 @@
     <PackageReference Include="Xunit.SkippableFact" />
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Oracle\Inquiry.Oracle.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Testing\Inquiry.Testing.csproj" />
     <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
     <ProjectReference Include="..\Inquiry.Oracle.UnsupportedFixtures\Inquiry.Oracle.UnsupportedFixtures.csproj" />
 
