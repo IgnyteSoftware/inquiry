@@ -40,32 +40,6 @@ public sealed class InquiryTvpDescriptor
         return Cache.GetOrAdd(key, static value => new InquiryTvpDescriptor(value.Kind, value.Length, value.Precision, value.Scale, value.Nullable));
     }
 
-    internal static InquiryTvpDescriptor Compatibility(Type type)
-    {
-        var nullable = Nullable.GetUnderlyingType(type) is not null || !type.IsValueType;
-        type = Nullable.GetUnderlyingType(type) ?? type;
-        if (type.IsEnum) type = Enum.GetUnderlyingType(type);
-        return Type.GetTypeCode(type) switch
-        {
-            TypeCode.Boolean => Get("bit", 0, 1, 0, nullable),
-            TypeCode.SByte or TypeCode.Byte => Get("tinyint", 0, 3, 0, nullable),
-            TypeCode.Int16 or TypeCode.UInt16 => Get("smallint", 0, 5, 0, nullable),
-            TypeCode.Int32 or TypeCode.UInt32 => Get("int", 0, 10, 0, nullable),
-            TypeCode.Int64 or TypeCode.UInt64 => Get("bigint", 0, 19, 0, nullable),
-            TypeCode.Single => Get("real", 0, 24, 0, nullable),
-            TypeCode.Double => Get("float", 0, 53, 0, nullable),
-            TypeCode.Decimal => Get("decimal", 0, 18, 2, nullable),
-            TypeCode.Char or TypeCode.String => Get("nvarchar", SqlMetaData.Max, 0, 0, nullable),
-            TypeCode.DateTime => Get("datetime2", 0, 0, 7, nullable),
-            _ when type == typeof(Guid) => Get("uniqueidentifier", 0, 0, 0, nullable),
-            _ when type == typeof(DateTimeOffset) => Get("datetimeoffset", 0, 0, 7, nullable),
-            _ when type == typeof(DateOnly) => Get("date", 0, 0, 0, nullable),
-            _ when type == typeof(TimeOnly) => Get("time", 0, 0, 7, nullable),
-            _ when type == typeof(byte[]) => Get("varbinary", SqlMetaData.Max, 0, 0, true),
-            _ => throw new NotSupportedException($"No TVP type mapping for {type.FullName}."),
-        };
-    }
-
     private static SqlMetaData CreateMetadata(string kind, long length, byte precision, byte scale) => kind switch
     {
         "bit" => new("Value", SqlDbType.Bit),

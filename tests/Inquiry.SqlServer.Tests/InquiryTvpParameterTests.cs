@@ -12,67 +12,89 @@ public sealed class InquiryTvpParameterTests
 
     [Theory]
     [MemberData(nameof(UnsignedCases))]
-    public void DirectUnsignedBinderUsesSignedArtifactMetadataAndRows(object values, SqlDbType expectedType, object[] expectedRows)
+    public void DirectUnsignedBinderUsesSignedArtifactMetadataAndRows(object values, SqlDbType expectedType, InquiryTvpDescriptor descriptor, object[] expectedRows)
     {
         using var command = new SqlCommand();
         switch (values)
         {
-            case sbyte[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
-            case ushort[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
-            case uint[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
-            case ulong[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
-            case UnsignedState[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]"); break;
+            case sbyte[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
+            case ushort[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
+            case uint[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
+            case ulong[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
+            case UnsignedState[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
         }
 
         var parameter = Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>()));
-        var records = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(parameter.Value).ToArray();
-        Assert.All(records, record => Assert.Equal(expectedType, record.GetSqlMetaData(0).SqlDbType));
-        Assert.Equal(expectedRows, records.Select(record => record.GetValue(0)).ToArray());
+        var records = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(parameter.Value);
+        var metadataTypes = new List<SqlDbType>();
+        var rowValues = new List<object>();
+        foreach (var record in records)
+        {
+            metadataTypes.Add(record.GetSqlMetaData(0).SqlDbType);
+            rowValues.Add(record.GetValue(0));
+        }
+        Assert.All(metadataTypes, type => Assert.Equal(expectedType, type));
+        Assert.Equal(expectedRows, rowValues.ToArray());
     }
 
     public static IEnumerable<object[]> UnsignedCases()
     {
-        yield return new object[] { new sbyte[] { -1 }, SqlDbType.TinyInt, new object[] { byte.MaxValue } };
-        yield return new object[] { new ushort[] { ushort.MaxValue }, SqlDbType.SmallInt, new object[] { (short)-1 } };
-        yield return new object[] { new uint[] { uint.MaxValue }, SqlDbType.Int, new object[] { -1 } };
-        yield return new object[] { new ulong[] { ulong.MaxValue }, SqlDbType.BigInt, new object[] { -1L } };
-        yield return new object[] { new[] { UnsignedState.High, UnsignedState.Max }, SqlDbType.Int, new object[] { unchecked((int)3_000_000_000u), -1 } };
+        yield return new object[] { new sbyte[] { -1 }, SqlDbType.TinyInt, InquiryTvpDescriptor.Get("tinyint", 0, 3, 0, false), new object[] { byte.MaxValue } };
+        yield return new object[] { new ushort[] { ushort.MaxValue }, SqlDbType.SmallInt, InquiryTvpDescriptor.Get("smallint", 0, 5, 0, false), new object[] { (short)-1 } };
+        yield return new object[] { new uint[] { uint.MaxValue }, SqlDbType.Int, InquiryTvpDescriptor.Get("int", 0, 10, 0, false), new object[] { -1 } };
+        yield return new object[] { new ulong[] { ulong.MaxValue }, SqlDbType.BigInt, InquiryTvpDescriptor.Get("bigint", 0, 19, 0, false), new object[] { -1L } };
+        yield return new object[] { new[] { UnsignedState.High, UnsignedState.Max }, SqlDbType.Int, InquiryTvpDescriptor.Get("int", 0, 10, 0, false), new object[] { unchecked((int)3_000_000_000u), -1 } };
     }
 
     [Fact]
     public void NullableUnsignedEmptyUsesNullValueAndAllNullRetainsDbNullRows()
     {
+        var descriptor = InquiryTvpDescriptor.Get("int", 0, 10, 0, true);
+
         using var empty = new SqlCommand();
-        InquiryTvpParameter.Bind(empty, "@v", Array.Empty<uint?>(), "[dbo].[Inquiry_Tvp_test]");
+        InquiryTvpParameter.Bind(empty, "@v", Array.Empty<uint?>(), "[dbo].[Inquiry_Tvp_test]", descriptor);
         var emptyParameter = Assert.IsType<SqlParameter>(Assert.Single(empty.Parameters.Cast<SqlParameter>()));
         Assert.Equal(SqlDbType.Structured, emptyParameter.SqlDbType);
         Assert.Equal("[dbo].[Inquiry_Tvp_test]", emptyParameter.TypeName);
         Assert.Null(emptyParameter.Value);
 
         using var allNull = new SqlCommand();
-        InquiryTvpParameter.Bind(allNull, "@v", new uint?[] { null, null }, "[dbo].[Inquiry_Tvp_test]");
+        InquiryTvpParameter.Bind(allNull, "@v", new uint?[] { null, null }, "[dbo].[Inquiry_Tvp_test]", descriptor);
         var allNullParameter = Assert.IsType<SqlParameter>(Assert.Single(allNull.Parameters.Cast<SqlParameter>()));
         Assert.Equal(SqlDbType.Structured, allNullParameter.SqlDbType);
         Assert.Equal("[dbo].[Inquiry_Tvp_test]", allNullParameter.TypeName);
-        var records = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(allNullParameter.Value).ToArray();
-        Assert.Equal(2, records.Length);
-        Assert.All(records, record => Assert.True(record.IsDBNull(0)));
+        var records = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(allNullParameter.Value);
+        var nullCount = 0;
+        foreach (var record in records)
+        {
+            Assert.True(record.IsDBNull(0));
+            nullCount++;
+        }
+        Assert.Equal(2, nullCount);
     }
 
     [Fact]
     public void NullableUnsignedAndEnumValuesPreserveFullBitRanges()
     {
+        var nullableIntDescriptor = InquiryTvpDescriptor.Get("int", 0, 10, 0, true);
+
         using var unsignedCommand = new SqlCommand();
-        InquiryTvpParameter.Bind(unsignedCommand, "@v", new uint?[] { 0, 2_147_483_648u, uint.MaxValue, null }, "[dbo].[Inquiry_Tvp_test]");
-        var unsignedRows = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
-            Assert.IsType<SqlParameter>(Assert.Single(unsignedCommand.Parameters.Cast<SqlParameter>())).Value).ToArray();
-        Assert.Equal(new object[] { 0, int.MinValue, -1, DBNull.Value }, unsignedRows.Select(static row => row.GetValue(0)).ToArray());
+        InquiryTvpParameter.Bind(unsignedCommand, "@v", new uint?[] { 0, 2_147_483_648u, uint.MaxValue, null }, "[dbo].[Inquiry_Tvp_test]", nullableIntDescriptor);
+        var unsignedRecords = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
+            Assert.IsType<SqlParameter>(Assert.Single(unsignedCommand.Parameters.Cast<SqlParameter>())).Value);
+        var unsignedValues = new List<object>();
+        foreach (var record in unsignedRecords)
+            unsignedValues.Add(record.GetValue(0));
+        Assert.Equal(new object[] { 0, int.MinValue, -1, DBNull.Value }, unsignedValues.ToArray());
 
         using var enumCommand = new SqlCommand();
-        InquiryTvpParameter.Bind(enumCommand, "@v", new UnsignedState?[] { UnsignedState.High, UnsignedState.Max, null }, "[dbo].[Inquiry_Tvp_test]");
-        var enumRows = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
-            Assert.IsType<SqlParameter>(Assert.Single(enumCommand.Parameters.Cast<SqlParameter>())).Value).ToArray();
-        Assert.Equal(new object[] { unchecked((int)3_000_000_000u), -1, DBNull.Value }, enumRows.Select(static row => row.GetValue(0)).ToArray());
+        InquiryTvpParameter.Bind(enumCommand, "@v", new UnsignedState?[] { UnsignedState.High, UnsignedState.Max, null }, "[dbo].[Inquiry_Tvp_test]", nullableIntDescriptor);
+        var enumRecords = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
+            Assert.IsType<SqlParameter>(Assert.Single(enumCommand.Parameters.Cast<SqlParameter>())).Value);
+        var enumValues = new List<object>();
+        foreach (var record in enumRecords)
+            enumValues.Add(record.GetValue(0));
+        Assert.Equal(new object[] { unchecked((int)3_000_000_000u), -1, DBNull.Value }, enumValues.ToArray());
     }
 
     [Fact]
@@ -93,7 +115,8 @@ public sealed class InquiryTvpParameterTests
     {
         using var command = new SqlCommand();
 
-        InquiryTvpParameter.Bind(command, "@ids", new[] { 1, 2 }, "[tenant].[Inquiry_Tvp_test]");
+        InquiryTvpParameter.Bind(command, "@ids", new[] { 1, 2 }, "[tenant].[Inquiry_Tvp_test]",
+            InquiryTvpDescriptor.Get("int", 0, 10, 0, false));
 
         Assert.Null(command.Connection);
         var parameter = Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>()));
@@ -115,7 +138,8 @@ public sealed class InquiryTvpParameterTests
     {
         using var command = new SqlCommand();
         Assert.ThrowsAny<ArgumentException>(() =>
-            InquiryTvpParameter.Bind(command, "@ids", Array.Empty<int>(), typeName!));
+            InquiryTvpParameter.Bind(command, "@ids", Array.Empty<int>(), typeName!,
+                InquiryTvpDescriptor.Get("int", 0, 10, 0, false)));
         Assert.Empty(command.Parameters.Cast<SqlParameter>());
     }
 
@@ -128,19 +152,22 @@ public sealed class InquiryTvpParameterTests
     public void BindAcceptsBracketEscapedGeneratedTypeNames(string typeName)
     {
         using var command = new SqlCommand();
-        InquiryTvpParameter.Bind(command, "@ids", new[] { 1 }, typeName);
+        InquiryTvpParameter.Bind(command, "@ids", new[] { 1 }, typeName,
+            InquiryTvpDescriptor.Get("int", 0, 10, 0, false));
         Assert.Equal(typeName, Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>())).TypeName);
     }
 
     [Fact]
     public void BindRetainsNullAndEmptyCollectionSemantics()
     {
+        var descriptor = InquiryTvpDescriptor.Get("int", 0, 10, 0, false);
+
         using var nullCommand = new SqlCommand();
-        InquiryTvpParameter.Bind<int>(nullCommand, "@ids", null, "[dbo].[Inquiry_Tvp_test]");
+        InquiryTvpParameter.Bind<int>(nullCommand, "@ids", null, "[dbo].[Inquiry_Tvp_test]", descriptor);
         Assert.Null(Assert.IsType<SqlParameter>(Assert.Single(nullCommand.Parameters.Cast<SqlParameter>())).Value);
 
         using var emptyCommand = new SqlCommand();
-        InquiryTvpParameter.Bind(emptyCommand, "@ids", Array.Empty<int>(), "[dbo].[Inquiry_Tvp_test]");
+        InquiryTvpParameter.Bind(emptyCommand, "@ids", Array.Empty<int>(), "[dbo].[Inquiry_Tvp_test]", descriptor);
         Assert.Null(Assert.IsType<SqlParameter>(Assert.Single(emptyCommand.Parameters.Cast<SqlParameter>())).Value);
     }
 
@@ -172,12 +199,15 @@ public sealed class InquiryTvpParameterTests
         using var nullableCommand = new SqlCommand();
         InquiryTvpParameter.Bind(nullableCommand, "@ids", new int?[] { 1, null, 3 }, "[dbo].[Inquiry_Tvp_test]",
             InquiryTvpDescriptor.Get("int", 0, 10, 0, true));
-        var nullableRows = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
-            Assert.IsType<SqlParameter>(Assert.Single(nullableCommand.Parameters.Cast<SqlParameter>())).Value).ToArray();
-        Assert.Equal(3, nullableRows.Length);
-        Assert.Equal(1, nullableRows[0].GetInt32(0));
-        Assert.True(nullableRows[1].IsDBNull(0));
-        Assert.Equal(3, nullableRows[2].GetInt32(0));
+        var nullableRecords = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
+            Assert.IsType<SqlParameter>(Assert.Single(nullableCommand.Parameters.Cast<SqlParameter>())).Value);
+        var nullableValues = new List<object>();
+        foreach (var record in nullableRecords)
+            nullableValues.Add(record.GetValue(0));
+        Assert.Equal(3, nullableValues.Count);
+        Assert.Equal(1, nullableValues[0]);
+        Assert.Equal(DBNull.Value, nullableValues[1]);
+        Assert.Equal(3, nullableValues[2]);
 
         using var nonNullableCommand = new SqlCommand();
         InquiryTvpParameter.Bind(nonNullableCommand, "@ids", new int?[] { 1, null }, "[dbo].[Inquiry_Tvp_test]",
@@ -291,6 +321,29 @@ public sealed class InquiryTvpParameterTests
             static error => Assert.IsType<ParameterAddException>(error),
             static error => Assert.IsType<ProbeException>(error));
         Assert.Equal(1, source.DisposeCount);
+    }
+
+    [Fact]
+    public void BinaryValuesAreFullyReplacedAcrossReusedRecords()
+    {
+        using var command = new SqlCommand();
+        var descriptor = InquiryTvpDescriptor.Get("varbinary", 17, 0, 0, false);
+        InquiryTvpParameter.Bind(command, "@v", new[] { new byte[] { 1, 2, 3 }, new byte[] { 9 } },
+            "[dbo].[Inquiry_Tvp_test]", descriptor);
+
+        var records = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
+            Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>())).Value);
+        var values = new List<byte[]>();
+        foreach (var record in records)
+        {
+            var len = record.GetBytes(0, 0, null, 0, 0);
+            var buf = new byte[len];
+            record.GetBytes(0, 0, buf, 0, buf.Length);
+            values.Add(buf);
+        }
+        Assert.Equal(2, values.Count);
+        Assert.Equal(new byte[] { 1, 2, 3 }, values[0]);
+        Assert.Equal(new byte[] { 9 }, values[1]);
     }
 
     [Fact]

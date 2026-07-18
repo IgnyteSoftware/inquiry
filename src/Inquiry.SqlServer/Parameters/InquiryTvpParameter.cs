@@ -23,10 +23,6 @@ public static class InquiryTvpParameter
         throw new NotSupportedException($"No TVP type mapping for {typeof(T).FullName}.");
     }
 
-    /// <summary>Compatibility wrapper. Generated stores use the exact descriptor overload.</summary>
-    public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values, string typeName)
-        => Bind(command, parameterName, values, typeName, CompatibilityDescriptor<T>.Value);
-
     /// <summary>
     /// Binds one exact TVP descriptor. Nonempty sources are peeked once and then retained as a
     /// single-pass sequence; custom pipelines must call <see cref="InquiryCommandResources.Dispose"/>
@@ -170,7 +166,7 @@ public static class InquiryTvpParameter
                 _first = false;
                 if (!hasValue) { Dispose(); return false; }
                 _index++;
-                var record = new SqlDataRecord(_descriptor.MetadataArray);
+                var record = _current ?? new SqlDataRecord(_descriptor.MetadataArray);
                 Write(record, source.Current, _descriptor, _index);
                 _current = record;
                 return true;
@@ -242,7 +238,7 @@ public static class InquiryTvpParameter
             {
                 var bytes = Unsafe.As<T, byte[]?>(ref v);
                 if (bytes is null) SetNull(r, d, i);
-                else r.SetBytes(0, 0, bytes, 0, bytes.Length);
+                else r.SetSqlBinary(0, new System.Data.SqlTypes.SqlBinary(bytes));
             };
 
             var nullableType = Nullable.GetUnderlyingType(typeof(T));
@@ -284,8 +280,4 @@ public static class InquiryTvpParameter
         }
     }
 
-    private static class CompatibilityDescriptor<T>
-    {
-        internal static readonly InquiryTvpDescriptor Value = InquiryTvpDescriptor.Compatibility(typeof(T));
-    }
 }
