@@ -1,0 +1,172 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:48:27.3680899\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_AdoNet(Rows: 1000)",
+      "medianNs": 1111326.1719,
+      "meanNs": 1101416.6667,
+      "allocatedBytes": 201168,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_Dapper(Rows: 1000)",
+      "medianNs": 1266589.2578,
+      "meanNs": 1253257.8776,
+      "allocatedBytes": 347080,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_LinqToDb(Rows: 1000)",
+      "medianNs": 955700.5859,
+      "meanNs": 958097.2656,
+      "allocatedBytes": 220480,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_EfCore(Rows: 1000)",
+      "medianNs": 1017396.875,
+      "meanNs": 1015299.0885,
+      "allocatedBytes": 416085,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_Inquiry(Rows: 1000)",
+      "medianNs": 1111816.9922,
+      "meanNs": 1133373.4375,
+      "allocatedBytes": 209912,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_AdoNet(Rows: 100000)",
+      "medianNs": 103460920,
+      "meanNs": 103156320,
+      "allocatedBytes": 20001168,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_Dapper(Rows: 100000)",
+      "medianNs": 115288620,
+      "meanNs": 115300640,
+      "allocatedBytes": 34900016,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_LinqToDb(Rows: 100000)",
+      "medianNs": 92687483.3333,
+      "meanNs": 92813672.2222,
+      "allocatedBytes": 22101416,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_EfCore(Rows: 100000)",
+      "medianNs": 87197216.6667,
+      "meanNs": 87922522.2222,
+      "allocatedBytes": 36553431,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.BufferedRead_Inquiry(Rows: 100000)",
+      "medianNs": 111011240,
+      "meanNs": 111309600,
+      "allocatedBytes": 21298848,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.StreamingRead_AdoNet(Rows: 1000)",
+      "medianNs": 1065972.7539,
+      "meanNs": 1065485.8398,
+      "allocatedBytes": 193112,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.StreamingRead_EfCore(Rows: 1000)",
+      "medianNs": 1023714.0625,
+      "meanNs": 1025058.0729,
+      "allocatedBytes": 399413,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.StreamingRead_LinqToDb(Rows: 1000)",
+      "medianNs": 955360.5469,
+      "meanNs": 952063.9323,
+      "allocatedBytes": 203808,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.StreamingRead_Inquiry(Rows: 1000)",
+      "medianNs": 1128346.2891,
+      "meanNs": 1133753.3854,
+      "allocatedBytes": 193552,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.StreamingRead_AdoNet(Rows: 100000)",
+      "medianNs": 104377840,
+      "meanNs": 104265220,
+      "allocatedBytes": 19201112,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.StreamingRead_EfCore(Rows: 100000)",
+      "medianNs": 91690183.3333,
+      "meanNs": 92657955.5556,
+      "allocatedBytes": 34455823,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.StreamingRead_LinqToDb(Rows: 100000)",
+      "medianNs": 93627550,
+      "meanNs": 93671227.7778,
+      "allocatedBytes": 20003808,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.StreamingBenchmarks.StreamingRead_Inquiry(Rows: 100000)",
+      "medianNs": 111196233.3333,
+      "meanNs": 112054488.8889,
+      "allocatedBytes": 19201552,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}

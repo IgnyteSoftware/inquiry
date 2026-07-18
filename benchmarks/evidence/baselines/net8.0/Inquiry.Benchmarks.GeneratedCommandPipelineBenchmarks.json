@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:48:08.4521017\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.EightParameters_NoInterceptors",
+      "medianNs": 22082.7972,
+      "meanNs": 22188.62,
+      "allocatedBytes": 3360,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.EightParameters_InactiveTelemetry",
+      "medianNs": 23172.5204,
+      "meanNs": 23254.4235,
+      "allocatedBytes": 3360,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.EightParameters_ActiveCustomInterceptor",
+      "medianNs": 23833.374,
+      "meanNs": 23726.4455,
+      "allocatedBytes": 3520,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.OneParameter_NoInterceptors",
+      "medianNs": 19477.2766,
+      "meanNs": 19355.7729,
+      "allocatedBytes": 1752,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.OneParameter_InactiveTelemetry",
+      "medianNs": 18791.7755,
+      "meanNs": 18677.474,
+      "allocatedBytes": 1752,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.OneParameter_ActiveCustomInterceptor",
+      "medianNs": 18402.7252,
+      "meanNs": 18410.8388,
+      "allocatedBytes": 1912,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.Parameterless_NoInterceptors",
+      "medianNs": 17000.6592,
+      "meanNs": 17073.587,
+      "allocatedBytes": 1424,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.Parameterless_InactiveTelemetry",
+      "medianNs": 18664.1785,
+      "meanNs": 18799.8556,
+      "allocatedBytes": 1424,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks.Parameterless_ActiveCustomInterceptor",
+      "medianNs": 17239.3906,
+      "meanNs": 17281.8995,
+      "allocatedBytes": 1584,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}

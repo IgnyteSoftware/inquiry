@@ -1,0 +1,370 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:47:53.8894252\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedDeleteAll(Rows: 1)",
+      "medianNs": 4325800,
+      "meanNs": 4457933.3333,
+      "allocatedBytes": 3136,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedDelete(Rows: 1)",
+      "medianNs": 4446000,
+      "meanNs": 4375700,
+      "allocatedBytes": 2528,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_PreSerializedJsonEachDeleteFloor(Rows: 1)",
+      "medianNs": 4497300,
+      "meanNs": 4606900,
+      "allocatedBytes": 2504,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_EndToEndJsonEachDelete(Rows: 1)",
+      "medianNs": 4561100,
+      "meanNs": 4691933.3333,
+      "allocatedBytes": 2536,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedDeleteAll(Rows: 10)",
+      "medianNs": 4617400,
+      "meanNs": 4526433.3333,
+      "allocatedBytes": 3856,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedDelete(Rows: 10)",
+      "medianNs": 4714800,
+      "meanNs": 4632600,
+      "allocatedBytes": 5552,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_PreSerializedJsonEachDeleteFloor(Rows: 10)",
+      "medianNs": 4413900,
+      "meanNs": 6366733.3333,
+      "allocatedBytes": 2720,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_EndToEndJsonEachDelete(Rows: 10)",
+      "medianNs": 4444100,
+      "meanNs": 4475566.6667,
+      "allocatedBytes": 2792,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedDeleteAll(Rows: 100)",
+      "medianNs": 4666600,
+      "meanNs": 4658100,
+      "allocatedBytes": 7800,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedDelete(Rows: 100)",
+      "medianNs": 4747500,
+      "meanNs": 4796966.6667,
+      "allocatedBytes": 34352,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_PreSerializedJsonEachDeleteFloor(Rows: 100)",
+      "medianNs": 4635400,
+      "meanNs": 4706900,
+      "allocatedBytes": 2720,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_EndToEndJsonEachDelete(Rows: 100)",
+      "medianNs": 4870400,
+      "meanNs": 5816666.6667,
+      "allocatedBytes": 3328,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedDeleteAll(Rows: 1000)",
+      "medianNs": 4858800,
+      "meanNs": 4894133.3333,
+      "allocatedBytes": 70344,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedDelete(Rows: 1000)",
+      "medianNs": 6080000,
+      "meanNs": 6096800,
+      "allocatedBytes": 322352,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_PreSerializedJsonEachDeleteFloor(Rows: 1000)",
+      "medianNs": 4828300,
+      "meanNs": 4910666.6667,
+      "allocatedBytes": 6640,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_EndToEndJsonEachDelete(Rows: 1000)",
+      "medianNs": 4883500,
+      "meanNs": 6415733.3333,
+      "allocatedBytes": 14456,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedInsertAll(Rows: 1)",
+      "medianNs": 4649300,
+      "meanNs": 4667466.6667,
+      "allocatedBytes": 3208,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedInsert(Rows: 1)",
+      "medianNs": 4477900,
+      "meanNs": 4530766.6667,
+      "allocatedBytes": 2704,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_PrecomputedMultiRowInsertFloor(Rows: 1)",
+      "medianNs": 4570000,
+      "meanNs": 4611066.6667,
+      "allocatedBytes": 2728,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_EndToEndMultiRowInsert(Rows: 1)",
+      "medianNs": 4519400,
+      "meanNs": 4519066.6667,
+      "allocatedBytes": 3264,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedInsertAll(Rows: 10)",
+      "medianNs": 4781100,
+      "meanNs": 4830000,
+      "allocatedBytes": 7312,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedInsert(Rows: 10)",
+      "medianNs": 7288900,
+      "meanNs": 6504366.6667,
+      "allocatedBytes": 6592,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_PrecomputedMultiRowInsertFloor(Rows: 10)",
+      "medianNs": 4356900,
+      "meanNs": 4423066.6667,
+      "allocatedBytes": 7344,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_EndToEndMultiRowInsert(Rows: 10)",
+      "medianNs": 4653000,
+      "meanNs": 4705933.3333,
+      "allocatedBytes": 8448,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedInsertAll(Rows: 100)",
+      "medianNs": 4356000,
+      "meanNs": 4535266.6667,
+      "allocatedBytes": 45472,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedInsert(Rows: 100)",
+      "medianNs": 4650200,
+      "meanNs": 4633266.6667,
+      "allocatedBytes": 44032,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_PrecomputedMultiRowInsertFloor(Rows: 100)",
+      "medianNs": 4590900,
+      "meanNs": 4585300,
+      "allocatedBytes": 50696,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_EndToEndMultiRowInsert(Rows: 100)",
+      "medianNs": 4626600,
+      "meanNs": 4676166.6667,
+      "allocatedBytes": 58208,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedInsertAll(Rows: 1000)",
+      "medianNs": 6170300,
+      "meanNs": 6227800,
+      "allocatedBytes": 427072,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedInsert(Rows: 1000)",
+      "medianNs": 6382600,
+      "meanNs": 69025300,
+      "allocatedBytes": 418432,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_PrecomputedMultiRowInsertFloor(Rows: 1000)",
+      "medianNs": 14629200,
+      "meanNs": 14722766.6667,
+      "allocatedBytes": 485336,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Raw_EndToEndMultiRowInsert(Rows: 1000)",
+      "medianNs": 14648600,
+      "meanNs": 16140566.6667,
+      "allocatedBytes": 568424,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedUpdateAll(Rows: 1)",
+      "medianNs": 4418900,
+      "meanNs": 4416300,
+      "allocatedBytes": 3160,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedUpdate(Rows: 1)",
+      "medianNs": 4574900,
+      "meanNs": 4590633.3333,
+      "allocatedBytes": 2704,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedUpdateAll(Rows: 10)",
+      "medianNs": 4496200,
+      "meanNs": 4566166.6667,
+      "allocatedBytes": 7264,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedUpdate(Rows: 10)",
+      "medianNs": 4871900,
+      "meanNs": 4848466.6667,
+      "allocatedBytes": 6592,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedUpdateAll(Rows: 100)",
+      "medianNs": 4594900,
+      "meanNs": 4561300,
+      "allocatedBytes": 45424,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedUpdate(Rows: 100)",
+      "medianNs": 4863300,
+      "meanNs": 4888000,
+      "allocatedBytes": 44032,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Inquiry_SelectedUpdateAll(Rows: 1000)",
+      "medianNs": 6184200,
+      "meanNs": 6397066.6667,
+      "allocatedBytes": 427024,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.BatchMutationStrategyBenchmarks.Direct_ReusedPreparedUpdate(Rows: 1000)",
+      "medianNs": 5669000,
+      "meanNs": 5780600,
+      "allocatedBytes": 418432,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}

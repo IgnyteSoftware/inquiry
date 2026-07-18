@@ -1,0 +1,145 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:47:58.7462035\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_AdoNet(Concurrency: 4)",
+      "medianNs": 78263.4949,
+      "meanNs": 79827.8137,
+      "allocatedBytes": 7432,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_Dapper(Concurrency: 4)",
+      "medianNs": 80425.8423,
+      "meanNs": 80290.922,
+      "allocatedBytes": 10228,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_EfCore(Concurrency: 4)",
+      "medianNs": 247383.9844,
+      "meanNs": 247518.2943,
+      "allocatedBytes": 233707,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_RepoDb(Concurrency: 4)",
+      "medianNs": 102126.6113,
+      "meanNs": 101435.9294,
+      "allocatedBytes": 23293,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_Inquiry(Concurrency: 4)",
+      "medianNs": 73995.2576,
+      "meanNs": 74957.1716,
+      "allocatedBytes": 8392,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_AdoNet(Concurrency: 16)",
+      "medianNs": 150645.0806,
+      "meanNs": 149376.5015,
+      "allocatedBytes": 28645,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_Dapper(Concurrency: 16)",
+      "medianNs": 155792.6514,
+      "meanNs": 156296.5576,
+      "allocatedBytes": 39932,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_EfCore(Concurrency: 16)",
+      "medianNs": 430964.5508,
+      "meanNs": 460972.526,
+      "allocatedBytes": 933745,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_RepoDb(Concurrency: 16)",
+      "medianNs": 183069.3848,
+      "meanNs": 183673.4863,
+      "allocatedBytes": 92714,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_Inquiry(Concurrency: 16)",
+      "medianNs": 151590.8325,
+      "meanNs": 151897.9207,
+      "allocatedBytes": 32485,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_AdoNet(Concurrency: 64)",
+      "medianNs": 290666.748,
+      "meanNs": 289112.6465,
+      "allocatedBytes": 113504,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_Dapper(Concurrency: 64)",
+      "medianNs": 303562.0361,
+      "meanNs": 304076.5544,
+      "allocatedBytes": 159130,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_EfCore(Concurrency: 64)",
+      "medianNs": 2017977.3438,
+      "meanNs": 1866140.7552,
+      "allocatedBytes": 3736974,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_RepoDb(Concurrency: 64)",
+      "medianNs": 353768.5547,
+      "meanNs": 352733.2682,
+      "allocatedBytes": 373360,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ConcurrencyBenchmarks.ConcurrentPointRead_Inquiry(Concurrency: 64)",
+      "medianNs": 296386.377,
+      "meanNs": 286642.7409,
+      "allocatedBytes": 128869,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}

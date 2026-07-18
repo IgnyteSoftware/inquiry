@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:47:56.2628729\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.ColdStartBenchmarks.ColdPointRead_AdoNet",
+      "medianNs": 25139.7934,
+      "meanNs": 25128.3615,
+      "allocatedBytes": 1528,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ColdStartBenchmarks.ColdPointRead_Dapper",
+      "medianNs": 26605.8929,
+      "meanNs": 26767.7063,
+      "allocatedBytes": 2216,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ColdStartBenchmarks.ColdPointRead_EfCore",
+      "medianNs": 319578.7354,
+      "meanNs": 289221.346,
+      "allocatedBytes": 58097,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ColdStartBenchmarks.ColdPointRead_RepoDb",
+      "medianNs": 29535.6201,
+      "meanNs": 29519.5211,
+      "allocatedBytes": 5392,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ColdStartBenchmarks.ColdPointRead_Inquiry",
+      "medianNs": 25454.1428,
+      "meanNs": 26046.3781,
+      "allocatedBytes": 1768,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}

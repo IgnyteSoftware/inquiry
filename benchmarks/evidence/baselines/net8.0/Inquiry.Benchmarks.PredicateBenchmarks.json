@@ -1,0 +1,190 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:48:17.9250968\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_AdoNet(Rows: 1000)",
+      "medianNs": 486756.9824,
+      "meanNs": 487047.8678,
+      "allocatedBytes": 82824,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_Dapper(Rows: 1000)",
+      "medianNs": 514038.4766,
+      "meanNs": 511165.918,
+      "allocatedBytes": 136512,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_EfCore(Rows: 1000)",
+      "medianNs": 537200.1953,
+      "meanNs": 540551.2044,
+      "allocatedBytes": 195915,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_LinqToDb(Rows: 1000)",
+      "medianNs": 450149.0234,
+      "meanNs": 446205.5664,
+      "allocatedBytes": 99296,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_Inquiry(Rows: 1000)",
+      "medianNs": 502691.7969,
+      "meanNs": 511211.849,
+      "allocatedBytes": 82288,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_AdoNet(Rows: 100000)",
+      "medianNs": 48978154.5455,
+      "meanNs": 49309893.9394,
+      "allocatedBytes": 8251376,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_Dapper(Rows: 100000)",
+      "medianNs": 52048360,
+      "meanNs": 51881336.6667,
+      "allocatedBytes": 13354064,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_EfCore(Rows: 100000)",
+      "medianNs": 46538845.4545,
+      "meanNs": 47460072.7273,
+      "allocatedBytes": 14007749,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_LinqToDb(Rows: 100000)",
+      "medianNs": 46342027.2727,
+      "meanNs": 46717336.3636,
+      "allocatedBytes": 8565007,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.InList_Inquiry(Rows: 100000)",
+      "medianNs": 52837820,
+      "meanNs": 52358240,
+      "allocatedBytes": 8250840,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_AdoNet(Rows: 1000)",
+      "medianNs": 178841.2842,
+      "meanNs": 183038.0859,
+      "allocatedBytes": 21176,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_Dapper(Rows: 1000)",
+      "medianNs": 204019.0186,
+      "meanNs": 204705.9652,
+      "allocatedBytes": 35288,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_EfCore(Rows: 1000)",
+      "medianNs": 717864.0625,
+      "meanNs": 729206.3802,
+      "allocatedBytes": 509598,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_LinqToDb(Rows: 1000)",
+      "medianNs": 173962.6953,
+      "meanNs": 172872.7865,
+      "allocatedBytes": 27392,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_Inquiry(Rows: 1000)",
+      "medianNs": 196926.8555,
+      "meanNs": 199071.8424,
+      "allocatedBytes": 21408,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_AdoNet(Rows: 100000)",
+      "medianNs": 15360987.5,
+      "meanNs": 15352041.6667,
+      "allocatedBytes": 1971040,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_Dapper(Rows: 100000)",
+      "medianNs": 17021531.25,
+      "meanNs": 16976568.75,
+      "allocatedBytes": 3181952,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_EfCore(Rows: 100000)",
+      "medianNs": 56206455.5556,
+      "meanNs": 56443059.2593,
+      "allocatedBytes": 44981371,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_LinqToDb(Rows: 100000)",
+      "medianNs": 14403912.5,
+      "meanNs": 14406383.3333,
+      "allocatedBytes": 2047656,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.PredicateBenchmarks.Search_Inquiry(Rows: 100000)",
+      "medianNs": 16315206.25,
+      "meanNs": 16434800,
+      "allocatedBytes": 1971272,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}
