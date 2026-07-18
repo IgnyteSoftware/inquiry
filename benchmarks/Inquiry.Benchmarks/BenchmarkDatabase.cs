@@ -52,10 +52,12 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     public DataOptions LinqToDbOptions { get; }
 
     public IInquiry Inquiry => _services.GetRequiredService<IInquiry>();
-    public CustomerStore Customers => _services.GetRequiredService<CustomerStore>();
-    public ProductStore  Products  => _services.GetRequiredService<ProductStore>();
-    public ShipperStore  Shippers  => _services.GetRequiredService<ShipperStore>();
-    public RegionStore   Regions   => _services.GetRequiredService<RegionStore>();
+    public CustomerStore    Customers   => _services.GetRequiredService<CustomerStore>();
+    public ProductStore     Products    => _services.GetRequiredService<ProductStore>();
+    public ShipperStore     Shippers    => _services.GetRequiredService<ShipperStore>();
+    public RegionStore      Regions     => _services.GetRequiredService<RegionStore>();
+    public TerritoryStore   Territories => _services.GetRequiredService<TerritoryStore>();
+    public CategoryStore    Categories  => _services.GetRequiredService<CategoryStore>();
     public BatchMutationBenchmarkStore BatchMutations => _services.GetRequiredService<BatchMutationBenchmarkStore>();
 
     /// <summary>
@@ -205,6 +207,47 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     {
         "USA", "UK", "Germany", "France", "Italy", "Spain", "Brazil", "Canada", "Mexico", "Japan",
     };
+
+    public async Task SeedRegionsAsync(int regionCount, int territoryCount)
+    {
+        await using var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var tx = (SqliteTransaction)await connection.BeginTransactionAsync().ConfigureAwait(false);
+
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT INTO Region (RegionID, RegionDescription) VALUES ($id, $desc);";
+            var pId = insert.Parameters.Add("$id", SqliteType.Integer);
+            var pDesc = insert.Parameters.Add("$desc", SqliteType.Text);
+            await insert.PrepareAsync().ConfigureAwait(false);
+            for (int i = 0; i < regionCount; i++)
+            {
+                pId.Value = i + 1;
+                pDesc.Value = $"Region {i}";
+                await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT INTO Territories (TerritoryID, TerritoryDescription, RegionID) VALUES ($id, $desc, $region);";
+            var pId = insert.Parameters.Add("$id", SqliteType.Text);
+            var pDesc = insert.Parameters.Add("$desc", SqliteType.Text);
+            var pRegion = insert.Parameters.Add("$region", SqliteType.Integer);
+            await insert.PrepareAsync().ConfigureAwait(false);
+            for (int i = 0; i < territoryCount; i++)
+            {
+                pId.Value = i.ToString();
+                pDesc.Value = $"Territory {i}";
+                pRegion.Value = (i % regionCount) + 1;
+                await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        await tx.CommitAsync().ConfigureAwait(false);
+    }
 
     public async ValueTask DisposeAsync()
     {
