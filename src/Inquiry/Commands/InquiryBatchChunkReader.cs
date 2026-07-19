@@ -45,6 +45,13 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
             }
 
             var count = Math.Min(_maxBatchSize, _items.Count - _offset);
+            if (_offset == 0 && count == _items.Count)
+            {
+                _offset = count;
+                chunk = _items;
+                return true;
+            }
+
             _view!.Set(_items, _offset, count);
             _offset += count;
             chunk = _view;

@@ -2042,7 +2042,16 @@ internal static class StoreOperationEmitter
             maxParametersExpression: "0"));
         source.AppendLine("        },");
         source.AppendLine("        parametersPerItem: 0,");
-        source.AppendLine("        maxItemsPerCommand: global::System.Int32.MaxValue);");
+        if (sqlBuilder.CollectionBindingBypassesBatchSizeLimit)
+        {
+            source.AppendLine("        maxItemsPerCommand: global::System.Int32.MaxValue,");
+            source.AppendLine("        commandType: global::System.Data.CommandType.Text,");
+            source.AppendLine("        ignoresMaxBatchSize: true);");
+        }
+        else
+        {
+            source.AppendLine("        maxItemsPerCommand: global::System.Int32.MaxValue);");
+        }
         source.AppendLine();
     }
 

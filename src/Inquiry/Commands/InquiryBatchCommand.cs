@@ -56,6 +56,19 @@ public readonly struct InquiryBatchCommand<TItem>
         int parametersPerItem,
         int maxItemsPerCommand = int.MaxValue,
         CommandType commandType = CommandType.Text)
+        : this(commandTextFactory, bindChunk, parametersPerItem, maxItemsPerCommand, commandType, ignoresMaxBatchSize: false)
+    {
+    }
+
+    /// <summary>Initializes a whole-chunk command whose binding streams the entire source natively.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public InquiryBatchCommand(
+        Func<int, string> commandTextFactory,
+        Action<DbCommand, IReadOnlyList<TItem>> bindChunk,
+        int parametersPerItem,
+        int maxItemsPerCommand,
+        CommandType commandType,
+        bool ignoresMaxBatchSize)
     {
         if (!Enum.IsDefined(commandType))
         {
@@ -77,6 +90,7 @@ public readonly struct InquiryBatchCommand<TItem>
         SetBasedMaxItemsPerCommand = maxItemsPerCommand;
         UseChunk = null;
         PreferPrepareOnce = false;
+        IgnoresMaxBatchSize = ignoresMaxBatchSize;
     }
 
     /// <summary>Initializes a generated command that selects a set-based chunk shape when eligible.</summary>
@@ -147,6 +161,10 @@ public readonly struct InquiryBatchCommand<TItem>
     /// <summary>Gets the optional per-chunk set-based eligibility selector.</summary>
     public Func<IReadOnlyList<TItem>, bool>? UseChunk { get; }
 
+    /// <summary>Gets whether the binding streams the entire source natively, bypassing MaxBatchSize chunking.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool IgnoresMaxBatchSize { get; }
+
     /// <summary>Gets whether <see cref="PreparedStatementMode.Auto"/> may prepare the reused command once for this batch.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool PreferPrepareOnce { get; }
@@ -185,7 +203,9 @@ public readonly struct InquiryBatchCommand<TItem>
         if (ParametersPerItem > maxParametersPerCommand)
             throw new InvalidOperationException("The configured command parameter limit cannot fit one batch item.");
 
-        var size = Math.Min(maxBatchSize, MaxItemsPerCommand);
+        var size = IgnoresMaxBatchSize
+            ? MaxItemsPerCommand
+            : Math.Min(maxBatchSize, MaxItemsPerCommand);
         if (CommandTextFactory is not null && UseChunk is null && ParametersPerItem > 0)
             size = Math.Min(size, maxParametersPerCommand / ParametersPerItem);
         if (size < 1)

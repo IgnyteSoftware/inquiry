@@ -1200,6 +1200,9 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual bool UseArrayInParameters => false;
 
+    /// <summary>Whether the collection binding streams the entire source natively (e.g. TVP) and should bypass MaxBatchSize chunking.</summary>
+    public virtual bool CollectionBindingBypassesBatchSizeLimit => false;
+
     /// <summary>
     /// Fully-qualified type name of the static helper that binds an IN collection as one parameter
     /// when <see cref="UseArrayInParameters"/> is true. The emitter calls

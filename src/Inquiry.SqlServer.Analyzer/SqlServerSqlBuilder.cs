@@ -63,6 +63,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     /// </summary>
     public override bool UseArrayInParameters => true;
 
+    /// <inheritdoc/>
+    public override bool CollectionBindingBypassesBatchSizeLimit => true;
+
     /// <inheritdoc cref="UseArrayInParameters"/>
     protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
         => quotedColumn + " IN (SELECT [Value] FROM " + parameterName + ")";
