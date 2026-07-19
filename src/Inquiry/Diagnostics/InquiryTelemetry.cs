@@ -52,4 +52,34 @@ public static class InquiryTelemetry
         "OracleCommand" => "oracle.db",
         _ => "other_sql",
     };
+
+    internal static string MapDbSystem(System.Data.Common.DbConnection connection) => connection.GetType().Name switch
+    {
+        "SqliteConnection" => "sqlite",
+        "SqlConnection" => "microsoft.sql_server",
+        "NpgsqlConnection" or "NpgsqlDataSource" => "postgresql",
+        "MySqlConnection" => "mysql",
+        "OracleConnection" => "oracle.db",
+        _ => "other_sql",
+    };
+
+    internal static string MapDbSystem(Connections.IInquiryConnectionFactory factory) => factory.GetType().Name switch
+    {
+        "SqliteInquiryConnectionFactory" => "sqlite",
+        "SqlServerInquiryConnectionFactory" => "microsoft.sql_server",
+        "PostgreSqlInquiryConnectionFactory" => "postgresql",
+        "MySqlInquiryConnectionFactory" => "mysql",
+        "MariaDbInquiryConnectionFactory" => "mysql",
+        "OracleInquiryConnectionFactory" => "oracle.db",
+        _ => "other_sql",
+    };
+
+    /// <summary>
+    /// Best-effort extraction of the first table name from common SQL patterns.
+    /// </summary>
+    internal static string? ExtractTableName(string? commandText)
+    {
+        if (commandText is null) return null;
+        return InquiryTelemetryInterceptor.TableName(commandText);
+    }
 }

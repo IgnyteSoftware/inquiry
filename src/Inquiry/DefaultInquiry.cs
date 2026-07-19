@@ -7,6 +7,7 @@ using Inquiry.Transactions;
 using Microsoft.Extensions.DependencyInjection;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 
 namespace Inquiry;
 
@@ -274,7 +275,7 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
 
     /// <inheritdoc />
-    public Task<long> BulkInsertAsync<TEntity>(
+    public async Task<long> BulkInsertAsync<TEntity>(
         Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
         CancellationToken cancellationToken = default)
@@ -301,7 +302,79 @@ internal sealed class DefaultInquiry : IInquiry
             ?? throw new InvalidOperationException(
                 "No IInquiryBulkCopier is registered. Bulk insert needs a provider with a native bulk-copy API " +
                 "(SQL Server, PostgreSQL, MySQL); on other providers use the [InquiryInsertAll] batch insert.");
-        return copier.BulkInsertAsync(definition, rows, cancellationToken);
+
+        var (activity, startTimestamp, dbSystem) = StartBulkInsertActivity(definition.Table);
+        try
+        {
+            var rowCount = await copier.BulkInsertAsync(definition, rows, cancellationToken).ConfigureAwait(false);
+            RecordBulkInsertCompletion(activity, startTimestamp, dbSystem, rowCount);
+            return rowCount;
+        }
+        catch (Exception exception)
+        {
+            RecordBulkInsertFailure(activity, startTimestamp, dbSystem, exception);
+            throw;
+        }
+    }
+
+    private (Activity? activity, long startTimestamp, string dbSystem) StartBulkInsertActivity(string table)
+    {
+        if (!Diagnostics.InquiryTelemetry.ActivitySource.HasListeners()
+            && !Diagnostics.InquiryTelemetry.CommandDuration.Enabled)
+            return (null, 0, "");
+
+        var dbSystem = Diagnostics.InquiryTelemetry.MapDbSystem(_connectionFactory);
+        var startTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+        Activity? activity = null;
+        if (Diagnostics.InquiryTelemetry.ActivitySource.HasListeners())
+        {
+            activity = Diagnostics.InquiryTelemetry.ActivitySource.StartActivity("BULK_INSERT", ActivityKind.Client);
+            if (activity is not null)
+            {
+                activity.SetTag("db.system.name", dbSystem);
+                activity.SetTag("db.operation.name", "BULK_INSERT");
+                activity.SetTag("db.collection.name", table);
+            }
+        }
+
+        return (activity, startTimestamp, dbSystem);
+    }
+
+    private static void RecordBulkInsertCompletion(Activity? activity, long startTimestamp, string dbSystem, long rowCount)
+    {
+        if (startTimestamp == 0) return;
+
+        Diagnostics.InquiryTelemetry.CommandDuration.Record(
+            System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+            new KeyValuePair<string, object?>("db.system.name", dbSystem),
+            new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"));
+
+        if (activity is not null)
+        {
+            activity.SetTag("db.response.affected_rows", rowCount);
+            activity.Dispose();
+        }
+    }
+
+    private static void RecordBulkInsertFailure(Activity? activity, long startTimestamp, string dbSystem, Exception exception)
+    {
+        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+
+        if (startTimestamp != 0)
+        {
+            Diagnostics.InquiryTelemetry.CommandDuration.Record(
+                System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+                new KeyValuePair<string, object?>("db.system.name", dbSystem),
+                new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"),
+                new KeyValuePair<string, object?>("error.type", errorType));
+        }
+
+        if (activity is not null)
+        {
+            activity.SetTag("error.type", errorType);
+            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            activity.Dispose();
+        }
     }
 
     /// <inheritdoc />

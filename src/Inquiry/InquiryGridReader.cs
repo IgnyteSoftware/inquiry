@@ -229,7 +229,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
                     InquiryTelemetry.CommandDuration.Record(
                         Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
                         new KeyValuePair<string, object?>("db.system.name", dbSystem),
-                        new KeyValuePair<string, object?>("db.operation.name", "BATCH"));
+                        new KeyValuePair<string, object?>("db.operation.name", "QUERY_MULTIPLE"));
                 }
 
                 _activity?.Dispose();
@@ -267,7 +267,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         InquiryTelemetry.CommandDuration.Record(
             Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
-            new KeyValuePair<string, object?>("db.operation.name", "BATCH"),
+            new KeyValuePair<string, object?>("db.operation.name", "QUERY_MULTIPLE"),
             new KeyValuePair<string, object?>("error.type", errorType));
         if (_activity is { } activity)
         {

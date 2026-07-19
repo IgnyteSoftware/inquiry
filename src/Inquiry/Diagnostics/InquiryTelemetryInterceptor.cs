@@ -36,6 +36,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         public long StartTimestamp;
         public string DbSystem = "other_sql";
         public string Operation = "";
+        public string? Table;
     }
 
     public InquiryTelemetryInterceptor(InquiryTelemetryOptions options, ILoggerFactory? loggerFactory)
@@ -57,10 +58,12 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
             return ValueTask.CompletedTask;
         }
 
+        var commandText = context.Command.CommandText;
         var state = new CommandState
         {
             DbSystem = InquiryTelemetry.MapDbSystem(context.Command),
-            Operation = OperationName(context.Command.CommandText),
+            Operation = OperationName(commandText),
+            Table = TableName(commandText),
             StartTimestamp = Stopwatch.GetTimestamp(),
         };
 
@@ -71,9 +74,14 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
             {
                 activity.SetTag("db.system.name", state.DbSystem);
                 activity.SetTag("db.operation.name", state.Operation);
+                if (state.Table is not null)
+                {
+                    activity.SetTag("db.collection.name", state.Table);
+                }
+
                 if (_options.RecordCommandText)
                 {
-                    activity.SetTag("db.query.text", context.Command.CommandText);
+                    activity.SetTag("db.query.text", commandText);
                 }
 
                 state.Activity = activity;
@@ -162,6 +170,109 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         }
 
         return end == 0 ? "SQL" : span[..end].ToString().ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// Best-effort extraction of the first table name from common SQL patterns.
+    /// Handles INSERT INTO table, UPDATE table, DELETE FROM table, and SELECT ... FROM table.
+    /// </summary>
+    internal static string? TableName(string commandText)
+    {
+        var sql = commandText.AsSpan().TrimStart();
+        if (sql.Length == 0) return null;
+
+        // Skip leading keyword
+        var pos = 0;
+        while (pos < sql.Length && char.IsAsciiLetter(sql[pos])) pos++;
+        var keyword = sql[..pos];
+
+        if (keyword.Equals("INSERT", StringComparison.OrdinalIgnoreCase))
+        {
+            // INSERT INTO <table>
+            pos = SkipWhitespace(sql, pos);
+            if (pos < sql.Length && sql[pos..].StartsWith("INTO", StringComparison.OrdinalIgnoreCase))
+            {
+                pos += 4;
+                pos = SkipWhitespace(sql, pos);
+                return ExtractIdentifier(sql, pos);
+            }
+        }
+        else if (keyword.Equals("UPDATE", StringComparison.OrdinalIgnoreCase))
+        {
+            // UPDATE <table>
+            pos = SkipWhitespace(sql, pos);
+            return ExtractIdentifier(sql, pos);
+        }
+        else if (keyword.Equals("DELETE", StringComparison.OrdinalIgnoreCase))
+        {
+            // DELETE FROM <table>
+            pos = SkipWhitespace(sql, pos);
+            if (pos < sql.Length && sql[pos..].StartsWith("FROM", StringComparison.OrdinalIgnoreCase))
+            {
+                pos += 4;
+                pos = SkipWhitespace(sql, pos);
+                return ExtractIdentifier(sql, pos);
+            }
+        }
+        else if (keyword.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            // SELECT ... FROM <table>
+            var fromIndex = sql.IndexOf(" FROM ", StringComparison.OrdinalIgnoreCase);
+            if (fromIndex >= 0)
+            {
+                pos = fromIndex + 6;
+                pos = SkipWhitespace(sql, pos);
+                return ExtractIdentifier(sql, pos);
+            }
+        }
+
+        return null;
+    }
+
+    private static int SkipWhitespace(ReadOnlySpan<char> sql, int pos)
+    {
+        while (pos < sql.Length && char.IsWhiteSpace(sql[pos])) pos++;
+        return pos;
+    }
+
+    private static string? ExtractIdentifier(ReadOnlySpan<char> sql, int pos)
+    {
+        if (pos >= sql.Length) return null;
+
+        // Handle quoted identifiers: [table], "table", `table`
+        if (sql[pos] == '[')
+        {
+            var end = sql[pos..].IndexOf(']');
+            return end > 1 ? sql.Slice(pos + 1, end - 1).ToString() : null;
+        }
+
+        if (sql[pos] == '"')
+        {
+            var end = sql[(pos + 1)..].IndexOf('"');
+            return end > 0 ? sql.Slice(pos + 1, end).ToString() : null;
+        }
+
+        if (sql[pos] == '`')
+        {
+            var end = sql[(pos + 1)..].IndexOf('`');
+            return end > 0 ? sql.Slice(pos + 1, end).ToString() : null;
+        }
+
+        // Handle schema.table — skip to the table part
+        var start = pos;
+        while (pos < sql.Length && (char.IsAsciiLetterOrDigit(sql[pos]) || sql[pos] == '_'))
+            pos++;
+
+        if (pos < sql.Length && sql[pos] == '.')
+        {
+            // Schema prefix — advance past the dot to the table name
+            pos++;
+            start = pos;
+            while (pos < sql.Length && (char.IsAsciiLetterOrDigit(sql[pos]) || sql[pos] == '_'))
+                pos++;
+        }
+
+        return pos > start ? sql[start..pos].ToString() : null;
     }
 
     private static class Log

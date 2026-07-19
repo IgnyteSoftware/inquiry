@@ -157,12 +157,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         Activity? activity = null;
         if (InquiryTelemetry.ActivitySource.HasListeners())
         {
-            activity = InquiryTelemetry.ActivitySource.StartActivity("BATCH", ActivityKind.Client);
+            activity = InquiryTelemetry.ActivitySource.StartActivity("QUERY_MULTIPLE", ActivityKind.Client);
             if (activity is not null)
             {
                 var dbSystem = InquiryTelemetry.MapDbSystem(dbCommand);
                 activity.SetTag("db.system.name", dbSystem);
-                activity.SetTag("db.operation.name", "BATCH");
+                activity.SetTag("db.operation.name", "QUERY_MULTIPLE");
             }
         }
 
@@ -178,7 +178,71 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             InquiryTelemetry.CommandDuration.Record(
                 Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
                 new KeyValuePair<string, object?>("db.system.name", InquiryTelemetry.MapDbSystem(dbCommand)),
-                new KeyValuePair<string, object?>("db.operation.name", "BATCH"),
+                new KeyValuePair<string, object?>("db.operation.name", "QUERY_MULTIPLE"),
+                new KeyValuePair<string, object?>("error.type", errorType));
+        }
+
+        if (activity is not null)
+        {
+            activity.SetTag("error.type", errorType);
+            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            activity.Dispose();
+        }
+    }
+
+    private static (Activity? activity, long startTimestamp, string dbSystem) StartBatchActivity(
+        DbConnection connection, string? commandText)
+    {
+        if (!InquiryTelemetry.ActivitySource.HasListeners() && !InquiryTelemetry.CommandDuration.Enabled)
+            return (null, 0, "");
+
+        var dbSystem = InquiryTelemetry.MapDbSystem(connection);
+        var startTimestamp = Stopwatch.GetTimestamp();
+        Activity? activity = null;
+        if (InquiryTelemetry.ActivitySource.HasListeners())
+        {
+            activity = InquiryTelemetry.ActivitySource.StartActivity("EXECUTE_BATCH", ActivityKind.Client);
+            if (activity is not null)
+            {
+                activity.SetTag("db.system.name", dbSystem);
+                activity.SetTag("db.operation.name", "EXECUTE_BATCH");
+                var table = InquiryTelemetry.ExtractTableName(commandText);
+                if (table is not null)
+                {
+                    activity.SetTag("db.collection.name", table);
+                }
+            }
+        }
+
+        return (activity, startTimestamp, dbSystem);
+    }
+
+    private static void RecordBatchCompletion(Activity? activity, long startTimestamp, string dbSystem, int total)
+    {
+        if (startTimestamp == 0) return;
+
+        InquiryTelemetry.CommandDuration.Record(
+            Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+            new KeyValuePair<string, object?>("db.system.name", dbSystem),
+            new KeyValuePair<string, object?>("db.operation.name", "EXECUTE_BATCH"));
+
+        if (activity is not null)
+        {
+            activity.SetTag("db.response.affected_rows", total);
+            activity.Dispose();
+        }
+    }
+
+    private static void RecordBatchFailure(Activity? activity, long startTimestamp, string dbSystem, Exception exception)
+    {
+        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+
+        if (startTimestamp != 0)
+        {
+            InquiryTelemetry.CommandDuration.Record(
+                Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+                new KeyValuePair<string, object?>("db.system.name", dbSystem),
+                new KeyValuePair<string, object?>("db.operation.name", "EXECUTE_BATCH"),
                 new KeyValuePair<string, object?>("error.type", errorType));
         }
 
@@ -1542,9 +1606,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         var committed = false;
         Exception? primaryException = null;
         List<Exception>? cleanupExceptions = null;
+        Activity? batchActivity = null;
+        long batchStartTimestamp = 0;
+        string batchDbSystem = "";
         try
         {
             connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+            (batchActivity, batchStartTimestamp, batchDbSystem) =
+                StartBatchActivity(connection, command.CommandText);
             transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
             var hasActiveInterceptors = HasActiveInterceptors;
             Func<IReadOnlyList<TItem>, CancellationToken, Task<int>>? interceptedRows = hasActiveInterceptors
@@ -1562,6 +1631,8 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             chunks.Dispose();
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             committed = true;
+            RecordBatchCompletion(batchActivity, batchStartTimestamp, batchDbSystem, total);
+            batchActivity = null;
             return total;
 
             async Task<int> ExecuteInterceptedChunkAsync(IReadOnlyList<TItem> chunk, CancellationToken token)
@@ -1640,15 +1711,20 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             primaryException = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            RecordBatchFailure(batchActivity, batchStartTimestamp, batchDbSystem, primaryException);
+            batchActivity = null;
             throw primaryException;
         }
         catch (Exception exception)
         {
             primaryException = exception;
+            RecordBatchFailure(batchActivity, batchStartTimestamp, batchDbSystem, exception);
+            batchActivity = null;
             throw;
         }
         finally
         {
+            batchActivity?.Dispose();
             try { chunks.Dispose(); }
             catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
             try
