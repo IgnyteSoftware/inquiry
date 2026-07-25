@@ -11,7 +11,8 @@ public static class CiContractVerifier
         ["actions/checkout"] = "9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
         ["actions/setup-dotnet"] = "26b0ec14cb23fa6904739307f278c14f94c95bf1",
         ["actions/upload-artifact"] = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-        ["actions/download-artifact"] = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+        ["actions/download-artifact"] = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        ["actions/attest-build-provenance"] = "0f67c3f4856b2e3261c31976d6725780e5e4c373"
     };
 
     private static readonly string[] JobIds =
@@ -59,7 +60,7 @@ public static class CiContractVerifier
         {
             "integration" => new[] { "runs-on", "timeout-minutes", "env", "strategy", "steps" },
             "benchmark-smoke" => new[] { "runs-on", "timeout-minutes", "steps" },
-            "package-producer" => new[] { "runs-on", "timeout-minutes", "outputs", "steps" },
+            "package-producer" => new[] { "runs-on", "timeout-minutes", "permissions", "outputs", "steps" },
             "package-verifier" => new[] { "needs", "runs-on", "timeout-minutes", "permissions", "steps" },
             "ci-required-v1" => new[] { "name", "if", "needs", "runs-on", "steps" },
             "aot-smoke" => new[] { "runs-on", "timeout-minutes", "steps" },
@@ -143,7 +144,7 @@ public static class CiContractVerifier
             "aot-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
             "integration" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
             "benchmark-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
-            "package-producer" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
+            "package-producer" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/attest-build-provenance", "actions/upload-artifact" },
             "package-verifier" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/download-artifact" },
             _ => []
         };
@@ -155,6 +156,11 @@ public static class CiContractVerifier
 
         if (jobId == "package-producer")
         {
+            var producerPermissions = Map(job["permissions"], "package-producer.permissions", "attestations", "contents", "id-token");
+            Require(Scalar(producerPermissions["attestations"], "permissions.attestations") == "write"
+                && Scalar(producerPermissions["contents"], "permissions.contents") == "read"
+                && Scalar(producerPermissions["id-token"], "permissions.id-token") == "write",
+                "Package producer permissions must be attestations:write, contents:read, and id-token:write.");
             var outputs = Map(job["outputs"], "package-producer.outputs", "artifact-id", "artifact-digest");
             Require(Scalar(outputs["artifact-id"], "artifact-id") == "${{ steps.upload.outputs.artifact-id }}"
                 && Scalar(outputs["artifact-digest"], "artifact-digest") == "${{ steps.upload.outputs.artifact-digest }}",
@@ -272,6 +278,13 @@ public static class CiContractVerifier
             var expectedPath = jobId == "package-producer" ? "${{ runner.temp }}/package-contract/" : "test-results/";
             Require(Scalar(with["name"], "upload.name") == expectedName && Scalar(with["path"], "upload.path") == expectedPath,
                 "Artifact upload name/path contract drifted.");
+        }
+        else if (repository == "actions/attest-build-provenance")
+        {
+            Require(step.TryGetValue("with", out var withNode), "Provenance attestation must declare its exact contract.");
+            var with = Map(withNode!, "attest-build-provenance.with", "subject-path");
+            Require(Scalar(with["subject-path"], "attest.subject-path") == "${{ runner.temp }}/package-contract/*.nupkg",
+                "Provenance attestation subject-path must target the exact package output glob.");
         }
         else if (repository == "actions/download-artifact")
         {
