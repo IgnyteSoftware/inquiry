@@ -1,0 +1,10 @@
+# Default owner for everything
+* @JakeOverstreet
+
+# Release engineering — packing, verification, CI contract, manifest
+/eng/ @JakeOverstreet
+/.github/workflows/ @JakeOverstreet
+
+# Public API surface — source generators and runtime
+/src/Inquiry/ @JakeOverstreet
+/src/Inquiry.Generators.Shared/ @JakeOverstreet
