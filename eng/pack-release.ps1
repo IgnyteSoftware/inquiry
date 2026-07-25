@@ -126,6 +126,16 @@ try {
         }
     }
 
+    & dotnet tool restore --tool-manifest (Join-Path $snapshotRoot '.config/dotnet-tools.json')
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Dotnet tool restore failed in the packing snapshot.'
+    }
+
+    & dotnet dotnet-CycloneDX (Join-Path $snapshotRoot 'Inquiry.slnx') --json --output $resolvedOutput --filename sbom.cdx.json
+    if ($LASTEXITCODE -ne 0) {
+        throw 'SBOM generation failed.'
+    }
+
     $verifyArguments = @(
         'run', '--project', $toolProject,
         '--configuration', 'Release', '--',

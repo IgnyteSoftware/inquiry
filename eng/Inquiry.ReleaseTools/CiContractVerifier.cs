@@ -15,7 +15,7 @@ public static class CiContractVerifier
     };
 
     private static readonly string[] JobIds =
-        ["build-and-unit", "aot-smoke", "integration", "package-producer", "package-verifier", "ci-required-v1"];
+        ["build-and-unit", "aot-smoke", "integration", "benchmark-smoke", "package-producer", "package-verifier", "ci-required-v1"];
     private static readonly string[] IntegrationProviders =
         ["PostgreSql", "MySql", "MariaDb", "SqlServer", "Oracle"];
     private static readonly string[] IntegrationTfms = ["net8.0", "net9.0", "net10.0"];
@@ -26,8 +26,8 @@ public static class CiContractVerifier
         var contract = ReadContract(Path.GetFullPath(contractPath, root));
         var required = contract.RequiredJobs ?? throw new ReleaseVerificationException("CI contract requiredJobs must be an array.");
         Require(contract.SchemaVersion == "ci-required-v1", "CI contract schemaVersion must be ci-required-v1.");
-        Require(required.Count == 5 && required.Select(job => job.Job).SequenceEqual(JobIds[..5]),
-            "CI contract must declare the exact five required jobs in canonical order.");
+        Require(required.Count == 6 && required.Select(job => job.Job).SequenceEqual(JobIds[..6]),
+            "CI contract must declare the exact six required jobs in canonical order.");
 
         var document = LoadYaml(Path.GetFullPath(workflowPath, root));
         var workflow = Map(document, "workflow", "name", "on", "permissions", "jobs");
@@ -58,6 +58,7 @@ public static class CiContractVerifier
         var allowed = jobId switch
         {
             "integration" => new[] { "runs-on", "timeout-minutes", "env", "strategy", "steps" },
+            "benchmark-smoke" => new[] { "runs-on", "timeout-minutes", "steps" },
             "package-producer" => new[] { "runs-on", "timeout-minutes", "outputs", "steps" },
             "package-verifier" => new[] { "needs", "runs-on", "timeout-minutes", "permissions", "steps" },
             "ci-required-v1" => new[] { "name", "if", "needs", "runs-on", "steps" },
@@ -103,7 +104,7 @@ public static class CiContractVerifier
         {
             Require(Scalar(job["name"], "ci-required-v1.name") == "ci-required-v1", "Aggregator name must be ci-required-v1.");
             Require(Scalar(job["if"], "ci-required-v1.if") == "always()", "Aggregator must use if: always().");
-            RequireSequence(Sequence(job["needs"], "ci-required-v1.needs"), JobIds[..5], "aggregator needs");
+            RequireSequence(Sequence(job["needs"], "ci-required-v1.needs"), JobIds[..6], "aggregator needs");
         }
         else
         {
@@ -141,6 +142,7 @@ public static class CiContractVerifier
             "build-and-unit" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
             "aot-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
             "integration" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
+            "benchmark-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
             "package-producer" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
             "package-verifier" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/download-artifact" },
             _ => []
@@ -169,8 +171,8 @@ public static class CiContractVerifier
         {
             var aggregatorStep = Map(steps.Single(), "ci-required-v1 step", "name", "env", "run");
             var env = Map(aggregatorStep["env"], "ci-required-v1.env",
-                "BUILD_AND_UNIT_RESULT", "AOT_SMOKE_RESULT", "INTEGRATION_RESULT", "PACKAGE_PRODUCER_RESULT", "PACKAGE_VERIFIER_RESULT");
-            var expected = JobIds[..5].ToDictionary(
+                "BUILD_AND_UNIT_RESULT", "AOT_SMOKE_RESULT", "INTEGRATION_RESULT", "BENCHMARK_SMOKE_RESULT", "PACKAGE_PRODUCER_RESULT", "PACKAGE_VERIFIER_RESULT");
+            var expected = JobIds[..6].ToDictionary(
                 item => item.Replace('-', '_').ToUpperInvariant() + "_RESULT",
                 item => $"${{{{ needs.{item}.result }}}}",
                 StringComparer.Ordinal);
@@ -193,6 +195,9 @@ public static class CiContractVerifier
             "docker build --file tests/Inquiry.SqlServer.Tests/Fixtures/SqlServerFts.Dockerfile --tag inquiry-sqlserver-fts:2022-cu14 .",
             "uid=\"$(docker run --rm --entrypoint /usr/bin/id inquiry-sqlserver-fts:2022-cu14 -u)\"\ntest -n \"$uid\"\ntest \"$uid\" != \"0\"\necho \"SQL Server image runtime UID: $uid\"",
             "dotnet test tests/Inquiry.${{ matrix.provider }}.Tests/Inquiry.${{ matrix.provider }}.Tests.csproj -c Release -f ${{ matrix.tfm }} --logger \"trx;LogFileName=${{ matrix.provider }}-${{ matrix.tfm }}.trx\" --results-directory test-results\nif [ \"${{ matrix.provider }}\" = \"SqlServer\" ]; then\n  dotnet test tests/Inquiry.Benchmarks.SqlServer.Tests/Inquiry.Benchmarks.SqlServer.Tests.csproj -c Release -f ${{ matrix.tfm }} --logger \"trx;LogFileName=SqlServer-collection-${{ matrix.tfm }}.trx\" --results-directory test-results\nfi");
+        RequireRuns(jobs, "benchmark-smoke",
+            "dotnet build benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release\ndotnet build benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj -c Release",
+            "dotnet run --project benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release -f net8.0 -- \\\n  --filter \"*ShipperCrudBenchmarks.SelectAll_AdoNet*\" \\\n  --job Dry \\\n  --exporters json");
         RequireRuns(jobs, "package-producer",
             "./eng/pack-release.ps1 -OutputPath \"$env:RUNNER_TEMP/package-contract\" -Commit $env:GITHUB_SHA",
             "test -n \"$ARTIFACT_ID\"\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'");
@@ -200,7 +205,7 @@ public static class CiContractVerifier
             "echo \"$ARTIFACT_ID\" | grep -Eq '^[0-9]+$'\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ncurl --fail --silent --show-error --retry 3 --max-redirs 0 \\\n  --header \"Authorization: Bearer $GH_TOKEN\" \\\n  --header \"X-GitHub-Api-Version: 2022-11-28\" \\\n  \"$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip\" \\\n  --dump-header artifact.headers --output /dev/null\nartifact_url=\"$(sed -n 's/^location: //Ip' artifact.headers | tr -d '\\r')\"\ncase \"$artifact_url\" in https://*) ;; *) exit 1 ;; esac\ncurl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \\\n  \"$artifact_url\" --output artifact.zip\necho \"$ARTIFACT_DIGEST  artifact.zip\" | sha256sum --check --strict",
             "echo \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded \"$GITHUB_SHA\"");
         RequireRuns(jobs, "ci-required-v1",
-            "test \"$BUILD_AND_UNIT_RESULT\" = success\ntest \"$AOT_SMOKE_RESULT\" = success\ntest \"$INTEGRATION_RESULT\" = success\ntest \"$PACKAGE_PRODUCER_RESULT\" = success\ntest \"$PACKAGE_VERIFIER_RESULT\" = success");
+            "test \"$BUILD_AND_UNIT_RESULT\" = success\ntest \"$AOT_SMOKE_RESULT\" = success\ntest \"$INTEGRATION_RESULT\" = success\ntest \"$BENCHMARK_SMOKE_RESULT\" = success\ntest \"$PACKAGE_PRODUCER_RESULT\" = success\ntest \"$PACKAGE_VERIFIER_RESULT\" = success");
 
         var workflowText = string.Join('\n', jobs.Values.Select(node => node.ToString()));
         Require(!workflowText.Contains("dotnet nuget push", StringComparison.OrdinalIgnoreCase), "Normal CI must not publish packages.");
@@ -246,6 +251,7 @@ public static class CiContractVerifier
             var with = Map(withNode!, "setup-dotnet.with", "dotnet-version");
             var expectedVersions = jobId is "aot-smoke" ? "10.0.x"
                 : jobId is "package-verifier" ? "8.0.x"
+                : jobId is "benchmark-smoke" ? "8.0.x\n10.0.x"
                 : "8.0.x\n9.0.x\n10.0.x";
             Require(NormalizeRun(Scalar(with["dotnet-version"], "setup-dotnet.dotnet-version")) == expectedVersions,
                 $"{jobId} setup-dotnet SDK inputs drifted.");
@@ -329,7 +335,7 @@ public static class CiContractVerifier
                 {
                     ["ARTIFACT_DIGEST"] = "${{ needs.package-producer.outputs.artifact-digest }}"
                 },
-            ("ci-required-v1", "Enforce every required job and matrix leg") => JobIds[..5].ToDictionary(
+            ("ci-required-v1", "Enforce every required job and matrix leg") => JobIds[..6].ToDictionary(
                 item => item.Replace('-', '_').ToUpperInvariant() + "_RESULT",
                 item => $"${{{{ needs.{item}.result }}}}", StringComparer.Ordinal),
             _ => null

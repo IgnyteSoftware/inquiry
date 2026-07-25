@@ -129,6 +129,7 @@ public static class PackageVerifier
                 $"{package.Id}.{manifest.PackageVersion}.nupkg",
                 $"{package.Id}.{manifest.PackageVersion}.snupkg"
             })
+            .Append("sbom.cdx.json")
             .Order(StringComparer.Ordinal)
             .ToArray();
         var fileSystemEntries = Directory.EnumerateFileSystemEntries(bundle, "*", SearchOption.TopDirectoryOnly).ToArray();
@@ -138,7 +139,7 @@ public static class PackageVerifier
         Require(actualFiles.All(path => !path.Contains('/')), "Bundle files must all be at its root.");
         Require(actualFiles.Distinct(StringComparer.OrdinalIgnoreCase).Count() == actualFiles.Length,
             "Bundle contains duplicate file names under case-insensitive comparison.");
-        RequireSequence(actualFiles, expectedFiles, "exact 18-file bundle inventory");
+        RequireSequence(actualFiles, expectedFiles, "exact bundle inventory");
 
         foreach (var package in manifest.Packages)
         {
@@ -147,6 +148,8 @@ public static class PackageVerifier
             var debugIdentities = VerifyNupkg(root, nupkg, package, manifest, expectedCommit);
             VerifySnupkg(snupkg, package, manifest, expectedCommit, debugIdentities);
         }
+
+        VerifySbom(Path.Combine(bundle, "sbom.cdx.json"));
     }
 
     internal static void VerifyPackagePairForTests(
@@ -405,6 +408,26 @@ public static class PackageVerifier
         catch (Exception exception) when (exception is InvalidDataException or InvalidOperationException or BadImageFormatException or JsonException)
         {
             throw new ReleaseVerificationException($"{package.Id} snupkg is malformed: {exception.Message}");
+        }
+    }
+
+    private static void VerifySbom(string sbomPath)
+    {
+        Require(File.Exists(sbomPath), "Bundle is missing the CycloneDX SBOM (sbom.cdx.json).");
+        try
+        {
+            using var stream = File.OpenRead(sbomPath);
+            using var document = JsonDocument.Parse(stream);
+            var root = document.RootElement;
+            Require(root.TryGetProperty("bomFormat", out var format) && format.GetString() == "CycloneDX",
+                "SBOM bomFormat must be CycloneDX.");
+            Require(root.TryGetProperty("specVersion", out _), "SBOM must declare a specVersion.");
+            Require(root.TryGetProperty("components", out var components) && components.ValueKind == JsonValueKind.Array && components.GetArrayLength() > 0,
+                "SBOM must contain a non-empty components array.");
+        }
+        catch (JsonException exception)
+        {
+            throw new ReleaseVerificationException($"SBOM is invalid JSON: {exception.Message}");
         }
     }
 

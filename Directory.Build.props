@@ -6,6 +6,8 @@
     <LangVersion>latest</LangVersion>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
 
     <!-- NuGet package metadata -->
     <RepositoryUrl>https://github.com/JakeOverstreet/inquiry</RepositoryUrl>
