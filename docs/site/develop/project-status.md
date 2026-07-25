@@ -3,23 +3,24 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code and GitHub:** 2026-07-16.
+**Last reconciled against the code and GitHub:** 2026-07-25.
 
-**1.0.0 is not release-ready.** GitHub has 22 open issues: 17 carry a 1.0 priority label
-(3 P0, 9 P1, and 5 P2) and are assigned to the `1.0.0` milestone; five are explicitly planned for
-1.x or demand-driven work. The [Roadmap](roadmap.md) records the complete priority inventory.
+**1.0.0 is not release-ready.** GitHub has 32 open issues: 14 carry a 1.0 priority label
+(1 P0, 8 P1, and 5 P2) and are assigned to the `1.0.0` milestone; five are explicitly planned for
+1.x or demand-driven work; and 13 are non-blocking `review-gate` follow-ups. The [Roadmap](roadmap.md) records the complete priority inventory.
 
-Delivery is active. Since 2026-07-14, ten prioritized issues have closed: #214 (SequentialGuid sort
+Delivery is active. Since 2026-07-14, thirteen prioritized issues have closed: #214 (SequentialGuid sort
 order), #78 (stored-procedure INOUT / multi-result-set / Oracle REF CURSOR), #156 (end-to-end
 cancellation), #178 (pessimistic row-level locking), #188 (stored-procedure metadata), #210 (column-list
 constants), #211 (InquiryPagedResult), #212 (typed FK attribute), #213 (ASP.NET Core audit-context
-middleware), and #219 (generated query contracts). [#89](https://github.com/JakeOverstreet/inquiry/issues/89)
+middleware), #219 (generated query contracts),
+[#69](https://github.com/JakeOverstreet/inquiry/issues/69) (SQL Server TVP production hardening),
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87) (benchmark truth and regression gates), and
+[#86](https://github.com/JakeOverstreet/inquiry/issues/86) (unified telemetry for all execution paths).
+[#89](https://github.com/JakeOverstreet/inquiry/issues/89)
 shipped governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), public API baseline
 (PublicApiAnalyzers + EnablePackageValidation), and package verification fixes but remains open for
 remaining release-engineering steps.
-[#69](https://github.com/JakeOverstreet/inquiry/issues/69) advanced with SQL Server TVP binding but
-remains open for broader acceptance criteria.
-[#87](https://github.com/JakeOverstreet/inquiry/issues/87) remains open for authoritative benchmarks.
 
 ## Supported database engines (6, all live-tested)
 
@@ -74,6 +75,8 @@ now defines the exact nine-package 1.0 bundle, and the cross-platform verifier r
 dependency, repository-commit, metadata, symbol, and SourceLink drift. `eng/pack-release.ps1` packs from
 an exact commit in a detached worktree, and CI separates the package producer from an independent verifier
 before the versioned `ci-required-v1` aggregate gate can pass. Public publishing remains disabled.
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87) (benchmark truth and regression gates) is closed:
+corrected baselines committed, weekly regression budgets enforced, and EF Core coverage gaps closed.
 [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and analyzer release
 tracking, isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
 SBOM/provenance/dependency evidence, hosted versioned documentation, changelog/release notes,

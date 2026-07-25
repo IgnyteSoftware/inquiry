@@ -7,7 +7,7 @@
 > predictable allocations; NativeAOT support; and explicit, validated SQL escape hatches. It is not
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
-> **Last reconciled against source and GitHub:** 2026-07-16. All
+> **Last reconciled against source and GitHub:** 2026-07-25. All
 > providers are restored; [#171](https://github.com/JakeOverstreet/inquiry/issues/171) records that
 > completed restoration gate.
 
@@ -36,14 +36,24 @@ The generated execution-path tranche ([#179](https://github.com/JakeOverstreet/i
 [#181](https://github.com/JakeOverstreet/inquiry/issues/181)) is complete. Immutable generated commands,
 sequential-safe generated ad-hoc materializers, and bounded provider-selected batch transports passed
 114/114 focused live tests across all six providers and .NET 8/9/10. The retained 72-cell diagnostic
-strategy record is published in the [batch mutation diagnostic matrix](batch-mutation-diagnostic-matrix.md);
-[#87](https://github.com/JakeOverstreet/inquiry/issues/87) still owns authoritative release-grade evidence.
-[#225](https://github.com/JakeOverstreet/inquiry/pull/225) merged a SQL Server collection-benchmark
-tranche that advances [#69](https://github.com/JakeOverstreet/inquiry/issues/69) and
-[#87](https://github.com/JakeOverstreet/inquiry/issues/87), but both issues remain open for their broader
-acceptance criteria. [#226](https://github.com/JakeOverstreet/inquiry/pull/226) merged the many-to-many
+strategy record is published in the [batch mutation diagnostic matrix](batch-mutation-diagnostic-matrix.md).
+[#226](https://github.com/JakeOverstreet/inquiry/pull/226) merged the many-to-many
 child-filter correction and closed [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
 [#68](https://github.com/JakeOverstreet/inquiry/issues/68) is closed with the Roslyn 4.8 hold policy recorded.
+
+[#69](https://github.com/JakeOverstreet/inquiry/issues/69) (SQL Server TVP production hardening) is closed.
+Generated TVP artifacts, I/O-free binding, exact element metadata, unsigned transport correctness,
+stored-procedure TVP parameters, and streaming resource lifetime are all shipped. Thirteen `review-gate`
+follow-up issues (#242–#254) were filed during the final review passes and remain open as non-blocking
+hardening work.
+
+[#87](https://github.com/JakeOverstreet/inquiry/issues/87) (benchmark truth and regression gates) is closed.
+Corrected baselines are committed, the weekly `benchmarks.yml` workflow enforces 10% latency / 5% allocation
+budgets against 16 baseline files covering all SQLite workloads, and EF Core coverage gaps are closed.
+
+[#86](https://github.com/JakeOverstreet/inquiry/issues/86) (unified telemetry for batch, bulk insert, and
+grid execution paths) is closed. All execution paths now emit consistent operation-context telemetry;
+connection-open/pool-wait metrics were deferred as a stretch goal.
 
 ## Product contract
 
@@ -75,16 +85,15 @@ For 1.0, "feature complete" means:
 ## Priority index
 
 GitHub issue state, priority labels, and the [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1)
-are authoritative for acceptance criteria. As reconciled on 2026-07-16, GitHub has **22 open issues**:
-**17 prioritized for 1.0 (3 P0, 9 P1, and 5 P2)** and five planned for post-1.0 work. All 17 prioritized
-issues are assigned to the `1.0.0` milestone.
+are authoritative for acceptance criteria. As reconciled on 2026-07-25, GitHub has **32 open issues**:
+**14 prioritized for 1.0 (1 P0, 8 P1, and 5 P2)** assigned to the `1.0.0` milestone, five planned for
+post-1.0 work, and 13 non-blocking `review-gate` follow-ups (#242–#254).
 
 ### P0 — stop-ship
 
 | Workstream | Issues |
 |---|---|
-| Broken/partial provider features | [#69](https://github.com/JakeOverstreet/inquiry/issues/69) |
-| Benchmark truth and release engineering | [#87](https://github.com/JakeOverstreet/inquiry/issues/87), [#89](https://github.com/JakeOverstreet/inquiry/issues/89) |
+| Release engineering and governance | [#89](https://github.com/JakeOverstreet/inquiry/issues/89) |
 
 ### P1 — must complete for 1.0
 
@@ -94,7 +103,7 @@ issues are assigned to the `1.0.0` milestone.
 | Scaffolding and live/offline validation | [#72](https://github.com/JakeOverstreet/inquiry/issues/72), [#79](https://github.com/JakeOverstreet/inquiry/issues/79) |
 | Query composition and tenant safety | [#82](https://github.com/JakeOverstreet/inquiry/issues/82), [#177](https://github.com/JakeOverstreet/inquiry/issues/177) |
 | First-party provider authoring and conformance | [#184](https://github.com/JakeOverstreet/inquiry/issues/184) |
-| Execution-path performance and semantics | [#86](https://github.com/JakeOverstreet/inquiry/issues/86), [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
+| Bulk insert production readiness | [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
 
 ### P2 — target for 1.0 if release gates stay healthy
 
@@ -153,7 +162,7 @@ acceptance criteria supersede any older wording that describes an initial implem
 - **~~DDL safety lint — more rules~~** *(resolved 2026-07-09)*. See [Recently resolved](#recently-resolved).
 - **~~Testing follow-ups: transaction sandbox + data factories~~** *(resolved 2026-07-14)*.
   See [Recently resolved](#recently-resolved) and [Testing](../articles/features/testing.md).
-- **Release engineering & governance — remaining scope** *(reconciled 2026-07-16)*. [#220](https://github.com/JakeOverstreet/inquiry/pull/220) shipped
+- **Release engineering & governance — remaining scope** *(reconciled 2026-07-25)*. [#220](https://github.com/JakeOverstreet/inquiry/pull/220) shipped
   exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
   and the versioned required CI gate. Governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), the
   public API baseline (PublicApiAnalyzers + EnablePackageValidation), and package verification fixes
@@ -174,11 +183,10 @@ acceptance criteria supersede any older wording that describes an initial implem
   to build on.
 - **~~Stored-procedure INOUT parameters & multi-result-set~~** *(resolved 2026-07-15)*. See
   [Recently resolved](#recently-resolved). INOUT parameters, multi-result-set stored procedures,
-  Oracle `OUT REF CURSOR`, and stored-procedure metadata generation are all shipped;
-  [#78](https://github.com/JakeOverstreet/inquiry/issues/78) and
-  [#188](https://github.com/JakeOverstreet/inquiry/issues/188) are closed.
-  Stored-procedure TVP parameters remain open in
-  [#69](https://github.com/JakeOverstreet/inquiry/issues/69).
+  Oracle `OUT REF CURSOR`, stored-procedure metadata generation, and stored-procedure TVP parameters
+  are all shipped; [#78](https://github.com/JakeOverstreet/inquiry/issues/78),
+  [#188](https://github.com/JakeOverstreet/inquiry/issues/188), and
+  [#69](https://github.com/JakeOverstreet/inquiry/issues/69) are closed.
 - **Database-first scaffolding CLI** *(gap research 2026-06-12)*. A `dotnet inquiry scaffold` tool
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
@@ -228,11 +236,9 @@ acceptance criteria supersede any older wording that describes an initial implem
   keyed DI services are the natural mechanism *(integration research 2026-06-12)*.
 - **Optional Roslyn bump.** `Microsoft.CodeAnalysis.CSharp` is intentionally held at 4.8.0 to keep the
   analyzer's minimum-SDK floor low; revisit only if a newer Roslyn API is needed.
-- **Telemetry enrichment (#86).** The opt-in telemetry layer (see
-  [Observability](../articles/features/observability.md)) emits OTel-conventional spans, a
-  `db.client.operation.duration` histogram, and `ILogger` messages. Candidate follow-ups:
-  a `db.collection.name` (table) span tag, sqlcommenter-style trace-context SQL comments, and
-  connection-open / pool-wait instruments.
+- **~~Telemetry enrichment (#86)~~** *(resolved 2026-07-20)*. See [Recently resolved](#recently-resolved).
+  Unified telemetry for batch, bulk insert, and grid execution paths shipped. Connection-open/pool-wait
+  metrics were deferred as a stretch goal.
 ## Test coverage & hardening
 
 - The SQLite-only feature suites and Oracle bulk fallback coverage were added in
@@ -284,6 +290,29 @@ This archive records when an initial capability landed. It does **not** override
 GitHub: several capabilities exposed follow-up correctness/performance work and remain open under a
 new or reframed issue.
 
+- **Unified telemetry for all execution paths (#86, 2026-07-20).** Batch, bulk insert, and grid
+  execution paths now emit consistent operation-context telemetry (spans, metrics, and logging)
+  matching the ordinary command path. Grid duration spans cover execute through reader disposal;
+  batch and bulk emit row counts; registered-but-unobserved telemetry has an allocation-free fast
+  gate; spans include provider/operation/table where statically known. Connection-open/pool-wait
+  metrics were deferred as a stretch goal.
+
+- **SQL Server TVP production hardening (#69, 2026-07-19).** Parameter binding performs no DDL or
+  other I/O. Generated TVP artifacts provide explicit schema provisioning. ANSI/Unicode length,
+  decimal precision/scale, converter, enum, date/time, binary, and nullable metadata are correct or
+  rejected at build time. Concurrent first use, two databases, ambient transactions, and missing
+  schema artifacts have live tests. Stored-procedure TVP parameters are supported. TVP-backed batch
+  commands bypass MaxBatchSize chunking via `IgnoresMaxBatchSize`, ensuring correct resource lifetime
+  for streaming collection bindings. Eighteen resource lifetime integration tests pass across
+  net8.0/net9.0/net10.0. Review-gate follow-ups #242–#254 track non-blocking documentation and
+  edge-case hardening.
+
+- **Benchmark truth and regression gates (#87, 2026-07-19).** Corrected baselines committed with
+  reproducible environment details. The weekly `benchmarks.yml` workflow enforces 10% latency / 5%
+  allocation budgets against 16 baseline files covering all SQLite workloads. EF Core coverage gaps
+  closed. Raw ADO.NET, Dapper, and EF Core are represented by workload with matched SQL, columns,
+  connection lifecycle, buffering/streaming, and cardinality validation.
+
 - **SequentialGuid sort-order fix (#214, 2026-07-15).** `SequentialGuidGenerator` now writes the
   timestamp bytes in big-endian order within the RFC 9562 `unix_ts_ms` field, matching SQL Server's
   `uniqueidentifier` comparison semantics so time-ordered GUIDs sort chronologically.
@@ -291,7 +320,7 @@ new or reframed issue.
 - **Stored-procedure INOUT, multi-result-set, and Oracle REF CURSOR (#78, #188, 2026-07-15).**
   INOUT parameters (value passed in *and* read back), multi-result-set stored procedures, Oracle
   `OUT REF CURSOR`, and stored-procedure metadata source generation are all shipped. Stored-procedure
-  TVP parameters remain open in [#69](https://github.com/JakeOverstreet/inquiry/issues/69).
+  TVP parameters shipped in [#69](https://github.com/JakeOverstreet/inquiry/issues/69) (2026-07-19).
 
 - **End-to-end cancellation (#156, 2026-07-15).** Cancellation now propagates through generated
   operations and the `IInquiry` pipeline, not just direct provider commands. All provider suites
@@ -437,14 +466,15 @@ new or reframed issue.
   `AddInquiryMariaDb` DI overloads, `[assembly: InquiryDialect("MariaDb")]`). The full MySQL integration
   suite is cloned to `tests/Inquiry.MariaDb.Tests` against a Testcontainers `mariadb:11.4` image, and
   MariaDb joined the CI provider matrix. Unblocked #58, #169, and #170.
-- **Table-valued-parameter foundation for SQL Server (#69, 2026-07-09).** SQL Server IN collections
-  (`Compare.In` predicates and `[InquiryDeleteAll]`) now bind as table-valued parameters (TVPs)
+- **Table-valued-parameter foundation for SQL Server (#69, 2026-07-09; hardened 2026-07-19).** SQL Server
+  IN collections (`Compare.In` predicates and `[InquiryDeleteAll]`) bind as table-valued parameters (TVPs)
   instead of per-element sentinel expansion. The SQL stays constant across list lengths
   (`col IN (SELECT [Value] FROM @param)`) — one cached plan for all cardinalities, no per-element
-  parameter cap, and no power-of-two bucketing overhead. TVP table types (`Inquiry_IntList`,
-  `Inquiry_BigIntList`, etc.) are auto-created on first use. Query-time synchronous DDL, database-unsafe
-  caching, incomplete type metadata, stored-procedure support, and allocations remain open in
-  [#69](https://github.com/JakeOverstreet/inquiry/issues/69).
+  parameter cap, and no power-of-two bucketing overhead. The initial foundation shipped generated TVP
+  artifacts and I/O-free binding; the production hardening pass added exact element metadata (ANSI/Unicode
+  length, decimal precision/scale, converter, enum, date/time, binary, nullable), unsigned transport
+  correctness, stored-procedure TVP parameters, and streaming resource lifetime with `IgnoresMaxBatchSize`.
+  [#69](https://github.com/JakeOverstreet/inquiry/issues/69) is closed.
 - **SQLite `json_each` and Oracle `JSON_TABLE` IN optimization (2026-07-09).** Extends the #69 IN
   collection optimization to the remaining viable engines. SQLite uses
   `col IN (SELECT value FROM json_each(@param))` (available since SQLite 3.38.0); Oracle uses
@@ -713,8 +743,8 @@ new or reframed issue.
   a new `IInquiry.ExecuteProcedureScalarAsync<T>` pipeline seam (both pipelines). The two knobs are
   mutually exclusive and a RETURN value must be `Task<int>` (new INQ051). Provider-uniform via
   `CommandType.StoredProcedure`; live-proven on SQL Server (`OUTPUT` + `RETURN` procs), plus generator
-  snapshots. INOUT, multi-result-set, and Oracle REF CURSOR shipped in #78/#188 (see above);
-  stored-procedure TVP parameters remain open in #69. See
+  snapshots. INOUT, multi-result-set, and Oracle REF CURSOR shipped in #78/#188;
+  stored-procedure TVP parameters shipped in #69 (see above). See
   [Stored procedures](../articles/features/stored-procedures.md).
 - **Provider-native bulk copy (2026-06-13):** `[InquiryBulkInsert]` streams rows through
   `SqlBulkCopy` / Npgsql binary `COPY` / `MySqlBulkCopy` (new `IInquiryBulkCopier` registered by
