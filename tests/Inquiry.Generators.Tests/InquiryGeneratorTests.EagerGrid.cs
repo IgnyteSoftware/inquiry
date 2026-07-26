@@ -172,6 +172,121 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("DBMS_SQL.RETURN_RESULT", text);
     }
 
+    // A relation whose child type is not an [InquiryTable] entity is silently skipped — no diagnostic
+    // (InquiryGeneratorBase.ValidateRelations) and no child fetch. It must not drag its mapped siblings
+    // off the grid path with it (#70).
+    private const string PartiallyMappedRelationEagerSource = """
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("Tag")]
+        public sealed class Tag
+        {
+            [InquiryKey] public int Id { get; set; }
+            [InquiryColumn] public int PostId { get; set; }
+        }
+
+        // Deliberately NOT an [InquiryTable] entity.
+        public sealed class Note
+        {
+            public int Id { get; set; }
+            public int PostId { get; set; }
+        }
+
+        [InquiryTable("Post")]
+        public sealed class Post
+        {
+            [InquiryKey] public int Id { get; set; }
+
+            [InquiryRelation(nameof(Tag.PostId))]
+            public IReadOnlyList<Tag> Tags { get; set; } = new List<Tag>();
+
+            [InquiryRelation("PostId")]
+            public IReadOnlyList<Note> Notes { get; set; } = new List<Note>();
+        }
+
+        public partial class PostStore : InquiryStore<Post>
+        {
+            [InquirySelectOneByKeyEager]
+            public partial Task<Post?> GetWithRelationsAsync(int id, CancellationToken ct = default);
+        }
+        """;
+
+    [Theory]
+    [InlineData("Sqlite")]
+    [InlineData("SqlServer")]
+    [InlineData("PostgreSql")]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    [InlineData("Oracle")]
+    public void SelectOneByKeyEager_UnmappedRelation_StillGridsMappedRelations(string dialect)
+    {
+        var result = RunGenerator(PartiallyMappedRelationEagerSource, dialect: dialect);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
+
+        var text = GetPostStoreText(result);
+
+        // The mapped relation still resolves in one round trip; the unmapped one is simply absent.
+        Assert.Contains("Inquiry.QueryMultipleAsync(", text);
+        Assert.Contains("_sql_Tags", text);
+        Assert.Contains("_grid.ReadListAsync<", text);
+        Assert.DoesNotContain("_sql_Notes", text);
+        Assert.DoesNotContain("_entity.Notes", text);
+    }
+
+    // An eager method on an entity with no emittable relation falls off the grid path onto the
+    // separate-query path. That path streams with `await foreach`, and IAsyncEnumerable<T>.ConfigureAwait
+    // is an EXTENSION method — generated stores emit no usings, so it has to be called as a static or the
+    // generated file does not compile.
+    private const string NoRelationEagerSource = """
+        using System.Collections.Generic;
+        using System.Threading;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("Region")]
+        public sealed class Region
+        {
+            [InquiryKey] public int RegionId { get; set; }
+        }
+
+        public partial class RegionStore : InquiryStore<Region>
+        {
+            [InquirySelectAllEager]
+            public partial IAsyncEnumerable<Region> SelectAllEagerAsync(CancellationToken cancellationToken = default);
+        }
+        """;
+
+    [Theory]
+    [InlineData("Sqlite")]
+    [InlineData("SqlServer")]
+    [InlineData("PostgreSql")]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    [InlineData("Oracle")]
+    public void SelectAllEager_WithoutRelations_EmitsCompilableSeparatePath(string dialect)
+    {
+        var result = RunGenerator(NoRelationEagerSource, dialect: dialect);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
+
+        var text = GetRegionStoreText(result);
+
+        // No relations to batch, so no grid command.
+        Assert.DoesNotContain("Inquiry.QueryMultipleAsync(", text);
+        Assert.Contains("global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(", text);
+    }
+
     private static string GetRegionStoreText(GeneratorTestResult result)
     {
         var generatedStore = Assert.Single(

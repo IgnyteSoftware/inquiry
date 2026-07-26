@@ -2198,27 +2198,40 @@ internal static class StoreOperationEmitter
     private static string NullGuardedSelect(string arg, string selector)
         => $"{arg} is null ? null : global::System.Linq.Enumerable.Select({arg}, {selector})";
 
+    /// <summary>
+    /// <c>ConfigureAwait</c> for an <c>await foreach</c> source, spelled as a static call.
+    /// Generated stores emit no <c>using</c> directives — every type is <c>global::</c>-qualified — so
+    /// the <c>IAsyncEnumerable&lt;T&gt;.ConfigureAwait</c> EXTENSION method cannot bind by name and
+    /// <c>source.ConfigureAwait(false)</c> fails to compile. Task-returning awaits are unaffected
+    /// (there <c>ConfigureAwait</c> is an instance method).
+    /// </summary>
+    private const string ConfigureAwaitEnumerable =
+        "global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait";
+
     private static void EmitSelectOneByKeyEager(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
     {
-        // Single-round-trip (grid) path when EVERY relation can be expressed with the input key alone:
+        // Single-round-trip (grid) path — every emittable relation is expressed with the input key alone:
         // collection and many-to-many children filter by the parent key directly; reference (belongs-to)
         // children use a scalar subquery (SELECT parentFK FROM parent WHERE parentPK = @key) so the
         // value is resolved server-side without materializing the parent first. The grid path requires a
         // dialect that can return multiple result sets from one command — a ;-separated batch on most
         // dialects, Oracle's DBMS_SQL.RETURN_RESULT PL/SQL wrapper via the MultiResultBatch* hooks.
-        var allKeyFilterable = entity.Relations.Count > 0 && sqlBuilder.SupportsMultiResultBatch;
+        // Relations that actually emit a child fetch (a relation with no resolved child entity is skipped),
+        // matching EmitSelectAllEager. An unresolvable relation must not demote its resolvable siblings to
+        // the separate path: the separate path skips it too, so the fallback would cost a round trip per
+        // sibling and still not load it.
+        var emittedRelations = new List<RelationData>();
         foreach (var relation in entity.Relations)
         {
-            if (!relationChildEntities.ContainsKey(relation.PropertyName))
+            if (relationChildEntities.ContainsKey(relation.PropertyName))
             {
-                allKeyFilterable = false;
-                break;
+                emittedRelations.Add(relation);
             }
         }
 
-        if (allKeyFilterable)
+        if (sqlBuilder.SupportsMultiResultBatch && emittedRelations.Count > 0)
         {
-            EmitSelectOneByKeyEagerGrid(source, sqlBuilder, method, parameters, entityType, cancellation, entity, relationChildEntities, parentSelectField);
+            EmitSelectOneByKeyEagerGrid(source, sqlBuilder, method, parameters, entityType, cancellation, entity, relationChildEntities, emittedRelations, parentSelectField);
         }
         else
         {
@@ -2259,7 +2272,7 @@ internal static class StoreOperationEmitter
     // Single round trip: one command with the parent SELECT + each key-filterable child SELECT, read in
     // order through an InquiryGridReader. Matches what Dapper (QueryMultiple), DLG (multi-result proc), and
     // a hand-written two-result-set ADO command do.
-    private static void EmitSelectOneByKeyEagerGrid(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
+    private static void EmitSelectOneByKeyEagerGrid(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, List<RelationData> emittedRelations, string parentSelectField)
     {
         var keyParamName = method.Parameters[0].Name;
         var parentStructMat = entity.StructMaterializerFullName;
@@ -2271,7 +2284,7 @@ internal static class StoreOperationEmitter
         // Collection and M:N relations use the by-FK const; reference (belongs-to) relations use the
         // _ByKey subquery const so the FK value is resolved server-side in the same round trip.
         var sqlFields = new List<string> { parentSelectField };
-        foreach (var relation in entity.Relations)
+        foreach (var relation in emittedRelations)
         {
             var suffix = relation.IsCollection || relation.IsManyToMany ? "" : "_ByKey";
             sqlFields.Add($"_sql_{relation.PropertyName}{suffix}");
@@ -2281,7 +2294,7 @@ internal static class StoreOperationEmitter
         // Deduped parameters, all bound to the input key value. Non-M:N collection children filter by
         // their own FK param; M:N and reference children use the parent-key param (already first).
         var paramNames = new List<string> { parentKeyProp };
-        foreach (var relation in entity.Relations)
+        foreach (var relation in emittedRelations)
         {
             if (relation.IsCollection && !relation.IsManyToMany)
             {
@@ -2312,7 +2325,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"        var _entity = await _grid.ReadGeneratedSingleOrDefaultAsync<{entityType}, {parentStructMat}>(default, {cancellation}).ConfigureAwait(false);");
         source.AppendLine("        if (_entity is not null)");
         source.AppendLine("        {");
-        foreach (var relation in entity.Relations)
+        foreach (var relation in emittedRelations)
         {
             var childEntity = relationChildEntities[relation.PropertyName];
             if (relation.IsCollection || relation.IsManyToMany)
@@ -2350,10 +2363,10 @@ internal static class StoreOperationEmitter
             {
                 // The JOIN const filters by this entity's key (bound as the parent key parameter).
                 source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
-                source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}, {method.Parameters[0].TypeDisplay}, {childStructMat}>(");
+                source.AppendLine($"            await foreach (var _child in {ConfigureAwaitEnumerable}(Inquiry.QueryAsync<{childType}, {method.Parameters[0].TypeDisplay}, {childStructMat}>(");
                 AppendSingleParameterGeneratedCommand(source, sqlBuilder, fieldName, method.Parameters[0].TypeDisplay, "_entity." + entity.Keys[0].PropertyName, entity.Keys[0].PropertyName, entity.Keys[0], "                ");
                 source.AppendLine("                default,");
-                source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"                {cancellation}), false))");
                 source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
                 source.AppendLine($"            _entity.{relation.PropertyName} = _{relation.PropertyName}_list;");
                 continue;
@@ -2362,10 +2375,10 @@ internal static class StoreOperationEmitter
             if (relation.IsCollection)
             {
                 source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
-                source.AppendLine($"            await foreach (var _child in Inquiry.QueryAsync<{childType}, {method.Parameters[0].TypeDisplay}, {childStructMat}>(");
+                source.AppendLine($"            await foreach (var _child in {ConfigureAwaitEnumerable}(Inquiry.QueryAsync<{childType}, {method.Parameters[0].TypeDisplay}, {childStructMat}>(");
                 AppendSingleParameterGeneratedCommand(source, sqlBuilder, fieldName, method.Parameters[0].TypeDisplay, "_entity." + entity.Keys[0].PropertyName, relation.ForeignKeyProperty, entity.Keys[0], "                ");
                 source.AppendLine("                default,");
-                source.AppendLine($"                {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"                {cancellation}), false))");
                 source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
                 source.AppendLine($"            _entity.{relation.PropertyName} = _{relation.PropertyName}_list;");
             }
@@ -2424,7 +2437,7 @@ internal static class StoreOperationEmitter
             }
             else
             {
-                source.AppendLine($"        await foreach (var {loopVar} in Inquiry.QueryAsync<{rowType}, byte, {rowStructMat}>({EmptyGeneratedCommand(sqlField)}, default, {cancellation}).ConfigureAwait(false))");
+                source.AppendLine($"        await foreach (var {loopVar} in {ConfigureAwaitEnumerable}(Inquiry.QueryAsync<{rowType}, byte, {rowStructMat}>({EmptyGeneratedCommand(sqlField)}, default, {cancellation}), false))");
                 source.AppendLine("        {");
             }
         }
@@ -2459,7 +2472,7 @@ internal static class StoreOperationEmitter
         else
         {
             source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
-            source.AppendLine($"        await foreach (var _e in Inquiry.QueryAsync<{entityType}, byte, {parentStructMat}>({EmptyGeneratedCommand(parentSelectField)}, default, {cancellation}).ConfigureAwait(false))");
+            source.AppendLine($"        await foreach (var _e in {ConfigureAwaitEnumerable}(Inquiry.QueryAsync<{entityType}, byte, {parentStructMat}>({EmptyGeneratedCommand(parentSelectField)}, default, {cancellation}), false))");
             source.AppendLine("            _entities.Add(_e);");
         }
         source.AppendLine("        if (_entities.Count == 0)");
