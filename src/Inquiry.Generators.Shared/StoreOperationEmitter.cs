@@ -2450,11 +2450,164 @@ internal static class StoreOperationEmitter
                 source.AppendLine("        }");
         }
 
+        // Dictionary capacity. On the non-grid path the parent list is materialized first, so its count is
+        // available; on the grid path parents have not been read yet (they are the LAST result set). Two of
+        // the four hints were dimensionally wrong anyway — _childByKey_ is keyed by the child's key and
+        // _parents_ by the referenced entity's key, neither of which is bounded by the parent count — so
+        // dropping them there costs a few amortized rehashes and removes two over-allocations.
+        var dictCapacity = useGrid ? string.Empty : "_entities.Count";
+
+        void AppendChildGrouping()
+        {
+            foreach (var relation in emittedRelations)
+            {
+                var childEntity = relationChildEntities[relation.PropertyName];
+                var childType = childEntity.FullyQualifiedName;
+                var fieldName = $"_sql_{relation.PropertyName}";
+                var childStructMat = childEntity.StructMaterializerFullName;
+                if (relation.IsManyToMany)
+                {
+                    // Load participating children indexed by key, then load participating junction rows and group the children
+                    // under each parent key — a two-query in-memory assembly (no N+1) reusing both materializers.
+                    var junctionEntity = relationJunctionEntities[relation.PropertyName];
+                    var junctionType = junctionEntity.FullyQualifiedName;
+                    var junctionStructMat = junctionEntity.StructMaterializerFullName;
+                    var childKey = childEntity.Keys[0];
+                    var childKeyType = childKey.Type.NonNullableDisplayName;
+                    var jParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
+                    var jChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!;
+                    var parentKeyType = entity.Keys[0].Type.NonNullableDisplayName;
+
+                    source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>({dictCapacity});");
+                    AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
+                    if (childKey.Type.IsNullable)
+                    {
+                        source.AppendLine($"            if (_c.{childKey.PropertyName} is null) {skipRow};");
+                    }
+                    source.AppendLine($"            _childByKey_{relation.PropertyName}[{NonNullableValueExpression(childKey.Type, $"_c.{childKey.PropertyName}")}] = _c;");
+                    AppendChildLoopClose();
+
+                    source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>({dictCapacity});");
+                    AppendChildLoopOpen("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
+                    if (jChildFk.Type.IsNullable)
+                    {
+                        source.AppendLine($"            if (_j.{jChildFk.PropertyName} is null) {skipRow};");
+                    }
+                    if (jParentFk.Type.IsNullable)
+                    {
+                        source.AppendLine($"            if (_j.{jParentFk.PropertyName} is null) {skipRow};");
+                    }
+                    source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jChildFk.Type, $"_j.{jChildFk.PropertyName}")}, out var _child)) {skipRow};");
+                    source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}, out var _grp))");
+                    source.AppendLine("            {");
+                    source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
+                    source.AppendLine($"                _grouped_{relation.PropertyName}[{NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}] = _grp;");
+                    source.AppendLine("            }");
+                    source.AppendLine("            _grp.Add(_child);");
+                    AppendChildLoopClose();
+                    continue;
+                }
+
+                if (relation.IsCollection)
+                {
+                    var childFkColumn = FindColumn(childEntity, relation.ForeignKeyProperty);
+                    var childFkNullable = childFkColumn?.Type.IsNullable ?? false;
+                    var fkKeyType = childFkColumn?.Type.NonNullableDisplayName ?? "object";
+
+                    source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{fkKeyType}, global::System.Collections.Generic.List<{childType}>>({dictCapacity});");
+                    AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
+                    if (childFkNullable)
+                    {
+                        source.AppendLine($"            if (_c.{relation.ForeignKeyProperty} is null) {skipRow};");
+                        source.AppendLine($"            var _fkVal = {NonNullableValueExpression(childFkColumn!.Type, $"_c.{relation.ForeignKeyProperty}")};");
+                    }
+                    else
+                    {
+                        source.AppendLine($"            var _fkVal = _c.{relation.ForeignKeyProperty};");
+                    }
+                    source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue(_fkVal, out var _grp))");
+                    source.AppendLine("            {");
+                    source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
+                    source.AppendLine($"                _grouped_{relation.PropertyName}[_fkVal] = _grp;");
+                    source.AppendLine("            }");
+                    source.AppendLine("            _grp.Add(_c);");
+                    AppendChildLoopClose();
+                }
+                else
+                {
+                    var relatedKeyProperty = childEntity.Keys[0].PropertyName;
+                    var childKeyNullable = childEntity.Keys[0].Type.IsNullable;
+                    var parentKeyType = childEntity.Keys[0].Type.NonNullableDisplayName;
+
+                    source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, {childType}>({dictCapacity});");
+                    AppendChildLoopOpen("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
+                    if (childKeyNullable)
+                    {
+                        source.AppendLine($"            if (_p.{relatedKeyProperty} is null) {skipRow};");
+                    }
+                    source.AppendLine($"            _parents_{relation.PropertyName}[{(childKeyNullable ? NonNullableValueExpression(childEntity.Keys[0].Type, $"_p.{relatedKeyProperty}") : $"_p.{relatedKeyProperty}")}] = _p;");
+                    AppendChildLoopClose();
+                }
+            }
+        }
+
+        // Assigns each relation property on a single materialized parent. Driven from emittedRelations —
+        // the same list AppendChildGrouping walks — so a relation can never be stitched without having
+        // been grouped (which would reference an undeclared local).
+        void AppendStitch()
+        {
+            foreach (var relation in emittedRelations)
+            {
+                var childEntity = relationChildEntities[relation.PropertyName];
+                var childType = childEntity.FullyQualifiedName;
+                if (relation.IsCollection)
+                {
+                    if (entity.Keys[0].Type.IsNullable)
+                    {
+                        source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{entity.Keys[0].PropertyName} is null");
+                        source.AppendLine($"                ? new global::System.Collections.Generic.List<{childType}>()");
+                        source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(entity.Keys[0].Type, $"_entity.{entity.Keys[0].PropertyName}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
+                    }
+                    else
+                    {
+                        source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue(_entity.{entity.Keys[0].PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+                    }
+                }
+                else
+                {
+                    var parentFkColumn = FindColumn(entity, relation.ForeignKeyProperty);
+                    var parentFkNullable = parentFkColumn?.Type.IsNullable ?? false;
+                    if (parentFkNullable)
+                    {
+                        source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{relation.ForeignKeyProperty} is null");
+                        source.AppendLine($"                ? null");
+                        source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(parentFkColumn!.Type, $"_entity.{relation.ForeignKeyProperty}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
+                    }
+                    else
+                    {
+                        source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue(_entity.{relation.ForeignKeyProperty}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
+                    }
+                }
+            }
+        }
+
         if (useGrid)
         {
-            // The combined command is parameterless: the child _All / _Junction selects use subquery
-            // filters (no @-parameters), so there is nothing to bind.
-            var sqlFields = new List<string> { parentSelectField };
+            // Result sets are ordered CHILDREN FIRST, PARENT LAST (#70). Every child SELECT filters through
+            // a parent-key subquery, so none of them depends on the parent result set having been read —
+            // which means the grouping dictionaries can be fully built before the first parent row arrives,
+            // and parents can then stream straight out of the reader, stitched and yielded one at a time.
+            // Nothing buffers the parent set.
+            //
+            // Ordering invariant: sqlFields and AppendChildGrouping both walk emittedRelations in the same
+            // order, and a many-to-many relation contributes its _All set immediately before its _Junction
+            // set in both. Break that correspondence and the reads silently consume the wrong result set.
+            //
+            // Read-consistency note: statements in one batch are not atomic outside a snapshot or
+            // repeatable-read transaction. With children first, a parent inserted mid-batch is returned
+            // with an empty collection (previously it was omitted entirely). Neither ordering ever
+            // guaranteed consistency; see the [InquirySelectAllEager] docs.
+            var sqlFields = new List<string>();
             foreach (var relation in emittedRelations)
             {
                 sqlFields.Add($"_sql_{relation.PropertyName}_All{relationSqlSuffix}");
@@ -2463,152 +2616,46 @@ internal static class StoreOperationEmitter
                     sqlFields.Add($"_sql_{relation.PropertyName}_Junction{relationSqlSuffix}");
                 }
             }
+            sqlFields.Add(parentSelectField);
+
+            // The combined command is parameterless: the child _All / _Junction selects use subquery
+            // filters (no @-parameters), so there is nothing to bind.
             AppendGridCommandText(source, sqlBuilder, sqlFields);
             source.AppendLine("        await using var _grid = await Inquiry.QueryMultipleAsync(");
             source.AppendLine($"            {EmptyGeneratedCommand("_sql")},");
             source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
-            source.AppendLine($"        var _entities = await _grid.ReadListAsync<{entityType}, {parentStructMat}>(default, {cancellation}).ConfigureAwait(false);");
+
+            AppendChildGrouping();
+            source.AppendLine();
+
+            // ReadStreamAsync returns IAsyncEnumerable<T>, so ConfigureAwait is the extension method and
+            // must be called as a static — generated stores emit no usings.
+            source.AppendLine($"        await foreach (var _entity in {ConfigureAwaitEnumerable}(_grid.ReadStreamAsync<{entityType}, {parentStructMat}>(default, {cancellation}), false))");
+            source.AppendLine("        {");
+            AppendStitch();
+            source.AppendLine("            yield return _entity;");
+            source.AppendLine("        }");
         }
         else
         {
+            // Separate-query fallback: the parent set must be materialized up front so the child queries
+            // can be skipped entirely when there are none.
             source.AppendLine($"        var _entities = new global::System.Collections.Generic.List<{entityType}>();");
             source.AppendLine($"        await foreach (var _e in {ConfigureAwaitEnumerable}(Inquiry.QueryAsync<{entityType}, byte, {parentStructMat}>({EmptyGeneratedCommand(parentSelectField)}, default, {cancellation}), false))");
             source.AppendLine("            _entities.Add(_e);");
+            source.AppendLine("        if (_entities.Count == 0)");
+            source.AppendLine("            yield break;");
+            source.AppendLine();
+
+            AppendChildGrouping();
+            source.AppendLine();
+
+            source.AppendLine("        foreach (var _entity in _entities)");
+            source.AppendLine("        {");
+            AppendStitch();
+            source.AppendLine("            yield return _entity;");
+            source.AppendLine("        }");
         }
-        source.AppendLine("        if (_entities.Count == 0)");
-        source.AppendLine("            yield break;");
-        source.AppendLine();
-
-        foreach (var relation in emittedRelations)
-        {
-            var childEntity = relationChildEntities[relation.PropertyName];
-            var childType = childEntity.FullyQualifiedName;
-            var fieldName = $"_sql_{relation.PropertyName}";
-            var childStructMat = childEntity.StructMaterializerFullName;
-            if (relation.IsManyToMany)
-            {
-                // Load participating children indexed by key, then load participating junction rows and group the children
-                // under each parent key — a two-query in-memory assembly (no N+1) reusing both materializers.
-                var junctionEntity = relationJunctionEntities[relation.PropertyName];
-                var junctionType = junctionEntity.FullyQualifiedName;
-                var junctionStructMat = junctionEntity.StructMaterializerFullName;
-                var childKey = childEntity.Keys[0];
-                var childKeyType = childKey.Type.NonNullableDisplayName;
-                var jParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
-                var jChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!;
-                var parentKeyType = entity.Keys[0].Type.NonNullableDisplayName;
-
-                source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>(_entities.Count);");
-                AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
-                if (childKey.Type.IsNullable)
-                {
-                    source.AppendLine($"            if (_c.{childKey.PropertyName} is null) {skipRow};");
-                }
-                source.AppendLine($"            _childByKey_{relation.PropertyName}[{NonNullableValueExpression(childKey.Type, $"_c.{childKey.PropertyName}")}] = _c;");
-                AppendChildLoopClose();
-
-                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>(_entities.Count);");
-                AppendChildLoopOpen("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
-                if (jChildFk.Type.IsNullable)
-                {
-                    source.AppendLine($"            if (_j.{jChildFk.PropertyName} is null) {skipRow};");
-                }
-                if (jParentFk.Type.IsNullable)
-                {
-                    source.AppendLine($"            if (_j.{jParentFk.PropertyName} is null) {skipRow};");
-                }
-                source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jChildFk.Type, $"_j.{jChildFk.PropertyName}")}, out var _child)) {skipRow};");
-                source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}, out var _grp))");
-                source.AppendLine("            {");
-                source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
-                source.AppendLine($"                _grouped_{relation.PropertyName}[{NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}] = _grp;");
-                source.AppendLine("            }");
-                source.AppendLine("            _grp.Add(_child);");
-                AppendChildLoopClose();
-                continue;
-            }
-
-            if (relation.IsCollection)
-            {
-                var childFkColumn = FindColumn(childEntity, relation.ForeignKeyProperty);
-                var childFkNullable = childFkColumn?.Type.IsNullable ?? false;
-                var fkKeyType = childFkColumn?.Type.NonNullableDisplayName ?? "object";
-
-                source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{fkKeyType}, global::System.Collections.Generic.List<{childType}>>(_entities.Count);");
-                AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
-                if (childFkNullable)
-                {
-                    source.AppendLine($"            if (_c.{relation.ForeignKeyProperty} is null) {skipRow};");
-                    source.AppendLine($"            var _fkVal = {NonNullableValueExpression(childFkColumn!.Type, $"_c.{relation.ForeignKeyProperty}")};");
-                }
-                else
-                {
-                    source.AppendLine($"            var _fkVal = _c.{relation.ForeignKeyProperty};");
-                }
-                source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue(_fkVal, out var _grp))");
-                source.AppendLine("            {");
-                source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
-                source.AppendLine($"                _grouped_{relation.PropertyName}[_fkVal] = _grp;");
-                source.AppendLine("            }");
-                source.AppendLine("            _grp.Add(_c);");
-                AppendChildLoopClose();
-            }
-            else
-            {
-                var relatedKeyProperty = childEntity.Keys[0].PropertyName;
-                var childKeyNullable = childEntity.Keys[0].Type.IsNullable;
-                var parentKeyType = childEntity.Keys[0].Type.NonNullableDisplayName;
-
-                source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, {childType}>(_entities.Count);");
-                AppendChildLoopOpen("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
-                if (childKeyNullable)
-                {
-                    source.AppendLine($"            if (_p.{relatedKeyProperty} is null) {skipRow};");
-                }
-                source.AppendLine($"            _parents_{relation.PropertyName}[{(childKeyNullable ? NonNullableValueExpression(childEntity.Keys[0].Type, $"_p.{relatedKeyProperty}") : $"_p.{relatedKeyProperty}")}] = _p;");
-                AppendChildLoopClose();
-            }
-        }
-
-        source.AppendLine("        foreach (var _entity in _entities)");
-        source.AppendLine("        {");
-        foreach (var relation in entity.Relations)
-        {
-            if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity)) continue;
-            var childType = childEntity.FullyQualifiedName;
-            if (relation.IsCollection)
-            {
-                if (entity.Keys[0].Type.IsNullable)
-                {
-                    source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{entity.Keys[0].PropertyName} is null");
-                    source.AppendLine($"                ? new global::System.Collections.Generic.List<{childType}>()");
-                    source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(entity.Keys[0].Type, $"_entity.{entity.Keys[0].PropertyName}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
-                }
-                else
-                {
-                    source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue(_entity.{entity.Keys[0].PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
-                }
-            }
-            else
-            {
-                var parentFkColumn = FindColumn(entity, relation.ForeignKeyProperty);
-                var parentFkNullable = parentFkColumn?.Type.IsNullable ?? false;
-                if (parentFkNullable)
-                {
-                    source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{relation.ForeignKeyProperty} is null");
-                    source.AppendLine($"                ? null");
-                    source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(parentFkColumn!.Type, $"_entity.{relation.ForeignKeyProperty}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
-                }
-                else
-                {
-                    source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue(_entity.{relation.ForeignKeyProperty}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
-                }
-            }
-        }
-        source.AppendLine("        }");
-        source.AppendLine();
-        source.AppendLine("        foreach (var _entity in _entities)");
-        source.AppendLine("            yield return _entity;");
         source.AppendLine("    }");
     }
 

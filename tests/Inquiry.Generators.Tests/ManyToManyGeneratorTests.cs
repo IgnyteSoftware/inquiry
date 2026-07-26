@@ -216,7 +216,10 @@ public sealed partial class InquiryGeneratorTests
         var text = GetOrderStore(result);
 
         Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sqlSelectByKey + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Products + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
-        Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sqlSelectAll + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Products_All + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Products_Junction + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
+        // SelectAllEager orders the child sets FIRST and the parent LAST (#70), so parents stream out of
+        // the reader instead of being buffered. A relation's _All set stays immediately before its
+        // _Junction set — the grouping reads depend on that pairing.
+        Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sql_Products_All + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Products_Junction + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sqlSelectAll + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
         Assert.Contains("_entity.Products = await _grid.ReadListAsync<", text);
         // No per-relation streaming query on the grid path.
         Assert.DoesNotContain("await foreach (var _child in Inquiry.QueryAsync<", text);

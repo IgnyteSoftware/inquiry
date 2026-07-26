@@ -321,6 +321,49 @@ public sealed class EagerLoadingIntegrationTests
             probe, recorder);
     }
 
+    // ---- Streaming-parent behaviour (#70). SelectAllEager reads child sets first and streams parents out
+    // of the grid's last result set, so there is no buffered parent list and no zero-parent early-out. ----
+
+    [Fact]
+    public async Task SelectAllEagerReturnsEmptyWhenThereAreNoParents()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerEmpty");
+        var regionStore = harness.GetRequiredService<RegionStore>();
+
+        var all = await regionStore.SelectAllWithTerritoriesAsync().ToListAsync();
+
+        Assert.Empty(all);
+    }
+
+    [Fact]
+    public async Task SelectAllEagerAbandonedMidStreamStillStitchesAndLeavesHarnessUsable()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "EagerBreak");
+        var regionStore = harness.GetRequiredService<RegionStore>();
+        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+
+        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
+        await regionStore.InsertAsync(new Region { RegionID = 2, RegionDescription = "Western" });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T2", TerritoryDescription = "Denver", RegionID = 2 });
+
+        // Take the first parent and walk away — the grid is disposed mid-result-set.
+        Region? first = null;
+        await foreach (var region in regionStore.SelectAllWithTerritoriesAsync())
+        {
+            first = region;
+            break;
+        }
+
+        Assert.NotNull(first);
+        Assert.Single(first!.Territories!);
+
+        // Abandoning the stream must not wedge the connection for subsequent work.
+        var all = await regionStore.SelectAllWithTerritoriesAsync().ToListAsync();
+        Assert.Equal(2, all.Count);
+        Assert.All(all, r => Assert.Single(r.Territories!));
+    }
+
     private static async Task<(SqliteTestHarness Harness, BatchExecutionProbe Probe, RecordingCommandInterceptor Recorder)> CreateGridHarnessAsync()
     {
         var probe = new BatchExecutionProbe();

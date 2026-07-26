@@ -292,6 +292,7 @@ Inquiry.InquiryGridReader.ReadGeneratedSingleOrDefaultAsync<TEntity, TMaterializ
 Inquiry.InquiryGridReader.ReadListAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.List<TEntity!>!>!
 Inquiry.InquiryGridReader.ReadScalarAsync<T>(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T>!
 Inquiry.InquiryGridReader.ReadSingleOrDefaultAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Inquiry.InquiryGridReader.ReadStreamAsync<TEntity, TMaterializer>(TMaterializer materializer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
 Inquiry.InquiryGuid
 Inquiry.InquiryOptions
 Inquiry.InquiryOptions.DefaultCommandTimeout.get -> System.TimeSpan?

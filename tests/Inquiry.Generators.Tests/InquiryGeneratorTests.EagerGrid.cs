@@ -56,10 +56,15 @@ public sealed partial class InquiryGeneratorTests
 
         var text = GetRegionStoreText(result);
 
-        // One ;-separated command (parent + child) read through the grid reader.
+        // One ;-separated command read through the grid reader. Assert the WHOLE line: child sets come
+        // first and the parent set last (#70), and only the full text pins that order.
         Assert.Contains("Inquiry.QueryMultipleAsync(", text);
-        Assert.Contains("_grid.ReadListAsync<", text);
-        Assert.Contains("\";\" + _sql_Territories_All", text);
+        Assert.Contains("var _sql = _sql_Territories_All + \";\" + _sqlSelectAll;", text);
+
+        // Parents stream straight out of the reader — no intermediate list, no second pass.
+        Assert.Contains("_grid.ReadStreamAsync<", text);
+        Assert.DoesNotContain("_grid.ReadListAsync<", text);
+        Assert.DoesNotContain("var _entities", text);
         // No per-relation streaming query for the child collection on the grid path. Match the text the
         // separate path actually emits: the child loop wraps its source in a fully-qualified static
         // ConfigureAwait, so a bare "Inquiry.QueryAsync<" literal here would never match anything.
@@ -79,8 +84,12 @@ public sealed partial class InquiryGeneratorTests
         // Oracle multiplexes result sets through a DBMS_SQL.RETURN_RESULT PL/SQL block (implicit result
         // sets), read through the same grid reader as the ;-batching dialects.
         Assert.Contains("Inquiry.QueryMultipleAsync(", text);
-        Assert.Contains("_grid.ReadListAsync<", text);
-        Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sqlSelectAll + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Territories_All + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
+        Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sql_Territories_All + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sqlSelectAll + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
+
+        // Parents stream straight out of the reader — no intermediate list, no second pass.
+        Assert.Contains("_grid.ReadStreamAsync<", text);
+        Assert.DoesNotContain("_grid.ReadListAsync<", text);
+        Assert.DoesNotContain("var _entities", text);
         // No per-relation streaming query for the child collection on the grid path. Match the text the
         // separate path actually emits: the child loop wraps its source in a fully-qualified static
         // ConfigureAwait, so a bare "Inquiry.QueryAsync<" literal here would never match anything.

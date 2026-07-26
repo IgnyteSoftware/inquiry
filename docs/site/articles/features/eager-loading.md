@@ -1,6 +1,6 @@
 # Eager loading
 
-Pull related entities alongside a parent with `[InquirySelectOneByKeyEager]` (one entity by key) or `[InquirySelectAllEager]` (all rows). The generator loads the parent, then runs **one additional query per relation** to populate each navigation property — a separate-query strategy, not a JOIN. Every navigation property declared with `[InquiryRelation]` on the entity is loaded.
+Pull related entities alongside a parent with `[InquirySelectOneByKeyEager]` (one entity by key) or `[InquirySelectAllEager]` (all rows). The parent `SELECT` and every relation `SELECT` are batched into **a single multi-result-set command — one round trip** — and stitched in memory. It is a separate-`SELECT` strategy rather than a JOIN, so no parent column is duplicated across child rows. Every navigation property declared with `[InquiryRelation]` on the entity is loaded.
 
 ## You write
 
@@ -28,19 +28,33 @@ public sealed class Order
 
 ## The generator emits
 
-The parent is fetched by key; then each relation is fetched in its own query and assigned to the navigation property (the relation queries run only when the parent is found):
+One command carrying both result sets, read in order through an `InquiryGridReader`:
 
 ```sql
--- 1. the parent, by key
-SELECT "OrderID", "CustomerID" FROM "Orders" WHERE "OrderID" = @OrderID
+-- result set 1: the parent, by key
+SELECT "OrderID", "CustomerID" FROM "Orders" WHERE "OrderID" = @OrderID;
 
--- 2. the Customer reference: the child by its key, bound to the parent's foreign key
-SELECT "CustomerID", "CompanyName", ... FROM "Customers" WHERE "CustomerID" = @CustomerID
+-- result set 2: the Customer reference, resolved server-side from the parent's foreign key
+SELECT "CustomerID", "CompanyName", ... FROM "Customers"
+WHERE "CustomerID" = (SELECT "CustomerID" FROM "Orders" WHERE "OrderID" = @OrderID)
 ```
 
-A **to-one reference** is fetched with `QuerySingleOrDefaultAsync` (as above); a **to-many collection** streams the children with `WHERE <childForeignKey> = <parentKey>` and accumulates them into the navigation list. An orphan or missing foreign key leaves the navigation property `null` (reference) or empty (collection).
+A **to-one reference** resolves through that scalar subquery, so the foreign-key value never has to round-trip to the client first; a **to-many collection** filters with `WHERE <childForeignKey> = <parentKey>`. An orphan or missing foreign key leaves the navigation property `null` (reference) or empty (collection).
 
-> **One round-trip per relation.** A parent with *k* relations costs *k + 1* queries. Collapsing the parent and relation `SELECT`s into a single multi-result-set command (one round-trip) is a planned enhancement — see the [roadmap](../../develop/roadmap.md).
+Oracle has no `;`-separated batch, so it wraps the same `SELECT`s in a `DBMS_SQL.RETURN_RESULT` PL/SQL block and returns them as implicit result sets. The client protocol — and the round-trip count — is identical.
+
+> **A parent with *k* relations costs one round trip, not *k* + 1.** The only exception is a relation whose child type is not an `[InquiryTable]` entity: it is silently skipped, and its resolvable siblings still share the single command.
+
+### `SelectAllEager` streams
+
+`[InquirySelectAllEager]` orders the batch **children first, parent last**. The relation result sets fill the grouping dictionaries, then parents are materialized, stitched, and yielded one at a time — the parent set is never buffered into a list, so memory is bounded by the child rows rather than by the full result.
+
+Two consequences:
+
+- The reader stays open while the caller enumerates. Call `ToListAsync()` if the consumer is slow, or if it may abandon the loop early.
+- Statements within one command are not read-consistent with each other outside a snapshot or repeatable-read transaction. Because the relation `SELECT`s run *before* the parent `SELECT`, a concurrent commit in between is visible in one direction only: a newly inserted parent arrives with an empty collection, and a **deleted child row is still attached** to its parent. The second case matters if you branch on a collection's contents — an authorization check like `resource.AccessGrants.Any(g => g.UserId == u)` can observe a grant that was already revoked. Wrap the call in a snapshot/repeatable-read transaction when the parent and its children must be read as of one instant.
+
+  The size of that window is engine-dependent. Oracle runs the whole PL/SQL block server-side before any row reaches the client, so the gap is negligible; on SQL Server, SQLite, MySQL and MariaDB the next statement does not begin until the previous result set has been consumed, so the gap is as long as it takes to transfer the child rows.
 
 ## Relation validation
 
@@ -53,4 +67,4 @@ A **to-one reference** is fetched with `QuerySingleOrDefaultAsync` (as above); a
 ## Limitations
 
 - **One level of include** in the current implementation — chained includes (`Order.OrderDetails[].Product`) are a future addition.
-- **One round-trip per relation** — each relation is a separate query rather than a single JOIN; single-round-trip (multi-result-set) loading is on the [roadmap](../../develop/roadmap.md).
+- **Single-column keys only** on both sides — eager loading is rejected on a composite-key parent (`INQ012`) or child (`INQ041`).
