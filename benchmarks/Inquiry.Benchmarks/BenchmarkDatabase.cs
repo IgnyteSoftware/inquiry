@@ -59,6 +59,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     public TerritoryStore   Territories => _services.GetRequiredService<TerritoryStore>();
     public CategoryStore    Categories  => _services.GetRequiredService<CategoryStore>();
     public BatchMutationBenchmarkStore BatchMutations => _services.GetRequiredService<BatchMutationBenchmarkStore>();
+    public MixedBenchPostStore MixedPosts => _services.GetRequiredService<MixedBenchPostStore>();
 
     /// <summary>
     /// Seeds <paramref name="seedRows"/> rows of each benchmarked entity. Returns the freshly
@@ -78,6 +79,17 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
                 CREATE TABLE InquiryBatchEvidence (
                     Id INTEGER NOT NULL PRIMARY KEY,
                     ValueText TEXT NOT NULL);
+                CREATE TABLE MixedBenchAuthor (
+                    Id INTEGER NOT NULL PRIMARY KEY,
+                    Name TEXT NOT NULL);
+                CREATE TABLE MixedBenchPost (
+                    Id INTEGER NOT NULL PRIMARY KEY,
+                    AuthorId INTEGER NOT NULL,
+                    Title TEXT NOT NULL);
+                CREATE TABLE MixedBenchTag (
+                    Id INTEGER NOT NULL PRIMARY KEY,
+                    PostId INTEGER NOT NULL,
+                    Label TEXT NOT NULL);
                 """;
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
@@ -241,6 +253,69 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
                 pId.Value = i.ToString();
                 pDesc.Value = $"Territory {i}";
                 pRegion.Value = (i % regionCount) + 1;
+                await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        await tx.CommitAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Seeds the #70 mixed-relation tables: <paramref name="postCount"/> parents, each with a to-one
+    /// author and a share of <paramref name="tagCount"/> tags, so density varies the same way
+    /// <see cref="SeedRegionsAsync"/> does.
+    /// </summary>
+    public async Task SeedMixedRelationAsync(int postCount, int tagCount, int authorCount)
+    {
+        await using var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var tx = (SqliteTransaction)await connection.BeginTransactionAsync().ConfigureAwait(false);
+
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT INTO MixedBenchAuthor (Id, Name) VALUES ($id, $name);";
+            var pId = insert.Parameters.Add("$id", SqliteType.Integer);
+            var pName = insert.Parameters.Add("$name", SqliteType.Text);
+            await insert.PrepareAsync().ConfigureAwait(false);
+            for (int i = 0; i < authorCount; i++)
+            {
+                pId.Value = i + 1;
+                pName.Value = $"Author {i}";
+                await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT INTO MixedBenchPost (Id, AuthorId, Title) VALUES ($id, $author, $title);";
+            var pId = insert.Parameters.Add("$id", SqliteType.Integer);
+            var pAuthor = insert.Parameters.Add("$author", SqliteType.Integer);
+            var pTitle = insert.Parameters.Add("$title", SqliteType.Text);
+            await insert.PrepareAsync().ConfigureAwait(false);
+            for (int i = 0; i < postCount; i++)
+            {
+                pId.Value = i + 1;
+                pAuthor.Value = (i % authorCount) + 1;
+                pTitle.Value = $"Post {i}";
+                await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+        }
+
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT INTO MixedBenchTag (Id, PostId, Label) VALUES ($id, $post, $label);";
+            var pId = insert.Parameters.Add("$id", SqliteType.Integer);
+            var pPost = insert.Parameters.Add("$post", SqliteType.Integer);
+            var pLabel = insert.Parameters.Add("$label", SqliteType.Text);
+            await insert.PrepareAsync().ConfigureAwait(false);
+            for (int i = 0; i < tagCount; i++)
+            {
+                pId.Value = i + 1;
+                pPost.Value = (i % postCount) + 1;
+                pLabel.Value = $"Tag {i}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

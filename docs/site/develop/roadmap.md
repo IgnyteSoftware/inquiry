@@ -22,14 +22,15 @@ fail closed.
 [#220](https://github.com/JakeOverstreet/inquiry/pull/220) installed the immutable release-engineering foundation: an exact-commit detached-worktree pack,
 the canonical nine-package manifest, package/bundle and CI-contract verification, package producer and
 independent verifier jobs, and the `ci-required-v1` aggregate required gate. Public promotion is still
-disabled. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and
-analyzer release tracking, isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
-SBOM/provenance/dependency evidence, hosted versioned documentation, changelog/release notes,
-release/support/security policies and repository rulesets, and protected promotion plus resumable publishing.
+disabled. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) closed 2026-07-25 across all nine
+acceptance criteria, adding APICompat and analyzer release tracking, isolated net8/net9/net10 and NativeAOT
+installs from the produced nupkgs, a CycloneDX SBOM plus SLSA build provenance and dependency auditing,
+hosted versioned documentation, release/support/security policies, CODEOWNERS and branch protection, and
+CodeQL plus dependency scanning. Branch protection and CodeQL activate when the repository goes public.
 
 The fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security diff scan and threat-model review found and fixed a custom-shell CI bypass.
-The post-fix scan reported no remaining reportable findings; this does not replace the remaining
-release evidence and governance work tracked in [#89](https://github.com/JakeOverstreet/inquiry/issues/89).
+The post-fix scan reported no remaining reportable findings. Release evidence and governance shipped with
+[#89](https://github.com/JakeOverstreet/inquiry/issues/89) (closed 2026-07-25).
 
 The generated execution-path tranche ([#179](https://github.com/JakeOverstreet/inquiry/issues/179),
 [#180](https://github.com/JakeOverstreet/inquiry/issues/180), and
@@ -85,21 +86,20 @@ For 1.0, "feature complete" means:
 ## Priority index
 
 GitHub issue state, priority labels, and the [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1)
-are authoritative for acceptance criteria. As reconciled on 2026-07-25, GitHub has **32 open issues**:
-**14 prioritized for 1.0 (1 P0, 8 P1, and 5 P2)** assigned to the `1.0.0` milestone, five planned for
-post-1.0 work, and 13 non-blocking `review-gate` follow-ups (#242–#254).
+are authoritative for acceptance criteria. As reconciled on 2026-07-26, GitHub has **40 open issues**:
+**12 prioritized for 1.0 (7 P1 and 5 P2)** assigned to the `1.0.0` milestone, five planned for post-1.0
+work, and 23 non-blocking `review-gate` follow-ups (#242–#264).
 
 ### P0 — stop-ship
 
-| Workstream | Issues |
-|---|---|
-| Release engineering and governance | [#89](https://github.com/JakeOverstreet/inquiry/issues/89) |
+None. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) (release engineering and governance)
+closed 2026-07-25.
 
 ### P1 — must complete for 1.0
 
 | Workstream | Issues |
 |---|---|
-| Eager loading and relationship correctness | [#70](https://github.com/JakeOverstreet/inquiry/issues/70), [#80](https://github.com/JakeOverstreet/inquiry/issues/80) |
+| Eager loading and relationship correctness | [#80](https://github.com/JakeOverstreet/inquiry/issues/80) — [#70](https://github.com/JakeOverstreet/inquiry/issues/70) closed 2026-07-26 |
 | Scaffolding and live/offline validation | [#72](https://github.com/JakeOverstreet/inquiry/issues/72), [#79](https://github.com/JakeOverstreet/inquiry/issues/79) |
 | Query composition and tenant safety | [#82](https://github.com/JakeOverstreet/inquiry/issues/82), [#177](https://github.com/JakeOverstreet/inquiry/issues/177) |
 | First-party provider authoring and conformance | [#184](https://github.com/JakeOverstreet/inquiry/issues/184) |
@@ -166,10 +166,10 @@ acceptance criteria supersede any older wording that describes an initial implem
   exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
   and the versioned required CI gate. Governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), the
   public API baseline (PublicApiAnalyzers + EnablePackageValidation), and package verification fixes
-  have shipped. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) remains open for APICompat and analyzer release tracking,
-  isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
-  SBOM/provenance/dependency evidence, hosted versioned docs, repository rulesets, protected
-  promotion, and a resumable publisher.
+  have shipped. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) closed 2026-07-25, also
+  delivering APICompat and analyzer release tracking, isolated net8/net9/net10 and NativeAOT installs
+  from the produced nupkgs, SBOM/provenance/dependency evidence, hosted versioned docs, CODEOWNERS and
+  branch protection, and CodeQL plus dependency scanning.
 - **Default interceptor library — remaining scope** *(gap research 2026-06-12)*. The
   `Inquiry.Interceptors` package shipped with slow-query warning logging and sqlcommenter
   trace-context tagging (see [Recently resolved](#recently-resolved)); the command-text assertion
@@ -437,8 +437,29 @@ new or reframed issue.
   `InquiryGridReader` runtime is unchanged — the entire change is in the generator layer. Three
   virtual hooks on `SqlBuilder` (`MultiResultBatchPrefix`, `MultiResultBatchSeparator`,
   `MultiResultBatchSuffix`) let Oracle inject the wrapper while the other four dialects keep the
-  default `;`-separated batch unchanged. Reference-relation fallbacks, allocation work, exact command-count
-  tests, and representative benchmarks remain in [#70](https://github.com/JakeOverstreet/inquiry/issues/70).
+  default `;`-separated batch unchanged.
+
+- **Eager loading completed (#70, 2026-07-26).** Closed the remaining gaps on the grid path.
+  `SelectOneByKeyEager` no longer demotes an entire method to separate queries because one relation's
+  child type is unmapped — it filters that relation out and grids the rest. The `SelectAllEager` batch is
+  now ordered **children first, parent last**: every child SELECT filters through a parent-key subquery,
+  so nothing depends on the parent set having been read, and parents stream straight out of the reader
+  through the new `InquiryGridReader.ReadStreamAsync` — stitched and yielded one at a time, with no
+  parent list and no second pass. That also closed the allocation item: the grid path no longer allocates
+  a parent `List<T>`, and the four dictionary capacity hints were dropped there (two of them were
+  dimensionally wrong — `_childByKey_` is keyed by the child's key and `_parents_` by the referenced
+  entity's, neither bounded by the parent count). Live tests assert an exact round-trip count on all six providers via
+  `BatchExecutionProbe` (the previous `Assert.Empty(recorder.Commands)` proved nothing: the grid path
+  bypasses interceptors, so it passed at one command and at *N*). The 1-parent-2-relations shape gained
+  both generator and live coverage, and `EagerGridMixedRelationBenchmarks` measures it against ADO.NET
+  and Dapper on latency and allocations, gated by a committed regression baseline. Peak working set was
+  built and dropped: under `ServerGarbageCollection` it tracks the GC's reservation policy rather than the
+  operation, inverting leg ordering across runs — see the benchmarks README for the evidence.
+
+  Two behaviours worth knowing: the reader stays open while a caller enumerates `SelectAllEager`
+  (`ToListAsync()` is the escape hatch), and because the relation SELECTs now run *before* the parent
+  SELECT, intra-batch read skew shows up as a deleted child row still attached rather than a missing
+  parent — see the [eager-loading guide](../articles/features/eager-loading.md).
 
 - **MySQL and MariaDB `JSON_TABLE` IN optimization (#169, #170, 2026-07-09).** The shared
   `MySqlFamilySqlBuilder` uses MySQL 8.0+ / MariaDB 10.6+ `JSON_TABLE`: IN collections bind as a single JSON
@@ -520,9 +541,9 @@ new or reframed issue.
   package/bundle verifier, package producer and independent verifier jobs, and versioned
   `ci-required-v1` aggregate required gate are in place. APICompat/analyzer release tracking,
   isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
-  SBOM/provenance/dependency evidence, hosted versioned docs, changelog/release notes, policies/rulesets,
-  protected promotion, and resumable publication remain release-blocking under #89. Benchmark and sample
-  projects remain non-packable.
+  SBOM/provenance/dependency evidence, hosted versioned docs, changelog/release notes, policies, and
+  branch protection all shipped under #89 (closed 2026-07-25). Benchmark and sample projects remain
+  non-packable.
 - **PostgreSQL bulk COPY typed writes (#122, 2026-07-08).** The binary copier now threads
   `System.Data.DbType` through `InquiryBulkInsertDefinition.ColumnTypes` (populated at compile time by
   the source generator), maps them to `NpgsqlDbType` in `PostgreSqlBulkCopier.MapColumnTypes`, and calls

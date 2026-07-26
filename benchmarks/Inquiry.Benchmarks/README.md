@@ -67,6 +67,18 @@ Two invariants keep the comparison honest:
 ~1.00 (modulo noise). A wrapper under 1.00 means the baseline has drifted out of parity — fix
 the baseline, not the wrapper.
 
+**Exempt: the grid-eager classes** (`EagerGridBenchmarks`, `EagerGridMixedRelationBenchmarks`). There the
+ADO.NET baseline deliberately runs *separate* queries and stitches in memory, while Inquiry issues a
+single multi-result-set command — so a `Ratio` or `Alloc Ratio` below 1.00 is the architectural
+difference being measured, not baseline drift. Do not "fix" it.
+
+Ratios in the committed `EagerGridBenchmarks` baseline (`Grid_Inquiry` ÷ `Grid_AdoNet`, median): 0.97 at
+(1000, 4), 1.00 at (1000, 100), **1.15 at (100000, 4)**, 0.98 at (100000, 100). That dense-100k outlier
+predates the children-first streaming change (#70) and has not been re-measured since. It is tracked as
+[#265](https://github.com/JakeOverstreet/inquiry/issues/265) — because the baseline pins 1.15 as the
+expected value, the regression gate will never flag it. `EagerLoadingBenchmarks` is **not** exempt — it
+runs 1.11–1.13× and the ordinary rule applies.
+
 ## What it measures
 
 ### CRUD (`CustomerCrudBenchmarks` / `ProductCrudBenchmarks` / `ShipperCrudBenchmarks`)
@@ -101,8 +113,26 @@ a like-for-like comparison it is omitted (noted in each class's doc comment).
 | `ProjectionAggregateBenchmarks`  | Projection, Count, Sum    | 3-column `ProductSummary` projection, `COUNT(*)`, and `SUM(UnitPrice)`.                                     |
 | `PredicateBenchmarks`            | Search, InList            | Two-clause AND predicate (`UnitPrice >=` + `ProductName LIKE`) and `CategoryID IN (...)`.                   |
 | `BatchBenchmarks`                | BatchInsert               | One batched multi-row INSERT (`[InquiryInsertAll]`) vs an N-row INSERT loop in a transaction.               |
-| `EagerLoadingBenchmarks`         | EagerAll                  | Separate-query eager load of `Product.Category` vs a Dapper/ADO two-query-then-stitch of the same shape.    |
+| `EagerLoadingBenchmarks`         | EagerAll                  | Eager load of the `Product.Category` reference vs a Dapper/ADO two-query-then-stitch of the same shape.     |
+| `EagerGridBenchmarks`            | EagerGrid                 | `Region → Territories` collection, one grid command vs two queries stitched. Density: `RegionCount` 4 (dense) or 100 (sparse). |
+| `EagerGridMixedRelationBenchmarks` | EagerGridMixed          | 1 parent + 2 relations (`MixedBenchPost` → to-one `Author`, to-many `Tags`), one grid command vs three queries stitched. `Rows` is the **tag** count; `PostCount` 4 (dense) or 100 (sparse). Seeds only its own tables (`CreateAsync(seedRows: 0)`), unlike the classes above. |
 | `PreparedStatementBenchmarks`    | SimplePointRead, MultiJoinPointRead | PostgreSQL-only comparison of Inquiry `PreparedStatementMode.None` vs `Auto` on generated and ad-hoc stable SQL. |
+
+#### Why there is no working-set column
+
+Peak working set is deliberately **not** reported. It was built and measured three ways during #70, and
+none of them tracked the workload:
+
+| Measured as | Result |
+| --- | --- |
+| Absolute process peak | 59% swing between identical runs (215,800 vs 342,844 KB) while `Allocated` stayed byte-stable; leg ordering inverted |
+| Delta from `BeforeActualRun` | That signal fires *after* warmup, which has already run the workload and grown the heap — so the delta is residual growth, not footprint |
+| Delta from `BeforeAnythingElse` | Back to GC-dominated: 200,380 / 462,648 / 195,848 KB for operations allocating 92 / 156 / 91 KB, with ordering still inverting |
+
+The cause is `ServerGarbageCollection` (on for these projects): working set reflects the GC's reservation
+policy, which scales with core count and available RAM, not with what the benchmark allocates. No reset
+point fixes that. **`Allocated` is the actionable memory signal** — it reproduces to the byte and is
+gated by the #87 regression budget.
 
 ### Generated-command hot path (`ParameterBindingBenchmarks` / `GeneratedCommandPipelineBenchmarks`)
 
@@ -184,13 +214,20 @@ The explicit Windows RID overrides the benchmark project's Linux CI default; omi
 ## Dataset size (`[Params(1000, 100000)]`)
 
 The read-oriented classes — both CRUD classes and `PaginationBenchmarks`,
-`ProjectionAggregateBenchmarks`, `PredicateBenchmarks`, `EagerLoadingBenchmarks` — carry a
+`ProjectionAggregateBenchmarks`, `PredicateBenchmarks`, `EagerLoadingBenchmarks`,
+`EagerGridBenchmarks`, `EagerGridMixedRelationBenchmarks` — carry a
 `[Params(1000, 100000)] public int Rows;` field, so BenchmarkDotNet runs every benchmark at
 **two dataset tiers**: a small **1 000-row** set and a large **100 000-row** set. This shows
 how each library's overhead scales: per-call fixed cost dominates at 1 000 rows, while
 materialization / streaming cost dominates at 100 000. `BatchBenchmarks` is intentionally
 **not** parameterized — it is a fixed-size (500-row) write benchmark, not a read over the
 seeded data.
+
+The two eager-grid classes cross `Rows` with a second **density** parameter — `RegionCount`
+(4 dense / 100 sparse) and `PostCount` respectively — so each tier is measured with both few
+parents holding many children and many parents holding few. In
+`EagerGridMixedRelationBenchmarks`, `Rows` is the **tag** (child collection) count rather than a
+per-entity row count.
 
 ## Setup
 
@@ -199,6 +236,12 @@ Each benchmark class creates a fresh SQLite database in `%TEMP%`, applies the sh
 of categories so `Products.CategoryID` has valid FKs). Seeding happens **once per parameter
 value in `[GlobalSetup]`** — so the 100 000-row insert is paid a single time per class/tier,
 outside the measured region, not on every invocation. The file is deleted on `[GlobalCleanup]`.
+
+`EagerGridMixedRelationBenchmarks` is the exception: it calls `CreateAsync(seedRows: 0)` and seeds only
+its own three tables, because it never reads the Northwind entities and ~300k unused inserts is pure
+setup cost. Its `[GlobalSetup]` also runs all three legs once through `AssertLegsAgree()`, which fails
+the run unless they stitch the same number of relations — otherwise a regression that stopped populating
+a navigation property would make one leg do less work and report as *faster*.
 
 ## Running
 
