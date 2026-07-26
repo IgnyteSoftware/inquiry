@@ -2267,6 +2267,67 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ041");
     }
 
+    [Theory]
+    [InlineData("[InquirySelectOneByKeyEager]\n    public partial System.Threading.Tasks.Task<OrderLine?> GetAsync(int orderId, int productId, CancellationToken cancellationToken = default);")]
+    [InlineData("[InquirySelectAllEager]\n    public partial IAsyncEnumerable<OrderLine> AllAsync(CancellationToken cancellationToken = default);")]
+    public void EagerLoadingOnCompositeKeyParentEmitsDiagnosticAndDropsTheMethod(string eagerMethod)
+    {
+        // The eager emitters bind a single key value (StoreOperationEmitter binds one `_key` and
+        // groups on entity.Keys[0]), so a composite-key PARENT is rejected outright by INQ012.
+        // Composite-key children are a separate rule — this pins the parent side only.
+        var source = $$"""
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Note")]
+            public sealed class Note
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn] public int OrderId { get; set; }
+            }
+
+            [InquiryTable("OrderLine")]
+            public sealed class OrderLine
+            {
+                [InquiryKey] public int OrderId { get; set; }
+                [InquiryKey] public int ProductId { get; set; }
+
+                [InquiryRelation(nameof(Note.OrderId))]
+                public IReadOnlyList<Note> Notes { get; set; } = new List<Note>();
+            }
+
+            public partial class OrderLineStore : InquiryStore<OrderLine>
+            {
+                {{eagerMethod}}
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ012");
+
+        // The method is dropped rather than emitted against a single key column, but the store must
+        // still be emitted as throwing stubs. Omitting it entirely buries INQ012 under CS8795
+        // ("partial method must have an implementation part") and CS7036 (no constructor).
+        var errors = result.Compilation.GetDiagnostics()
+            .Where(static d => d.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.Empty(errors);
+
+        var text = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("OrderLineStore.InquiryStore.g.cs", StringComparison.Ordinal))
+            .GetText().ToString();
+        Assert.Contains("global::System.NotSupportedException", text);
+        Assert.DoesNotContain("Inquiry.QueryMultipleAsync(", text);
+    }
+
     [Fact]
     public void CollectionRelationWithMistypedForeignKeyButNoEagerMethodDoesNotCrashGenerator()
     {

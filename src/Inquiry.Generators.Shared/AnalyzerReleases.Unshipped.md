@@ -15,7 +15,7 @@ INQ008 | Inquiry | Error | Store entity type is not mapped with InquiryTable
 INQ009 | Inquiry | Error | Mapped entity property must have an accessible setter
 INQ010 | Inquiry | Error | Query method must be a partial declaration
 INQ011 | Inquiry | Error | Composite primary key cannot contain database-generated columns
-INQ012 | Inquiry | Error | Eager loading is not supported on composite-key entities
+INQ012 | Inquiry | Error | Eager loading is not supported on a composite-key parent entity
 INQ014 | Inquiry | Error | Multiple Inquiry SQL dialects are referenced
 INQ016 | Inquiry | Error | Store class cannot be nested inside another type
 INQ017 | Inquiry | Error | Store class cannot be abstract

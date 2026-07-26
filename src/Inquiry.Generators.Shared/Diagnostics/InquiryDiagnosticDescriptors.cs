@@ -135,8 +135,8 @@ internal static class InquiryDiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor EagerLoadingOnCompositeKeyParent = new(
         "INQ012",
-        "Eager loading is not supported on composite-key entities",
-        "Query method '{0}' uses eager loading on entity '{1}', which has a composite primary key. Composite-key parents are not supported for eager loading.",
+        "Eager loading is not supported on a composite-key parent entity",
+        "Query method '{0}' uses eager loading on entity '{1}', which has a composite primary key. The entity being eager-loaded (the parent) must have a single-column key; composite keys on the related entities are unaffected by this rule.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

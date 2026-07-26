@@ -116,7 +116,16 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ018");
-        Assert.DoesNotContain(result.RunResult.GeneratedTrees, static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal));
+
+        // The method is rejected, but the store is still emitted as a throwing stub — matching the
+        // INQ076 case above. Omitting the store leaves the user's partial unimplemented, burying
+        // INQ018 under CS8795 and CS7036.
+        var generated = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal))
+            .GetText().ToString();
+        Assert.Contains("throw new global::System.NotSupportedException", generated);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
     }
 
     [Fact]
