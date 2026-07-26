@@ -4,6 +4,7 @@ using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Testing;
+using Inquiry.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.SqlServer.Tests;
@@ -308,94 +309,79 @@ public sealed class EagerLoadingIntegrationTests
         Assert.Null(all.Single(p => p.ProductName == "Uncategorized").Category);
     }
 
-    // ---- Grid-path (command-count) tests ----
+    // ---- Round-trip assertions: exactly one command, and it went through the grid path.
+    // See EagerGridCommandAssertions.AssertSingleGridCommand for why both signals are required. ----
 
     [SkippableFact]
     public async Task SelectOneByKeyEagerUsesGridPath()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        var recorder = new RecordingCommandInterceptor();
-        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, NorthwindSchema.SqlServerDdl, "EagerGrid",
-            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
-        var regionStore = harness.GetRequiredService<RegionStore>();
-        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
-        recorder.Clear();
+        var (harness, probe, recorder) = await CreateGridHarnessAsync();
+        await using var _ = harness;
 
-        var loaded = await regionStore.SelectByKeyWithTerritoriesAsync(1);
-
-        Assert.NotNull(loaded);
-        Assert.Single(loaded.Territories!);
-        Assert.Empty(recorder.Commands);
+        await EagerGridCommandAssertions.SelectOneByKeyEagerIssuesOneCommandAsync(
+            harness.GetRequiredService<RegionStore>(),
+            harness.GetRequiredService<TerritoryStore>(),
+            probe, recorder);
     }
 
     [SkippableFact]
     public async Task SelectAllEagerUsesGridPath()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        var recorder = new RecordingCommandInterceptor();
-        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, NorthwindSchema.SqlServerDdl, "EagerGrid",
-            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
-        var regionStore = harness.GetRequiredService<RegionStore>();
-        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
-        recorder.Clear();
+        var (harness, probe, recorder) = await CreateGridHarnessAsync();
+        await using var _ = harness;
 
-        var all = await regionStore.SelectAllWithTerritoriesAsync().ToListAsync();
-
-        Assert.Single(all);
-        Assert.Single(all[0].Territories!);
-        Assert.Empty(recorder.Commands);
+        await EagerGridCommandAssertions.SelectAllEagerIssuesOneCommandAsync(
+            harness.GetRequiredService<RegionStore>(),
+            harness.GetRequiredService<TerritoryStore>(),
+            probe, recorder);
     }
 
     [SkippableFact]
     public async Task SelectOneByKeyEagerWithReferenceUsesGridPath()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        var recorder = new RecordingCommandInterceptor();
-        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, NorthwindSchema.SqlServerDdl, "EagerGrid",
-            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
-        var regionStore = harness.GetRequiredService<RegionStore>();
-        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
-        recorder.Clear();
+        var (harness, probe, recorder) = await CreateGridHarnessAsync();
+        await using var _ = harness;
 
-        var loaded = await territoryStore.SelectByKeyWithRegionAsync("T1");
-
-        Assert.NotNull(loaded);
-        Assert.NotNull(loaded.Region);
-        Assert.Equal("Eastern", loaded.Region!.RegionDescription);
-        Assert.Empty(recorder.Commands);
+        await EagerGridCommandAssertions.SelectOneByKeyEagerWithReferenceIssuesOneCommandAsync(
+            harness.GetRequiredService<RegionStore>(),
+            harness.GetRequiredService<TerritoryStore>(),
+            probe, recorder);
     }
 
     [SkippableFact]
     public async Task SelectAllEagerWithReferenceUsesGridPath()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
-        var recorder = new RecordingCommandInterceptor();
-        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, NorthwindSchema.SqlServerDdl, "EagerGrid",
-            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
-        var regionStore = harness.GetRequiredService<RegionStore>();
-        var territoryStore = harness.GetRequiredService<TerritoryStore>();
 
-        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
-        recorder.Clear();
+        var (harness, probe, recorder) = await CreateGridHarnessAsync();
+        await using var _ = harness;
 
-        var all = await territoryStore.SelectAllWithRegionAsync().ToListAsync();
-
-        Assert.Single(all);
-        Assert.NotNull(all[0].Region);
-        Assert.Empty(recorder.Commands);
+        await EagerGridCommandAssertions.SelectAllEagerWithReferenceIssuesOneCommandAsync(
+            harness.GetRequiredService<RegionStore>(),
+            harness.GetRequiredService<TerritoryStore>(),
+            probe, recorder);
     }
+
+    private async Task<(SqlServerTestHarness Harness, BatchExecutionProbe Probe, RecordingCommandInterceptor Recorder)> CreateGridHarnessAsync()
+    {
+        var probe = new BatchExecutionProbe();
+        var recorder = new RecordingCommandInterceptor();
+        var harness = await SqlServerTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, NorthwindSchema.SqlServerDdl, "EagerGrid",
+            configureServices: Configure(probe, recorder));
+        return (harness, probe, recorder);
+    }
+
+    private static Action<IServiceCollection> Configure(BatchExecutionProbe probe, RecordingCommandInterceptor recorder)
+        => services =>
+        {
+            services.AddSingleton<IInquiryCommandInterceptor>(recorder);
+            probe.Decorate(services);
+        };
 }

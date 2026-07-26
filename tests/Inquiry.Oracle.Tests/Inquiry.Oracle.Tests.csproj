@@ -26,6 +26,7 @@
 
     <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
     <Compile Include="..\Shared\BatchExecutionProbe.cs" LinkBase="Shared" />
+    <Compile Include="..\Shared\EagerGridCommandAssertions.cs" LinkBase="Shared" />
     <!-- W9 full-text search is NOT supported on Oracle (generator emits INQ035); FullText is excluded. -->
     <!-- <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" /> -->
   </ItemGroup>

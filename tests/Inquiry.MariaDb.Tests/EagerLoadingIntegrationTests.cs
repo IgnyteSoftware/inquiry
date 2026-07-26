@@ -4,6 +4,7 @@ using Inquiry.Northwind;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Testing;
+using Inquiry.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.MariaDb.Tests;
@@ -309,30 +310,21 @@ public sealed class EagerLoadingIntegrationTests
         Assert.Null(all.Single(p => p.ProductName == "Uncategorized").Category);
     }
 
-    // ---- Command-count assertions: the grid path (QueryMultipleAsync) bypasses the interceptor,
-    // so zero intercepted commands + correct data proves one grid round trip was used. ----
+    // ---- Round-trip assertions: exactly one command, and it went through the grid path.
+    // See EagerGridCommandAssertions.AssertSingleGridCommand for why both signals are required. ----
 
     [SkippableFact]
     public async Task SelectOneByKeyEagerUsesGridPath()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
 
-        var recorder = new RecordingCommandInterceptor();
-        await using var harness = await MariaDbTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
-            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
-        var regionStore = harness.GetRequiredService<RegionStore>();
-        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+        var (harness, probe, recorder) = await CreateGridHarnessAsync();
+        await using var _ = harness;
 
-        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
-        recorder.Clear();
-
-        var loaded = await regionStore.SelectByKeyWithTerritoriesAsync(1);
-
-        Assert.NotNull(loaded);
-        Assert.Single(loaded.Territories!);
-        Assert.Empty(recorder.Commands);
+        await EagerGridCommandAssertions.SelectOneByKeyEagerIssuesOneCommandAsync(
+            harness.GetRequiredService<RegionStore>(),
+            harness.GetRequiredService<TerritoryStore>(),
+            probe, recorder);
     }
 
     [SkippableFact]
@@ -340,22 +332,13 @@ public sealed class EagerLoadingIntegrationTests
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
 
-        var recorder = new RecordingCommandInterceptor();
-        await using var harness = await MariaDbTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
-            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
-        var regionStore = harness.GetRequiredService<RegionStore>();
-        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+        var (harness, probe, recorder) = await CreateGridHarnessAsync();
+        await using var _ = harness;
 
-        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
-        recorder.Clear();
-
-        var all = await regionStore.SelectAllWithTerritoriesAsync().ToListAsync();
-
-        Assert.Single(all);
-        Assert.Single(all[0].Territories!);
-        Assert.Empty(recorder.Commands);
+        await EagerGridCommandAssertions.SelectAllEagerIssuesOneCommandAsync(
+            harness.GetRequiredService<RegionStore>(),
+            harness.GetRequiredService<TerritoryStore>(),
+            probe, recorder);
     }
 
     [SkippableFact]
@@ -363,23 +346,13 @@ public sealed class EagerLoadingIntegrationTests
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
 
-        var recorder = new RecordingCommandInterceptor();
-        await using var harness = await MariaDbTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
-            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
-        var regionStore = harness.GetRequiredService<RegionStore>();
-        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+        var (harness, probe, recorder) = await CreateGridHarnessAsync();
+        await using var _ = harness;
 
-        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
-        recorder.Clear();
-
-        var loaded = await territoryStore.SelectByKeyWithRegionAsync("T1");
-
-        Assert.NotNull(loaded);
-        Assert.NotNull(loaded.Region);
-        Assert.Equal("Eastern", loaded.Region!.RegionDescription);
-        Assert.Empty(recorder.Commands);
+        await EagerGridCommandAssertions.SelectOneByKeyEagerWithReferenceIssuesOneCommandAsync(
+            harness.GetRequiredService<RegionStore>(),
+            harness.GetRequiredService<TerritoryStore>(),
+            probe, recorder);
     }
 
     [SkippableFact]
@@ -387,21 +360,29 @@ public sealed class EagerLoadingIntegrationTests
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
 
-        var recorder = new RecordingCommandInterceptor();
-        await using var harness = await MariaDbTestHarness.CreateFromDdlAsync(
-            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
-            configureServices: s => s.AddSingleton<IInquiryCommandInterceptor>(recorder));
-        var regionStore = harness.GetRequiredService<RegionStore>();
-        var territoryStore = harness.GetRequiredService<TerritoryStore>();
+        var (harness, probe, recorder) = await CreateGridHarnessAsync();
+        await using var _ = harness;
 
-        await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Boston", RegionID = 1 });
-        recorder.Clear();
-
-        var all = await territoryStore.SelectAllWithRegionAsync().ToListAsync();
-
-        Assert.Single(all);
-        Assert.NotNull(all[0].Region);
-        Assert.Empty(recorder.Commands);
+        await EagerGridCommandAssertions.SelectAllEagerWithReferenceIssuesOneCommandAsync(
+            harness.GetRequiredService<RegionStore>(),
+            harness.GetRequiredService<TerritoryStore>(),
+            probe, recorder);
     }
+
+    private async Task<(MariaDbTestHarness Harness, BatchExecutionProbe Probe, RecordingCommandInterceptor Recorder)> CreateGridHarnessAsync()
+    {
+        var probe = new BatchExecutionProbe();
+        var recorder = new RecordingCommandInterceptor();
+        var harness = await MariaDbTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, NorthwindSchema.MySqlDdl, "eager",
+            configureServices: Configure(probe, recorder));
+        return (harness, probe, recorder);
+    }
+
+    private static Action<IServiceCollection> Configure(BatchExecutionProbe probe, RecordingCommandInterceptor recorder)
+        => services =>
+        {
+            services.AddSingleton<IInquiryCommandInterceptor>(recorder);
+            probe.Decorate(services);
+        };
 }
