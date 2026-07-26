@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
 
@@ -82,7 +84,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sql_Products = \"SELECT \\\"Products\\\".\\\"Id\\\", \\\"Products\\\".\\\"Title\\\", \\\"Products\\\".\\\"IsDeleted\\\", \\\"Products\\\".\\\"IsActive\\\" FROM \\\"Products\\\" INNER JOIN \\\"OrderProduct\\\" \\\"__j\\\" ON \\\"__j\\\".\\\"ProductId\\\" = \\\"Products\\\".\\\"Id\\\" WHERE \\\"__j\\\".\\\"OrderId\\\" = @Id AND \\\"__j\\\".\\\"IsDeleted\\\" = 0 AND \\\"__j\\\".\\\"IsActive\\\" = 1 AND \\\"Products\\\".\\\"IsDeleted\\\" = 0 AND \\\"Products\\\".\\\"IsActive\\\" = 1\";", text);
         Assert.Contains("\\\"Id\\\" IN (SELECT \\\"__j\\\".\\\"ProductId\\\" FROM \\\"OrderProduct\\\" \\\"__j\\\"", text);
         Assert.Contains("\\\"__j\\\".\\\"IsDeleted\\\" = 0 AND \\\"__j\\\".\\\"IsActive\\\" = 1 AND \\\"__j\\\".\\\"OrderId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1)", text);
-        Assert.Contains("_sql_Products_Junction = \"SELECT \\\"OrderId\\\", \\\"ProductId\\\", \\\"IsDeleted\\\", \\\"IsActive\\\" FROM \\\"OrderProduct\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1 AND \\\"OrderId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1) AND \\\"ProductId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Products\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1)\";", text);
+        // The junction SELECT is projected to just the two foreign keys — the batch loader groups child
+        // keys under parent keys and reads nothing else off a junction row. The soft-delete and
+        // global-filter columns leave the select list but must stay in the WHERE clause.
+        Assert.Contains("_sql_Products_Junction = \"SELECT \\\"OrderId\\\", \\\"ProductId\\\" FROM \\\"OrderProduct\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1 AND \\\"OrderId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1) AND \\\"ProductId\\\" IN (SELECT \\\"Id\\\" FROM \\\"Products\\\" WHERE \\\"IsDeleted\\\" = 0 AND \\\"IsActive\\\" = 1)\";", text);
         Assert.Contains("_sql_Products_All_IncludeDeleted", text);
         Assert.Contains("IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\" WHERE \\\"IsActive\\\" = 1)", text);
         Assert.Contains("_sql_Products_Junction_IncludeDeleted", text);
@@ -193,6 +198,76 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_childByKey_Products", text);
         Assert.Contains("_grouped_Products", text);
         Assert.Contains("_sql_Products_Junction", text);
+
+        // The junction rows are read straight off the grid's reader — the batch loader wants two scalars
+        // per row, so nothing is materialized. The junction's own materializer stays unreferenced, which
+        // is the assertion that would break if the read ever regressed to ReadForEachAsync.
+        Assert.Contains("await _grid.ReadRowsAsync(reader =>", text);
+        Assert.DoesNotContain("OrderProductInquiryEntityStructMaterializer", text);
+
+        // Both keys are hoisted before either is used, in ascending ordinal order: the grid reads with
+        // SequentialAccess, and the parent key below is touched three times. Ordinal 0 is the parent FK
+        // and 1 the child FK, matching the projected select list.
+        Assert.Contains(
+            """
+                        long _jParentKey = reader.GetInt64(0);
+                        long _jChildKey = reader.GetInt64(1);
+            """.TrimStart(),
+            text);
+    }
+
+    [Fact]
+    public void ManyToManyJunctionRawReadToleratesAUserParameterNamedReader_Sqlite()
+    {
+        // Every other identifier the eager emitter introduces is underscore-prefixed so it cannot
+        // collide with a user's parameter name. The junction read's lambda parameter is the exception —
+        // it must be `reader`, because MaterializerEmitter.ReadExpression hard-codes that receiver — so
+        // a user parameter of the same name lands in the enclosing scope. Shadowing it is legal, but
+        // nothing else in the emitter guarantees that stays true: a future change that introduced a
+        // `reader` local inside the lambda instead would be a compile error only in this shape.
+        var source = OrderProductSource.Replace(
+            "public partial IAsyncEnumerable<Order> AllWithProductsAsync(CancellationToken cancellationToken = default);",
+            "public partial IAsyncEnumerable<Order> AllWithProductsAsync(CancellationToken reader = default);");
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.GeneratorDiagnostics);
+
+        var text = GetOrderStore(result);
+        Assert.Contains("AllWithProductsAsync([global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken reader)", text);
+        Assert.Contains("await _grid.ReadRowsAsync(reader =>", text);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Fact]
+    public void ManyToManyJunctionRawReadAppliesValueConverter_Sqlite()
+    {
+        // The raw junction read bypasses the junction materializer, so it has to reproduce what the
+        // materializer did for these two columns. A converter on a junction FK is the case that fails
+        // silently: reader.GetInt64 alone compiles wherever the model type is long, and simply skips the
+        // conversion — which for a converted key means looking the child up under the wrong value.
+        var source = OrderProductSource
+            .Replace(
+                "[InquiryKey] public long ProductId { get; set; }",
+                "[InquiryKey(Converter = typeof(ProductIdConverter))] public long ProductId { get; set; }")
+            .Replace(
+                "[InquiryTable(\"OrderProduct\")]",
+                """
+                public sealed class ProductIdConverter : IInquiryValueConverter<long, long>
+                {
+                    public long ToProvider(long model) => model;
+                    public long FromProvider(long provider) => provider;
+                }
+
+                [InquiryTable("OrderProduct")]
+                """);
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetOrderStore(result);
+
+        Assert.Contains("long _jChildKey = ", text);
+        Assert.Contains("ProductIdConverter", text);
+        Assert.DoesNotContain("long _jChildKey = reader.GetInt64(1);", text);
     }
 
     [Fact]

@@ -144,6 +144,38 @@ public sealed class InquiryGridReader : IAsyncDisposable
     }
 
     /// <summary>
+    /// Hands each row of the current result set to <paramref name="onRow"/> as a raw
+    /// <see cref="DbDataReader"/> — no entity is materialized — then advances to the next result set.
+    /// Used by generated eager-load stores to read a many-to-many junction's two foreign-key columns
+    /// directly: the batch loader only groups child keys under parent keys, so materializing a junction
+    /// row would allocate an object and fetch columns nobody reads.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="onRow"/> must read each column at most once, in ascending ordinal order — the grid
+    /// reads with <see cref="System.Data.CommandBehavior.SequentialAccess"/> — and must not retain the
+    /// reader past the callback: it is the grid's own reader, positioned on the current row only.
+    /// </remarks>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public async Task ReadRowsAsync(Action<DbDataReader> onRow, CancellationToken cancellationToken = default)
+    {
+        EnsureResultSet();
+        try
+        {
+            while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                onRow(_reader);
+            }
+
+            await AdvanceAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            RecordFailure(exception);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Streams each row of the current result set as it is materialized — no intermediate list — then
     /// advances to the next result set once enumeration completes. The pull-based counterpart to
     /// <see cref="ReadForEachAsync{TEntity, TMaterializer}"/>, used by generated eager-load stores to

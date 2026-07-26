@@ -2488,20 +2488,48 @@ internal static class StoreOperationEmitter
                     AppendChildLoopClose();
 
                     source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>({dictCapacity});");
-                    AppendChildLoopOpen("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
+
+                    // How the junction's two foreign keys are reached differs by path, but everything
+                    // below is shared.
+                    string jParentAccess;
+                    string jChildAccess;
+                    if (useGrid)
+                    {
+                        // The junction result set is projected to exactly (parent FK, child FK), so read
+                        // those two ordinals off the reader — a junction row carries nothing else worth
+                        // materializing. Both are hoisted into locals before any use: the grid reads with
+                        // SequentialAccess, which forbids revisiting a column, and the grouping below
+                        // touches the parent key up to three times. The lambda parameter must be named
+                        // `reader` — MaterializerEmitter.ReadExpression hard-codes that receiver.
+                        source.AppendLine("        await _grid.ReadRowsAsync(reader =>");
+                        source.AppendLine("        {");
+                        source.AppendLine($"            {jParentFk.Type.DisplayName} _jParentKey = {MaterializerEmitter.ReadExpression(jParentFk.Type, 0, sqlBuilder, jParentFk.EnumAsString, jParentFk.Converter)};");
+                        source.AppendLine($"            {jChildFk.Type.DisplayName} _jChildKey = {MaterializerEmitter.ReadExpression(jChildFk.Type, 1, sqlBuilder, jChildFk.EnumAsString, jChildFk.Converter)};");
+                        jParentAccess = "_jParentKey";
+                        jChildAccess = "_jChildKey";
+                    }
+                    else
+                    {
+                        // Multi-round-trip fallback: no grid, so the junction row still comes through its
+                        // entity materializer and the SELECT still carries every column.
+                        AppendChildLoopOpen("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
+                        jParentAccess = $"_j.{jParentFk.PropertyName}";
+                        jChildAccess = $"_j.{jChildFk.PropertyName}";
+                    }
+
                     if (jChildFk.Type.IsNullable)
                     {
-                        source.AppendLine($"            if (_j.{jChildFk.PropertyName} is null) {skipRow};");
+                        source.AppendLine($"            if ({jChildAccess} is null) {skipRow};");
                     }
                     if (jParentFk.Type.IsNullable)
                     {
-                        source.AppendLine($"            if (_j.{jParentFk.PropertyName} is null) {skipRow};");
+                        source.AppendLine($"            if ({jParentAccess} is null) {skipRow};");
                     }
-                    source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jChildFk.Type, $"_j.{jChildFk.PropertyName}")}, out var _child)) {skipRow};");
-                    source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}, out var _grp))");
+                    source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jChildFk.Type, jChildAccess)}, out var _child)) {skipRow};");
+                    source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jParentFk.Type, jParentAccess)}, out var _grp))");
                     source.AppendLine("            {");
                     source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
-                    source.AppendLine($"                _grouped_{relation.PropertyName}[{NonNullableValueExpression(jParentFk.Type, $"_j.{jParentFk.PropertyName}")}] = _grp;");
+                    source.AppendLine($"                _grouped_{relation.PropertyName}[{NonNullableValueExpression(jParentFk.Type, jParentAccess)}] = _grp;");
                     source.AppendLine("            }");
                     source.AppendLine("            _grp.Add(_child);");
                     AppendChildLoopClose();

@@ -1745,9 +1745,22 @@ internal static class StoreProcessor
                     // M:N consts: the single-parent JOIN through the junction, plus the two filtered batch
                     // selects the all-eager loader assembles in memory.
                     var junctionEntity = relationJunctionEntities[relation.PropertyName];
-                    var junctionParentFkColumn = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!.ColumnName;
-                    var junctionChildFkColumn = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!.ColumnName;
+                    var junctionParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
+                    var junctionChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!;
+                    var junctionParentFkColumn = junctionParentFk.ColumnName;
+                    var junctionChildFkColumn = junctionChildFk.ColumnName;
                     var junctionCtx = new SqlBuildContext(sqlBuilder, junctionEntity.Schema, junctionEntity.TableName, ToColumnList(junctionEntity.Columns));
+
+                    // The batch junction read only groups child keys under parent keys, so it needs exactly
+                    // the two foreign keys. Narrowing the projection is what lets the grid loader read those
+                    // two values straight off the reader instead of materializing a junction row. The
+                    // non-grid fallback still materializes one — its materializer reads every entity column
+                    // by ordinal — so it keeps the full select list. Only this builder reads SelectColumns
+                    // off the junction context; the other two take it for its table name and active-row
+                    // predicate, which the narrowed context reproduces exactly.
+                    var junctionSelectCtx = sqlBuilder.SupportsMultiResultBatch
+                        ? JunctionKeyProjectionContext(sqlBuilder, junctionEntity, junctionParentFk, junctionChildFk)
+                        : junctionCtx;
 
                     AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildManyToManySelectByParentSql(
                         childCtx, ToColumnList(childEntity.Columns), junctionCtx,
@@ -1758,7 +1771,7 @@ internal static class StoreProcessor
                             junctionChildFkColumn, junctionParentFkColumn, entity.Keys[0].ColumnName));
                     AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction",
                         sqlBuilder.BuildManyToManyJunctionAllFilteredSql(
-                            junctionCtx, ctx, childCtx, junctionParentFkColumn, entity.Keys[0].ColumnName,
+                            junctionSelectCtx, ctx, childCtx, junctionParentFkColumn, entity.Keys[0].ColumnName,
                             junctionChildFkColumn, childEntity.Keys[0].ColumnName));
                     if (hasIncludeDeletedSelectAllEager)
                     {
@@ -1768,7 +1781,7 @@ internal static class StoreProcessor
                                 junctionChildFkColumn, junctionParentFkColumn, entity.Keys[0].ColumnName));
                         AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction_IncludeDeleted",
                             sqlBuilder.BuildManyToManyJunctionAllFilteredSql(
-                                junctionCtx, ctxIncludeDeleted, childCtx, junctionParentFkColumn,
+                                junctionSelectCtx, ctxIncludeDeleted, childCtx, junctionParentFkColumn,
                                 entity.Keys[0].ColumnName, junctionChildFkColumn, childEntity.Keys[0].ColumnName));
                     }
                     continue;
@@ -2733,6 +2746,39 @@ internal static class StoreProcessor
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Builds a junction context whose select list is just the parent and child foreign keys, in that
+    /// order — the two ordinals the grid eager loader reads. Shaped like a projection context: a subset
+    /// column list drops the soft-delete and global-filter columns, so those are handed over separately
+    /// to keep the active-row predicate byte-identical to the full-column context's.
+    /// </summary>
+    private static SqlBuildContext JunctionKeyProjectionContext(
+        SqlBuilder sqlBuilder, EntityData junction, ColumnData parentForeignKey, ColumnData childForeignKey)
+    {
+        var projection = new List<IColumn> { parentForeignKey, childForeignKey };
+
+        // SqlBuildContext concatenates the detected and supplied global-filter columns rather than
+        // unioning them, so a foreign key that is itself a global filter must not be passed twice —
+        // that would emit its predicate term twice. (The soft-delete column needs no such guard: the
+        // context prefers the detected one with ??.)
+        var supplied = new List<IColumn>();
+        foreach (var column in junction.Columns.AsImmutableArray())
+        {
+            if (column.IsGlobalFilter && !IsProjected(column))
+            {
+                supplied.Add(column);
+            }
+        }
+
+        return new SqlBuildContext(sqlBuilder, junction.Schema, junction.TableName, projection,
+            softDeletePredicateColumn: junction.SoftDeleteColumn,
+            globalFilterPredicateColumns: supplied);
+
+        bool IsProjected(ColumnData column)
+            => string.Equals(column.PropertyName, parentForeignKey.PropertyName, StringComparison.Ordinal)
+                || string.Equals(column.PropertyName, childForeignKey.PropertyName, StringComparison.Ordinal);
     }
 
     private static List<IColumn> ToColumnList(EquatableArray<ColumnData> columns)
