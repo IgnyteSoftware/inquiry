@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Inquiry.FeatureCatalog;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Testing;
@@ -29,7 +30,7 @@ internal static class EagerGridCommandAssertions
 
         Assert.NotNull(loaded);
         Assert.Single(loaded!.Territories!);
-        AssertSingleGridCommand(probe, recorder, "Region", "Territories");
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "Region", "Territories");
     }
 
     internal static async Task SelectAllEagerIssuesOneCommandAsync(
@@ -44,7 +45,7 @@ internal static class EagerGridCommandAssertions
 
         Assert.Single(all);
         Assert.Single(all[0].Territories!);
-        AssertSingleGridCommand(probe, recorder, "Region", "Territories");
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "Region", "Territories");
     }
 
     internal static async Task SelectOneByKeyEagerWithReferenceIssuesOneCommandAsync(
@@ -60,7 +61,7 @@ internal static class EagerGridCommandAssertions
         Assert.NotNull(loaded);
         Assert.NotNull(loaded!.Region);
         Assert.Equal("Eastern", loaded.Region!.RegionDescription);
-        AssertSingleGridCommand(probe, recorder, "Region", "Territories");
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "Region", "Territories");
     }
 
     internal static async Task SelectAllEagerWithReferenceIssuesOneCommandAsync(
@@ -75,7 +76,77 @@ internal static class EagerGridCommandAssertions
 
         Assert.Single(all);
         Assert.NotNull(all[0].Region);
-        AssertSingleGridCommand(probe, recorder, "Region", "Territories");
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "Region", "Territories");
+    }
+
+    // ---- 1 parent + 2 relations (#70). EagerMixedPost has both a to-one Author and a to-many Tags,
+    // so one eager load must still batch all three SELECTs into a single command. ----
+
+    internal static async Task SelectOneByKeyEagerWithTwoRelationsIssuesOneCommandAsync(
+        EagerMixedAuthorStore authors,
+        EagerMixedPostStore posts,
+        EagerMixedTagStore tags,
+        BatchExecutionProbe probe,
+        RecordingCommandInterceptor recorder)
+    {
+        await SeedMixedAsync(authors, posts, tags, probe, recorder);
+
+        var loaded = await posts.GetWithAuthorAndTagsAsync(10);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("First", loaded!.Title);
+        Assert.NotNull(loaded.Author);
+        Assert.Equal("Ada", loaded.Author!.Name);
+        Assert.Equal(
+            new[] { "alpha", "beta" },
+            loaded.Tags.Select(t => t.Label).OrderBy(s => s, StringComparer.Ordinal));
+
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 3, "EagerMixedPost", "EagerMixedAuthor", "EagerMixedTag");
+    }
+
+    internal static async Task SelectAllEagerWithTwoRelationsIssuesOneCommandAsync(
+        EagerMixedAuthorStore authors,
+        EagerMixedPostStore posts,
+        EagerMixedTagStore tags,
+        BatchExecutionProbe probe,
+        RecordingCommandInterceptor recorder)
+    {
+        await SeedMixedAsync(authors, posts, tags, probe, recorder);
+
+        var all = await ToListAsync(posts.SelectAllWithAuthorAndTagsAsync());
+
+        Assert.Equal(2, all.Count);
+
+        var first = all.Single(p => p.Id == 10);
+        Assert.Equal("Ada", first.Author!.Name);
+        Assert.Equal(
+            new[] { "alpha", "beta" },
+            first.Tags.Select(t => t.Label).OrderBy(s => s, StringComparer.Ordinal));
+
+        // Second post resolves a different author and has no tags — the empty-collection branch.
+        var second = all.Single(p => p.Id == 11);
+        Assert.Equal("Grace", second.Author!.Name);
+        Assert.Empty(second.Tags);
+
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 3, "EagerMixedPost", "EagerMixedAuthor", "EagerMixedTag");
+    }
+
+    private static async Task SeedMixedAsync(
+        EagerMixedAuthorStore authors,
+        EagerMixedPostStore posts,
+        EagerMixedTagStore tags,
+        BatchExecutionProbe probe,
+        RecordingCommandInterceptor recorder)
+    {
+        await authors.InsertAsync(new EagerMixedAuthor { Id = 1, Name = "Ada" });
+        await authors.InsertAsync(new EagerMixedAuthor { Id = 2, Name = "Grace" });
+        await posts.InsertAsync(new EagerMixedPost { Id = 10, AuthorId = 1, Title = "First" });
+        await posts.InsertAsync(new EagerMixedPost { Id = 11, AuthorId = 2, Title = "Second" });
+        await tags.InsertAsync(new EagerMixedTag { Id = 100, PostId = 10, Label = "alpha" });
+        await tags.InsertAsync(new EagerMixedTag { Id = 101, PostId = 10, Label = "beta" });
+
+        recorder.Clear();
+        probe.Reset();
     }
 
     // Each provider suite has its own ToListAsync extension in its own Fixtures namespace, so this shared
@@ -132,15 +203,41 @@ internal static class EagerGridCommandAssertions
     internal static void AssertSingleGridCommand(
         BatchExecutionProbe probe,
         RecordingCommandInterceptor recorder,
+        int expectedResultSets,
         params string[] expectedTables)
     {
         var command = Assert.Single(probe.FinalizedCommands);
         Assert.Equal(0, probe.CreateBatchCount);
         Assert.Empty(recorder.Commands);
+        AssertResultSetCount(command.CommandText, expectedResultSets);
         foreach (var table in expectedTables)
         {
             AssertSelectsFrom(command.CommandText, table);
         }
+    }
+
+    /// <summary>
+    /// Asserts the single command really carries <paramref name="expected"/> result sets.
+    /// </summary>
+    /// <remarks>
+    /// This is the assertion that actually pins "one command, N result sets". Table-name checks cannot:
+    /// the relation SELECTs filter through a parent-key subquery, so <c>FROM EagerMixedPost</c> appears
+    /// inside the child statements too, and a batch that lost the parent SELECT entirely would still
+    /// match every expected table name.
+    /// Generated SQL contains no string literals, so counting separators is exact. Oracle multiplexes
+    /// implicit result sets through <c>DBMS_SQL.RETURN_RESULT</c>; every other dialect emits a
+    /// <c>;</c>-separated batch with no trailing separator.
+    /// </remarks>
+    private static void AssertResultSetCount(string commandText, int expected)
+    {
+        const string OracleMarker = "DBMS_SQL.RETURN_RESULT";
+        var actual = commandText.Contains(OracleMarker, StringComparison.OrdinalIgnoreCase)
+            ? Regex.Matches(commandText, Regex.Escape(OracleMarker), RegexOptions.IgnoreCase).Count
+            : commandText.Split(';').Length;
+
+        Assert.True(
+            actual == expected,
+            $"Expected {expected} result sets in the single grid command but counted {actual}:{Environment.NewLine}{commandText}");
     }
 
     /// <summary>

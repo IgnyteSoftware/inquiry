@@ -60,8 +60,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("Inquiry.QueryMultipleAsync(", text);
         Assert.Contains("_grid.ReadListAsync<", text);
         Assert.Contains("\";\" + _sql_Territories_All", text);
-        // No per-relation streaming query for the child collection on the grid path.
-        Assert.DoesNotContain("await foreach (var _c in Inquiry.QueryAsync<", text);
+        // No per-relation streaming query for the child collection on the grid path. Match the text the
+        // separate path actually emits: the child loop wraps its source in a fully-qualified static
+        // ConfigureAwait, so a bare "Inquiry.QueryAsync<" literal here would never match anything.
+        Assert.DoesNotContain("TaskAsyncEnumerableExtensions.ConfigureAwait(Inquiry.QueryAsync<", text);
     }
 
     [Fact]
@@ -79,8 +81,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("Inquiry.QueryMultipleAsync(", text);
         Assert.Contains("_grid.ReadListAsync<", text);
         Assert.Contains("var _sql = \"DECLARE c SYS_REFCURSOR; BEGIN OPEN c FOR \" + _sqlSelectAll + \"; DBMS_SQL.RETURN_RESULT(c); OPEN c FOR \" + _sql_Territories_All + \"; DBMS_SQL.RETURN_RESULT(c); END;\";", text);
-        // No per-relation streaming query for the child collection on the grid path.
-        Assert.DoesNotContain("await foreach (var _c in Inquiry.QueryAsync<", text);
+        // No per-relation streaming query for the child collection on the grid path. Match the text the
+        // separate path actually emits: the child loop wraps its source in a fully-qualified static
+        // ConfigureAwait, so a bare "Inquiry.QueryAsync<" literal here would never match anything.
+        Assert.DoesNotContain("TaskAsyncEnumerableExtensions.ConfigureAwait(Inquiry.QueryAsync<", text);
     }
 
     private const string MixedRelationEagerSource = """
@@ -124,6 +128,9 @@ public sealed partial class InquiryGeneratorTests
         {
             [InquirySelectOneByKeyEager]
             public partial Task<Post?> GetWithRelationsAsync(int id, CancellationToken ct = default);
+
+            [InquirySelectAllEager]
+            public partial IAsyncEnumerable<Post> SelectAllWithRelationsAsync(CancellationToken ct = default);
         }
         """;
 
@@ -170,6 +177,39 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_grid.ReadGeneratedSingleOrDefaultAsync<", text);
         Assert.Contains("_grid.ReadListAsync<", text);
         Assert.Contains("DBMS_SQL.RETURN_RESULT", text);
+    }
+
+    [Theory]
+    [InlineData("Sqlite")]
+    [InlineData("SqlServer")]
+    [InlineData("PostgreSql")]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    [InlineData("Oracle")]
+    public void SelectAllEager_MixedCollectionAndReference_UsesOneGridCommand(string dialect)
+    {
+        var result = RunGenerator(MixedRelationEagerSource, dialect: dialect);
+        var errors = result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(errors);
+
+        var text = GetPostStoreText(result);
+
+        // One grid command carrying the parent SELECT plus both relation SELECTs.
+        Assert.Contains("Inquiry.QueryMultipleAsync(", text);
+        Assert.Contains("_sql_Tags_All", text);
+        Assert.Contains("_sql_Author_All", text);
+
+        // The collection relation groups by the child FK; the reference relation indexes the
+        // referenced rows by their own key. Both stream through ReadForEachAsync on the grid path.
+        Assert.Contains("_grouped_Tags", text);
+        Assert.Contains("_parents_Author", text);
+        Assert.Contains("_grid.ReadForEachAsync<", text);
+
+        // No per-relation round trip. This is the literal the separate path actually emits — the child
+        // loop wraps its source in a fully-qualified static ConfigureAwait, so asserting on a bare
+        // "Inquiry.QueryAsync<" would be unfalsifiable.
+        Assert.DoesNotContain("TaskAsyncEnumerableExtensions.ConfigureAwait(Inquiry.QueryAsync<", text);
     }
 
     // A relation whose child type is not an [InquiryTable] entity is silently skipped — no diagnostic
@@ -285,6 +325,9 @@ public sealed partial class InquiryGeneratorTests
         // No relations to batch, so no grid command.
         Assert.DoesNotContain("Inquiry.QueryMultipleAsync(", text);
         Assert.Contains("global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(", text);
+
+        // Pins the literal the grid tests above assert the ABSENCE of, so those guards stay falsifiable.
+        Assert.Contains("TaskAsyncEnumerableExtensions.ConfigureAwait(Inquiry.QueryAsync<", text);
     }
 
     private static string GetRegionStoreText(GeneratorTestResult result)

@@ -236,6 +236,103 @@ public static class FeatureSchema
         """;
 
     // ---------------------------------------------------------------------------
+    // #70 mixed-relation eager tables: EagerMixedPost (parent) carries both a to-one
+    // reference to EagerMixedAuthor and a to-many collection of EagerMixedTag, so one
+    // eager load batches three SELECTs into a single command. Client-supplied int keys
+    // (no IDENTITY/SEQUENCE) and no FK constraints, matching the UnsignedKeyEager tables.
+    // ---------------------------------------------------------------------------
+
+    /// <summary>SQL Server DDL for the <see cref="EagerMixedPost"/> mixed-relation eager tables.</summary>
+    public const string EagerMixedSqlServerDdl = """
+        CREATE TABLE EagerMixedAuthor (
+            Id   INT           NOT NULL PRIMARY KEY,
+            Name NVARCHAR(100) NOT NULL
+        );
+        CREATE TABLE EagerMixedPost (
+            Id       INT           NOT NULL PRIMARY KEY,
+            AuthorId INT           NOT NULL,
+            Title    NVARCHAR(200) NOT NULL
+        );
+        CREATE TABLE EagerMixedTag (
+            Id     INT           NOT NULL PRIMARY KEY,
+            PostId INT           NOT NULL,
+            Label  NVARCHAR(100) NOT NULL
+        );
+        """;
+
+    /// <summary>SQLite DDL for the <see cref="EagerMixedPost"/> mixed-relation eager tables.</summary>
+    public const string EagerMixedSqliteDdl = """
+        CREATE TABLE EagerMixedAuthor (
+            Id   INTEGER NOT NULL PRIMARY KEY,
+            Name TEXT    NOT NULL
+        );
+        CREATE TABLE EagerMixedPost (
+            Id       INTEGER NOT NULL PRIMARY KEY,
+            AuthorId INTEGER NOT NULL,
+            Title    TEXT    NOT NULL
+        );
+        CREATE TABLE EagerMixedTag (
+            Id     INTEGER NOT NULL PRIMARY KEY,
+            PostId INTEGER NOT NULL,
+            Label  TEXT    NOT NULL
+        );
+        """;
+
+    /// <summary>PostgreSQL DDL for the <see cref="EagerMixedPost"/> mixed-relation eager tables.</summary>
+    public const string EagerMixedPostgreSqlDdl = """
+        CREATE TABLE "EagerMixedAuthor" (
+            "Id"   INTEGER NOT NULL PRIMARY KEY,
+            "Name" TEXT NOT NULL
+        );
+        CREATE TABLE "EagerMixedPost" (
+            "Id"       INTEGER NOT NULL PRIMARY KEY,
+            "AuthorId" INTEGER NOT NULL,
+            "Title"    TEXT NOT NULL
+        );
+        CREATE TABLE "EagerMixedTag" (
+            "Id"     INTEGER NOT NULL PRIMARY KEY,
+            "PostId" INTEGER NOT NULL,
+            "Label"  TEXT NOT NULL
+        );
+        """;
+
+    /// <summary>MySQL / MariaDB DDL for the <see cref="EagerMixedPost"/> mixed-relation eager tables.</summary>
+    public const string EagerMixedMySqlDdl = """
+        CREATE TABLE EagerMixedAuthor (
+            Id   INT NOT NULL PRIMARY KEY,
+            Name VARCHAR(100) NOT NULL
+        );
+        CREATE TABLE EagerMixedPost (
+            Id       INT NOT NULL PRIMARY KEY,
+            AuthorId INT NOT NULL,
+            Title    VARCHAR(200) NOT NULL
+        );
+        CREATE TABLE EagerMixedTag (
+            Id     INT NOT NULL PRIMARY KEY,
+            PostId INT NOT NULL,
+            Label  VARCHAR(100) NOT NULL
+        );
+        """;
+
+    /// <summary>Oracle DDL for the <see cref="EagerMixedPost"/> mixed-relation eager tables.</summary>
+    public const string EagerMixedOracleDdl = """
+        CREATE TABLE EagerMixedAuthor (
+            Id   NUMBER(10) NOT NULL PRIMARY KEY,
+            Name VARCHAR2(100) NOT NULL
+        );
+        CREATE TABLE EagerMixedPost (
+            Id       NUMBER(10) NOT NULL PRIMARY KEY,
+            AuthorId NUMBER(10) NOT NULL,
+            Title    VARCHAR2(200) NOT NULL
+        );
+        CREATE TABLE EagerMixedTag (
+            Id     NUMBER(10) NOT NULL PRIMARY KEY,
+            PostId NUMBER(10) NOT NULL,
+            Label  VARCHAR2(100) NOT NULL
+        )
+        """;
+
+    // ---------------------------------------------------------------------------
     // GlobalFilter integration tables: GlobalFilterDoc (publish gate + soft delete)
     // and GlobalFilterTicket (KeepWhen = false archive gate).
     // ---------------------------------------------------------------------------
