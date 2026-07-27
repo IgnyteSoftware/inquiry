@@ -8,7 +8,7 @@ namespace Inquiry.Generators.Tests;
 /// Many-to-many eager loading ([InquiryManyToMany]): the single-parent load joins the related rows
 /// through the junction table (filtered by the junction's parent FK), and the batch (all-eager) load
 /// assembles in memory from filtered child and junction queries. Verifies the JOIN SQL, the
-/// batch consts, the per-dialect identifier quoting, and the INQ063 validation diagnostics.
+/// batch consts, the per-dialect identifier quoting, and the INQ063/INQ087-INQ089 validation diagnostics.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
@@ -180,7 +180,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(CompositeChildSource);
 
         Assert.Empty(result.GeneratorDiagnostics);
-        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id is "INQ063" or "INQ087" or "INQ088" or "INQ089");
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
     }
 
@@ -254,7 +254,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
-        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ089");
         Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
             static tree => tree.GetText().ToString().Contains("EXISTS (SELECT 1 FROM", StringComparison.Ordinal));
@@ -310,7 +310,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
-        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ089");
         Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
             static tree => tree.GetText().ToString().Contains("EXISTS (SELECT 1 FROM", StringComparison.Ordinal));
@@ -367,7 +367,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         Assert.Empty(result.GeneratorDiagnostics);
-        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id is "INQ063" or "INQ087" or "INQ088" or "INQ089");
         var text = GetPostStore(result);
 
         // Each component is read into a local of its OWN (nullable) type, guarded, then unwrapped.
@@ -428,7 +428,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
 
-        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id is "INQ063" or "INQ087" or "INQ088" or "INQ089");
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
     }
 
@@ -711,7 +711,107 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void ManyToManyWithUnknownJunctionForeignKeyReportsINQ063()
+    public void ManyToManyWithNoChildForeignKeyNameReportsINQ063OnACollectionProperty()
+    {
+        // Discovery records a malformed attribute the same way it records a non-collection property —
+        // IsCollection forced false — so INQ063 cannot tell the two apart. Its message therefore names
+        // both causes rather than asserting "this is not a collection" about a List<T>, which is what a
+        // narrower wording would do here and would be simply false.
+        const string source = """
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Orders")]
+            public sealed class Order
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                // params string[] makes zero child foreign-key names compile.
+                [InquiryManyToMany(typeof(OrderProduct), "OrderId")]
+                public List<Product> Products { get; set; } = new();
+            }
+
+            [InquiryTable("Products")]
+            public sealed class Product { [InquiryKey] public long Id { get; set; } }
+
+            [InquiryTable("OrderProduct")]
+            public sealed class OrderProduct
+            {
+                [InquiryKey] public long OrderId { get; set; }
+                [InquiryKey] public long ProductId { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ063"));
+        var message = diagnostic.GetMessage();
+        Assert.Contains("at least one child foreign-key property name", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("it is not a collection navigation", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ManyToManyWithUnmappedJunctionTypeReportsINQ087NamingTheType()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Orders")]
+            public sealed class Order
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(typeof(OrderProduct), "OrderId", "ProductId")]
+                public List<Product> Products { get; set; } = new();
+            }
+
+            [InquiryTable("Products")]
+            public sealed class Product { [InquiryKey] public long Id { get; set; } }
+
+            // No [InquiryTable]: not a mapped entity.
+            public sealed class OrderProduct
+            {
+                public long OrderId { get; set; }
+                public long ProductId { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ087"));
+        Assert.Contains("OrderProduct", diagnostic.GetMessage(), StringComparison.Ordinal);
+
+        // The old catch-all fired here too; the split is only worth it if the narrower code replaces it
+        // rather than joining it, otherwise a user still has to read every reason to find the real one.
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+    }
+
+    [Fact]
+    public void CompositeKeyChildManyToManyTranspositionMessageNamesTheMismatchedPair()
+    {
+        // INQ089's trailing sentence is what turns "these do not pair" into something actionable: with
+        // the counts equal, it names the first position whose types disagree and says the order may be
+        // wrong — which is the actual mistake behind almost every transposition.
+        var source = CompositeChildSource.Replace(
+            "nameof(PostTag.TenantId), nameof(PostTag.Slug)",
+            "nameof(PostTag.Slug), nameof(PostTag.TenantId)");
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ089"));
+        var message = diagnostic.GetMessage();
+        Assert.Contains("'Slug'", message, StringComparison.Ordinal);
+        Assert.Contains("'TenantId'", message, StringComparison.Ordinal);
+        Assert.Contains("the names may be in the wrong order", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ManyToManyWithUnknownJunctionForeignKeyReportsINQ088()
     {
         const string source = """
             using System.Collections.Generic;
@@ -741,16 +841,21 @@ public sealed partial class InquiryGeneratorTests
             """;
 
         var result = RunGenerator(source);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ063");
+
+        // INQ088 rather than the old catch-all: the point of splitting it out is that the message can
+        // name the string that did not resolve, which is the whole content of a typo.
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ088"));
+        Assert.Contains("'Nope'", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("OrderProduct", diagnostic.GetMessage(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ManyToManyNamingMoreThanOneChildForeignKeyReportsINQ063()
+    public void ManyToManyNamingMoreThanOneChildForeignKeyForASingleKeyChildReportsINQ089()
     {
         // The child foreign-key parameter is `params string[]`, so naming several columns compiles.
-        // Only a single-column related key is supported today, and the arity check lives at validation
+        // The arity must match the related entity's key column count, and that check lives at validation
         // rather than at discovery because that is where the related entity's key count is known —
-        // discovery sees one entity symbol at a time. This pins that a wider arity is rejected, and
+        // discovery sees one entity symbol at a time. This pins that a wrong arity is rejected, and
         // that it is rejected without generating any join SQL from the first name alone.
         const string source = """
             using System.Collections.Generic;
@@ -782,7 +887,12 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
-        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+
+        // INQ089 states both counts, so the message alone says what to change.
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ089"));
+        Assert.Contains("names 2 child foreign-key properties", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("which has 1 key column", diagnostic.GetMessage(), StringComparison.Ordinal);
+
         Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,
             static tree => tree.GetText().ToString().Contains("INNER JOIN", StringComparison.Ordinal));

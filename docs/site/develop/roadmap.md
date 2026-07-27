@@ -668,8 +668,11 @@ new or reframed issue.
   eligible junction rows, so unrelated and child/junction/parent-filtered rows are not materialized — no
   N+1 and no runtime key expansion. The JOIN and filtered batch shapes are ANSI-uniform across all six
   dialects (space alias for Oracle, table-qualified child columns).
-  Misconfiguration (non-collection nav, unmapped junction/child, missing junction FK property, composite
-  child key) is **`INQ063`**. Generator assertions and live coverage span SQLite, SQL Server, PostgreSQL,
+  A composite-key related entity is supported: the junction names one foreign-key property per key column
+  and the batch selects correlate with `EXISTS` (row-value `IN` is not portable to SQL Server).
+  Misconfiguration reports the specific reason — non-collection nav **`INQ063`**, unmapped junction/child
+  **`INQ087`**, missing junction FK property **`INQ088`**, child keys that do not pair **`INQ089`**.
+  Generator assertions and live coverage span SQLite, SQL Server, PostgreSQL,
   MySQL, MariaDB, and Oracle. Writing associations is through the junction entity's own store. See
   [Many-to-many relations](../articles/features/many-to-many.md).
 

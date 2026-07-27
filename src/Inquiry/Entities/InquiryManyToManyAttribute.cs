@@ -11,9 +11,11 @@ namespace Inquiry.Entities;
 /// The property is not mapped to a column; it is populated by eager-loading store methods
 /// (<c>[InquirySelectOneByKeyEager]</c> / <c>[InquirySelectAllEager]</c>), which read the related rows by
 /// joining through the junction. Writing associations is done through the junction entity's own store
-/// (insert/delete a junction row). The related entity must have a single-column key (INQ063). Apply this
-/// to a collection property (<c>List&lt;T&gt;</c> / <c>IReadOnlyList&lt;T&gt;</c> / …) — a non-collection
-/// property is rejected (INQ063).
+/// (insert/delete a junction row). The related entity may have a single-column or a composite key; name
+/// one junction foreign-key property per key column. Apply this to a collection property
+/// (<c>List&lt;T&gt;</c> / <c>IReadOnlyList&lt;T&gt;</c> / …) — a non-collection property is rejected
+/// (INQ063). An unmapped junction or related type is INQ087, a junction property that is not a mapped
+/// column is INQ088, and foreign keys that do not pair with the related entity's key are INQ089.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryManyToManyAttribute : Attribute
@@ -30,7 +32,7 @@ public sealed class InquiryManyToManyAttribute : Attribute
     /// <para>
     /// The pairing is positional, and both the generated SQL and the in-memory grouping follow it, so a
     /// transposed list is a silently wrong join rather than a compile error. Naming a property whose type
-    /// does not match the key column opposite it is rejected (INQ063), which catches most transpositions —
+    /// does not match the key column opposite it is rejected (INQ089), which catches most transpositions —
     /// but two key columns of the same type are indistinguishable, so order still matters.
     /// </para>
     /// </param>
@@ -67,7 +69,7 @@ public sealed class InquiryManyToManyAttribute : Attribute
 
     /// <summary>
     /// Gets the junction properties that reference the related entity's key, in key order. Exactly one
-    /// name is accepted today; see INQ063.
+    /// name is the common case; see INQ089.
     /// </summary>
     public IReadOnlyList<string> ChildForeignKeyProperties { get; }
 }

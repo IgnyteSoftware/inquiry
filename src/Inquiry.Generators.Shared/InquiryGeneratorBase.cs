@@ -1,3 +1,4 @@
+using System;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
@@ -417,12 +418,11 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                     // A many-to-many association must be a collection nav whose junction and related
                     // entities are both mapped, and the junction must name one foreign-key property per
                     // key column of the related entity — one for a single-column key, or one per column
-                    // for a composite key, paired by position.
-                    if (!relation.IsCollection || !IsManyToManyValid(mappedEntities, relation))
+                    // for a composite key, paired by position. Each reason reports its own diagnostic so
+                    // the message can name the offending type, property, or arity.
+                    if (DescribeManyToManyFailure(mappedEntities, entity, relation) is { } diagnostic)
                     {
-                        context.ReportDiagnostic(Diagnostic.Create(
-                            InquiryDiagnosticDescriptors.ManyToManyInvalid, relation.Location?.ToLocation(),
-                            entity.Name, relation.PropertyName));
+                        context.ReportDiagnostic(diagnostic);
                     }
 
                     continue;
@@ -480,22 +480,118 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     }
 
     /// <summary>
-    /// True when a many-to-many relation's junction and related entities are both mapped, the junction
-    /// carries the named parent foreign key, and its named child foreign keys pair one-for-one with the
-    /// related entity's key columns — one for a single-column key, one per column for a composite key.
+    /// Returns the diagnostic describing why a many-to-many relation is unusable, or <see langword="null"/>
+    /// when it is valid. Checks run outermost-first — shape, then resolvability, then pairing — so the
+    /// reported reason is the one a user has to fix first rather than a downstream consequence of it.
     /// </summary>
-    private static bool IsManyToManyValid(Dictionary<string, EntityData> mappedEntities, RelationData relation)
+    private static Diagnostic? DescribeManyToManyFailure(
+        Dictionary<string, EntityData> mappedEntities, EntityData entity, RelationData relation)
     {
-        if (relation.JunctionEntityFullyQualifiedName is not { } junctionFqn ||
-            !mappedEntities.TryGetValue(junctionFqn, out var junction) ||
-            FindEntityColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is null ||
-            !mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var child))
+        var location = relation.Location?.ToLocation();
+
+        if (!relation.IsCollection)
         {
-            return false;
+            return Diagnostic.Create(
+                InquiryDiagnosticDescriptors.ManyToManyInvalid, location, entity.Name, relation.PropertyName);
         }
 
-        return StoreProcessor.JunctionForeignKeysPairWithChildKeys(
-            junction, child, relation.JunctionChildForeignKeyProperties, FindEntityColumn);
+        if (relation.JunctionEntityFullyQualifiedName is not { } junctionFqn ||
+            !mappedEntities.TryGetValue(junctionFqn, out var junction))
+        {
+            return Diagnostic.Create(
+                InquiryDiagnosticDescriptors.ManyToManyTypeNotMapped, location,
+                entity.Name, relation.PropertyName, Simplify(relation.JunctionEntityFullyQualifiedName));
+        }
+
+        if (!mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var child))
+        {
+            return Diagnostic.Create(
+                InquiryDiagnosticDescriptors.ManyToManyTypeNotMapped, location,
+                entity.Name, relation.PropertyName, Simplify(relation.ChildEntityFullyQualifiedName));
+        }
+
+        var parentForeignKey = relation.JunctionParentForeignKeyProperty ?? string.Empty;
+        if (FindEntityColumn(junction, parentForeignKey) is null)
+        {
+            return Diagnostic.Create(
+                InquiryDiagnosticDescriptors.ManyToManyForeignKeyNotMapped, location,
+                entity.Name, relation.PropertyName, parentForeignKey, junction.Name);
+        }
+
+        // An unresolvable child foreign-key name is a naming problem, not a pairing one, so it reports
+        // INQ088 naming the string — checked before the arity/type rules, which would otherwise mask it.
+        foreach (var name in relation.JunctionChildForeignKeyProperties)
+        {
+            if (FindEntityColumn(junction, name) is null)
+            {
+                return Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.ManyToManyForeignKeyNotMapped, location,
+                    entity.Name, relation.PropertyName, name, junction.Name);
+            }
+        }
+
+        if (!StoreProcessor.JunctionForeignKeysPairWithChildKeys(
+                junction, child, relation.JunctionChildForeignKeyProperties, FindEntityColumn))
+        {
+            var named = relation.JunctionChildForeignKeyProperties.Count;
+            return Diagnostic.Create(
+                InquiryDiagnosticDescriptors.ManyToManyChildKeyPairingInvalid, location,
+                entity.Name, relation.PropertyName,
+                named, named == 1 ? "y" : "ies",
+                child.Name, child.Keys.Count, child.Keys.Count == 1 ? string.Empty : "s",
+                DescribePairing(junction, child, relation.JunctionChildForeignKeyProperties));
+        }
+
+        return null;
+
+        // Drops the namespace for readability. Only the segment BEFORE any type argument list is scanned:
+        // the last '.' in "global::System.Collections.Generic.List<global::Demo.Product>" sits inside the
+        // argument, so searching the whole string would render the type as "Product>".
+        static string Simplify(string? fullyQualifiedName)
+        {
+            if (string.IsNullOrEmpty(fullyQualifiedName)) return "(unknown)";
+            var name = fullyQualifiedName!;
+            var openAngle = name.IndexOf('<');
+            var searchEnd = openAngle < 0 ? name.Length : openAngle;
+            var lastDot = name.LastIndexOf('.', searchEnd - 1, searchEnd);
+            return lastDot < 0 ? name : name.Substring(lastDot + 1);
+        }
+    }
+
+    /// <summary>
+    /// The trailing sentence of INQ089 — names the first specific mismatch when the counts do line up, so
+    /// a transposed list says which position is wrong instead of only restating the rule.
+    /// </summary>
+    private static string DescribePairing(
+        EntityData junction, EntityData child, EquatableArray<string> foreignKeyNames)
+    {
+        if (foreignKeyNames.Count != child.Keys.Count)
+        {
+            return string.Empty;
+        }
+
+        for (var i = 0; i < foreignKeyNames.Count; i++)
+        {
+            for (var j = i + 1; j < foreignKeyNames.Count; j++)
+            {
+                if (string.Equals(foreignKeyNames[i], foreignKeyNames[j], StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"'{foreignKeyNames[i]}' is named more than once.";
+                }
+            }
+
+            var foreignKey = FindEntityColumn(junction, foreignKeyNames[i]);
+            var keyColumn = child.Keys[i];
+            if (foreignKey is not null &&
+                !string.Equals(
+                    foreignKey.Type.NonNullableDisplayName, keyColumn.Type.NonNullableDisplayName, StringComparison.Ordinal))
+            {
+                return $"'{foreignKeyNames[i]}' ({foreignKey.Type.NonNullableDisplayName}) is paired with key column "
+                    + $"'{keyColumn.PropertyName}' ({keyColumn.Type.NonNullableDisplayName}); the names may be in the wrong order.";
+            }
+        }
+
+        return string.Empty;
     }
 
     private DialectOwnership ResolveOwnership(Compilation compilation, CancellationToken cancellationToken)

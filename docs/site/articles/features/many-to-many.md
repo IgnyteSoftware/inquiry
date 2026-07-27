@@ -92,12 +92,31 @@ await orderProducts.LinkAsync(new OrderProduct { OrderId = 1, ProductId = 42 });
 
 ## Rules
 
-A `[InquiryManyToMany]` navigation must be a **collection** (`List<T>` / `IReadOnlyList<T>` / …), the **junction and related types must both be mapped** `[InquiryTable]` entities, the **junction must declare the two named foreign-key properties**, and the **related entity must have a single-column key**. Violations are a compile error (**`INQ063`**).
+A `[InquiryManyToMany]` navigation must be a **collection** (`List<T>` / `IReadOnlyList<T>` / …), the **junction and related types must both be mapped** `[InquiryTable]` entities, and the **junction must name the parent foreign-key property plus one child foreign-key property per key column of the related entity**. Each rule reports its own compile error:
+
+| Code | Reason |
+|---|---|
+| `INQ063` | The navigation is not a collection. |
+| `INQ087` | The junction or related type is not a mapped `[InquiryTable]` entity. |
+| `INQ088` | A named junction property is not a mapped column — the message names it. |
+| `INQ089` | The number of child foreign keys does not match the related entity's key column count. For a **composite** key, also: duplicated names, or a foreign key whose type does not match the key column it is paired with. |
+
+### Composite-key related entities
+
+A related entity may have a composite key. Name one junction property per key column, **in the related entity's key-declaration order**:
+
+```csharp
+[InquiryManyToMany(typeof(PostTag), nameof(PostTag.PostId), nameof(PostTag.TenantId), nameof(PostTag.Slug))]
+public List<Tag> Tags { get; set; } = new();
+```
+
+The pairing is positional, and both the generated SQL and the in-memory grouping follow it, so a transposed list is a silently wrong join rather than a compile error. `INQ089` rejects a composite pair whose types disagree, which catches most transpositions — but two key columns of the *same* type are indistinguishable, so **order still matters**. These pairing checks apply only to composite keys: with a single-column key there is one position and nothing to transpose, so a foreign key of a different (but comparable) type is accepted, as it always has been.
+
+Composite keys correlate with a `EXISTS` subquery rather than a row-value `IN`: SQL Server has no row-value constructors, and row values would also impose a SQLite 3.15 floor. The shape is identical on all six providers.
 
 ## Limitations (v1)
 
 - The junction must be an explicitly mapped entity (no implicit/auto-managed junction table yet).
-- The related (child) entity must have a single-column key.
 
 ## See also
 

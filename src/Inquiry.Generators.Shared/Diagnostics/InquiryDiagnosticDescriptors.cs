@@ -40,7 +40,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ059         Global query filter             ([InquiryGlobalFilter] on non-bool / key / generated / token / soft-delete) [IN USE]
     //   INQ060         JSON-path predicate             ([InquiryWhere(JsonPath=…)] on non-string / converter column, or malformed path) [IN USE]
     //   INQ061–INQ064  DDL safety lints (off by default) (INQ061 unindexed FK, INQ062 decimal w/o precision, INQ064 unindexed filter column; opt in via .editorconfig) [IN USE]
-    //   INQ063         Many-to-many relation          ([InquiryManyToMany] misconfigured junction/child) [IN USE]
+    //   INQ063         Many-to-many relation          ([InquiryManyToMany] not on a collection navigation) [IN USE]
     //   INQ065         Column metadata range          ([InquiryColumn] Length/Precision/Scale out of range) [IN USE]
     //   INQ066–INQ067  DDL safety lints (off by default) (INQ066 nullable column with default, INQ067 unbounded string column; opt in via .editorconfig) [IN USE]
     //   INQ068         Invalid database-generated concurrency-token shape [IN USE]
@@ -50,6 +50,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ078–INQ082  Value-converter model and construction validation [IN USE]
     //   INQ083         Paged-result + Distinct conflict [IN USE]
     //   INQ086         Stored-procedure TVP binding     (collection param on sproc: missing TvpTypeName, unsupported provider, or type mapping failure) [IN USE]
+    //   INQ087–INQ089  Many-to-many configuration     (INQ087 junction/related type unmapped, INQ088 named junction FK not a mapped column, INQ089 child FKs do not pair with the related key) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -329,13 +330,49 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Info,
         isEnabledByDefault: false);
 
-    // INQ063: an [InquiryManyToMany] association is misconfigured — it must be on a collection navigation
-    // (List<T>/…), its junction and related types must both be mapped Inquiry entities, the junction must
-    // carry the two named foreign-key properties, and the related entity must have a single-column key.
+    // INQ063: the [InquiryManyToMany] declaration itself is unusable — the property is not a collection,
+    // or the attribute did not supply a junction type and at least one child foreign-key name. Discovery
+    // cannot tell those two apart (it records both the same way), so the message names both rather than
+    // asserting one and risking being wrong. Retains the ID it had when it bundled every many-to-many
+    // failure, so existing suppressions keep working; the reasons it CAN distinguish moved to
+    // INQ087-INQ089, which name the offending type, property, or arity.
     public static readonly DiagnosticDescriptor ManyToManyInvalid = new(
         "INQ063",
-        "InquiryManyToMany association is misconfigured",
-        "Entity '{0}' relation '{1}' is marked [InquiryManyToMany], but it is not usable. It must be a collection navigation whose junction and related types are both mapped [InquiryTable] entities, and the junction must name the parent foreign-key property plus one child foreign-key property per key column of the related entity — one for a single-column key, or one per column for a composite key, listed in the related entity's key-declaration order. For a composite key the names must be distinct and each must have the same type as the key column it is paired with.",
+        "InquiryManyToMany declaration is unusable",
+        "Entity '{0}' property '{1}' is marked [InquiryManyToMany], but the declaration is unusable. Apply it to a collection of the related entity (List<T>, IReadOnlyList<T>, …) — a many-to-many association is many-valued on both sides — and give [InquiryManyToMany] a junction type plus at least one child foreign-key property name.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ087: the junction or related type named by [InquiryManyToMany] is not a mapped entity. Split out
+    // of INQ063 so the message can name which type is unmapped rather than listing every possible cause.
+    public static readonly DiagnosticDescriptor ManyToManyTypeNotMapped = new(
+        "INQ087",
+        "InquiryManyToMany junction or related type is not a mapped entity",
+        "Entity '{0}' relation '{1}' references type '{2}', which is not a mapped Inquiry entity. Both the junction type and the related type must be classes marked [InquiryTable] (an entity that failed its own validation is also unmapped — fix the diagnostics on '{2}' first).",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ088: a foreign-key property named by [InquiryManyToMany] does not exist as a mapped column on the
+    // junction. Split out of INQ063 to name the offending string — the common cause is a typo or a
+    // property that exists but carries no [InquiryColumn]/[InquiryKey].
+    public static readonly DiagnosticDescriptor ManyToManyForeignKeyNotMapped = new(
+        "INQ088",
+        "InquiryManyToMany names a junction property that is not a mapped column",
+        "Entity '{0}' relation '{1}' names '{2}' as a foreign-key property of junction '{3}', but '{3}' has no mapped column for it. Name a property that carries [InquiryColumn] or [InquiryKey]; use nameof to keep the name checked by the compiler.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ089: the child foreign keys do not pair with the related entity's key columns — wrong count,
+    // duplicated names, or a type that does not match the key column it sits opposite. The pairing is
+    // positional and drives both the SQL correlation and the in-memory grouping, so a mis-paired list is
+    // a silently wrong join rather than a compile error; this is what makes it loud.
+    public static readonly DiagnosticDescriptor ManyToManyChildKeyPairingInvalid = new(
+        "INQ089",
+        "InquiryManyToMany child foreign keys do not pair with the related entity's key",
+        "Entity '{0}' relation '{1}' names {2} child foreign-key propert{3} for related entity '{4}', which has {5} key column{6}. Name one junction property per key column, in the related entity's key-declaration order, with distinct names and each having the same type as the key column it is paired with. {7}",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

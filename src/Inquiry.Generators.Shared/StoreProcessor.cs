@@ -2202,7 +2202,10 @@ internal static class StoreProcessor
                 {
                     // M:N emit needs a resolvable junction naming one foreign-key column per child key
                     // column — one for a single-column key, one per column for a composite key —
-                    // otherwise drop the eager method (INQ063 already reported at declaration time).
+                    // otherwise drop the eager method (INQ063/INQ087-INQ089 already reported at
+                    // declaration time by ValidateRelations). This gate is deliberately independent of
+                    // those diagnostics: suppressing one with NoWarn still drops the method rather than
+                    // emitting a mis-paired join, so the failure stays a compile error.
                     var junctionOk = relation.IsCollection &&
                         relationJunctionEntities.TryGetValue(relation.PropertyName, out var junction) &&
                         FindColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&

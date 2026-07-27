@@ -313,8 +313,11 @@ public sealed partial class InquiryGeneratorTests
             public partial class OrderStore : InquiryStore<Order> { [InquirySelectOneByKeyEager] public partial Task<Order?> Get(long id); }
             """;
         var result = RunGenerator(source, dialect: "MySql");
-        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(d => d.Id == "INQ063"));
-        Assert.Contains("marked [InquiryManyToMany]", diagnostic.GetMessage(), StringComparison.Ordinal);
+        // The junction declares no key, so it fails its own validation and never reaches mappedEntities —
+        // which is INQ087 ("not a mapped entity"), the reason split out of INQ063's old catch-all.
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(d => d.Id == "INQ087"));
+        Assert.Contains("is not a mapped Inquiry entity", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("OrderProduct", diagnostic.GetMessage(), StringComparison.Ordinal);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ008" && d.GetMessage().Contains("relation dependency", StringComparison.Ordinal));
     }
 

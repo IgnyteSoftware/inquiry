@@ -63,7 +63,7 @@ INQ059 | Inquiry | Error | InquiryGlobalFilter column is invalid
 INQ060 | Inquiry | Error | InquiryWhere JSON-path criterion is invalid
 INQ061 | Inquiry | Disabled | Foreign-key column has no index
 INQ062 | Inquiry | Disabled | Decimal column relies on the default precision and scale
-INQ063 | Inquiry | Error | InquiryManyToMany association is misconfigured
+INQ063 | Inquiry | Error | InquiryManyToMany declaration is unusable
 INQ064 | Inquiry | Disabled | Filtered column has no index
 INQ065 | Inquiry | Error | Column Length Precision or Scale is out of range
 INQ066 | Inquiry | Disabled | Nullable column has a default value
@@ -86,3 +86,6 @@ INQ083 | Inquiry | Error | InquiryPagedResult cannot be combined with Distinct
 INQ084 | Inquiry | Error | Typed foreign key target lacks [InquiryTable]
 INQ085 | Inquiry | Error | Typed foreign key target has no [InquiryKey]
 INQ086 | Inquiry | Error | Stored-procedure collection parameter TVP binding is invalid
+INQ087 | Inquiry | Error | InquiryManyToMany junction or related type is not a mapped entity
+INQ088 | Inquiry | Error | InquiryManyToMany names a junction property that is not a mapped column
+INQ089 | Inquiry | Error | InquiryManyToMany child foreign keys do not pair with the related entity's key
