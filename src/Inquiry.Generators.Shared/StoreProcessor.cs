@@ -1748,8 +1748,14 @@ internal static class StoreProcessor
                     var junctionParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
                     var junctionChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[0])!;
                     var junctionParentFkColumn = junctionParentFk.ColumnName;
-                    var junctionChildFkColumn = junctionChildFk.ColumnName;
                     var junctionCtx = new SqlBuildContext(sqlBuilder, junctionEntity.Schema, junctionEntity.TableName, ToColumnList(junctionEntity.Columns));
+
+                    // The child side of the association is passed as a column list so a composite child
+                    // key needs no further signature churn. Both lists are single-element today —
+                    // validation still requires a single-column child key — and stay paired by position:
+                    // junction foreign key i references child key column i.
+                    var childKeyColumns = new[] { childEntity.Keys[0].ColumnName };
+                    var junctionChildFkColumns = new[] { junctionChildFk.ColumnName };
 
                     // The batch junction read only groups child keys under parent keys, so it needs exactly
                     // the two foreign keys. Narrowing the projection is what lets the grid loader read those
@@ -1764,25 +1770,25 @@ internal static class StoreProcessor
 
                     AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildManyToManySelectByParentSql(
                         childCtx, ToColumnList(childEntity.Columns), junctionCtx,
-                        junctionChildFkColumn, childEntity.Keys[0].ColumnName, junctionParentFkColumn, entity.Keys[0].PropertyName));
+                        junctionChildFkColumns, childKeyColumns, junctionParentFkColumn, entity.Keys[0].PropertyName));
                     AppendConstSql(source, "_sql_" + relation.PropertyName + "_All",
                         sqlBuilder.BuildManyToManySelectAllFilteredSql(
-                            childCtx, junctionCtx, ctx, childEntity.Keys[0].ColumnName,
-                            junctionChildFkColumn, junctionParentFkColumn, entity.Keys[0].ColumnName));
+                            childCtx, junctionCtx, ctx, childKeyColumns,
+                            junctionChildFkColumns, junctionParentFkColumn, entity.Keys[0].ColumnName));
                     AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction",
                         sqlBuilder.BuildManyToManyJunctionAllFilteredSql(
                             junctionSelectCtx, ctx, childCtx, junctionParentFkColumn, entity.Keys[0].ColumnName,
-                            junctionChildFkColumn, childEntity.Keys[0].ColumnName));
+                            junctionChildFkColumns, childKeyColumns));
                     if (hasIncludeDeletedSelectAllEager)
                     {
                         AppendConstSql(source, "_sql_" + relation.PropertyName + "_All_IncludeDeleted",
                             sqlBuilder.BuildManyToManySelectAllFilteredSql(
-                                childCtx, junctionCtx, ctxIncludeDeleted, childEntity.Keys[0].ColumnName,
-                                junctionChildFkColumn, junctionParentFkColumn, entity.Keys[0].ColumnName));
+                                childCtx, junctionCtx, ctxIncludeDeleted, childKeyColumns,
+                                junctionChildFkColumns, junctionParentFkColumn, entity.Keys[0].ColumnName));
                         AppendConstSql(source, "_sql_" + relation.PropertyName + "_Junction_IncludeDeleted",
                             sqlBuilder.BuildManyToManyJunctionAllFilteredSql(
                                 junctionSelectCtx, ctxIncludeDeleted, childCtx, junctionParentFkColumn,
-                                entity.Keys[0].ColumnName, junctionChildFkColumn, childEntity.Keys[0].ColumnName));
+                                entity.Keys[0].ColumnName, junctionChildFkColumns, childKeyColumns));
                     }
                     continue;
                 }

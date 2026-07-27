@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Inquiry.Generators.Infrastructure;
@@ -345,11 +346,12 @@ public abstract class SqlBuilder
         SqlBuildContext childContext,
         SqlBuildContext junctionContext,
         SqlBuildContext parentContext,
-        string childKeyColumnName,
-        string junctionChildForeignKeyColumnName,
+        IReadOnlyList<string> childKeyColumns,
+        IReadOnlyList<string> junctionChildForeignKeyColumns,
         string junctionParentForeignKeyColumnName,
         string parentKeyColumnName)
     {
+        EnsurePairedChildKeyColumns(junctionChildForeignKeyColumns, childKeyColumns);
         var j = QuoteIdentifier("__j");
         var parentSubquery = "SELECT " + QuoteIdentifier(parentKeyColumnName)
             + " FROM " + parentContext.Table
@@ -357,10 +359,15 @@ public abstract class SqlBuilder
         var junctionPredicate = junctionContext.QualifyActiveRowPredicate(j);
         junctionPredicate = AppendWhere(junctionPredicate,
             j + "." + QuoteIdentifier(junctionParentForeignKeyColumnName) + " IN (" + parentSubquery + ")");
-        var junctionKeySubquery = "SELECT " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumnName)
+
+        // Single-column child key: a scalar IN over a junction-key subquery, so providers can seek the
+        // child primary key. Indexing [0] is safe because a composite child key is still rejected
+        // (INQ063); widening this into a correlated EXISTS is A4's job, and it is deliberately not
+        // written yet so this commit can prove the SQL is unchanged byte for byte.
+        var junctionKeySubquery = "SELECT " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumns[0])
             + " FROM " + junctionContext.Table + " " + j
             + WhereSuffix(junctionPredicate);
-        var childKeyPredicate = QuoteIdentifier(childKeyColumnName) + " IN (" + junctionKeySubquery + ")";
+        var childKeyPredicate = QuoteIdentifier(childKeyColumns[0]) + " IN (" + junctionKeySubquery + ")";
 
         return "SELECT " + childContext.SelectColumns + " FROM " + childContext.Table
             + " WHERE " + AppendWhere(childContext.ActiveRowPredicate, childKeyPredicate);
@@ -372,21 +379,69 @@ public abstract class SqlBuilder
         SqlBuildContext childContext,
         string junctionParentForeignKeyColumnName,
         string parentKeyColumnName,
-        string junctionChildForeignKeyColumnName,
-        string childKeyColumnName)
+        IReadOnlyList<string> junctionChildForeignKeyColumns,
+        IReadOnlyList<string> childKeyColumns)
     {
+        EnsurePairedChildKeyColumns(junctionChildForeignKeyColumns, childKeyColumns);
         var parentSubquery = "SELECT " + QuoteIdentifier(parentKeyColumnName)
             + " FROM " + parentContext.Table
             + WhereSuffix(parentContext.ActiveRowPredicate);
-        var childSubquery = "SELECT " + QuoteIdentifier(childKeyColumnName)
+
+        // Same single-column assumption as the child SELECT above, and lifted by the same later commit.
+        var childSubquery = "SELECT " + QuoteIdentifier(childKeyColumns[0])
             + " FROM " + childContext.Table
             + WhereSuffix(childContext.ActiveRowPredicate);
         var where = AppendWhere(junctionContext.ActiveRowPredicate,
             QuoteIdentifier(junctionParentForeignKeyColumnName) + " IN (" + parentSubquery + ")");
         where = AppendWhere(where,
-            QuoteIdentifier(junctionChildForeignKeyColumnName) + " IN (" + childSubquery + ")");
+            QuoteIdentifier(junctionChildForeignKeyColumns[0]) + " IN (" + childSubquery + ")");
         return "SELECT " + junctionContext.SelectColumns + " FROM " + junctionContext.Table
             + " WHERE " + where;
+    }
+
+    /// <summary>
+    /// Renders the equality that ties a junction row to its child row — <c>j.fk = c.key</c> per key
+    /// column, AND-joined. Both qualifiers arrive pre-rendered (a quoted alias or a quoted, possibly
+    /// schema-qualified table); only the column names are quoted here. Over a single column this is
+    /// exactly the scalar equality it replaces, which is what keeps the generated JOIN unchanged.
+    /// </summary>
+    private string RenderChildKeyEquality(
+        string junctionQualifier,
+        IReadOnlyList<string> junctionChildForeignKeyColumns,
+        string childQualifier,
+        IReadOnlyList<string> childKeyColumns)
+    {
+        EnsurePairedChildKeyColumns(junctionChildForeignKeyColumns, childKeyColumns);
+        var terms = new string[childKeyColumns.Count];
+        for (var i = 0; i < terms.Length; i++)
+        {
+            terms[i] = junctionQualifier + "." + QuoteIdentifier(junctionChildForeignKeyColumns[i])
+                + " = " + childQualifier + "." + QuoteIdentifier(childKeyColumns[i]);
+        }
+
+        return string.Join(" AND ", terms);
+    }
+
+    /// <summary>
+    /// Guards the pairing every many-to-many builder depends on: at least one child key column, and
+    /// exactly one junction foreign-key column per child key column, aligned by position. A violation is
+    /// a bug in this assembly rather than user input, and both failure modes it prevents are silent —
+    /// a short junction list drops an equality term, turning a composite join into a prefix match that
+    /// returns rows the association does not actually link (a global-filter column among the child key
+    /// components makes that a cross-tenant read), and empty lists render an empty ON clause.
+    /// </summary>
+    private static void EnsurePairedChildKeyColumns(
+        IReadOnlyList<string> junctionChildForeignKeyColumns,
+        IReadOnlyList<string> childKeyColumns)
+    {
+        if (childKeyColumns.Count == 0 || junctionChildForeignKeyColumns.Count != childKeyColumns.Count)
+        {
+            throw new ArgumentException(
+                "A many-to-many association needs at least one child key column and exactly one junction "
+                + $"foreign-key column per child key column; got {junctionChildForeignKeyColumns.Count} "
+                + $"foreign-key column(s) for {childKeyColumns.Count} child key column(s).",
+                nameof(junctionChildForeignKeyColumns));
+        }
     }
 
     public abstract string BuildSelectByKeySql(SqlBuildContext context);
@@ -412,34 +467,34 @@ public abstract class SqlBuilder
         IReadOnlyList<IColumn> childColumns,
         string? junctionSchema,
         string junctionTable,
-        string junctionChildForeignKeyColumn,
-        string childKeyColumn,
+        IReadOnlyList<string> junctionChildForeignKeyColumns,
+        IReadOnlyList<string> childKeyColumns,
         string junctionParentForeignKeyColumn,
         string parentParameterName)
         => BuildManyToManySelectByParentSqlCore(
             childContext, childColumns, QuoteTable(junctionSchema, junctionTable), string.Empty,
-            junctionChildForeignKeyColumn, childKeyColumn, junctionParentForeignKeyColumn, parentParameterName);
+            junctionChildForeignKeyColumns, childKeyColumns, junctionParentForeignKeyColumn, parentParameterName);
 
     internal string BuildManyToManySelectByParentSql(
         SqlBuildContext childContext,
         IReadOnlyList<IColumn> childColumns,
         SqlBuildContext junctionContext,
-        string junctionChildForeignKeyColumn,
-        string childKeyColumn,
+        IReadOnlyList<string> junctionChildForeignKeyColumns,
+        IReadOnlyList<string> childKeyColumns,
         string junctionParentForeignKeyColumn,
         string parentParameterName)
         => BuildManyToManySelectByParentSqlCore(
             childContext, childColumns, junctionContext.Table,
             junctionContext.QualifyActiveRowPredicate(QuoteIdentifier("__j")),
-            junctionChildForeignKeyColumn, childKeyColumn, junctionParentForeignKeyColumn, parentParameterName);
+            junctionChildForeignKeyColumns, childKeyColumns, junctionParentForeignKeyColumn, parentParameterName);
 
     private string BuildManyToManySelectByParentSqlCore(
         SqlBuildContext childContext,
         IReadOnlyList<IColumn> childColumns,
         string junctionTable,
         string junctionActiveRowPredicate,
-        string junctionChildForeignKeyColumn,
-        string childKeyColumn,
+        IReadOnlyList<string> junctionChildForeignKeyColumns,
+        IReadOnlyList<string> childKeyColumns,
         string junctionParentForeignKeyColumn,
         string parentParameterName)
     {
@@ -461,7 +516,7 @@ public abstract class SqlBuilder
         return "SELECT " + childCols.ToString()
             + " FROM " + childContext.Table
             + " INNER JOIN " + junctionTable + " " + j
-            + " ON " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumn) + " = " + childContext.Table + "." + QuoteIdentifier(childKeyColumn)
+            + " ON " + RenderChildKeyEquality(j, junctionChildForeignKeyColumns, childContext.Table, childKeyColumns)
             + " WHERE " + where;
     }
 
