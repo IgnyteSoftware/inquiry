@@ -2513,6 +2513,69 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void IncrementalPipelineCachesEntityCarryingAManyToManyRelation()
+    {
+        // The caching test above uses a relation-free entity, so it cannot see RelationData at all.
+        // A many-to-many relation carries a collection of junction foreign-key names, and a collection
+        // held by value equality is the whole reason that field is an EquatableArray rather than a
+        // string[]: a record comparing a string[] falls back to reference equality, so every rerun
+        // would report Modified and the entity transform would never cache.
+        const string source = """
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Orders")]
+            public sealed class Order
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(typeof(OrderProduct), nameof(OrderProduct.OrderId), nameof(OrderProduct.ProductId))]
+                public List<Product> Products { get; set; } = new();
+            }
+
+            [InquiryTable("Products")]
+            public sealed class Product
+            {
+                [InquiryKey] public long Id { get; set; }
+            }
+
+            [InquiryTable("OrderProduct")]
+            public sealed class OrderProduct
+            {
+                [InquiryKey] public long OrderId { get; set; }
+                [InquiryKey] public long ProductId { get; set; }
+            }
+            """;
+
+        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+        var trees = new List<SyntaxTree>
+        {
+            CSharpSyntaxTree.ParseText(source, parseOptions),
+            CSharpSyntaxTree.ParseText("[assembly: global::Inquiry.InquiryDialect(\"Sqlite\")]", parseOptions),
+        };
+        var compilation = CSharpCompilation.Create(
+            "InquiryIncrementalManyToManyTests",
+            trees,
+            GetReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new ISourceGenerator[] { new global::Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator() },
+            parseOptions: parseOptions,
+            driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true));
+
+        driver = driver.RunGenerators(compilation);
+
+        var updated = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            "namespace Other { internal sealed class Unrelated { public int Value { get; set; } } }", parseOptions));
+        driver = driver.RunGenerators(updated);
+
+        AssertStepsCached(driver.GetRunResult().Results[0], "InquiryEntities");
+    }
+
+    [Fact]
     public void ChangedEntityReEmitsDependentStoreWithFreshSql()
     {
         // Correctness counterpart to the caching test: when an entity changes, its dependent store

@@ -23,8 +23,13 @@ public sealed class InquiryManyToManyAttribute : Attribute
     /// </summary>
     /// <param name="junctionEntity">The mapped junction (link) entity type.</param>
     /// <param name="parentForeignKeyProperty">The junction property holding the foreign key to this entity's key.</param>
-    /// <param name="childForeignKeyProperty">The junction property holding the foreign key to the related entity's key.</param>
-    public InquiryManyToManyAttribute(Type junctionEntity, string parentForeignKeyProperty, string childForeignKeyProperty)
+    /// <param name="childForeignKeyProperties">
+    /// The junction properties holding the foreign key to the related entity's key — one per key column,
+    /// in key order. A single name is the common case and the only arity accepted today; the parameter is
+    /// <see langword="params"/> so a composite-key related entity can name each column without a
+    /// source-breaking signature change.
+    /// </param>
+    public InquiryManyToManyAttribute(Type junctionEntity, string parentForeignKeyProperty, params string[] childForeignKeyProperties)
     {
         JunctionEntity = junctionEntity ?? throw new ArgumentNullException(nameof(junctionEntity));
         if (string.IsNullOrWhiteSpace(parentForeignKeyProperty))
@@ -32,13 +37,21 @@ public sealed class InquiryManyToManyAttribute : Attribute
             throw new ArgumentException("Parent foreign-key property name cannot be empty.", nameof(parentForeignKeyProperty));
         }
 
-        if (string.IsNullOrWhiteSpace(childForeignKeyProperty))
+        if (childForeignKeyProperties is null || childForeignKeyProperties.Length == 0)
         {
-            throw new ArgumentException("Child foreign-key property name cannot be empty.", nameof(childForeignKeyProperty));
+            throw new ArgumentException("At least one child foreign-key property name is required.", nameof(childForeignKeyProperties));
+        }
+
+        foreach (var name in childForeignKeyProperties)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("Child foreign-key property names cannot be empty.", nameof(childForeignKeyProperties));
+            }
         }
 
         ParentForeignKeyProperty = parentForeignKeyProperty;
-        ChildForeignKeyProperty = childForeignKeyProperty;
+        ChildForeignKeyProperties = childForeignKeyProperties;
     }
 
     /// <summary>Gets the mapped junction (link) entity type.</summary>
@@ -47,6 +60,9 @@ public sealed class InquiryManyToManyAttribute : Attribute
     /// <summary>Gets the junction property that references this entity's key.</summary>
     public string ParentForeignKeyProperty { get; }
 
-    /// <summary>Gets the junction property that references the related entity's key.</summary>
-    public string ChildForeignKeyProperty { get; }
+    /// <summary>
+    /// Gets the junction properties that reference the related entity's key, in key order. Exactly one
+    /// name is accepted today; see INQ063.
+    /// </summary>
+    public IReadOnlyList<string> ChildForeignKeyProperties { get; }
 }

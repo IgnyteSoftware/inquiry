@@ -366,4 +366,48 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ063");
     }
+
+    [Fact]
+    public void ManyToManyNamingMoreThanOneChildForeignKeyReportsINQ063()
+    {
+        // The child foreign-key parameter is `params string[]`, so naming several columns compiles.
+        // Only a single-column related key is supported today, and the arity check lives at validation
+        // rather than at discovery because that is where the related entity's key count is known —
+        // discovery sees one entity symbol at a time. This pins that a wider arity is rejected, and
+        // that it is rejected without generating any join SQL from the first name alone.
+        const string source = """
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Orders")]
+            public sealed class Order
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(typeof(OrderProduct), "OrderId", "ProductId", "RegionId")]
+                public List<Product> Products { get; set; } = new();
+            }
+
+            [InquiryTable("Products")]
+            public sealed class Product { [InquiryKey] public long Id { get; set; } }
+
+            [InquiryTable("OrderProduct")]
+            public sealed class OrderProduct
+            {
+                [InquiryKey] public long OrderId { get; set; }
+                [InquiryKey] public long ProductId { get; set; }
+                [InquiryColumn] public long RegionId { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.DoesNotContain(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.GetText().ToString().Contains("INNER JOIN", StringComparison.Ordinal));
+    }
 }

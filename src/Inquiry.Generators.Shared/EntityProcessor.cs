@@ -999,10 +999,11 @@ internal static class EntityProcessor
             var manyToManyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryManyToManyAttribute");
             if (manyToManyAttribute is not null)
             {
+                var childFks = GetJunctionChildForeignKeys(manyToManyAttribute);
                 if (manyToManyAttribute.ConstructorArguments.Length < 3 ||
                     manyToManyAttribute.ConstructorArguments[0].Value is not INamedTypeSymbol junctionSymbol ||
                     manyToManyAttribute.ConstructorArguments[1].Value is not string parentFk ||
-                    manyToManyAttribute.ConstructorArguments[2].Value is not string childFk ||
+                    childFks.Count == 0 ||
                     !TryGetChildEntityType(property.Type, out var manyChildSymbol, out var manyIsCollection) ||
                     !manyIsCollection)
                 {
@@ -1024,7 +1025,7 @@ internal static class EntityProcessor
                             ? manyToManyAttribute.ConstructorArguments[0].Value as INamedTypeSymbol
                             : null)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         JunctionParentForeignKeyProperty = manyToManyAttribute.ConstructorArguments.Length > 1 ? manyToManyAttribute.ConstructorArguments[1].Value as string : null,
-                        JunctionChildForeignKeyProperty = manyToManyAttribute.ConstructorArguments.Length > 2 ? manyToManyAttribute.ConstructorArguments[2].Value as string : null,
+                        JunctionChildForeignKeyProperties = childFks,
                     });
                     continue;
                 }
@@ -1039,7 +1040,7 @@ internal static class EntityProcessor
                     IsManyToMany = true,
                     JunctionEntityFullyQualifiedName = junctionSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     JunctionParentForeignKeyProperty = parentFk,
-                    JunctionChildForeignKeyProperty = childFk,
+                    JunctionChildForeignKeyProperties = childFks,
                 });
                 continue;
             }
@@ -1071,6 +1072,39 @@ internal static class EntityProcessor
         }
 
         return relations;
+    }
+
+    /// <summary>
+    /// Reads the junction child foreign-key names off <c>[InquiryManyToMany]</c>'s third parameter. That
+    /// parameter is <c>params string[]</c>, so Roslyn always surfaces it as a single array-kind
+    /// <see cref="TypedConstant"/> — expanded call form included — whose <c>Value</c> is null. Returns
+    /// empty for any malformed shape; the caller turns that into the diagnostic-only relation record.
+    /// </summary>
+    private static EquatableArray<string> GetJunctionChildForeignKeys(AttributeData attribute)
+    {
+        if (attribute.ConstructorArguments.Length < 3)
+        {
+            return EquatableArray<string>.Empty;
+        }
+
+        var argument = attribute.ConstructorArguments[2];
+        if (argument.Kind != TypedConstantKind.Array || argument.Values.IsDefaultOrEmpty)
+        {
+            return EquatableArray<string>.Empty;
+        }
+
+        var names = ImmutableArray.CreateBuilder<string>(argument.Values.Length);
+        foreach (var value in argument.Values)
+        {
+            if (value.Value is not string name)
+            {
+                return EquatableArray<string>.Empty;
+            }
+
+            names.Add(name);
+        }
+
+        return new EquatableArray<string>(names.ToImmutable());
     }
 
     private static bool TryGetChildEntityType(ITypeSymbol type, out INamedTypeSymbol? childEntitySymbol, out bool isCollection)

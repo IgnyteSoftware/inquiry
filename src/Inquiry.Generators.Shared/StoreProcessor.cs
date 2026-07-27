@@ -1746,7 +1746,7 @@ internal static class StoreProcessor
                     // selects the all-eager loader assembles in memory.
                     var junctionEntity = relationJunctionEntities[relation.PropertyName];
                     var junctionParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
-                    var junctionChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!;
+                    var junctionChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[0])!;
                     var junctionParentFkColumn = junctionParentFk.ColumnName;
                     var junctionChildFkColumn = junctionChildFk.ColumnName;
                     var junctionCtx = new SqlBuildContext(sqlBuilder, junctionEntity.Schema, junctionEntity.TableName, ToColumnList(junctionEntity.Columns));
@@ -2190,7 +2190,8 @@ internal static class StoreProcessor
                     var junctionOk = relation.IsCollection &&
                         relationJunctionEntities.TryGetValue(relation.PropertyName, out var junction) &&
                         FindColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&
-                        FindColumn(junction, relation.JunctionChildForeignKeyProperty ?? string.Empty) is not null;
+                        relation.JunctionChildForeignKeyProperties.Count == 1 &&
+                        FindColumn(junction, relation.JunctionChildForeignKeyProperties[0]) is not null;
                     if (!junctionOk || childEntity.Keys.Count != 1)
                     {
                         return false;

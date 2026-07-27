@@ -190,8 +190,8 @@ Inquiry.Entities.InquiryKeyAttribute.IsGenerated.set -> void
 Inquiry.Entities.InquiryKeyAttribute.SequentialGuid.get -> bool
 Inquiry.Entities.InquiryKeyAttribute.SequentialGuid.set -> void
 Inquiry.Entities.InquiryManyToManyAttribute
-Inquiry.Entities.InquiryManyToManyAttribute.ChildForeignKeyProperty.get -> string!
-Inquiry.Entities.InquiryManyToManyAttribute.InquiryManyToManyAttribute(System.Type! junctionEntity, string! parentForeignKeyProperty, string! childForeignKeyProperty) -> void
+Inquiry.Entities.InquiryManyToManyAttribute.ChildForeignKeyProperties.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Inquiry.Entities.InquiryManyToManyAttribute.InquiryManyToManyAttribute(System.Type! junctionEntity, string! parentForeignKeyProperty, params string![]! childForeignKeyProperties) -> void
 Inquiry.Entities.InquiryManyToManyAttribute.JunctionEntity.get -> System.Type!
 Inquiry.Entities.InquiryManyToManyAttribute.ParentForeignKeyProperty.get -> string!
 Inquiry.Entities.InquiryModifiedAtAttribute

@@ -2475,7 +2475,7 @@ internal static class StoreOperationEmitter
                     var childKey = childEntity.Keys[0];
                     var childKeyType = childKey.Type.NonNullableDisplayName;
                     var jParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
-                    var jChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperty!)!;
+                    var jChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[0])!;
                     var parentKeyType = entity.Keys[0].Type.NonNullableDisplayName;
 
                     source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>({dictCapacity});");

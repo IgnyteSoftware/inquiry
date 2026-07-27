@@ -420,7 +420,8 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                     var validJunction = relation.JunctionEntityFullyQualifiedName is { } junctionFqn &&
                         mappedEntities.TryGetValue(junctionFqn, out var junction) &&
                         FindEntityColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&
-                        FindEntityColumn(junction, relation.JunctionChildForeignKeyProperty ?? string.Empty) is not null;
+                        relation.JunctionChildForeignKeyProperties.Count == 1 &&
+                        FindEntityColumn(junction, relation.JunctionChildForeignKeyProperties[0]) is not null;
                     var validChild = mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var mnChild) &&
                         mnChild.Keys.Count == 1;
 
