@@ -25,9 +25,14 @@ public sealed class InquiryManyToManyAttribute : Attribute
     /// <param name="parentForeignKeyProperty">The junction property holding the foreign key to this entity's key.</param>
     /// <param name="childForeignKeyProperties">
     /// The junction properties holding the foreign key to the related entity's key — one per key column,
-    /// in key order. A single name is the common case and the only arity accepted today; the parameter is
-    /// <see langword="params"/> so a composite-key related entity can name each column without a
-    /// source-breaking signature change.
+    /// <strong>in the related entity's key-declaration order</strong>. A single name is the common case;
+    /// a composite-key related entity names each of its key columns.
+    /// <para>
+    /// The pairing is positional, and both the generated SQL and the in-memory grouping follow it, so a
+    /// transposed list is a silently wrong join rather than a compile error. Naming a property whose type
+    /// does not match the key column opposite it is rejected (INQ063), which catches most transpositions —
+    /// but two key columns of the same type are indistinguishable, so order still matters.
+    /// </para>
     /// </param>
     public InquiryManyToManyAttribute(Type junctionEntity, string parentForeignKeyProperty, params string[] childForeignKeyProperties)
     {

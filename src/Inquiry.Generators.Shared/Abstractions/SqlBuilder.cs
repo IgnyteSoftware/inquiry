@@ -360,10 +360,30 @@ public abstract class SqlBuilder
         junctionPredicate = AppendWhere(junctionPredicate,
             j + "." + QuoteIdentifier(junctionParentForeignKeyColumnName) + " IN (" + parentSubquery + ")");
 
+        if (childKeyColumns.Count > 1)
+        {
+            // Composite child key. The scalar form below would want (a, b) IN (SELECT x, y …), but SQL
+            // Server has no row-value constructors at any version and adopting them would also impose a
+            // SQLite >= 3.15 floor Inquiry does not have. A correlated EXISTS is standard on all six,
+            // plans as the same semi-join, and needs no dialect override.
+            var childAlias = QuoteIdentifier("__c");
+            var correlated = AppendWhere(junctionPredicate,
+                RenderChildKeyEquality(j, junctionChildForeignKeyColumns, childAlias, childKeyColumns));
+            var exists = "EXISTS (SELECT 1 FROM " + junctionContext.Table + " " + j
+                + " WHERE " + correlated + ")";
+
+            // The outer child takes an alias so the correlation qualifier is a bare "__c" rather than a
+            // schema-qualified table name — qualifying a column as "schema"."table"."col" is exactly what
+            // ManyToManyBatchChildSqlSupportsSchemasWithoutQualifiedColumnReferences exists to prevent.
+            // Its select list and active-row filter stay unqualified: they sit outside the EXISTS, where
+            // the child is the only table in scope.
+            return "SELECT " + childContext.SelectColumns + " FROM " + childContext.Table + " " + childAlias
+                + " WHERE " + AppendWhere(childContext.ActiveRowPredicate, exists);
+        }
+
         // Single-column child key: a scalar IN over a junction-key subquery, so providers can seek the
-        // child primary key. Indexing [0] is safe because a composite child key is still rejected
-        // (INQ063); widening this into a correlated EXISTS is A4's job, and it is deliberately not
-        // written yet so this commit can prove the SQL is unchanged byte for byte.
+        // child primary key. Kept verbatim rather than folded into the EXISTS form above — the shapes
+        // plan the same, and this is the path every existing generated store already pins.
         var junctionKeySubquery = "SELECT " + j + "." + QuoteIdentifier(junctionChildForeignKeyColumns[0])
             + " FROM " + junctionContext.Table + " " + j
             + WhereSuffix(junctionPredicate);
@@ -387,7 +407,26 @@ public abstract class SqlBuilder
             + " FROM " + parentContext.Table
             + WhereSuffix(parentContext.ActiveRowPredicate);
 
-        // Same single-column assumption as the child SELECT above, and lifted by the same later commit.
+        if (childKeyColumns.Count > 1)
+        {
+            // Composite child key: correlated EXISTS, for the same portability reason as the child
+            // SELECT. Here the OUTER table is the junction, and it has to be aliased too — inside the
+            // EXISTS the child is in scope, so an unqualified junction foreign-key name would silently
+            // bind to a child column of the same name instead of correlating.
+            var jAlias = QuoteIdentifier("__j");
+            var cAlias = QuoteIdentifier("__c");
+            var childExists = "EXISTS (SELECT 1 FROM " + childContext.Table + " " + cAlias
+                + " WHERE " + AppendWhere(
+                    childContext.QualifyActiveRowPredicate(cAlias),
+                    RenderChildKeyEquality(jAlias, junctionChildForeignKeyColumns, cAlias, childKeyColumns))
+                + ")";
+            var compositeWhere = AppendWhere(junctionContext.QualifyActiveRowPredicate(jAlias),
+                jAlias + "." + QuoteIdentifier(junctionParentForeignKeyColumnName) + " IN (" + parentSubquery + ")");
+            compositeWhere = AppendWhere(compositeWhere, childExists);
+            return "SELECT " + junctionContext.SelectColumns + " FROM " + junctionContext.Table + " " + jAlias
+                + " WHERE " + compositeWhere;
+        }
+
         var childSubquery = "SELECT " + QuoteIdentifier(childKeyColumns[0])
             + " FROM " + childContext.Table
             + WhereSuffix(childContext.ActiveRowPredicate);

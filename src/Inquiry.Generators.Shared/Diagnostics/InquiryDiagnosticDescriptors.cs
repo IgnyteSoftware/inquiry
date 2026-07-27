@@ -335,7 +335,7 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor ManyToManyInvalid = new(
         "INQ063",
         "InquiryManyToMany association is misconfigured",
-        "Entity '{0}' relation '{1}' is marked [InquiryManyToMany], but it is not usable. It must be a collection navigation whose junction and related types are both mapped [InquiryTable] entities, the junction must declare the two named foreign-key properties, and the related entity must have a single-column key.",
+        "Entity '{0}' relation '{1}' is marked [InquiryManyToMany], but it is not usable. It must be a collection navigation whose junction and related types are both mapped [InquiryTable] entities, and the junction must name the parent foreign-key property plus one child foreign-key property per key column of the related entity — one for a single-column key, or one per column for a composite key, listed in the related entity's key-declaration order. For a composite key the names must be distinct and each must have the same type as the key column it is paired with.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

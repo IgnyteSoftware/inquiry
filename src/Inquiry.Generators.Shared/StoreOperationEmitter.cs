@@ -2055,6 +2055,16 @@ internal static class StoreOperationEmitter
         source.AppendLine();
     }
 
+    /// <summary>
+    /// The type to declare a local holding one raw reader read. <see cref="TypeData.DisplayName"/> carries
+    /// the <c>?</c> for a nullable value type but not for a nullable reference type, and the read
+    /// expression for one is <c>reader.IsDBNull(i) ? null : …</c> — so declaring it by DisplayName alone
+    /// assigns a maybe-null value to a non-nullable local, which is CS8600 inside <c>#nullable enable</c>
+    /// generated code and a build break for a consumer using TreatWarningsAsErrors.
+    /// </summary>
+    private static string NullableLocalType(TypeData type)
+        => type.IsNullable ? type.NonNullableDisplayName + "?" : type.DisplayName;
+
     private static string NonNullableValueExpression(TypeData type, string accessor)
     {
         if (!type.IsNullable) return accessor;
@@ -2472,41 +2482,75 @@ internal static class StoreOperationEmitter
                     var junctionEntity = relationJunctionEntities[relation.PropertyName];
                     var junctionType = junctionEntity.FullyQualifiedName;
                     var junctionStructMat = junctionEntity.StructMaterializerFullName;
-                    var childKey = childEntity.Keys[0];
-                    var childKeyType = childKey.Type.NonNullableDisplayName;
+                    var childKeys = childEntity.Keys;
                     var jParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
-                    var jChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[0])!;
+                    var jChildFks = new ColumnData[relation.JunctionChildForeignKeyProperties.Count];
+                    for (var i = 0; i < jChildFks.Length; i++)
+                    {
+                        jChildFks[i] = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[i])!;
+                    }
+
                     var parentKeyType = entity.Keys[0].Type.NonNullableDisplayName;
+
+                    // A composite child key indexes by a C# value tuple, which brings structural equality
+                    // and hashing with it — no IEqualityComparer needed. Arity 1 stays scalar: ValueTuple<T>
+                    // is not a tuple type in C#, so "(T)" would just be T anyway, and keeping the scalar
+                    // shape leaves every existing generated store unchanged.
+                    var childKeyType = childKeys.Count == 1
+                        ? childKeys[0].Type.NonNullableDisplayName
+                        : "(" + string.Join(", ", childKeys.AsImmutableArray().Select(static k => k.Type.NonNullableDisplayName)) + ")";
 
                     source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>({dictCapacity});");
                     AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
-                    if (childKey.Type.IsNullable)
+
+                    // Every tuple component must be non-nullable, so each nullable one is skipped before
+                    // the tuple is built — a null key column cannot match a junction row anyway.
+                    var childKeyParts = new string[childKeys.Count];
+                    for (var i = 0; i < childKeys.Count; i++)
                     {
-                        source.AppendLine($"            if (_c.{childKey.PropertyName} is null) {skipRow};");
+                        var key = childKeys[i];
+                        if (key.Type.IsNullable)
+                        {
+                            source.AppendLine($"            if (_c.{key.PropertyName} is null) {skipRow};");
+                        }
+
+                        childKeyParts[i] = NonNullableValueExpression(key.Type, $"_c.{key.PropertyName}");
                     }
-                    source.AppendLine($"            _childByKey_{relation.PropertyName}[{NonNullableValueExpression(childKey.Type, $"_c.{childKey.PropertyName}")}] = _c;");
+
+                    var childKeyExpression = childKeys.Count == 1
+                        ? childKeyParts[0]
+                        : "(" + string.Join(", ", childKeyParts) + ")";
+                    source.AppendLine($"            _childByKey_{relation.PropertyName}[{childKeyExpression}] = _c;");
                     AppendChildLoopClose();
 
                     source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, global::System.Collections.Generic.List<{childType}>>({dictCapacity});");
 
-                    // How the junction's two foreign keys are reached differs by path, but everything
-                    // below is shared.
+                    // How the junction's foreign keys are reached differs by path, but everything below is
+                    // shared.
                     string jParentAccess;
-                    string jChildAccess;
+                    var jChildAccess = new string[jChildFks.Length];
                     if (useGrid)
                     {
-                        // The junction result set is projected to exactly (parent FK, child FK), so read
-                        // those two ordinals off the reader — a junction row carries nothing else worth
-                        // materializing. Both are hoisted into locals before any use: the grid reads with
+                        // The junction result set is projected to exactly (parent FK, child FK…), so read
+                        // those ordinals off the reader — a junction row carries nothing else worth
+                        // materializing. All are hoisted into locals before any use: the grid reads with
                         // SequentialAccess, which forbids revisiting a column, and the grouping below
                         // touches the parent key up to three times. The lambda parameter must be named
                         // `reader` — MaterializerEmitter.ReadExpression hard-codes that receiver.
                         source.AppendLine("        await _grid.ReadRowsAsync(reader =>");
                         source.AppendLine("        {");
-                        source.AppendLine($"            {jParentFk.Type.DisplayName} _jParentKey = {MaterializerEmitter.ReadExpression(jParentFk.Type, 0, sqlBuilder, jParentFk.EnumAsString, jParentFk.Converter)};");
-                        source.AppendLine($"            {jChildFk.Type.DisplayName} _jChildKey = {MaterializerEmitter.ReadExpression(jChildFk.Type, 1, sqlBuilder, jChildFk.EnumAsString, jChildFk.Converter)};");
+                        source.AppendLine($"            {NullableLocalType(jParentFk.Type)} _jParentKey = {MaterializerEmitter.ReadExpression(jParentFk.Type, 0, sqlBuilder, jParentFk.EnumAsString, jParentFk.Converter)};");
+                        for (var i = 0; i < jChildFks.Length; i++)
+                        {
+                            var fk = jChildFks[i];
+                            // Unsuffixed for the single-column case, so a single-key association's
+                            // generated store is unchanged by composite support landing.
+                            var local = jChildFks.Length == 1 ? "_jChildKey" : $"_jChildKey{i}";
+                            source.AppendLine($"            {NullableLocalType(fk.Type)} {local} = {MaterializerEmitter.ReadExpression(fk.Type, i + 1, sqlBuilder, fk.EnumAsString, fk.Converter)};");
+                            jChildAccess[i] = local;
+                        }
+
                         jParentAccess = "_jParentKey";
-                        jChildAccess = "_jChildKey";
                     }
                     else
                     {
@@ -2514,18 +2558,32 @@ internal static class StoreOperationEmitter
                         // entity materializer and the SELECT still carries every column.
                         AppendChildLoopOpen("_j", junctionType, junctionStructMat, $"{fieldName}_Junction{relationSqlSuffix}");
                         jParentAccess = $"_j.{jParentFk.PropertyName}";
-                        jChildAccess = $"_j.{jChildFk.PropertyName}";
+                        for (var i = 0; i < jChildFks.Length; i++)
+                        {
+                            jChildAccess[i] = $"_j.{jChildFks[i].PropertyName}";
+                        }
                     }
 
-                    if (jChildFk.Type.IsNullable)
+                    var jChildKeyParts = new string[jChildFks.Length];
+                    for (var i = 0; i < jChildFks.Length; i++)
                     {
-                        source.AppendLine($"            if ({jChildAccess} is null) {skipRow};");
+                        if (jChildFks[i].Type.IsNullable)
+                        {
+                            source.AppendLine($"            if ({jChildAccess[i]} is null) {skipRow};");
+                        }
+
+                        jChildKeyParts[i] = NonNullableValueExpression(jChildFks[i].Type, jChildAccess[i]);
                     }
+
                     if (jParentFk.Type.IsNullable)
                     {
                         source.AppendLine($"            if ({jParentAccess} is null) {skipRow};");
                     }
-                    source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jChildFk.Type, jChildAccess)}, out var _child)) {skipRow};");
+
+                    var jChildKeyExpression = jChildKeyParts.Length == 1
+                        ? jChildKeyParts[0]
+                        : "(" + string.Join(", ", jChildKeyParts) + ")";
+                    source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({jChildKeyExpression}, out var _child)) {skipRow};");
                     source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jParentFk.Type, jParentAccess)}, out var _grp))");
                     source.AppendLine("            {");
                     source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");

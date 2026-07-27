@@ -1746,16 +1746,25 @@ internal static class StoreProcessor
                     // selects the all-eager loader assembles in memory.
                     var junctionEntity = relationJunctionEntities[relation.PropertyName];
                     var junctionParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
-                    var junctionChildFk = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[0])!;
                     var junctionParentFkColumn = junctionParentFk.ColumnName;
                     var junctionCtx = new SqlBuildContext(sqlBuilder, junctionEntity.Schema, junctionEntity.TableName, ToColumnList(junctionEntity.Columns));
 
-                    // The child side of the association is passed as a column list so a composite child
-                    // key needs no further signature churn. Both lists are single-element today —
-                    // validation still requires a single-column child key — and stay paired by position:
-                    // junction foreign key i references child key column i.
-                    var childKeyColumns = new[] { childEntity.Keys[0].ColumnName };
-                    var junctionChildFkColumns = new[] { junctionChildFk.ColumnName };
+                    // The child side of the association is a column list: one junction foreign key per
+                    // child key column, paired by position (validation enforces the arity, so the two
+                    // lengths always agree here). Single-element for the common single-column key.
+                    var junctionChildFks = new ColumnData[relation.JunctionChildForeignKeyProperties.Count];
+                    var junctionChildFkColumns = new string[junctionChildFks.Length];
+                    for (var i = 0; i < junctionChildFks.Length; i++)
+                    {
+                        junctionChildFks[i] = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[i])!;
+                        junctionChildFkColumns[i] = junctionChildFks[i].ColumnName;
+                    }
+
+                    var childKeyColumns = new string[childEntity.Keys.Count];
+                    for (var i = 0; i < childKeyColumns.Length; i++)
+                    {
+                        childKeyColumns[i] = childEntity.Keys[i].ColumnName;
+                    }
 
                     // The batch junction read only groups child keys under parent keys, so it needs exactly
                     // the two foreign keys. Narrowing the projection is what lets the grid loader read those
@@ -1765,7 +1774,7 @@ internal static class StoreProcessor
                     // off the junction context; the other two take it for its table name and active-row
                     // predicate, which the narrowed context reproduces exactly.
                     var junctionSelectCtx = sqlBuilder.SupportsMultiResultBatch
-                        ? JunctionKeyProjectionContext(sqlBuilder, junctionEntity, junctionParentFk, junctionChildFk)
+                        ? JunctionKeyProjectionContext(sqlBuilder, junctionEntity, junctionParentFk, junctionChildFks)
                         : junctionCtx;
 
                     AppendConstSql(source, "_sql_" + relation.PropertyName, sqlBuilder.BuildManyToManySelectByParentSql(
@@ -2191,14 +2200,15 @@ internal static class StoreProcessor
 
                 if (relation.IsManyToMany)
                 {
-                    // M:N emit needs a resolvable junction carrying both named FK columns and a single-key
-                    // child; otherwise drop the eager method (INQ063 already reported at declaration time).
+                    // M:N emit needs a resolvable junction naming one foreign-key column per child key
+                    // column — one for a single-column key, one per column for a composite key —
+                    // otherwise drop the eager method (INQ063 already reported at declaration time).
                     var junctionOk = relation.IsCollection &&
                         relationJunctionEntities.TryGetValue(relation.PropertyName, out var junction) &&
                         FindColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&
-                        relation.JunctionChildForeignKeyProperties.Count == 1 &&
-                        FindColumn(junction, relation.JunctionChildForeignKeyProperties[0]) is not null;
-                    if (!junctionOk || childEntity.Keys.Count != 1)
+                        JunctionForeignKeysPairWithChildKeys(
+                            junction, childEntity, relation.JunctionChildForeignKeyProperties, FindColumn);
+                    if (!junctionOk)
                     {
                         return false;
                     }
@@ -2741,6 +2751,68 @@ internal static class StoreProcessor
         return result;
     }
 
+    /// <summary>
+    /// True when the junction's named child foreign keys pair one-for-one with the related entity's key
+    /// columns: same count, each name resolving to a mapped junction column, names distinct, and each
+    /// foreign key carrying the same model type as the key column it sits opposite.
+    /// </summary>
+    /// <remarks>
+    /// The pairing is positional — foreign key <c>i</c> references key column <c>i</c> — and both the SQL
+    /// correlation and the in-memory tuple lookup follow it, so a mis-paired list is not a compile error
+    /// but a silently wrong join. Matching types is what catches a transposed list; two components of the
+    /// same type stay indistinguishable, which is why the attribute documents that order matters.
+    /// Type equality also keeps the generated dictionary key and its lookup assignment-compatible, so a
+    /// mismatch surfaces here rather than as an unattributable error inside generated code.
+    /// </remarks>
+    internal static bool JunctionForeignKeysPairWithChildKeys(
+        EntityData junction,
+        EntityData child,
+        EquatableArray<string> foreignKeyNames,
+        Func<EntityData, string, ColumnData?> findColumn)
+    {
+        if (foreignKeyNames.Count == 0 || foreignKeyNames.Count != child.Keys.Count)
+        {
+            return false;
+        }
+
+        // Distinctness and type pairing apply only to a composite key. At arity 1 there is nothing to
+        // transpose, so neither rule can catch anything — and the type rule would REJECT a mapping that
+        // has always worked, a junction foreign key narrower than the key it references (int against a
+        // long key: the SQL comparison is fine everywhere and TryGetValue binds by implicit widening).
+        var pairwise = foreignKeyNames.Count > 1;
+
+        for (var i = 0; i < foreignKeyNames.Count; i++)
+        {
+            if (pairwise)
+            {
+                for (var j = i + 1; j < foreignKeyNames.Count; j++)
+                {
+                    if (string.Equals(foreignKeyNames[i], foreignKeyNames[j], StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            var foreignKey = findColumn(junction, foreignKeyNames[i]);
+            if (foreignKey is null)
+            {
+                return false;
+            }
+
+            if (pairwise &&
+                !string.Equals(
+                    foreignKey.Type.NonNullableDisplayName,
+                    child.Keys[i].Type.NonNullableDisplayName,
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static ColumnData? FindColumn(EntityData entity, string nameOrColumn)
     {
         foreach (var column in entity.Columns.AsImmutableArray())
@@ -2756,15 +2828,20 @@ internal static class StoreProcessor
     }
 
     /// <summary>
-    /// Builds a junction context whose select list is just the parent and child foreign keys, in that
-    /// order — the two ordinals the grid eager loader reads. Shaped like a projection context: a subset
-    /// column list drops the soft-delete and global-filter columns, so those are handed over separately
-    /// to keep the active-row predicate byte-identical to the full-column context's.
+    /// Builds a junction context whose select list is just the parent foreign key followed by the child
+    /// foreign keys, in that order — the ordinals the grid eager loader reads (parent at 0, child key
+    /// components from 1). Shaped like a projection context: a subset column list drops the soft-delete
+    /// and global-filter columns, so those are handed over separately to keep the active-row predicate
+    /// byte-identical to the full-column context's.
     /// </summary>
     private static SqlBuildContext JunctionKeyProjectionContext(
-        SqlBuilder sqlBuilder, EntityData junction, ColumnData parentForeignKey, ColumnData childForeignKey)
+        SqlBuilder sqlBuilder, EntityData junction, ColumnData parentForeignKey, IReadOnlyList<ColumnData> childForeignKeys)
     {
-        var projection = new List<IColumn> { parentForeignKey, childForeignKey };
+        var projection = new List<IColumn>(childForeignKeys.Count + 1) { parentForeignKey };
+        foreach (var childForeignKey in childForeignKeys)
+        {
+            projection.Add(childForeignKey);
+        }
 
         // SqlBuildContext concatenates the detected and supplied global-filter columns rather than
         // unioning them, so a foreign key that is itself a global filter must not be passed twice —
@@ -2784,8 +2861,17 @@ internal static class StoreProcessor
             globalFilterPredicateColumns: supplied);
 
         bool IsProjected(ColumnData column)
-            => string.Equals(column.PropertyName, parentForeignKey.PropertyName, StringComparison.Ordinal)
-                || string.Equals(column.PropertyName, childForeignKey.PropertyName, StringComparison.Ordinal);
+        {
+            foreach (var projected in projection)
+            {
+                if (string.Equals(column.PropertyName, projected.PropertyName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     private static List<IColumn> ToColumnList(EquatableArray<ColumnData> columns)

@@ -415,17 +415,10 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 if (relation.IsManyToMany)
                 {
                     // A many-to-many association must be a collection nav whose junction and related
-                    // entities are both mapped, the junction must carry the two named FK properties, and
-                    // the related entity must have a single-column key (we JOIN/index on it).
-                    var validJunction = relation.JunctionEntityFullyQualifiedName is { } junctionFqn &&
-                        mappedEntities.TryGetValue(junctionFqn, out var junction) &&
-                        FindEntityColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&
-                        relation.JunctionChildForeignKeyProperties.Count == 1 &&
-                        FindEntityColumn(junction, relation.JunctionChildForeignKeyProperties[0]) is not null;
-                    var validChild = mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var mnChild) &&
-                        mnChild.Keys.Count == 1;
-
-                    if (!relation.IsCollection || !validJunction || !validChild)
+                    // entities are both mapped, and the junction must name one foreign-key property per
+                    // key column of the related entity — one for a single-column key, or one per column
+                    // for a composite key, paired by position.
+                    if (!relation.IsCollection || !IsManyToManyValid(mappedEntities, relation))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             InquiryDiagnosticDescriptors.ManyToManyInvalid, relation.Location?.ToLocation(),
@@ -484,6 +477,25 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// True when a many-to-many relation's junction and related entities are both mapped, the junction
+    /// carries the named parent foreign key, and its named child foreign keys pair one-for-one with the
+    /// related entity's key columns — one for a single-column key, one per column for a composite key.
+    /// </summary>
+    private static bool IsManyToManyValid(Dictionary<string, EntityData> mappedEntities, RelationData relation)
+    {
+        if (relation.JunctionEntityFullyQualifiedName is not { } junctionFqn ||
+            !mappedEntities.TryGetValue(junctionFqn, out var junction) ||
+            FindEntityColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is null ||
+            !mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var child))
+        {
+            return false;
+        }
+
+        return StoreProcessor.JunctionForeignKeysPairWithChildKeys(
+            junction, child, relation.JunctionChildForeignKeyProperties, FindEntityColumn);
     }
 
     private DialectOwnership ResolveOwnership(Compilation compilation, CancellationToken cancellationToken)

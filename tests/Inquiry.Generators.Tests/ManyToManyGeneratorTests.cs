@@ -73,6 +73,383 @@ public sealed partial class InquiryGeneratorTests
         return tree.GetText().ToString();
     }
 
+    /// <summary>
+    /// A composite-key related entity: <c>Tag</c> is keyed <c>(TenantId, Slug)</c> — client-supplied,
+    /// since INQ011 forbids generated columns in a composite key — and the junction names one foreign-key
+    /// property per key column, paired by position.
+    /// </summary>
+    private const string CompositeChildSource = """
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("Posts")]
+        public sealed class Post
+        {
+            [InquiryKey] public long Id { get; set; }
+            [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+
+            [InquiryManyToMany(typeof(PostTag), nameof(PostTag.PostId), nameof(PostTag.TenantId), nameof(PostTag.Slug))]
+            public List<Tag> Tags { get; set; } = new();
+        }
+
+        [InquiryTable("Tags")]
+        public sealed class Tag
+        {
+            [InquiryKey] public int TenantId { get; set; }
+            [InquiryKey(Length = 64)] public string Slug { get; set; } = string.Empty;
+            [InquiryColumn] public string Label { get; set; } = string.Empty;
+            [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+        }
+
+        [InquiryTable("PostTag")]
+        public sealed class PostTag
+        {
+            [InquiryKey] public long PostId { get; set; }
+            [InquiryKey] public int TenantId { get; set; }
+            [InquiryKey(Length = 64)] public string Slug { get; set; } = string.Empty;
+            [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+        }
+
+        public partial class PostStore : Inquiry.Stores.InquiryStore<Demo.Post>
+        {
+            [InquirySelectOneByKeyEager]
+            public partial Task<Post?> GetWithTagsAsync(long id, CancellationToken cancellationToken = default);
+
+            [InquirySelectAllEager]
+            public partial IAsyncEnumerable<Post> AllWithTagsAsync(CancellationToken cancellationToken = default);
+        }
+        """;
+
+    private static string GetPostStore(GeneratorTestResult result)
+        => Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("PostStore.InquiryStore.g.cs", StringComparison.Ordinal))
+            .GetText().ToString();
+
+    /// <summary>Returns the single line declaring <paramref name="constName"/>, for per-const assertions.</summary>
+    private static string ConstLine(string text, string constName)
+        => Assert.Single(
+            text.Split('\n'),
+            line => line.Contains(" " + constName + " = ", StringComparison.Ordinal));
+
+    [Theory]
+    [InlineData("Sqlite", "\"", "\"", "\"__j\"", "\"__c\"")]
+    [InlineData("SqlServer", "[", "]", "[__j]", "[__c]")]
+    [InlineData("PostgreSql", "\"", "\"", "\"__j\"", "\"__c\"")]
+    [InlineData("MySql", "`", "`", "`__j`", "`__c`")]
+    [InlineData("MariaDb", "`", "`", "`__j`", "`__c`")]
+    [InlineData("Oracle", "", "", "\"__j\"", "\"__c\"")]
+    public void CompositeKeyChildManyToManyCorrelatesByAliasNotSchemaQualifiedTable(
+        string dialect, string quoteOpen, string quoteClose, string junctionAlias, string childAlias)
+    {
+        // The composite branches introduce aliases precisely so a correlation never has to name the
+        // table. With a schema in play, qualifying a column as "app"."Tags"."TenantId" is what
+        // ManyToManyBatchChildSqlSupportsSchemasWithoutQualifiedColumnReferences forbids. Scoped to the
+        // two batch consts: the single-parent JOIN qualifies its select list with the child table by
+        // design, and that predates composite support.
+        var source = CompositeChildSource
+            .Replace("[InquiryTable(\"Posts\")]", "[InquiryTable(\"Posts\", Schema = \"app\")]")
+            .Replace("[InquiryTable(\"Tags\")]", "[InquiryTable(\"Tags\", Schema = \"app\")]")
+            .Replace("[InquiryTable(\"PostTag\")]", "[InquiryTable(\"PostTag\", Schema = \"app\")]");
+
+        var result = RunGenerator(source, dialect: dialect);
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetPostStore(result);
+        string Q(string name) => quoteOpen + name + quoteClose;
+
+        foreach (var constName in new[] { "_sql_Tags_All", "_sql_Tags_Junction" })
+        {
+            var line = ConstLine(text, constName);
+            Assert.Contains(
+                EscapeGeneratedString(junctionAlias + "." + Q("TenantId") + " = " + childAlias + "." + Q("TenantId")),
+                line);
+            Assert.DoesNotContain(EscapeGeneratedString(Q("app") + "." + Q("Tags") + "." + Q("TenantId")), line);
+            Assert.DoesNotContain(EscapeGeneratedString(Q("app") + "." + Q("PostTag") + "." + Q("TenantId")), line);
+        }
+    }
+
+    [Fact]
+    public void CompositeKeyChildManyToManyIsAcceptedAndCompiles_Sqlite()
+    {
+        var result = RunGenerator(CompositeChildSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Fact]
+    public void CompositeKeyChildManyToManyJoinsOnEveryKeyColumn_Sqlite()
+    {
+        var text = GetPostStore(RunGenerator(CompositeChildSource));
+
+        // The single-parent JOIN pairs each junction foreign key with its child key column.
+        Assert.Contains(
+            "ON \\\"__j\\\".\\\"TenantId\\\" = \\\"Tags\\\".\\\"TenantId\\\" AND \\\"__j\\\".\\\"Slug\\\" = \\\"Tags\\\".\\\"Slug\\\"",
+            text);
+    }
+
+    [Fact]
+    public void CompositeKeyChildManyToManyCorrelatesWithExistsNotRowValueIn_Sqlite()
+    {
+        var text = GetPostStore(RunGenerator(CompositeChildSource));
+
+        // A row-value IN — (a, b) IN (SELECT x, y …) — is not portable: SQL Server has no row-value
+        // constructors at any version. Both batch selects correlate with EXISTS instead, which every
+        // dialect plans as the same semi-join.
+        Assert.Contains("_sql_Tags_All = \"SELECT", text);
+        Assert.Contains("EXISTS (SELECT 1 FROM", text);
+
+        // The outer child is aliased so the correlation qualifier is a bare alias, never a table name.
+        Assert.Contains("FROM \\\"Tags\\\" \\\"__c\\\" WHERE", text);
+        Assert.Contains("\\\"__j\\\".\\\"TenantId\\\" = \\\"__c\\\".\\\"TenantId\\\" AND \\\"__j\\\".\\\"Slug\\\" = \\\"__c\\\".\\\"Slug\\\"", text);
+
+        // The junction batch select aliases its own outer table too: inside its EXISTS the child is in
+        // scope, so an unqualified junction foreign key would bind to the child's same-named column.
+        Assert.Contains("_sql_Tags_Junction = \"SELECT \\\"PostId\\\", \\\"TenantId\\\", \\\"Slug\\\" FROM \\\"PostTag\\\" \\\"__j\\\" WHERE", text);
+    }
+
+    [Theory]
+    [InlineData("Sqlite")]
+    [InlineData("SqlServer")]
+    [InlineData("PostgreSql")]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    [InlineData("Oracle")]
+    public void CompositeKeyChildManyToManyEmitsNoRowValueInOnAnyDialect(string dialect)
+    {
+        var result = RunGenerator(CompositeChildSource, dialect: dialect);
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetPostStore(result);
+
+        Assert.Contains("EXISTS (SELECT 1 FROM", text);
+        Assert.DoesNotContain(") IN (SELECT", text);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Theory]
+    // Transposed: the junction names the child's key columns in the wrong order. Their types differ, so
+    // the mismatch is catchable — a same-typed transposition is not, which is why order is documented.
+    [InlineData("nameof(PostTag.Slug), nameof(PostTag.TenantId)")]
+    // Duplicated: one child key column named twice, leaving the other uncorrelated.
+    [InlineData("nameof(PostTag.TenantId), nameof(PostTag.TenantId)")]
+    // Right arity, but a property that is not a key column of the child at that position.
+    [InlineData("nameof(PostTag.TenantId), nameof(PostTag.PostId)")]
+    public void CompositeKeyChildManyToManyRejectsMispairedForeignKeys(string foreignKeys)
+    {
+        // A mis-paired list is not a compile error — both the SQL correlation and the tuple lookup follow
+        // the same wrong pairing — so it would silently join a child row to the wrong parent. With a
+        // global-filter column among the key components that is a cross-tenant read, so it has to be
+        // rejected at generation time rather than discovered in production.
+        var source = CompositeChildSource.Replace(
+            "nameof(PostTag.TenantId), nameof(PostTag.Slug)",
+            foreignKeys);
+
+        var result = RunGenerator(source);
+
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.DoesNotContain(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.GetText().ToString().Contains("EXISTS (SELECT 1 FROM", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CompositeKeyChildManyToManyRejectsDuplicateForeignKeyWhenTypesCannotDistinguishIt()
+    {
+        // When both child key columns share a type, naming one of them twice passes the type-pairing
+        // check — nothing about the types is wrong. Only the distinctness rule catches it, and without
+        // that the second key column would go uncorrelated: every child sharing the first component
+        // would match, which for a tenant discriminator is a cross-tenant read.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Posts")]
+            public sealed class Post
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(typeof(PostTag), nameof(PostTag.PostId), nameof(PostTag.TenantId), nameof(PostTag.TenantId))]
+                public List<Tag> Tags { get; set; } = new();
+            }
+
+            [InquiryTable("Tags")]
+            public sealed class Tag
+            {
+                [InquiryKey] public int TenantId { get; set; }
+                [InquiryKey] public int CategoryId { get; set; }
+            }
+
+            [InquiryTable("PostTag")]
+            public sealed class PostTag
+            {
+                [InquiryKey] public long PostId { get; set; }
+                [InquiryKey] public int TenantId { get; set; }
+                [InquiryKey] public int CategoryId { get; set; }
+            }
+
+            public partial class PostStore : Inquiry.Stores.InquiryStore<Demo.Post>
+            {
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Post> AllWithTagsAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.DoesNotContain(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.GetText().ToString().Contains("EXISTS (SELECT 1 FROM", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CompositeKeyChildManyToManyGuardsEveryNullableJunctionComponent()
+    {
+        // A nullable junction foreign key against a non-nullable child key column: the pairing rule
+        // compares non-nullable types, so this is accepted. Each nullable component then needs its own
+        // null skip emitted BEFORE the tuple is built — a tuple component cannot be nullable, and
+        // dereferencing an unguarded null would throw once per row.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Posts")]
+            public sealed class Post
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(typeof(PostTag), nameof(PostTag.PostId), nameof(PostTag.TenantId), nameof(PostTag.Slug))]
+                public List<Tag> Tags { get; set; } = new();
+            }
+
+            [InquiryTable("Tags")]
+            public sealed class Tag
+            {
+                [InquiryKey] public int TenantId { get; set; }
+                [InquiryKey(Length = 64)] public string Slug { get; set; } = string.Empty;
+            }
+
+            [InquiryTable("PostTag")]
+            public sealed class PostTag
+            {
+                [InquiryKey] public long Id { get; set; }
+                [InquiryColumn] public long PostId { get; set; }
+                [InquiryColumn] public int? TenantId { get; set; }
+                [InquiryColumn(Length = 64)] public string? Slug { get; set; }
+            }
+
+            public partial class PostStore : Inquiry.Stores.InquiryStore<Demo.Post>
+            {
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Post> AllWithTagsAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        var text = GetPostStore(result);
+
+        // Each component is read into a local of its OWN (nullable) type, guarded, then unwrapped.
+        Assert.Contains("int? _jChildKey0 = ", text);
+        Assert.Contains("string? _jChildKey1 = ", text);
+        Assert.Contains("if (_jChildKey0 is null) return;", text);
+        Assert.Contains("if (_jChildKey1 is null) return;", text);
+        Assert.Contains("TryGetValue((_jChildKey0.Value, _jChildKey1!), out var _child)", text);
+
+        // The whole point: nullable components must not leak a warning or error into generated code.
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+        Assert.DoesNotContain(
+            result.Compilation.GetDiagnostics(),
+            static d => d.Severity == DiagnosticSeverity.Warning && d.Id is "CS8600" or "CS8601" or "CS8602");
+    }
+
+    [Fact]
+    public void SingleKeyManyToManyStillAcceptsAWideningForeignKeyType()
+    {
+        // A junction foreign key narrower than the child key it references has always worked: the SQL
+        // comparison is fine on all six dialects and Dictionary<long, T>.TryGetValue(int) binds by
+        // implicit widening. Composite support added a type-pairing rule to catch transposed key lists,
+        // and that rule must not reach back and reject this — there is nothing to transpose at arity 1.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Orders")]
+            public sealed class Order
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(typeof(OrderProduct), nameof(OrderProduct.OrderId), nameof(OrderProduct.ProductId))]
+                public List<Product> Products { get; set; } = new();
+            }
+
+            [InquiryTable("Products")]
+            public sealed class Product { [InquiryKey] public long Id { get; set; } }
+
+            [InquiryTable("OrderProduct")]
+            public sealed class OrderProduct
+            {
+                [InquiryKey] public long OrderId { get; set; }
+                [InquiryKey] public int ProductId { get; set; }
+            }
+
+            public partial class OrderStore : Inquiry.Stores.InquiryStore<Demo.Order>
+            {
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Order> AllWithProductsAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Fact]
+    public void CompositeKeyChildManyToManyIndexesChildrenByValueTuple_Sqlite()
+    {
+        var text = GetPostStore(RunGenerator(CompositeChildSource));
+
+        // A value tuple brings structural equality and hashing with it, so no IEqualityComparer is
+        // needed. The junction read builds the same shape to look the child up.
+        Assert.Contains("_childByKey_Tags = new global::System.Collections.Generic.Dictionary<(int, string), global::Demo.Tag>", text);
+        Assert.Contains("_childByKey_Tags[(_c.TenantId, _c.Slug)] = _c;", text);
+        Assert.Contains("_childByKey_Tags.TryGetValue((_jChildKey0, _jChildKey1), out var _child)", text);
+
+        // Both junction key components are read off the reader in ascending ordinal order, after the
+        // parent foreign key at ordinal 0 — the grid reads with SequentialAccess.
+        Assert.Contains("long _jParentKey = reader.GetInt64(0);", text);
+        Assert.Contains("int _jChildKey0 = reader.GetInt32(1);", text);
+        Assert.Contains("string _jChildKey1 = reader.GetString(2);", text);
+    }
+
     [Fact]
     public void ManyToManyEmitsJoinAndBatchConsts_Sqlite()
     {
