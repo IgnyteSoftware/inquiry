@@ -287,3 +287,146 @@ public partial class M2MOrderProductStore : InquiryStore<M2MOrderProduct>
     [InquiryInsert]
     public partial Task<int> LinkAsync(M2MOrderProduct link, CancellationToken cancellationToken = default);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Composite-key related entity (#80 Phase A). M2MTag is keyed (TenantId, Slug) — client-supplied,
+// since INQ011 forbids generated columns in a composite key — and the junction names one foreign-key
+// property per key column, in the tag's key-declaration order. The pair (TenantId, Slug) is chosen so
+// each component occurs under more than one value of the other: a join that matched on only one
+// component would return rows the association does not link.
+// ---------------------------------------------------------------------------------------------
+
+[InquiryTable("M2MPost")]
+public sealed class M2MPost
+{
+    [InquiryKey(IsGenerated = true)]
+    public long Id { get; set; }
+
+    [InquiryColumn("Title")]
+    public string Title { get; set; } = string.Empty;
+
+    [InquiryColumn("IsDeleted"), InquirySoftDelete]
+    public bool IsDeleted { get; set; }
+
+    [InquiryManyToMany(typeof(M2MPostTag), nameof(M2MPostTag.PostId), nameof(M2MPostTag.TenantId), nameof(M2MPostTag.Slug))]
+    public List<M2MTag> Tags { get; set; } = new();
+}
+
+[InquiryTable("M2MTag")]
+public sealed class M2MTag
+{
+    [InquiryKey]
+    public int TenantId { get; set; }
+
+    [InquiryKey(Length = 64)]
+    public string Slug { get; set; } = string.Empty;
+
+    [InquiryColumn("Label")]
+    public string Label { get; set; } = string.Empty;
+
+    [InquiryColumn("IsDeleted"), InquirySoftDelete]
+    public bool IsDeleted { get; set; }
+}
+
+[InquiryTable("M2MPostTag")]
+public sealed class M2MPostTag
+{
+    [InquiryKey]
+    public long PostId { get; set; }
+
+    [InquiryKey]
+    public int TenantId { get; set; }
+
+    [InquiryKey(Length = 64)]
+    public string Slug { get; set; } = string.Empty;
+
+    [InquiryColumn("IsDeleted"), InquirySoftDelete]
+    public bool IsDeleted { get; set; }
+}
+
+public partial class M2MPostStore : InquiryStore<M2MPost>
+{
+    [InquiryInsert(ReturnEntity = true)]
+    public partial Task<M2MPost?> InsertAsync(M2MPost post, CancellationToken cancellationToken = default);
+
+    [InquirySelectOneByKeyEager]
+    public partial Task<M2MPost?> GetWithTagsAsync(long id, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllEager]
+    public partial IAsyncEnumerable<M2MPost> AllWithTagsAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAllEager(IncludeDeleted = true)]
+    public partial IAsyncEnumerable<M2MPost> AllIncludingDeletedWithTagsAsync(CancellationToken cancellationToken = default);
+}
+
+public partial class M2MTagStore : InquiryStore<M2MTag>
+{
+    [InquiryInsert]
+    public partial Task<int> InsertAsync(M2MTag tag, CancellationToken cancellationToken = default);
+}
+
+public partial class M2MPostTagStore : InquiryStore<M2MPostTag>
+{
+    [InquiryInsert]
+    public partial Task<int> LinkAsync(M2MPostTag link, CancellationToken cancellationToken = default);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Auto-managed junction (#80 Phase B). Neither side names a junction: Inquiry synthesizes
+// M2MAuthor_M2MBook with columns M2MAuthor_Id / M2MBook_Id, derived from the two table names sorted
+// ordinally. Declared from BOTH sides so the canonical naming is exercised end to end — a
+// parent-first derivation would produce two tables here.
+//
+// Keys are client-supplied so the fixture can seed authors, books, AND links from DDL: an
+// auto-managed junction is read-only, so there is no store that could insert a link row.
+// ---------------------------------------------------------------------------------------------
+
+[InquiryTable("M2MAuthor")]
+public sealed class M2MAuthor
+{
+    [InquiryKey]
+    public long Id { get; set; }
+
+    [InquiryColumn("Name")]
+    public string Name { get; set; } = string.Empty;
+
+    [InquiryColumn("IsDeleted"), InquirySoftDelete]
+    public bool IsDeleted { get; set; }
+
+    [InquiryManyToMany]
+    public List<M2MBook> Books { get; set; } = new();
+}
+
+[InquiryTable("M2MBook")]
+public sealed class M2MBook
+{
+    [InquiryKey]
+    public long Id { get; set; }
+
+    [InquiryColumn("Title")]
+    public string Title { get; set; } = string.Empty;
+
+    [InquiryColumn("IsDeleted"), InquirySoftDelete]
+    public bool IsDeleted { get; set; }
+
+    [InquiryManyToMany]
+    public List<M2MAuthor> Authors { get; set; } = new();
+}
+
+public partial class M2MAuthorStore : InquiryStore<M2MAuthor>
+{
+    [InquirySelectOneByKeyEager]
+    public partial Task<M2MAuthor?> GetWithBooksAsync(long id, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllEager]
+    public partial IAsyncEnumerable<M2MAuthor> AllWithBooksAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAllEager(IncludeDeleted = true)]
+    public partial IAsyncEnumerable<M2MAuthor> AllIncludingDeletedWithBooksAsync(CancellationToken cancellationToken = default);
+}
+
+public partial class M2MBookStore : InquiryStore<M2MBook>
+{
+    [InquirySelectAllEager]
+    public partial IAsyncEnumerable<M2MBook> AllWithAuthorsAsync(CancellationToken cancellationToken = default);
+}

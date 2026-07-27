@@ -191,11 +191,12 @@ acceptance criteria supersede any older wording that describes an initial implem
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
   largest onboarding lever for existing databases.
-- **Many-to-many relations — auto-managed junction** *(gap research 2026-06-12)*. Eager-loading M:N
-  through an explicitly-mapped junction shipped — see [Recently resolved](#recently-resolved). Remaining:
-  an *auto-managed* / implicit junction table (no hand-written junction entity) and composite-key related
-  entities. Child, junction, and parent soft-delete/global filters are already applied to all-parent eager
-  M:N result sets.
+- **Many-to-many relations — writing through an auto-managed junction** *(gap research 2026-06-12,
+  narrowed 2026-07-27)*. Eager-loading M:N shipped for all three shapes — an explicitly-mapped junction,
+  a composite-key related entity, and an auto-managed junction Inquiry synthesizes — see
+  [Recently resolved](#recently-resolved). Remaining: an auto-managed junction is **read-only**, because
+  inserting or deleting a link row needs store methods the junction has no CLR type for. Writing links
+  means mapping the junction explicitly, or raw SQL against the generated table.
 - **CTEs and set operations** *(gap research 2026-06-12)*. `WITH` / `UNION` / `INTERSECT` / `EXCEPT`
   composition in the predicate/select model (Kysely-style); ad-hoc SQL covers this today.
 - **Parameterized & named query filters + Postgres RLS helpers** *(gap research 2026-06-12)*. The

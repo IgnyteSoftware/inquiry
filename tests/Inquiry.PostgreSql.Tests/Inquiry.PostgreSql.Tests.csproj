@@ -27,6 +27,7 @@
     <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" />
     <Compile Include="..\Shared\BatchExecutionProbe.cs" Link="Shared\BatchExecutionProbe.cs" />
     <Compile Include="..\Shared\EagerGridCommandAssertions.cs" Link="Shared\EagerGridCommandAssertions.cs" />
+    <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" Link="Shared\ManyToManyExtensionAssertions.cs" />
   </ItemGroup>
 
   <ItemGroup>
