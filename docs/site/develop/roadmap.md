@@ -669,7 +669,10 @@ new or reframed issue.
   N+1 and no runtime key expansion. The JOIN and filtered batch shapes are ANSI-uniform across all six
   dialects (space alias for Oracle, table-qualified child columns).
   A composite-key related entity is supported: the junction names one foreign-key property per key column
-  and the batch selects correlate with `EXISTS` (row-value `IN` is not portable to SQL Server).
+  and the batch selects correlate with `EXISTS` (row-value `IN` is not portable to SQL Server). The
+  parameterless `[InquiryManyToMany]` synthesizes the junction table instead — DDL and eager loading, with
+  names derived order-independently so both sides of a bidirectional association describe one table;
+  writing links still needs an explicitly mapped junction (**`INQ090`**).
   Misconfiguration reports the specific reason — non-collection nav **`INQ063`**, unmapped junction/child
   **`INQ087`**, missing junction FK property **`INQ088`**, child keys that do not pair **`INQ089`**.
   Generator assertions and live coverage span SQLite, SQL Server, PostgreSQL,

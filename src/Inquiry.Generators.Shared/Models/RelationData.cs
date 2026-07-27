@@ -35,4 +35,24 @@ internal sealed record RelationData(
     /// Empty when the attribute was malformed; arity other than 1 is rejected by validation today.
     /// </summary>
     public EquatableArray<string> JunctionChildForeignKeyProperties { get; init; }
+
+    /// <summary>
+    /// True for an auto-managed many-to-many — <c>[InquiryManyToMany]</c> with no arguments — whose
+    /// junction table Inquiry synthesizes rather than the user mapping it. Set at discovery; by the time
+    /// emission runs, synthesis has rewritten the relation to name the synthesized junction and its two
+    /// columns, so every downstream stage sees the same shape an explicit junction produces.
+    /// </summary>
+    public bool IsAutoJunction { get; init; }
+
+    /// <summary>Auto-managed only: the user's table-name override, or null to derive it.</summary>
+    public string? AutoJunctionTable { get; init; }
+
+    /// <summary>Auto-managed only: the user's schema override, or null to take the mapped tables' schema.</summary>
+    public string? AutoJunctionSchema { get; init; }
+
+    /// <summary>Auto-managed only: the user's parent column-name override, or null to derive it.</summary>
+    public string? AutoParentColumn { get; init; }
+
+    /// <summary>Auto-managed only: the user's child column-name override, or null to derive it.</summary>
+    public string? AutoChildColumn { get; init; }
 }

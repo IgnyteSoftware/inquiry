@@ -132,6 +132,653 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("PostStore.InquiryStore.g.cs", StringComparison.Ordinal))
             .GetText().ToString();
 
+    /// <summary>
+    /// An auto-managed association: <c>[InquiryManyToMany]</c> with no arguments, so Inquiry synthesizes
+    /// the junction table rather than the user mapping one.
+    /// </summary>
+    private const string AutoJunctionSource = """
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("Orders")]
+        public sealed class Order
+        {
+            [InquiryKey] public long Id { get; set; }
+            [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+
+            [InquiryManyToMany]
+            public List<Product> Products { get; set; } = new();
+        }
+
+        [InquiryTable("Products")]
+        public sealed class Product
+        {
+            [InquiryKey] public long Id { get; set; }
+            [InquiryColumn] public string Title { get; set; } = string.Empty;
+        }
+
+        public partial class OrderStore : Inquiry.Stores.InquiryStore<Demo.Order>
+        {
+            [InquirySelectOneByKeyEager]
+            public partial Task<Order?> GetWithProductsAsync(long id, CancellationToken cancellationToken = default);
+
+            [InquirySelectAllEager]
+            public partial IAsyncEnumerable<Order> AllWithProductsAsync(CancellationToken cancellationToken = default);
+        }
+        """;
+
+    private static string GetSchema(GeneratorTestResult result)
+        => Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal))
+            .GetText().ToString();
+
+    [Fact]
+    public void AutoJunctionSynthesizesATableWithBothForeignKeysAndACompositeKey_Sqlite()
+    {
+        var result = RunGenerator(AutoJunctionSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        // Names derive from both TABLE names and their key columns, so they stay stable when the CLR
+        // types are renamed and unambiguous when both sides key on "Id".
+        var schema = GetSchema(result);
+        Assert.Contains("CREATE TABLE IF NOT EXISTS \"\"Orders_Products\"\" (", schema);
+        Assert.Contains("\"\"Orders_Id\"\" INTEGER NOT NULL,", schema);
+        Assert.Contains("\"\"Products_Id\"\" INTEGER NOT NULL,", schema);
+        Assert.Contains("PRIMARY KEY (\"\"Orders_Id\"\", \"\"Products_Id\"\")", schema);
+        Assert.Contains("FOREIGN KEY (\"\"Orders_Id\"\") REFERENCES \"\"Orders\"\"(\"\"Id\"\")", schema);
+        Assert.Contains("FOREIGN KEY (\"\"Products_Id\"\") REFERENCES \"\"Products\"\"(\"\"Id\"\")", schema);
+    }
+
+    [Fact]
+    public void AutoJunctionHasNoMaterializerAndIsNotRegistered_Sqlite()
+    {
+        var result = RunGenerator(AutoJunctionSource);
+
+        // A synthesized junction has no CLR type. It must reach DDL and relation resolution without
+        // reaching the materializer loop or DI registration, both of which name a real type.
+        Assert.DoesNotContain(
+            result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.Contains("Orders_Products", StringComparison.Ordinal));
+
+        var registration = Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("InquiryGeneratedServiceRegistration.g.cs", StringComparison.Ordinal))
+            .GetText().ToString();
+        Assert.DoesNotContain("Orders_Products", registration);
+    }
+
+    [Fact]
+    public void AutoJunctionEagerLoadJoinsThroughTheSynthesizedTable_Sqlite()
+    {
+        var text = GetOrderStore(RunGenerator(AutoJunctionSource));
+
+        Assert.Contains(
+            "INNER JOIN \\\"Orders_Products\\\" \\\"__j\\\" ON \\\"__j\\\".\\\"Products_Id\\\" = \\\"Products\\\".\\\"Id\\\"",
+            text);
+
+        // The batch junction read is the same projected two-column shape an explicit junction produces —
+        // which is what lets the loader read it without any junction type existing.
+        Assert.Contains(
+            "_sql_Products_Junction = \"SELECT \\\"Orders_Id\\\", \\\"Products_Id\\\" FROM \\\"Orders_Products\\\"",
+            text);
+        Assert.Contains("await _grid.ReadRowsAsync(reader =>", text);
+    }
+
+    [Fact]
+    public void AutoJunctionDeclaredFromBothSidesSynthesizesOneTable_Sqlite()
+    {
+        // The point of deriving every name from an order-independent pair. If the two sides disagreed on
+        // the table name they would produce two tables; if they agreed on the name but ordered the
+        // primary key differently, SchemaEmitter hashes key columns IN ORDER and would report INQ070.
+        var source = AutoJunctionSource.Replace(
+            """
+                [InquiryColumn] public string Title { get; set; } = string.Empty;
+            """,
+            """
+                [InquiryColumn] public string Title { get; set; } = string.Empty;
+
+                [InquiryManyToMany]
+                public List<Order> Orders { get; set; } = new();
+            """);
+
+        var result = RunGenerator(source);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id is "INQ070" or "INQ090");
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var schema = GetSchema(result);
+        Assert.Equal(
+            1,
+            schema.Split(new[] { "CREATE TABLE IF NOT EXISTS \"\"Orders_Products\"\"" }, StringSplitOptions.None).Length - 1);
+
+        // Counting only the canonical name would still pass if order-independence regressed and the
+        // reverse side produced a SECOND table under its own derived name — no INQ070 either, since the
+        // names differ. Assert the total: exactly the two mapped tables plus one junction.
+        Assert.DoesNotContain("Products_Orders", schema);
+        Assert.Equal(3, schema.Split(new[] { "CREATE TABLE IF NOT EXISTS" }, StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void AutoJunctionDeclaredOnlyFromTheOtherSideDerivesTheSameNames_Sqlite()
+    {
+        // Declaring from Product alone must land on the same table as declaring from Order alone —
+        // otherwise adding the reverse navigation later would silently rename the table.
+        var source = AutoJunctionSource
+            .Replace(
+                """
+                    [InquiryManyToMany]
+                    public List<Product> Products { get; set; } = new();
+                """,
+                string.Empty)
+            .Replace(
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+                """,
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+
+                    [InquiryManyToMany]
+                    public List<Order> Orders { get; set; } = new();
+                """)
+            .Replace("[InquirySelectOneByKeyEager]\n        public partial Task<Order?> GetWithProductsAsync(long id, CancellationToken cancellationToken = default);\n\n        [InquirySelectAllEager]\n        public partial IAsyncEnumerable<Order> AllWithProductsAsync(CancellationToken cancellationToken = default);", string.Empty);
+
+        var result = RunGenerator(source);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        var schema = GetSchema(result);
+        Assert.Contains("CREATE TABLE IF NOT EXISTS \"\"Orders_Products\"\" (", schema);
+        Assert.Contains("PRIMARY KEY (\"\"Orders_Id\"\", \"\"Products_Id\"\")", schema);
+    }
+
+    [Fact]
+    public void AutoJunctionHonoursExplicitTableAndColumnOverrides_Sqlite()
+    {
+        var source = AutoJunctionSource.Replace(
+            "[InquiryManyToMany]",
+            """[InquiryManyToMany(JunctionTable = "order_product", ParentColumn = "order_id", ChildColumn = "product_id")]""");
+
+        var result = RunGenerator(source);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        var schema = GetSchema(result);
+        Assert.Contains("CREATE TABLE IF NOT EXISTS \"\"order_product\"\" (", schema);
+        Assert.Contains("PRIMARY KEY (\"\"order_id\"\", \"\"product_id\"\")", schema);
+    }
+
+    [Fact]
+    public void AutoJunctionCollidingWithAMappedEntitysTableReportsINQ090()
+    {
+        // Merging into a mapped entity's table is the case the plan calls out as needing to be an error
+        // rather than an INQ070 silent merge: that entity can carry soft-delete or global-filter columns
+        // the auto read path never applies, so links would surface that its own store hides.
+        var source = AutoJunctionSource.Replace(
+            """
+            public partial class OrderStore
+            """,
+            """
+            [InquiryTable("Orders_Products")]
+            public sealed class Legacy
+            {
+                [InquiryKey] public long Id { get; set; }
+                [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+            }
+
+            public partial class OrderStore
+            """);
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("Orders_Products", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwoUnrelatedAutoJunctionsResolvingToOneTableReportINQ090()
+    {
+        // The severe case: identical overrides copy-pasted onto two unrelated associations. Merging them
+        // gives one link table two meanings, and each side's eager load reads the other's rows — with
+        // both key types long, nothing downstream would object.
+        const string source = """
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Alpha")]
+            public sealed class Alpha
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(JunctionTable = "links", ParentColumn = "left_id", ChildColumn = "right_id")]
+                public List<Beta> Betas { get; set; } = new();
+            }
+
+            [InquiryTable("Beta")]
+            public sealed class Beta { [InquiryKey] public long Id { get; set; } }
+
+            [InquiryTable("Delta")]
+            public sealed class Delta
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(JunctionTable = "links", ParentColumn = "left_id", ChildColumn = "right_id")]
+                public List<Epsilon> Epsilons { get; set; } = new();
+            }
+
+            [InquiryTable("Epsilon")]
+            public sealed class Epsilon { [InquiryKey] public long Id { get; set; } }
+            """;
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("already the junction for a different pair of entities", diagnostic.GetMessage(), StringComparison.Ordinal);
+
+        // Exactly one link table, and the rejected association contributes no eager SQL.
+        var schema = GetSchema(result);
+        Assert.Equal(1, schema.Split(new[] { "CREATE TABLE IF NOT EXISTS \"\"links\"\"" }, StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void AutoJunctionAcceptsBidirectionalColumnOverridesStatedFromEachSide_Sqlite()
+    {
+        // ParentColumn/ChildColumn are relative to the declaring side, so the reverse navigation states
+        // them swapped. Nothing covered the accepted spelling, and the docs previously said "identically"
+        // — which this rejects.
+        var source = AutoJunctionSource
+            .Replace(
+                "[InquiryManyToMany]",
+                """[InquiryManyToMany(JunctionTable = "order_product", ParentColumn = "order_id", ChildColumn = "product_id")]""")
+            .Replace(
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+                """,
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+
+                    [InquiryManyToMany(JunctionTable = "order_product", ParentColumn = "product_id", ChildColumn = "order_id")]
+                    public List<Order> Orders { get; set; } = new();
+                """);
+
+        var result = RunGenerator(source);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id is "INQ070" or "INQ090");
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        var schema = GetSchema(result);
+        Assert.Equal(3, schema.Split(new[] { "CREATE TABLE IF NOT EXISTS" }, StringSplitOptions.None).Length - 1);
+        Assert.Contains("PRIMARY KEY (\"\"order_id\"\", \"\"product_id\"\")", schema);
+    }
+
+    [Fact]
+    public void AutoJunctionWithCaseDifferingTableOnEachSideStillGenerates_Sqlite()
+    {
+        // Identities compare case-insensitively — "links" and "LINKS" are one object on SQL Server,
+        // MySQL, and Oracle — so the two sides can spell the table differently and only ONE entity is
+        // synthesized. The reverse navigation must be rewritten with the OWNER's spelling: naming the
+        // candidate's would reference an entity that does not exist, and the ordinal lookup miss took
+        // down the whole generator (CS8785, zero output) rather than reporting anything.
+        var source = AutoJunctionSource
+            .Replace("[InquiryManyToMany]", """[InquiryManyToMany(JunctionTable = "Order_Product")]""")
+            .Replace(
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+                """,
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+
+                    [InquiryManyToMany(JunctionTable = "order_product")]
+                    public List<Order> Orders { get; set; } = new();
+                """);
+
+        var result = RunGenerator(source);
+
+        // The crash showed up as a generator-level failure with no trees at all.
+        Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.NotEmpty(result.RunResult.GeneratedTrees);
+        Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+
+        // One table, and both navigations resolve to it.
+        var schema = GetSchema(result);
+        Assert.Equal(3, schema.Split(new[] { "CREATE TABLE IF NOT EXISTS" }, StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void AutoJunctionCollidingWithTheProvidersDefaultSchemaReportsINQ090()
+    {
+        // A null schema means "the provider's default", which spells out as dbo on SQL Server and public
+        // on PostgreSQL — the same physical object. Comparing literal schema strings let an unqualified
+        // junction bind to a mapped entity's table, and because SQL Server wraps CREATE TABLE in
+        // IF OBJECT_ID(...) IS NULL the junction's DDL was silently skipped. Its reads then hit that
+        // entity's table while applying none of its soft-delete or filter columns.
+        var source = AutoJunctionSource.Replace(
+            """
+            public partial class OrderStore
+            """,
+            """
+            [InquiryTable("Orders_Products", Schema = "dbo")]
+            public sealed class LegacyLink
+            {
+                [InquiryKey] public long Id { get; set; }
+                [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+            }
+
+            public partial class OrderStore
+            """);
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AThirdAutoNavigationFromTheReverseSideReportsINQ090()
+    {
+        // A pair supports one auto-managed navigation per side. Remembering only the FIRST declarer would
+        // let the other side add any number of extra navigations — each compares against the first and
+        // passes — so both collections would silently share one set of link rows. Whether it errored
+        // would then depend on Roslyn's entity discovery order.
+        var source = AutoJunctionSource.Replace(
+            """
+                [InquiryColumn] public string Title { get; set; } = string.Empty;
+            """,
+            """
+                [InquiryColumn] public string Title { get; set; } = string.Empty;
+
+                [InquiryManyToMany]
+                public List<Order> Orders { get; set; } = new();
+
+                [InquiryManyToMany]
+                public List<Order> FeaturedOrders { get; set; } = new();
+            """);
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("Each side may declare one", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwoAutoJunctionsDifferingOnlyByCaseReportINQ090()
+    {
+        // "links" and "LINKS" are one object on SQL Server, MySQL, and Oracle, and SchemaEmitter's own
+        // INQ070 grouping is ordinal — so an ordinal identity index here would emit both and let them
+        // collapse at the server with no diagnostic from anywhere.
+        const string source = """
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Alpha")]
+            public sealed class Alpha
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(JunctionTable = "links", ParentColumn = "left_id", ChildColumn = "right_id")]
+                public List<Beta> Betas { get; set; } = new();
+            }
+
+            [InquiryTable("Beta")]
+            public sealed class Beta { [InquiryKey] public long Id { get; set; } }
+
+            [InquiryTable("Delta")]
+            public sealed class Delta
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany(JunctionTable = "LINKS", ParentColumn = "left_id", ChildColumn = "right_id")]
+                public List<Epsilon> Epsilons { get; set; } = new();
+            }
+
+            [InquiryTable("Epsilon")]
+            public sealed class Epsilon { [InquiryKey] public long Id { get; set; } }
+            """;
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("already the junction for a different pair of entities", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AutoJunctionOnANonCollectionPropertyStillReportsINQ063()
+    {
+        // The synthesizer stays silent on this one so it is not reported as an auto-managed-specific
+        // failure — which means relation validation has to reach it BEFORE the suppression that hides
+        // rejected auto relations, or it would be reported nowhere at all.
+        var source = AutoJunctionSource.Replace(
+            "public List<Product> Products { get; set; } = new();",
+            "public Product Favourite { get; set; } = new();");
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ063");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ090");
+    }
+
+    [Fact]
+    public void TwoAutoJunctionsBetweenTheSamePairReportINQ090()
+    {
+        // Two navigations between the same entities are two associations that derive one name. Sharing
+        // the table would make both collections always return identical contents.
+        var source = AutoJunctionSource.Replace(
+            """
+                [InquiryManyToMany]
+                public List<Product> Products { get; set; } = new();
+            """,
+            """
+                [InquiryManyToMany]
+                public List<Product> Products { get; set; } = new();
+
+                [InquiryManyToMany]
+                public List<Product> FeaturedProducts { get; set; } = new();
+            """);
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("already declares an auto-managed association", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("Each side may declare one", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AutoJunctionWithAOneSidedTableOverrideReportsINQ090()
+    {
+        // A table-name disagreement changes the derived identity, so it cannot be caught by comparing
+        // shapes that share one. Left undetected it emits TWO link tables for one association, and links
+        // written through either are invisible from the other side.
+        var source = AutoJunctionSource
+            .Replace("[InquiryManyToMany]", """[InquiryManyToMany(JunctionTable = "order_product")]""")
+            .Replace(
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+                """,
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+
+                    [InquiryManyToMany]
+                    public List<Order> Orders { get; set; } = new();
+                """);
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("must state the same JunctionTable and JunctionSchema", diagnostic.GetMessage(), StringComparison.Ordinal);
+
+        var schema = GetSchema(result);
+        Assert.DoesNotContain("CREATE TABLE IF NOT EXISTS \\\"Orders_Products\\\"", schema);
+    }
+
+    [Fact]
+    public void AutoJunctionCollidingWithAViewReportsINQ090()
+    {
+        // A view owns its name in the database exactly as a table does, and is excluded from the schema
+        // set — so a CREATE TABLE against it would fail at deploy time with no compile-time signal.
+        var source = AutoJunctionSource.Replace(
+            """
+            public partial class OrderStore
+            """,
+            """
+            [InquiryView("Orders_Products")]
+            public sealed class LegacyLinkView
+            {
+                [InquiryColumn] public long OrderId { get; set; }
+            }
+
+            public partial class OrderStore
+            """);
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AutoJunctionOverAViewReportsINQ090()
+    {
+        // No provider allows a foreign key referencing a view, and a synthesized junction declares one
+        // to each side.
+        var source = AutoJunctionSource.Replace(
+            """[InquiryTable("Products")]""",
+            """[InquiryView("Products")]""");
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("[InquiryView]", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("foreign key to a view", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("\"\"", "not a usable identifier")]
+    [InlineData("\"ThisTableNameIsDeliberatelyFarTooLongToFitInsideTheSixtyThreeByteIdentifierBudget\"", "not a usable identifier")]
+    public void AutoJunctionWithAnUnusableTableNameReportsINQ090(string tableName, string expected)
+    {
+        // Held to the same rule as an explicitly named constraint. Silent truncation is the hazard: two
+        // junctions sharing a 63-byte prefix would collapse onto one physical table at the server.
+        var source = AutoJunctionSource.Replace(
+            "[InquiryManyToMany]",
+            $"[InquiryManyToMany(JunctionTable = {tableName})]");
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains(expected, diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AutoJunctionAcrossDifferentSchemasReportsINQ090()
+    {
+        // Picking one silently would place the table in whichever schema sorts first, and move it if
+        // either were ever renamed.
+        var source = AutoJunctionSource
+            .Replace("""[InquiryTable("Orders")]""", """[InquiryTable("Orders", Schema = "sales")]""")
+            .Replace("""[InquiryTable("Products")]""", """[InquiryTable("Products", Schema = "catalog")]""");
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("different schemas", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("Set JunctionSchema on both sides", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectedAutoJunctionReportsOnlyINQ090()
+    {
+        // A rejected auto relation still carries no junction name, which would otherwise make relation
+        // validation add INQ087 naming a junction type "(unknown)" the user never wrote.
+        var source = AutoJunctionSource.Replace(
+            """[InquiryTable("Products")]""",
+            """[InquiryView("Products")]""");
+
+        var result = RunGenerator(source);
+
+        Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id is "INQ063" or "INQ087" or "INQ088" or "INQ089");
+    }
+
+    [Fact]
+    public void AutoJunctionOnASelfReferentialAssociationReportsINQ090()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryTable("Employees")]
+            public sealed class Employee
+            {
+                [InquiryKey] public long Id { get; set; }
+
+                [InquiryManyToMany]
+                public List<Employee> Reports { get; set; } = new();
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("self-referential", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AutoJunctionOnACompositeKeyEntityReportsINQ090()
+    {
+        // One column per side cannot express a composite key; the explicit three-argument form can.
+        var source = AutoJunctionSource.Replace(
+            "[InquiryColumn] public string Title { get; set; } = string.Empty;",
+            "[InquiryKey] public int TenantId { get; set; }");
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("composite primary key", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("three-argument constructor", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AutoJunctionWithDisagreeingOverridesOnEachSideReportsINQ090()
+    {
+        // Both sides describe the same table; only one states the column overrides. Taking the
+        // first-seen shape would make the generated table depend on entity discovery order.
+        var source = AutoJunctionSource
+            .Replace(
+                "[InquiryManyToMany]",
+                """[InquiryManyToMany(ParentColumn = "order_id", ChildColumn = "product_id")]""")
+            .Replace(
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+                """,
+                """
+                    [InquiryColumn] public string Title { get; set; } = string.Empty;
+
+                    [InquiryManyToMany]
+                    public List<Order> Orders { get; set; } = new();
+                """);
+
+        var result = RunGenerator(source);
+
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
+        Assert.Contains("the reverse side states the two swapped", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
     /// <summary>Returns the single line declaring <paramref name="constName"/>, for per-const assertions.</summary>
     private static string ConstLine(string text, string constName)
         => Assert.Single(

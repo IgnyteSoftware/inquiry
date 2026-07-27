@@ -56,4 +56,17 @@ internal sealed record EntityData(
     /// view is defined in the database, not created by Inquiry).
     /// </summary>
     public bool IsView { get; init; }
+
+    /// <summary>
+    /// Whether this entity was synthesized for an auto-managed <c>[InquiryManyToMany]</c> junction rather
+    /// than discovered from a user type. It has no CLR type, so no materializer is emitted for it and it
+    /// is never a store target — but it IS mapped and IS a table, so it keeps its place in the entity set
+    /// (where relation resolution finds it) and in the schema set (where it gets DDL like any other).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IsMapped"/>/<see cref="IsView"/> cannot express this: <c>IsMapped = false</c> would drop
+    /// it from the relation lookup as well as from DDL, and <c>IsView = true</c> would drop the DDL that
+    /// is the whole point of synthesizing it.
+    /// </remarks>
+    public bool IsSynthesizedJunction { get; init; }
 }

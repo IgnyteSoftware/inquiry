@@ -208,6 +208,13 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
         var sqlBuilder = CreateSqlBuilder();
         entities = ResolveComputedExpressions(context, entities, sqlBuilder, out var computedInvalidEntityNames);
+
+        // Auto-managed [InquiryManyToMany] junctions become real entities here, before anything looks at
+        // the entity set. Each declaring relation is rewritten to name the synthesized junction, so
+        // relation validation, the SQL builders, and the schema emitter all see the shape an explicitly
+        // mapped junction produces and need no auto-junction branch of their own.
+        entities = AutoJunctionSynthesizer.Synthesize(context, entities, sqlBuilder);
+
         var mappedEntities = new Dictionary<string, EntityData>();
         foreach (var entity in entities)
         {
@@ -250,6 +257,14 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistration>();
         foreach (var entity in mappedEntities.Values)
         {
+            // A synthesized junction has no CLR type to materialize into, and nothing reads its rows as
+            // entities — the eager loader reads its two key columns straight off the reader. It stays in
+            // mappedEntities so relation resolution finds it, and in the schema set so it gets DDL.
+            if (entity.IsSynthesizedJunction)
+            {
+                continue;
+            }
+
             entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity, sqlBuilder));
         }
 
@@ -489,10 +504,21 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     {
         var location = relation.Location?.ToLocation();
 
+        // Not a collection navigation: the same INQ063 both forms report, and checked before the
+        // auto-junction suppression below — the synthesizer deliberately stays silent on this one so it
+        // is not reported as an auto-managed-specific failure, which would leave it reported nowhere.
         if (!relation.IsCollection)
         {
             return Diagnostic.Create(
                 InquiryDiagnosticDescriptors.ManyToManyInvalid, location, entity.Name, relation.PropertyName);
+        }
+
+        // An auto-managed relation still holding no junction name is one the synthesizer rejected — it
+        // already reported INQ090 saying why. Reporting again here would add INQ087 naming a junction
+        // type "(unknown)" that the user never wrote.
+        if (relation.IsAutoJunction && relation.JunctionEntityFullyQualifiedName is null)
+        {
+            return null;
         }
 
         if (relation.JunctionEntityFullyQualifiedName is not { } junctionFqn ||
@@ -551,7 +577,14 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         {
             if (string.IsNullOrEmpty(fullyQualifiedName)) return "(unknown)";
             var name = fullyQualifiedName!;
+
+            // Only the segment before any type-argument list is scanned: the last '.' in
+            // "…Generic.List<global::Demo.Product>" sits inside the argument. A name that OPENS with
+            // '<' leaves nothing to scan — LastIndexOf would be handed a -1 start index and throw,
+            // turning a diagnostic into a generator crash — so it is returned whole.
             var openAngle = name.IndexOf('<');
+            if (openAngle == 0) return name;
+
             var searchEnd = openAngle < 0 ? name.Length : openAngle;
             var lastDot = name.LastIndexOf('.', searchEnd - 1, searchEnd);
             return lastDot < 0 ? name : name.Substring(lastDot + 1);

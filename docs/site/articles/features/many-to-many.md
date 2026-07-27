@@ -1,6 +1,6 @@
 # Many-to-many relations
 
-Model a many-to-many association through a **junction (link) table** and eager-load the related collection — a single JOIN for one parent, or an N+1-free in-memory assembly for all parents. Mark a collection navigation with `[InquiryManyToMany]`, pointing at the mapped junction entity and its two foreign-key properties.
+Model a many-to-many association through a **junction (link) table** and eager-load the related collection — a single JOIN for one parent, or an N+1-free in-memory assembly for all parents. Mark a collection navigation with `[InquiryManyToMany]`, either pointing at a mapped junction entity and its foreign-key properties, or leaving it bare to have Inquiry [synthesize the junction](#auto-managed-junctions) for you.
 
 ## You write
 
@@ -114,9 +114,60 @@ The pairing is positional, and both the generated SQL and the in-memory grouping
 
 Composite keys correlate with a `EXISTS` subquery rather than a row-value `IN`: SQL Server has no row-value constructors, and row values would also impose a SQLite 3.15 floor. The shape is identical on all six providers.
 
+## Auto-managed junctions
+
+Leave the arguments off and Inquiry synthesizes the junction table itself — no junction entity to write:
+
+```csharp
+[InquiryTable("Orders")]
+public sealed class Order
+{
+    [InquiryKey(IsGenerated = true)] public long Id { get; set; }
+
+    [InquiryManyToMany]
+    public List<Product> Products { get; set; } = new();
+}
+```
+
+The generated DDL is an ordinary link table, named from both mapped tables and their key columns:
+
+```sql
+CREATE TABLE "Orders_Products" (
+    "Orders_Id"   INTEGER NOT NULL,
+    "Products_Id" INTEGER NOT NULL,
+    PRIMARY KEY ("Orders_Id", "Products_Id"),
+    FOREIGN KEY ("Orders_Id")   REFERENCES "Orders"("Id"),
+    FOREIGN KEY ("Products_Id") REFERENCES "Products"("Id")
+);
+```
+
+Names derive from an **order-independent** pair — the two tables sorted ordinally — so declaring the association from either side, or from both, describes the same table. Each side may declare one navigation; two separate associations between the same pair of entities need an explicitly mapped junction.
+
+Override any of them with `JunctionTable`, `JunctionSchema`, `ParentColumn`, and `ChildColumn`. `JunctionTable` and `JunctionSchema` name the same object from either side, so state them identically. `ParentColumn` and `ChildColumn` are **relative to the declaring side** — `ParentColumn` is the column referencing the entity you are declaring on — so the reverse navigation states the two **swapped**:
+
+```csharp
+// on Order
+[InquiryManyToMany(JunctionTable = "order_product", ParentColumn = "order_id", ChildColumn = "product_id")]
+public List<Product> Products { get; set; } = new();
+
+// on Product — same table, columns swapped
+[InquiryManyToMany(JunctionTable = "order_product", ParentColumn = "product_id", ChildColumn = "order_id")]
+public List<Order> Orders { get; set; } = new();
+```
+
+`INQ090` rejects the cases where a synthesized table would be wrong rather than merely unhelpful: a collision with a mapped entity's table, two sides disagreeing on the shape, a self-referential pair whose columns would collide, and a composite key that one column per side cannot express.
+
+> [!IMPORTANT]
+> Auto-managed junctions are **read-only**. Inquiry emits their DDL and eager-loads through them, but writing an association means inserting or deleting a junction row, which needs a mapped junction entity with its own store. Use the three-argument form when you need to write links, or issue raw SQL against the generated table.
+
+> [!WARNING]
+> A synthesized junction carries **only the two foreign keys** — no soft-delete column and no `[InquiryGlobalFilter]`. Reads are still correctly scoped, because every eager query composes the parent's and the child's own active-row filters, so a link whose endpoint is filtered out returns nothing. But the link rows themselves are not tenant-scoped and cannot be soft-deleted, and the raw-SQL escape hatch above is an unguarded write path into a table that carries no filter column. If your schema relies on soft delete or a tenant filter for links as well as for rows, map the junction explicitly so it can carry those columns.
+>
+> The generated foreign keys use `NO ACTION`. Where the provider enforces foreign keys, a hard `DELETE` of a parent that still has links is rejected by the constraint, so remove the links first. Where it does not — SQLite enforces them only when the connection issues `PRAGMA foreign_keys = ON`, which Inquiry does not do for you — the delete succeeds and orphan link rows remain.
+
 ## Limitations (v1)
 
-- The junction must be an explicitly mapped entity (no implicit/auto-managed junction table yet).
+- An auto-managed junction is read-only, and supports only single-column keys on both sides. Map the junction explicitly for either.
 
 ## See also
 

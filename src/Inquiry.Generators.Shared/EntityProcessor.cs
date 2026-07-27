@@ -999,6 +999,30 @@ internal static class EntityProcessor
             var manyToManyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryManyToManyAttribute");
             if (manyToManyAttribute is not null)
             {
+                // The parameterless form asks Inquiry to synthesize the junction. Discriminate on the
+                // constructor arity rather than on whether the named properties were set, so a fully
+                // defaulted [InquiryManyToMany] is unambiguous and a half-specified explicit form still
+                // reports its own error instead of silently becoming auto-managed.
+                if (manyToManyAttribute.ConstructorArguments.Length == 0)
+                {
+                    TryGetChildEntityType(property.Type, out var autoChild, out var autoIsCollection);
+                    relations.Add(new RelationData(
+                        property.Name,
+                        string.Empty,
+                        autoChild?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? string.Empty,
+                        IsCollection: autoIsCollection,
+                        LocationData.From(property.Locations.FirstOrDefault()))
+                    {
+                        IsManyToMany = true,
+                        IsAutoJunction = true,
+                        AutoJunctionTable = GeneratorHelpers.GetNamedString(manyToManyAttribute, "JunctionTable"),
+                        AutoJunctionSchema = GeneratorHelpers.GetNamedString(manyToManyAttribute, "JunctionSchema"),
+                        AutoParentColumn = GeneratorHelpers.GetNamedString(manyToManyAttribute, "ParentColumn"),
+                        AutoChildColumn = GeneratorHelpers.GetNamedString(manyToManyAttribute, "ChildColumn"),
+                    });
+                    continue;
+                }
+
                 var childFks = GetJunctionChildForeignKeys(manyToManyAttribute);
                 if (manyToManyAttribute.ConstructorArguments.Length < 3 ||
                     manyToManyAttribute.ConstructorArguments[0].Value is not INamedTypeSymbol junctionSymbol ||

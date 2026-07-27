@@ -190,10 +190,19 @@ Inquiry.Entities.InquiryKeyAttribute.IsGenerated.set -> void
 Inquiry.Entities.InquiryKeyAttribute.SequentialGuid.get -> bool
 Inquiry.Entities.InquiryKeyAttribute.SequentialGuid.set -> void
 Inquiry.Entities.InquiryManyToManyAttribute
+Inquiry.Entities.InquiryManyToManyAttribute.ChildColumn.get -> string?
+Inquiry.Entities.InquiryManyToManyAttribute.ChildColumn.set -> void
 Inquiry.Entities.InquiryManyToManyAttribute.ChildForeignKeyProperties.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Inquiry.Entities.InquiryManyToManyAttribute.InquiryManyToManyAttribute() -> void
+Inquiry.Entities.InquiryManyToManyAttribute.JunctionSchema.get -> string?
+Inquiry.Entities.InquiryManyToManyAttribute.JunctionSchema.set -> void
+Inquiry.Entities.InquiryManyToManyAttribute.JunctionTable.get -> string?
+Inquiry.Entities.InquiryManyToManyAttribute.JunctionTable.set -> void
+Inquiry.Entities.InquiryManyToManyAttribute.ParentColumn.get -> string?
+Inquiry.Entities.InquiryManyToManyAttribute.ParentColumn.set -> void
 Inquiry.Entities.InquiryManyToManyAttribute.InquiryManyToManyAttribute(System.Type! junctionEntity, string! parentForeignKeyProperty, params string![]! childForeignKeyProperties) -> void
-Inquiry.Entities.InquiryManyToManyAttribute.JunctionEntity.get -> System.Type!
-Inquiry.Entities.InquiryManyToManyAttribute.ParentForeignKeyProperty.get -> string!
+Inquiry.Entities.InquiryManyToManyAttribute.JunctionEntity.get -> System.Type?
+Inquiry.Entities.InquiryManyToManyAttribute.ParentForeignKeyProperty.get -> string?
 Inquiry.Entities.InquiryModifiedAtAttribute
 Inquiry.Entities.InquiryModifiedAtAttribute.InquiryModifiedAtAttribute() -> void
 Inquiry.Entities.InquiryModifiedAtAttribute.InquiryModifiedAtAttribute(string! name) -> void

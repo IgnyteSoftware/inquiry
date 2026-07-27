@@ -898,7 +898,12 @@ internal static class SchemaEmitter
             ? TableKey(foreignKey.LocalSchema, foreignKey.LocalTable) + "\0" + name
             : (foreignKey.LocalSchema ?? string.Empty) + "\0" + name;
 
-    private static bool IsValidExplicitIdentifier(string value)
+    /// <summary>
+    /// The bound every explicitly named schema object must satisfy: non-empty, within the 63-byte budget
+    /// the narrowest supported dialect allows, and free of control characters. Shared with the
+    /// auto-junction synthesizer so a synthesized table is held to the same rule as a named constraint.
+    /// </summary>
+    internal static bool IsValidExplicitIdentifier(string value)
         => value.Length > 0 && Encoding.UTF8.GetByteCount(value) <= 63 && !value.Any(char.IsControl);
 
     private static System.StringComparer NameComparer(IdentifierComparison comparison)

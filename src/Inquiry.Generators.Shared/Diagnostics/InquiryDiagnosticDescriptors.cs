@@ -344,6 +344,20 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    // INQ090: an auto-managed [InquiryManyToMany] (the parameterless form) cannot be synthesized. Every
+    // reason is a case where synthesizing anyway would produce a table that is wrong rather than merely
+    // unhelpful — a collision with a mapped entity's table, two sides disagreeing on the shape, a
+    // self-referential pair whose columns collide, or a composite key the one-column-per-side naming
+    // cannot express. Reason-parameterised rather than split further: they share one fix (map the
+    // junction explicitly), and each states its own remedy in the message.
+    public static readonly DiagnosticDescriptor AutoJunctionInvalid = new(
+        "INQ090",
+        "InquiryManyToMany cannot synthesize an auto-managed junction",
+        "Entity '{0}' relation '{1}' uses an auto-managed [InquiryManyToMany], but the junction cannot be synthesized: {2}.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     // INQ087: the junction or related type named by [InquiryManyToMany] is not a mapped entity. Split out
     // of INQ063 so the message can name which type is unmapped rather than listing every possible cause.
     public static readonly DiagnosticDescriptor ManyToManyTypeNotMapped = new(
