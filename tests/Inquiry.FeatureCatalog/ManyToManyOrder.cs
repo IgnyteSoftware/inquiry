@@ -326,6 +326,12 @@ public sealed class M2MTag
 
     [InquiryColumn("IsDeleted"), InquirySoftDelete]
     public bool IsDeleted { get; set; }
+
+    // A global filter on an entity whose key the composite join pairs on: the filter narrows rows the
+    // join still matches, so a batch const that dropped it would return a tag that IS linked and IS
+    // excluded — a join that looks correct produces a row that should not be visible.
+    [InquiryColumn("IsActive"), InquiryGlobalFilter]
+    public bool IsActive { get; set; } = true;
 }
 
 [InquiryTable("M2MPostTag")]
@@ -408,6 +414,11 @@ public sealed class M2MBook
 
     [InquiryColumn("IsDeleted"), InquirySoftDelete]
     public bool IsDeleted { get; set; }
+
+    // The synthesized junction has no filter columns of its own, so the child's soft-delete and global
+    // filter are the only things that can exclude a link.
+    [InquiryColumn("IsActive"), InquiryGlobalFilter]
+    public bool IsActive { get; set; } = true;
 
     [InquiryManyToMany]
     public List<M2MAuthor> Authors { get; set; } = new();

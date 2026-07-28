@@ -77,6 +77,12 @@ The related rows are never carried on the child entity (the foreign keys live on
 
 The JOIN is ANSI-standard, so the SQL is dialect-uniform across all six providers (the junction takes a space alias — Oracle rejects `AS` for table aliases — and child columns are table-qualified to stay unambiguous).
 
+### Child filters
+
+The related entity's own active-row predicate — its `[InquirySoftDelete]` term and every `[InquiryGlobalFilter]` term — is composed into **every** query that returns related rows: the single-parent JOIN, the batch child select, and the batch junction select. This holds for all three shapes, including a composite-key related entity and an auto-managed junction; a synthesized junction has no filter columns of its own, so the child's filter is the only thing that can exclude a link.
+
+`IncludeDeleted = true` suppresses the **parent's** soft-delete term and nothing else. The child's soft-delete term still applies, and — as everywhere else — a global filter has no per-method opt-out, so it stays composed on both sides of an "include deleted" read.
+
 ## Writing associations
 
 This attribute is read-side: it populates the navigation on eager loads. To **associate** or **dissociate**, write to the junction entity through its own store — the junction is a normal `[InquiryTable]`, so give it an `[InquiryInsert]` / `[InquiryDeleteOneByKey]`:

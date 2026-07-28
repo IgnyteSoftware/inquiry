@@ -39,6 +39,7 @@ internal static class ManyToManyExtensionAssertions
         await tags.InsertAsync(new M2MTag { TenantId = 1, Slug = "blue", Label = "Blue T1" });
         await tags.InsertAsync(new M2MTag { TenantId = 2, Slug = "red", Label = "Red T2" });
         await tags.InsertAsync(new M2MTag { TenantId = 2, Slug = "gone", Label = "Deleted", IsDeleted = true });
+        await tags.InsertAsync(new M2MTag { TenantId = 1, Slug = "muted", Label = "Muted T1", IsActive = false });
 
         await links.LinkAsync(new M2MPostTag { PostId = post1, TenantId = 1, Slug = "red" });
         await links.LinkAsync(new M2MPostTag { PostId = post2, TenantId = 1, Slug = "blue" });
@@ -48,6 +49,11 @@ internal static class ManyToManyExtensionAssertions
         // Excluded two ways: the tag is soft-deleted, and so is the link itself.
         await links.LinkAsync(new M2MPostTag { PostId = post1, TenantId = 2, Slug = "gone" });
         await links.LinkAsync(new M2MPostTag { PostId = post1, TenantId = 2, Slug = "red", IsDeleted = true });
+
+        // Live link to a globally filtered tag. Its key shares TenantId 1 with the tag post1 DOES get,
+        // so the join and the filter disagree on exactly one row — nothing but the child's own
+        // global filter can exclude it.
+        await links.LinkAsync(new M2MPostTag { PostId = post1, TenantId = 1, Slug = "muted" });
 
         return (post1, post2, deletedPost, unlinkedPost);
     }
@@ -120,6 +126,38 @@ internal static class ManyToManyExtensionAssertions
         Assert.Equal(new[] { "Red T1" }, Labels(all.Single(p => p.Id == post1).Tags));
     }
 
+    /// <summary>
+    /// The child's global filter, on the composite shape. Soft delete is covered by the seeds above;
+    /// this is the other half of the child's active-row predicate, and unlike soft delete it has no
+    /// per-method opt-out, so it must survive the IncludeDeleted variant too.
+    /// <para>
+    /// What this pins live is the single-parent JOIN. At the collection level the two batch consts back
+    /// each other up — the child select and the junction select each exclude the muted tag on their own,
+    /// so dropping the filter from one alone still yields the right collection. That case is caught by
+    /// the per-dialect generated-SQL assertions instead, which pin each const separately.
+    /// </para>
+    /// </summary>
+    internal static async Task CompositeEagerExcludesGloballyFilteredTagsAsync(
+        M2MPostStore posts, M2MTagStore tags, M2MPostTagStore links)
+    {
+        var (post1, _, _, _) = await SeedCompositeAsync(posts, tags, links);
+
+        // Exercises all three consts that return child rows — each renders the filter differently: the
+        // single-parent JOIN qualifies it by table, the batch child select leaves it bare on the outer
+        // child, and the batch junction select qualifies it by correlation alias inside an EXISTS.
+        var single = await posts.GetWithTagsAsync(post1);
+        var all = await ToListAsync(posts.AllWithTagsAsync());
+        var includingDeleted = await ToListAsync(posts.AllIncludingDeletedWithTagsAsync());
+
+        Assert.NotNull(single);
+        Assert.Equal(new[] { "Red T1" }, Labels(single!.Tags));
+        Assert.Equal(new[] { "Red T1" }, Labels(all.Single(p => p.Id == post1).Tags));
+
+        // IncludeDeleted suppresses the PARENT's soft-delete term and nothing else — a global filter has
+        // no per-method opt-out, so the muted tag stays out here too.
+        Assert.Equal(new[] { "Red T1" }, Labels(includingDeleted.Single(p => p.Id == post1).Tags));
+    }
+
     internal static async Task CompositeEagerLoadCostsOneRoundTripAsync(
         M2MPostStore posts, M2MTagStore tags, M2MPostTagStore links,
         BatchExecutionProbe probe, RecordingCommandInterceptor recorder)
@@ -140,9 +178,34 @@ internal static class ManyToManyExtensionAssertions
         var loaded = await authors.GetWithBooksAsync(1);
 
         Assert.NotNull(loaded);
-        // Book 30 is soft-deleted. The junction has no soft-delete column of its own, so the child's own
-        // active-row filter is the only thing excluding that link.
+        // Book 30 is soft-deleted and book 40 is globally filtered. The junction has no filter columns
+        // of its own, so the child's own active-row filter is the only thing excluding those links.
         Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(loaded!.Books));
+    }
+
+    /// <summary>
+    /// The child's global filter, on the auto-managed shape. A synthesized junction carries only the two
+    /// foreign keys, so unlike a mapped junction it has nothing of its own that could exclude the link.
+    /// Pins the single-parent JOIN live; the two batch consts are pinned separately by the per-dialect
+    /// generated-SQL assertions, for the reason given on the composite counterpart above.
+    /// </summary>
+    internal static async Task AutoJunctionEagerExcludesGloballyFilteredBooksAsync(
+        M2MAuthorStore authors, M2MBookStore books)
+    {
+        var single = await authors.GetWithBooksAsync(1);
+        var all = await ToListAsync(authors.AllWithBooksAsync());
+        var includingDeleted = await ToListAsync(authors.AllIncludingDeletedWithBooksAsync());
+
+        Assert.NotNull(single);
+        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(single!.Books));
+        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(all.Single(a => a.Id == 1).Books));
+        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(includingDeleted.Single(a => a.Id == 1).Books));
+
+        // The same book is a PARENT on the reverse navigation, where the identical filter has to exclude
+        // it from the result set rather than from a collection. Asserting the exact set rather than just
+        // book 40's absence — "not present" is also true of an empty result.
+        var loadedBooks = await ToListAsync(books.AllWithAuthorsAsync());
+        Assert.Equal(new[] { 10L, 20L }, loadedBooks.Select(b => b.Id).OrderBy(id => id).ToArray());
     }
 
     internal static async Task AutoJunctionAllEagerAssemblesFromBothSidesAsync(

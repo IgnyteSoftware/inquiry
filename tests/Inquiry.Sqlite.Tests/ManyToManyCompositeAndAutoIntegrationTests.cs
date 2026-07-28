@@ -68,6 +68,16 @@ public sealed class ManyToManyCompositeAndAutoIntegrationTests
     }
 
     [Fact]
+    public async Task CompositeKeyEagerExcludesGloballyFilteredTags()
+    {
+        await using var harness = await CompositeHarnessAsync();
+        await ManyToManyExtensionAssertions.CompositeEagerExcludesGloballyFilteredTagsAsync(
+            harness.GetRequiredService<M2MPostStore>(),
+            harness.GetRequiredService<M2MTagStore>(),
+            harness.GetRequiredService<M2MPostTagStore>());
+    }
+
+    [Fact]
     public async Task CompositeKeyEagerLoadCostsOneRoundTrip()
     {
         var (harness, probe, recorder) = await CreateGridHarnessAsync(
@@ -116,6 +126,15 @@ public sealed class ManyToManyCompositeAndAutoIntegrationTests
         await using var harness = await AutoHarnessAsync();
         await ManyToManyExtensionAssertions.AutoJunctionAllEagerIncludingDeletedAsync(
             harness.GetRequiredService<M2MAuthorStore>());
+    }
+
+    [Fact]
+    public async Task AutoJunctionEagerExcludesGloballyFilteredBooks()
+    {
+        await using var harness = await AutoHarnessAsync();
+        await ManyToManyExtensionAssertions.AutoJunctionEagerExcludesGloballyFilteredBooksAsync(
+            harness.GetRequiredService<M2MAuthorStore>(),
+            harness.GetRequiredService<M2MBookStore>());
     }
 
     [Fact]

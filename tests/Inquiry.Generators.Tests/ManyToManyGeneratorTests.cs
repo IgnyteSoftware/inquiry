@@ -105,6 +105,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryKey(Length = 64)] public string Slug { get; set; } = string.Empty;
             [InquiryColumn] public string Label { get; set; } = string.Empty;
             [InquiryColumn, InquirySoftDelete] public bool IsDeleted { get; set; }
+            [InquiryColumn, InquiryGlobalFilter] public bool IsActive { get; set; } = true;
         }
 
         [InquiryTable("PostTag")]
@@ -123,6 +124,9 @@ public sealed partial class InquiryGeneratorTests
 
             [InquirySelectAllEager]
             public partial IAsyncEnumerable<Post> AllWithTagsAsync(CancellationToken cancellationToken = default);
+
+            [InquirySelectAllEager(IncludeDeleted = true)]
+            public partial IAsyncEnumerable<Post> AllIncludingDeletedWithTagsAsync(CancellationToken cancellationToken = default);
         }
         """;
 
@@ -161,6 +165,7 @@ public sealed partial class InquiryGeneratorTests
         {
             [InquiryKey] public long Id { get; set; }
             [InquiryColumn] public string Title { get; set; } = string.Empty;
+            [InquiryColumn, InquiryGlobalFilter] public bool IsActive { get; set; } = true;
         }
 
         public partial class OrderStore : Inquiry.Stores.InquiryStore<Demo.Order>
@@ -878,6 +883,91 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("EXISTS (SELECT 1 FROM", text);
         Assert.DoesNotContain(") IN (SELECT", text);
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Theory]
+    [InlineData("Sqlite", "\"", "\"", "\"__c\"", "0", "1")]
+    [InlineData("SqlServer", "[", "]", "[__c]", "0", "1")]
+    [InlineData("PostgreSql", "\"", "\"", "\"__c\"", "FALSE", "TRUE")]
+    [InlineData("MySql", "`", "`", "`__c`", "0", "1")]
+    [InlineData("MariaDb", "`", "`", "`__c`", "0", "1")]
+    [InlineData("Oracle", "", "", "\"__c\"", "0", "1")]
+    public void CompositeKeyChildManyToManyAppliesChildFiltersInEveryConst(
+        string dialect, string quoteOpen, string quoteClose, string childAlias,
+        string falseLiteral, string trueLiteral)
+    {
+        // Every M:N const that returns child rows has to carry the child's own active-row filter, and the
+        // composite branches render it three different ways: qualified by the child table in the JOIN,
+        // bare on the outer child of the batch select, and qualified by the correlation alias inside the
+        // junction select's EXISTS. A branch that dropped it would return soft-deleted or globally
+        // filtered children — and here TenantId is a KEY component, so the filtered column and the join
+        // are the same tenant boundary.
+        var result = RunGenerator(CompositeChildSource, dialect: dialect);
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetPostStore(result);
+        string Q(string name) => quoteOpen + name + quoteClose;
+        string Filter(string qualifier)
+        {
+            var prefix = qualifier.Length == 0 ? "" : qualifier + ".";
+            return prefix + Q("IsDeleted") + " = " + falseLiteral
+                + " AND " + prefix + Q("IsActive") + " = " + trueLiteral;
+        }
+
+        // Single-parent JOIN: the child is named by table, not aliased, so its filter is table-qualified.
+        Assert.Contains(EscapeGeneratedString(Filter(Q("Tags"))), ConstLine(text, "_sql_Tags"));
+
+        // Batch child select: the child is the outer table and the only one in scope outside the EXISTS,
+        // so the filter is bare and leads the WHERE.
+        Assert.Contains(
+            EscapeGeneratedString(" WHERE " + Filter("") + " AND EXISTS ("),
+            ConstLine(text, "_sql_Tags_All"));
+
+        // Batch junction select: the child appears only inside the correlated EXISTS, where an
+        // unqualified IsDeleted would bind to the junction's own same-named column instead.
+        Assert.Contains(EscapeGeneratedString(Filter(childAlias)), ConstLine(text, "_sql_Tags_Junction"));
+
+        // IncludeDeleted rebuilds both batch consts from a parent context with the parent's soft-delete
+        // term suppressed. The CHILD's filter is not suppressed — neither half of it — so both consts
+        // still carry it in full. This is the one path that deliberately drops a predicate, so it is the
+        // one where a widened suppression would go unnoticed.
+        Assert.Contains(
+            EscapeGeneratedString(" WHERE " + Filter("") + " AND EXISTS ("),
+            ConstLine(text, "_sql_Tags_All_IncludeDeleted"));
+        Assert.Contains(
+            EscapeGeneratedString(Filter(childAlias)),
+            ConstLine(text, "_sql_Tags_Junction_IncludeDeleted"));
+    }
+
+    [Theory]
+    [InlineData("Sqlite", "\"", "\"", "1")]
+    [InlineData("SqlServer", "[", "]", "1")]
+    [InlineData("PostgreSql", "\"", "\"", "TRUE")]
+    [InlineData("MySql", "`", "`", "1")]
+    [InlineData("MariaDb", "`", "`", "1")]
+    [InlineData("Oracle", "", "", "1")]
+    public void AutoJunctionManyToManyAppliesChildFiltersInEveryConst(
+        string dialect, string quoteOpen, string quoteClose, string trueLiteral)
+    {
+        // The synthesized junction carries no filter columns of its own, so the child's filter is the
+        // only thing keeping a filtered-out child out of the collection.
+        var result = RunGenerator(AutoJunctionSource, dialect: dialect);
+        Assert.Empty(result.GeneratorDiagnostics);
+        var text = GetOrderStore(result);
+        string Q(string name) => quoteOpen + name + quoteClose;
+        var bare = Q("IsActive") + " = " + trueLiteral;
+
+        Assert.Contains(
+            EscapeGeneratedString(Q("Products") + "." + bare),
+            ConstLine(text, "_sql_Products"));
+        Assert.Contains(
+            EscapeGeneratedString(" WHERE " + bare + " AND " + Q("Id") + " IN ("),
+            ConstLine(text, "_sql_Products_All"));
+
+        // The junction select reaches the child through a subquery over the child table, which is where
+        // its filter has to sit — the junction row itself carries nothing to filter on.
+        Assert.Contains(
+            EscapeGeneratedString("IN (SELECT " + Q("Id") + " FROM " + Q("Products") + " WHERE " + bare + ")"),
+            ConstLine(text, "_sql_Products_Junction"));
     }
 
     [Theory]

@@ -74,6 +74,17 @@ public sealed class ManyToManyCompositeAndAutoIntegrationTests
     }
 
     [SkippableFact]
+    public async Task CompositeKeyEagerExcludesGloballyFilteredTags()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await CompositeHarnessAsync();
+        await ManyToManyExtensionAssertions.CompositeEagerExcludesGloballyFilteredTagsAsync(
+            harness.GetRequiredService<M2MPostStore>(),
+            harness.GetRequiredService<M2MTagStore>(),
+            harness.GetRequiredService<M2MPostTagStore>());
+    }
+
+    [SkippableFact]
     public async Task CompositeKeyEagerLoadCostsOneRoundTrip()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
@@ -127,6 +138,16 @@ public sealed class ManyToManyCompositeAndAutoIntegrationTests
         await using var harness = await AutoHarnessAsync();
         await ManyToManyExtensionAssertions.AutoJunctionAllEagerIncludingDeletedAsync(
             harness.GetRequiredService<M2MAuthorStore>());
+    }
+
+    [SkippableFact]
+    public async Task AutoJunctionEagerExcludesGloballyFilteredBooks()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await AutoHarnessAsync();
+        await ManyToManyExtensionAssertions.AutoJunctionEagerExcludesGloballyFilteredBooksAsync(
+            harness.GetRequiredService<M2MAuthorStore>(),
+            harness.GetRequiredService<M2MBookStore>());
     }
 
     [SkippableFact]

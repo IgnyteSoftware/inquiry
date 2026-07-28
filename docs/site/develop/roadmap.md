@@ -674,6 +674,9 @@ new or reframed issue.
   parameterless `[InquiryManyToMany]` synthesizes the junction table instead — DDL and eager loading, with
   names derived order-independently so both sides of a bidirectional association describe one table;
   writing links still needs an explicitly mapped junction (**`INQ090`**).
+  The related entity's own soft-delete and global-filter terms are composed into all three consts on
+  every shape — `IncludeDeleted` suppresses the parent's soft-delete term only — pinned per dialect on
+  the generated SQL and live on all six providers.
   Misconfiguration reports the specific reason — non-collection nav **`INQ063`**, unmapped junction/child
   **`INQ087`**, missing junction FK property **`INQ088`**, child keys that do not pair **`INQ089`**.
   Generator assertions and live coverage span SQLite, SQL Server, PostgreSQL,
