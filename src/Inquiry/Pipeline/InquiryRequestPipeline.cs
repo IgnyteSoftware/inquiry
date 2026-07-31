@@ -1182,7 +1182,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return recordsAffected;
@@ -1226,7 +1226,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var value = await dbCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            var value = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             if (HasInterceptors) await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return ScalarConvert.From<T>(value);
@@ -1279,7 +1279,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             // No Prepare: a procedure call with output parameters runs once; preparing it adds a
             // round trip with no reuse benefit.
-            var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             // ADO.NET populates output / return-value DbParameters after ExecuteNonQuery; read the
             // named one back and convert it the same way as a scalar result.
@@ -1401,7 +1401,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
-            var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
             var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return readBack;
@@ -1471,7 +1471,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var value = await dbCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            var value = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             return ScalarConvert.From<T>(value);
@@ -1544,7 +1544,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var recordsAffected = await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             if (interceptorCommand is not null) await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
             return recordsAffected;
