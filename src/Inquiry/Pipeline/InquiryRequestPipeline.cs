@@ -1629,7 +1629,14 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 _maxParametersPerCommand,
                 command, chunks, firstChunk, interceptedRows, interceptedChunk, cancellationToken).ConfigureAwait(false);
             chunks.Dispose();
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            // The commit is race-guarded like the single-command awaits: a driver that lies success
+            // for a KILL-interrupted COMMIT would otherwise report a fully-committed batch the server
+            // rolled back. Register-first form — the commit is the operation's last provider call, so
+            // no downstream token check backstops the start-vs-register window the way the chunk
+            // reader does for the executes. One registration per batch; the per-item hot-loop cost
+            // argument does not apply here.
+            await InquiryCancellation.AwaitEnforcingCallerToken(
+                transaction.CommitAsync, cancellationToken).ConfigureAwait(false);
             committed = true;
             RecordBatchCompletion(batchActivity, batchStartTimestamp, batchDbSystem, total);
             batchActivity = null;
@@ -1711,6 +1718,21 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             primaryException = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            RecordBatchFailure(batchActivity, batchStartTimestamp, batchDbSystem, primaryException);
+            batchActivity = null;
+            throw primaryException;
+        }
+        catch (Exception exception)
+            when (exception is not OperationCanceledException && !committed && cancellationToken.IsCancellationRequested)
+        {
+            // The batch analog of the single-command native-error arm: a chunk's driver failure that
+            // surfaced after the caller cancelled (SqlClient's attention-cancel SqlException) owes the
+            // caller an OCE with their token. The lying-SUCCESS face needs no counterpart here — every
+            // chunk execute is followed by the chunk reader's MoveNext token check, and the commit is
+            // race-guarded above, so a post-cancel success can never complete the batch. The !committed
+            // gate keeps a POST-commit failure (a throwing telemetry listener in RecordBatchCompletion)
+            // from re-labelling durably committed work as cancelled.
+            primaryException = InquiryCancellation.NormalizeNativeError(exception, cancellationToken);
             RecordBatchFailure(batchActivity, batchStartTimestamp, batchDbSystem, primaryException);
             batchActivity = null;
             throw primaryException;

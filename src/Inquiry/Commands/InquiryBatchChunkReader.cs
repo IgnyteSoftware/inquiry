@@ -35,6 +35,13 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
 
     internal bool MoveNext(out IReadOnlyList<T> chunk)
     {
+        // Load-bearing for the batch cancellation contract, not just a courtesy check. Every chunk
+        // execute in InquiryBatchCommandExecutor is followed by a MoveNext before any total is
+        // returned or the batch transaction commits — including the call that returns false after the
+        // final chunk. That is what makes a driver's post-cancel lying success (a KILL-interrupted
+        // MySQL statement reporting normal completion) unable to complete a cancelled batch, without
+        // per-execute registrations on the hot loop. BatchCancellationRaceTests pins this end to end;
+        // do not make this check conditional.
         _cancellationToken.ThrowIfCancellationRequested();
         if (_items is not null)
         {

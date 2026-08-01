@@ -1660,6 +1660,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         Activity? batchActivity = null;
         long batchStartTimestamp = 0;
         string batchDbSystem = "";
+        var executed = false;
         try
         {
             (batchActivity, batchStartTimestamp, batchDbSystem) =
@@ -1677,6 +1678,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 _autoPrepareConfigured && command.PreferPrepareOnce,
                 _maxParametersPerCommand,
                 command, chunks, firstChunk, interceptedRows, interceptedChunk, cancellationToken).ConfigureAwait(false);
+            executed = true;
             chunks.Dispose();
             RecordBatchCompletion(batchActivity, batchStartTimestamp, batchDbSystem, total);
             batchActivity = null;
@@ -1756,6 +1758,27 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            RecordBatchFailure(batchActivity, batchStartTimestamp, batchDbSystem, normalized);
+            batchActivity = null;
+            try { chunks.Dispose(); }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    "Inquiry batch execution failed and its source enumerator also failed to dispose.",
+                    normalized,
+                    cleanupException);
+            }
+
+            throw normalized;
+        }
+        catch (Exception exception)
+            when (exception is not OperationCanceledException && !executed && cancellationToken.IsCancellationRequested)
+        {
+            // The batch analog of the single-command native-error arm; see the non-transacted pipeline.
+            // The ambient transaction stays caller-owned — the OCE escapes so the caller's scope
+            // decides, exactly as a driver-thrown OCE would. The !executed gate keeps a failure AFTER
+            // every statement applied (a throwing telemetry listener) from re-labelling completed work.
+            var normalized = InquiryCancellation.NormalizeNativeError(exception, cancellationToken);
             RecordBatchFailure(batchActivity, batchStartTimestamp, batchDbSystem, normalized);
             batchActivity = null;
             try { chunks.Dispose(); }
