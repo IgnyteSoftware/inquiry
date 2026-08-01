@@ -336,7 +336,7 @@ public static class PackageVerifier
             var metadata = ReadNuspecMetadata(archive, package, symbols: false);
             VerifyNuspecIdentity(metadata, package, manifest, expectedCommit, version, branch);
             Require(Element(metadata, "license") == manifest.Assets.LicenseExpression, $"{package.Id} license mismatch.");
-            Require(Element(metadata, "authors") == "Inquiry Contributors", $"{package.Id} authors mismatch.");
+            Require(Element(metadata, "authors") == "Ignyte Software", $"{package.Id} authors mismatch.");
             Require(Element(metadata, "licenseUrl") == "https://licenses.nuget.org/MIT", $"{package.Id} license URL mismatch.");
             Require(Element(metadata, "readme") == manifest.Assets.Readme, $"{package.Id} readme metadata mismatch.");
             Require(Element(metadata, "icon") == manifest.Assets.Icon, $"{package.Id} icon metadata mismatch.");
