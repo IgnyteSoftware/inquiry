@@ -295,7 +295,17 @@ public sealed partial class InquiryGeneratorTests
                     [InquiryManyToMany]
                     public List<Order> Orders { get; set; } = new();
                 """)
-            .Replace("[InquirySelectOneByKeyEager]\n        public partial Task<Order?> GetWithProductsAsync(long id, CancellationToken cancellationToken = default);\n\n        [InquirySelectAllEager]\n        public partial IAsyncEnumerable<Order> AllWithProductsAsync(CancellationToken cancellationToken = default);", string.Empty);
+            // Raw literal, matching the reshapes above: a hand-written "\n" search cannot match this
+            // template, whose literal carries the checkout's CRLF and indents these methods by four.
+            .Replace(
+                """
+                    [InquirySelectOneByKeyEager]
+                    public partial Task<Order?> GetWithProductsAsync(long id, CancellationToken cancellationToken = default);
+
+                    [InquirySelectAllEager]
+                    public partial IAsyncEnumerable<Order> AllWithProductsAsync(CancellationToken cancellationToken = default);
+                """,
+                string.Empty);
 
         var result = RunGenerator(source);
 
