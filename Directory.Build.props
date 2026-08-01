@@ -15,8 +15,8 @@
     <PackageProjectUrl>https://github.com/IgnyteSoftware/inquiry</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>micro-orm;source-generator;ado.net;sql</PackageTags>
-    <Authors>Ignyte Software</Authors>
-    <Company>Ignyte Software</Company>
+    <Authors>Ignyte Software Inc.</Authors>
+    <Company>Ignyte Software Inc.</Company>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
 
