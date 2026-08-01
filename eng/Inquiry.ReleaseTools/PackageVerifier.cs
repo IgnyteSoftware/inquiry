@@ -98,7 +98,7 @@ public static class PackageVerifier
         Require(assets.Icon == "icon.png", "icon must be icon.png.");
         Require(Uri.TryCreate(assets.RepositoryUrl, UriKind.Absolute, out var repositoryUri)
             && repositoryUri.Scheme == Uri.UriSchemeHttps, "repositoryUrl must be an absolute HTTPS URL.");
-        Require(assets.RepositoryBranch == "refs/heads/prerelease", "repositoryBranch must be exactly refs/heads/prerelease.");
+        Require(assets.RepositoryBranch == "refs/heads/main", "repositoryBranch must be exactly refs/heads/main.");
         Require(assets.RequireSymbols, "Symbol packages are required.");
         Require(assets.RequireSourceLink, "SourceLink is required.");
     }

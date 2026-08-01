@@ -2,9 +2,9 @@
 
 ## Getting help
 
-- **Documentation:** <https://github.com/JakeOverstreet/inquiry> (build locally with `docfx docs/site/docfx.json --serve`)
-- **Bug reports and feature requests:** [GitHub Issues](https://github.com/JakeOverstreet/inquiry/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/JakeOverstreet/inquiry/discussions)
+- **Documentation:** <https://github.com/IgnyteSoftware/inquiry> (build locally with `docfx docs/site/docfx.json --serve`)
+- **Bug reports and feature requests:** [GitHub Issues](https://github.com/IgnyteSoftware/inquiry/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/IgnyteSoftware/inquiry/discussions)
 
 ## Supported versions
 

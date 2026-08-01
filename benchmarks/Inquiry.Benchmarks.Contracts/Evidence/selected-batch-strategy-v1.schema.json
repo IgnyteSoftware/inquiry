@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/JakeOverstreet/inquiry/schemas/selected-batch-strategy-v1.json",
+  "$id": "https://github.com/IgnyteSoftware/inquiry/schemas/selected-batch-strategy-v1.json",
   "title": "Inquiry selected batch strategy manifest",
   "type": "object",
   "additionalProperties": false,

@@ -8,51 +8,51 @@
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
 > **Last reconciled against source and GitHub:** 2026-07-25. All
-> providers are restored; [#171](https://github.com/JakeOverstreet/inquiry/issues/171) records that
+> providers are restored; [#171](https://github.com/IgnyteSoftware/inquiry/issues/171) records that
 > completed restoration gate.
 
 ## Current release status
 
 **1.0.0 is not release-ready.** Provider restoration is complete: Oracle returned to the required
-matrix in [#216](https://github.com/JakeOverstreet/inquiry/pull/216), SQL Server's release-gating path was hardened in [#218](https://github.com/JakeOverstreet/inquiry/pull/218), and two consecutive full CI
+matrix in [#216](https://github.com/IgnyteSoftware/inquiry/pull/216), SQL Server's release-gating path was hardened in [#218](https://github.com/IgnyteSoftware/inquiry/pull/218), and two consecutive full CI
 runs are green at 20/20 required checks each. Both runs include all 15 PostgreSQL, MySQL, MariaDB,
 SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs with Docker failures configured to
 fail closed.
 
-[#220](https://github.com/JakeOverstreet/inquiry/pull/220) installed the immutable release-engineering foundation: an exact-commit detached-worktree pack,
+[#220](https://github.com/IgnyteSoftware/inquiry/pull/220) installed the immutable release-engineering foundation: an exact-commit detached-worktree pack,
 the canonical nine-package manifest, package/bundle and CI-contract verification, package producer and
 independent verifier jobs, and the `ci-required-v1` aggregate required gate. Public promotion is still
-disabled. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) closed 2026-07-25 across all nine
+disabled. [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25 across all nine
 acceptance criteria, adding APICompat and analyzer release tracking, isolated net8/net9/net10 and NativeAOT
 installs from the produced nupkgs, a CycloneDX SBOM plus SLSA build provenance and dependency auditing,
 hosted versioned documentation, release/support/security policies, CODEOWNERS and branch protection, and
 CodeQL plus dependency scanning. Branch protection and CodeQL activate when the repository goes public.
 
-The fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security diff scan and threat-model review found and fixed a custom-shell CI bypass.
+The fresh [#220](https://github.com/IgnyteSoftware/inquiry/pull/220) security diff scan and threat-model review found and fixed a custom-shell CI bypass.
 The post-fix scan reported no remaining reportable findings. Release evidence and governance shipped with
-[#89](https://github.com/JakeOverstreet/inquiry/issues/89) (closed 2026-07-25).
+[#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (closed 2026-07-25).
 
-The generated execution-path tranche ([#179](https://github.com/JakeOverstreet/inquiry/issues/179),
-[#180](https://github.com/JakeOverstreet/inquiry/issues/180), and
-[#181](https://github.com/JakeOverstreet/inquiry/issues/181)) is complete. Immutable generated commands,
+The generated execution-path tranche ([#179](https://github.com/IgnyteSoftware/inquiry/issues/179),
+[#180](https://github.com/IgnyteSoftware/inquiry/issues/180), and
+[#181](https://github.com/IgnyteSoftware/inquiry/issues/181)) is complete. Immutable generated commands,
 sequential-safe generated ad-hoc materializers, and bounded provider-selected batch transports passed
 114/114 focused live tests across all six providers and .NET 8/9/10. The retained 72-cell diagnostic
 strategy record is published in the [batch mutation diagnostic matrix](batch-mutation-diagnostic-matrix.md).
-[#226](https://github.com/JakeOverstreet/inquiry/pull/226) merged the many-to-many
-child-filter correction and closed [#57](https://github.com/JakeOverstreet/inquiry/issues/57).
-[#68](https://github.com/JakeOverstreet/inquiry/issues/68) is closed with the Roslyn 4.8 hold policy recorded.
+[#226](https://github.com/IgnyteSoftware/inquiry/pull/226) merged the many-to-many
+child-filter correction and closed [#57](https://github.com/IgnyteSoftware/inquiry/issues/57).
+[#68](https://github.com/IgnyteSoftware/inquiry/issues/68) is closed with the Roslyn 4.8 hold policy recorded.
 
-[#69](https://github.com/JakeOverstreet/inquiry/issues/69) (SQL Server TVP production hardening) is closed.
+[#69](https://github.com/IgnyteSoftware/inquiry/issues/69) (SQL Server TVP production hardening) is closed.
 Generated TVP artifacts, I/O-free binding, exact element metadata, unsigned transport correctness,
 stored-procedure TVP parameters, and streaming resource lifetime are all shipped. Thirteen `review-gate`
 follow-up issues (#242–#254) were filed during the final review passes and remain open as non-blocking
 hardening work.
 
-[#87](https://github.com/JakeOverstreet/inquiry/issues/87) (benchmark truth and regression gates) is closed.
+[#87](https://github.com/IgnyteSoftware/inquiry/issues/87) (benchmark truth and regression gates) is closed.
 Corrected baselines are committed, the weekly `benchmarks.yml` workflow enforces 10% latency / 5% allocation
 budgets against 16 baseline files covering all SQLite workloads, and EF Core coverage gaps are closed.
 
-[#86](https://github.com/JakeOverstreet/inquiry/issues/86) (unified telemetry for batch, bulk insert, and
+[#86](https://github.com/IgnyteSoftware/inquiry/issues/86) (unified telemetry for batch, bulk insert, and
 grid execution paths) is closed. All execution paths now emit consistent operation-context telemetry;
 connection-open/pool-wait metrics were deferred as a stretch goal.
 
@@ -85,41 +85,41 @@ For 1.0, "feature complete" means:
 
 ## Priority index
 
-GitHub issue state, priority labels, and the [`1.0.0` milestone](https://github.com/JakeOverstreet/inquiry/milestone/1)
+GitHub issue state, priority labels, and the [`1.0.0` milestone](https://github.com/IgnyteSoftware/inquiry/milestone/1)
 are authoritative for acceptance criteria. As reconciled on 2026-07-26, GitHub has **40 open issues**:
 **12 prioritized for 1.0 (7 P1 and 5 P2)** assigned to the `1.0.0` milestone, five planned for post-1.0
 work, and 23 non-blocking `review-gate` follow-ups (#242–#264).
 
 ### P0 — stop-ship
 
-None. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) (release engineering and governance)
+None. [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (release engineering and governance)
 closed 2026-07-25.
 
 ### P1 — must complete for 1.0
 
 | Workstream | Issues |
 |---|---|
-| Eager loading and relationship correctness | [#80](https://github.com/JakeOverstreet/inquiry/issues/80) — [#70](https://github.com/JakeOverstreet/inquiry/issues/70) closed 2026-07-26 |
-| Scaffolding and live/offline validation | [#72](https://github.com/JakeOverstreet/inquiry/issues/72), [#79](https://github.com/JakeOverstreet/inquiry/issues/79) |
-| Query composition and tenant safety | [#82](https://github.com/JakeOverstreet/inquiry/issues/82), [#177](https://github.com/JakeOverstreet/inquiry/issues/177) |
-| First-party provider authoring and conformance | [#184](https://github.com/JakeOverstreet/inquiry/issues/184) |
-| Bulk insert production readiness | [#183](https://github.com/JakeOverstreet/inquiry/issues/183) |
+| Eager loading and relationship correctness | [#80](https://github.com/IgnyteSoftware/inquiry/issues/80) — [#70](https://github.com/IgnyteSoftware/inquiry/issues/70) closed 2026-07-26 |
+| Scaffolding and live/offline validation | [#72](https://github.com/IgnyteSoftware/inquiry/issues/72), [#79](https://github.com/IgnyteSoftware/inquiry/issues/79) |
+| Query composition and tenant safety | [#82](https://github.com/IgnyteSoftware/inquiry/issues/82), [#177](https://github.com/IgnyteSoftware/inquiry/issues/177) |
+| First-party provider authoring and conformance | [#184](https://github.com/IgnyteSoftware/inquiry/issues/184) |
+| Bulk insert production readiness | [#183](https://github.com/IgnyteSoftware/inquiry/issues/183) |
 
 ### P2 — target for 1.0 if release gates stay healthy
 
-- Project templates and Aspire integration: [#63](https://github.com/JakeOverstreet/inquiry/issues/63),
-  [#71](https://github.com/JakeOverstreet/inquiry/issues/71).
-- Explain and testing ergonomics: [#73](https://github.com/JakeOverstreet/inquiry/issues/73).
-- Named databases/providers: [#85](https://github.com/JakeOverstreet/inquiry/issues/85).
-- Large-solution incremental-generator performance: [#182](https://github.com/JakeOverstreet/inquiry/issues/182).
+- Project templates and Aspire integration: [#63](https://github.com/IgnyteSoftware/inquiry/issues/63),
+  [#71](https://github.com/IgnyteSoftware/inquiry/issues/71).
+- Explain and testing ergonomics: [#73](https://github.com/IgnyteSoftware/inquiry/issues/73).
+- Named databases/providers: [#85](https://github.com/IgnyteSoftware/inquiry/issues/85).
+- Large-solution incremental-generator performance: [#182](https://github.com/IgnyteSoftware/inquiry/issues/182).
 
 ### Planned for 1.x or demand-driven
 
-- Audit trail/entity validation [#76](https://github.com/JakeOverstreet/inquiry/issues/76), read replicas
-  [#77](https://github.com/JakeOverstreet/inquiry/issues/77), composable CTE/set operations
-  [#81](https://github.com/JakeOverstreet/inquiry/issues/81), provider-native/vector types
-  [#83](https://github.com/JakeOverstreet/inquiry/issues/83), and verified cloud modes
-  [#88](https://github.com/JakeOverstreet/inquiry/issues/88).
+- Audit trail/entity validation [#76](https://github.com/IgnyteSoftware/inquiry/issues/76), read replicas
+  [#77](https://github.com/IgnyteSoftware/inquiry/issues/77), composable CTE/set operations
+  [#81](https://github.com/IgnyteSoftware/inquiry/issues/81), provider-native/vector types
+  [#83](https://github.com/IgnyteSoftware/inquiry/issues/83), and verified cloud modes
+  [#88](https://github.com/IgnyteSoftware/inquiry/issues/88).
 - Additional engines are added only with user demand and live CI; MariaDB satisfied and closed the previous
   engine-count issue.
 
@@ -153,7 +153,7 @@ acceptance criteria supersede any older wording that describes an initial implem
 - **`dotnet new` project templates** *(integration research 2026-06-12)*. An Aspire-ready starter
   template with a provider, telemetry, health checks, and tests wired from the first build.
 - **First-party provider authoring kit and conformance suite**
-  ([#184](https://github.com/JakeOverstreet/inquiry/issues/184)). Replace the current copy-an-existing-
+  ([#184](https://github.com/IgnyteSoftware/inquiry/issues/184)). Replace the current copy-an-existing-
   provider workflow with a scaffold, shared analyzer-pack/test MSBuild plumbing, reusable provider
   registration and resilient-open composition, and source-linked cross-provider contract tests. Generated
   stores must remain source-compiled inside each provider test assembly so every dialect analyzer is
@@ -162,11 +162,11 @@ acceptance criteria supersede any older wording that describes an initial implem
 - **~~DDL safety lint — more rules~~** *(resolved 2026-07-09)*. See [Recently resolved](#recently-resolved).
 - **~~Testing follow-ups: transaction sandbox + data factories~~** *(resolved 2026-07-14)*.
   See [Recently resolved](#recently-resolved) and [Testing](../articles/features/testing.md).
-- **Release engineering & governance — remaining scope** *(reconciled 2026-07-25)*. [#220](https://github.com/JakeOverstreet/inquiry/pull/220) shipped
+- **Release engineering & governance — remaining scope** *(reconciled 2026-07-25)*. [#220](https://github.com/IgnyteSoftware/inquiry/pull/220) shipped
   exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
   and the versioned required CI gate. Governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), the
   public API baseline (PublicApiAnalyzers + EnablePackageValidation), and package verification fixes
-  have shipped. [#89](https://github.com/JakeOverstreet/inquiry/issues/89) closed 2026-07-25, also
+  have shipped. [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25, also
   delivering APICompat and analyzer release tracking, isolated net8/net9/net10 and NativeAOT installs
   from the produced nupkgs, SBOM/provenance/dependency evidence, hosted versioned docs, CODEOWNERS and
   branch protection, and CodeQL plus dependency scanning.
@@ -184,9 +184,9 @@ acceptance criteria supersede any older wording that describes an initial implem
 - **~~Stored-procedure INOUT parameters & multi-result-set~~** *(resolved 2026-07-15)*. See
   [Recently resolved](#recently-resolved). INOUT parameters, multi-result-set stored procedures,
   Oracle `OUT REF CURSOR`, stored-procedure metadata generation, and stored-procedure TVP parameters
-  are all shipped; [#78](https://github.com/JakeOverstreet/inquiry/issues/78),
-  [#188](https://github.com/JakeOverstreet/inquiry/issues/188), and
-  [#69](https://github.com/JakeOverstreet/inquiry/issues/69) are closed.
+  are all shipped; [#78](https://github.com/IgnyteSoftware/inquiry/issues/78),
+  [#188](https://github.com/IgnyteSoftware/inquiry/issues/188), and
+  [#69](https://github.com/IgnyteSoftware/inquiry/issues/69) are closed.
 - **Database-first scaffolding CLI** *(gap research 2026-06-12)*. A `dotnet inquiry scaffold` tool
   that introspects an existing database and emits attributed entities + store skeletons — the
   `dotnet ef dbcontext scaffold` / `prisma db pull` / `drizzle-kit pull` workflow. Largest effort,
@@ -243,19 +243,19 @@ acceptance criteria supersede any older wording that describes an initial implem
 ## Test coverage & hardening
 
 - The SQLite-only feature suites and Oracle bulk fallback coverage were added in
-  [#154](https://github.com/JakeOverstreet/inquiry/issues/154) and
-  [#155](https://github.com/JakeOverstreet/inquiry/issues/155); both tracking issues are closed.
+  [#154](https://github.com/IgnyteSoftware/inquiry/issues/154) and
+  [#155](https://github.com/IgnyteSoftware/inquiry/issues/155); both tracking issues are closed.
 - The all-types bulk matrix is green on every provider and
-  [#134](https://github.com/JakeOverstreet/inquiry/issues/134) is closed.
+  [#134](https://github.com/IgnyteSoftware/inquiry/issues/134) is closed.
 - End-to-end cancellation through generated/IInquiry operations is complete;
-  [#156](https://github.com/JakeOverstreet/inquiry/issues/156) is closed.
+  [#156](https://github.com/IgnyteSoftware/inquiry/issues/156) is closed.
 - Analyzer diagnostic release tracking and generator output-identity hardening are complete;
-  [#135](https://github.com/JakeOverstreet/inquiry/issues/135) and
-  [#176](https://github.com/JakeOverstreet/inquiry/issues/176) are closed.
-- The Oracle `:rc` finalize-once guard shipped and [#136](https://github.com/JakeOverstreet/inquiry/issues/136)
+  [#135](https://github.com/IgnyteSoftware/inquiry/issues/135) and
+  [#176](https://github.com/IgnyteSoftware/inquiry/issues/176) are closed.
+- The Oracle `:rc` finalize-once guard shipped and [#136](https://github.com/IgnyteSoftware/inquiry/issues/136)
   is closed.
 - The provider-restoration gate is complete and
-  [#171](https://github.com/JakeOverstreet/inquiry/issues/171) closed after two consecutive 20/20
+  [#171](https://github.com/IgnyteSoftware/inquiry/issues/171) closed after two consecutive 20/20
   full CI runs passed all 15 live provider/TFM legs.
 
 ## Explicitly out of scope for 1.0
@@ -321,7 +321,7 @@ new or reframed issue.
 - **Stored-procedure INOUT, multi-result-set, and Oracle REF CURSOR (#78, #188, 2026-07-15).**
   INOUT parameters (value passed in *and* read back), multi-result-set stored procedures, Oracle
   `OUT REF CURSOR`, and stored-procedure metadata source generation are all shipped. Stored-procedure
-  TVP parameters shipped in [#69](https://github.com/JakeOverstreet/inquiry/issues/69) (2026-07-19).
+  TVP parameters shipped in [#69](https://github.com/IgnyteSoftware/inquiry/issues/69) (2026-07-19).
 
 - **End-to-end cancellation (#156, 2026-07-15).** Cancellation now propagates through generated
   operations and the `IInquiry` pipeline, not just direct provider commands. All provider suites
@@ -350,7 +350,7 @@ new or reframed issue.
 - **Release governance documents (#89 partial, 2026-07-15).** SECURITY.md, SUPPORT.md, and
   CHANGELOG.md shipped. Public API baseline established with `Microsoft.CodeAnalysis.PublicApiAnalyzers`
   and `EnablePackageValidation`. Package verification fixes applied (`.artifacts` path filter,
-  `Inquiry.AspNetCore` marked non-packable). [#89](https://github.com/JakeOverstreet/inquiry/issues/89)
+  `Inquiry.AspNetCore` marked non-packable). [#89](https://github.com/IgnyteSoftware/inquiry/issues/89)
   remains open for remaining release-engineering steps.
 
 - **Generated execution hot path (#179, 2026-07-14).** Parameterless generated operations bypass
@@ -379,7 +379,7 @@ new or reframed issue.
   now accept `CancellationToken` (matching `EntityProcessor.Extract`) and call
   `ThrowIfCancellationRequested()` in their column-discovery loops. The diagnostic-ID registry
   comment corrected: INQ036–INQ037 were in use and INQ038 was reserved at that point. Analyzer release
-  tracking subsequently completed and [#135](https://github.com/JakeOverstreet/inquiry/issues/135) is closed.
+  tracking subsequently completed and [#135](https://github.com/IgnyteSoftware/inquiry/issues/135) is closed.
 
 - **MySQL-family type-correct JSON collections (#169, 2026-07-10).** MySQL and MariaDB now share
   one `JSON_TABLE` mapping, the runtime writes AOT-safe invariant JSON for supported scalars,
@@ -392,7 +392,7 @@ new or reframed issue.
   `BulkAllTypesIntegrationTests` to all six providers. Each test bulk-inserts a single row and
   asserts every type round-trips through the provider's bulk-copy path (native copier on PG/SS/MySQL/
   MariaDB, batch-INSERT fallback on SQLite/Oracle). The final Docker-required matrix passed on all six
-  providers across net8/net9/net10, and [#134](https://github.com/JakeOverstreet/inquiry/issues/134)
+  providers across net8/net9/net10, and [#134](https://github.com/IgnyteSoftware/inquiry/issues/134)
   is closed.
 
 - **Oracle `[InquiryBulkInsert]` fallback test coverage (#155, 2026-07-10).** Added
@@ -412,7 +412,7 @@ new or reframed issue.
   long-running operation (`pg_sleep` / `WAITFOR DELAY` / `SLEEP` / `DBMS_SESSION.SLEEP`), cancels
   the token after 500ms, and asserts the provider throws `OperationCanceledException` (or Oracle's
   `ORA-01013`). End-to-end generated/IInquiry pipeline propagation subsequently completed;
-  [#156](https://github.com/JakeOverstreet/inquiry/issues/156) is closed.
+  [#156](https://github.com/IgnyteSoftware/inquiry/issues/156) is closed.
 
 - **MySQL and MariaDB `DbDataSource` refactor (2026-07-09).** `MySqlInquiryConnectionFactory` and
   `MariaDbInquiryConnectionFactory` now build and own one app-lifetime `MySqlDataSource` (a
@@ -479,7 +479,7 @@ new or reframed issue.
   two-statement batch from `MySqlFamilySqlBuilder`. Null database-default keys route through native
   insert-returning, while explicit-key upserts bind the supplied key and native `RETURNING` reads the
   actual row, including an unambiguous secondary-unique conflict. DELETE RETURNING also shipped;
-  [#58](https://github.com/JakeOverstreet/inquiry/issues/58) is closed.
+  [#58](https://github.com/IgnyteSoftware/inquiry/issues/58) is closed.
 
 - **Split MySQL and MariaDB into independent dialect providers (#168, 2026-07-09).** The MySQL builder
   body moved to a shared `MySqlFamilySqlBuilder` in `Inquiry.Generators.Shared`; `MySqlSqlBuilder` and
@@ -496,7 +496,7 @@ new or reframed issue.
   artifacts and I/O-free binding; the production hardening pass added exact element metadata (ANSI/Unicode
   length, decimal precision/scale, converter, enum, date/time, binary, nullable), unsigned transport
   correctness, stored-procedure TVP parameters, and streaming resource lifetime with `IgnoresMaxBatchSize`.
-  [#69](https://github.com/JakeOverstreet/inquiry/issues/69) is closed.
+  [#69](https://github.com/IgnyteSoftware/inquiry/issues/69) is closed.
 - **SQLite `json_each` and Oracle `JSON_TABLE` IN optimization (2026-07-09).** Extends the #69 IN
   collection optimization to the remaining viable engines. SQLite uses
   `col IN (SELECT value FROM json_each(@param))` (available since SQLite 3.38.0); Oracle uses
@@ -514,7 +514,7 @@ new or reframed issue.
   `SELECT col, COUNT(*) FROM t GROUP BY col` and returns `Task<IReadOnlyList<GroupCount<TKey>>>`.
   The "counts by status" / "orders per customer" dashboard primitive. Per-method inline materializer
   generated for type-safe key reading. Cross-provider count-value materialization is consolidated in
-  [#174](https://github.com/JakeOverstreet/inquiry/issues/174).
+  [#174](https://github.com/IgnyteSoftware/inquiry/issues/174).
 - **DISTINCT support on select and projection read shapes (#66, 2026-07-08).** `Distinct = true` on
   `[InquirySelectAll]`, `[InquirySelectAllByField]`, and `[InquirySelectAllByPredicate]` emits
   `SELECT DISTINCT` in the const SQL. Works on all five dialects, composes with soft-delete filters,
@@ -531,7 +531,7 @@ new or reframed issue.
   soft-delete/global filters are composed structurally, preserving the grid path without runtime key
   expansion. Covered by generated-SQL assertions and live suites for SQLite, SQL Server, PostgreSQL,
   MySQL, MariaDB, and Oracle; SQL Server performance evidence is in
-  [`EagerLoadingBenchmarks.cs`](../../../benchmarks/Inquiry.Benchmarks.SqlServer/EagerLoadingBenchmarks.cs).
+  [`EagerLoadingBenchmarks.cs`](https://github.com/IgnyteSoftware/inquiry/blob/main/benchmarks/Inquiry.Benchmarks.SqlServer/EagerLoadingBenchmarks.cs).
 - **Release engineering — immutable packaging and required CI gate (#220, 2026-07-14).** `RepositoryUrl` placeholder replaced
   with the real GitHub URL; `RepositoryType`, `PackageProjectUrl` added. SourceLink
   (`Microsoft.SourceLink.GitHub`) embeds commit metadata and the `.snupkg` symbol packages enable

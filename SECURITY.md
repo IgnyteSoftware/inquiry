@@ -12,7 +12,7 @@ Only the latest patch of each supported major.minor receives security fixes.
 
 **Do not open a public issue for security vulnerabilities.**
 
-Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/JakeOverstreet/inquiry/security/advisories/new). You will receive an acknowledgement within 72 hours and a resolution timeline within 14 days.
+Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/IgnyteSoftware/inquiry/security/advisories/new). You will receive an acknowledgement within 72 hours and a resolution timeline within 14 days.
 
 If private advisory reporting is unavailable, email the maintainer directly at jake.overstreet@icloud.com with the subject line `[SECURITY] Inquiry vulnerability report`.
 

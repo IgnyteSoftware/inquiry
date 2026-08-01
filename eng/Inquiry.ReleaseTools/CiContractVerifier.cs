@@ -33,7 +33,7 @@ public static class CiContractVerifier
         var document = LoadYaml(Path.GetFullPath(workflowPath, root));
         var workflow = Map(document, "workflow", "name", "on", "permissions", "jobs");
         Require(Scalar(workflow["name"], "workflow.name") == "CI", "Workflow name must be CI.");
-        VerifyTriggers(Map(workflow["on"], "workflow.on", "pull_request", "merge_group"));
+        VerifyTriggers(Map(workflow["on"], "workflow.on", "push", "pull_request", "merge_group"));
         var permissions = Map(workflow["permissions"], "workflow.permissions", "contents");
         Require(Scalar(permissions["contents"], "workflow.permissions.contents") == "read", "Workflow contents permission must be read.");
 
@@ -49,6 +49,10 @@ public static class CiContractVerifier
 
     private static void VerifyTriggers(IReadOnlyDictionary<string, YamlNode> triggers)
     {
+        // push on main is post-merge signal, not a gate: branch protection is what actually blocks a
+        // bad merge. It exists so a commit that lands directly on main is still verified.
+        var push = Map(triggers["push"], "push", "branches");
+        RequireSequence(Sequence(push["branches"], "push.branches"), ["main"], "push branches");
         var pullRequest = Map(triggers["pull_request"], "pull_request", "branches");
         RequireSequence(Sequence(pullRequest["branches"], "pull_request.branches"), ["main", "prerelease"], "pull_request branches");
         Require(IsNull(triggers["merge_group"]), "merge_group must not be narrowed by filters.");

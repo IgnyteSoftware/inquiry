@@ -52,5 +52,5 @@ pipeline — it fits entirely inside the existing `SqlBuilder` contract + `IInqu
 command-init hook, and Oracle's `RETURNING … INTO` ref-cursor handling lives in its connection factory.)
 
 > The full per-workstream design specs are retained in-repo under
-> [`docs/plans/`](https://github.com/JakeOverstreet/inquiry/tree/main/docs/plans) as the archived design
+> [`docs/plans/`](https://github.com/IgnyteSoftware/inquiry/tree/main/docs/plans) as the archived design
 > record. See also [Design notes](design-notes.md).

@@ -304,11 +304,11 @@ Message: `docs(site): add Contributing page (reconciled CI/process facts)`
 - Create: `docs/site/develop/adding-a-provider.md` (from `docs/plans/adding-a-provider.md`)
 - Create: `docs/site/develop/design-notes.md` (distilled from `docs/plans/README.md` + the workstream specs + `docs/superpowers/`)
 
-- [ ] **Step 1: Read `docs/plans/adding-a-provider.md`** and adapt it into `develop/adding-a-provider.md`: keep the append-point checklist, fix any relative links (the site copy lives under `develop/`, so links to `../../src/...` become GitHub links `https://github.com/JakeOverstreet/inquiry/blob/main/src/...` or are reworded as paths), and ensure the abstract `SqlBuilder` members / new diagnostics list is current (mention `INQ040`/`INQ041`/`INQ042` exist; `INQ027` retired).
+- [ ] **Step 1: Read `docs/plans/adding-a-provider.md`** and adapt it into `develop/adding-a-provider.md`: keep the append-point checklist, fix any relative links (the site copy lives under `develop/`, so links to `../../src/...` become GitHub links `https://github.com/IgnyteSoftware/inquiry/blob/main/src/...` or are reworded as paths), and ensure the abstract `SqlBuilder` members / new diagnostics list is current (mention `INQ040`/`INQ041`/`INQ042` exist; `INQ027` retired).
 
 - [ ] **Step 2: Write `develop/design-notes.md`** — a distilled design record (not a wholesale copy). Sections:
   - **What Inquiry is** — compile-time-SQL micro-ORM; Roslyn incremental generator; runtime ships zero SQL.
-  - **The 13-workstream roadmap (implemented)** — the table from `docs/plans/README.md` (E1–E3, W1–W10) with a one-line description each, noting all are merged. Link the archived specs on GitHub (`https://github.com/JakeOverstreet/inquiry/tree/main/docs/plans`).
+  - **The 13-workstream roadmap (implemented)** — the table from `docs/plans/README.md` (E1–E3, W1–W10) with a one-line description each, noting all are merged. Link the archived specs on GitHub (`https://github.com/IgnyteSoftware/inquiry/tree/main/docs/plans`).
   - **The shared "hot spine"** — why naive parallelism fails; the foundation-first pass; that new `SqlBuilder` capabilities are `virtual`-with-base-default where dialect-uniform.
   - **Live-runtime testing & benchmarks** — per-dialect compilation of the shared Northwind source; one Testcontainer per provider suite; the catalog-introspection fidelity guardrail; cross-provider apples-to-apples benchmarks + `SequentialAccess` read streaming. (Distilled from `docs/superpowers/specs/2026-06-01-live-runtime-testing-design.md` and `2026-06-02-test-coverage-and-benchmark-expansion-design.md`.)
   - **Out of scope** — Migrations Phase B, NoSQL, JOIN/lazy eager loading (cross-link the Roadmap's "Explicitly not planned").

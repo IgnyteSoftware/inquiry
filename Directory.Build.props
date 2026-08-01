@@ -10,9 +10,9 @@
     <NuGetAuditMode>all</NuGetAuditMode>
 
     <!-- NuGet package metadata -->
-    <RepositoryUrl>https://github.com/JakeOverstreet/inquiry</RepositoryUrl>
+    <RepositoryUrl>https://github.com/IgnyteSoftware/inquiry</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/JakeOverstreet/inquiry</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/IgnyteSoftware/inquiry</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>micro-orm;source-generator;ado.net;sql</PackageTags>
     <Authors>Inquiry Contributors</Authors>

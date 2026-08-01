@@ -8,7 +8,7 @@ statement as a `const string` at build time. The runtime ships zero SQL.
 **1.0.0 is not release-ready**, though the stop-ship lane is now clear. GitHub has 40 open issues: 12
 carry a 1.0 priority label (7 P1 and 5 P2) and are assigned to the `1.0.0` milestone; five are explicitly
 planned for 1.x or demand-driven work; and 23 are non-blocking `review-gate` follow-ups. **No P0 remains**
-— [#89](https://github.com/JakeOverstreet/inquiry/issues/89) (release engineering and governance) closed
+— [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (release engineering and governance) closed
 2026-07-25. The [Roadmap](roadmap.md) records the complete priority inventory.
 
 Delivery is active. Since 2026-07-14, thirteen prioritized issues have closed: #214 (SequentialGuid sort
@@ -16,16 +16,16 @@ order), #78 (stored-procedure INOUT / multi-result-set / Oracle REF CURSOR), #15
 cancellation), #178 (pessimistic row-level locking), #188 (stored-procedure metadata), #210 (column-list
 constants), #211 (InquiryPagedResult), #212 (typed FK attribute), #213 (ASP.NET Core audit-context
 middleware), #219 (generated query contracts),
-[#69](https://github.com/JakeOverstreet/inquiry/issues/69) (SQL Server TVP production hardening),
-[#87](https://github.com/JakeOverstreet/inquiry/issues/87) (benchmark truth and regression gates), and
-[#86](https://github.com/JakeOverstreet/inquiry/issues/86) (unified telemetry for all execution paths).
-[#89](https://github.com/JakeOverstreet/inquiry/issues/89) (release engineering and governance) closed
+[#69](https://github.com/IgnyteSoftware/inquiry/issues/69) (SQL Server TVP production hardening),
+[#87](https://github.com/IgnyteSoftware/inquiry/issues/87) (benchmark truth and regression gates), and
+[#86](https://github.com/IgnyteSoftware/inquiry/issues/86) (unified telemetry for all execution paths).
+[#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (release engineering and governance) closed
 2026-07-25: governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), public API baseline
 (PublicApiAnalyzers + EnablePackageValidation), package verification, CycloneDX SBOM and SLSA build
 provenance, hosted docs, CODEOWNERS and branch protection, and CodeQL plus dependency scanning. Two of
 those activate when the repository goes public: branch protection
 (`eng/configure-branch-protection.ps1`) and CodeQL code scanning.
-[#70](https://github.com/JakeOverstreet/inquiry/issues/70) (eager loading) closed 2026-07-26.
+[#70](https://github.com/IgnyteSoftware/inquiry/issues/70) (eager loading) closed 2026-07-26.
 
 ## Supported database engines (6, all live-tested)
 
@@ -80,9 +80,9 @@ now defines the exact nine-package 1.0 bundle, and the cross-platform verifier r
 dependency, repository-commit, metadata, symbol, and SourceLink drift. `eng/pack-release.ps1` packs from
 an exact commit in a detached worktree, and CI separates the package producer from an independent verifier
 before the versioned `ci-required-v1` aggregate gate can pass. Public publishing remains disabled.
-[#87](https://github.com/JakeOverstreet/inquiry/issues/87) (benchmark truth and regression gates) is closed:
+[#87](https://github.com/IgnyteSoftware/inquiry/issues/87) (benchmark truth and regression gates) is closed:
 corrected baselines committed, weekly regression budgets enforced, and EF Core coverage gaps closed.
-[#89](https://github.com/JakeOverstreet/inquiry/issues/89) closed 2026-07-25 across all nine acceptance
+[#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25 across all nine acceptance
 criteria: package identity, an immutable CI artifact, clean consumer installs on net8/net9/net10 and
 NativeAOT from the produced nupkgs, an API-compatibility baseline, CycloneDX SBOM plus SLSA build
 provenance and dependency auditing, release/support/security policies, hosted versioned documentation,
@@ -91,10 +91,10 @@ CODEOWNERS and branch protection, and CodeQL plus dependency scanning. See
 
 ## Security status
 
-The early repository scan findings fixed in `318ee5f` remain covered. A fresh [#220](https://github.com/JakeOverstreet/inquiry/pull/220) security diff scan
-and threat-model review then found a custom-shell CI bypass; [#220](https://github.com/JakeOverstreet/inquiry/pull/220) fixed it and added regression coverage.
+The early repository scan findings fixed in `318ee5f` remain covered. A fresh [#220](https://github.com/IgnyteSoftware/inquiry/pull/220) security diff scan
+and threat-model review then found a custom-shell CI bypass; [#220](https://github.com/IgnyteSoftware/inquiry/pull/220) fixed it and added regression coverage.
 The post-fix review reported no remaining reportable findings. Security evidence, policies, and release
-governance shipped with [#89](https://github.com/JakeOverstreet/inquiry/issues/89) (closed 2026-07-25):
+governance shipped with [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (closed 2026-07-25):
 SECURITY.md, a CycloneDX SBOM and SLSA build provenance on every packed artifact, NuGetAudit over direct
 and transitive dependencies, and a CodeQL + dependency-scanning workflow. CodeQL activates when the
 repository goes public or GitHub Advanced Security is enabled.
@@ -124,7 +124,7 @@ Northwind stores.
 
 **For current test counts**, run the whole suite (`dotnet test`) or a single project
 (e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). The provider-restoration gate in
-[#171](https://github.com/JakeOverstreet/inquiry/issues/171) is closed. Two consecutive full CI runs
+[#171](https://github.com/IgnyteSoftware/inquiry/issues/171) is closed. Two consecutive full CI runs
 are green at 20/20 required checks each, including every one of the 15 PostgreSQL, MySQL, MariaDB,
 SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs. Docker-gated suites skip locally
 (not in CI) when Docker is unavailable.
@@ -136,5 +136,5 @@ Oracle × net8.0/net9.0/net10.0 via Testcontainers — exactly 15 required legs)
 and the independent **package-verifier**. The `ci-required-v1` aggregator runs even after failures and
 fails unless all required jobs and matrix legs succeed. Direct merging has been retired; external
 rulesets must protect both branches with this context and the review requirements documented under
-[#89](https://github.com/JakeOverstreet/inquiry/issues/89). A separate **scheduled weekly workflow**
+[#89](https://github.com/IgnyteSoftware/inquiry/issues/89). A separate **scheduled weekly workflow**
 (`scheduled.yml`) repeats the full provider × net8.0/net9.0/net10.0 matrix every Monday.

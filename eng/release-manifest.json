@@ -150,8 +150,8 @@
     "licenseExpression": "MIT",
     "readme": "README.md",
     "icon": "icon.png",
-    "repositoryUrl": "https://github.com/JakeOverstreet/inquiry",
-    "repositoryBranch": "refs/heads/prerelease",
+    "repositoryUrl": "https://github.com/IgnyteSoftware/inquiry",
+    "repositoryBranch": "refs/heads/main",
     "requireSymbols": true,
     "requireSourceLink": true
   }

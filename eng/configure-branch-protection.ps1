@@ -16,7 +16,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$owner = 'JakeOverstreet'
+$owner = 'IgnyteSoftware'
 $repo  = 'inquiry'
 
 $body = @{

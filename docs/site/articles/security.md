@@ -56,7 +56,7 @@ Generated store methods are unaffected (their SQL and parameters are compile-tim
 
 ## Credentials and connection strings
 
-Connection strings, and the credentials in them, are the host application's responsibility. Inquiry takes a connection string at DI-registration time (`AddInquirySqlServer(connectionString)`, ...) and hands it to the provider's `DbConnection`; it never logs it. Keep real credentials out of source control: load them from environment variables, a secrets manager, or your platform's configuration provider. The bundled sample demonstrates this with its `INQUIRY_SAMPLE_DB` environment-variable override; see [`samples/Inquiry.Sample/README.md`](https://github.com/JakeOverstreet/inquiry/blob/main/samples/Inquiry.Sample/README.md).
+Connection strings, and the credentials in them, are the host application's responsibility. Inquiry takes a connection string at DI-registration time (`AddInquirySqlServer(connectionString)`, ...) and hands it to the provider's `DbConnection`; it never logs it. Keep real credentials out of source control: load them from environment variables, a secrets manager, or your platform's configuration provider. The bundled sample demonstrates this with its `INQUIRY_SAMPLE_DB` environment-variable override; see [`samples/Inquiry.Sample/README.md`](https://github.com/IgnyteSoftware/inquiry/blob/main/samples/Inquiry.Sample/README.md).
 
 ## Telemetry and data exposure
 

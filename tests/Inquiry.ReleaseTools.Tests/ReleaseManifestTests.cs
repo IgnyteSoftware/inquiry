@@ -304,7 +304,7 @@ public sealed class ReleaseManifestTests
                 root.Remove("schemaVersion");
                 break;
             case "repository-branch":
-                root["assets"]!["repositoryBranch"] = "refs/heads/main";
+                root["assets"]!["repositoryBranch"] = "refs/heads/prerelease";
                 break;
             case "null-id":
                 packages[0]!["id"] = null;

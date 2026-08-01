@@ -75,7 +75,7 @@ difference being measured, not baseline drift. Do not "fix" it.
 Ratios in the committed `EagerGridBenchmarks` baseline (`Grid_Inquiry` ÷ `Grid_AdoNet`, median): 0.97 at
 (1000, 4), 1.00 at (1000, 100), **1.15 at (100000, 4)**, 0.98 at (100000, 100). That dense-100k outlier
 predates the children-first streaming change (#70) and has not been re-measured since. It is tracked as
-[#265](https://github.com/JakeOverstreet/inquiry/issues/265) — because the baseline pins 1.15 as the
+[#265](https://github.com/IgnyteSoftware/inquiry/issues/265) — because the baseline pins 1.15 as the
 expected value, the regression gate will never flag it. `EagerLoadingBenchmarks` is **not** exempt — it
 runs 1.11–1.13× and the ordinary rule applies.
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/JakeOverstreet/inquiry/schemas/benchmark-evidence-v2.json",
+  "$id": "https://github.com/IgnyteSoftware/inquiry/schemas/benchmark-evidence-v2.json",
   "title": "Inquiry benchmark checked evidence envelope v2",
   "type": "object",
   "additionalProperties": false,

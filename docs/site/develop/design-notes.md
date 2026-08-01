@@ -2,8 +2,8 @@
 
 The condensed design and dependency record. For the user-facing architecture write-up see
 [Architecture](../articles/architecture.md); the full per-workstream specs are retained in-repo under
-[`docs/plans/`](https://github.com/JakeOverstreet/inquiry/tree/main/docs/plans) and
-[`docs/superpowers/`](https://github.com/JakeOverstreet/inquiry/tree/main/docs/superpowers).
+[`docs/plans/`](https://github.com/IgnyteSoftware/inquiry/tree/main/docs/plans) and
+[`docs/superpowers/`](https://github.com/IgnyteSoftware/inquiry/tree/main/docs/superpowers).
 
 ## What Inquiry is
 

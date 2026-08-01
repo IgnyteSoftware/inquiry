@@ -76,7 +76,7 @@ approach is the convention.)
 
 ## CI
 
-[`.github/workflows/ci.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/ci.yml)
+[`.github/workflows/ci.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/ci.yml)
 runs for pull requests into `prerelease` and `main`, and for merge-queue `merge_group` events:
 
 - a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker);
@@ -91,7 +91,7 @@ aggregator from drifting away from it. CI uploads TRX result artifacts even afte
 evidence is absent, and retains the artifacts for 14 days.
 
 A separate **scheduled weekly workflow**
-([`scheduled.yml`](https://github.com/JakeOverstreet/inquiry/blob/main/.github/workflows/scheduled.yml))
+([`scheduled.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/scheduled.yml))
 runs every Monday and repeats the full three-TFM integration matrix, re-verifying every provider against
 current container images.
 
@@ -114,7 +114,7 @@ Inquiry uses **MinVer** for tag-based versioning. The version is derived from th
 ### How to release
 
 Public publishing is disabled while the immutable release-candidate pipeline is being completed under
-[#89](https://github.com/JakeOverstreet/inquiry/issues/89). Do not create or push a release tag manually.
+[#89](https://github.com/IgnyteSoftware/inquiry/issues/89). Do not create or push a release tag manually.
 The retired tag workflow rebuilt source and wildcard-pushed packages; that path was intentionally removed.
 
 For local package-contract verification only, pack the nine manifest entries at an exact commit:
