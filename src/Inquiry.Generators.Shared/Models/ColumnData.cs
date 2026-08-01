@@ -48,6 +48,12 @@ internal sealed record ColumnData : IColumn
     /// <summary>The bool value a global-filter column must equal for a row to stay visible (InquiryGlobalFilter.KeepWhen, default true).</summary>
     public bool GlobalFilterKeepWhenTrue { get; init; } = true;
 
+    /// <summary>
+    /// InquiryGlobalFilter.Name, or null for an unnamed (non-bypassable) filter. Only a named filter
+    /// can be dropped from a method's SQL via [InquiryIgnoreFilter]; whitespace normalizes to null.
+    /// </summary>
+    public string? GlobalFilterName { get; init; }
+
     public bool IsConcurrencyToken { get; init; }
     public bool IsDatabaseGeneratedToken { get; init; }
     public bool EnumAsString { get; init; }

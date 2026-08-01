@@ -171,6 +171,11 @@ Inquiry.Entities.InquiryGlobalFilterAttribute
 Inquiry.Entities.InquiryGlobalFilterAttribute.InquiryGlobalFilterAttribute() -> void
 Inquiry.Entities.InquiryGlobalFilterAttribute.KeepWhen.get -> bool
 Inquiry.Entities.InquiryGlobalFilterAttribute.KeepWhen.set -> void
+Inquiry.Entities.InquiryGlobalFilterAttribute.Name.get -> string?
+Inquiry.Entities.InquiryGlobalFilterAttribute.Name.set -> void
+Inquiry.Stores.InquiryIgnoreFilterAttribute
+Inquiry.Stores.InquiryIgnoreFilterAttribute.InquiryIgnoreFilterAttribute(string! filterName) -> void
+Inquiry.Stores.InquiryIgnoreFilterAttribute.FilterName.get -> string!
 Inquiry.Entities.InquiryIndexAttribute
 Inquiry.Entities.InquiryIndexAttribute.Include.get -> string![]!
 Inquiry.Entities.InquiryIndexAttribute.Include.set -> void

@@ -51,6 +51,8 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ083         Paged-result + Distinct conflict [IN USE]
     //   INQ086         Stored-procedure TVP binding     (collection param on sproc: missing TvpTypeName, unsupported provider, or type mapping failure) [IN USE]
     //   INQ087–INQ089  Many-to-many configuration     (INQ087 junction/related type unmapped, INQ088 named junction FK not a mapped column, INQ089 child FKs do not pair with the related key) [IN USE]
+    //   INQ091         Ignore-filter bypass            ([InquiryIgnoreFilter] names an unknown/unnamed filter, or sits on an operation that composes no filters) [IN USE]
+    //   INQ092         Global-filter name              ([InquiryGlobalFilter] Name blank, or duplicated across the entity's filters) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -354,6 +356,30 @@ internal static class InquiryDiagnosticDescriptors
         "INQ090",
         "InquiryManyToMany cannot synthesize an auto-managed junction",
         "Entity '{0}' relation '{1}' uses an auto-managed [InquiryManyToMany], but the junction cannot be synthesized: {2}.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ092: a global-filter Name that breaks the bypass contract at the declaration site. A blank
+    // name looks named but can never be matched; a duplicate makes one [InquiryIgnoreFilter] silently
+    // drop MULTIPLE predicates — the ambiguous multi-term removal the named mechanism exists to avoid.
+    public static readonly DiagnosticDescriptor GlobalFilterNameInvalid = new(
+        "INQ092",
+        "InquiryGlobalFilter Name is invalid",
+        "Entity '{0}' property '{1}' has an invalid [InquiryGlobalFilter] Name: {2}.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ091: an [InquiryIgnoreFilter] that cannot bypass anything. Reason-parameterised like INQ090 —
+    // an unknown or unnamed filter name, or an operation whose SQL never composes the entity's filters.
+    // An error rather than a warning: a typo'd name silently returning FILTERED results is the
+    // cross-tenant-read shape this attribute's compile-time contract exists to prevent, and an
+    // ignored-but-ineffective attribute misleads the reader about what the method returns.
+    public static readonly DiagnosticDescriptor IgnoreFilterInvalid = new(
+        "INQ091",
+        "InquiryIgnoreFilter cannot bypass the named filter",
+        "Store method '{0}' is marked [InquiryIgnoreFilter(\"{1}\")], but {2}.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

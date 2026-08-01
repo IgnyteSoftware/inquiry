@@ -84,7 +84,31 @@ private const string _sqlCount =
 
 ## No silent bypass
 
-Unlike soft delete — which has a per-method `IncludeDeleted = true` opt-out — a global filter has **no per-method bypass**. That's deliberate: a tenant-isolation or publish filter is a safety boundary you don't want a stray flag to drop. When you genuinely need an unfiltered read (an admin "all tenants" view, a back-office report), reach for an [ad-hoc query](ad-hoc-dtos.md) or a hand-written [`InquiryCommand`](crud.md), where the absence of the filter is explicit and reviewable.
+Unlike soft delete — which has a per-method `IncludeDeleted = true` opt-out — an **unnamed** global filter has **no per-method bypass**. That's deliberate: a tenant-isolation filter is a safety boundary you don't want a stray flag to drop. When you genuinely need an unfiltered read (an admin "all tenants" view, a back-office report), reach for an [ad-hoc query](ad-hoc-dtos.md) or a hand-written [`InquiryCommand`](crud.md), where the absence of the filter is explicit and reviewable.
+
+## Named filters and per-method bypass
+
+For filters that are conveniences rather than security boundaries — a `PublishGate` an admin view legitimately lists drafts past — give the filter a `Name` and bypass it per method with `[InquiryIgnoreFilter]` (the EF 10 `IgnoreQueryFilters(string[])` analog, fully compile-time):
+
+```csharp
+[InquiryColumn("IsPublished"), InquiryGlobalFilter(Name = "PublishGate")]
+public bool IsPublished { get; set; }
+
+[InquiryColumn("IsActive"), InquiryGlobalFilter]   // unnamed — never bypassable
+public bool IsActive { get; set; }
+
+// In the store:
+[InquirySelectAll]                                  // WHERE IsPublished = 1 AND IsActive = 1
+[InquirySelectAll, InquiryIgnoreFilter("PublishGate")] // WHERE IsActive = 1
+```
+
+The rules keep the bypass exactly as safe as the rest of the mechanism:
+
+- Only a filter with a **declared `Name`** can be bypassed; the ignore attribute names the filter, never the column. Unnamed filters always stay composed.
+- The name is resolved **entirely at generation time** — the method still gets a const SQL string with the term simply absent. On any generated operation, an unknown or unnamed filter name is a **build error** (`INQ091`) that drops the method, never a silently ignored attribute; a blank or duplicated `Name` on the entity is one too (`INQ092`, with duplicated names additionally rendered non-bypassable so a suppressed diagnostic cannot widen the bypass). The generator cannot see hand-written methods — an ignore attribute on a method with no Inquiry operation attribute is outside its reach and does nothing.
+- One attribute per filter; apply it multiple times to bypass several named filters.
+- Valid on the read operations that compose the filter — selects, paged/keyset reads, `Count`, `Exists`, aggregates, group counts, full-text search. Eager-loading methods reject it (`INQ091`) in v1, and it never applies to writes.
+- `IncludeDeleted` and a named bypass compose independently: each drops exactly its own term.
 
 This also means the filter and soft delete compose cleanly: on an entity with **both**, `IncludeDeleted = true` drops only the soft-delete term — the global filter still applies, so an "include deleted" read still respects tenant isolation.
 

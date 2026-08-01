@@ -287,6 +287,7 @@ internal static class EntityProcessor
             // concurrency token — those own the column's value (INQ059, flag cleared so emission stays valid).
             var isGlobalFilter = false;
             var globalFilterKeepWhenTrue = true;
+            string? globalFilterName = null;
             var globalFilterAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryGlobalFilterAttribute");
             if (globalFilterAttribute is not null)
             {
@@ -304,6 +305,23 @@ internal static class EntityProcessor
                 {
                     isGlobalFilter = true;
                     globalFilterKeepWhenTrue = GeneratorHelpers.GetNamedBool(globalFilterAttribute, "KeepWhen", defaultValue: true);
+                    // Name is optional (null = deliberately unnamed and non-bypassable), but a name
+                    // that was WRITTEN and can never match — blank/whitespace — is an error, not a
+                    // silent downgrade to unnamed: the author expressed bypassability and got none.
+                    var name = GeneratorHelpers.GetNamedString(globalFilterAttribute, "Name");
+                    if (name is not null && string.IsNullOrWhiteSpace(name))
+                    {
+                        diagnostics.Add(DiagnosticData.Create(
+                            InquiryDiagnosticDescriptors.GlobalFilterNameInvalid,
+                            property.Locations.FirstOrDefault(),
+                            entitySymbol.Name,
+                            property.Name,
+                            "the name is empty or whitespace — give the filter a non-blank name, or omit Name to keep it unnamed and non-bypassable"));
+                    }
+                    else
+                    {
+                        globalFilterName = name;
+                    }
                 }
             }
 
@@ -471,6 +489,7 @@ internal static class EntityProcessor
                 SoftDelete = softDelete,
                 IsGlobalFilter = isGlobalFilter,
                 GlobalFilterKeepWhenTrue = globalFilterKeepWhenTrue,
+                GlobalFilterName = globalFilterName,
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 IsCreatedAt = isCreatedAt,
@@ -528,6 +547,44 @@ internal static class EntityProcessor
                     property.Locations.FirstOrDefault(),
                     entitySymbol.Name,
                     property.Name));
+            }
+        }
+
+        // A duplicated filter Name would make one [InquiryIgnoreFilter] silently drop MULTIPLE
+        // predicates — reject at the declaration site (INQ092) rather than let the bypass become an
+        // ambiguous multi-term removal. Ordinal, like the name matching itself.
+        var seenFilterNames = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string>? duplicatedFilterNames = null;
+        foreach (var column in columns)
+        {
+            if (!column.IsGlobalFilter || column.GlobalFilterName is null || seenFilterNames.Add(column.GlobalFilterName))
+            {
+                continue;
+            }
+
+            (duplicatedFilterNames ??= new HashSet<string>(StringComparer.Ordinal)).Add(column.GlobalFilterName);
+            diagnostics.Add(DiagnosticData.Create(
+                InquiryDiagnosticDescriptors.GlobalFilterNameInvalid,
+                entitySymbol.Locations.FirstOrDefault(),
+                entitySymbol.Name,
+                column.PropertyName,
+                $"the name \"{column.GlobalFilterName}\" is already used by another [InquiryGlobalFilter] on this entity — filter names must be unique so a bypass removes exactly one predicate"));
+        }
+
+        // Structural enforcement, not just the diagnostic: INQ092 is suppressible (.editorconfig /
+        // NoWarn), and a suppressed duplicate must not leave two same-named bypassable filters — one
+        // [InquiryIgnoreFilter] would drop BOTH predicates. Clearing the name on every colliding
+        // column makes them unnamed (never bypassable): the filters stay composed, and a method that
+        // names the duplicated filter now fails INQ091's unknown-name check, which is enforced by
+        // dropping the method (CS8795) rather than by a suppressible diagnostic alone.
+        if (duplicatedFilterNames is not null)
+        {
+            for (var i = 0; i < columns.Count; i++)
+            {
+                if (columns[i].GlobalFilterName is { } filterName && duplicatedFilterNames.Contains(filterName))
+                {
+                    columns[i] = columns[i] with { GlobalFilterName = null };
+                }
             }
         }
 

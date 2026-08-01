@@ -49,6 +49,13 @@ public sealed class SqlBuildContext
     /// upsert-returning emulation cannot identify a row after a secondary-unique conflict use this
     /// metadata to degrade that operation instead of returning the wrong row.
     /// </param>
+    /// <param name="ignoredGlobalFilterNames">
+    /// Named <c>[InquiryGlobalFilter]</c> filters to leave OUT of the active-row predicate — the
+    /// per-method context for an <c>[InquiryIgnoreFilter]</c> method. Matching is by the filter's
+    /// declared <c>Name</c>; unnamed filters can never match and always stay composed. Null (the
+    /// default) for every context with no bypass in play. Validated upstream (INQ091), so an
+    /// unmatched entry here is simply inert.
+    /// </param>
     public SqlBuildContext(
         SqlBuilder builder,
         string? schema,
@@ -58,7 +65,8 @@ public sealed class SqlBuildContext
         bool generateForeignKeys = true,
         IColumn? softDeletePredicateColumn = null,
         IReadOnlyList<IColumn>? globalFilterPredicateColumns = null,
-        bool hasSecondaryUniqueConstraint = false)
+        bool hasSecondaryUniqueConstraint = false,
+        IReadOnlyCollection<string>? ignoredGlobalFilterNames = null)
     {
         Columns = columns;
         RawSchema = schema;
@@ -128,9 +136,17 @@ public sealed class SqlBuildContext
             }
         }
 
-        // Global filters. Always applied — unlike soft delete, there is no per-method opt-out, so they
-        // are not suppressed by IncludeDeleted (an "include deleted" read still respects tenant filtering).
+        // Global filters. Applied unconditionally except for a NAMED filter the method explicitly
+        // bypasses via [InquiryIgnoreFilter] (ignoredGlobalFilterNames). They are never suppressed by
+        // IncludeDeleted (an "include deleted" read still composes them), and an unnamed filter has no
+        // handle to bypass by design.
         var globalFilterColumns = columns.Where(c => c.IsGlobalFilter).Concat(globalFilterPredicateColumns ?? Array.Empty<IColumn>());
+        if (ignoredGlobalFilterNames is { Count: > 0 })
+        {
+            globalFilterColumns = globalFilterColumns.Where(
+                gf => gf.GlobalFilterName is null || !ignoredGlobalFilterNames.Contains(gf.GlobalFilterName));
+        }
+
         foreach (var gf in globalFilterColumns)
         {
             var gfQuoted = builder.QuoteIdentifier(gf.ColumnName);

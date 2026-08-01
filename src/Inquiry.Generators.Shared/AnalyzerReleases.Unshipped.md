@@ -90,3 +90,5 @@ INQ087 | Inquiry | Error | InquiryManyToMany junction or related type is not a m
 INQ088 | Inquiry | Error | InquiryManyToMany names a junction property that is not a mapped column
 INQ089 | Inquiry | Error | InquiryManyToMany child foreign keys do not pair with the related entity's key
 INQ090 | Inquiry | Error | InquiryManyToMany cannot synthesize an auto-managed junction
+INQ091 | Inquiry | Error | InquiryIgnoreFilter cannot bypass the named filter
+INQ092 | Inquiry | Error | InquiryGlobalFilter Name is invalid

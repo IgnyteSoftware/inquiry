@@ -252,12 +252,17 @@ internal static class StoreOperationEmitter
             }
 
             case StoreOperation.Count:
+            {
                 // COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
-                // so the Task is returned directly (no async state machine).
+                // so the Task is returned directly (no async state machine). A named-filter bypass is
+                // the one per-method Count shape; the matching const is emitted by StoreProcessor
+                // under the same IgnoredFilterNames condition.
+                var countField = method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.Name : "_sqlCount";
                 AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand("_sqlCount")}, {cancellation});");
+                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField)}, {cancellation});");
                 source.AppendLine("    }");
                 break;
+            }
 
             case StoreOperation.Exists:
                 // EXISTS returns a 1/0 scalar the runtime coerces to bool; criteria (if any) bind through

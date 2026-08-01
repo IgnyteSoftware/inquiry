@@ -15,7 +15,7 @@ public sealed class GlobalFilterDoc
     [InquiryColumn("Name")]
     public string Name { get; set; } = string.Empty;
 
-    [InquiryColumn("IsPublished"), InquiryGlobalFilter]
+    [InquiryColumn("IsPublished"), InquiryGlobalFilter(Name = "PublishGate")]
     public bool IsPublished { get; set; }
 
     [InquiryColumn("IsDeleted"), InquirySoftDelete]
@@ -35,6 +35,16 @@ public partial class GlobalFilterDocStore : InquiryStore<GlobalFilterDoc>
 
     [InquiryCount]
     public partial Task<long> CountPublishedAsync(CancellationToken cancellationToken = default);
+
+    // Named-filter bypass (#82 phase A): drops only the PublishGate predicate from this method's
+    // const — the soft-delete term stays, so a deleted draft remains hidden even here.
+    [InquirySelectAll]
+    [InquiryIgnoreFilter("PublishGate")]
+    public partial Task<IReadOnlyList<GlobalFilterDoc>> AllIncludingDraftsAsync(CancellationToken cancellationToken = default);
+
+    [InquiryCount]
+    [InquiryIgnoreFilter("PublishGate")]
+    public partial Task<long> CountIncludingDraftsAsync(CancellationToken cancellationToken = default);
 }
 
 [InquiryTable("GlobalFilterTicket")]

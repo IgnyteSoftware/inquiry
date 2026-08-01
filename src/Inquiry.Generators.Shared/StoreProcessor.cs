@@ -409,6 +409,7 @@ internal static class StoreProcessor
             KeysetFields = new EquatableArray<string>(keysetFields),
             KeysetDescending = keysetDescending,
             IncludeDeleted = includeDeleted,
+            IgnoredFilterNames = new EquatableArray<string>(ReadIgnoredFilterNames(method)),
             Distinct = distinct,
             HardDelete = hardDelete,
             LockMode = lockMode,
@@ -667,6 +668,37 @@ internal static class StoreProcessor
         }
 
         return enumerable is { TypeArguments.Length: 1 } ? enumerable.TypeArguments[0] : null;
+    }
+
+    /// <summary>
+    /// Reads every <c>[InquiryIgnoreFilter("name")]</c> on the method in declaration order. Blank
+    /// names are kept — they fail INQ091 validation at emit (no entity filter can carry one), which
+    /// is where the caller learns the attribute did nothing.
+    /// </summary>
+    private static ImmutableArray<string> ReadIgnoredFilterNames(IMethodSymbol method)
+    {
+        var builder = ImmutableArray.CreateBuilder<string>();
+        foreach (var candidate in method.GetAttributes())
+        {
+            if (candidate.AttributeClass?.Name != "InquiryIgnoreFilterAttribute" || !GeneratorHelpers.IsStoreAttribute(candidate))
+            {
+                continue;
+            }
+
+            if (candidate.ConstructorArguments.Length > 0 && candidate.ConstructorArguments[0].Value is string name)
+            {
+                builder.Add(name);
+            }
+            else
+            {
+                // A null argument ([InquiryIgnoreFilter(null!)]) must not vanish silently — record an
+                // empty name so INQ091's unknown-name branch fires (blank declared names are rejected
+                // by INQ092, so "" can never legitimately match a filter).
+                builder.Add(string.Empty);
+            }
+        }
+
+        return builder.ToImmutable();
     }
 
     /// <summary>
@@ -1381,7 +1413,34 @@ internal static class StoreProcessor
             ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
                 suppressSoftDelete: true, hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint)
             : ctx;
-        SqlBuildContext CtxFor(StoreMethodData m) => hasSoftDelete && m.IncludeDeleted ? ctxIncludeDeleted : ctx;
+        // A method bypassing named filters ([InquiryIgnoreFilter]) needs a context whose active-row
+        // predicate omits them. Cached per distinct (soft-delete-suppressed, name-set) — bypassing
+        // methods are rare, so the dictionary usually never allocates.
+        Dictionary<string, SqlBuildContext>? ignoreFilterContexts = null;
+        SqlBuildContext CtxFor(StoreMethodData m)
+        {
+            var suppressSoftDeleteForMethod = hasSoftDelete && m.IncludeDeleted;
+            if (m.IgnoredFilterNames.Count == 0)
+                return suppressSoftDeleteForMethod ? ctxIncludeDeleted : ctx;
+
+            var ignored = new HashSet<string>(m.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal);
+            // Length-prefixed serialization: a bare join would let the sets {"a|b"} and {"a","b"}
+            // collide on one cache key (filter names may contain any non-blank characters), handing
+            // one bypass method the other's context.
+            var cacheKey = (suppressSoftDeleteForMethod ? "1" : "0") + string.Concat(
+                ignored.OrderBy(static n => n, StringComparer.Ordinal).Select(static n => "|" + n.Length + ":" + n));
+            ignoreFilterContexts ??= new Dictionary<string, SqlBuildContext>(StringComparer.Ordinal);
+            if (!ignoreFilterContexts.TryGetValue(cacheKey, out var built))
+            {
+                built = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
+                    suppressSoftDelete: suppressSoftDeleteForMethod,
+                    hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint,
+                    ignoredGlobalFilterNames: ignored);
+                ignoreFilterContexts[cacheKey] = built;
+            }
+
+            return built;
+        }
 
         // Keyless (view) entities have no key column; the database-supplied-key upsert check below is
         // upsert-only, and views reject upserts (INQ052), so a keyless entity short-circuits to false.
@@ -1393,8 +1452,13 @@ internal static class StoreProcessor
         // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so
         // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. A method that
         // opts into IncludeDeleted gets its own unfiltered per-method const instead of the shared one.
+        // Exact complement of the needsPerMethodSql gate below — a method is served by the shared
+        // const precisely when no per-method shape (IncludeDeleted, Distinct, LockMode, named-filter
+        // bypass) forces its own. Keeping the two in lockstep is what prevents both dead shared
+        // consts and a bypass method silently falling back to filtered SQL.
         bool UsesSharedSelect((StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan) m)
-            => !(hasSoftDelete && m.Method.IncludeDeleted) && !m.Method.Distinct && m.Method.LockMode == 0;
+            => !(hasSoftDelete && m.Method.IncludeDeleted) && !m.Method.Distinct && m.Method.LockMode == 0
+                && m.Method.IgnoredFilterNames.Count == 0;
 
         var needsSelectAll = valid.Any(m => UsesSharedSelect(m) &&
             ((m.Method.Operation == StoreOperation.SelectAll && m.SelectPlan is null) ||
@@ -1425,7 +1489,7 @@ internal static class StoreProcessor
         var needsDeleteReturning = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.ReturnsEntity && (!hasSoftDelete || m.Method.HardDelete));
         var needsSoftDeleteReturning = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.ReturnsEntity && !m.Method.HardDelete);
         var needsRestore = valid.Any(static m => m.Method.Operation == StoreOperation.RestoreOneByKey);
-        var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count);
+        var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count && m.Method.IgnoredFilterNames.Count == 0);
         // A [InquiryBulkInsert] on a dialect without a native bulk-copy API compiles down to the
         // batch-insert body, so it needs the same baked consts.
         var needsInsertAll = valid.Any(m => m.Method.Operation == StoreOperation.InsertAll
@@ -1586,7 +1650,7 @@ internal static class StoreProcessor
             if (method.Operation == StoreOperation.Aggregate)
             {
                 var aggColumn = FindColumn(entity, method.AggregateColumn!)!;
-                AppendConstSql(source, "_sqlAgg_" + method.Name, sqlBuilder.BuildAggregateSql(ctx, method.AggregateFunction!, sqlBuilder.QuoteIdentifier(aggColumn.ColumnName)));
+                AppendConstSql(source, "_sqlAgg_" + method.Name, sqlBuilder.BuildAggregateSql(CtxFor(method), method.AggregateFunction!, sqlBuilder.QuoteIdentifier(aggColumn.ColumnName)));
             }
             else if (method.Operation == StoreOperation.SelectTopByOrder)
             {
@@ -1622,7 +1686,8 @@ internal static class StoreProcessor
                     ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns),
                         suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
                         softDeletePredicateColumn: entity.SoftDeleteColumn,
-                        globalFilterPredicateColumns: entityGlobalFilters)
+                        globalFilterPredicateColumns: entityGlobalFilters,
+                        ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null)
                     : CtxFor(method);
                 var planSql = BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan, method.Distinct);
                 if (method.LockMode != 0)
@@ -1648,16 +1713,20 @@ internal static class StoreProcessor
         }
 
         // emit a per-method base SELECT const for each non-plan select that needs one: IncludeDeleted
-        // on a soft-delete entity (unfiltered), Distinct (SELECT DISTINCT), LockMode, or any combination.
+        // on a soft-delete entity (unfiltered), Distinct (SELECT DISTINCT), LockMode, a named-filter
+        // bypass, or any combination. The ignore-filter term MUST be in this gate — a method whose
+        // only customization is [InquiryIgnoreFilter] would otherwise fall back to the shared const
+        // and silently keep the filter it claims to bypass.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
-            var needsPerMethodSql = (hasSoftDelete && method.IncludeDeleted) || method.Distinct || method.LockMode != 0;
+            var needsPerMethodSql = (hasSoftDelete && method.IncludeDeleted) || method.Distinct || method.LockMode != 0
+                || method.IgnoredFilterNames.Count > 0;
             if (!needsPerMethodSql || selectPlan is not null)
             {
                 continue;
             }
 
-            var methodCtx = hasSoftDelete && method.IncludeDeleted ? ctxIncludeDeleted : ctx;
+            var methodCtx = CtxFor(method);
 
             switch (method.Operation)
             {
@@ -1704,6 +1773,16 @@ internal static class StoreProcessor
                     baseSelectFields[method.Name] = field;
                     break;
                 }
+
+                // Count shares one _sqlCount const; a named-filter bypass is the only per-method shape
+                // it supports, so the per-method const exists exactly when the emitter picks the
+                // per-method name (StoreOperationEmitter's Count case keys off IgnoredFilterNames too).
+                // "_sqlCountFor_" rather than "_sqlCount_": the ReturnsPagedResult plan path already
+                // emits _sqlCount_<name>, and a paged overload sharing this method's name would
+                // otherwise collide into a CS0102 duplicate const in the generated store.
+                case StoreOperation.Count when method.IgnoredFilterNames.Count > 0:
+                    AppendConstSql(source, "_sqlCountFor_" + method.Name, sqlBuilder.BuildCountSql(methodCtx));
+                    break;
             }
         }
 
@@ -1843,7 +1922,8 @@ internal static class StoreProcessor
             var projCtx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(proj.Columns),
                 suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
                 softDeletePredicateColumn: entity.SoftDeleteColumn,
-                globalFilterPredicateColumns: entityGlobalFilters);
+                globalFilterPredicateColumns: entityGlobalFilters,
+                ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null);
             var projSql = method.Operation == StoreOperation.SelectAllByField
                 ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct)
                 : sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct);
@@ -2051,6 +2131,43 @@ internal static class StoreProcessor
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.OperationRequiresKey, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
             return false;
+        }
+
+        // [InquiryIgnoreFilter] must actually bypass something: every name must match a NAMED
+        // [InquiryGlobalFilter] on the entity, and the operation must be one whose per-method context
+        // composes the entity's filters (the non-eager select shapes). Eager loaders are excluded in
+        // v1 — their relation consts are shared per-relation, not per-method, so a bypass there would
+        // silently rewrite every eager method's SQL. Each failure is an error (INQ091): a typo that
+        // silently left the filter composed would misrepresent what the method returns.
+        if (method.IgnoredFilterNames.Count > 0)
+        {
+            var ignoreFilterOperationValid = method.Operation is StoreOperation.SelectAll
+                or StoreOperation.SelectOneByKey or StoreOperation.SelectAllByField
+                or StoreOperation.SelectAllByPredicate or StoreOperation.SelectTopByOrder
+                or StoreOperation.GroupCount or StoreOperation.KeysetPage
+                or StoreOperation.FullTextSearch or StoreOperation.Count
+                or StoreOperation.Exists or StoreOperation.Aggregate;
+            if (!ignoreFilterOperationValid)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.IgnoreFilterInvalid, method.Location?.ToLocation(),
+                    method.Name, method.IgnoredFilterNames[0],
+                    "the operation's SQL does not compose the entity's global filters per method — the attribute is valid only on non-eager select operations"));
+                return false;
+            }
+
+            foreach (var ignoredName in method.IgnoredFilterNames)
+            {
+                var matches = entity.Columns.AsImmutableArray().Any(c => c.IsGlobalFilter && c.GlobalFilterName == ignoredName);
+                if (!matches)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.IgnoreFilterInvalid, method.Location?.ToLocation(),
+                        method.Name, ignoredName,
+                        $"entity '{entity.Name}' has no [InquiryGlobalFilter(Name = \"{ignoredName}\")] column — only a filter with a matching declared Name can be bypassed, and an unnamed filter never can"));
+                    return false;
+                }
+            }
         }
 
         // restore only makes sense on a soft-delete entity. Without the indicator column the restore

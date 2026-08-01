@@ -30,6 +30,29 @@ public sealed class GlobalFilterIntegrationTests
     }
 
     [Fact]
+    public async Task IgnoreFilterBypassesOnlyTheNamedGateAndOnlyOnTheAnnotatedMethods()
+    {
+        var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.GlobalFilterSqliteDdl, "GlobalFilter");
+        await using var _ = harness;
+        var store = harness.GetRequiredService<GlobalFilterDocStore>();
+
+        await store.InsertAsync(new GlobalFilterDoc { Name = "Published", IsPublished = true });
+        await store.InsertAsync(new GlobalFilterDoc { Name = "Draft", IsPublished = false });
+        // A deleted draft: the bypass drops ONLY the publish gate, so soft delete still hides it.
+        await store.InsertAsync(new GlobalFilterDoc { Name = "DeletedDraft", IsPublished = false, IsDeleted = true });
+
+        // The bypass methods see the live draft but not the deleted one.
+        var drafts = await store.AllIncludingDraftsAsync();
+        Assert.Equal(new[] { "Draft", "Published" }, drafts.Select(d => d.Name).OrderBy(n => n).ToArray());
+        Assert.Equal(2L, await store.CountIncludingDraftsAsync());
+
+        // The unannotated methods still filter — the bypass is per method, not per store.
+        var published = Assert.Single(await store.AllAsync());
+        Assert.Equal("Published", published.Name);
+        Assert.Equal(1L, await store.CountPublishedAsync());
+    }
+
+    [Fact]
     public async Task IncludeDeletedKeepsTheGlobalFilter()
     {
         var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.GlobalFilterSqliteDdl, "GlobalFilter");

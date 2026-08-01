@@ -64,6 +64,12 @@ public interface IColumn
     /// </summary>
     bool GlobalFilterKeepWhenTrue { get; }
 
+    /// <summary>
+    /// <c>InquiryGlobalFilter.Name</c>, or null for an unnamed (non-bypassable) filter. Ignored when
+    /// <see cref="IsGlobalFilter"/> is false.
+    /// </summary>
+    string? GlobalFilterName { get; }
+
     /// <summary>True when this column is the entity's optimistic-concurrency token.</summary>
     bool IsConcurrencyToken { get; }
 

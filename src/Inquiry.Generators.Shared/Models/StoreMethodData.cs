@@ -75,6 +75,13 @@ internal sealed record StoreMethodData(
     public bool IncludeDeleted { get; init; }
 
     /// <summary>
+    /// The <c>[InquiryIgnoreFilter]</c> names on the method, in declaration order. Each must match a
+    /// named <c>[InquiryGlobalFilter]</c> on the entity (INQ091 otherwise); the matched filters'
+    /// predicates are dropped from this method's generated SQL.
+    /// </summary>
+    public EquatableArray<string> IgnoredFilterNames { get; init; } = EquatableArray<string>.Empty;
+
+    /// <summary>
     /// For a select operation, whether <c>Distinct = true</c> was set so the generated query
     /// emits <c>SELECT DISTINCT</c> instead of <c>SELECT</c>.
     /// </summary>

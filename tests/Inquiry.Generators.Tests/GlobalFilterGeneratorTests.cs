@@ -358,4 +358,315 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ059");
     }
+
+    // ---- Named filters + [InquiryIgnoreFilter] (#82 phase A) ----
+
+    /// <summary>
+    /// A named, bypassable publish gate alongside an UNNAMED (never bypassable) active flag, so every
+    /// bypass assertion can also prove the unnamed filter survived — dropping too much is the failure
+    /// mode that matters.
+    /// </summary>
+    private const string NamedFilterEntity = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("TPost")]
+        public sealed class Post
+        {
+            [InquiryKey]
+            public long Id { get; set; }
+
+            [InquiryColumn("Title")]
+            public string Title { get; set; } = string.Empty;
+
+            [InquiryColumn("IsPublished"), InquiryGlobalFilter(Name = "PublishGate")]
+            public bool IsPublished { get; set; }
+
+            [InquiryColumn("IsActive"), InquiryGlobalFilter]
+            public bool IsActive { get; set; }
+        }
+        """;
+
+    private static string PostStoreSource(string methods) =>
+        NamedFilterEntity + "\n\npublic partial class PostStore : Inquiry.Stores.InquiryStore<Demo.Post>\n{\n" + methods + "\n}\n";
+
+    private static string GetNamedFilterPostStore(GeneratorTestResult result)
+        => Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("PostStore.InquiryStore.g.cs", StringComparison.Ordinal))
+            .GetText().ToString();
+
+    [Fact]
+    public void IgnoreFilterDropsOnlyTheNamedFilterAndOnlyOnTheAnnotatedMethod_Sqlite()
+    {
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<Post>> PublishedAsync(CancellationToken cancellationToken = default);
+
+            [InquirySelectAll]
+            [InquiryIgnoreFilter("PublishGate")]
+            public partial Task<IReadOnlyList<Post>> IncludingDraftsAsync(CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetNamedFilterPostStore(result);
+
+        // The unannotated method keeps BOTH filters through the shared const.
+        Assert.Contains("_sqlSelectAll = \"SELECT \\\"Id\\\", \\\"Title\\\", \\\"IsPublished\\\", \\\"IsActive\\\" FROM \\\"TPost\\\" WHERE \\\"IsPublished\\\" = 1 AND \\\"IsActive\\\" = 1\";", text);
+        // The bypass method gets its OWN const with the named gate dropped and the unnamed flag intact.
+        Assert.Contains("_sqlSelectAll_IncludingDraftsAsync = \"SELECT \\\"Id\\\", \\\"Title\\\", \\\"IsPublished\\\", \\\"IsActive\\\" FROM \\\"TPost\\\" WHERE \\\"IsActive\\\" = 1\";", text);
+    }
+
+    [Fact]
+    public void IgnoreFilterAppliesToKeyAndFieldSelects_Sqlite()
+    {
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectOneByKey]
+            [InquiryIgnoreFilter("PublishGate")]
+            public partial Task<Post?> AnyByKeyAsync(long id, CancellationToken cancellationToken = default);
+
+            [InquirySelectAllByField("Title")]
+            [InquiryIgnoreFilter("PublishGate")]
+            public partial Task<IReadOnlyList<Post>> AnyByTitleAsync(string title, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetNamedFilterPostStore(result);
+
+        Assert.Contains("WHERE \\\"Id\\\" = @Id AND \\\"IsActive\\\" = 1\";", text);
+        Assert.Contains("WHERE \\\"Title\\\" = @Title AND \\\"IsActive\\\" = 1\";", text);
+        Assert.DoesNotContain("\\\"IsPublished\\\" = 1 AND \\\"IsActive\\\" = 1\\\" WHERE \\\"Id\\\"", text);
+    }
+
+    [Fact]
+    public void IgnoreFilterUnknownNameReportsINQ091()
+    {
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectAll]
+            [InquiryIgnoreFilter("PublishGat")]
+            public partial Task<IReadOnlyList<Post>> TypoAsync(CancellationToken cancellationToken = default);
+            """));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ091" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void IgnoreFilterCannotBypassAnUnnamedFilterReportsINQ091()
+    {
+        // "IsActive" is the unnamed filter's COLUMN name — an unnamed filter has no name to match, and
+        // guessing the column name must not become a bypass handle.
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectAll]
+            [InquiryIgnoreFilter("IsActive")]
+            public partial Task<IReadOnlyList<Post>> SneakyAsync(CancellationToken cancellationToken = default);
+            """));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ091" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void IgnoreFilterOnANonSelectOperationReportsINQ091()
+    {
+        var result = RunGenerator(PostStoreSource("""
+            [InquiryInsert]
+            [InquiryIgnoreFilter("PublishGate")]
+            public partial Task<int> InsertAsync(Post post, CancellationToken cancellationToken = default);
+            """));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ091" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void IgnoreFilterOnAnEagerSelectReportsINQ091()
+    {
+        // Eager relation consts are shared per relation, not per method — a bypass there would rewrite
+        // every eager method's SQL, so v1 rejects it rather than half-applying it.
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectAllEager]
+            [InquiryIgnoreFilter("PublishGate")]
+            public partial IAsyncEnumerable<Post> AllEagerAsync(CancellationToken cancellationToken = default);
+            """));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ091" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void IgnoreFilterAppliesToCountAndAggregate_Sqlite()
+    {
+        // Count and Aggregate compose the active-row predicate like any select, so the semantic rule
+        // ("bypassable wherever the filter is composed") covers them: Count switches to a per-method
+        // const, Aggregate's already-per-method const is built from the bypass context.
+        var result = RunGenerator(PostStoreSource("""
+            [InquiryCount]
+            [InquiryIgnoreFilter("PublishGate")]
+            public partial Task<long> CountAllAsync(CancellationToken cancellationToken = default);
+
+            [InquiryAggregate(InquiryAggregateFunction.Max, "Id")]
+            [InquiryIgnoreFilter("PublishGate")]
+            public partial Task<long> MaxIdAsync(CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetNamedFilterPostStore(result);
+
+        Assert.Contains("_sqlCountFor_CountAllAsync = \"SELECT COUNT(*) FROM \\\"TPost\\\" WHERE \\\"IsActive\\\" = 1\";", text);
+        Assert.Contains("_sqlAgg_MaxIdAsync = \"SELECT MAX(\\\"Id\\\") FROM \\\"TPost\\\" WHERE \\\"IsActive\\\" = 1\";", text);
+        // The method body references the per-method count const, not the shared filtered one.
+        Assert.Contains("_sqlCountFor_CountAllAsync,", text.Replace("\r", ""));
+    }
+
+    [Fact]
+    public void IgnoreFilterNullNameReportsINQ091InsteadOfVanishing()
+    {
+        // [InquiryIgnoreFilter(null!)] compiles; it must surface as a build error, not a silently
+        // dropped attribute that leaves the method reading as bypassed while returning filtered rows.
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectAll]
+            [InquiryIgnoreFilter(null!)]
+            public partial Task<IReadOnlyList<Post>> NullNameAsync(CancellationToken cancellationToken = default);
+            """));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ091" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void IgnoreFilterCacheKeyDistinguishesNamesContainingTheDelimiter_Sqlite()
+    {
+        // Filter names may contain any non-blank characters, including the cache key's own separator.
+        // {"a|b"} and {"a","b"} must build DIFFERENT contexts — a bare join would collide them and
+        // hand one method the other's SQL.
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TTri")]
+            public sealed class Tri
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryColumn("A"), InquiryGlobalFilter(Name = "a")]
+                public bool A { get; set; }
+
+                [InquiryColumn("B"), InquiryGlobalFilter(Name = "b")]
+                public bool B { get; set; }
+
+                [InquiryColumn("C"), InquiryGlobalFilter(Name = "a|b")]
+                public bool C { get; set; }
+            }
+
+            public partial class TriStore : Inquiry.Stores.InquiryStore<Demo.Tri>
+            {
+                [InquirySelectAll]
+                [InquiryIgnoreFilter("a|b")]
+                public partial Task<IReadOnlyList<Tri>> WithoutCAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectAll]
+                [InquiryIgnoreFilter("a")]
+                [InquiryIgnoreFilter("b")]
+                public partial Task<IReadOnlyList<Tri>> WithoutAAndBAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var text = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("TriStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Contains("_sqlSelectAll_WithoutCAsync = \"SELECT \\\"Id\\\", \\\"A\\\", \\\"B\\\", \\\"C\\\" FROM \\\"TTri\\\" WHERE \\\"A\\\" = 1 AND \\\"B\\\" = 1\";", text);
+        Assert.Contains("_sqlSelectAll_WithoutAAndBAsync = \"SELECT \\\"Id\\\", \\\"A\\\", \\\"B\\\", \\\"C\\\" FROM \\\"TTri\\\" WHERE \\\"C\\\" = 1\";", text);
+    }
+
+    [Fact]
+    public void GlobalFilterBlankNameReportsINQ092()
+    {
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<Post>> AllAsync(CancellationToken cancellationToken = default);
+            """).Replace("Name = \"PublishGate\"", "Name = \"  \""));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ092" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void GlobalFilterDuplicateNameReportsINQ092()
+    {
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<Post>> AllAsync(CancellationToken cancellationToken = default);
+            """).Replace("[InquiryColumn(\"IsActive\"), InquiryGlobalFilter]", "[InquiryColumn(\"IsActive\"), InquiryGlobalFilter(Name = \"PublishGate\")]"));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ092" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void GlobalFilterDuplicateNameIsStructurallyNonBypassable()
+    {
+        // INQ092 is suppressible; the enforcement must not be. Duplicated names are cleared from the
+        // model, so a bypass naming the duplicate gets INQ091 (unknown name → method dropped) instead
+        // of one attribute silently removing BOTH predicates.
+        var result = RunGenerator(PostStoreSource("""
+            [InquirySelectAll]
+            [InquiryIgnoreFilter("PublishGate")]
+            public partial Task<IReadOnlyList<Post>> BypassAsync(CancellationToken cancellationToken = default);
+            """).Replace("[InquiryColumn(\"IsActive\"), InquiryGlobalFilter]", "[InquiryColumn(\"IsActive\"), InquiryGlobalFilter(Name = \"PublishGate\")]"));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ092");
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ091");
+    }
+
+    [Fact]
+    public void IgnoreFilterCombinesWithIncludeDeletedAndKeepsUnbypassedTerms_Sqlite()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TPost")]
+            public sealed class Post
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryColumn("IsPublished"), InquiryGlobalFilter(Name = "PublishGate")]
+                public bool IsPublished { get; set; }
+
+                [InquiryColumn("IsActive"), InquiryGlobalFilter]
+                public bool IsActive { get; set; }
+
+                [InquiryColumn("IsDeleted"), InquirySoftDelete]
+                public bool IsDeleted { get; set; }
+            }
+
+            public partial class PostStore : Inquiry.Stores.InquiryStore<Demo.Post>
+            {
+                [InquirySelectAll(IncludeDeleted = true)]
+                [InquiryIgnoreFilter("PublishGate")]
+                public partial Task<IReadOnlyList<Post>> EverythingButInactiveAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var text = GetNamedFilterPostStore(result);
+
+        // Soft delete dropped by IncludeDeleted, PublishGate dropped by name — the unnamed IsActive
+        // filter is the only term left.
+        Assert.Contains("_sqlSelectAll_EverythingButInactiveAsync = \"SELECT \\\"Id\\\", \\\"IsPublished\\\", \\\"IsActive\\\", \\\"IsDeleted\\\" FROM \\\"TPost\\\" WHERE \\\"IsActive\\\" = 1\";", text);
+    }
 }

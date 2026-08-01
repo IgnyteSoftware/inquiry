@@ -26,4 +26,14 @@ public sealed class InquiryGlobalFilterAttribute : Attribute
     /// rows where the column is false (e.g. an <c>IsArchived</c> flag where the unarchived rows are kept).
     /// </summary>
     public bool KeepWhen { get; set; } = true;
+
+    /// <summary>
+    /// Optional name that makes this filter selectively bypassable: a store method annotated
+    /// <c>[InquiryIgnoreFilter("name")]</c> is generated without this filter's predicate. An UNNAMED
+    /// filter cannot be bypassed at all — leave <see cref="Name"/> unset for security boundaries
+    /// (tenant flags) and name only filters that legitimate callers sometimes need to see through
+    /// (a <c>PublishGate</c> an admin view lists drafts past). The name is resolved entirely at
+    /// generation time; a method naming a filter that does not exist on the entity is a build error.
+    /// </summary>
+    public string? Name { get; set; }
 }
