@@ -58,9 +58,9 @@ Register Inquiry with a provider and resolve the store:
 using Inquiry.DependencyInjection;
 using Inquiry.Sqlite.DependencyInjection;
 
-services
-    .AddInquiry()
-    .AddInquirySqlite(connectionString);
+services.AddInquiry();                 // core runtime services
+services.AddInquiryGeneratedStores();  // stores generated in this assembly
+services.AddInquirySqlite(connectionString);
 
 var orgs = sp.GetRequiredService<OrganizationStore>();
 await foreach (var o in orgs.SelectAllAsync()) { /* ... */ }

@@ -18,7 +18,10 @@ public sealed record ReleasePackage(
     [property: JsonRequired] IReadOnlyList<string> LibTfms,
     [property: JsonRequired] IReadOnlyList<string> Analyzers,
     [property: JsonRequired] IReadOnlyList<string> AnalyzerSymbols,
-    [property: JsonRequired] IReadOnlyList<string> FrameworkReferences);
+    [property: JsonRequired] IReadOnlyList<string> FrameworkReferences,
+    // Dependencies the SDK prunes from specific TFM groups because a declared framework
+    // reference supplies them (e.g. Microsoft.Extensions.* on net10.0 via AspNetCore.App).
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? PrunedDependencies = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReleaseAssets(

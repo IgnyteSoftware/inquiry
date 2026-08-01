@@ -13,6 +13,7 @@
             "Inquiry.MySql/Inquiry.MySql.csproj",
             "Inquiry.MariaDb/Inquiry.MariaDb.csproj",
             "Inquiry.Oracle/Inquiry.Oracle.csproj",
+            "Inquiry.AspNetCore/Inquiry.AspNetCore.csproj",
             "Inquiry.Interceptors/Inquiry.Interceptors.csproj"
           ]
         }

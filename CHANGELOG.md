@@ -43,6 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ASP.NET Core audit-context middleware via `UseInquiryAuditContext()` for stamping `CreatedBy`/`ModifiedBy` from the current user identity.
 - Interceptors package with slow-query logging, sqlcommenter trace-context tagging, and N+1 query detection.
 - Testing package with SQLite fixture, recording interceptor, entity factory, transaction sandbox, and Respawn reset.
-- 82 Roslyn analyzer diagnostics (INQ001–INQ086) for compile-time validation.
+- 88 Roslyn analyzer diagnostics (INQ001–INQ093) for compile-time validation.
 
 [Unreleased]: https://github.com/IgnyteSoftware/inquiry/commits/main

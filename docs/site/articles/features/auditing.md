@@ -61,6 +61,8 @@ using (InquiryAuditContext.BeginScope(httpContext.User.Identity?.Name))
 
 `InquiryAuditContext.CurrentUser` flows across `await` via `AsyncLocal`, so concurrent requests stay isolated; `BeginScope` returns a disposable that restores the previous value (scopes nest). The **created/modified semantics are identical to the timestamps** — `CreatedBy` is stamped on insert only when unset (null or empty) and excluded from every UPDATE SET; `ModifiedBy` is stamped on every insert/update/upsert.
 
+In ASP.NET Core apps, the `Ignyte.Inquiry.AspNetCore` package wraps this in ready-made middleware — `app.UseInquiryAuditContext()` opens the scope per request, defaulting the user to the `ClaimTypes.NameIdentifier` claim (register it after `UseAuthentication`; pass a `Func<HttpContext, string?>` to resolve the user differently).
+
 ## Rules and limits
 
 - A timestamp column must be `DateTime`/`DateTimeOffset`; a user column must be `string` (nullable allowed). Combining either with a key, `IsGenerated`, `UseDatabaseDefault`, `[InquirySoftDelete]`, or `[InquiryConcurrencyToken]` is a build-time error (`INQ049` for timestamps, `INQ055` for users). At most one of each per entity (`INQ050` / `INQ056`).

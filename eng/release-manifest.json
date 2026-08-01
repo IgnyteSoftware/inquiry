@@ -40,7 +40,15 @@
       "analyzerSymbols": [],
       "frameworkReferences": [
         "Microsoft.AspNetCore.App"
-      ]
+      ],
+      "prunedDependencies": {
+        "net10.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Diagnostics.HealthChecks",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.Sqlite",

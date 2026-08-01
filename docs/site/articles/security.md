@@ -64,4 +64,4 @@ The opt-in telemetry layer (`AddInquiryTelemetry()`) never records parameter val
 
 ## Reporting
 
-Found a security issue in Inquiry itself? Open a private report via the repository's GitHub security advisories rather than a public issue.
+Found a security issue in Inquiry itself? Open a private report via [GitHub private vulnerability reporting](https://github.com/IgnyteSoftware/inquiry/security/advisories/new) rather than a public issue — see [SECURITY.md](https://github.com/IgnyteSoftware/inquiry/blob/main/SECURITY.md) for the disclosure policy.

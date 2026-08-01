@@ -1,8 +1,8 @@
 name: Scheduled (full TFM matrix)
 on:
   schedule:
-    # Weekly, Mondays 06:00 UTC. Adds the net10.0 provider coverage the PR matrix omits, and
-    # re-verifies every provider against current container images.
+    # Weekly, Mondays 06:00 UTC. Repeats the full three-TFM provider matrix that PRs already
+    # run, re-verifying every provider against current container images.
     - cron: '0 6 * * 1'
   workflow_dispatch:
 

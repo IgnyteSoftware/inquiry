@@ -74,6 +74,13 @@ public static class PackageVerifier
             var frameworkReferences = package.FrameworkReferences ?? throw new ReleaseVerificationException($"{package.Id} frameworkReferences must be an array.");
             Require(frameworkReferences.All(reference => !string.IsNullOrWhiteSpace(reference)), $"{package.Id} frameworkReferences must contain only non-empty strings.");
             Require(frameworkReferences.Distinct(StringComparer.Ordinal).Count() == frameworkReferences.Count, $"{package.Id} has duplicate framework references.");
+            foreach (var pruned in package.PrunedDependencies ?? new Dictionary<string, IReadOnlyList<string>>())
+            {
+                Require(frameworkReferences.Count > 0, $"{package.Id} prunedDependencies requires a framework reference to prune against.");
+                Require(package.LibTfms.Contains(pruned.Key, StringComparer.Ordinal), $"{package.Id} prunes dependencies for unknown TFM {pruned.Key}.");
+                Require(pruned.Value is not null && pruned.Value.All(id => package.Dependencies.ContainsKey(id)),
+                    $"{package.Id} prunes dependencies that are not declared for {pruned.Key}.");
+            }
             Require(dependencies.All(dependency => !string.IsNullOrWhiteSpace(dependency.Key) && !string.IsNullOrWhiteSpace(dependency.Value)),
                 $"{package.Id} dependencies must map non-empty IDs to exact versions.");
             Require(libTfms.All(tfm => tfm is not null), $"{package.Id} libTfms must contain only strings.");
@@ -343,18 +350,21 @@ public static class PackageVerifier
                 $"{package.Id} dependency TFMs");
             foreach (var group in dependencyGroups)
             {
+                var groupTfm = (string?)group.Attribute("targetFramework") ?? string.Empty;
                 var dependencies = group.Elements().Where(element => element.Name.LocalName == "dependency").ToArray();
                 var ids = dependencies.Select(element => (string?)element.Attribute("id") ?? string.Empty).ToArray();
                 Require(ids.Distinct(StringComparer.Ordinal).Count() == ids.Length,
-                    $"{package.Id} dependency group {(string?)group.Attribute("targetFramework")} contains duplicate IDs.");
+                    $"{package.Id} dependency group {groupTfm} contains duplicate IDs.");
                 var actual = dependencies.ToDictionary(
                     element => (string?)element.Attribute("id") ?? string.Empty,
                     element => (string?)element.Attribute("version") ?? string.Empty,
                     StringComparer.Ordinal);
-                RequireSequence(actual.Keys.Order(StringComparer.Ordinal), package.Dependencies.Keys.Order(StringComparer.Ordinal),
-                    $"{package.Id} dependencies for {(string?)group.Attribute("targetFramework")}");
+                var prunedIds = package.PrunedDependencies?.GetValueOrDefault(groupTfm) ?? [];
+                var expectedIds = package.Dependencies.Keys.Where(id => !prunedIds.Contains(id, StringComparer.Ordinal)).ToArray();
+                RequireSequence(actual.Keys.Order(StringComparer.Ordinal), expectedIds.Order(StringComparer.Ordinal),
+                    $"{package.Id} dependencies for {groupTfm}");
                 var familyIds = manifest.Packages.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
-                foreach (var dependency in package.Dependencies)
+                foreach (var dependency in package.Dependencies.Where(item => actual.ContainsKey(item.Key)))
                 {
                     // Sibling packages are packed at the effective (possibly -preview.N) version;
                     // external dependencies stay at their manifest-pinned versions.
