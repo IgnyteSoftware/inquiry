@@ -10,7 +10,7 @@ public static class ReleaseTool
         {
             if (args.Length == 0)
             {
-                return Task.FromResult(Fail(error, "Usage: verify-manifest <repository-root> <manifest> | verify-ci <repository-root> <contract> <workflow> | verify-bundle <repository-root> <manifest> <bundle-directory> <commit> [tag]"));
+                return Task.FromResult(Fail(error, "Usage: verify-manifest <repository-root> <manifest> | verify-ci <repository-root> <contract> <workflow> | verify-bundle <repository-root> <manifest> <bundle-directory> <commit> [tag] [--version <version>] [--branch <refs/heads/...>]"));
             }
 
             switch (args[0])
@@ -23,10 +23,33 @@ public static class ReleaseTool
                     CiContractVerifier.Verify(args[1], args[2], args[3]);
                     output.WriteLine("Required CI contract is valid.");
                     return Task.FromResult(0);
-                case "verify-bundle" when args.Length is 5 or 6:
-                    PackageVerifier.VerifyBundle(args[1], args[2], args[3], args[4], args.Length == 6 ? args[5] : null);
+                case "verify-bundle" when args.Length >= 5:
+                {
+                    string? tag = null, expectedVersion = null, expectedBranch = null;
+                    for (var index = 5; index < args.Length; index++)
+                    {
+                        if (args[index] == "--version" && index + 1 < args.Length && expectedVersion is null)
+                        {
+                            expectedVersion = args[++index];
+                        }
+                        else if (args[index] == "--branch" && index + 1 < args.Length && expectedBranch is null)
+                        {
+                            expectedBranch = args[++index];
+                        }
+                        else if (tag is null && !args[index].StartsWith("--", StringComparison.Ordinal))
+                        {
+                            tag = args[index];
+                        }
+                        else
+                        {
+                            return Task.FromResult(Fail(error, "Invalid command or arguments."));
+                        }
+                    }
+
+                    PackageVerifier.VerifyBundle(args[1], args[2], args[3], args[4], tag, expectedVersion, expectedBranch);
                     output.WriteLine("Release bundle is valid.");
                     return Task.FromResult(0);
+                }
                 default:
                     return Task.FromResult(Fail(error, "Invalid command or arguments."));
             }

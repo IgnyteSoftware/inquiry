@@ -1,0 +1,6 @@
+#nullable enable
+Inquiry.AspNetCore.InquiryAuditContextApplicationBuilderExtensions
+Inquiry.AspNetCore.InquiryAuditContextMiddleware
+Inquiry.AspNetCore.InquiryAuditContextMiddleware.InquiryAuditContextMiddleware(Microsoft.AspNetCore.Http.RequestDelegate! next, System.Func<Microsoft.AspNetCore.Http.HttpContext!, string?>! userResolver) -> void
+Inquiry.AspNetCore.InquiryAuditContextMiddleware.InvokeAsync(Microsoft.AspNetCore.Http.HttpContext! context) -> System.Threading.Tasks.Task!
+static Inquiry.AspNetCore.InquiryAuditContextApplicationBuilderExtensions.UseInquiryAuditContext(this Microsoft.AspNetCore.Builder.IApplicationBuilder! app, System.Func<Microsoft.AspNetCore.Http.HttpContext!, string?>? userResolver = null) -> Microsoft.AspNetCore.Builder.IApplicationBuilder!

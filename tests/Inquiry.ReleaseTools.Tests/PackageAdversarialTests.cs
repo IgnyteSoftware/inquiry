@@ -6,8 +6,8 @@ namespace Inquiry.ReleaseTools.Tests;
 
 public sealed class PackageAdversarialTests
 {
-    private static readonly Lazy<PackageFixture> Fixture = new(() => CreateFixture("Inquiry", "src/Inquiry/Inquiry.csproj"));
-    private static readonly Lazy<PackageFixture> ProviderFixture = new(() => CreateFixture("Inquiry.Sqlite", "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj"));
+    private static readonly Lazy<PackageFixture> Fixture = new(() => CreateFixture("Ignyte.Inquiry", "src/Inquiry/Inquiry.csproj"));
+    private static readonly Lazy<PackageFixture> ProviderFixture = new(() => CreateFixture("Ignyte.Inquiry.Sqlite", "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj"));
 
     [Theory]
     [InlineData("extra-entry")]
@@ -24,8 +24,8 @@ public sealed class PackageAdversarialTests
         var directory = Directory.CreateTempSubdirectory("inquiry-package-mutation-");
         try
         {
-            var nupkg = Path.Combine(directory.FullName, "Inquiry.1.0.0.nupkg");
-            var snupkg = Path.Combine(directory.FullName, "Inquiry.1.0.0.snupkg");
+            var nupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.1.0.0.nupkg");
+            var snupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.1.0.0.snupkg");
             File.Copy(fixture.Nupkg, nupkg);
             File.Copy(fixture.Snupkg, snupkg);
 
@@ -44,10 +44,10 @@ public sealed class PackageAdversarialTests
                     Mutate(nupkg, archive => Replace(archive, "icon.png", "icon.png", "not canonical"u8));
                     break;
                 case "nuspec-element":
-                    Mutate(nupkg, archive => ReplaceText(archive, "Inquiry.nuspec", "</metadata>", "<unexpected /></metadata>"));
+                    Mutate(nupkg, archive => ReplaceText(archive, "Ignyte.Inquiry.nuspec", "</metadata>", "<unexpected /></metadata>"));
                     break;
                 case "dependency-attribute":
-                    Mutate(nupkg, archive => ReplaceText(archive, "Inquiry.nuspec", "exclude=\"Build,Analyzers\"", "exclude=\"Build,Analyzers\" unexpected=\"true\""));
+                    Mutate(nupkg, archive => ReplaceText(archive, "Ignyte.Inquiry.nuspec", "exclude=\"Build,Analyzers\"", "exclude=\"Build,Analyzers\" unexpected=\"true\""));
                     break;
                 case "pdb-dll-mismatch":
                     Mutate(snupkg, archive => Replace(archive, "lib/net8.0/Inquiry.pdb", "lib/net8.0/Inquiry.pdb", Read(archive, "lib/net9.0/Inquiry.pdb")));
@@ -63,7 +63,7 @@ public sealed class PackageAdversarialTests
                 RepositoryFixture.Root,
                 Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
                 directory.FullName,
-                "Inquiry",
+                "Ignyte.Inquiry",
                 fixture.Commit));
         }
         finally
@@ -82,8 +82,8 @@ public sealed class PackageAdversarialTests
         var directory = Directory.CreateTempSubdirectory("inquiry-analyzer-symbol-mutation-");
         try
         {
-            var nupkg = Path.Combine(directory.FullName, "Inquiry.Sqlite.1.0.0.nupkg");
-            var snupkg = Path.Combine(directory.FullName, "Inquiry.Sqlite.1.0.0.snupkg");
+            var nupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.Sqlite.1.0.0.nupkg");
+            var snupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.Sqlite.1.0.0.snupkg");
             File.Copy(fixture.Nupkg, nupkg);
             File.Copy(fixture.Snupkg, snupkg);
 
@@ -111,7 +111,7 @@ public sealed class PackageAdversarialTests
                 RepositoryFixture.Root,
                 Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
                 directory.FullName,
-                "Inquiry.Sqlite",
+                "Ignyte.Inquiry.Sqlite",
                 fixture.Commit));
         }
         finally

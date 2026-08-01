@@ -14,9 +14,16 @@ public sealed class CiContractTests
     }
 
     [Fact]
-    public void Unsafe_tag_rebuild_publisher_is_absent()
+    public void Release_workflow_publishes_from_branch_builds_never_tag_rebuilds()
     {
-        Assert.False(File.Exists(Path.Combine(RepositoryFixture.Root, ".github", "workflows", "release.yml")));
+        var workflow = File.ReadAllText(Path.Combine(RepositoryFixture.Root, ".github", "workflows", "release.yml"));
+
+        // Publishing must be driven by pushes to the protected branches; a tag trigger would
+        // allow republishing bytes that were never produced by a verified branch build.
+        Assert.Contains("branches: [main, prerelease]", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("tags:", workflow, StringComparison.Ordinal);
+        Assert.Contains("./eng/pack-release.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("--skip-duplicate", workflow, StringComparison.Ordinal);
     }
 
     [Theory]

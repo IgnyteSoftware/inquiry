@@ -2,6 +2,9 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <PropertyGroup Condition="'$(IsPackable)' != 'false'">
+    <!-- The bare "Inquiry" ID is taken on nuget.org, so packages ship under the Ignyte.* prefix
+         while assemblies and namespaces keep their canonical Inquiry.* names. -->
+    <PackageId>Ignyte.$(MSBuildProjectName)</PackageId>
     <EnablePackageValidation>true</EnablePackageValidation>
     <!-- RS0026/RS0027: optional-parameter overload conventions are intentional for the 1.0 API surface. -->
     <NoWarn>$(NoWarn);RS0026;RS0027</NoWarn>

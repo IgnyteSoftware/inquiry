@@ -160,8 +160,8 @@ public sealed class ReleaseManifestTests
             }
             else if (mutation == "version")
             {
-                File.Delete(Path.Combine(bundle.FullName, "Inquiry.1.0.0.nupkg"));
-                File.WriteAllBytes(Path.Combine(bundle.FullName, "Inquiry.1.0.1.nupkg"), []);
+                File.Delete(Path.Combine(bundle.FullName, "Ignyte.Inquiry.1.0.0.nupkg"));
+                File.WriteAllBytes(Path.Combine(bundle.FullName, "Ignyte.Inquiry.1.0.1.nupkg"), []);
             }
             else if (mutation == "nested")
             {
@@ -170,10 +170,10 @@ public sealed class ReleaseManifestTests
             }
             else
             {
-                var source = Path.Combine(bundle.FullName, "Inquiry.1.0.0.nupkg");
+                var source = Path.Combine(bundle.FullName, "Ignyte.Inquiry.1.0.0.nupkg");
                 var temporary = Path.Combine(bundle.FullName, "case.tmp");
                 File.Move(source, temporary);
-                File.Move(temporary, Path.Combine(bundle.FullName, "inquiry.1.0.0.nupkg"));
+                File.Move(temporary, Path.Combine(bundle.FullName, "ignyte.inquiry.1.0.0.nupkg"));
             }
 
             Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyBundle(
@@ -243,6 +243,65 @@ public sealed class ReleaseManifestTests
     }
 
     [Theory]
+    [InlineData("1.0.1", false)]
+    [InlineData("1.0.0-preview.1", true)]
+    [InlineData("1.0.0-preview.12", true)]
+    [InlineData("1.0.0-preview.01", false)]
+    [InlineData("1.0.0-preview.", false)]
+    [InlineData("1.0.0-beta.1", false)]
+    [InlineData("1.0.1-preview.1", false)]
+    public void Bundle_expected_version_must_be_the_manifest_version_or_one_of_its_previews(string expectedVersion, bool accepted)
+    {
+        var bundle = Directory.CreateTempSubdirectory("inquiry-version-bundle-");
+        try
+        {
+            var exception = Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyBundle(
+                RepositoryFixture.Root,
+                Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+                bundle.FullName,
+                new string('a', 40),
+                expectedTag: null,
+                expectedVersion: expectedVersion));
+
+            // Accepted versions fail later, on the empty bundle inventory; rejected ones fail on the version itself.
+            if (accepted)
+            {
+                Assert.DoesNotContain("Expected version", exception.Message, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.Contains("Expected version", exception.Message, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            bundle.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Tagged_bundle_rejects_prerelease_versions()
+    {
+        var bundle = Directory.CreateTempSubdirectory("inquiry-tagged-bundle-");
+        try
+        {
+            var exception = Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyBundle(
+                RepositoryFixture.Root,
+                Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+                bundle.FullName,
+                new string('a', 40),
+                expectedTag: "v1.0.0",
+                expectedVersion: "1.0.0-preview.1"));
+
+            Assert.Equal("Tagged releases must use the exact manifest version.", exception.Message);
+        }
+        finally
+        {
+            bundle.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
     [InlineData("ABCDEF0123456789ABCDEF0123456789ABCDEF01")]
     [InlineData("abcdef0")]
     [InlineData("not-a-commit")]
@@ -285,7 +344,7 @@ public sealed class ReleaseManifestTests
                 root["packageVersion"] = "1.0.1";
                 break;
             case "dependency":
-                packages[0]!["dependencies"]!["Inquiry"] = "1.0.0";
+                packages[0]!["dependencies"]!["Ignyte.Inquiry"] = "1.0.0";
                 break;
             case "tfm":
                 packages[0]!["libTfms"]!.AsArray().RemoveAt(0);
@@ -345,11 +404,12 @@ public sealed class ReleaseManifestTests
     private static void CreateExpectedEmptyBundle(string bundle)
     {
         var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json")))!.AsObject();
+        var version = manifest["packageVersion"]!.GetValue<string>();
         foreach (var package in manifest["packages"]!.AsArray())
         {
             var id = package!["id"]!.GetValue<string>();
-            File.WriteAllBytes(Path.Combine(bundle, $"{id}.1.0.0.nupkg"), []);
-            File.WriteAllBytes(Path.Combine(bundle, $"{id}.1.0.0.snupkg"), []);
+            File.WriteAllBytes(Path.Combine(bundle, $"{id}.{version}.nupkg"), []);
+            File.WriteAllBytes(Path.Combine(bundle, $"{id}.{version}.snupkg"), []);
         }
     }
 }

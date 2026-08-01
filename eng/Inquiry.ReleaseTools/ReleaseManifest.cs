@@ -17,7 +17,8 @@ public sealed record ReleasePackage(
     [property: JsonRequired] IReadOnlyDictionary<string, string> Dependencies,
     [property: JsonRequired] IReadOnlyList<string> LibTfms,
     [property: JsonRequired] IReadOnlyList<string> Analyzers,
-    [property: JsonRequired] IReadOnlyList<string> AnalyzerSymbols);
+    [property: JsonRequired] IReadOnlyList<string> AnalyzerSymbols,
+    [property: JsonRequired] IReadOnlyList<string> FrameworkReferences);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReleaseAssets(

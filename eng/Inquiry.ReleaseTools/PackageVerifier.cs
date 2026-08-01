@@ -17,17 +17,21 @@ public static class PackageVerifier
     private static readonly TimeSpan ProjectEvaluationTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan ProcessTerminationTimeout = TimeSpan.FromSeconds(10);
     private static readonly ConcurrentDictionary<string, Lazy<IReadOnlyDictionary<string, (bool IsPackable, string PackageId)>>> ProjectEvaluationCache = new(StringComparer.Ordinal);
+    // Packages ship under the Ignyte.* prefix because the bare "Inquiry" ID is taken on
+    // nuget.org; assemblies keep their canonical Inquiry.* names.
+    private const string PackageIdPrefix = "Ignyte.";
     private static readonly string[] RequiredPackageIds =
     [
-        "Inquiry",
-        "Inquiry.Interceptors",
-        "Inquiry.MariaDb",
-        "Inquiry.MySql",
-        "Inquiry.Oracle",
-        "Inquiry.PostgreSql",
-        "Inquiry.Sqlite",
-        "Inquiry.SqlServer",
-        "Inquiry.Testing"
+        "Ignyte.Inquiry",
+        "Ignyte.Inquiry.AspNetCore",
+        "Ignyte.Inquiry.Interceptors",
+        "Ignyte.Inquiry.MariaDb",
+        "Ignyte.Inquiry.MySql",
+        "Ignyte.Inquiry.Oracle",
+        "Ignyte.Inquiry.PostgreSql",
+        "Ignyte.Inquiry.Sqlite",
+        "Ignyte.Inquiry.SqlServer",
+        "Ignyte.Inquiry.Testing"
     ];
 
     private static readonly string[] RequiredTfms = ["net8.0", "net9.0", "net10.0"];
@@ -47,9 +51,9 @@ public static class PackageVerifier
         var assets = manifest.Assets ?? throw new ReleaseVerificationException("assets must be a non-null object.");
         Require(packages.All(package => package is not null), "packages must contain only package objects.");
         Require(manifest.SchemaVersion == "inquiry-release-v1", "schemaVersion must be inquiry-release-v1.");
-        Require(manifest.PackageVersion == "1.0.0", "packageVersion must be exactly 1.0.0.");
+        Require(IsStableSemVer(manifest.PackageVersion), "packageVersion must be a stable MAJOR.MINOR.PATCH version.");
         Require(manifest.Tag == $"v{manifest.PackageVersion}", "tag must equal v plus packageVersion.");
-        Require(packages.Count == RequiredPackageIds.Length, "The manifest must contain exactly nine packages.");
+        Require(packages.Count == RequiredPackageIds.Length, $"The manifest must contain exactly {RequiredPackageIds.Length} packages.");
         foreach (var package in packages)
         {
             Require(!string.IsNullOrWhiteSpace(package.Id), "Package ID cannot be empty.");
@@ -67,6 +71,9 @@ public static class PackageVerifier
             var libTfms = package.LibTfms ?? throw new ReleaseVerificationException($"{package.Id} libTfms must be an array.");
             var analyzers = package.Analyzers ?? throw new ReleaseVerificationException($"{package.Id} analyzers must be an array.");
             var analyzerSymbols = package.AnalyzerSymbols ?? throw new ReleaseVerificationException($"{package.Id} analyzerSymbols must be an array.");
+            var frameworkReferences = package.FrameworkReferences ?? throw new ReleaseVerificationException($"{package.Id} frameworkReferences must be an array.");
+            Require(frameworkReferences.All(reference => !string.IsNullOrWhiteSpace(reference)), $"{package.Id} frameworkReferences must contain only non-empty strings.");
+            Require(frameworkReferences.Distinct(StringComparer.Ordinal).Count() == frameworkReferences.Count, $"{package.Id} has duplicate framework references.");
             Require(dependencies.All(dependency => !string.IsNullOrWhiteSpace(dependency.Key) && !string.IsNullOrWhiteSpace(dependency.Value)),
                 $"{package.Id} dependencies must map non-empty IDs to exact versions.");
             Require(libTfms.All(tfm => tfm is not null), $"{package.Id} libTfms must contain only strings.");
@@ -76,7 +83,8 @@ public static class PackageVerifier
             var projectPath = Path.GetFullPath(package.Project, root);
             Require(IsWithin(root, projectPath), $"Project path escapes the repository: {package.Project}");
             Require(File.Exists(projectPath), $"Project does not exist: {package.Project}");
-            Require(Path.GetFileNameWithoutExtension(projectPath) == package.Id, $"Project/package ID mismatch for {package.Id}.");
+            Require(PackageIdPrefix + Path.GetFileNameWithoutExtension(projectPath) == package.Id,
+                $"Package ID {package.Id} must be {PackageIdPrefix} plus its project name.");
             RequireSequence(libTfms.Order(StringComparer.Ordinal), RequiredTfms.Order(StringComparer.Ordinal), $"{package.Id} lib TFMs");
             Require(analyzers.Distinct(StringComparer.Ordinal).Count() == analyzers.Count, $"{package.Id} has duplicate analyzer assets.");
             RequireSequence(analyzerSymbols.Order(StringComparer.Ordinal), analyzers
@@ -108,11 +116,19 @@ public static class PackageVerifier
         string manifestPath,
         string bundleDirectory,
         string expectedCommit,
-        string? expectedTag = null)
+        string? expectedTag = null,
+        string? expectedVersion = null,
+        string? expectedBranch = null)
     {
         VerifyManifest(repositoryRoot, manifestPath);
         var root = Path.GetFullPath(repositoryRoot);
         var manifest = ReleaseTool.ReadManifest(Path.GetFullPath(manifestPath, root));
+        var version = expectedVersion ?? manifest.PackageVersion;
+        var branch = expectedBranch ?? manifest.Assets.RepositoryBranch;
+        Require(version == manifest.PackageVersion || IsPreviewOf(manifest.PackageVersion, version),
+            $"Expected version {version} must equal the manifest version {manifest.PackageVersion} or be one of its -preview.N versions.");
+        Require(branch.StartsWith("refs/heads/", StringComparison.Ordinal) && branch.Length > "refs/heads/".Length,
+            $"Expected branch {branch} must be a fully qualified refs/heads/ reference.");
         var bundle = Path.GetFullPath(bundleDirectory, root);
         Require(Directory.Exists(bundle), $"Bundle directory does not exist: {bundle}");
         Require((File.GetAttributes(bundle) & FileAttributes.ReparsePoint) == 0,
@@ -121,13 +137,14 @@ public static class PackageVerifier
         if (expectedTag is not null)
         {
             Require(expectedTag == manifest.Tag, $"Tag {expectedTag} does not equal manifest tag {manifest.Tag}.");
+            Require(version == manifest.PackageVersion, "Tagged releases must use the exact manifest version.");
         }
 
         var expectedFiles = manifest.Packages
             .SelectMany(package => new[]
             {
-                $"{package.Id}.{manifest.PackageVersion}.nupkg",
-                $"{package.Id}.{manifest.PackageVersion}.snupkg"
+                $"{package.Id}.{version}.nupkg",
+                $"{package.Id}.{version}.snupkg"
             })
             .Append("sbom.cdx.json")
             .Order(StringComparer.Ordinal)
@@ -143,10 +160,10 @@ public static class PackageVerifier
 
         foreach (var package in manifest.Packages)
         {
-            var nupkg = Path.Combine(bundle, $"{package.Id}.{manifest.PackageVersion}.nupkg");
-            var snupkg = Path.Combine(bundle, $"{package.Id}.{manifest.PackageVersion}.snupkg");
-            var debugIdentities = VerifyNupkg(root, nupkg, package, manifest, expectedCommit);
-            VerifySnupkg(snupkg, package, manifest, expectedCommit, debugIdentities);
+            var nupkg = Path.Combine(bundle, $"{package.Id}.{version}.nupkg");
+            var snupkg = Path.Combine(bundle, $"{package.Id}.{version}.snupkg");
+            var debugIdentities = VerifyNupkg(root, nupkg, package, manifest, expectedCommit, version, branch);
+            VerifySnupkg(snupkg, package, manifest, expectedCommit, debugIdentities, version, branch);
         }
 
         VerifySbom(Path.Combine(bundle, "sbom.cdx.json"));
@@ -164,8 +181,8 @@ public static class PackageVerifier
         var package = manifest.Packages.Single(item => item.Id == packageId);
         var nupkg = Path.Combine(bundleDirectory, $"{package.Id}.{manifest.PackageVersion}.nupkg");
         var snupkg = Path.Combine(bundleDirectory, $"{package.Id}.{manifest.PackageVersion}.snupkg");
-        var identities = VerifyNupkg(root, nupkg, package, manifest, expectedCommit);
-        VerifySnupkg(snupkg, package, manifest, expectedCommit, identities);
+        var identities = VerifyNupkg(root, nupkg, package, manifest, expectedCommit, manifest.PackageVersion, manifest.Assets.RepositoryBranch);
+        VerifySnupkg(snupkg, package, manifest, expectedCommit, identities, manifest.PackageVersion, manifest.Assets.RepositoryBranch);
     }
 
     private static void VerifyPackableProjects(string root, IReadOnlyDictionary<string, ReleasePackage> packagesById)
@@ -193,8 +210,8 @@ public static class PackageVerifier
             var properties = evaluated[projectPath];
             if (properties.IsPackable)
             {
-                Require(properties.PackageId == Path.GetFileNameWithoutExtension(projectPath),
-                    $"Packable project {projectPath} must use its canonical project name as PackageId.");
+                Require(properties.PackageId == PackageIdPrefix + Path.GetFileNameWithoutExtension(projectPath),
+                    $"Packable project {projectPath} must use {PackageIdPrefix} plus its canonical project name as PackageId.");
                 actualPaths.Add(Normalize(Path.GetRelativePath(root, projectPath)));
             }
         }
@@ -293,7 +310,7 @@ public static class PackageVerifier
         }
     }
 
-    private static IReadOnlyDictionary<string, DebugIdentity> VerifyNupkg(string root, string packagePath, ReleasePackage package, ReleaseManifest manifest, string expectedCommit)
+    private static IReadOnlyDictionary<string, DebugIdentity> VerifyNupkg(string root, string packagePath, ReleasePackage package, ReleaseManifest manifest, string expectedCommit, string version, string branch)
     {
         try
         {
@@ -309,8 +326,8 @@ public static class PackageVerifier
             VerifyCanonicalBytes(iconEntry!, Path.Combine(root, manifest.Assets.Icon), $"{package.Id} icon");
             VerifyPngIcon(iconEntry!, package.Id);
 
-            var metadata = ReadNuspecMetadata(archive, package.Id, symbols: false);
-            VerifyNuspecIdentity(metadata, package.Id, manifest, expectedCommit);
+            var metadata = ReadNuspecMetadata(archive, package, symbols: false);
+            VerifyNuspecIdentity(metadata, package, manifest, expectedCommit, version, branch);
             Require(Element(metadata, "license") == manifest.Assets.LicenseExpression, $"{package.Id} license mismatch.");
             Require(Element(metadata, "authors") == "Inquiry Contributors", $"{package.Id} authors mismatch.");
             Require(Element(metadata, "licenseUrl") == "https://licenses.nuget.org/MIT", $"{package.Id} license URL mismatch.");
@@ -336,16 +353,21 @@ public static class PackageVerifier
                     StringComparer.Ordinal);
                 RequireSequence(actual.Keys.Order(StringComparer.Ordinal), package.Dependencies.Keys.Order(StringComparer.Ordinal),
                     $"{package.Id} dependencies for {(string?)group.Attribute("targetFramework")}");
+                var familyIds = manifest.Packages.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
                 foreach (var dependency in package.Dependencies)
                 {
-                    Require(actual[dependency.Key] == dependency.Value,
-                        $"{package.Id} dependency {dependency.Key} must be {dependency.Value}; found {actual[dependency.Key]}.");
+                    // Sibling packages are packed at the effective (possibly -preview.N) version;
+                    // external dependencies stay at their manifest-pinned versions.
+                    var expectedDependencyVersion = familyIds.Contains(dependency.Key) ? version : dependency.Value;
+                    Require(actual[dependency.Key] == expectedDependencyVersion,
+                        $"{package.Id} dependency {dependency.Key} must be {expectedDependencyVersion}; found {actual[dependency.Key]}.");
                 }
             }
 
-            var expectedLibDlls = package.LibTfms.Select(tfm => $"lib/{tfm}/{package.Id}.dll").Order(StringComparer.Ordinal).ToArray();
+            var assemblyName = AssemblyName(package);
+            var expectedLibDlls = package.LibTfms.Select(tfm => $"lib/{tfm}/{assemblyName}.dll").Order(StringComparer.Ordinal).ToArray();
             var expectedLibAssets = expectedLibDlls
-                .Concat(package.LibTfms.Select(tfm => $"lib/{tfm}/{package.Id}.xml"))
+                .Concat(package.LibTfms.Select(tfm => $"lib/{tfm}/{assemblyName}.xml"))
                 .Order(StringComparer.Ordinal).ToArray();
             var actualLibAssets = entries.Where(path => path.StartsWith("lib/", StringComparison.Ordinal)).Order(StringComparer.Ordinal).ToArray();
             RequireSequence(actualLibAssets, expectedLibAssets, $"{package.Id} lib assets");
@@ -357,14 +379,14 @@ public static class PackageVerifier
             foreach (var dllPath in expectedLibDlls)
             {
                 identities.Add(Path.ChangeExtension(dllPath, ".pdb"),
-                    VerifyAssemblyVersion(archive.GetEntry(dllPath)!, manifest.PackageVersion, expectedCommit));
+                    VerifyAssemblyVersion(archive.GetEntry(dllPath)!, version, expectedCommit));
             }
 
             foreach (var analyzer in package.Analyzers)
             {
                 var dllPath = $"analyzers/dotnet/cs/{analyzer}";
                 identities.Add($"lib/net8.0/{Path.ChangeExtension(analyzer, ".pdb")}",
-                    VerifyAssemblyVersion(archive.GetEntry(dllPath)!, manifest.PackageVersion, expectedCommit));
+                    VerifyAssemblyVersion(archive.GetEntry(dllPath)!, version, expectedCommit));
             }
             return identities;
         }
@@ -379,7 +401,7 @@ public static class PackageVerifier
     }
 
     private static void VerifySnupkg(string packagePath, ReleasePackage package, ReleaseManifest manifest, string expectedCommit,
-        IReadOnlyDictionary<string, DebugIdentity> debugIdentities)
+        IReadOnlyDictionary<string, DebugIdentity> debugIdentities, string version, string branch)
     {
         try
         {
@@ -387,9 +409,9 @@ public static class PackageVerifier
             var entries = ValidateZipEntries(archive, package.Id);
             var coreProperties = ResolveCoreProperties(entries, package.Id);
             RequireSequence(entries.Order(StringComparer.Ordinal), ExpectedSnupkgEntries(package, coreProperties).Order(StringComparer.Ordinal), $"{package.Id} snupkg entries");
-            var metadata = ReadNuspecMetadata(archive, package.Id, symbols: true);
-            VerifyNuspecIdentity(metadata, package.Id, manifest, expectedCommit);
-            var expectedPdbs = package.LibTfms.Select(tfm => $"lib/{tfm}/{package.Id}.pdb")
+            var metadata = ReadNuspecMetadata(archive, package, symbols: true);
+            VerifyNuspecIdentity(metadata, package, manifest, expectedCommit, version, branch);
+            var expectedPdbs = package.LibTfms.Select(tfm => $"lib/{tfm}/{AssemblyName(package)}.pdb")
                 .Concat(package.AnalyzerSymbols.Select(symbol => $"lib/net8.0/{symbol}"))
                 .Order(StringComparer.Ordinal).ToArray();
             var actualPdbs = entries.Where(path => path.EndsWith(".pdb", StringComparison.Ordinal))
@@ -431,8 +453,9 @@ public static class PackageVerifier
         }
     }
 
-    private static XElement ReadNuspecMetadata(ZipArchive archive, string packageId, bool symbols)
+    private static XElement ReadNuspecMetadata(ZipArchive archive, ReleasePackage package, bool symbols)
     {
+        var packageId = package.Id;
         var entry = archive.GetEntry($"{packageId}.nuspec");
         Require(entry is not null, $"{packageId} must contain the exact canonical nuspec name.");
         using var stream = entry!.Open();
@@ -452,9 +475,13 @@ public static class PackageVerifier
         var allowed = symbols
             ? new[] { "id", "version", "projectUrl", "description", "tags", "packageTypes", "repository", "dependencies" }
             : new[] { "id", "version", "authors", "license", "licenseUrl", "icon", "readme", "projectUrl", "description", "tags", "repository", "dependencies" };
+        if (package.FrameworkReferences.Count > 0)
+        {
+            allowed = [.. allowed, "frameworkReferences"];
+        }
         RequireSequence(metadata.Elements().Select(element => element.Name.LocalName), allowed, $"{packageId} nuspec metadata structure");
         Require(metadata.Elements().All(element => element.Name.Namespace == metadata.Name.Namespace), $"{packageId} nuspec mixes XML namespaces.");
-        foreach (var scalar in metadata.Elements().Where(element => element.Name.LocalName is not ("license" or "repository" or "dependencies" or "packageTypes")))
+        foreach (var scalar in metadata.Elements().Where(element => element.Name.LocalName is not ("license" or "repository" or "dependencies" or "packageTypes" or "frameworkReferences")))
         {
             Require(!scalar.HasAttributes && !scalar.HasElements, $"{packageId} nuspec {scalar.Name.LocalName} must be a plain scalar element.");
         }
@@ -471,12 +498,15 @@ public static class PackageVerifier
 
     private static void VerifyNuspecIdentity(
         XElement metadata,
-        string packageId,
+        ReleasePackage package,
         ReleaseManifest manifest,
-        string expectedCommit)
+        string expectedCommit,
+        string version,
+        string branch)
     {
+        var packageId = package.Id;
         Require(Element(metadata, "id") == packageId, $"{packageId} nuspec ID mismatch.");
-        Require(Element(metadata, "version") == manifest.PackageVersion, $"{packageId} nuspec version mismatch.");
+        Require(Element(metadata, "version") == version, $"{packageId} nuspec version mismatch.");
         Require(Element(metadata, "projectUrl") == manifest.Assets.RepositoryUrl, $"{packageId} project URL mismatch.");
         Require(Element(metadata, "tags") == "micro-orm source-generator ado.net sql", $"{packageId} tags mismatch.");
         Require(!string.IsNullOrWhiteSpace(Element(metadata, "description")), $"{packageId} description is empty.");
@@ -488,7 +518,7 @@ public static class PackageVerifier
         RequireSequence(repositories[0].Attributes().Select(attribute => attribute.Name.LocalName), ["type", "url", "branch", "commit"], $"{packageId} repository attributes");
         Require((string?)repositories[0].Attribute("url") == manifest.Assets.RepositoryUrl, $"{packageId} repository URL mismatch.");
         Require((string?)repositories[0].Attribute("type") == "git", $"{packageId} repository type must be git.");
-        Require((string?)repositories[0].Attribute("branch") == manifest.Assets.RepositoryBranch,
+        Require((string?)repositories[0].Attribute("branch") == branch,
             $"{packageId} repository branch mismatch.");
         Require((string?)repositories[0].Attribute("commit") == expectedCommit, $"{packageId} repository commit mismatch.");
 
@@ -507,12 +537,44 @@ public static class PackageVerifier
                 RequireSequence(dependency.Attributes().Select(attribute => attribute.Name.LocalName), ["id", "version", "exclude"],
                     $"{packageId} dependency attributes");
                 var dependencyId = (string?)dependency.Attribute("id");
-                var expectedExclude = packageId != "Inquiry.Oracle" && dependencyId == "System.Configuration.ConfigurationManager"
+                var expectedExclude = packageId != "Ignyte.Inquiry.Oracle" && dependencyId == "System.Configuration.ConfigurationManager"
                     ? "Compile,Build,Analyzers"
                     : "Build,Analyzers";
                 Require((string?)dependency.Attribute("exclude") == expectedExclude,
                     $"{packageId} dependency {dependencyId} must use the exact exclude contract {expectedExclude}.");
             }
+        }
+
+        var frameworkReferenceRoots = metadata.Elements().Where(element => element.Name.LocalName == "frameworkReferences").ToArray();
+        if (package.FrameworkReferences.Count == 0)
+        {
+            Require(frameworkReferenceRoots.Length == 0, $"{packageId} must not declare framework references.");
+            return;
+        }
+
+        Require(frameworkReferenceRoots.Length == 1, $"{packageId} must contain exactly one frameworkReferences element.");
+        Require(!frameworkReferenceRoots[0].HasAttributes, $"{packageId} frameworkReferences must not have attributes.");
+        var frameworkGroups = frameworkReferenceRoots[0].Elements().ToArray();
+        RequireSequence(
+            frameworkGroups.Select(group => (string?)group.Attribute("targetFramework") ?? string.Empty).Order(StringComparer.Ordinal),
+            package.LibTfms.Order(StringComparer.Ordinal),
+            $"{packageId} framework reference TFMs");
+        foreach (var group in frameworkGroups)
+        {
+            Require(group.Name.LocalName == "group" && group.Name.Namespace == metadata.Name.Namespace
+                && group.Attributes().Select(attribute => attribute.Name.LocalName).SequenceEqual(["targetFramework"]),
+                $"{packageId} framework reference group has invalid structure.");
+            RequireSequence(
+                group.Elements().Select(reference =>
+                {
+                    Require(reference.Name.LocalName == "frameworkReference" && reference.Name.Namespace == metadata.Name.Namespace
+                        && !reference.HasElements && string.IsNullOrWhiteSpace(reference.Value)
+                        && reference.Attributes().Select(attribute => attribute.Name.LocalName).SequenceEqual(["name"]),
+                        $"{packageId} framework reference has invalid structure.");
+                    return (string?)reference.Attribute("name") ?? string.Empty;
+                }).Order(StringComparer.Ordinal),
+                package.FrameworkReferences.Order(StringComparer.Ordinal),
+                $"{packageId} framework references for {(string?)group.Attribute("targetFramework")}");
         }
     }
 
@@ -540,13 +602,18 @@ public static class PackageVerifier
         Require(peReader.HasMetadata, $"{entry.FullName} has no managed metadata.");
         var reader = peReader.GetMetadataReader();
         var assembly = reader.GetAssemblyDefinition();
-        Require(assembly.Version == new Version(1, 0, 0, 0), $"{entry.FullName} assembly version must be 1.0.0.0; found {assembly.Version}.");
+        // MinVer stamps AssemblyVersion as MAJOR.0.0.0 and FileVersion as MAJOR.MINOR.PATCH.0.
+        var baseVersion = Version.Parse(packageVersion.Split('-')[0]);
+        var expectedAssemblyVersion = new Version(baseVersion.Major, 0, 0, 0);
+        Require(assembly.Version == expectedAssemblyVersion,
+            $"{entry.FullName} assembly version must be {expectedAssemblyVersion}; found {assembly.Version}.");
 
         var informational = ReadStringAttribute(reader, assembly.GetCustomAttributes(), "System.Reflection.AssemblyInformationalVersionAttribute");
         Require(informational == $"{packageVersion}+{expectedCommit}",
             $"{entry.FullName} informational version must be {packageVersion}+{expectedCommit}; found {informational ?? "<missing>"}.");
         var fileVersion = ReadStringAttribute(reader, assembly.GetCustomAttributes(), "System.Reflection.AssemblyFileVersionAttribute");
-        Require(fileVersion == "1.0.0.0", $"{entry.FullName} file version must be 1.0.0.0; found {fileVersion ?? "<missing>"}.");
+        var expectedFileVersion = $"{baseVersion.Major}.{baseVersion.Minor}.{baseVersion.Build}.0";
+        Require(fileVersion == expectedFileVersion, $"{entry.FullName} file version must be {expectedFileVersion}; found {fileVersion ?? "<missing>"}.");
         var codeViewEntries = peReader.ReadDebugDirectory().Where(item => item.Type == DebugDirectoryEntryType.CodeView).ToArray();
         Require(codeViewEntries.Length == 1, $"{entry.FullName} must contain exactly one CodeView debug identity.");
         var codeView = peReader.ReadCodeViewDebugDirectoryData(codeViewEntries[0]);
@@ -696,8 +763,8 @@ public static class PackageVerifier
         yield return manifest.Assets.Icon;
         foreach (var tfm in package.LibTfms)
         {
-            yield return $"lib/{tfm}/{package.Id}.dll";
-            yield return $"lib/{tfm}/{package.Id}.xml";
+            yield return $"lib/{tfm}/{AssemblyName(package)}.dll";
+            yield return $"lib/{tfm}/{AssemblyName(package)}.xml";
         }
         foreach (var analyzer in package.Analyzers)
         {
@@ -713,7 +780,7 @@ public static class PackageVerifier
         yield return $"{package.Id}.nuspec";
         foreach (var tfm in package.LibTfms)
         {
-            yield return $"lib/{tfm}/{package.Id}.pdb";
+            yield return $"lib/{tfm}/{AssemblyName(package)}.pdb";
         }
         foreach (var symbol in package.AnalyzerSymbols)
         {
@@ -791,6 +858,21 @@ public static class PackageVerifier
 
     private static bool IsLowerHex(string value, int length) =>
         value.Length == length && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static string AssemblyName(ReleasePackage package) => Path.GetFileNameWithoutExtension(package.Project);
+
+    private static bool IsStableSemVer(string version) =>
+        Version.TryParse(version, out var parsed) && parsed.Major >= 0 && parsed.Minor >= 0 && parsed.Build >= 0 && parsed.Revision == -1
+        && version == $"{parsed.Major}.{parsed.Minor}.{parsed.Build}";
+
+    private static bool IsPreviewOf(string stableVersion, string candidate)
+    {
+        var prefix = stableVersion + "-preview.";
+        return candidate.StartsWith(prefix, StringComparison.Ordinal)
+            && candidate.Length > prefix.Length
+            && candidate[prefix.Length..].All(character => character is >= '0' and <= '9')
+            && (candidate[prefix.Length] != '0' || candidate.Length == prefix.Length + 1);
+    }
 
     private static string DiagnosticTail(string value)
     {

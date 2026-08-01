@@ -7,6 +7,12 @@ param(
 
     [string] $Tag,
 
+    # Overrides the manifest's stable version, e.g. "1.2.3-preview.7" for prerelease builds.
+    [string] $PackageVersion,
+
+    # Overrides the manifest's repository branch, e.g. "refs/heads/prerelease".
+    [string] $RepositoryBranch,
+
     [switch] $NoBuild
 )
 
@@ -97,6 +103,12 @@ try {
         throw "Tag '$Tag' does not equal manifest tag '$($manifest.tag)'."
     }
 
+    $effectiveVersion = if ([string]::IsNullOrWhiteSpace($PackageVersion)) { $manifest.packageVersion } else { $PackageVersion }
+    $effectiveBranch = if ([string]::IsNullOrWhiteSpace($RepositoryBranch)) { $manifest.assets.repositoryBranch } else { $RepositoryBranch }
+    if ($Tag -and $effectiveVersion -cne $manifest.packageVersion) {
+        throw 'Tagged releases must pack the exact manifest version.'
+    }
+
     & dotnet restore (Join-Path $snapshotRoot 'Inquiry.slnx')
     if ($LASTEXITCODE -ne 0) {
         throw 'Detached release snapshot restore failed.'
@@ -115,9 +127,9 @@ try {
             '--output', $resolvedOutput,
             '--no-restore',
             '-p:ContinuousIntegrationBuild=true',
-            "-p:MinVerVersionOverride=$($manifest.packageVersion)",
+            "-p:MinVerVersionOverride=$effectiveVersion",
             "-p:RepositoryCommit=$Commit",
-            "-p:RepositoryBranch=$($manifest.assets.repositoryBranch)"
+            "-p:RepositoryBranch=$effectiveBranch"
         )
 
         & dotnet @arguments
@@ -144,6 +156,7 @@ try {
     if ($Tag) {
         $verifyArguments += $Tag
     }
+    $verifyArguments += @('--version', $effectiveVersion, '--branch', $effectiveBranch)
 
     & dotnet @verifyArguments
     if ($LASTEXITCODE -ne 0) {
