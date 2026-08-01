@@ -101,60 +101,61 @@ projects are the DLG comparison benchmarks under `benchmarks/`, which are out of
 
 ## Releasing
 
-Inquiry uses **MinVer** for tag-based versioning. The version is derived from the nearest git tag:
+Releases are automated by
+[`release.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/release.yml) and
+driven by `eng/release-manifest.json`, whose `packageVersion` is the single source of truth:
 
-| State | Example version |
+| Event | Published version |
 |---|---|
-| Tagged commit `v1.0.0` | `1.0.0` |
-| Tagged commit `v1.0.0-preview.1` | `1.0.0-preview.1` |
-| 3 commits after `v1.0.0` | `1.0.1-alpha.0.3` |
-| No tag (floor is 1.0) | `1.0.0-alpha.0.N` |
+| PR merged into `prerelease` | `<packageVersion>-preview.<run-number>` on nuget.org |
+| PR merged into `main` (manifest bumped) | `<packageVersion>` on nuget.org + git tag `v<packageVersion>` + GitHub release |
+| PR merged into `main` (version already tagged) | No publish — verified no-op |
 
-### How to release
+To cut a release, open a PR that bumps `packageVersion` (and the matching `tag` and inter-package
+dependency versions) in `eng/release-manifest.json`; the release ships when that PR reaches `main`.
+Do not create or push release tags manually — the workflow creates them after a successful publish.
+Authentication uses NuGet **Trusted Publishing** (OIDC via `NuGet/login`); no long-lived API key is
+stored in the repository.
 
-Public publishing is disabled while the immutable release-candidate pipeline is being completed under
-[#89](https://github.com/IgnyteSoftware/inquiry/issues/89). Do not create or push a release tag manually.
-The retired tag workflow rebuilt source and wildcard-pushed packages; that path was intentionally removed.
-
-For local package-contract verification only, pack the nine manifest entries at an exact commit:
+Every release run packs from an immutable detached snapshot of the exact merge commit and re-verifies
+the full package contract before pushing. For local package-contract verification, pack the ten
+manifest entries at an exact commit:
 
 ```powershell
 $output = Join-Path ([System.IO.Path]::GetTempPath()) 'inquiry-release-candidate'
 ./eng/pack-release.ps1 -OutputPath $output -Commit (git rev-parse HEAD)
+# preview variant:
+./eng/pack-release.ps1 -OutputPath $output -Commit (git rev-parse HEAD) `
+    -PackageVersion "1.0.0-preview.1" -RepositoryBranch "refs/heads/prerelease"
 ```
 
 This requires a clean worktree at the named `HEAD`, creates a detached temporary worktree at that exact
-commit, and restores and builds only from that immutable snapshot. It uses `MinVerVersionOverride=1.0.0`,
-refuses a non-empty or linked output directory, and validates exact nupkg and snupkg inventory, versions,
-dependencies, repository commit, metadata, assets, DLL/PDB identities, and complete SourceLink mappings.
-The canonical repository branch is recorded as `refs/heads/prerelease`, even though compilation occurs from
-the detached commit snapshot.
-It does not publish or create a tag. The protected promotion and resumable publication stages are not
-implemented yet; they must consume the verified bundle without rebuilding it.
-
-### Release prerequisites
-
-Repository visibility/plan, branch and tag rulesets, Pages, security features, the protected release
-environment, NuGet owners and package IDs, and trusted-publishing policy must pass the fail-closed settings
-attestation before RC. Repository code does not change those external settings. A short-lived scoped NuGet
-key is fallback-only and requires explicit owner approval; trusted OIDC publishing is the intended path.
+commit, and restores and builds only from that immutable snapshot. It refuses a non-empty or linked
+output directory, and validates exact nupkg and snupkg inventory, versions, dependencies, repository
+commit, metadata, assets, DLL/PDB identities, and complete SourceLink mappings. It does not publish or
+create a tag.
 
 ### Shippable packages
 
+Packages ship under the `Ignyte.` prefix (the bare `Inquiry` ID is taken on nuget.org); assemblies and
+namespaces remain `Inquiry.*`:
+
 | Package | Description |
 |---|---|
-| `Inquiry` | Core runtime — attributes, pipeline, DI |
-| `Inquiry.SqlServer` | SQL Server provider + bundled analyzer |
-| `Inquiry.PostgreSql` | PostgreSQL provider + bundled analyzer |
-| `Inquiry.MySql` | MySQL provider + bundled analyzer |
-| `Inquiry.MariaDb` | MariaDB provider + bundled analyzer |
-| `Inquiry.Oracle` | Oracle provider + bundled analyzer |
-| `Inquiry.Sqlite` | SQLite provider + bundled analyzer |
-| `Inquiry.Interceptors` | Opt-in slow-query logging + sqlcommenter |
-| `Inquiry.Testing` | SQLite fixture, recording interceptor, Respawn reset |
+| `Ignyte.Inquiry` | Core runtime — attributes, pipeline, DI |
+| `Ignyte.Inquiry.SqlServer` | SQL Server provider + bundled analyzer |
+| `Ignyte.Inquiry.PostgreSql` | PostgreSQL provider + bundled analyzer |
+| `Ignyte.Inquiry.MySql` | MySQL provider + bundled analyzer |
+| `Ignyte.Inquiry.MariaDb` | MariaDB provider + bundled analyzer |
+| `Ignyte.Inquiry.Oracle` | Oracle provider + bundled analyzer |
+| `Ignyte.Inquiry.Sqlite` | SQLite provider + bundled analyzer |
+| `Ignyte.Inquiry.AspNetCore` | ASP.NET Core audit-context middleware |
+| `Ignyte.Inquiry.Interceptors` | Opt-in slow-query logging + sqlcommenter |
+| `Ignyte.Inquiry.Testing` | SQLite fixture, recording interceptor, Respawn reset |
 
 Benchmark, sample, test, and analyzer projects are marked `IsPackable=false` and excluded from
-`dotnet pack`.
+`dotnet pack`. A new packable project must be added to `eng/release-manifest.json`; the package
+contract verifier fails CI when the manifest and packable-project inventory drift.
 
 ### SourceLink and symbol packages
 

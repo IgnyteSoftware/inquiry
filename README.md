@@ -86,6 +86,15 @@ Tests cover parameter binding, the request pipeline, transactions, generator emi
 
 The SQL Server, PostgreSQL, MySQL, MariaDB, and Oracle integration suites provision their engine with **[Testcontainers](https://dotnet.testcontainers.org/)** — the only host dependency is **Docker**. When Docker is unavailable every live fact **skips** (via `SkippableFact`) rather than failing, so `dotnet test` stays green without Docker. Required CI runs all five server providers with Docker required on pull requests into `prerelease` and `main`. See [Project status](docs/site/develop/project-status.md) for the current state and the [Roadmap](docs/site/develop/roadmap.md) for what's next.
 
-## Releasing
+## Installing
 
-Versions are derived from git tags by [MinVer](https://github.com/adamralph/minver). The first public release will be tagged `v1.0.0` and packaged as version `1.0.0`; untagged commits before that use `1.0.0-alpha.0.N`, and commits after it use `1.0.1-alpha.0.N`. Publishing is disabled until the immutable release-candidate and protected-promotion path in [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) is complete. Do not push release tags manually. See [Contributing — Releasing](docs/site/develop/contributing.md#releasing) for the package verifier and release prerequisites.
+Packages ship on nuget.org under the `Ignyte.` prefix (assemblies and namespaces remain `Inquiry.*`). Install the provider you need — it pulls in the core `Ignyte.Inquiry` package:
+
+```powershell
+dotnet add package Ignyte.Inquiry.Sqlite      # or .SqlServer / .PostgreSql / .MySql / .MariaDb / .Oracle
+dotnet add package Ignyte.Inquiry.Testing     # optional test helpers
+```
+
+## Contributing and releasing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. In short: feature branches PR into `prerelease`, which publishes `X.Y.Z-preview.N` packages to nuget.org on merge; a promotion PR into `main` publishes the stable `X.Y.Z` named in [`eng/release-manifest.json`](eng/release-manifest.json) and tags it `vX.Y.Z`. Do not push release tags manually — [`release.yml`](.github/workflows/release.yml) creates them. See [Contributing — Releasing](docs/site/develop/contributing.md#releasing) for the package verifier details.

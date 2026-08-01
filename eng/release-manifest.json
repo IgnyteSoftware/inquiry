@@ -25,7 +25,11 @@
       "id": "Ignyte.Inquiry.AspNetCore",
       "project": "src/Inquiry.AspNetCore/Inquiry.AspNetCore.csproj",
       "dependencies": {
-        "Ignyte.Inquiry": "1.0.0"
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8"
       },
       "libTfms": [
         "net8.0",
