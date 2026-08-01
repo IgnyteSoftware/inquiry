@@ -21,7 +21,7 @@
       "project": "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj",
       "dependencies": {
         "Inquiry": "1.0.0",
-        "Microsoft.Data.Sqlite": "10.0.8",
+        "Microsoft.Data.Sqlite": "10.0.9",
         "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
@@ -131,7 +131,7 @@
         "Inquiry": "1.0.0",
         "Inquiry.Sqlite": "1.0.0",
         "Microsoft.Data.SqlClient": "7.0.1",
-        "Microsoft.Data.Sqlite": "10.0.8",
+        "Microsoft.Data.Sqlite": "10.0.9",
         "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
         "Microsoft.Extensions.DependencyInjection": "10.0.8",
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
