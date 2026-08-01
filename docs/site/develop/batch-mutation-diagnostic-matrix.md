@@ -20,8 +20,8 @@ The measurements support the strategies recorded in
 - SQLite's reused generated row path remains close to its direct prepared-command control and avoids
   the allocation growth of end-to-end multi-row SQL at 1,000 rows.
 - SQL Server's runtime reported usable `DbBatch`; the selected adaptive path tracks the measured
-  native and set-based controls. The more intensive cutoff experiment remains recorded in
-  `docs/plans/2026-07-14-batch-insert-strategy-decision.md`.
+  native and set-based controls. The more intensive cutoff experiment is recorded in the
+  batch-insert strategy decision note, retained in git history.
 - PostgreSQL's selected generated path was measured against direct reused commands, native
   `NpgsqlBatch`, array-key delete, and set-based controls.
 - MySQL and MariaDB both measured usable `DbBatch` paths and the selected generated paths against

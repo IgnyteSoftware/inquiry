@@ -617,8 +617,13 @@ public sealed partial class InquiryGeneratorTests
         }
         """;
 
+    // Normalized to LF because callers reshape the entity with multi-line string.Replace searches, and
+    // a raw string literal carries the checkout's line endings — CRLF under core.autocrlf. A search
+    // written with \n then silently matches nothing on Windows, leaving the entity unmodified and the
+    // test asserting against a fixture it never actually built.
     private static string DocStoreSource(string methods) =>
-        TenantEntity + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n" + methods + "\n}\n";
+        (TenantEntity + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n" + methods + "\n}\n")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
 
     private static string GetTenantDocStore(GeneratorTestResult result)
         => Assert.Single(

@@ -6,8 +6,7 @@ and verifiable.
 ## Skill-first workflow
 
 Start work through the relevant workflow skill: brainstorm a new feature into a spec, turn the spec into an
-implementation plan, then execute it task-by-task. Use the debugging workflow for bugs. Specs and plans are
-kept in-repo under `docs/superpowers/`.
+implementation plan, then execute it task-by-task. Use the debugging workflow for bugs.
 
 ## Worktrees + parallel agents
 

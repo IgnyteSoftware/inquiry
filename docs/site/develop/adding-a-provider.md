@@ -51,6 +51,5 @@ pipeline — it fits entirely inside the existing `SqlBuilder` contract + `IInqu
 (Exceptions are documented per-workstream — e.g. Oracle's `:`-parameter / `BindByName` needs the
 command-init hook, and Oracle's `RETURNING … INTO` ref-cursor handling lives in its connection factory.)
 
-> The full per-workstream design specs are retained in-repo under
-> [`docs/plans/`](https://github.com/IgnyteSoftware/inquiry/tree/main/docs/plans) as the archived design
-> record. See also [Design notes](design-notes.md).
+> The original per-workstream design specs are no longer carried in the tree; they remain in git
+> history. See also [Design notes](design-notes.md).

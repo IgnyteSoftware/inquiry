@@ -1,9 +1,8 @@
 # Design notes
 
 The condensed design and dependency record. For the user-facing architecture write-up see
-[Architecture](../articles/architecture.md); the full per-workstream specs are retained in-repo under
-[`docs/plans/`](https://github.com/IgnyteSoftware/inquiry/tree/main/docs/plans) and
-[`docs/superpowers/`](https://github.com/IgnyteSoftware/inquiry/tree/main/docs/superpowers).
+[Architecture](../articles/architecture.md). The original per-workstream design specs are no longer
+carried in the tree; they remain in git history.
 
 ## What Inquiry is
 
