@@ -92,3 +92,4 @@ INQ089 | Inquiry | Error | InquiryManyToMany child foreign keys do not pair with
 INQ090 | Inquiry | Error | InquiryManyToMany cannot synthesize an auto-managed junction
 INQ091 | Inquiry | Error | InquiryIgnoreFilter cannot bypass the named filter
 INQ092 | Inquiry | Error | InquiryGlobalFilter Name is invalid
+INQ093 | Inquiry | Error | InquiryGlobalFilter ContextKey configuration is invalid

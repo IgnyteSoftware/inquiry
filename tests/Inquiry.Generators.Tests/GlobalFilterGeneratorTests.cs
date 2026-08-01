@@ -586,6 +586,222 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sqlSelectAll_WithoutAAndBAsync = \"SELECT \\\"Id\\\", \\\"A\\\", \\\"B\\\", \\\"C\\\" FROM \\\"TTri\\\" WHERE \\\"C\\\" = 1\";", text);
     }
 
+    // ---- Runtime-parameterized filters (#82 phase B) ----
+
+    /// <summary>
+    /// A tenant column carrying <c>ContextKey</c> (non-bypassable: no Name) alongside an unnamed
+    /// constant-bool filter, so every assertion can prove the two modes compose in one WHERE clause.
+    /// </summary>
+    private const string TenantEntity = """
+        using System;
+        using System.Collections.Generic;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Inquiry;
+        using Inquiry.Entities;
+        using Inquiry.Stores;
+
+        namespace Demo;
+
+        [InquiryTable("TDoc")]
+        public sealed class Doc
+        {
+            [InquiryKey]
+            public long Id { get; set; }
+
+            [InquiryColumn("TenantId"), InquiryGlobalFilter(ContextKey = "TenantId")]
+            public long TenantId { get; set; }
+
+            [InquiryColumn("IsActive"), InquiryGlobalFilter]
+            public bool IsActive { get; set; }
+        }
+        """;
+
+    private static string DocStoreSource(string methods) =>
+        TenantEntity + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n" + methods + "\n}\n";
+
+    private static string GetTenantDocStore(GeneratorTestResult result)
+        => Assert.Single(
+            result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal))
+            .GetText().ToString();
+
+    [Fact]
+    public void ParameterizedFilterComposesAParameterAndEmitsTheAmbientBinder_Sqlite()
+    {
+        var result = RunGenerator(DocStoreSource("""
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<Doc>> AllAsync(CancellationToken cancellationToken = default);
+
+            [InquirySelectOneByKey]
+            public partial Task<Doc?> ByKeyAsync(long id, CancellationToken cancellationToken = default);
+
+            [InquiryCount]
+            public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetTenantDocStore(result);
+
+        // The SQL is still a const; the tenant term compares to the ambient parameter and composes
+        // with the constant-bool filter.
+        Assert.Contains("_sqlSelectAll = \"SELECT \\\"Id\\\", \\\"TenantId\\\", \\\"IsActive\\\" FROM \\\"TDoc\\\" WHERE \\\"TenantId\\\" = @__gf_TenantId AND \\\"IsActive\\\" = 1\";", text);
+        Assert.Contains("WHERE \\\"Id\\\" = @Id AND \\\"TenantId\\\" = @__gf_TenantId AND \\\"IsActive\\\" = 1\";", text);
+        Assert.Contains("SELECT COUNT(*) FROM \\\"TDoc\\\" WHERE \\\"TenantId\\\" = @__gf_TenantId", text);
+
+        // One shared helper binds the ambient value through the normal parameter machinery…
+        Assert.Contains("private static void __BindGlobalFilters(global::System.Data.Common.DbCommand _cmd)", text);
+        Assert.Contains("global::Inquiry.InquiryFilterContext.GetRequired<long>(\"TenantId\")", text);
+        // …and every read binder calls it, including the previously no-op parameterless commands.
+        Assert.Contains("static (_cmd, _) => { __BindGlobalFilters(_cmd); }", text);
+        Assert.Contains("__BindGlobalFilters(_cmd);", text);
+    }
+
+    [Fact]
+    public void ParameterizedFilterOnACompositeKeyComponentIsAllowed_Sqlite()
+    {
+        // A tenant id inside the composite key is the multi-tenant norm — the constant-bool "not a
+        // key" restriction deliberately does not apply to ContextKey mode.
+        var result = RunGenerator(DocStoreSource("""
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<Doc>> AllAsync(CancellationToken cancellationToken = default);
+            """).Replace("[InquiryColumn(\"TenantId\"), InquiryGlobalFilter(ContextKey = \"TenantId\")]", "[InquiryKey, InquiryGlobalFilter(ContextKey = \"TenantId\")]"));
+        AssertNoErrors(result);
+
+        Assert.Contains("\\\"TenantId\\\" = @__gf_TenantId", GetTenantDocStore(result));
+    }
+
+    [Fact]
+    public void ParameterizedFilterConflictsAndInvalidShapesReportINQ093()
+    {
+        foreach (var mutation in new[]
+        {
+            // Explicit KeepWhen alongside ContextKey: the two predicate modes conflict.
+            "[InquiryColumn(\"TenantId\"), InquiryGlobalFilter(ContextKey = \"TenantId\", KeepWhen = true)]",
+            // Blank key.
+            "[InquiryColumn(\"TenantId\"), InquiryGlobalFilter(ContextKey = \" \")]",
+        })
+        {
+            var result = RunGenerator(DocStoreSource("""
+                [InquirySelectAll]
+                public partial Task<IReadOnlyList<Doc>> AllAsync(CancellationToken cancellationToken = default);
+                """).Replace("[InquiryColumn(\"TenantId\"), InquiryGlobalFilter(ContextKey = \"TenantId\")]", mutation));
+
+            Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ093" && d.Severity == DiagnosticSeverity.Error);
+        }
+
+        // Nullable column: a missing ambient value must fail loudly, not match NULL.
+        var nullable = RunGenerator(DocStoreSource("""
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<Doc>> AllAsync(CancellationToken cancellationToken = default);
+            """).Replace("public long TenantId { get; set; }", "public long? TenantId { get; set; }"));
+        Assert.Contains(nullable.RunResult.Diagnostics, d => d.Id == "INQ093" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void ParameterizedFilterRejectsEagerMethodsOnRootAndRelatedEntities()
+    {
+        // Root entity has the ContextKey filter; the eager method must fail rather than emit SQL
+        // whose @__gf_ parameter no grid binder fills.
+        var result = RunGenerator(DocStoreSource("""
+            [InquirySelectAllEager]
+            public partial IAsyncEnumerable<Doc> AllEagerAsync(CancellationToken cancellationToken = default);
+            """));
+
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ093" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void ParameterizedNamedFilterBypassDropsTermAndParameterTogether_Sqlite()
+    {
+        // A NAMED parameterized filter is bypassable like any named filter; the bypass method's SQL
+        // loses the term AND its binder loses the parameter (a reduced helper), while other methods
+        // keep both.
+        var source = DocStoreSource("""
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<Doc>> AllAsync(CancellationToken cancellationToken = default);
+
+            [InquirySelectAll]
+            [InquiryIgnoreFilter("Tenant")]
+            public partial Task<IReadOnlyList<Doc>> AllTenantsAsync(CancellationToken cancellationToken = default);
+            """).Replace("InquiryGlobalFilter(ContextKey = \"TenantId\")", "InquiryGlobalFilter(ContextKey = \"TenantId\", Name = \"Tenant\")");
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var text = GetTenantDocStore(result);
+
+        Assert.Contains("_sqlSelectAll = \"SELECT \\\"Id\\\", \\\"TenantId\\\", \\\"IsActive\\\" FROM \\\"TDoc\\\" WHERE \\\"TenantId\\\" = @__gf_TenantId AND \\\"IsActive\\\" = 1\";", text);
+        Assert.Contains("_sqlSelectAll_AllTenantsAsync = \"SELECT \\\"Id\\\", \\\"TenantId\\\", \\\"IsActive\\\" FROM \\\"TDoc\\\" WHERE \\\"IsActive\\\" = 1\";", text);
+        // The bypass method's command uses a plain no-op binder — no reduced helper is needed when
+        // the reduced set is empty, and binding the dropped parameter would error on strict providers.
+        Assert.DoesNotContain("__BindGlobalFilters_AllTenantsAsync", text);
+    }
+
+    [Fact]
+    public void ParameterizedFilterBinderCallIsPinnedOnEverySeam_Sqlite()
+    {
+        // One store spanning the distinct binder-emission seams; the exact occurrence counts are the
+        // point — deleting the filter call from any one seam (predicate command, paged main command,
+        // paged count, parameterless command, set-based update) changes a count and fails here, which
+        // the collection-level live tests cannot do because each seam masks the others.
+        var result = RunGenerator(DocStoreSource("""
+            [InquirySelectAllByPredicate]
+            [InquiryWhere("Title")]
+            public partial Task<IReadOnlyList<Doc>> SearchAsync(string title, CancellationToken cancellationToken = default);
+
+            [InquiryExists]
+            [InquiryWhere("Title")]
+            public partial Task<bool> ExistsAsync(string title, CancellationToken cancellationToken = default);
+
+            [InquirySelectAll(OrderBy = "Id ASC", Paged = true)]
+            public partial Task<global::Inquiry.Paging.InquiryPagedResult<Doc>> PageAsync(int offset, int limit, CancellationToken cancellationToken = default);
+
+            [InquiryCount]
+            public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
+
+            [InquiryUpdateWhere("Title")]
+            [InquiryWhere("Id")]
+            public partial Task<int> RetitleAsync(string title, long id, CancellationToken cancellationToken = default);
+            """).Replace("public long TenantId { get; set; }", "public long TenantId { get; set; }\n\n    [InquiryColumn(\"Title\")]\n    public string Title { get; set; } = string.Empty;\n\n    [InquiryColumn(\"T2\"), InquiryGlobalFilter(ContextKey = \"T2\")]\n    public long T2 { get; set; }"));
+        AssertNoErrors(result);
+        var text = GetTenantDocStore(result);
+
+        // _c form: predicate select, exists, paged main command, update-where.
+        Assert.Equal(4, CountOccurrences(text, "__BindGlobalFilters(_c);"));
+        // _cmd form: the parameterless Count command and the zero-field paged-result count.
+        Assert.Equal(2, CountOccurrences(text, "__BindGlobalFilters(_cmd); })"));
+        // Exactly one helper body, binding BOTH parameterized filters.
+        Assert.Equal(1, CountOccurrences(text, "private static void __BindGlobalFilters(global::System.Data.Common.DbCommand _cmd)"));
+        Assert.Contains("GetRequired<long>(\"TenantId\")", text);
+        Assert.Contains("GetRequired<long>(\"T2\")", text);
+    }
+
+    [Fact]
+    public void ParameterizedFilterReducedBypassSetGetsItsOwnHelper_Sqlite()
+    {
+        // Two named parameterized filters; the method bypasses one. The reduced helper's name encodes
+        // the ACTIVE set (length-prefixed property names), so overloads with different bypass sets can
+        // never share a body, and the reduced body binds only the surviving filter.
+        var source = DocStoreSource("""
+            [InquirySelectAll]
+            public partial Task<IReadOnlyList<Doc>> AllAsync(CancellationToken cancellationToken = default);
+
+            [InquirySelectAll]
+            [InquiryIgnoreFilter("Region")]
+            public partial Task<IReadOnlyList<Doc>> AllRegionsAsync(CancellationToken cancellationToken = default);
+            """)
+            .Replace("InquiryGlobalFilter(ContextKey = \"TenantId\")", "InquiryGlobalFilter(ContextKey = \"TenantId\", Name = \"Tenant\")")
+            .Replace("[InquiryColumn(\"IsActive\"), InquiryGlobalFilter]\n    public bool IsActive { get; set; }", "[InquiryColumn(\"RegionId\"), InquiryGlobalFilter(ContextKey = \"RegionId\", Name = \"Region\")]\n    public long RegionId { get; set; }");
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var text = GetTenantDocStore(result);
+
+        // Unannotated method: full helper, both terms.
+        Assert.Contains("WHERE \\\"TenantId\\\" = @__gf_TenantId AND \\\"RegionId\\\" = @__gf_RegionId\";", text);
+        // Bypass method: Region term gone, Tenant term kept, bound by the set-named reduced helper.
+        Assert.Contains("_sqlSelectAll_AllRegionsAsync = \"SELECT \\\"Id\\\", \\\"TenantId\\\", \\\"RegionId\\\" FROM \\\"TDoc\\\" WHERE \\\"TenantId\\\" = @__gf_TenantId\";", text);
+        Assert.Contains("private static void __BindGlobalFilters_8_TenantId(global::System.Data.Common.DbCommand _cmd)", text);
+        Assert.Contains("__BindGlobalFilters_8_TenantId(_cmd); })", text);
+    }
+
     [Fact]
     public void GlobalFilterBlankNameReportsINQ092()
     {

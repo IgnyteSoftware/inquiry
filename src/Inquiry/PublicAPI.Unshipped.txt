@@ -613,3 +613,13 @@ static Inquiry.Parameters.InquiryParameter.operator ==(Inquiry.Parameters.Inquir
 static Inquiry.Seeding.InquirySeedingExtensions.AddInquirySeeder<TSeeder>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Inquiry.Seeding.InquirySeedingExtensions.SeedInquiryAsync(this System.IServiceProvider! serviceProvider, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 static readonly Inquiry.Entities.InquiryConverterCache<TConverter>.Instance -> TConverter
+Inquiry.Entities.InquiryGlobalFilterAttribute.ContextKey.get -> string?
+Inquiry.Entities.InquiryGlobalFilterAttribute.ContextKey.set -> void
+Inquiry.InquiryFilterContext
+Inquiry.InquiryFilterContext.Scope
+Inquiry.InquiryFilterContext.Scope.Dispose() -> void
+Inquiry.InquiryFilterContext.Scope.Scope() -> void
+Inquiry.InquiryFilterValueMissingException
+Inquiry.InquiryFilterValueMissingException.InquiryFilterValueMissingException(string! message) -> void
+static Inquiry.InquiryFilterContext.BeginScope(System.Collections.Generic.IReadOnlyDictionary<string!, object!>! values) -> Inquiry.InquiryFilterContext.Scope
+static Inquiry.InquiryFilterContext.GetRequired<T>(string! contextKey) -> T

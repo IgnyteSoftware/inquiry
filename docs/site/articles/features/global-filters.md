@@ -110,6 +110,33 @@ The rules keep the bypass exactly as safe as the rest of the mechanism:
 - Valid on the read operations that compose the filter — selects, paged/keyset reads, `Count`, `Exists`, aggregates, group counts, full-text search. Eager-loading methods reject it (`INQ091`) in v1, and it never applies to writes.
 - `IncludeDeleted` and a named bypass compose independently: each drops exactly its own term.
 
+## Runtime-parameterized filters
+
+For a filter whose value is per-request rather than a constant — the multi-tenant shape — set `ContextKey` instead of relying on the bool column form:
+
+```csharp
+[InquiryColumn("TenantId"), InquiryGlobalFilter(ContextKey = "TenantId")]
+public long TenantId { get; set; }
+```
+
+Every generated read now composes `"TenantId" = @__gf_TenantId`, and the value is bound **at execute time** from the ambient `InquiryFilterContext` — set once per request, typically in middleware, exactly like `InquiryAuditContext`:
+
+```csharp
+using (InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["TenantId"] = tenantId }))
+{
+    var docs = await store.AllAsync();   // WHERE "TenantId" = @__gf_TenantId AND …
+}
+```
+
+The rules:
+
+- The SQL is still a compile-time const; only the parameter's value is runtime. The value flows across `await` via `AsyncLocal` and is isolated per async flow.
+- **A missing ambient value throws `InquiryFilterValueMissingException` before the command executes.** No scope, an absent key, or a wrong-typed value never binds `NULL` or returns an empty result — an empty result would be indistinguishable from working tenant isolation, which is the failure this mode exists to prevent. Exception messages name the key, never the value.
+- The column may be any **non-nullable mapped scalar** — `Guid`, `long`, `string`, an enum, a converter column — and, unlike the constant-bool form, it **may be a key component** (a tenant id inside a composite key is the norm). Explicitly setting `KeepWhen` alongside `ContextKey` is a build error (`INQ093`), as is a blank key, a nullable column, or a column whose role other machinery owns.
+- `ContextKey` is the value's identity; `Name` remains the bypass identity. A tenant boundary should set `ContextKey` and leave `Name` unset — then nothing can bypass it. A filter with both is bypassable like any named filter, and the bypassing method's SQL loses the term *and* its binder loses the parameter together.
+- **Key-based writes** (insert, update, delete, restore, upsert) do not compose the filter in this release — opt-in write-side enforcement is a separate roadmap feature. **Set-based predicate writes** (`[InquiryUpdateWhere]` and the soft form of `[InquiryDeleteWhere]`) compose it exactly as they always have, so those statements ARE tenant-scoped and throw `InquiryFilterValueMissingException` without an ambient scope. Eager-loading methods reject entities with parameterized filters anywhere in their relation tree (`INQ093`) — their shared relation consts cannot bind per-method parameters yet; use non-eager reads with these filters for now.
+- For a `string` tenant key, remember the equality inherits the column's **collation**: on a case-insensitive default (SQL Server, MySQL) `'acme'`, `'ACME'`, and — with SQL Server's trailing-blank semantics — `'acme '` all match. Prefer a `Guid` or integral tenant key, or a binary/case-sensitive collation, when tenant identifiers are user-influenced.
+
 This also means the filter and soft delete compose cleanly: on an entity with **both**, `IncludeDeleted = true` drops only the soft-delete term — the global filter still applies, so an "include deleted" read still respects tenant isolation.
 
 ```csharp

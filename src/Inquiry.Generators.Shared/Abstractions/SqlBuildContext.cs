@@ -150,6 +150,21 @@ public sealed class SqlBuildContext
         foreach (var gf in globalFilterColumns)
         {
             var gfQuoted = builder.QuoteIdentifier(gf.ColumnName);
+            if (gf.GlobalFilterContextKey is not null)
+            {
+                // Runtime-parameterized mode: the predicate is still a compile-time const, but it
+                // compares to a parameter the generated binder fills from the ambient
+                // InquiryFilterContext at execute time. The "__gf_" prefix keeps the name clear of
+                // every user-declared parameter (those are property/parameter names). The binder
+                // side derives the same set via StoreOperationEmitter.ActiveParameterizedFilters —
+                // both are pure functions of (columns, ignoredGlobalFilterNames), which is the
+                // agreement that keeps a const's parameters and its binder in lockstep.
+                var gfTerm = gfQuoted + " = " + builder.ParameterName("__gf_" + gf.PropertyName);
+                activeRowPredicates.Add(gfTerm);
+                qualifiedActiveRowPredicates.Add(Table + "." + gfTerm);
+                continue;
+            }
+
             var gfValue = gf.GlobalFilterKeepWhenTrue ? builder.BooleanTrueLiteral : builder.BooleanFalseLiteral;
             activeRowPredicates.Add(gfQuoted + " = " + gfValue);
             qualifiedActiveRowPredicates.Add(Table + "." + gfQuoted + " = " + gfValue);
@@ -226,6 +241,7 @@ public sealed class SqlBuildContext
     /// (e.g. many-to-many JOINs) where an unqualified column name would be ambiguous.
     /// </summary>
     public string QualifiedActiveRowPredicate { get; } = string.Empty;
+
 
     /// <summary>
     /// Returns <see cref="ActiveRowPredicate"/> qualified by an already-quoted table or alias.

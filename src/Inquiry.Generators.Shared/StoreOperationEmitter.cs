@@ -42,6 +42,10 @@ internal static class StoreOperationEmitter
         var cancellation = method.Parameters[method.Parameters.Count - 1].Name;
         var firstParameter = method.Parameters.Count > 1 ? method.Parameters[0].Name : "entity";
         var parameters = GetParameterDeclaration(method.Parameters);
+        // Non-null when this method's SQL composes runtime-parameterized filters; every READ binder
+        // below must call it or the command executes with a missing @__gf_* parameter. Writes never
+        // carry the term in this release.
+        var filterBinder = GlobalFilterBinderName(entity, method);
 
         // SelectAllByField with a plan (ordered and/or offset-paged) and SelectAll that is offset-paged
         // route through a dedicated emitter (own SQL const + filter/offset/limit binder). Ordered-only
@@ -51,7 +55,7 @@ internal static class StoreOperationEmitter
             (selectPlan.Pagination == Pagination.Offset || method.Operation == StoreOperation.SelectAllByField))
         {
             AppendHeader(source, method, parameters, isAsync: method.ReturnsPagedResult);
-            EmitOffsetPaged(source, sqlBuilder, method, fieldColumns, selectPlan, entityType, structMat, cancellation);
+            EmitOffsetPaged(source, sqlBuilder, method, fieldColumns, selectPlan, entityType, structMat, cancellation, filterBinder);
             source.AppendLine("    }");
             return;
         }
@@ -60,7 +64,7 @@ internal static class StoreOperationEmitter
         {
             case StoreOperation.KeysetPage:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitKeysetPage(source, sqlBuilder, method, selectPlan!, entityType, structMat, cancellation);
+                EmitKeysetPage(source, sqlBuilder, method, selectPlan!, entityType, structMat, cancellation, filterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -69,7 +73,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine(method.ReturnsList
                     ? $"        return Inquiry.QueryListAsync<{entityType}, byte, {structMat}>("
                     : $"        return Inquiry.QueryAsync<{entityType}, byte, {structMat}>(");
-                source.AppendLine($"            {EmptyGeneratedCommand(selectPlan is not null ? selectPlan.SqlFieldName : baseSelectField ?? "_sqlSelectAll")},");
+                source.AppendLine($"            {EmptyGeneratedCommand(selectPlan is not null ? selectPlan.SqlFieldName : baseSelectField ?? "_sqlSelectAll", filterBinder)},");
                 source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
@@ -81,7 +85,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectOneByKey:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, baseSelectField ?? "_sqlSelectByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
+                EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, baseSelectField ?? "_sqlSelectByKey", entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: filterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -92,13 +96,13 @@ internal static class StoreOperationEmitter
             case StoreOperation.SelectAllByField:
                 AppendHeader(source, method, parameters, isAsync: false);
                 // Buffered and streaming both use the immutable generated-command path.
-                EmitFastQueryByFields(source, sqlBuilder, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ", sqlField: baseSelectField, returnsList: method.ReturnsList);
+                EmitFastQueryByFields(source, sqlBuilder, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ", sqlField: baseSelectField, returnsList: method.ReturnsList, filterBinder: filterBinder);
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.SelectAllByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, entityType, structMat, cancellation, entity.Schema);
+                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, entityType, structMat, cancellation, entity.Schema, filterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -192,6 +196,10 @@ internal static class StoreOperationEmitter
                     }
                     else
                     {
+                        // No filterBinder: DELETE … RETURNING SQL never composes the active-row
+                        // predicate (a delete may remove filtered rows), so binding @__gf_* here
+                        // would add a parameter the SQL does not reference — a provider error on
+                        // strict binders and a spurious missing-scope throw on an unfiltered write.
                         EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, returningField, entity.Keys, method.Parameters, cancellation, indent: "        ");
                     }
                     source.AppendLine("    }");
@@ -259,7 +267,7 @@ internal static class StoreOperationEmitter
                 // under the same IgnoredFilterNames condition.
                 var countField = method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.Name : "_sqlCount";
                 AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField)}, {cancellation});");
+                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField, filterBinder)}, {cancellation});");
                 source.AppendLine("    }");
                 break;
             }
@@ -268,14 +276,14 @@ internal static class StoreOperationEmitter
                 // EXISTS returns a 1/0 scalar the runtime coerces to bool; criteria (if any) bind through
                 // the generated command's static binder.
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitExists(source, sqlBuilder, method, predicatePlan!, cancellation, entity.Schema);
+                EmitExists(source, sqlBuilder, method, predicatePlan!, cancellation, entity.Schema, filterBinder);
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.Aggregate:
                 // SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
                 AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, byte>({EmptyGeneratedCommand("_sqlAgg_" + method.Name)}, {cancellation});");
+                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, byte>({EmptyGeneratedCommand("_sqlAgg_" + method.Name, filterBinder)}, {cancellation});");
                 source.AppendLine("    }");
                 break;
 
@@ -283,7 +291,7 @@ internal static class StoreOperationEmitter
                 // Top-1-by-order: parameterless single-row select with ORDER BY + LIMIT 1.
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine($"        return Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, byte, {structMat}>(");
-                source.AppendLine($"            {EmptyGeneratedCommand("_sqlTop_" + method.Name)},");
+                source.AppendLine($"            {EmptyGeneratedCommand("_sqlTop_" + method.Name, filterBinder)},");
                 source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
@@ -299,7 +307,7 @@ internal static class StoreOperationEmitter
                 var matName = "_GroupCountMat_" + method.Name;
                 AppendHeader(source, method, parameters, isAsync: false);
                 source.AppendLine($"        return Inquiry.QueryListAsync<{gcType}, byte, {matName}>(");
-                source.AppendLine($"            {EmptyGeneratedCommand("_sqlGroupCount_" + method.Name)},");
+                source.AppendLine($"            {EmptyGeneratedCommand("_sqlGroupCount_" + method.Name, filterBinder)},");
                 source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");
@@ -338,6 +346,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine("                _p.DbType = global::System.Data.DbType.String;");
                 source.AppendLine("                _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
                 source.AppendLine("                _cmd.Parameters.Add(_p);");
+                if (filterBinder is not null) source.AppendLine($"                {filterBinder}(_cmd);");
                 source.AppendLine("            },");
                 source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation});");
@@ -387,13 +396,18 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.UpdateByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.Name, cancellation, entity.Schema);
+                // Set-based UPDATE composes the active-row predicate, so its SQL carries the
+                // parameterized filter term and the binder must fill it.
+                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.Name, cancellation, entity.Schema, filterBinder);
                 source.AppendLine("    }");
                 break;
 
             case StoreOperation.DeleteByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitMutationByPredicate(source, sqlBuilder, method, Array.Empty<ColumnData>(), predicatePlan!, "_sqlDeleteWhere_" + method.Name, cancellation, entity.Schema);
+                // The SOFT form composes the active-row predicate (it is an UPDATE); the hard form is
+                // deliberately unfiltered, so it binds no filter parameters.
+                EmitMutationByPredicate(source, sqlBuilder, method, Array.Empty<ColumnData>(), predicatePlan!, "_sqlDeleteWhere_" + method.Name, cancellation, entity.Schema,
+                    entity.SoftDeleteColumn is not null && !method.HardDelete ? filterBinder : null);
                 source.AppendLine("    }");
                 break;
 
@@ -829,7 +843,8 @@ internal static class StoreOperationEmitter
         Func<int, string> accessor,
         string indent,
         bool emitSizePrecision = false,
-        bool trailingComma = true)
+        bool trailingComma = true,
+        string? filterBinder = null)
     {
         source.AppendLine($"{indent}static (_cmd, {lambdaParam}) =>");
         source.AppendLine($"{indent}{{");
@@ -841,6 +856,10 @@ internal static class StoreOperationEmitter
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent + "    ", emitSizePrecision);
             source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i), sqlBuilder)};");
             source.AppendLine($"{indent}    _cmd.Parameters.Add(_p{i});");
+        }
+        if (filterBinder is not null)
+        {
+            source.AppendLine($"{indent}    {filterBinder}(_cmd);");
         }
         source.AppendLine($"{indent}}}{(trailingComma ? "," : string.Empty)}");
     }
@@ -877,7 +896,8 @@ internal static class StoreOperationEmitter
         EquatableArray<ColumnData> keyColumns,
         EquatableArray<ParameterData> methodParameters,
         string cancellation,
-        string indent)
+        string indent,
+        string? filterBinder = null)
     {
         if (keyColumns.Count == 1)
         {
@@ -886,7 +906,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{keyParam.TypeDisplay}>(");
             source.AppendLine($"{indent}        {sqlField},");
             source.AppendLine($"{indent}        {keyParam.Name},");
-            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "        ", emitSizePrecision: true, trailingComma: false);
+            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "        ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    default,");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
@@ -899,7 +919,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{tupleType}>(");
         source.AppendLine($"{indent}        {sqlField},");
         source.AppendLine($"{indent}        ({tupleArgs}),");
-        AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "        ", emitSizePrecision: true, trailingComma: false);
+        AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "        ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
         source.AppendLine($"{indent}    ),");
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
@@ -915,7 +935,8 @@ internal static class StoreOperationEmitter
         string cancellation,
         string indent,
         string? sqlField = null,
-        bool returnsList = true)
+        bool returnsList = true,
+        string? filterBinder = null)
     {
         sqlField ??= "_sqlSelectBy_" + BuildFieldSuffix(fieldColumns);
         var queryMethod = returnsList ? "QueryListAsync" : "QueryAsync";
@@ -926,7 +947,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{fieldParam.TypeDisplay}>(");
             source.AppendLine($"{indent}        {sqlField},");
             source.AppendLine($"{indent}        {fieldParam.Name},");
-            AppendBinderLambda(source, sqlBuilder, "_arg", fieldColumns, _ => "_arg", indent + "        ", emitSizePrecision: true, trailingComma: false);
+            AppendBinderLambda(source, sqlBuilder, "_arg", fieldColumns, _ => "_arg", indent + "        ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    default,");
             source.AppendLine($"{indent}    {cancellation});");
@@ -939,7 +960,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{tupleType}>(");
         source.AppendLine($"{indent}        {sqlField},");
         source.AppendLine($"{indent}        ({tupleArgs}),");
-        AppendBinderLambda(source, sqlBuilder, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "        ", emitSizePrecision: true, trailingComma: false);
+        AppendBinderLambda(source, sqlBuilder, "_args", fieldColumns, i => $"_args.Item{i + 1}", indent + "        ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
         source.AppendLine($"{indent}    ),");
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation});");
@@ -959,9 +980,10 @@ internal static class StoreOperationEmitter
         string entityType,
         string structMat,
         string cancellation,
-        string? owningSchema)
+        string? owningSchema,
+        string? filterBinder = null)
     {
-        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlPredicate_" + method.Name, owningSchema);
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlPredicate_" + method.Name, owningSchema, filterBinder);
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
 
         if (method.ReturnsList)
@@ -980,16 +1002,16 @@ internal static class StoreOperationEmitter
     /// parameters to bind, so the command uses a no-op binder; otherwise the
     /// predicate binder runs after the pipeline assigns the command text (as for predicate selects).
     /// </summary>
-    private static void EmitExists(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string cancellation, string? owningSchema)
+    private static void EmitExists(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string cancellation, string? owningSchema, string? filterBinder = null)
     {
         var sqlField = "_sqlExists_" + method.Name;
         if (plan.Bindings.Count == 0)
         {
-            source.AppendLine($"        return Inquiry.ExecuteScalarAsync<bool, byte>({EmptyGeneratedCommand(sqlField)}, {cancellation});");
+            source.AppendLine($"        return Inquiry.ExecuteScalarAsync<bool, byte>({EmptyGeneratedCommand(sqlField, filterBinder)}, {cancellation});");
             return;
         }
 
-        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, owningSchema);
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, owningSchema, filterBinder);
         source.AppendLine($"        return Inquiry.ExecuteScalarAsync<bool, {new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection)).Type}>(_cmd, {cancellation});");
     }
 
@@ -998,7 +1020,7 @@ internal static class StoreOperationEmitter
     /// binder runs after the pipeline assigns the
     /// command text, so <c>InquiryInExpansion</c> can rewrite an IN/NOT IN sentinel.
     /// </summary>
-    private static void EmitPredicateBoundCommand(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string sqlField, string? owningSchema)
+    private static void EmitPredicateBoundCommand(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string sqlField, string? owningSchema, string? filterBinder = null)
     {
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
         source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
@@ -1033,6 +1055,10 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                _c.Parameters.Add(_p{i});");
             }
         }
+        if (filterBinder is not null)
+        {
+            source.AppendLine($"                {filterBinder}(_c);");
+        }
         source.AppendLine("            });");
     }
 
@@ -1053,7 +1079,8 @@ internal static class StoreOperationEmitter
         ResolvedPredicatePlan plan,
         string sqlField,
         string cancellation,
-        string? owningSchema)
+        string? owningSchema,
+        string? filterBinder = null)
     {
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
         source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
@@ -1105,6 +1132,11 @@ internal static class StoreOperationEmitter
             }
         }
 
+        if (filterBinder is not null)
+        {
+            source.AppendLine($"                {filterBinder}(_c);");
+        }
+
         source.AppendLine("            });");
         source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
     }
@@ -1122,7 +1154,8 @@ internal static class StoreOperationEmitter
         ResolvedSelectPlan plan,
         string entityType,
         string structMat,
-        string cancellation)
+        string cancellation,
+        string? filterBinder = null)
     {
         var paged = plan.Pagination == Pagination.Offset;
         var state = new GeneratedCommandState(method.Parameters);
@@ -1169,6 +1202,11 @@ internal static class StoreOperationEmitter
             pagedCapacityArg = $", capacityHint: {method.Parameters[fieldColumns.Count + 1].Name}";
         }
 
+        if (filterBinder is not null)
+        {
+            source.AppendLine($"                {filterBinder}(_c);");
+        }
+
         source.AppendLine("            });");
 
         if (method.ReturnsPagedResult)
@@ -1177,7 +1215,7 @@ internal static class StoreOperationEmitter
 
             if (fieldColumns.Count == 0)
             {
-                source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand("_sqlCount_" + method.Name)}, {cancellation}).ConfigureAwait(false);");
+                source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand("_sqlCount_" + method.Name, filterBinder)}, {cancellation}).ConfigureAwait(false);");
             }
             else
             {
@@ -1197,6 +1235,10 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"                _p{cpi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg, sqlBuilder)};");
                     source.AppendLine($"                _c.Parameters.Add(_p{cpi});");
                     cpi++;
+                }
+                if (filterBinder is not null)
+                {
+                    source.AppendLine($"                {filterBinder}(_c);");
                 }
                 source.AppendLine("            });");
                 source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, {state.Type}>(_countCmd, {cancellation}).ConfigureAwait(false);");
@@ -1223,7 +1265,8 @@ internal static class StoreOperationEmitter
         ResolvedSelectPlan plan,
         string entityType,
         string structMat,
-        string cancellation)
+        string cancellation,
+        string? filterBinder = null)
     {
         var cursorParam = method.Parameters[0].Name;
         var pageSizeParam = method.Parameters[1].Name;
@@ -1289,6 +1332,11 @@ internal static class StoreOperationEmitter
         }
 
         AppendScalarIntParameter(source, sqlBuilder, ref pi, "__pageSize", pageSizeParam + " + 1");
+
+        if (filterBinder is not null)
+        {
+            source.AppendLine($"                {filterBinder}(_c);");
+        }
 
         source.AppendLine("            });");
         // Over-fetch pageSize + 1 to detect a next page; pre-size the list to that exact count (#61).
@@ -3095,6 +3143,116 @@ internal static class StoreOperationEmitter
             + ", default, static (_, _) => { }"
             + (storedProcedure ? ", global::System.Data.CommandType.StoredProcedure" : string.Empty)
             + ")";
+
+    /// <summary>
+    /// The parameterless-command variant for SQL whose active-row predicate carries runtime
+    /// parameterized filters: the binder is no longer a no-op — it must bind the ambient
+    /// <c>@__gf_*</c> parameters or the command fails with a missing parameter.
+    /// </summary>
+    private static string EmptyGeneratedCommand(string sqlField, string? filterBinder)
+        => filterBinder is null
+            ? EmptyGeneratedCommand(sqlField)
+            : "new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(" + sqlField
+                + ", default, static (_cmd, _) => { " + filterBinder + "(_cmd); })";
+
+    /// <summary>
+    /// The runtime-parameterized filter columns whose predicate terms end up in the SQL a method's
+    /// context composes: the entity's ContextKey filters minus the ones the method bypasses by name.
+    /// Mirrors the term selection in SqlBuildContext — the emitter and the const builder must agree
+    /// or the command binds a parameter its SQL does not carry (or misses one it does).
+    /// </summary>
+    internal static IReadOnlyList<ColumnData> ActiveParameterizedFilters(EntityData entity, StoreMethodData method)
+    {
+        List<ColumnData>? active = null;
+        foreach (var column in entity.Columns)
+        {
+            if (!column.IsGlobalFilter || column.GlobalFilterContextKey is null)
+            {
+                continue;
+            }
+
+            if (column.GlobalFilterName is not null && Contains(method.IgnoredFilterNames, column.GlobalFilterName))
+            {
+                continue;
+            }
+
+            (active ??= new List<ColumnData>()).Add(column);
+        }
+
+        return (IReadOnlyList<ColumnData>?)active ?? System.Array.Empty<ColumnData>();
+
+        static bool Contains(EquatableArray<string> names, string name)
+        {
+            for (var i = 0; i < names.Count; i++)
+            {
+                if (string.Equals(names[i], name, StringComparison.Ordinal)) return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The generated static helper a method's binders call to bind its ambient filter parameters, or
+    /// null when the method's SQL carries none. The full entity set shares one helper; a method that
+    /// bypassed a parameterized named filter gets its own reduced helper, suffixed with the method
+    /// name. StoreProcessor emits the helper bodies from the same two inputs.
+    /// </summary>
+    internal static string? GlobalFilterBinderName(EntityData entity, StoreMethodData method)
+    {
+        var active = ActiveParameterizedFilters(entity, method);
+        if (active.Count == 0) return null;
+
+        var full = 0;
+        foreach (var column in entity.Columns)
+        {
+            if (column.IsGlobalFilter && column.GlobalFilterContextKey is not null) full++;
+        }
+
+        if (active.Count == full) return "__BindGlobalFilters";
+
+        // Reduced-set name derived from the SET CONTENT, not the method name: overloads share a
+        // method name, and StoreProcessor dedupes helper emission by name — a name that encodes the
+        // set makes "same name" imply "same body", so two methods with different bypass sets can
+        // never silently share one helper. Length-prefixed segments keep the encoding injective even
+        // when property names themselves contain underscores; digits and underscores are valid
+        // identifier characters, so the result is always a legal C# method name.
+        var suffix = new StringBuilder("__BindGlobalFilters");
+        foreach (var column in active)
+        {
+            suffix.Append('_').Append(column.PropertyName.Length).Append('_').Append(column.PropertyName);
+        }
+
+        return suffix.ToString();
+    }
+
+    /// <summary>
+    /// Emits the body of a <c>__BindGlobalFilters*</c> helper: one ambient parameter per active
+    /// filter, value read from InquiryFilterContext at execute time (missing scope throws before the
+    /// command runs) and routed through the same converter/DbType machinery as a declared parameter.
+    /// </summary>
+    internal static void AppendGlobalFilterBinderHelper(
+        StringBuilder source,
+        SqlBuilder sqlBuilder,
+        string helperName,
+        IReadOnlyList<ColumnData> filters)
+    {
+        source.AppendLine();
+        source.AppendLine($"    private static void {helperName}(global::System.Data.Common.DbCommand _cmd)");
+        source.AppendLine("    {");
+        for (var i = 0; i < filters.Count; i++)
+        {
+            var column = filters[i];
+            var value = $"global::Inquiry.InquiryFilterContext.GetRequired<{column.Type.DisplayName}>(\"{GeneratorHelpers.Escape(column.GlobalFilterContextKey!)}\")";
+            source.AppendLine($"        var _fp{i} = _cmd.CreateParameter();");
+            source.AppendLine($"        _fp{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("__gf_" + column.PropertyName))}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_fp{i}", "        ", predicate: true);
+            source.AppendLine($"        _fp{i}.Value = {BuildParameterValueExpression(column, value, sqlBuilder)};");
+            source.AppendLine($"        _cmd.Parameters.Add(_fp{i});");
+        }
+
+        source.AppendLine("    }");
+    }
 
     private static void AppendGeneratedStateAliases(
         StringBuilder source,

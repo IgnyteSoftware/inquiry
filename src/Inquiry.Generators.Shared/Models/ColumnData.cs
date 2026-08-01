@@ -54,6 +54,13 @@ internal sealed record ColumnData : IColumn
     /// </summary>
     public string? GlobalFilterName { get; init; }
 
+    /// <summary>
+    /// InquiryGlobalFilter.ContextKey, or null for the constant-bool mode. Non-null switches the
+    /// composed predicate to <c>"col" = @__gf_&lt;property&gt;</c> with the value bound at execute
+    /// time from the ambient InquiryFilterContext under this key.
+    /// </summary>
+    public string? GlobalFilterContextKey { get; init; }
+
     public bool IsConcurrencyToken { get; init; }
     public bool IsDatabaseGeneratedToken { get; init; }
     public bool EnumAsString { get; init; }

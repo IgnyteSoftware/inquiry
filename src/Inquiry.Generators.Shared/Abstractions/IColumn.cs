@@ -70,6 +70,13 @@ public interface IColumn
     /// </summary>
     string? GlobalFilterName { get; }
 
+    /// <summary>
+    /// <c>InquiryGlobalFilter.ContextKey</c>, or null for the constant-bool mode. Non-null switches
+    /// the composed predicate to an equality against an execute-time-bound ambient parameter.
+    /// Ignored when <see cref="IsGlobalFilter"/> is false.
+    /// </summary>
+    string? GlobalFilterContextKey { get; }
+
     /// <summary>True when this column is the entity's optimistic-concurrency token.</summary>
     bool IsConcurrencyToken { get; }
 

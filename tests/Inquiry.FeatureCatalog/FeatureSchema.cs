@@ -337,6 +337,11 @@ public static class FeatureSchema
     // and GlobalFilterTicket (KeepWhen = false archive gate).
     // ---------------------------------------------------------------------------
 
+    // Runtime-parameterized filter (#82 phase B): TenantScopedDoc's reads bind @__gf_TenantId from
+    // the ambient InquiryFilterContext.
+    public const string TenantScopedDocSqliteDdl =
+        "CREATE TABLE TenantScopedDoc (Id INTEGER PRIMARY KEY AUTOINCREMENT, TenantId INTEGER NOT NULL, Title TEXT NOT NULL, IsActive INTEGER NOT NULL DEFAULT 1);";
+
     public const string GlobalFilterSqliteDdl = """
         CREATE TABLE GlobalFilterDoc (Id INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT NOT NULL, IsPublished INTEGER NOT NULL DEFAULT 0, IsDeleted INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE GlobalFilterTicket (Id INTEGER PRIMARY KEY AUTOINCREMENT, Title TEXT NOT NULL, IsArchived INTEGER NOT NULL DEFAULT 0);

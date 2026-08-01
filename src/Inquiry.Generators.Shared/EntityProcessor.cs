@@ -288,8 +288,68 @@ internal static class EntityProcessor
             var isGlobalFilter = false;
             var globalFilterKeepWhenTrue = true;
             string? globalFilterName = null;
+            string? globalFilterContextKey = null;
             var globalFilterAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryGlobalFilterAttribute");
-            if (globalFilterAttribute is not null)
+            var globalFilterContextKeyRaw = globalFilterAttribute is not null
+                ? GeneratorHelpers.GetNamedString(globalFilterAttribute, "ContextKey")
+                : null;
+            if (globalFilterAttribute is not null && globalFilterContextKeyRaw is not null)
+            {
+                // Runtime-parameterized mode (ContextKey): the predicate compares the column to an
+                // ambient value bound at execute time, so the column is any non-nullable mapped
+                // scalar — INCLUDING a key component (a tenant id in a composite key is the point) —
+                // but the constant-mode KeepWhen is meaningless here and the roles other machinery
+                // owns stay invalid.
+                string? contextKeyError = null;
+                if (string.IsNullOrWhiteSpace(globalFilterContextKeyRaw))
+                    contextKeyError = "the ContextKey is empty or whitespace — give it the ambient key the value is stored under (e.g. \"TenantId\")";
+                else if (globalFilterAttribute.NamedArguments.Any(static a => a.Key == "KeepWhen"))
+                    contextKeyError = "KeepWhen and ContextKey conflict — a runtime-parameterized filter compares to the ambient value, not a constant bool; remove one of the two";
+                else if (typeData.IsNullable)
+                    contextKeyError = "the column type is nullable — a parameterized filter needs a non-nullable scalar so a missing ambient value fails loudly instead of matching NULL";
+                else if (isGenerated || useDatabaseDefault || isConcurrencyToken || softDelete != SoftDeleteKind.None)
+                    contextKeyError = "the column's role is owned by other machinery (generated/database-default value, concurrency token, or soft-delete indicator)";
+
+                if (contextKeyError is not null)
+                {
+                    diagnostics.Add(DiagnosticData.Create(
+                        InquiryDiagnosticDescriptors.GlobalFilterContextKeyInvalid,
+                        property.Locations.FirstOrDefault(),
+                        entitySymbol.Name,
+                        property.Name,
+                        contextKeyError));
+                    // Structural fail-closed, mirroring the INQ092 duplicate-name treatment: INQ093
+                    // is suppressible, and a suppressed error must not silently strip the tenant
+                    // predicate from every read (isGlobalFilter = false would). The filter stays
+                    // parameterized-active — a blank key falls back to the property name so the
+                    // binder still emits and a missing ambient value still throws — so a suppressed
+                    // diagnostic yields filtered-or-failing reads, never unfiltered ones.
+                    isGlobalFilter = true;
+                    globalFilterContextKey = string.IsNullOrWhiteSpace(globalFilterContextKeyRaw)
+                        ? property.Name
+                        : globalFilterContextKeyRaw;
+                }
+                else
+                {
+                    isGlobalFilter = true;
+                    globalFilterContextKey = globalFilterContextKeyRaw;
+                    var name = GeneratorHelpers.GetNamedString(globalFilterAttribute, "Name");
+                    if (name is not null && string.IsNullOrWhiteSpace(name))
+                    {
+                        diagnostics.Add(DiagnosticData.Create(
+                            InquiryDiagnosticDescriptors.GlobalFilterNameInvalid,
+                            property.Locations.FirstOrDefault(),
+                            entitySymbol.Name,
+                            property.Name,
+                            "the name is empty or whitespace — give the filter a non-blank name, or omit Name to keep it unnamed and non-bypassable"));
+                    }
+                    else
+                    {
+                        globalFilterName = name;
+                    }
+                }
+            }
+            else if (globalFilterAttribute is not null)
             {
                 var isBool = !typeData.IsNullable && typeData.SpecialType == SpecialType.System_Boolean;
                 if (!isBool || keyAttribute is not null || isGenerated || useDatabaseDefault ||
@@ -490,6 +550,7 @@ internal static class EntityProcessor
                 IsGlobalFilter = isGlobalFilter,
                 GlobalFilterKeepWhenTrue = globalFilterKeepWhenTrue,
                 GlobalFilterName = globalFilterName,
+                GlobalFilterContextKey = globalFilterContextKey,
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 IsCreatedAt = isCreatedAt,

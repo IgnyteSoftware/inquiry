@@ -27,16 +27,18 @@ between `ctx` and `ctxIncludeDeleted` (`suppressSoftDelete: true`).
   other methods untouched, unknown name fails the build), live SQLite round-trip; docs in
   `global-filters.md`.
 
-## Phase B — runtime-parameterized filters
+## Phase B — runtime-parameterized filters — DONE
 
-- Filter value bound from ambient context instead of a constant column predicate:
-  `"TenantId" = @__gf_TenantId`. Mirror the existing `InquiryAuditContext` AsyncLocal pattern
-  (`InquiryFilterContext` + DI-friendly provider seam).
-- Design decisions to settle with Codex input: attribute shape (likely a separate property on
-  `[InquiryGlobalFilter]` or a sibling attribute since the column is no longer bool), the parameter
-  binding seam in generated methods (every method whose SQL carries the term must bind the extra
-  parameter), and missing-ambient-value behavior (throw — filtering to nothing silently is the
-  cross-tenant-read shape this feature exists to prevent).
+Landed: `ContextKey` on `[InquiryGlobalFilter]` (separate from `Name`; both Codex consults converged
+on that split), static `InquiryFilterContext` mirroring `InquiryAuditContext` (xhigh consult's
+simpler surface chosen over a DI provider interface), `@__gf_<property>` const terms with values
+bound inside the generated static binders at execute time, `InquiryFilterValueMissingException`
+before execution on any missing/mistyped ambient value, INQ093 (blank key, KeepWhen conflict,
+nullable column, role overlaps, eager rejection), key participation allowed. Binding coverage is by
+construction: every read-binder emission seam (EmptyGeneratedCommand, AppendBinderLambda,
+single-param commands, predicate/paged/keyset/FTS binders, set-based UPDATE and soft predicate
+DELETE) takes the per-method binder name computed from one shared function. Eager methods reject
+parameterized filters anywhere in the relation tree rather than emit unbindable SQL.
 
 ## Phase C — opt-in write-side enforcement
 

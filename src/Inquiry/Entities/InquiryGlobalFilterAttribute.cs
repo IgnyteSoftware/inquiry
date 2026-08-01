@@ -36,4 +36,18 @@ public sealed class InquiryGlobalFilterAttribute : Attribute
     /// generation time; a method naming a filter that does not exist on the entity is a build error.
     /// </summary>
     public string? Name { get; set; }
+
+    /// <summary>
+    /// Switches the filter from a constant predicate to a RUNTIME-parameterized one: instead of
+    /// <c>"col" = KeepWhen</c>, every generated SELECT composes <c>"col" = @__gf_&lt;property&gt;</c>
+    /// and binds the value from the ambient <see cref="InquiryFilterContext"/> under this key at
+    /// execute time — the multi-tenant shape (<c>ContextKey = "TenantId"</c> on a tenant column).
+    /// The SQL is still a compile-time const; only the value is runtime, and a missing ambient value
+    /// throws <see cref="InquiryFilterValueMissingException"/> before the command runs. In this mode
+    /// the column may be any non-nullable mapped scalar (including a key component) rather than a
+    /// bool, and <see cref="KeepWhen"/> must not be set (the modes conflict — INQ093). Identity
+    /// stays separate from <see cref="Name"/>: a tenant boundary should set <see cref="ContextKey"/>
+    /// and leave <see cref="Name"/> unset so it cannot be bypassed.
+    /// </summary>
+    public string? ContextKey { get; set; }
 }

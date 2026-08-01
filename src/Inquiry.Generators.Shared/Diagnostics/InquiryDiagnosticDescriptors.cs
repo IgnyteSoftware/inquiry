@@ -53,6 +53,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ087–INQ089  Many-to-many configuration     (INQ087 junction/related type unmapped, INQ088 named junction FK not a mapped column, INQ089 child FKs do not pair with the related key) [IN USE]
     //   INQ091         Ignore-filter bypass            ([InquiryIgnoreFilter] names an unknown/unnamed filter, or sits on an operation that composes no filters) [IN USE]
     //   INQ092         Global-filter name              ([InquiryGlobalFilter] Name blank, or duplicated across the entity's filters) [IN USE]
+    //   INQ093         Parameterized filter            ([InquiryGlobalFilter] ContextKey blank/conflicting/unbindable, or on SQL the binder cannot cover) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -367,6 +368,18 @@ internal static class InquiryDiagnosticDescriptors
         "INQ092",
         "InquiryGlobalFilter Name is invalid",
         "Entity '{0}' property '{1}' has an invalid [InquiryGlobalFilter] Name: {2}.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ093: a runtime-parameterized [InquiryGlobalFilter] (ContextKey mode) that cannot bind. The
+    // modes conflict (explicit KeepWhen), the key is blank, the column's type cannot be a bound
+    // scalar (nullable), the column's role is owned by other machinery, or the filter reaches SQL the
+    // binder cannot cover in this release (eager loaders). Reason-parameterised like INQ090/091.
+    public static readonly DiagnosticDescriptor GlobalFilterContextKeyInvalid = new(
+        "INQ093",
+        "InquiryGlobalFilter ContextKey configuration is invalid",
+        "Entity '{0}' property '{1}' has an invalid runtime-parameterized [InquiryGlobalFilter]: {2}.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

@@ -1930,6 +1930,23 @@ internal static class StoreProcessor
             AppendConstSql(source, "_sqlProj_" + method.Name, projSql);
         }
 
+        // __BindGlobalFilters* helper bodies for runtime-parameterized filters: one per distinct
+        // helper NAME the emitters reference (the full-set helper plus one per bypass method with a
+        // reduced set). Name selection and the active set both come from StoreOperationEmitter so the
+        // helper that is emitted and the helper that is called can never disagree.
+        var emittedFilterBinders = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (method, _, _, _) in valid)
+        {
+            var binderName = StoreOperationEmitter.GlobalFilterBinderName(entity, method);
+            if (binderName is null || !emittedFilterBinders.Add(binderName))
+            {
+                continue;
+            }
+
+            StoreOperationEmitter.AppendGlobalFilterBinderHelper(
+                source, sqlBuilder, binderName, StoreOperationEmitter.ActiveParameterizedFilters(entity, method));
+        }
+
         source.AppendLine();
         source.AppendLine($"    public {store.Name}(global::Inquiry.IInquiry inquiry)");
         source.AppendLine("        : base(inquiry)");
@@ -2131,6 +2148,29 @@ internal static class StoreProcessor
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.OperationRequiresKey, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
             return false;
+        }
+
+        // Eager loaders assemble multi-entity grids whose relation consts are shared per relation;
+        // this release has no per-relation binding variants, so a runtime-parameterized filter
+        // anywhere in the eager tree (root, relation child, or junction) would produce SQL with an
+        // unbound @__gf_* parameter. Rejecting is the fail-closed choice — a diagnostic beats a
+        // runtime missing-parameter error, and silently dropping the filter is exactly the
+        // cross-tenant read the feature exists to prevent.
+        if (method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager)
+        {
+            var parameterized =
+                entity.Columns.AsImmutableArray().FirstOrDefault(static c => c.IsGlobalFilter && c.GlobalFilterContextKey is not null)
+                ?? relationChildEntities.Values.Concat(relationJunctionEntities.Values)
+                    .SelectMany(static e => e.Columns.AsImmutableArray())
+                    .FirstOrDefault(static c => c.IsGlobalFilter && c.GlobalFilterContextKey is not null);
+            if (parameterized is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.GlobalFilterContextKeyInvalid, method.Location?.ToLocation(),
+                    entity.Name, parameterized.PropertyName,
+                    $"eager-loading method '{method.Name}' cannot bind runtime-parameterized filters in this release — use non-eager reads for entities with ContextKey filters, or remove the eager method"));
+                return false;
+            }
         }
 
         // [InquiryIgnoreFilter] must actually bypass something: every name must match a NAMED
