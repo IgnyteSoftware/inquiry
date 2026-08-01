@@ -1,14 +1,18 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main, prerelease]
   merge_group:
 
 permissions:
   contents: read
+
+# A superseded push to the same PR cancels the in-flight matrix; merge-group runs are never
+# cancelled because the queue's verdict is the merge gate.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-unit:
@@ -41,7 +45,7 @@ jobs:
           name: unit-test-results
           path: test-results/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
   aot-smoke:
     runs-on: ubuntu-latest
@@ -102,7 +106,7 @@ jobs:
           name: integration-test-results-${{ matrix.provider }}-${{ matrix.tfm }}
           path: test-results/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
   benchmark-smoke:
     runs-on: ubuntu-latest

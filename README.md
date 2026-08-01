@@ -2,7 +2,7 @@
 
 Inquiry is an experimental **.NET 8+** source-generated micro-ORM. You write attributed entity classes and `partial` store classes with `partial` method declarations; a Roslyn source generator emits the matching partial with method bodies, materializers, and dependency-injection wiring. Every SQL string is built at compile time by a provider-specific `SqlBuilder` and baked into the generated source as `const string` fields, so each database can be tuned independently and **the runtime carries no SQL**.
 
-> **Documentation lives in the DocFX site** ([`docs/site/`](docs/site/)) — getting-started, features, per-dialect notes, the architecture deep-dive, security, and an auto-generated API reference, plus a **Develop** area with project status and the roadmap. The site is local-preview only for now: run `docfx docs/site/docfx.json --serve` from the repo root (see [`docs/site/README.md`](docs/site/README.md)).
+> **Documentation lives in the DocFX site** ([`docs/site/`](docs/site/)) — getting-started, features, per-dialect notes, the architecture deep-dive, security, and an auto-generated API reference, plus a **Develop** area with project status and the roadmap. The published site lives at <https://ignytesoftware.github.io/inquiry/> (deployed by `docs.yml` on every push to `main`); preview locally with `docfx docs/site/docfx.json --serve` (see [`docs/site/README.md`](docs/site/README.md)).
 >
 > - **New here?** [Getting started](docs/site/articles/getting-started.md) · [How it works](docs/site/articles/concepts.md)
 > - **Reference:** [Features](docs/site/articles/features/crud.md) · [Providers](docs/site/articles/providers/sqlite.md) · [Security](docs/site/articles/security.md) · [Architecture](docs/site/articles/architecture.md)

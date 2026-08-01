@@ -1,12 +1,13 @@
 name: Security
 
+# PRs get scanned before merge; the weekly schedule refreshes the default-branch baseline.
+# No push trigger — a push-to-main run would duplicate the PR scan that just gated the merge.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   schedule:
     - cron: '27 4 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read

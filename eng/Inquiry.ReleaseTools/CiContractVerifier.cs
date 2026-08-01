@@ -31,9 +31,10 @@ public static class CiContractVerifier
             "CI contract must declare the exact six required jobs in canonical order.");
 
         var document = LoadYaml(Path.GetFullPath(workflowPath, root));
-        var workflow = Map(document, "workflow", "name", "on", "permissions", "jobs");
+        var workflow = Map(document, "workflow", "name", "on", "permissions", "concurrency", "jobs");
         Require(Scalar(workflow["name"], "workflow.name") == "CI", "Workflow name must be CI.");
-        VerifyTriggers(Map(workflow["on"], "workflow.on", "push", "pull_request", "merge_group"));
+        VerifyTriggers(Map(workflow["on"], "workflow.on", "pull_request", "merge_group"));
+        VerifyConcurrency(Map(workflow["concurrency"], "workflow.concurrency", "group", "cancel-in-progress"));
         var permissions = Map(workflow["permissions"], "workflow.permissions", "contents");
         Require(Scalar(permissions["contents"], "workflow.permissions.contents") == "read", "Workflow contents permission must be read.");
 
@@ -49,13 +50,22 @@ public static class CiContractVerifier
 
     private static void VerifyTriggers(IReadOnlyDictionary<string, YamlNode> triggers)
     {
-        // push on main is post-merge signal, not a gate: branch protection is what actually blocks a
-        // bad merge. It exists so a commit that lands directly on main is still verified.
-        var push = Map(triggers["push"], "push", "branches");
-        RequireSequence(Sequence(push["branches"], "push.branches"), ["main"], "push branches");
+        // No push trigger: the identical matrix already gated the pull request (and merge group),
+        // so a post-merge rerun only duplicates spend. Direct pushes to main are excluded by branch
+        // rulesets, and release.yml independently re-verifies the package contract on every push.
         var pullRequest = Map(triggers["pull_request"], "pull_request", "branches");
         RequireSequence(Sequence(pullRequest["branches"], "pull_request.branches"), ["main", "prerelease"], "pull_request branches");
         Require(IsNull(triggers["merge_group"]), "merge_group must not be narrowed by filters.");
+    }
+
+    private static void VerifyConcurrency(IReadOnlyDictionary<string, YamlNode> concurrency)
+    {
+        // Superseded pushes to a PR cancel their in-flight run; merge-group runs must never be
+        // cancelled because the queue's verdict is the merge gate.
+        Require(Scalar(concurrency["group"], "concurrency.group") == "ci-${{ github.ref }}",
+            "Concurrency group must partition runs by ref.");
+        Require(Scalar(concurrency["cancel-in-progress"], "concurrency.cancel-in-progress") == "${{ github.event_name == 'pull_request' }}",
+            "Only pull request runs may be cancelled by newer pushes.");
     }
 
     private static void VerifyJob(string jobId, IReadOnlyDictionary<string, YamlNode> job, IReadOnlyList<CiRequiredJob> contract)
@@ -275,7 +285,7 @@ public static class CiContractVerifier
             Require(step.TryGetValue("with", out var withNode), "Artifact upload must declare its exact contract.");
             var with = Map(withNode!, "upload-artifact.with", "name", "path", "if-no-files-found", "retention-days");
             Require(Scalar(with["if-no-files-found"], "upload.if-no-files-found") == "error", "Artifact upload must fail when files are absent.");
-            var expectedRetention = jobId == "package-producer" ? "30" : "14";
+            var expectedRetention = jobId == "package-producer" ? "30" : "7";
             Require(Scalar(with["retention-days"], "upload.retention-days") == expectedRetention, "Artifact retention contract drifted.");
             var expectedName = jobId switch
             {

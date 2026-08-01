@@ -2,7 +2,7 @@
 
 ## Getting help
 
-- **Documentation:** <https://github.com/IgnyteSoftware/inquiry> (build locally with `docfx docs/site/docfx.json --serve`)
+- **Documentation:** <https://ignytesoftware.github.io/inquiry/>
 - **Bug reports and feature requests:** [GitHub Issues](https://github.com/IgnyteSoftware/inquiry/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/IgnyteSoftware/inquiry/discussions)
 
