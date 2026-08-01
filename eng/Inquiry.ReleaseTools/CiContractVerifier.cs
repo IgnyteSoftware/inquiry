@@ -135,7 +135,11 @@ public static class CiContractVerifier
                 var name = step.TryGetValue("name", out var nameNode) ? Scalar(nameNode, "step.name") : string.Empty;
                 var approved = (name.StartsWith("Upload ", StringComparison.Ordinal) && condition == "always()")
                     || (jobId == "integration" && name is "Build pinned SQL Server full-text image" or "Preflight SQL Server image runtime user"
-                        && condition == "matrix.provider == 'SqlServer'");
+                        && condition == "matrix.provider == 'SqlServer'")
+                    // Attestation persistence is a paid org feature for private repos; the step is
+                    // opt-in via repository variable rather than failing every run.
+                    || (jobId == "package-producer" && name == "Attest build provenance"
+                        && condition == "vars.ENABLE_ATTESTATIONS == 'true'");
                 Require(approved, $"Unapproved conditional step in {jobId}: {name}.");
             }
 
