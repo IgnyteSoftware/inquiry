@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows'))">win-x64</RuntimeIdentifier>
+    <BenchmarkEvidenceProvider>sqlite</BenchmarkEvidenceProvider>
+    <BenchmarkEvidenceLane>DeveloperProject</BenchmarkEvidenceLane>
+    <BenchmarkEvidenceProviderAssembly>Inquiry.Sqlite</BenchmarkEvidenceProviderAssembly>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- BenchmarkDotNet requires Release-mode binaries. The csproj defaults stay in Debug; -->
+    <!-- pass `-c Release` when running. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="linq2db" />
+    <PackageReference Include="RepoDb" />
+    <PackageReference Include="RepoDb.Sqlite.Microsoft" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- Networked EF Core providers for the cross-dialect 4-way comparison. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
+    <!-- EF Core 8.x pulls in M.E.DependencyInjection 8.0.1 transitively; override the
+         central package version (6.0.1, picked for the library's netstandard2.0 surface)
+         locally so NuGet does not flag a downgrade. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="8.0.1" />
+    <!-- Cross-dialect benchmark (CrossDialectReadBenchmarks): ADO drivers + Testcontainers for the
+         networked dialects. EF Core is compared in the in-process SQLite suite only. -->
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.MySql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inquiry.Benchmarks.Contracts\Inquiry.Benchmarks.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.MySql\Inquiry.MySql.csproj" />
+    <ProjectReference Include="..\..\samples\Inquiry.Northwind\Inquiry.Northwind.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />
+</Project>

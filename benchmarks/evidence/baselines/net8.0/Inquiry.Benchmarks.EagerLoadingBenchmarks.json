@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:48:06.0393645\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.EagerLoadingBenchmarks.EagerAll_AdoNet(Rows: 1000)",
+      "medianNs": 1164542.7734,
+      "meanNs": 1153951.888,
+      "allocatedBytes": 203728,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerLoadingBenchmarks.EagerAll_Dapper(Rows: 1000)",
+      "medianNs": 1248945.1172,
+      "meanNs": 1259361.1328,
+      "allocatedBytes": 350152,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerLoadingBenchmarks.EagerAll_Inquiry(Rows: 1000)",
+      "medianNs": 1316517.3828,
+      "meanNs": 1352457.2917,
+      "allocatedBytes": 250640,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerLoadingBenchmarks.EagerAll_AdoNet(Rows: 100000)",
+      "medianNs": 105375620,
+      "meanNs": 105228700,
+      "allocatedBytes": 20003728,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerLoadingBenchmarks.EagerAll_Dapper(Rows: 100000)",
+      "medianNs": 114222960,
+      "meanNs": 115787853.3333,
+      "allocatedBytes": 34903088,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerLoadingBenchmarks.EagerAll_Inquiry(Rows: 100000)",
+      "medianNs": 116698960,
+      "meanNs": 116721626.6667,
+      "allocatedBytes": 25142360,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}

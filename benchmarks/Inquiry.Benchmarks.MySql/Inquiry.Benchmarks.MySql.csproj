@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <BenchmarkEvidenceProvider>mysql</BenchmarkEvidenceProvider>
+    <BenchmarkEvidenceLane>DeveloperProject</BenchmarkEvidenceLane>
+    <BenchmarkEvidenceProviderAssembly>Inquiry.MySql</BenchmarkEvidenceProviderAssembly>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- BenchmarkDotNet requires Release-mode binaries. The csproj defaults stay in Debug; -->
+    <!-- pass `-c Release` when running. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
+    <PackageReference Include="Testcontainers.MySql" />
+    <!-- EF Core 8.x pulls in M.E.DependencyInjection 8.0.1 transitively; override the
+         central package version (6.0.1, picked for the library's netstandard2.0 surface)
+         locally so NuGet does not flag a downgrade. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- INQ014: exactly ONE dialect runtime per compilation. -->
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.MySql\Inquiry.MySql.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Link-compile the Northwind source so the generator emits the MySql store.
+         Do NOT ProjectReference Inquiry.Northwind — it is Sqlite-pinned (INQ014). -->
+    <Compile Include="..\..\samples\Inquiry.Northwind\Models\**\*.cs" LinkBase="Northwind\Models" />
+    <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
+    <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
+    <Compile Include="..\Inquiry.Benchmarks.MySqlFamily\MySqlBatchMutationStrategyRunner.cs" Link="Batch\MySqlBatchMutationStrategyRunner.cs" />
+  </ItemGroup>
+
+  <Import Project="..\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />
+</Project>

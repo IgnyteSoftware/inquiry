@@ -1,0 +1,9 @@
+- name: Docs
+  href: articles/
+  homepage: articles/getting-started.md
+- name: API
+  href: api/
+  homepage: api/index.md
+- name: Develop
+  href: develop/
+  homepage: develop/index.md

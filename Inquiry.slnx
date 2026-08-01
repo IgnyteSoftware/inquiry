@@ -1,0 +1,55 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Inquiry.Benchmarks.Contracts/Inquiry.Benchmarks.Contracts.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.FixtureGenerator/Inquiry.Benchmarks.FixtureGenerator.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.DLG/Inquiry.Benchmarks.DLG.csproj" Id="d8e858e3-2391-43d3-9471-0bebe45d2326" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.MariaDb/Inquiry.Benchmarks.MariaDb.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.MySql/Inquiry.Benchmarks.MySql.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.Oracle/Inquiry.Benchmarks.Oracle.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.PostgreSql/Inquiry.Benchmarks.PostgreSql.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.SqlServer/Inquiry.Benchmarks.SqlServer.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/eng/">
+    <Project Path="eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj" />
+    <Project Path="samples/Inquiry.Northwind/Inquiry.Northwind.csproj" />
+    <Project Path="samples/Inquiry.Sample/Inquiry.Sample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Inquiry.Generators.Shared/Inquiry.Generators.Shared.csproj" />
+    <Project Path="src/Inquiry.MariaDb.Analyzer/Inquiry.MariaDb.Analyzer.csproj" />
+    <Project Path="src/Inquiry.MariaDb/Inquiry.MariaDb.csproj" />
+    <Project Path="src/Inquiry.MySql.Analyzer/Inquiry.MySql.Analyzer.csproj" />
+    <Project Path="src/Inquiry.MySql/Inquiry.MySql.csproj" />
+    <Project Path="src/Inquiry.Oracle.Analyzer/Inquiry.Oracle.Analyzer.csproj" />
+    <Project Path="src/Inquiry.Oracle/Inquiry.Oracle.csproj" />
+    <Project Path="src/Inquiry.PostgreSql.Analyzer/Inquiry.PostgreSql.Analyzer.csproj" />
+    <Project Path="src/Inquiry.PostgreSql/Inquiry.PostgreSql.csproj" />
+    <Project Path="src/Inquiry.Sqlite.Analyzer/Inquiry.Sqlite.Analyzer.csproj" />
+    <Project Path="src/Inquiry.Sqlite/Inquiry.Sqlite.csproj" />
+    <Project Path="src/Inquiry.SqlServer.Analyzer/Inquiry.SqlServer.Analyzer.csproj" />
+    <Project Path="src/Inquiry.SqlServer/Inquiry.SqlServer.csproj" />
+    <Project Path="src/Inquiry.AspNetCore/Inquiry.AspNetCore.csproj" />
+    <Project Path="src/Inquiry.Interceptors/Inquiry.Interceptors.csproj" />
+    <Project Path="src/Inquiry.Testing/Inquiry.Testing.csproj" />
+    <Project Path="src/Inquiry/Inquiry.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Inquiry.Benchmarks.Contracts.Tests/Inquiry.Benchmarks.Contracts.Tests.csproj" />
+    <Project Path="tests/Inquiry.Benchmarks.SqlServer.Tests/Inquiry.Benchmarks.SqlServer.Tests.csproj" />
+    <Project Path="tests/Inquiry.Benchmarks.SelectedStrategy.Tests/Inquiry.Benchmarks.SelectedStrategy.Tests.csproj" />
+    <Project Path="tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj" />
+    <Project Path="tests/Inquiry.MariaDb.Tests/Inquiry.MariaDb.Tests.csproj" />
+    <Project Path="tests/Inquiry.MySql.Tests/Inquiry.MySql.Tests.csproj" />
+    <Project Path="tests/Inquiry.Oracle.Tests/Inquiry.Oracle.Tests.csproj" />
+    <Project Path="tests/Inquiry.ReleaseTools.Tests/Inquiry.ReleaseTools.Tests.csproj" />
+    <Project Path="tests/Inquiry.Oracle.UnsupportedFixtures/Inquiry.Oracle.UnsupportedFixtures.csproj" />
+    <Project Path="tests/Inquiry.PostgreSql.Tests/Inquiry.PostgreSql.Tests.csproj" />
+    <Project Path="tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj" />
+    <Project Path="tests/Inquiry.SqlServer.Tests/Inquiry.SqlServer.Tests.csproj" />
+    <Project Path="tests/Inquiry.Tests/Inquiry.Tests.csproj" />
+  </Folder>
+</Solution>

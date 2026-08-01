@@ -1,0 +1,211 @@
+@page "/"
+@inject CustomerService Customers
+@inject EmployeeService Employees
+@inject CatalogService Catalog
+@inject SupplierService Suppliers
+@inject ShipperService Shippers
+@inject RegionService Regions
+@inject OrderService Orders
+@inject DemographicsService Demographics
+
+<h1>Dashboard</h1>
+
+<p>
+    A snapshot of the classic Northwind sample database, mapped through Inquiry. Every one
+    of the thirteen Northwind tables — including the three composite-key ones
+    (<code>Order Details</code>, <code>EmployeeTerritories</code>,
+    <code>CustomerCustomerDemo</code>) — is rendered from a Blazor page that injects a
+    <em>service</em>, which delegates to an Inquiry generated store.
+</p>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <section>
+        <h2>Customers <span class="count">@_customers.Count</span></h2>
+        <table>
+            <thead><tr><th>ID</th><th>Company</th><th>Contact</th><th>Country</th></tr></thead>
+            <tbody>
+                @foreach (var c in _customers)
+                {
+                    <tr>
+                        <td><code>@c.CustomerID</code></td>
+                        <td>@c.CompanyName</td>
+                        <td>@(c.ContactName ?? "—")</td>
+                        <td>@(c.Country ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Employees <span class="count">@_employees.Count</span></h2>
+        <table>
+            <thead><tr><th>Name</th><th>Title</th><th>Reports to</th><th>Hire date</th></tr></thead>
+            <tbody>
+                @foreach (var e in _employees)
+                {
+                    <tr>
+                        <td>@e.FirstName @e.LastName</td>
+                        <td>@(e.Title ?? "—")</td>
+                        <td>@(e.ReportsTo?.ToString() ?? "—")</td>
+                        <td>@(e.HireDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Catalog <span class="badge">Eager loaded</span></h2>
+        <p class="hint">
+            Categories are materialized in one query; each <code>Products</code> collection
+            is loaded in a follow-up query and stitched in by the generator.
+        </p>
+        @foreach (var cat in _catalog)
+        {
+            var products = cat.Products ?? new List<Product>();
+            <details open>
+                <summary><strong>@cat.CategoryName</strong> — @products.Count products</summary>
+                <ul>
+                    @if (products.Count > 0)
+                    {
+                        foreach (var p in products)
+                        {
+                            <li>@p.ProductName <span class="muted">$@((p.UnitPrice ?? 0m).ToString("0.00"))</span></li>
+                        }
+                    }
+                    else
+                    {
+                        <li class="muted">no products</li>
+                    }
+                </ul>
+            </details>
+        }
+    </section>
+
+    <section>
+        <h2>Suppliers <span class="count">@_suppliers.Count</span></h2>
+        <table>
+            <thead><tr><th>ID</th><th>Company</th><th>Country</th><th>Contact</th></tr></thead>
+            <tbody>
+                @foreach (var s in _suppliers)
+                {
+                    <tr>
+                        <td><code>@s.SupplierID</code></td>
+                        <td>@s.CompanyName</td>
+                        <td>@(s.Country ?? "—")</td>
+                        <td>@(s.ContactName ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Shippers <span class="count">@_shippers.Count</span></h2>
+        <table>
+            <thead><tr><th>ID</th><th>Company</th><th>Phone</th></tr></thead>
+            <tbody>
+                @foreach (var s in _shippers)
+                {
+                    <tr>
+                        <td><code>@s.ShipperID</code></td>
+                        <td>@s.CompanyName</td>
+                        <td>@(s.Phone ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Regions <span class="badge">Eager loaded</span></h2>
+        <p class="hint">
+            <code>Region</code> rows pull in their <code>Territories</code> via
+            <code>[InquirySelectAllEager]</code>.
+        </p>
+        @foreach (var r in _regions)
+        {
+            var territories = r.Territories ?? new List<Territory>();
+            <details>
+                <summary><strong>@r.RegionDescription</strong> — @territories.Count territories</summary>
+                <ul>
+                    @foreach (var t in territories)
+                    {
+                        <li><code>@t.TerritoryID</code> — @t.TerritoryDescription</li>
+                    }
+                </ul>
+            </details>
+        }
+    </section>
+
+    <section>
+        <h2>Orders <span class="count">@_orders.Count</span></h2>
+        <table>
+            <thead><tr><th>ID</th><th>Customer</th><th>Order date</th><th>Freight</th></tr></thead>
+            <tbody>
+                @foreach (var o in _orders)
+                {
+                    <tr>
+                        <td><code>@o.OrderID</code></td>
+                        <td>@(o.CustomerID ?? "—")</td>
+                        <td>@(o.OrderDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                        <td>$@((o.Freight ?? 0m).ToString("0.00"))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Demographics <span class="count">@_demographicTypes.Count</span></h2>
+        <table>
+            <thead><tr><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+                @foreach (var d in _demographicTypes)
+                {
+                    <tr>
+                        <td><code>@d.CustomerTypeID</code></td>
+                        <td>@(d.CustomerDesc ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="hint">
+            Assignments stored in the composite-key <code>CustomerCustomerDemo</code> bridge:
+            @_assignments.Count.
+        </p>
+    </section>
+}
+
+@code {
+    private bool _loading = true;
+    private List<Customer> _customers = new();
+    private List<Employee> _employees = new();
+    private List<Category> _catalog = new();
+    private List<Supplier> _suppliers = new();
+    private List<Shipper> _shippers = new();
+    private List<Region> _regions = new();
+    private List<Order> _orders = new();
+    private List<CustomerDemographic> _demographicTypes = new();
+    private List<CustomerCustomerDemo> _assignments = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers        = await Customers.GetAllAsync();
+        _employees        = await Employees.GetAllAsync();
+        _catalog          = await Catalog.GetCategoriesWithProductsAsync();
+        _suppliers        = await Suppliers.GetAllAsync();
+        _shippers         = await Shippers.GetAllAsync();
+        _regions          = await Regions.GetAllWithTerritoriesAsync();
+        _orders           = await Orders.GetAllAsync();
+        _demographicTypes = await Demographics.GetDemographicsAsync();
+        _assignments      = await Demographics.GetAssignmentsAsync();
+        _loading = false;
+    }
+}

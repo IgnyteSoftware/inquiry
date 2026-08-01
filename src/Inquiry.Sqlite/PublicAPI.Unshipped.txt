@@ -1,0 +1,4 @@
+#nullable enable
+Inquiry.Sqlite.DependencyInjection.SqliteInquiryServiceCollectionExtensions
+static Inquiry.Sqlite.DependencyInjection.SqliteInquiryServiceCollectionExtensions.AddInquirySqlite(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.Sqlite.DependencyInjection.SqliteInquiryServiceCollectionExtensions.AddInquirySqlite(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

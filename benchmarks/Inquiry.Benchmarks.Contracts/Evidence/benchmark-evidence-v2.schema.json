@@ -1,0 +1,468 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/IgnyteSoftware/inquiry/schemas/benchmark-evidence-v2.json",
+  "title": "Inquiry benchmark checked evidence envelope v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "authoritative", "caseId", "caseKey", "checkout", "source",
+    "schemaHash", "datasetHash", "seed", "campaignId", "collectedAtUtc", "benchmarkConfigFileSha256", "benchmarkJobContractHash", "dependencyHash", "parityHash",
+    "sqlFingerprint", "environmentHash", "benchmarkTarget", "runtimeCapabilities", "parity", "database", "environment", "aggregation", "launchHealthRule", "launchHealth", "benchmarkDotNet", "result"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "inquiry-benchmark-evidence-v2" },
+    "authoritative": { "type": "boolean" },
+    "caseId": { "$ref": "#/$defs/hash" },
+    "caseKey": { "$ref": "#/$defs/caseKey" },
+    "checkout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "isClean", "hasUntrackedFiles"],
+      "properties": {
+        "commit": { "$ref": "#/$defs/gitCommit" },
+        "isClean": { "type": "boolean" },
+        "hasUntrackedFiles": { "type": "boolean" }
+      }
+    },
+    "source": { "$ref": "#/$defs/source" },
+    "schemaHash": { "$ref": "#/$defs/hash" },
+    "datasetHash": { "$ref": "#/$defs/hash" },
+    "seed": { "type": "integer" },
+    "campaignId": { "type": "string", "minLength": 1 },
+    "collectedAtUtc": { "type": "string", "format": "date-time" },
+    "benchmarkConfigFileSha256": { "$ref": "#/$defs/hash" },
+    "benchmarkJobContractHash": { "$ref": "#/$defs/hash" },
+    "dependencyHash": { "$ref": "#/$defs/hash" },
+    "parityHash": { "$ref": "#/$defs/hash" },
+    "sqlFingerprint": { "$ref": "#/$defs/hash" },
+    "environmentHash": { "$ref": "#/$defs/hash" },
+    "benchmarkTarget": { "$ref": "#/$defs/benchmarkTarget" },
+    "runtimeCapabilities": { "$ref": "#/$defs/stringMap" },
+    "parity": { "$ref": "#/$defs/parity" },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imageDigest", "serverVersion", "nativeLibraryVersion", "compileOptions", "resourceTopology"],
+      "properties": {
+        "imageDigest": { "oneOf": [{ "$ref": "#/$defs/imageDigest" }, { "type": "null" }] },
+        "serverVersion": { "type": "string", "minLength": 1 },
+        "nativeLibraryVersion": { "type": ["string", "null"] },
+        "compileOptions": { "type": "array", "items": { "type": "string" } },
+        "resourceTopology": { "type": "string", "minLength": 1 }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runnerClass", "operatingSystem", "kernel", "runtimeTfm", "runtimeIdentifier", "runtimeVersion", "runtimeDescription", "garbageCollector", "cpuClass", "microcode",
+        "numa", "turboPolicy", "powerPolicy", "virtualization", "dockerLimits", "dockerStorage",
+        "dockerNetwork", "backgroundLoadHealth"
+      ],
+      "properties": {
+        "runnerClass": { "type": "string", "minLength": 1 },
+        "operatingSystem": { "type": "string", "minLength": 1 },
+        "kernel": { "type": "string", "minLength": 1 },
+        "runtimeTfm": { "enum": ["net8.0", "net10.0"] },
+        "runtimeIdentifier": { "type": "string", "pattern": "^[a-z0-9]+-[a-z0-9]+$" },
+        "runtimeVersion": { "type": "string", "minLength": 1 },
+        "runtimeDescription": { "type": "string", "minLength": 1 },
+        "garbageCollector": { "type": "string", "minLength": 1 },
+        "cpuClass": { "type": "string", "minLength": 1 },
+        "microcode": { "type": "string", "minLength": 1 },
+        "numa": { "type": "string", "minLength": 1 },
+        "turboPolicy": { "type": "string", "minLength": 1 },
+        "powerPolicy": { "type": "string", "minLength": 1 },
+        "virtualization": { "type": "string", "minLength": 1 },
+        "dockerLimits": { "type": "string", "minLength": 1 },
+        "dockerStorage": { "type": "string", "minLength": 1 },
+        "dockerNetwork": { "type": "string", "minLength": 1 },
+        "backgroundLoadHealth": { "type": "string", "minLength": 1 }
+      }
+    },
+    "aggregation": { "$ref": "#/$defs/aggregation" },
+    "launchHealthRule": { "$ref": "#/$defs/launchHealthRule" },
+    "launchHealth": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/launchHealth" }
+    },
+    "benchmarkDotNet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version", "jobId", "launchCount", "warmupIterations", "measurementIterations", "invocationCount",
+        "unrollFactor", "minIterationTimeMilliseconds", "maxRelativeError", "evaluateOverhead", "outlierMode",
+        "gcStats", "rawStatistics", "measurements", "resultFields"
+      ],
+      "properties": {
+        "version": { "const": "0.15.8" },
+        "jobId": { "type": "string", "minLength": 1 },
+        "launchCount": { "type": "integer", "minimum": 1 },
+        "warmupIterations": { "type": "integer", "minimum": 3 },
+        "measurementIterations": { "type": "integer", "minimum": 15 },
+        "invocationCount": { "const": 1 },
+        "unrollFactor": { "const": 1 },
+        "minIterationTimeMilliseconds": { "type": "integer", "minimum": 1 },
+        "maxRelativeError": { "type": "number", "exclusiveMinimum": 0 },
+        "evaluateOverhead": { "type": "boolean" },
+        "outlierMode": { "type": "string", "minLength": 1 },
+        "gcStats": { "$ref": "#/$defs/gcStats" },
+        "rawStatistics": { "type": "array", "minItems": 1, "items": { "type": "number", "minimum": 0 } },
+        "measurements": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/measurement" } },
+        "resultFields": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/resultField" } }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "allocatedBytes", "allocationUnit"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0 },
+        "unit": { "type": "string", "minLength": 1 },
+        "allocatedBytes": { "type": ["integer", "null"], "minimum": 0 },
+        "allocationUnit": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "gitCommit": { "type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" },
+    "imageDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "stringMap": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "benchmarkTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assemblyName", "typeName", "methodName", "cardinality", "parameters"],
+      "properties": {
+        "assemblyName": { "type": "string", "minLength": 1 },
+        "typeName": { "type": "string", "minLength": 1 },
+        "methodName": { "type": "string", "minLength": 1 },
+        "cardinality": { "type": "integer", "minimum": 1 },
+        "parameters": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "commit", "bundleId", "bundleSha256", "artifactManifestHash", "resolvedDependencies", "artifacts"],
+      "properties": {
+        "mode": { "enum": ["projectReference", "packageConsumer"] },
+        "commit": { "$ref": "#/$defs/gitCommit" },
+        "bundleId": { "type": ["string", "null"] },
+        "bundleSha256": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "artifactManifestHash": { "$ref": "#/$defs/hash" },
+        "resolvedDependencies": { "$ref": "#/$defs/resolvedDependencyManifest" },
+        "artifacts": { "type": "array", "minItems": 6, "items": { "$ref": "#/$defs/sourceArtifact" } }
+      }
+    },
+    "sourceArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "relativeArtifactId", "sha256"],
+      "properties": {
+        "role": { "enum": ["package", "runtimeAssembly", "analyzerAssembly", "generatedSource", "benchmarkConfigFile", "packageLockFile", "dependencyArtifact", "selectedAssetsManifest", "resolvedDependencyManifest"] },
+        "relativeArtifactId": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "resolvedDependencyManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selectionRuleId", "provider", "lane", "runtimeTfm", "runtimeIdentifier", "projectAssetsSha256", "selectedAssetsManifestSha256", "assets"],
+      "properties": {
+        "selectionRuleId": { "const": "msbuild-selected-compiler-runtime-native-analyzer-generated-host-product-assets-v1" },
+        "provider": { "enum": ["sqlite", "sqlserver", "postgresql", "mysql", "mariadb", "oracle"] },
+        "lane": { "enum": ["developerProject", "releaseCandidatePackage"] },
+        "runtimeTfm": { "enum": ["net8.0", "net10.0"] },
+        "runtimeIdentifier": { "type": "string", "pattern": "^[a-z0-9]+-[a-z0-9]+$" },
+        "projectAssetsSha256": { "$ref": "#/$defs/hash" },
+        "selectedAssetsManifestSha256": { "$ref": "#/$defs/hash" },
+        "assets": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/resolvedDependencyAsset" } }
+      }
+    },
+    "resolvedDependencyAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logicalAssetId", "kind", "provenance", "sha256"],
+      "properties": {
+        "logicalAssetId": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["compilerReference", "runtime", "native", "analyzer", "generatedSource", "hostAssembly", "productAssembly"] },
+        "provenance": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "caseKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion", "workloadId", "provider", "operationSemantics", "dataTier", "cardinality",
+        "buffering", "connectionLifecycle", "pooling", "preparation", "temperature", "tracking",
+        "compilation", "apiStyle", "timedBoundaryHash", "transaction", "competitor",
+        "competitorMajor", "runtimeTfm", "runtimeIdentifier", "jobKind", "metricFamily", "source"
+      ],
+      "properties": {
+        "contractVersion": { "type": "string", "minLength": 1 },
+        "workloadId": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "operationSemantics": { "type": "string", "minLength": 1 },
+        "dataTier": { "enum": ["tiny", "standard", "large"] },
+        "cardinality": { "type": "integer", "minimum": 0 },
+        "buffering": { "enum": ["buffered", "streaming"] },
+        "connectionLifecycle": { "enum": ["perOperation", "retained"] },
+        "pooling": { "enum": ["pooled", "unpooled"] },
+        "preparation": { "enum": ["unprepared", "prepared"] },
+        "temperature": { "enum": ["warm", "cold"] },
+        "tracking": { "enum": ["notApplicable", "tracked", "untracked"] },
+        "compilation": { "enum": ["notApplicable", "compiled", "uncompiled"] },
+        "apiStyle": { "enum": ["exactOverhead", "idiomatic", "micro"] },
+        "timedBoundaryHash": { "$ref": "#/$defs/hash" },
+        "transaction": { "enum": ["none", "committed", "existingRollback"] },
+        "competitor": { "type": "string", "minLength": 1 },
+        "competitorMajor": { "type": "integer", "minimum": 0 },
+        "runtimeTfm": { "enum": ["net8.0", "net10.0"] },
+        "runtimeIdentifier": { "type": "string", "pattern": "^[a-z0-9]+-[a-z0-9]+$" },
+        "jobKind": { "enum": ["inProcess", "live", "coldProcess", "load"] },
+        "metricFamily": { "enum": ["latency", "throughput", "allocation"] },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+    "timedPath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "includesDependencyResolution", "includesConnectionCreation", "includesConnectionOpen", "includesConnectionClose",
+        "includesCommandConstruction", "includesParameterBinding", "includesProjection", "includesDuplicateRead",
+        "includesMaterializationOrEnumeration", "includesPoolingPolicy", "includesPreparationPolicy",
+        "includesTransactionBegin", "includesTransactionCommit"
+      ],
+      "properties": {
+        "includesDependencyResolution": { "type": "boolean" },
+        "includesConnectionCreation": { "type": "boolean" },
+        "includesConnectionOpen": { "type": "boolean" },
+        "includesConnectionClose": { "type": "boolean" },
+        "includesCommandConstruction": { "type": "boolean" },
+        "includesParameterBinding": { "type": "boolean" },
+        "includesProjection": { "type": "boolean" },
+        "includesDuplicateRead": { "type": "boolean" },
+        "includesMaterializationOrEnumeration": { "type": "boolean" },
+        "includesPoolingPolicy": { "type": "boolean" },
+        "includesPreparationPolicy": { "type": "boolean" },
+        "includesTransactionBegin": { "type": "boolean" },
+        "includesTransactionCommit": { "type": "boolean" }
+      }
+    },
+    "projectedValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "clrType", "databaseType", "ordinal", "nullable"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "clrType": { "type": "string", "minLength": 1 },
+        "databaseType": { "type": "string", "minLength": 1 },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "nullable": { "type": "boolean" }
+      }
+    },
+    "scenarioData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputs", "projection", "nullSemantics", "duplicateSemantics"],
+      "properties": {
+        "inputs": { "type": "object", "additionalProperties": { "type": "string" } },
+        "projection": { "type": "array", "items": { "$ref": "#/$defs/projectedValue" } },
+        "nullSemantics": { "type": "string", "minLength": 1 },
+        "duplicateSemantics": { "type": "string", "minLength": 1 }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "checksum", "errorClass", "transactionOutcome", "commandCount"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "checksum": { "type": "string", "minLength": 1 },
+        "errorClass": { "type": ["string", "null"] },
+        "transactionOutcome": { "enum": ["none", "committed", "rolledBack"] },
+        "commandCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "commandNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "tables", "joins", "predicates", "orderBy", "limit", "projectedExpressions", "parameterTypes", "parameterNames", "mutation", "transactionOutcome"],
+      "properties": {
+        "operation": { "enum": ["select", "insert", "update", "delete", "upsert", "procedure"] },
+        "tables": { "type": "array", "items": { "type": "string" } },
+        "joins": { "type": "array", "items": { "type": "string" } },
+        "predicates": { "type": "array", "items": { "type": "string" } },
+        "orderBy": { "type": "array", "items": { "type": "string" } },
+        "limit": { "type": ["integer", "null"] },
+        "projectedExpressions": { "type": "array", "items": { "type": "string" } },
+        "parameterTypes": { "type": "array", "items": { "type": "string" } },
+        "parameterNames": { "type": "array", "items": { "type": "string" } },
+        "mutation": { "enum": ["none", "read", "insert", "update", "delete", "bulkWrite"] },
+        "transactionOutcome": { "enum": ["none", "committed", "rolledBack"] }
+      }
+    },
+    "commandGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commands", "sqlStatements"],
+      "properties": {
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/commandNode" } },
+        "sqlStatements": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "mutationReset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mutatesData", "resetOutsideTimedPath"],
+      "properties": {
+        "mutatesData": { "type": "boolean" },
+        "resetOutsideTimedPath": { "type": "boolean" }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "comparisonEligible", "loadEligible", "timedPath", "data", "expected", "approvedCommandGraph", "mutationReset"],
+      "properties": {
+        "key": { "$ref": "#/$defs/caseKey" },
+        "comparisonEligible": { "type": "boolean" },
+        "loadEligible": { "type": "boolean" },
+        "timedPath": { "$ref": "#/$defs/timedPath" },
+        "data": { "$ref": "#/$defs/scenarioData" },
+        "expected": { "$ref": "#/$defs/expected" },
+        "approvedCommandGraph": { "$ref": "#/$defs/commandGraph" },
+        "mutationReset": { "$ref": "#/$defs/mutationReset" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "checksum", "errorClass", "transactionOutcome", "commandCount", "buffering", "connectionLifecycle", "pooling", "preparation", "timedPath", "commandGraph"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "checksum": { "type": "string", "minLength": 1 },
+        "errorClass": { "type": ["string", "null"] },
+        "transactionOutcome": { "enum": ["none", "committed", "rolledBack"] },
+        "commandCount": { "type": "integer", "minimum": 0 },
+        "buffering": { "enum": ["buffered", "streaming"] },
+        "connectionLifecycle": { "enum": ["perOperation", "retained"] },
+        "pooling": { "enum": ["pooled", "unpooled"] },
+        "preparation": { "enum": ["unprepared", "prepared"] },
+        "timedPath": { "$ref": "#/$defs/timedPath" },
+        "commandGraph": { "$ref": "#/$defs/commandGraph" }
+      }
+    },
+    "parity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario", "observation"],
+      "properties": {
+        "scenario": { "$ref": "#/$defs/scenario" },
+        "observation": { "$ref": "#/$defs/observation" }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["launchIndex", "iterationIndex", "operations", "nanosecondsPerOperation"],
+      "properties": {
+        "launchIndex": { "type": "integer", "minimum": 0 },
+        "iterationIndex": { "type": "integer", "minimum": 0 },
+        "operations": { "type": "integer", "minimum": 1 },
+        "nanosecondsPerOperation": { "type": "number", "minimum": 0 }
+      }
+    },
+    "aggregation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "authoritativeStatistic", "timingAggregation", "medianAggregation", "allocationStatistic",
+        "rawTimingUnit", "resultTimingUnit", "resultAllocationUnit",
+        "benchmarkDotNetTimingUnit", "benchmarkDotNetAllocationUnit", "decimalPlaces", "rounding"
+      ],
+      "properties": {
+        "id": { "const": "target-measurements-v1" },
+        "authoritativeStatistic": { "const": "arithmetic-mean" },
+        "timingAggregation": { "const": "arithmetic-mean-all-target-measurements" },
+        "medianAggregation": { "const": "median-all-target-measurements" },
+        "allocationStatistic": { "const": "gc-stats-bytes-allocated-per-operation" },
+        "rawTimingUnit": { "const": "nanoseconds-per-operation" },
+        "resultTimingUnit": { "const": "ns" },
+        "resultAllocationUnit": { "const": "B/op" },
+        "benchmarkDotNetTimingUnit": { "const": "ns" },
+        "benchmarkDotNetAllocationUnit": { "const": "B" },
+        "decimalPlaces": { "const": 3 },
+        "rounding": { "const": "to-even" }
+      }
+    },
+    "gcStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalOperations", "bytesAllocatedPerOperation", "provenance", "memoryDiagnoserEnabled"],
+      "properties": {
+        "totalOperations": { "type": "integer", "minimum": 1 },
+        "bytesAllocatedPerOperation": { "type": ["integer", "null"], "minimum": 0 },
+        "provenance": { "const": "BenchmarkDotNet.Engines.GcStats.GetBytesAllocatedPerOperation(BenchmarkCase)/0.15.8/MemoryDiagnoser" },
+        "memoryDiagnoserEnabled": { "const": true }
+      }
+    },
+    "launchHealthRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "maximumCpuContentionPercent", "maximumCoefficientOfVariation", "coefficientOfVariationMethod", "metricDecimalPlaces"],
+      "properties": {
+        "id": { "const": "launch-health-v1" },
+        "maximumCpuContentionPercent": { "const": 5.0 },
+        "maximumCoefficientOfVariation": { "const": 0.10 },
+        "coefficientOfVariationMethod": { "const": "sample-standard-deviation-over-mean" },
+        "metricDecimalPlaces": { "const": 6 }
+      }
+    },
+    "launchHealthMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thermalThrottlingDetected", "powerThrottlingDetected", "cpuContentionPercent", "dockerResourceDriftDetected", "coefficientOfVariation"],
+      "properties": {
+        "thermalThrottlingDetected": { "type": "boolean" },
+        "powerThrottlingDetected": { "type": "boolean" },
+        "cpuContentionPercent": { "type": "number", "minimum": 0 },
+        "dockerResourceDriftDetected": { "type": "boolean" },
+        "coefficientOfVariation": { "type": "number", "minimum": 0 }
+      }
+    },
+    "launchHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["launchIndex", "collectedAtUtc", "ruleIdentityHash", "metrics", "status"],
+      "properties": {
+        "launchIndex": { "type": "integer", "minimum": 0 },
+        "collectedAtUtc": { "type": "string", "format": "date-time" },
+        "ruleIdentityHash": { "$ref": "#/$defs/hash" },
+        "metrics": { "$ref": "#/$defs/launchHealthMetrics" },
+        "status": { "enum": ["healthy", "thermalThrottling", "powerThrottling", "cpuContention", "dockerResourceDrift", "noiseBudgetExceeded"] }
+      }
+    },
+    "resultField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": { "enum": ["Mean", "Median", "Allocated"] },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -1,0 +1,84 @@
+<Project>
+  <PropertyGroup>
+    <_InquirySqliteProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Sqlite\Inquiry.Sqlite.csproj'))</_InquirySqliteProjectPath>
+    <_InquirySqliteAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Sqlite.Analyzer.dll'))</_InquirySqliteAnalyzerPath>
+    <_InquirySqliteSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquirySqliteSharedPath>
+
+    <_InquirySqlServerProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.SqlServer\Inquiry.SqlServer.csproj'))</_InquirySqlServerProjectPath>
+    <_InquirySqlServerAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.SqlServer.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.SqlServer.Analyzer.dll'))</_InquirySqlServerAnalyzerPath>
+    <_InquirySqlServerSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.SqlServer.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquirySqlServerSharedPath>
+
+    <_InquiryPostgreSqlProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj'))</_InquiryPostgreSqlProjectPath>
+    <_InquiryPostgreSqlAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.PostgreSql.Analyzer.dll'))</_InquiryPostgreSqlAnalyzerPath>
+    <_InquiryPostgreSqlSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.PostgreSql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryPostgreSqlSharedPath>
+
+    <_InquiryMySqlProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql\Inquiry.MySql.csproj'))</_InquiryMySqlProjectPath>
+    <_InquiryMySqlAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.MySql.Analyzer.dll'))</_InquiryMySqlAnalyzerPath>
+    <_InquiryMySqlSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MySql.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryMySqlSharedPath>
+
+    <_InquiryMariaDbProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MariaDb\Inquiry.MariaDb.csproj'))</_InquiryMariaDbProjectPath>
+    <_InquiryMariaDbAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MariaDb.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.MariaDb.Analyzer.dll'))</_InquiryMariaDbAnalyzerPath>
+    <_InquiryMariaDbSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.MariaDb.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryMariaDbSharedPath>
+
+    <_InquiryOracleProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle\Inquiry.Oracle.csproj'))</_InquiryOracleProjectPath>
+    <_InquiryOracleAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Oracle.Analyzer.dll'))</_InquiryOracleAnalyzerPath>
+    <_InquiryOracleSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryOracleSharedPath>
+  </PropertyGroup>
+
+  <!-- Roslyn analyzer auto-flow only attaches IsRoslynComponent project references one level deep,
+       so we manually attach each provider's analyzer (and the shared framework DLL it depends on)
+       for any project that references that provider's runtime package. Inside each provider's
+       NuGet, both DLLs ship side-by-side under analyzers/dotnet/cs/; we mirror that here for
+       project-reference dev builds so the load-context Roslyn picks contains both. -->
+  <Target Name="AddInquiryProjectReferenceAnalyzers" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <_InquirySqliteProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquirySqliteProjectPath)'" />
+      <Analyzer Include="$(_InquirySqliteAnalyzerPath)" Condition="'@(_InquirySqliteProjectReference)' != '' and Exists('$(_InquirySqliteAnalyzerPath)')" />
+      <Analyzer Include="$(_InquirySqliteSharedPath)" Condition="'@(_InquirySqliteProjectReference)' != '' and Exists('$(_InquirySqliteSharedPath)')" />
+
+      <_InquirySqlServerProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquirySqlServerProjectPath)'" />
+      <Analyzer Include="$(_InquirySqlServerAnalyzerPath)" Condition="'@(_InquirySqlServerProjectReference)' != '' and Exists('$(_InquirySqlServerAnalyzerPath)')" />
+      <Analyzer Include="$(_InquirySqlServerSharedPath)" Condition="'@(_InquirySqlServerProjectReference)' != '' and Exists('$(_InquirySqlServerSharedPath)')" />
+
+      <_InquiryPostgreSqlProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryPostgreSqlProjectPath)'" />
+      <Analyzer Include="$(_InquiryPostgreSqlAnalyzerPath)" Condition="'@(_InquiryPostgreSqlProjectReference)' != '' and Exists('$(_InquiryPostgreSqlAnalyzerPath)')" />
+      <Analyzer Include="$(_InquiryPostgreSqlSharedPath)" Condition="'@(_InquiryPostgreSqlProjectReference)' != '' and Exists('$(_InquiryPostgreSqlSharedPath)')" />
+
+      <_InquiryMySqlProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryMySqlProjectPath)'" />
+      <Analyzer Include="$(_InquiryMySqlAnalyzerPath)" Condition="'@(_InquiryMySqlProjectReference)' != '' and Exists('$(_InquiryMySqlAnalyzerPath)')" />
+      <Analyzer Include="$(_InquiryMySqlSharedPath)" Condition="'@(_InquiryMySqlProjectReference)' != '' and Exists('$(_InquiryMySqlSharedPath)')" />
+
+      <_InquiryMariaDbProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryMariaDbProjectPath)'" />
+      <Analyzer Include="$(_InquiryMariaDbAnalyzerPath)" Condition="'@(_InquiryMariaDbProjectReference)' != '' and Exists('$(_InquiryMariaDbAnalyzerPath)')" />
+      <Analyzer Include="$(_InquiryMariaDbSharedPath)" Condition="'@(_InquiryMariaDbProjectReference)' != '' and Exists('$(_InquiryMariaDbSharedPath)')" />
+
+      <_InquiryOracleProjectReference Include="@(ProjectReference)" Condition="'%(FullPath)' == '$(_InquiryOracleProjectPath)'" />
+      <Analyzer Include="$(_InquiryOracleAnalyzerPath)" Condition="'@(_InquiryOracleProjectReference)' != '' and Exists('$(_InquiryOracleAnalyzerPath)')" />
+      <Analyzer Include="$(_InquiryOracleSharedPath)" Condition="'@(_InquiryOracleProjectReference)' != '' and Exists('$(_InquiryOracleSharedPath)')" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Analyzer DLLs live outside lib/, so NuGet's default symbol discovery cannot see their portable
+       PDBs. Add them once from the first inner build; NuGet places these additional symbols under
+       lib/net8.0 in the snupkg without adding PDBs to the runtime nupkg. -->
+  <Target Name="_AddInquiryAnalyzerSymbolsToPackage"
+          BeforeTargets="_GetDebugSymbolsWithTfm"
+          DependsOnTargets="_ResolveAnalyzerDlls"
+          Condition="'$(TargetFramework)' == 'net8.0' and
+                     ('$(MSBuildProjectName)' == 'Inquiry.Sqlite' or
+                      '$(MSBuildProjectName)' == 'Inquiry.SqlServer' or
+                      '$(MSBuildProjectName)' == 'Inquiry.PostgreSql' or
+                      '$(MSBuildProjectName)' == 'Inquiry.MySql' or
+                      '$(MSBuildProjectName)' == 'Inquiry.MariaDb' or
+                      '$(MSBuildProjectName)' == 'Inquiry.Oracle')">
+    <ItemGroup>
+      <_InquiryAnalyzerSymbol Include="@(_AnalyzerTargetPath->'%(RootDir)%(Directory)%(Filename).pdb')" />
+      <_InquiryAnalyzerSymbol Include="@(_AnalyzerTargetPath->'%(RootDir)%(Directory)Inquiry.Generators.Shared.pdb')" />
+      <TfmSpecificDebugSymbolsFile Include="@(_InquiryAnalyzerSymbol)">
+        <TargetFramework>$(TargetFramework)</TargetFramework>
+      </TfmSpecificDebugSymbolsFile>
+    </ItemGroup>
+    <Error Condition="!Exists('%(_InquiryAnalyzerSymbol.Identity)')"
+           Text="Analyzer symbol package input is missing: %(_InquiryAnalyzerSymbol.Identity)" />
+  </Target>
+</Project>

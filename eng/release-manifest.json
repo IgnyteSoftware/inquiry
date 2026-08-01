@@ -1,0 +1,268 @@
+{
+  "schemaVersion": "inquiry-release-v1",
+  "packageVersion": "1.0.0",
+  "tag": "v1.0.0",
+  "packages": [
+    {
+      "id": "Ignyte.Inquiry",
+      "project": "src/Inquiry/Inquiry.csproj",
+      "dependencies": {
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [],
+      "analyzerSymbols": [],
+      "frameworkReferences": []
+    },
+    {
+      "id": "Ignyte.Inquiry.AspNetCore",
+      "project": "src/Inquiry.AspNetCore/Inquiry.AspNetCore.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [],
+      "analyzerSymbols": [],
+      "frameworkReferences": [
+        "Microsoft.AspNetCore.App"
+      ],
+      "prunedDependencies": {
+        "net10.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Diagnostics.HealthChecks",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
+    },
+    {
+      "id": "Ignyte.Inquiry.Sqlite",
+      "project": "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Data.Sqlite": "10.0.9",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+        "SQLitePCLRaw.lib.e_sqlite3": "3.50.3"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [
+        "Inquiry.Sqlite.Analyzer.dll",
+        "Inquiry.Generators.Shared.dll"
+      ],
+      "analyzerSymbols": [
+        "Inquiry.Sqlite.Analyzer.pdb",
+        "Inquiry.Generators.Shared.pdb"
+      ],
+      "frameworkReferences": []
+    },
+    {
+      "id": "Ignyte.Inquiry.SqlServer",
+      "project": "src/Inquiry.SqlServer/Inquiry.SqlServer.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Data.SqlClient": "7.0.1",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+        "System.Configuration.ConfigurationManager": "9.0.13"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [
+        "Inquiry.SqlServer.Analyzer.dll",
+        "Inquiry.Generators.Shared.dll"
+      ],
+      "analyzerSymbols": [
+        "Inquiry.SqlServer.Analyzer.pdb",
+        "Inquiry.Generators.Shared.pdb"
+      ],
+      "frameworkReferences": []
+    },
+    {
+      "id": "Ignyte.Inquiry.PostgreSql",
+      "project": "src/Inquiry.PostgreSql/Inquiry.PostgreSql.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+        "Npgsql": "10.0.3"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [
+        "Inquiry.PostgreSql.Analyzer.dll",
+        "Inquiry.Generators.Shared.dll"
+      ],
+      "analyzerSymbols": [
+        "Inquiry.PostgreSql.Analyzer.pdb",
+        "Inquiry.Generators.Shared.pdb"
+      ],
+      "frameworkReferences": []
+    },
+    {
+      "id": "Ignyte.Inquiry.MySql",
+      "project": "src/Inquiry.MySql/Inquiry.MySql.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+        "MySqlConnector": "2.6.0"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [
+        "Inquiry.MySql.Analyzer.dll",
+        "Inquiry.Generators.Shared.dll"
+      ],
+      "analyzerSymbols": [
+        "Inquiry.MySql.Analyzer.pdb",
+        "Inquiry.Generators.Shared.pdb"
+      ],
+      "frameworkReferences": []
+    },
+    {
+      "id": "Ignyte.Inquiry.MariaDb",
+      "project": "src/Inquiry.MariaDb/Inquiry.MariaDb.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+        "MySqlConnector": "2.6.0"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [
+        "Inquiry.MariaDb.Analyzer.dll",
+        "Inquiry.Generators.Shared.dll"
+      ],
+      "analyzerSymbols": [
+        "Inquiry.MariaDb.Analyzer.pdb",
+        "Inquiry.Generators.Shared.pdb"
+      ],
+      "frameworkReferences": []
+    },
+    {
+      "id": "Ignyte.Inquiry.Oracle",
+      "project": "src/Inquiry.Oracle/Inquiry.Oracle.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+        "Oracle.ManagedDataAccess.Core": "23.26.200",
+        "System.Configuration.ConfigurationManager": "9.0.13"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [
+        "Inquiry.Oracle.Analyzer.dll",
+        "Inquiry.Generators.Shared.dll"
+      ],
+      "analyzerSymbols": [
+        "Inquiry.Oracle.Analyzer.pdb",
+        "Inquiry.Generators.Shared.pdb"
+      ],
+      "frameworkReferences": []
+    },
+    {
+      "id": "Ignyte.Inquiry.Interceptors",
+      "project": "src/Inquiry.Interceptors/Inquiry.Interceptors.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [],
+      "analyzerSymbols": [],
+      "frameworkReferences": []
+    },
+    {
+      "id": "Ignyte.Inquiry.Testing",
+      "project": "src/Inquiry.Testing/Inquiry.Testing.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry": "1.0.0",
+        "Ignyte.Inquiry.Sqlite": "1.0.0",
+        "Microsoft.Data.SqlClient": "7.0.1",
+        "Microsoft.Data.Sqlite": "10.0.9",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection": "10.0.8",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+        "Respawn": "6.2.1",
+        "SQLitePCLRaw.lib.e_sqlite3": "3.50.3",
+        "System.Configuration.ConfigurationManager": "9.0.13"
+      },
+      "libTfms": [
+        "net8.0",
+        "net9.0",
+        "net10.0"
+      ],
+      "analyzers": [],
+      "analyzerSymbols": [],
+      "frameworkReferences": []
+    }
+  ],
+  "assets": {
+    "licenseExpression": "MIT",
+    "readme": "README.md",
+    "icon": "icon.png",
+    "repositoryUrl": "https://github.com/IgnyteSoftware/inquiry",
+    "repositoryBranch": "refs/heads/main",
+    "requireSymbols": true,
+    "requireSourceLink": true
+  }
+}

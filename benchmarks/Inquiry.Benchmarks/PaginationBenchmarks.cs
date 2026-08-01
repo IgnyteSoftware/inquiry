@@ -1,0 +1,205 @@
+using System.Data;
+using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using Dapper;
+using Inquiry.Benchmarks.LinqToDb;
+using Inquiry.Benchmarks.RepoDB;
+using Inquiry.Northwind.Models;
+using LinqToDB;
+using LinqToDB.Data;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+
+namespace Inquiry.Benchmarks;
+
+/// <summary>
+/// Pagination comparison over the IDENTITY-keyed <c>Products</c> table. Two strategies are
+/// exercised against a deep page (offset ≈ <c>Rows / 2</c>):
+/// <list type="bullet">
+///   <item><b>OffsetPage</b> — <c>LIMIT/OFFSET</c> ordered by ProductID (Inquiry
+///   <c>[InquirySelectAll(Paged = true)]</c>).</item>
+///   <item><b>KeysetPage</b> — seek by <c>ProductID &gt; @after</c> (Inquiry
+///   <c>[InquiryKeysetPage]</c>, which fetches <c>pageSize + 1</c> to compute the cursor).</item>
+/// </list>
+/// ADO/Dapper read the same Product column list the Inquiry materializer reads, so per-row work
+/// is equal. EF Core is included for <b>OffsetPage</b> only (<c>OrderBy / Skip / Take</c> is a
+/// natural one-liner); it is excluded from <b>KeysetPage</b> because EF has no first-class keyset
+/// helper and a fake <c>Skip/Take</c> would compare a different strategy, not the same work.
+/// </summary>
+[MemoryDiagnoser]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[CategoriesColumn]
+public class PaginationBenchmarks
+{
+    private BenchmarkDatabase _db = null!;
+    private string _connectionString = null!;
+    private DataOptions _linqToDbOptions = null!;
+
+    /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
+    [Params(1000, 100000)] public int Rows;
+
+    private const int PageSize = 20;
+    private int _offset;
+    private int _after;
+
+    [GlobalSetup]
+    public void GlobalSetup()
+    {
+        _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
+        _connectionString = _db.ConnectionString;
+        _linqToDbOptions = _db.LinqToDbOptions;
+        _offset = Rows / 2;   // deep page so OFFSET cost is realistic
+        _after  = Rows / 2;   // keyset seek point
+    }
+
+    [GlobalCleanup]
+    public void GlobalCleanup() => _db.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    // Same Product column list ProductCrudBenchmarks reads, so AdoNet/Dapper do equal per-row work.
+    private const string SelectColumns =
+        "ProductID, ProductName, SupplierID, CategoryID, QuantityPerUnit, UnitPrice, UnitsInStock, UnitsOnOrder, ReorderLevel, Discontinued";
+
+    private static Product ReadProduct(System.Data.Common.DbDataReader reader) => new Product
+    {
+        ProductID       = reader.GetInt32(0),
+        ProductName     = reader.GetString(1),
+        SupplierID      = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+        CategoryID      = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+        QuantityPerUnit = reader.IsDBNull(4) ? null : reader.GetString(4),
+        UnitPrice       = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+        UnitsInStock    = reader.IsDBNull(6) ? null : reader.GetInt16(6),
+        UnitsOnOrder    = reader.IsDBNull(7) ? null : reader.GetInt16(7),
+        ReorderLevel    = reader.IsDBNull(8) ? null : reader.GetInt16(8),
+        Discontinued    = reader.GetInt32(9) != 0,
+    };
+
+    // ---- OffsetPage (LIMIT / OFFSET) ----------------------------------------------------
+
+    private const string OffsetSql =
+        "SELECT " + SelectColumns + " FROM Products ORDER BY ProductID LIMIT $limit OFFSET $off;";
+    private const string OffsetSqlAt =
+        "SELECT " + SelectColumns + " FROM Products ORDER BY ProductID LIMIT @limit OFFSET @off;";
+
+    [BenchmarkCategory("OffsetPage"), Benchmark(Baseline = true)]
+    public async Task<int> OffsetPage_AdoNet()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = OffsetSql;
+        command.Parameters.Add("$limit", SqliteType.Integer).Value = PageSize;
+        command.Parameters.Add("$off",   SqliteType.Integer).Value = _offset;
+        var list = new List<Product>(PageSize);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
+        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        return list.Count;
+    }
+
+    [BenchmarkCategory("OffsetPage"), Benchmark]
+    public async Task<int> OffsetPage_Dapper()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await connection.QueryAsync<Product>(
+            OffsetSqlAt, new { limit = PageSize, off = _offset })).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("OffsetPage"), Benchmark]
+    public async Task<int> OffsetPage_EfCore()
+    {
+        await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
+        var list = await ctx.Products.AsNoTracking()
+            .OrderBy(p => p.ProductID)
+            .Skip(_offset)
+            .Take(PageSize)
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("OffsetPage"), Benchmark]
+    public async Task<int> OffsetPage_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>()
+            .OrderBy(p => p.ProductID)
+            .Skip(_offset)
+            .Take(PageSize)
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("OffsetPage"), Benchmark]
+    public async Task<int> OffsetPage_RepoDb()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await RepoDb.DbConnectionExtension.BatchQueryAsync<RdProduct>(
+            connection,
+            page: _offset / PageSize,
+            rowsPerBatch: PageSize,
+            orderBy: RepoDb.OrderField.Parse(new { ProductID = RepoDb.Enumerations.Order.Ascending }),
+            where: (object)null!)).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("OffsetPage"), Benchmark]
+    public async Task<int> OffsetPage_Inquiry()
+    {
+        var list = await _db.Products.PageByIdAsync(offset: _offset, limit: PageSize);
+        return list.Count;
+    }
+
+    // ---- KeysetPage (seek by ProductID > @after) ----------------------------------------
+    // Inquiry fetches pageSize + 1 to derive the cursor, so ADO/Dapper request the same +1
+    // for a fair row-count comparison.
+
+    private const string KeysetSql =
+        "SELECT " + SelectColumns + " FROM Products WHERE ProductID > $after ORDER BY ProductID LIMIT $limit;";
+    private const string KeysetSqlAt =
+        "SELECT " + SelectColumns + " FROM Products WHERE ProductID > @after ORDER BY ProductID LIMIT @limit;";
+
+    [BenchmarkCategory("KeysetPage"), Benchmark(Baseline = true)]
+    public async Task<int> KeysetPage_AdoNet()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = KeysetSql;
+        command.Parameters.Add("$after", SqliteType.Integer).Value = _after;
+        command.Parameters.Add("$limit", SqliteType.Integer).Value = PageSize + 1;
+        var list = new List<Product>(PageSize + 1);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
+        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        return list.Count;
+    }
+
+    [BenchmarkCategory("KeysetPage"), Benchmark]
+    public async Task<int> KeysetPage_Dapper()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var list = (await connection.QueryAsync<Product>(
+            KeysetSqlAt, new { after = _after, limit = PageSize + 1 })).AsList();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("KeysetPage"), Benchmark]
+    public async Task<int> KeysetPage_LinqToDb()
+    {
+        await using var dc = new DataConnection(_linqToDbOptions);
+        var list = await dc.GetTable<L2Product>()
+            .Where(p => p.ProductID > _after)
+            .OrderBy(p => p.ProductID)
+            .Take(PageSize + 1)
+            .ToListAsync();
+        return list.Count;
+    }
+
+    [BenchmarkCategory("KeysetPage"), Benchmark]
+    public async Task<int> KeysetPage_Inquiry()
+    {
+        var page = await _db.Products.KeysetByIdAsync(afterProductID: _after, pageSize: PageSize);
+        return page.Items.Count;
+    }
+}

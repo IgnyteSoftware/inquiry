@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <!-- See Inquiry.Tests.csproj for the CS8765 rationale (test doubles + ADO.NET base nullability). Audit P2 #11. -->
+    <NoWarn>$(NoWarn);CS8765</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Testing\Inquiry.Testing.csproj" />
+    <ProjectReference Include="..\..\samples\Inquiry.Northwind\Inquiry.Northwind.csproj" />
+    <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
+
+    <!-- Shared feature catalog (W6/W8/W10). FullText (W9) is excluded: SQLite rejects FTS (INQ035). -->
+    <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
+    <Compile Include="..\Inquiry.UpdateActionCatalog\*.cs" LinkBase="UpdateActionCatalog" />
+    <Compile Include="..\Shared\BatchExecutionProbe.cs" Link="Shared\BatchExecutionProbe.cs" />
+    <Compile Include="..\Shared\EagerGridCommandAssertions.cs" Link="Shared\EagerGridCommandAssertions.cs" />
+    <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" Link="Shared\ManyToManyExtensionAssertions.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

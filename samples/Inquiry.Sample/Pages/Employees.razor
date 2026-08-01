@@ -1,0 +1,83 @@
+@page "/employees"
+@inject EmployeeService EmployeeSvc
+
+<h1>Employees</h1>
+
+<p>Uses <code>[InquiryInsert(ReturnEntity = true)]</code> for create — the database assigns
+   the IDENTITY-backed <code>EmployeeID</code> and Inquiry materializes the inserted row
+   back into a strongly-typed entity.</p>
+
+<EditForm Model="_draft" OnValidSubmit="CreateAsync" class="form-inline">
+    <DataAnnotationsValidator />
+    <InputText @bind-Value="_draft.FirstName" placeholder="First name" class="input" />
+    <InputText @bind-Value="_draft.LastName"  placeholder="Last name"  class="input" />
+    <InputText @bind-Value="_draft.Title"     placeholder="Title"      class="input" />
+    <button type="submit" class="btn primary">Add</button>
+</EditForm>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>ID</th><th>First</th><th>Last</th><th>Title</th><th>Hire date</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var e in _all)
+            {
+                <tr>
+                    <td><code>@e.EmployeeID</code></td>
+                    <td><InputText @bind-Value="e.FirstName" class="input" /></td>
+                    <td><InputText @bind-Value="e.LastName"  class="input" /></td>
+                    <td><InputText @bind-Value="e.Title"     class="input" /></td>
+                    <td>@(e.HireDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                    <td class="actions">
+                        <button class="btn" @onclick="() => UpdateAsync(e)">Save</button>
+                        <button class="btn danger" @onclick="() => DeleteAsync(e)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool _loading = true;
+    private List<Employee> _all = new();
+    private Employee _draft = NewDraft();
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _all = await EmployeeSvc.GetAllAsync();
+        _loading = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_draft.FirstName) || string.IsNullOrWhiteSpace(_draft.LastName)) return;
+        _draft.HireDate ??= DateTime.UtcNow.Date;
+        await EmployeeSvc.CreateAsync(_draft);
+        _draft = NewDraft();
+        await RefreshAsync();
+    }
+
+    private async Task UpdateAsync(Employee employee)
+    {
+        await EmployeeSvc.UpdateAsync(employee);
+        await RefreshAsync();
+    }
+
+    private async Task DeleteAsync(Employee employee)
+    {
+        await EmployeeSvc.DeleteAsync(employee.EmployeeID);
+        await RefreshAsync();
+    }
+
+    private static Employee NewDraft() => new() { FirstName = string.Empty, LastName = string.Empty };
+}

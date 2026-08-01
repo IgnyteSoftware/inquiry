@@ -1,0 +1,24 @@
+using Inquiry.Entities;
+
+namespace Inquiry.Northwind.Models;
+
+[InquiryTable("Order Details")]
+public sealed class OrderDetail
+{
+    [InquiryKey("OrderID")]
+    [InquiryForeignKey("OrderID", "Orders", "OrderID")]
+    public int OrderID { get; set; }
+
+    [InquiryKey("ProductID")]
+    [InquiryForeignKey("ProductID", "Products", "ProductID")]
+    public int ProductID { get; set; }
+
+    [InquiryColumn(Precision = 19, Scale = 4)]
+    public decimal UnitPrice { get; set; }
+
+    [InquiryColumn]
+    public short Quantity { get; set; }
+
+    [InquiryColumn]
+    public float Discount { get; set; }
+}

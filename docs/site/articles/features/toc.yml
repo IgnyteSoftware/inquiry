@@ -1,0 +1,62 @@
+- name: CRUD
+  href: crud.md
+- name: Pagination
+  href: pagination.md
+- name: Soft delete
+  href: soft-delete.md
+- name: Global query filters
+  href: global-filters.md
+- name: Auditing
+  href: auditing.md
+- name: Projections
+  href: projections.md
+- name: View entities
+  href: view-entities.md
+- name: Ad-hoc DTOs
+  href: ad-hoc-dtos.md
+- name: Aggregates
+  href: aggregates.md
+- name: Optimistic concurrency
+  href: concurrency.md
+- name: Batch operations
+  href: batch-operations.md
+- name: Bulk insert
+  href: bulk-insert.md
+- name: Set-based mutations
+  href: set-based-mutations.md
+- name: Full-text search
+  href: full-text-search.md
+- name: Prepared statements
+  href: prepared-statements.md
+- name: Value converters
+  href: value-converters.md
+- name: Column encryption
+  href: column-encryption.md
+- name: JSON columns
+  href: json-columns.md
+- name: JSON-path querying
+  href: json-path-querying.md
+- name: Eager loading
+  href: eager-loading.md
+- name: Many-to-many relations
+  href: many-to-many.md
+- name: Transactions
+  href: transactions.md
+- name: Stored procedures
+  href: stored-procedures.md
+- name: Schema DDL
+  href: schema-ddl.md
+- name: Migrations recipe
+  href: migrations.md
+- name: GraphQL DataLoader recipe
+  href: graphql-dataloader.md
+- name: Observability
+  href: observability.md
+- name: Interceptors
+  href: interceptors.md
+- name: Testing
+  href: testing.md
+- name: Data seeding
+  href: data-seeding.md
+- name: Resiliency & failover
+  href: resiliency.md

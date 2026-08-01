@@ -1,0 +1,28 @@
+#nullable enable
+Inquiry.SqlServer.DependencyInjection.SqlServerInquiryServiceCollectionExtensions
+Inquiry.SqlServer.Parameters.InquiryTvpDescriptor
+Inquiry.SqlServer.Parameters.InquiryTvpParameter
+Inquiry.SqlServer.SqlServerCompatibility
+Inquiry.SqlServer.SqlServerCompatibility.AzureSql = 1 -> Inquiry.SqlServer.SqlServerCompatibility
+Inquiry.SqlServer.SqlServerCompatibility.None = 0 -> Inquiry.SqlServer.SqlServerCompatibility
+Inquiry.SqlServer.SqlServerInquiryOptions
+Inquiry.SqlServer.SqlServerInquiryOptions.AccessTokenProvider.get -> System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<string!>>?
+Inquiry.SqlServer.SqlServerInquiryOptions.AccessTokenProvider.set -> void
+Inquiry.SqlServer.SqlServerInquiryOptions.Compatibility.get -> Inquiry.SqlServer.SqlServerCompatibility
+Inquiry.SqlServer.SqlServerInquiryOptions.Compatibility.set -> void
+Inquiry.SqlServer.SqlServerInquiryOptions.FailoverConnectionString.get -> string?
+Inquiry.SqlServer.SqlServerInquiryOptions.FailoverConnectionString.set -> void
+Inquiry.SqlServer.SqlServerInquiryOptions.MaxAttempts.get -> int
+Inquiry.SqlServer.SqlServerInquiryOptions.MaxAttempts.set -> void
+Inquiry.SqlServer.SqlServerInquiryOptions.RetryBaseDelay.get -> System.TimeSpan
+Inquiry.SqlServer.SqlServerInquiryOptions.RetryBaseDelay.set -> void
+Inquiry.SqlServer.SqlServerInquiryOptions.RetryMaxDelay.get -> System.TimeSpan
+Inquiry.SqlServer.SqlServerInquiryOptions.RetryMaxDelay.set -> void
+Inquiry.SqlServer.SqlServerInquiryOptions.SqlServerInquiryOptions() -> void
+static Inquiry.SqlServer.DependencyInjection.SqlServerInquiryServiceCollectionExtensions.AddInquirySqlServer(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.SqlServer.DependencyInjection.SqlServerInquiryServiceCollectionExtensions.AddInquirySqlServer(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Inquiry.SqlServer.SqlServerInquiryOptions!>! configure, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.SqlServer.DependencyInjection.SqlServerInquiryServiceCollectionExtensions.AddInquirySqlServer(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.SqlServer.DependencyInjection.SqlServerInquiryServiceCollectionExtensions.AddInquirySqlServer(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString, System.Action<Inquiry.SqlServer.SqlServerInquiryOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.SqlServer.Parameters.InquiryTvpDescriptor.Get(string! kind, long length, int precision, int scale, bool nullable) -> Inquiry.SqlServer.Parameters.InquiryTvpDescriptor!
+static Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values, string! typeName, Inquiry.SqlServer.Parameters.InquiryTvpDescriptor! descriptor) -> void
+static Inquiry.SqlServer.Parameters.InquiryTvpParameter.BindUnsupported<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values) -> void

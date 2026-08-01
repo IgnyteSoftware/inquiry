@@ -1,0 +1,110 @@
+name: Release
+
+# Merging a PR into main publishes the manifest's stable version to nuget.org and tags it.
+# Merging a PR into prerelease publishes <manifest-version>-preview.<run-number>.
+# The version ships only when eng/release-manifest.json is bumped: if the manifest tag
+# already exists, the main-branch run is a verified no-op.
+
+on:
+  push:
+    branches: [main, prerelease]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write # push the release tag and create the GitHub release
+      id-token: write # NuGet Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Resolve release version
+        id: version
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Raw eng/release-manifest.json | ConvertFrom-Json
+          $stable = $manifest.packageVersion
+          if ('${{ github.ref }}' -eq 'refs/heads/main') {
+            $tag = "v$stable"
+            $exists = git tag --list $tag
+            $publish = if ($exists) { 'false' } else { 'true' }
+            "version=$stable" >> $env:GITHUB_OUTPUT
+            "tag=$tag" >> $env:GITHUB_OUTPUT
+            "publish=$publish" >> $env:GITHUB_OUTPUT
+            "branch=refs/heads/main" >> $env:GITHUB_OUTPUT
+            if ($exists) { Write-Host "Tag $tag already exists; nothing new to release." }
+          }
+          else {
+            "version=$stable-preview.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+            "tag=" >> $env:GITHUB_OUTPUT
+            "publish=true" >> $env:GITHUB_OUTPUT
+            "branch=refs/heads/prerelease" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Pack and verify the release bundle
+        if: steps.version.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          $arguments = @{
+            OutputPath       = "$env:RUNNER_TEMP/release"
+            Commit           = $env:GITHUB_SHA
+            PackageVersion   = '${{ steps.version.outputs.version }}'
+            RepositoryBranch = '${{ steps.version.outputs.branch }}'
+          }
+          if ('${{ steps.version.outputs.tag }}') {
+            $arguments.Tag = '${{ steps.version.outputs.tag }}'
+          }
+          ./eng/pack-release.ps1 @arguments
+
+      - name: Attest build provenance
+        # Attestation persistence is unavailable for private repos on this org's plan; enable the
+        # repo variable (or make the repo public) to turn it back on.
+        if: steps.version.outputs.publish == 'true' && vars.ENABLE_ATTESTATIONS == 'true'
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-path: ${{ runner.temp }}/release/*.nupkg
+
+      - name: NuGet login (Trusted Publishing)
+        if: steps.version.outputs.publish == 'true'
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push packages to nuget.org
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          dotnet nuget push "$RUNNER_TEMP/release/*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+            --skip-duplicate
+
+      - name: Tag the release and publish GitHub release notes
+        if: steps.version.outputs.publish == 'true' && steps.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+          gh release create "$TAG" "$RUNNER_TEMP"/release/*.nupkg "$RUNNER_TEMP"/release/sbom.cdx.json \
+            --title "$TAG" \
+            --generate-notes

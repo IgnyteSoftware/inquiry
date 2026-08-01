@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="$(InquirySmokeProviderPackage)" Version="$(InquirySmokeVersion)" />
+  </ItemGroup>
+
+  <Target Name="RequireInquirySmokeVersion" BeforeTargets="Restore">
+    <Error Condition="'$(InquirySmokeVersion)' == ''"
+           Text="Set InquirySmokeVersion. Run tests/Inquiry.PackageSmoke/run.ps1 instead of restoring this project directly." />
+    <Error Condition="'$(InquirySmokeProviderPackage)' == ''"
+           Text="Set InquirySmokeProviderPackage. Run tests/Inquiry.PackageSmoke/run.ps1 instead of restoring this project directly." />
+  </Target>
+</Project>

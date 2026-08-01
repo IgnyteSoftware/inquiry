@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Description>MySQL provider for Inquiry. Bundles the MySQL-flavoured source generator (Inquiry.MySql.Analyzer) so referencing this package alone enables store SQL generation.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Runs the trim/AOT analyzers and stamps the trimming/AOT-compatibility metadata. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\Inquiry.MySql.Analyzer\Inquiry.MySql.Analyzer.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Inquiry.MySql.Tests" />
+  </ItemGroup>
+
+  <!-- Resolve analyzer DLL paths dynamically so dotnet pack works under UseArtifactsOutput or custom OutputPath. -->
+  <Target Name="_ResolveAnalyzerDlls" BeforeTargets="_GetPackageFiles">
+    <MSBuild Projects="..\Inquiry.MySql.Analyzer\Inquiry.MySql.Analyzer.csproj"
+             Targets="GetTargetPath"
+             RemoveProperties="TargetFramework;TargetFrameworks;RuntimeIdentifier;SelfContained"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_AnalyzerTargetPath" />
+    </MSBuild>
+    <ItemGroup>
+      <None Include="@(_AnalyzerTargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+      <None Include="$([System.IO.Path]::GetDirectoryName('%(_AnalyzerTargetPath.Identity)'))\Inquiry.Generators.Shared.dll"
+            Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+  </Target>
+</Project>

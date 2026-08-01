@@ -1,0 +1,72 @@
+using Inquiry.Generators.Infrastructure;
+
+namespace Inquiry.Generators.Models;
+
+/// <summary>
+/// Value-equatable replacement for the old <c>EntityModel</c>. Holds all entity facts the emitters
+/// need as strings/primitives (no <see cref="Microsoft.CodeAnalysis.INamedTypeSymbol"/>), plus the
+/// pre-computed materializer names and any discovery diagnostics. <see cref="IsMapped"/> is false
+/// when the entity is unusable as a store target (no key, or a composite key containing a generated
+/// column) — those entities are reported but excluded from the store-linking set, matching the old
+/// "report and skip" behavior.
+/// </summary>
+internal sealed record EntityData(
+    string FullyQualifiedName,
+    string HintName,
+    string Name,
+    string? Namespace,
+    string TableName,
+    string? Schema,
+    EquatableArray<ColumnData> Columns,
+    EquatableArray<ColumnData> Keys,
+    EquatableArray<RelationData> Relations,
+    string ClassMaterializerName,
+    string StructMaterializerName,
+    string ClassMaterializerFullName,
+    string StructMaterializerFullName,
+    bool IsMapped,
+    EquatableArray<DiagnosticData> Diagnostics)
+{
+    public LocationData? Location { get; init; }
+    public EquatableArray<IndexData> Indexes { get; init; }
+    public EquatableArray<CheckConstraintData> Checks { get; init; }
+    /// <summary>
+    /// The entity's single <c>[InquirySoftDelete]</c> column, or null when none is declared. Cached
+    /// here so the store emitter can decide delete→update routing and SELECT filtering without rescanning.
+    /// </summary>
+    public ColumnData? SoftDeleteColumn { get; init; }
+
+    /// <summary>
+    /// The entity's single <c>[InquiryConcurrencyToken]</c> column, or null when none is declared.
+    /// Cached so the store emitter can emit the conflict-throw branch only for token entities.
+    /// </summary>
+    public ColumnData? ConcurrencyToken { get; init; }
+
+    /// <summary>
+    /// Whether generated <c>CREATE TABLE</c> DDL emits <c>FOREIGN KEY</c> constraints for this
+    /// entity's foreign-key columns (<see cref="InquiryTableAttribute.GenerateForeignKeys"/>). Default true.
+    /// </summary>
+    public bool GenerateForeignKeys { get; init; } = true;
+    public bool GenerateDdl { get; init; } = true;
+
+    /// <summary>
+    /// Whether this entity maps a database <c>[InquiryView]</c> rather than a table: it is read-only
+    /// (a store over it may only declare SELECT/aggregate operations — mutations are rejected),
+    /// keyless-permitted (no <c>[InquiryKey]</c> required), and skipped by the schema emitter (the
+    /// view is defined in the database, not created by Inquiry).
+    /// </summary>
+    public bool IsView { get; init; }
+
+    /// <summary>
+    /// Whether this entity was synthesized for an auto-managed <c>[InquiryManyToMany]</c> junction rather
+    /// than discovered from a user type. It has no CLR type, so no materializer is emitted for it and it
+    /// is never a store target — but it IS mapped and IS a table, so it keeps its place in the entity set
+    /// (where relation resolution finds it) and in the schema set (where it gets DDL like any other).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IsMapped"/>/<see cref="IsView"/> cannot express this: <c>IsMapped = false</c> would drop
+    /// it from the relation lookup as well as from DDL, and <c>IsView = true</c> would drop the DDL that
+    /// is the whole point of synthesizing it.
+    /// </remarks>
+    public bool IsSynthesizedJunction { get; init; }
+}

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <!--
+      Test doubles in this project (FakeDbCommand, RecordingDbConnection, etc.) override
+      System.Data.Common.* members. The base setters carry [AllowNull] for ADO.NET back-compat;
+      auto-property overrides in the test doubles can't easily replicate that, and rewriting them
+      as explicit get/set with [AllowNull] would be pure noise in throwaway fakes. Suppress
+      CS8765 (nullability mismatch on override) at test-project scope; production code is
+      unaffected. Audit P2 #11.
+    -->
+    <NoWarn>$(NoWarn);CS8765</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\..\src\Inquiry.AspNetCore\Inquiry.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Interceptors\Inquiry.Interceptors.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Testing\Inquiry.Testing.csproj" />
+    <ProjectReference Include="..\Inquiry.IntegrationTesting\Inquiry.IntegrationTesting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\BatchExecutionProbe.cs" Link="Shared\BatchExecutionProbe.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,21 @@
+#nullable enable
+Inquiry.MariaDb.DependencyInjection.MariaDbInquiryServiceCollectionExtensions
+Inquiry.MariaDb.MariaDbCompatibility
+Inquiry.MariaDb.MariaDbCompatibility.CloudHosted = 1 -> Inquiry.MariaDb.MariaDbCompatibility
+Inquiry.MariaDb.MariaDbCompatibility.None = 0 -> Inquiry.MariaDb.MariaDbCompatibility
+Inquiry.MariaDb.MariaDbInquiryOptions
+Inquiry.MariaDb.MariaDbInquiryOptions.Compatibility.get -> Inquiry.MariaDb.MariaDbCompatibility
+Inquiry.MariaDb.MariaDbInquiryOptions.Compatibility.set -> void
+Inquiry.MariaDb.MariaDbInquiryOptions.FailoverConnectionString.get -> string?
+Inquiry.MariaDb.MariaDbInquiryOptions.FailoverConnectionString.set -> void
+Inquiry.MariaDb.MariaDbInquiryOptions.MariaDbInquiryOptions() -> void
+Inquiry.MariaDb.MariaDbInquiryOptions.MaxAttempts.get -> int
+Inquiry.MariaDb.MariaDbInquiryOptions.MaxAttempts.set -> void
+Inquiry.MariaDb.MariaDbInquiryOptions.RetryBaseDelay.get -> System.TimeSpan
+Inquiry.MariaDb.MariaDbInquiryOptions.RetryBaseDelay.set -> void
+Inquiry.MariaDb.MariaDbInquiryOptions.RetryMaxDelay.get -> System.TimeSpan
+Inquiry.MariaDb.MariaDbInquiryOptions.RetryMaxDelay.set -> void
+static Inquiry.MariaDb.DependencyInjection.MariaDbInquiryServiceCollectionExtensions.AddInquiryMariaDb(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.MariaDb.DependencyInjection.MariaDbInquiryServiceCollectionExtensions.AddInquiryMariaDb(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Inquiry.MariaDb.MariaDbInquiryOptions!>! configure, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.MariaDb.DependencyInjection.MariaDbInquiryServiceCollectionExtensions.AddInquiryMariaDb(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.MariaDb.DependencyInjection.MariaDbInquiryServiceCollectionExtensions.AddInquiryMariaDb(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString, System.Action<Inquiry.MariaDb.MariaDbInquiryOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

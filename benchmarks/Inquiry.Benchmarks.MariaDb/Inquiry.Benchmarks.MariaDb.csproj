@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <BenchmarkEvidenceProvider>mariadb</BenchmarkEvidenceProvider>
+    <BenchmarkEvidenceLane>DeveloperProject</BenchmarkEvidenceLane>
+    <BenchmarkEvidenceProviderAssembly>Inquiry.MariaDb</BenchmarkEvidenceProviderAssembly>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
+    <PackageReference Include="Testcontainers.MariaDb" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.MariaDb\Inquiry.MariaDb.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\samples\Inquiry.Northwind\Models\**\*.cs" LinkBase="Northwind\Models" />
+    <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
+    <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
+    <Compile Include="..\Inquiry.Benchmarks.MySqlFamily\MySqlBatchMutationStrategyRunner.cs" Link="Batch\MySqlBatchMutationStrategyRunner.cs" />
+  </ItemGroup>
+
+  <Import Project="..\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />
+</Project>

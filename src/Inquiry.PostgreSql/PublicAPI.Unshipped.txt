@@ -1,0 +1,22 @@
+#nullable enable
+Inquiry.PostgreSql.DependencyInjection.PostgreSqlInquiryServiceCollectionExtensions
+Inquiry.PostgreSql.PostgreSqlCompatibility
+Inquiry.PostgreSql.PostgreSqlCompatibility.AuroraPostgreSql = 2 -> Inquiry.PostgreSql.PostgreSqlCompatibility
+Inquiry.PostgreSql.PostgreSqlCompatibility.CockroachDb = 1 -> Inquiry.PostgreSql.PostgreSqlCompatibility
+Inquiry.PostgreSql.PostgreSqlCompatibility.None = 0 -> Inquiry.PostgreSql.PostgreSqlCompatibility
+Inquiry.PostgreSql.PostgreSqlInquiryOptions
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.Compatibility.get -> Inquiry.PostgreSql.PostgreSqlCompatibility
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.Compatibility.set -> void
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.FailoverConnectionString.get -> string?
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.FailoverConnectionString.set -> void
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.MaxAttempts.get -> int
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.MaxAttempts.set -> void
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.PostgreSqlInquiryOptions() -> void
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.RetryBaseDelay.get -> System.TimeSpan
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.RetryBaseDelay.set -> void
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.RetryMaxDelay.get -> System.TimeSpan
+Inquiry.PostgreSql.PostgreSqlInquiryOptions.RetryMaxDelay.set -> void
+static Inquiry.PostgreSql.DependencyInjection.PostgreSqlInquiryServiceCollectionExtensions.AddInquiryPostgreSql(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.PostgreSql.DependencyInjection.PostgreSqlInquiryServiceCollectionExtensions.AddInquiryPostgreSql(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Inquiry.PostgreSql.PostgreSqlInquiryOptions!>! configure, string! connectionStringName = "Inquiry") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.PostgreSql.DependencyInjection.PostgreSqlInquiryServiceCollectionExtensions.AddInquiryPostgreSql(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Inquiry.PostgreSql.DependencyInjection.PostgreSqlInquiryServiceCollectionExtensions.AddInquiryPostgreSql(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString, System.Action<Inquiry.PostgreSql.PostgreSqlInquiryOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

@@ -1,0 +1,81 @@
+using Inquiry.Northwind.Models;
+using Inquiry.Northwind.Stores;
+using Inquiry.Oracle.Tests.Fixtures;
+
+namespace Inquiry.Oracle.Tests;
+
+/// <summary>
+/// Northwind coverage gaps for the Oracle provider that the existing Oracle suites do not already
+/// exercise: a multi-field <c>SELECT</c> filtering by two columns, and the <c>Employee.ReportsTo</c>
+/// self-referencing foreign key round-trip. Each fact runs in its own throwaway schema so parallel facts
+/// cannot collide on table state.
+/// </summary>
+[Collection(OracleCollection.Name)]
+public sealed class OracleCoverageGapIntegrationTests
+{
+    private readonly OracleContainerFixture _fixture;
+    public OracleCoverageGapIntegrationTests(OracleContainerFixture fixture) => _fixture = fixture;
+
+    [SkippableFact]
+    public async Task MultiFieldSelectFiltersByBothColumns()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "multifield");
+        var customers = harness.GetRequiredService<CustomerStore>();
+        var employees = harness.GetRequiredService<EmployeeStore>();
+        var orders = harness.GetRequiredService<OrderStore>();
+
+        await customers.InsertAsync(new Customer { CustomerID = "ALFKI", CompanyName = "Alfreds" });
+        await customers.InsertAsync(new Customer { CustomerID = "BONAP", CompanyName = "Bon app'" });
+        var nancy = await employees.InsertReturningAsync(new Employee { FirstName = "Nancy", LastName = "Davolio" });
+        var andrew = await employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller" });
+
+        await orders.InsertAsync(new Order { CustomerID = "ALFKI", EmployeeID = nancy!.EmployeeID,  ShipCity = "Berlin" });
+        await orders.InsertAsync(new Order { CustomerID = "ALFKI", EmployeeID = andrew!.EmployeeID, ShipCity = "Berlin" });
+        await orders.InsertAsync(new Order { CustomerID = "BONAP", EmployeeID = nancy.EmployeeID,   ShipCity = "Marseille" });
+
+        var matched = await orders.SelectByCustomerAndEmployeeAsync("ALFKI", nancy.EmployeeID).ToListAsync();
+        var only = Assert.Single(matched);
+        Assert.Equal("Berlin", only.ShipCity);
+    }
+
+    [SkippableFact]
+    public async Task EmployeeReportsToSelfReferenceRoundTrips()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "emp");
+        var employees = harness.GetRequiredService<EmployeeStore>();
+
+        var manager = await employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller", Title = "VP" });
+        var report = await employees.InsertReturningAsync(new Employee { FirstName = "Nancy", LastName = "Davolio", Title = "Sales", ReportsTo = manager!.EmployeeID });
+
+        var fetched = await employees.SelectByKeyAsync(report!.EmployeeID);
+        Assert.NotNull(fetched);
+        Assert.Equal(manager.EmployeeID, fetched!.ReportsTo);
+    }
+
+    [SkippableFact]
+    public async Task DateTimeColumnsRoundTripThroughOracle()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        // Regression for the ODP.NET DbType.DateTime2 rejection: a non-null System.DateTime binds (Oracle
+        // maps it to DbType.DateTime -> TIMESTAMP) and round-trips through INSERT RETURNING + SELECT.
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "datetime");
+        var employees = harness.GetRequiredService<EmployeeStore>();
+
+        var birth = new DateTime(1980, 5, 15);
+        var hire = new DateTime(2010, 3, 1);
+        var inserted = await employees.InsertReturningAsync(new Employee
+        {
+            FirstName = "Nancy",
+            LastName = "Davolio",
+            BirthDate = birth,
+            HireDate = hire,
+        });
+
+        var fetched = await employees.SelectByKeyAsync(inserted!.EmployeeID);
+        Assert.NotNull(fetched);
+        Assert.Equal(birth, fetched!.BirthDate);
+        Assert.Equal(hire, fetched.HireDate);
+    }
+}

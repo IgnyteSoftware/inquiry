@@ -1,0 +1,107 @@
+using Inquiry.Generators.Abstractions;
+
+namespace Inquiry.Generators.Models;
+
+/// <summary>
+/// Value-equatable replacement for the old <c>ColumnModel</c>. Still implements <see cref="IColumn"/>
+/// so it feeds <c>SqlBuildContext</c> / <c>SqlBuilder</c> unchanged at emit time.
+/// </summary>
+/// <remarks>
+/// FOUNDATION CONVENTION: additive column metadata MUST be added as init-only
+/// properties with sensible defaults in this record body — never as new positional constructor
+/// parameters. There is a single construction site (<c>EntityProcessor.DiscoverColumns</c>) using an
+/// object initializer, so optional additions (e.g. concurrency-token, soft-delete, converter, DDL
+/// metadata) default cleanly and parallel feature branches do not conflict on the constructor.
+/// </remarks>
+internal sealed record ColumnData : IColumn
+{
+    public LocationData? Location { get; init; }
+    public required string PropertyName { get; init; }
+    public required string ColumnName { get; init; }
+    public required TypeData Type { get; init; }
+    public bool IsKey { get; init; }
+    public bool IsGenerated { get; init; }
+
+    /// <summary>Insert/upsert assigns a sequential GUID when this key is unset ([InquiryKey(SequentialGuid = true)]).</summary>
+    public bool IsSequentialGuid { get; init; }
+
+    /// <summary>[InquiryCreatedAt]: stamped on insert when unset; excluded from UPDATE SET and bind.</summary>
+    public bool IsCreatedAt { get; init; }
+
+    /// <summary>[InquiryModifiedAt]: stamped on every generated insert/update/upsert before binding.</summary>
+    public bool IsModifiedAt { get; init; }
+
+    /// <summary>[InquiryCreatedBy]: stamped from the ambient user on insert when unset; excluded from UPDATE.</summary>
+    public bool IsCreatedBy { get; init; }
+
+    /// <summary>[InquiryModifiedBy]: stamped from the ambient user on every generated insert/update/upsert.</summary>
+    public bool IsModifiedBy { get; init; }
+
+    /// <summary>True for any write-once-on-insert auditing column (created-at / created-by).</summary>
+    public bool IsCreatedAudit => IsCreatedAt || IsCreatedBy;
+    public bool UseDatabaseDefault { get; init; }
+    public SoftDeleteKind SoftDelete { get; init; } = SoftDeleteKind.None;
+
+    /// <summary>[InquiryGlobalFilter]: every generated SELECT AND-composes <c>"col" = GlobalFilterKeepWhenTrue</c>.</summary>
+    public bool IsGlobalFilter { get; init; }
+
+    /// <summary>The bool value a global-filter column must equal for a row to stay visible (InquiryGlobalFilter.KeepWhen, default true).</summary>
+    public bool GlobalFilterKeepWhenTrue { get; init; } = true;
+
+    /// <summary>
+    /// InquiryGlobalFilter.Name, or null for an unnamed (non-bypassable) filter. Only a named filter
+    /// can be dropped from a method's SQL via [InquiryIgnoreFilter]; whitespace normalizes to null.
+    /// </summary>
+    public string? GlobalFilterName { get; init; }
+
+    /// <summary>
+    /// InquiryGlobalFilter.ContextKey, or null for the constant-bool mode. Non-null switches the
+    /// composed predicate to <c>"col" = @__gf_&lt;property&gt;</c> with the value bound at execute
+    /// time from the ambient InquiryFilterContext under this key.
+    /// </summary>
+    public string? GlobalFilterContextKey { get; init; }
+
+    public bool IsConcurrencyToken { get; init; }
+    public bool IsDatabaseGeneratedToken { get; init; }
+    public bool EnumAsString { get; init; }
+
+    // DDL generation metadata.
+    public DbTypeClass TypeClass { get; init; }
+    public bool IsNullable { get; init; }
+    public string? SqlType { get; init; }
+    public LocationData? SqlTypeLocation { get; init; }
+    public string ProviderClrTypeName { get; init; } = string.Empty;
+    public bool ProviderValueIsNullable { get; init; }
+    public int Length { get; init; }
+    public bool IsLengthSpecified { get; init; }
+    public LocationData? LengthLocation { get; init; }
+    public int Precision { get; init; }
+    public bool IsPrecisionSpecified { get; init; }
+    public LocationData? PrecisionLocation { get; init; }
+    public int Scale { get; init; }
+    public bool IsScaleSpecified { get; init; }
+    public LocationData? ScaleLocation { get; init; }
+    public string? DefaultExpression { get; init; }
+    public LocationData? DefaultExpressionLocation { get; init; }
+    public LocationData? UseDatabaseDefaultLocation { get; init; }
+
+    /// <summary>Raw SQL expression for a server-computed column ([InquiryColumn(Computed = …)]), or null.</summary>
+    public string? ComputedExpression { get; init; }
+    public LocationData? ComputedExpressionLocation { get; init; }
+    public Inquiry.Generators.Infrastructure.EquatableArray<ComputedExpressionOverrideData> ComputedExpressionOverrides { get; init; }
+    public string? ForeignKeyTable { get; init; }
+    public string? ForeignKeySchema { get; init; }
+    public string? ForeignKeyColumn { get; init; }
+    public string? ForeignKeyConstraintName { get; init; }
+    public int ForeignKeyOnDelete { get; init; }
+    public int ForeignKeyOnUpdate { get; init; }
+    public bool IsIndexed { get; init; }
+    public bool IsUnicode { get; init; } = true;
+    public bool IsUnicodeSpecified { get; init; }
+    public LocationData? IsUnicodeLocation { get; init; }
+    public bool IsUnique { get; init; }
+    public string? IndexName { get; init; }
+
+    /// <summary>The value converter applied to this column, or null for a directly-mapped type.</summary>
+    public ConverterData? Converter { get; init; }
+}

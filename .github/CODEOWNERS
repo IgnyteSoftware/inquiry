@@ -1,0 +1,10 @@
+# Default owner for everything
+* @IgnyteSoftware/engineering
+
+# Release engineering — packing, verification, CI contract, manifest
+/eng/ @IgnyteSoftware/engineering
+/.github/workflows/ @IgnyteSoftware/engineering
+
+# Public API surface — source generators and runtime
+/src/Inquiry/ @IgnyteSoftware/engineering
+/src/Inquiry.Generators.Shared/ @IgnyteSoftware/engineering

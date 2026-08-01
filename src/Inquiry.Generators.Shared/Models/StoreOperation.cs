@@ -1,0 +1,31 @@
+namespace Inquiry.Generators.Models;
+
+internal enum StoreOperation
+{
+    None,
+    SelectAll,
+    SelectAllEager,
+    SelectOneByKey,
+    SelectOneByKeyEager,
+    SelectAllByField,
+    SelectAllByPredicate,
+    KeysetPage,
+    Count,
+    Exists,
+    Aggregate,
+    FullTextSearch,
+    InsertAll,
+    BulkInsert,
+    DeleteAll,
+    UpdateAll,
+    Insert,
+    Update,
+    Upsert,
+    DeleteOneByKey,
+    RestoreOneByKey,
+    UpdateByPredicate,
+    DeleteByPredicate,
+    StoredProcedure,
+    SelectTopByOrder,
+    GroupCount,
+}

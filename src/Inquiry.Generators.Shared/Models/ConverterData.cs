@@ -1,0 +1,22 @@
+using Microsoft.CodeAnalysis;
+
+namespace Inquiry.Generators.Models;
+
+/// <summary>
+/// Value-equatable, symbol-free description of the value converter applied to a column. The
+/// generated materializer reads the provider primitive and calls <c>FromProvider</c>; the binder calls
+/// <c>ToProvider</c> and binds the provider value. Stateless converters are instantiated inline at each
+/// use site (<c>new TConverter()</c>).
+/// </summary>
+internal sealed record ConverterData(
+    string ConverterTypeDisplay,
+    string ModelTypeDisplay,
+    string ProviderTypeDisplay,
+    SpecialType ProviderSpecialType)
+{
+    /// <summary>Provider-side type facts, when resolved from an explicit converter.</summary>
+    public TypeData? ProviderType { get; init; }
+
+    /// <summary>Whether the selected converter contract is implemented explicitly.</summary>
+    public bool RequiresInterfaceDispatch { get; init; }
+}

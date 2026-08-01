@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:48:15.5505934\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.ParameterBindingBenchmarks.Collection_DirectStaticBinderFloor",
+      "medianNs": 65.9376,
+      "meanNs": 65.471,
+      "allocatedBytes": 312,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ParameterBindingBenchmarks.Collection_GeneratedStore",
+      "medianNs": 76.1243,
+      "meanNs": 76.8963,
+      "allocatedBytes": 312,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ParameterBindingBenchmarks.EightParameters_DirectStaticBinderFloor",
+      "medianNs": 162.023,
+      "meanNs": 162.8148,
+      "allocatedBytes": 704,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ParameterBindingBenchmarks.EightParameters_GeneratedStore",
+      "medianNs": 128.5233,
+      "meanNs": 126.9578,
+      "allocatedBytes": 704,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ParameterBindingBenchmarks.OneParameter_DirectStaticBinderFloor",
+      "medianNs": 22.4979,
+      "meanNs": 22.2428,
+      "allocatedBytes": 88,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ParameterBindingBenchmarks.OneParameter_GeneratedStore",
+      "medianNs": 32.0085,
+      "meanNs": 31.8847,
+      "allocatedBytes": 88,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ParameterBindingBenchmarks.Parameterless_DirectStaticBinderFloor",
+      "medianNs": 2.6441,
+      "meanNs": 2.6666,
+      "allocatedBytes": 0,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.ParameterBindingBenchmarks.Parameterless_GeneratedStore",
+      "medianNs": 14.4227,
+      "meanNs": 14.518,
+      "allocatedBytes": 0,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}

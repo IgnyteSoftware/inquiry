@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:48:03.6783295\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_AdoNet(Rows: 1000, RegionCount: 4)",
+      "medianNs": 444455.5664,
+      "meanNs": 442829.1667,
+      "allocatedBytes": 147672,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_Dapper(Rows: 1000, RegionCount: 4)",
+      "medianNs": 572831.25,
+      "meanNs": 570960.4167,
+      "allocatedBytes": 189224,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_Inquiry(Rows: 1000, RegionCount: 4)",
+      "medianNs": 430445.2148,
+      "meanNs": 440004.0039,
+      "allocatedBytes": 147872,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_AdoNet(Rows: 1000, RegionCount: 100)",
+      "medianNs": 479247.7539,
+      "meanNs": 482348.6003,
+      "allocatedBytes": 180824,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_Dapper(Rows: 1000, RegionCount: 100)",
+      "medianNs": 595687.207,
+      "meanNs": 595593.7174,
+      "allocatedBytes": 219856,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_Inquiry(Rows: 1000, RegionCount: 100)",
+      "medianNs": 478874.1211,
+      "meanNs": 474126.6276,
+      "allocatedBytes": 176200,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_AdoNet(Rows: 100000, RegionCount: 4)",
+      "medianNs": 39139407.6923,
+      "meanNs": 39496235.8974,
+      "allocatedBytes": 15693112,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_Dapper(Rows: 100000, RegionCount: 4)",
+      "medianNs": 51527100,
+      "meanNs": 52110646.6667,
+      "allocatedBytes": 20192198,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_Inquiry(Rows: 100000, RegionCount: 4)",
+      "medianNs": 45100508.3333,
+      "meanNs": 44935908.3333,
+      "allocatedBytes": 15693312,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_AdoNet(Rows: 100000, RegionCount: 100)",
+      "medianNs": 39072776.9231,
+      "meanNs": 39366730.7692,
+      "allocatedBytes": 15272024,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_Dapper(Rows: 100000, RegionCount: 100)",
+      "medianNs": 51988900,
+      "meanNs": 52288766.6667,
+      "allocatedBytes": 19767992,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.EagerGridBenchmarks.Grid_Inquiry(Rows: 100000, RegionCount: 100)",
+      "medianNs": 38422330.7692,
+      "meanNs": 38591046.1538,
+      "allocatedBytes": 15267400,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}

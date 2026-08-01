@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
+    <ProjectReference Include="..\Inquiry.Northwind\Inquiry.Northwind.csproj" />
+  </ItemGroup>
+</Project>

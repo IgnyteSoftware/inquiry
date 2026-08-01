@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/IgnyteSoftware/inquiry/schemas/sqlserver-collection-evidence-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "collectedAtUtc", "imageDigest", "fixtureIdentityHash", "logicalReads", "planStability"],
+  "properties": {
+    "schemaVersion": { "const": "inquiry-sqlserver-collection-evidence-v1" },
+    "collectedAtUtc": { "type": "string", "format": "date-time" },
+    "imageDigest": { "$ref": "#/$defs/digest" },
+    "fixtureIdentityHash": { "$ref": "#/$defs/hash" },
+    "logicalReads": { "type": "array", "minItems": 12, "maxItems": 12, "items": { "$ref": "#/$defs/logical" } },
+    "planStability": { "type": "array", "minItems": 12, "maxItems": 12, "items": { "$ref": "#/$defs/plan" } }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "transport": { "enum": ["tvp", "openJson", "scalarExpansion"] },
+    "cardinality": { "enum": [1, 10, 100, 1000] },
+    "logical": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transport", "cardinality", "lastLogicalReads", "executionCount", "queryHash", "planHash"],
+      "properties": {
+        "transport": { "$ref": "#/$defs/transport" }, "cardinality": { "$ref": "#/$defs/cardinality" },
+        "lastLogicalReads": { "type": "integer", "minimum": 0 }, "executionCount": { "type": "integer", "minimum": 1 },
+        "queryHash": { "$ref": "#/$defs/hash" }, "planHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "plan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transport", "cardinality", "sqlHash", "parameterSignature", "queryHash", "planHash", "cachedPlanCount"],
+      "properties": {
+        "transport": { "$ref": "#/$defs/transport" }, "cardinality": { "$ref": "#/$defs/cardinality" },
+        "sqlHash": { "$ref": "#/$defs/hash" }, "parameterSignature": { "$ref": "#/$defs/hash" },
+        "queryHash": { "$ref": "#/$defs/hash" }, "planHash": { "$ref": "#/$defs/hash" },
+        "cachedPlanCount": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

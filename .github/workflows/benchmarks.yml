@@ -1,0 +1,89 @@
+name: Benchmarks
+
+on:
+  schedule:
+    # Weekly, Wednesdays 04:00 UTC. Generates baseline JSON on consistent CI hardware.
+    - cron: '0 4 * * 3'
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'BenchmarkDotNet filter (e.g. *ShipperCrud*). Empty = all benchmarks.'
+        required: false
+        default: ''
+      tfm:
+        description: 'Target framework (net8.0 or net10.0)'
+        required: false
+        default: 'net8.0'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark-sqlite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        tfm: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.tfm || 'net8.0')) || fromJSON('["net8.0", "net10.0"]') }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Run SQLite benchmarks (${{ matrix.tfm }})
+        run: |
+          filter="${{ inputs.filter || '*' }}"
+          dotnet run --project benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj \
+            -c Release -f ${{ matrix.tfm }} -- \
+            --filter "$filter" \
+            --exporters json \
+            --artifacts artifacts/benchmarks/${{ matrix.tfm }}
+      - name: Regression check against committed baselines
+        run: |
+          baseline_dir="benchmarks/evidence/baselines/${{ matrix.tfm }}"
+          results_dir="artifacts/benchmarks/${{ matrix.tfm }}/results"
+          if [ ! -d "$baseline_dir" ]; then
+            echo "No baselines committed at $baseline_dir — skipping regression check."
+            exit 0
+          fi
+          exit_code=0
+          for bdn_json in "$results_dir"/*-report-full-compressed.json; do
+            [ -f "$bdn_json" ] || continue
+            class_name="$(basename "$bdn_json" -report-full-compressed.json)"
+            baseline_file="$baseline_dir/$class_name.json"
+            if [ ! -f "$baseline_file" ]; then
+              echo "No baseline for $class_name — skipping."
+              continue
+            fi
+            echo "Checking $class_name against baseline..."
+            dotnet run --project benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj \
+              -c Release -- compare "$bdn_json" "$baseline_file" || exit_code=1
+          done
+          exit $exit_code
+      - name: Generate baseline candidates
+        if: always()
+        run: |
+          results_dir="artifacts/benchmarks/${{ matrix.tfm }}/results"
+          out_dir="artifacts/benchmarks/${{ matrix.tfm }}/baseline-candidates"
+          mkdir -p "$out_dir"
+          for bdn_json in "$results_dir"/*-report-full-compressed.json; do
+            [ -f "$bdn_json" ] || continue
+            class_name="$(basename "$bdn_json" -report-full-compressed.json)"
+            dotnet run --project benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj \
+              -c Release -- generate "$bdn_json" \
+              --provider sqlite --tfm "${{ matrix.tfm }}" \
+              --commit "$GITHUB_SHA" \
+              --env "$(uname -s) / $(uname -m) / ubuntu-latest" \
+              > "$out_dir/$class_name.json" 2>&1 || true
+          done
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: benchmark-results-sqlite-${{ matrix.tfm }}
+          path: artifacts/benchmarks/${{ matrix.tfm }}/
+          if-no-files-found: warn
+          retention-days: 90

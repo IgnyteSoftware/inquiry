@@ -1,0 +1,44 @@
+#nullable enable
+Inquiry.Testing.EntityFactory<TEntity>
+Inquiry.Testing.EntityFactory<TEntity>.Build(params string![]! states) -> TEntity!
+Inquiry.Testing.EntityFactory<TEntity>.BuildMany(int count, params string![]! states) -> System.Collections.Generic.IReadOnlyList<TEntity!>!
+Inquiry.Testing.EntityFactory<TEntity>.EntityFactory(System.Func<long, TEntity!>! create) -> void
+Inquiry.Testing.EntityFactory<TEntity>.EntityFactory(System.Func<TEntity!>! create) -> void
+Inquiry.Testing.EntityFactory<TEntity>.State(string! name, System.Action<TEntity!, long>! apply) -> Inquiry.Testing.EntityFactory<TEntity!>!
+Inquiry.Testing.EntityFactory<TEntity>.State(string! name, System.Action<TEntity!>! apply) -> Inquiry.Testing.EntityFactory<TEntity!>!
+Inquiry.Testing.InquiryRespawner
+Inquiry.Testing.InquiryRespawner.ResetAsync(Inquiry.Connections.IInquiryConnectionFactory! factory, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.Testing.InquiryRespawner.ResetAsync(System.Data.Common.DbConnection! openConnection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.Testing.InquirySandbox
+Inquiry.Testing.InquirySandbox.InquirySandbox(System.IServiceProvider! services, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted) -> void
+Inquiry.Testing.InquirySandbox.RunAsync(System.Func<Inquiry.Testing.InquirySandboxContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! operation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.Testing.InquirySandbox.RunAsync<TResult>(System.Func<Inquiry.Testing.InquirySandboxContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task<TResult>!>! operation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResult>!
+Inquiry.Testing.InquirySandboxContext
+Inquiry.Testing.InquirySandboxContext.Services.get -> System.IServiceProvider!
+Inquiry.Testing.InquirySandboxContext.Transaction.get -> Inquiry.IInquiry!
+Inquiry.Testing.RecordedCommand
+Inquiry.Testing.RecordedCommand.CommandText.get -> string!
+Inquiry.Testing.RecordedCommand.Exception.get -> System.Exception?
+Inquiry.Testing.RecordedCommand.Parameters.get -> System.Collections.Generic.IReadOnlyList<Inquiry.Testing.RecordedParameter!>!
+Inquiry.Testing.RecordedCommand.RecordsAffected.get -> int?
+Inquiry.Testing.RecordedParameter
+Inquiry.Testing.RecordedParameter.Name.get -> string!
+Inquiry.Testing.RecordedParameter.Value.get -> object?
+Inquiry.Testing.RecordingCommandInterceptor
+Inquiry.Testing.RecordingCommandInterceptor.AssertExecuted(string! commandTextSubstring) -> Inquiry.Testing.RecordedCommand!
+Inquiry.Testing.RecordingCommandInterceptor.AssertNotExecuted(string! commandTextSubstring) -> void
+Inquiry.Testing.RecordingCommandInterceptor.Clear() -> void
+Inquiry.Testing.RecordingCommandInterceptor.CommandExecutedAsync(Inquiry.Commands.InquiryCommandExecutedContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Testing.RecordingCommandInterceptor.CommandExecutingAsync(Inquiry.Commands.InquiryCommandContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Testing.RecordingCommandInterceptor.CommandFailedAsync(Inquiry.Commands.InquiryCommandFailedContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Inquiry.Testing.RecordingCommandInterceptor.Commands.get -> System.Collections.Generic.IReadOnlyList<Inquiry.Testing.RecordedCommand!>!
+Inquiry.Testing.RecordingCommandInterceptor.RecordingCommandInterceptor() -> void
+Inquiry.Testing.SqliteInquiryFixture
+Inquiry.Testing.SqliteInquiryFixture.ConnectionString.get -> string!
+Inquiry.Testing.SqliteInquiryFixture.CreateScope() -> Microsoft.Extensions.DependencyInjection.IServiceScope!
+Inquiry.Testing.SqliteInquiryFixture.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Inquiry.Testing.SqliteInquiryFixture.ExecuteDdlAsync(string! ddl, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.Testing.SqliteInquiryFixture.Services.get -> System.IServiceProvider!
+static Inquiry.Testing.InquiryRespawner.CreateAsync(Inquiry.Connections.IInquiryConnectionFactory! factory, Respawn.RespawnerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Testing.InquiryRespawner!>!
+static Inquiry.Testing.InquiryRespawner.CreateAsync(System.Data.Common.DbConnection! openConnection, Respawn.RespawnerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Testing.InquiryRespawner!>!
+static Inquiry.Testing.SqliteInquiryFixture.CreateAsync(System.Action<Microsoft.Extensions.DependencyInjection.IServiceCollection!>? configureServices = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Testing.SqliteInquiryFixture!>!

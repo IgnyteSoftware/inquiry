@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "regression-baseline-v1",
+  "provider": "sqlite",
+  "runtimeTfm": "net8.0",
+  "generatedAtUtc": "2026-07-18T21:48:29.6537364\u002B00:00",
+  "commit": "ce072c2b75da6ea9e8d37fd200f1dd3296c94f9b",
+  "environment": "Windows 11 / x64 / local",
+  "cases": [
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.BareInsert_AdoNet",
+      "medianNs": 4541183.5938,
+      "meanNs": 4576364.3229,
+      "allocatedBytes": 1264,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.BareInsert_Dapper",
+      "medianNs": 4549685.1562,
+      "meanNs": 4549719.2708,
+      "allocatedBytes": 1768,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.BareInsert_LinqToDb",
+      "medianNs": 4549088.2812,
+      "meanNs": 5171715.3646,
+      "allocatedBytes": 7840,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.BareInsert_RepoDb",
+      "medianNs": 4607623.4375,
+      "meanNs": 6162660.1562,
+      "allocatedBytes": 2664,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.BareInsert_Inquiry",
+      "medianNs": 4496938.2812,
+      "meanNs": 4481938.0208,
+      "allocatedBytes": 1352,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.TransactedInsert_AdoNet",
+      "medianNs": 4531483.5938,
+      "meanNs": 4536773.9583,
+      "allocatedBytes": 2592,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.TransactedInsert_Dapper",
+      "medianNs": 4677332.8125,
+      "meanNs": 4686273.9583,
+      "allocatedBytes": 3096,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.TransactedInsert_LinqToDb",
+      "medianNs": 4699900,
+      "meanNs": 4627029.6875,
+      "allocatedBytes": 9544,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.TransactedInsert_RepoDb",
+      "medianNs": 4556927.3438,
+      "meanNs": 4535893.75,
+      "allocatedBytes": 3992,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    },
+    {
+      "fullName": "Inquiry.Benchmarks.TransactionBenchmarks.TransactedInsert_Inquiry",
+      "medianNs": 4556228.9062,
+      "meanNs": 4521452.6042,
+      "allocatedBytes": 3600,
+      "relativeBudget": 0.1,
+      "absoluteBudgetNs": 5000,
+      "allocationRelativeBudget": 0.05
+    }
+  ]
+}
