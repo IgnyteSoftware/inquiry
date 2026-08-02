@@ -54,7 +54,7 @@ public static class CiContractVerifier
         // so a post-merge rerun only duplicates spend. Direct pushes to main are excluded by branch
         // rulesets, and release.yml independently re-verifies the package contract on every push.
         var pullRequest = Map(triggers["pull_request"], "pull_request", "branches");
-        RequireSequence(Sequence(pullRequest["branches"], "pull_request.branches"), ["main", "prerelease"], "pull_request branches");
+        RequireSequence(Sequence(pullRequest["branches"], "pull_request.branches"), ["main"], "pull_request branches");
         Require(IsNull(triggers["merge_group"]), "merge_group must not be narrowed by filters.");
     }
 

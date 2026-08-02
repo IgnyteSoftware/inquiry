@@ -56,17 +56,17 @@ for the consumer-facing checklist.
 
 Run the code-review workflow on a feature branch before merging; fix Critical/Important findings first.
 
-## Pull requests and integration branches
+## Pull requests
 
-All changes land through reviewed pull requests. During 1.0 stabilization, feature branches target
-`prerelease`; promotion to `main` is a separate reviewed pull request after the release gates pass. Direct
+Development is trunk-based: all changes land through reviewed pull requests into `main`. Direct
 pushes, force-pushes, branch deletion, and merge commits are not part of the supported workflow.
 
 Repository rulesets (applied by [`eng/configure-branch-protection.ps1`](https://github.com/IgnyteSoftware/inquiry/blob/main/eng/configure-branch-protection.ps1))
-protect both `prerelease` and `main`: linear history, an up-to-date branch, resolved conversations, one
-human approval with code-owner review and last-push approval, and the final `ci-required-v1` status pinned
-to GitHub Actions. A second ruleset blocks update and deletion of `v*` release tags for everyone (creation stays
-open so the release workflow can tag; GitHub rejects the Actions app as a bypass actor). Organization admins are a named, audited bypass actor (a solo-maintainer
+protect `main`: linear history, an up-to-date branch, resolved conversations, one human approval with
+code-owner review and last-push approval, and the final `ci-required-v1` status pinned to GitHub Actions.
+A second ruleset governs `v*` release tags: creation is restricted to organization admins (pushing a
+release tag *is* the release act), and update/deletion are blocked for everyone, so a release tag is
+immutable once pushed. Organization admins are a named, audited bypass actor (a solo-maintainer
 necessity — remove that bypass once a second reviewer exists). Copilot and other automated reviews
 supplement, but do not replace, the human approval. These are repository-setting requirements: the
 checked-in workflow cannot enforce them by itself.
@@ -80,7 +80,7 @@ approach is the convention.)
 ## CI
 
 [`.github/workflows/ci.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/ci.yml)
-runs for pull requests into `prerelease` and `main`, and for merge-queue `merge_group` events:
+runs for pull requests into `main`, and for merge-queue `merge_group` events:
 
 - a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker);
 - an **aot-smoke** job — publishes the `Inquiry.AotSmoke` sample as a native binary and executes it,
@@ -105,21 +105,20 @@ projects are the DLG comparison benchmarks under `benchmarks/`, which are out of
 
 ## Releasing
 
-Releases are automated by
+Releases are tag-driven, automated by
 [`release.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/release.yml) and
-driven by `eng/release-manifest.json`, whose `packageVersion` is the single source of truth:
+gated by `eng/release-manifest.json`, whose `packageVersion` is the single source of truth:
 
 | Event | Published version |
 |---|---|
-| PR merged into `prerelease` | `<packageVersion>-preview.<run-number>` on nuget.org |
-| PR merged into `main` (manifest bumped) | `<packageVersion>` on nuget.org + git tag `v<packageVersion>` + GitHub release |
-| PR merged into `main` (version already tagged) | No publish — verified no-op |
+| Admin pushes tag `v<packageVersion>-preview.N` on `main` | that preview on nuget.org + GitHub prerelease |
+| Admin pushes tag `v<packageVersion>` on `main` | the stable on nuget.org + GitHub release |
+| Tag version doesn't match the manifest, or the commit isn't on `main` | Release fails closed — nothing publishes |
 
-To cut a release, open a PR that bumps `packageVersion` (and the matching `tag` and inter-package
-dependency versions) in `eng/release-manifest.json`; the release ships when that PR reaches `main`.
-Do not create or push release tags manually — the workflow creates them after a successful publish.
-Authentication uses NuGet **Trusted Publishing** (OIDC via `NuGet/login`); no long-lived API key is
-stored in the repository.
+To cut a release: open a PR bumping `packageVersion` (and the matching `tag` and inter-package
+dependency versions) in `eng/release-manifest.json`, merge it, then push the tag. Authentication uses
+NuGet **Trusted Publishing** (OIDC via `NuGet/login`) bound to the `nuget-release` environment; no
+long-lived API key is stored in the repository.
 
 Every release run packs from an immutable detached snapshot of the exact merge commit and re-verifies
 the full package contract before pushing. For local package-contract verification, pack the ten

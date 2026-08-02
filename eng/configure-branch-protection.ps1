@@ -7,18 +7,18 @@
 
     Creates (or replaces, matched by name) two rulesets:
 
-    - protect-release-branches (main + prerelease): pull request required with 1 approval,
+    - protect-release-branches (main): pull request required with 1 approval,
       code-owner review, last-push approval, stale-review dismissal, and conversation
       resolution; the ci-required-v1 status check (pinned to GitHub Actions) with strict
       up-to-date enforcement; linear history; no force pushes; no deletion.
-    - protect-release-tags (v*): creation, update, and deletion blocked.
+    - protect-release-tags (v*): creation restricted to org admins; update and deletion
+      blocked for everyone (release tags are immutable and ARE the release trigger).
 
     Bypass model (deliberate): Organization admins are a named bypass actor on both
     rulesets — solo-maintainer reality means self-approval is impossible, so admin merges
     must stay possible; ruleset bypasses are logged and labeled, unlike the old
     enforce_admins=false. Remove the OrganizationAdmin bypass actor once a second
-    maintainer can review. GitHub Actions (app 15368) may create release tags — the
-    release workflow pushes v* tags after publishing.
+    maintainer can review.
 
     Bodies are written to BOM-free temp files: Windows PowerShell 5.1 stamps a BOM onto
     pipeline output to native commands and the GitHub API rejects the resulting JSON.
@@ -42,7 +42,7 @@ $branchRuleset = @{
     enforcement = 'active'
     conditions = @{
         ref_name = @{
-            include = @('refs/heads/main', 'refs/heads/prerelease')
+            include = @('refs/heads/main')
             exclude = @()
         }
     }
@@ -86,10 +86,11 @@ $tagRuleset = @{
             exclude = @()
         }
     }
-    # Creation stays open: the release workflow pushes v* tags with the workflow token, and
-    # GitHub rejects the Actions app as a ruleset bypass actor on this org. Update and deletion
-    # are blocked for everyone, which is the part that protects the tag->commit audit trail.
+    # Tag-driven releases: creating a v* tag IS the release act, so creation is restricted to
+    # organization admins (the bypass actor). Update and deletion are blocked for everyone,
+    # making a release tag immutable once pushed.
     rules = @(
+        @{ type = 'creation' }
         @{ type = 'update' }
         @{ type = 'deletion' }
     )
@@ -123,4 +124,4 @@ foreach ($ruleset in @($branchRuleset, $tagRuleset)) {
     }
 }
 
-Write-Host 'Done. Bypass model: OrganizationAdmin (audited) on both rulesets; GitHub Actions may create v* tags.'
+Write-Host 'Done. Bypass model: OrganizationAdmin (audited) on both rulesets; only admins may create v* release tags.'
