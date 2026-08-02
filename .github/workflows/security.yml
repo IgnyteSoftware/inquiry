@@ -4,6 +4,8 @@ name: Security
 # No push trigger — a push-to-main run would duplicate the PR scan that just gated the merge.
 on:
   pull_request:
+    # Trunk-based: every change PRs into main, so scanning main PRs covers everything
+    # before any release tag can include it.
     branches: [main]
   schedule:
     - cron: '27 4 * * 1'

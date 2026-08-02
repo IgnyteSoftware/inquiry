@@ -8,40 +8,38 @@ style, generator "hot spine" rules) live in the
 ## TL;DR workflow
 
 ```
-feature branch ──PR──▶ prerelease ──promotion PR──▶ main
-                          │                           │
-                          ▼                           ▼
-              Ignyte.Inquiry.* X.Y.Z-preview.N   Ignyte.Inquiry.* X.Y.Z
-                  on nuget.org                     on nuget.org + tag vX.Y.Z
+feature branch ──PR──▶ main ──tag vX.Y.Z-preview.N──▶ Ignyte.Inquiry.* preview on nuget.org
+                        │
+                        └──tag vX.Y.Z──────────────▶ Ignyte.Inquiry.* stable on nuget.org
+                                                      + GitHub release
 ```
 
 1. **Open an issue first** for anything non-trivial so the approach can be agreed before you
    invest time.
-2. **Branch from `prerelease`** (`feature/<short-name>` or `fix/<short-name>`).
+2. **Branch from `main`** (`feature/<short-name>` or `fix/<short-name>`).
 3. **Write the failing test first**, then the fix/feature. Generator changes start with an
    emission test asserting the exact generated SQL/`const string`.
-4. **Open a PR into `prerelease`.** CI must pass: build + unit + SQLite suites, NativeAOT
+4. **Open a PR into `main`.** CI must pass: build + unit + SQLite suites, NativeAOT
    smoke, the 15-leg live-database integration matrix (5 providers × 3 TFMs), benchmark
    smoke, and the package contract producer/verifier. At least one human review is required.
-5. When `prerelease` is ready to ship, a **promotion PR** from `prerelease` into `main` is
-   opened, reviewed, and merged. Nothing merges to `main` directly.
 
-## What merging does (releases)
+## Releases (tag-driven)
 
-Publishing is automated by [`release.yml`](.github/workflows/release.yml) and driven by
+Publishing is automated by [`release.yml`](.github/workflows/release.yml) and gated by
 [`eng/release-manifest.json`](eng/release-manifest.json), whose `packageVersion` is the
 single source of truth:
 
-- **Merge into `prerelease`** → every package is packed, verified, and published to
-  nuget.org as `<packageVersion>-preview.<run-number>` (e.g. `1.0.0-preview.42`).
-- **Merge into `main`** → the exact `packageVersion` is packed, verified, published to
-  nuget.org as a stable release, tagged `v<packageVersion>`, and a GitHub release is
-  created with the packages and SBOM attached.
-- If the manifest version has already been tagged, the `main` run is a no-op — so a
-  release requires a PR that **bumps `packageVersion`** (and the manifest's `tag` and
-  inter-package dependency versions to match).
+- A maintainer pushes tag **`vX.Y.Z-preview.N`** on `main` → every package is packed,
+  verified, and published to nuget.org as that preview version.
+- A maintainer pushes tag **`vX.Y.Z`** on `main` → the stable version publishes to
+  nuget.org and a GitHub release is created with the packages and SBOM attached.
+- The tag version must match the manifest (`X.Y.Z` exactly, or `-preview.N` of it) and the
+  tagged commit must be on `main`, or the release fails closed. Cutting a new version
+  therefore starts with a reviewed PR that **bumps `packageVersion`** (plus the manifest's
+  `tag` and inter-package dependency versions).
 
-Do not push release tags manually; the workflow creates them.
+Creating `v*` tags is restricted to organization admins by ruleset, and release tags can
+never be updated or deleted — a release tag is the immutable record of what shipped.
 
 ## Packages
 

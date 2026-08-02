@@ -14,16 +14,20 @@ public sealed class CiContractTests
     }
 
     [Fact]
-    public void Release_workflow_publishes_from_branch_builds_never_tag_rebuilds()
+    public void Release_workflow_publishes_only_from_immutable_release_tags_on_main()
     {
         var workflow = File.ReadAllText(Path.Combine(RepositoryFixture.Root, ".github", "workflows", "release.yml"));
 
-        // Publishing must be driven by pushes to the protected branches; a tag trigger would
-        // allow republishing bytes that were never produced by a verified branch build.
-        Assert.Contains("branches: [main, prerelease]", workflow, StringComparison.Ordinal);
-        Assert.DoesNotContain("tags:", workflow, StringComparison.Ordinal);
+        // Publishing is tag-driven: v* tags are creation-restricted and immutable via the
+        // protect-release-tags ruleset, the tagged commit must be reachable from main, and the
+        // bundle is packed and verified from that exact commit — never from mutable branch state.
+        Assert.Contains("tags: ['v*']", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("branches:", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("workflow_dispatch", workflow, StringComparison.Ordinal);
+        Assert.Contains("merge-base --is-ancestor", workflow, StringComparison.Ordinal);
         Assert.Contains("./eng/pack-release.ps1", workflow, StringComparison.Ordinal);
         Assert.Contains("--skip-duplicate", workflow, StringComparison.Ordinal);
+        Assert.Contains("environment: nuget-release", workflow, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -145,7 +149,7 @@ public sealed class CiContractTests
 
     [Theory]
     [InlineData("if: always()", "if: success()")]
-    [InlineData("branches: [main, prerelease]", "branches: [main]")]
+    [InlineData("branches: [main]", "branches: [main, prerelease]")]
     [InlineData("tfm: [net8.0, net9.0, net10.0]", "tfm: [net8.0, net9.0]")]
     [InlineData("fail-fast: false", "fail-fast: \"false\"")]
     [InlineData("name: CI", "name: &workflow-name CI")]

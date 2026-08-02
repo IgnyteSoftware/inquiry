@@ -1,14 +1,16 @@
 name: Release
 
-# Merging a PR into main publishes the manifest's stable version to nuget.org and tags it.
-# Merging a PR into prerelease publishes <manifest-version>-preview.<run-number>.
-# The version ships only when eng/release-manifest.json is bumped: if the manifest tag
-# already exists, the main-branch run is a verified no-op.
+# Tag-driven releases (Ignyte org standard):
+#   git tag v1.2.3            -> publishes the stable version to nuget.org + GitHub release
+#   git tag v1.2.3-preview.1  -> publishes a preview to nuget.org + GitHub prerelease
+# The tag version must match eng/release-manifest.json (stable exactly; previews must be
+# -preview.N of the manifest version), and the tagged commit must be on main. Tag creation
+# is restricted to organization admins by the protect-release-tags ruleset; update and
+# deletion of v* tags are blocked for everyone, so a release tag is immutable once pushed.
 
 on:
   push:
-    branches: [main, prerelease]
-  workflow_dispatch:
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -19,11 +21,17 @@ concurrency:
 
 jobs:
   publish:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    # The nuget-release environment restricts deployments to v* tags and is the binding
+    # point for the nuget.org Trusted Publishing policy.
+    environment: nuget-release
     permissions:
-      contents: write # push the release tag and create the GitHub release
+      attestations: write # persist build provenance
+      contents: write # create the GitHub release
       id-token: write # NuGet Trusted Publishing (OIDC)
+      packages: write # mirror to the GitHub Packages NuGet registry
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -36,75 +44,81 @@ jobs:
             9.0.x
             10.0.x
 
-      - name: Resolve release version
+      - name: Resolve and validate the release version
         id: version
         shell: pwsh
         run: |
+          $ref = '${{ github.ref }}'
+          if ($ref -notmatch '^refs/tags/v(.+)$') {
+            throw "Refusing to release from unexpected ref '$ref'."
+          }
+          $version = $Matches[1]
           $manifest = Get-Content -Raw eng/release-manifest.json | ConvertFrom-Json
           $stable = $manifest.packageVersion
-          if ('${{ github.ref }}' -eq 'refs/heads/main') {
-            $tag = "v$stable"
-            $exists = git tag --list $tag
-            $publish = if ($exists) { 'false' } else { 'true' }
-            "version=$stable" >> $env:GITHUB_OUTPUT
-            "tag=$tag" >> $env:GITHUB_OUTPUT
-            "publish=$publish" >> $env:GITHUB_OUTPUT
-            "branch=refs/heads/main" >> $env:GITHUB_OUTPUT
-            if ($exists) { Write-Host "Tag $tag already exists; nothing new to release." }
-          }
-          else {
-            "version=$stable-preview.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
-            "tag=" >> $env:GITHUB_OUTPUT
-            "publish=true" >> $env:GITHUB_OUTPUT
-            "branch=refs/heads/prerelease" >> $env:GITHUB_OUTPUT
+          $isPreview = $version -match "^$([regex]::Escape($stable))-preview\.[0-9]+$"
+          if (-not $isPreview -and $version -cne $stable) {
+            throw "Tag version '$version' must equal the manifest version '$stable' or be one of its -preview.N versions."
           }
 
+          # Resolve the commit via HEAD: for annotated tags GITHUB_SHA can be the tag object,
+          # not the commit. Release tags must point at reviewed history on main.
+          $commit = (git rev-parse HEAD).Trim()
+          git merge-base --is-ancestor $commit origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tagged commit $commit is not reachable from origin/main."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "commit=$commit" >> $env:GITHUB_OUTPUT
+          "prerelease=$(if ($isPreview) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+
       - name: Pack and verify the release bundle
-        if: steps.version.outputs.publish == 'true'
         shell: pwsh
         run: |
           $arguments = @{
-            OutputPath       = "$env:RUNNER_TEMP/release"
-            Commit           = $env:GITHUB_SHA
-            PackageVersion   = '${{ steps.version.outputs.version }}'
-            RepositoryBranch = '${{ steps.version.outputs.branch }}'
+            OutputPath     = "$env:RUNNER_TEMP/release"
+            Commit         = '${{ steps.version.outputs.commit }}'
+            PackageVersion = '${{ steps.version.outputs.version }}'
           }
-          if ('${{ steps.version.outputs.tag }}') {
-            $arguments.Tag = '${{ steps.version.outputs.tag }}'
+          if ('${{ steps.version.outputs.prerelease }}' -eq 'false') {
+            $arguments.Tag = 'v${{ steps.version.outputs.version }}'
           }
           ./eng/pack-release.ps1 @arguments
 
       - name: Attest build provenance
-        # Attestation persistence is unavailable for private repos on this org's plan; enable the
-        # repo variable (or make the repo public) to turn it back on.
-        if: steps.version.outputs.publish == 'true' && vars.ENABLE_ATTESTATIONS == 'true'
+        # Unconditional and fail-closed: a public release must not ship without provenance.
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-path: ${{ runner.temp }}/release/*.nupkg
 
       - name: NuGet login (Trusted Publishing)
-        if: steps.version.outputs.publish == 'true'
         id: nuget-login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
           user: ${{ vars.NUGET_USER }}
 
       - name: Push packages to nuget.org
-        if: steps.version.outputs.publish == 'true'
         run: |
           dotnet nuget push "$RUNNER_TEMP/release/*.nupkg" \
             --source https://api.nuget.org/v3/index.json \
             --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
             --skip-duplicate
 
-      - name: Tag the release and publish GitHub release notes
-        if: steps.version.outputs.publish == 'true' && steps.version.outputs.tag != ''
+      - name: Mirror packages to GitHub Packages
+        run: |
+          dotnet nuget push "$RUNNER_TEMP/release/*.nupkg" \
+            --source "https://nuget.pkg.github.com/IgnyteSoftware/index.json" \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
+            --skip-duplicate
+
+      - name: Publish GitHub release notes
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: v${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
-          git tag "$TAG" "$GITHUB_SHA"
-          git push origin "refs/tags/$TAG"
-          gh release create "$TAG" "$RUNNER_TEMP"/release/*.nupkg "$RUNNER_TEMP"/release/sbom.cdx.json \
-            --title "$TAG" \
-            --generate-notes
+          flags=(--title "$TAG" --generate-notes)
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" "$RUNNER_TEMP"/release/*.nupkg "$RUNNER_TEMP"/release/sbom.cdx.json "${flags[@]}"

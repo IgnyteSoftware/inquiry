@@ -84,7 +84,7 @@ dotnet test
 
 Tests cover parameter binding, the request pipeline, transactions, generator emission, per-dialect SQL strings, end-to-end CRUD/eager-loading against in-memory SQLite, and — for every provider — live CRUD, schema-fidelity, and generated-DDL verification against the real engine.
 
-The SQL Server, PostgreSQL, MySQL, MariaDB, and Oracle integration suites provision their engine with **[Testcontainers](https://dotnet.testcontainers.org/)** — the only host dependency is **Docker**. When Docker is unavailable every live fact **skips** (via `SkippableFact`) rather than failing, so `dotnet test` stays green without Docker. Required CI runs all five server providers with Docker required on pull requests into `prerelease` and `main`. See [Project status](docs/site/develop/project-status.md) for the current state and the [Roadmap](docs/site/develop/roadmap.md) for what's next.
+The SQL Server, PostgreSQL, MySQL, MariaDB, and Oracle integration suites provision their engine with **[Testcontainers](https://dotnet.testcontainers.org/)** — the only host dependency is **Docker**. When Docker is unavailable every live fact **skips** (via `SkippableFact`) rather than failing, so `dotnet test` stays green without Docker. Required CI runs all five server providers with Docker required on pull requests into `main`. See [Project status](docs/site/develop/project-status.md) for the current state and the [Roadmap](docs/site/develop/roadmap.md) for what's next.
 
 ## Installing
 
@@ -97,4 +97,4 @@ dotnet add package Ignyte.Inquiry.Testing     # optional test helpers
 
 ## Contributing and releasing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. In short: feature branches PR into `prerelease`, which publishes `X.Y.Z-preview.N` packages to nuget.org on merge; a promotion PR into `main` publishes the stable `X.Y.Z` named in [`eng/release-manifest.json`](eng/release-manifest.json) and tags it `vX.Y.Z`. Do not push release tags manually — [`release.yml`](.github/workflows/release.yml) creates them. See [Contributing — Releasing](docs/site/develop/contributing.md#releasing) for the package verifier details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. In short: feature branches PR into `main` (trunk-based); releases are tag-driven — a maintainer pushes `vX.Y.Z` for a stable or `vX.Y.Z-preview.N` for a preview, and [`release.yml`](.github/workflows/release.yml) packs, verifies, and publishes to nuget.org. The tag must match the version in [`eng/release-manifest.json`](eng/release-manifest.json), so every release starts with a reviewed manifest-bump PR. See [Contributing — Releasing](docs/site/develop/contributing.md#releasing) for the package verifier details.
