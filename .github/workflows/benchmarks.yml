@@ -34,8 +34,11 @@ jobs:
             8.0.x
             10.0.x
       - name: Run SQLite benchmarks (${{ matrix.tfm }})
+        env:
+          # Pass dispatch input via the environment so shell interpolation cannot execute it.
+          BENCH_FILTER: ${{ inputs.filter || '*' }}
         run: |
-          filter="${{ inputs.filter || '*' }}"
+          filter="$BENCH_FILTER"
           dotnet run --project benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj \
             -c Release -f ${{ matrix.tfm }} -- \
             --filter "$filter" \
