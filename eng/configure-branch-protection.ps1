@@ -1,17 +1,23 @@
 <#
 .SYNOPSIS
-    Configures branch protection rules for the main branch.
+    Configures branch protection rules for the main and prerelease branches.
 
 .DESCRIPTION
     Requires GitHub Pro or a public repository. Run once after making the
     repository public or upgrading to Pro. Uses the GitHub CLI (gh).
+
+    The request body is written to a BOM-free temp file rather than piped,
+    because Windows PowerShell 5.1 stamps a BOM onto pipeline output to
+    native commands and the GitHub API rejects the resulting JSON.
 
 .EXAMPLE
     ./eng/configure-branch-protection.ps1
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [string[]] $Branches = @('main', 'prerelease')
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -38,15 +44,25 @@ $body = @{
     required_conversation_resolution = $true
 } | ConvertTo-Json -Depth 4
 
-$body | gh api --method PUT "repos/$owner/$repo/branches/main/protection" --input -
+$bodyPath = Join-Path ([System.IO.Path]::GetTempPath()) ("inquiry-branch-protection-" + [guid]::NewGuid().ToString('N') + '.json')
+try {
+    [System.IO.File]::WriteAllText($bodyPath, $body)
 
-if ($LASTEXITCODE -ne 0) {
-    throw 'Failed to configure branch protection. Ensure the repo is public or on GitHub Pro.'
+    foreach ($branch in $Branches) {
+        gh api --method PUT "repos/$owner/$repo/branches/$branch/protection" --input $bodyPath | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to configure branch protection for '$branch'. Ensure the repo is public or on GitHub Pro."
+        }
+        Write-Host "Branch protection configured for '$branch':"
+        Write-Host '  - Required status check: ci-required-v1 (strict, pinned to GitHub Actions)'
+        Write-Host '  - Required review: 1 approval, dismiss stale'
+        Write-Host '  - Force push: disabled (admin bypass enabled)'
+        Write-Host '  - Deletion: disabled'
+        Write-Host '  - Conversation resolution: required'
+    }
 }
-
-Write-Host 'Branch protection configured:'
-Write-Host '  - Required status check: ci-required-v1 (strict, pinned to GitHub Actions)'
-Write-Host '  - Required review: 1 approval, dismiss stale'
-Write-Host '  - Force push: disabled (admin bypass enabled)'
-Write-Host '  - Deletion: disabled'
-Write-Host '  - Conversation resolution: required'
+finally {
+    if (Test-Path $bodyPath) {
+        Remove-Item -Force $bodyPath
+    }
+}
