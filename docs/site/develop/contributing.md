@@ -62,10 +62,14 @@ All changes land through reviewed pull requests. During 1.0 stabilization, featu
 `prerelease`; promotion to `main` is a separate reviewed pull request after the release gates pass. Direct
 pushes, force-pushes, branch deletion, and merge commits are not part of the supported workflow.
 
-The external rulesets for both `prerelease` and `main` must require linear history, an up-to-date branch,
-resolved conversations, at least one real human approval, and the final `ci-required-v1` status. Copilot and
-other automated reviews supplement, but do not replace, the human approval. These are repository-setting
-requirements: the checked-in workflow cannot enforce them by itself.
+Repository rulesets (applied by [`eng/configure-branch-protection.ps1`](https://github.com/IgnyteSoftware/inquiry/blob/main/eng/configure-branch-protection.ps1))
+protect both `prerelease` and `main`: linear history, an up-to-date branch, resolved conversations, one
+human approval with code-owner review and last-push approval, and the final `ci-required-v1` status pinned
+to GitHub Actions. A second ruleset blocks update and deletion of `v*` release tags for everyone (creation stays
+open so the release workflow can tag; GitHub rejects the Actions app as a bypass actor). Organization admins are a named, audited bypass actor (a solo-maintainer
+necessity — remove that bypass once a second reviewer exists). Copilot and other automated reviews
+supplement, but do not replace, the human approval. These are repository-setting requirements: the
+checked-in workflow cannot enforce them by itself.
 
 ## Commit messages
 
@@ -87,7 +91,7 @@ runs for pull requests into `prerelease` and `main`, and for merge-queue `merge_
 The always-running **ci-required-v1** job fails unless every required job and every matrix leg succeeds.
 Its versioned source of truth is `eng/ci-required-v1.json`; contract tests prevent the workflow matrix or
 aggregator from drifting away from it. CI uploads TRX result artifacts even after failures, fails if the
-evidence is absent, and retains the artifacts for 14 days.
+evidence is absent, and retains the artifacts for 7 days.
 
 A separate **scheduled weekly workflow**
 ([`scheduled.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/scheduled.yml))
