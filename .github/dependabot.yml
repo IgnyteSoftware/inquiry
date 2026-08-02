@@ -14,3 +14,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # The source generator's Roslyn reference is a compatibility FLOOR, not a currency
+      # target: raising it drops support for consumers on older SDK/IDE Roslyn versions.
+      - dependency-name: Microsoft.CodeAnalysis.CSharp
+      - dependency-name: Microsoft.CodeAnalysis.Common
