@@ -19,3 +19,10 @@ updates:
       # target: raising it drops support for consumers on older SDK/IDE Roslyn versions.
       - dependency-name: Microsoft.CodeAnalysis.CSharp
       - dependency-name: Microsoft.CodeAnalysis.Common
+      # The EF Core family is a pinned comparison cohort for the DLG benchmarks with
+      # committed baselines; it moves wholesale in a deliberate benchmarks refresh, and
+      # its provider packages must share a major version.
+      - dependency-name: Microsoft.EntityFrameworkCore*
+      - dependency-name: Npgsql.EntityFrameworkCore.PostgreSQL
+      - dependency-name: Pomelo.EntityFrameworkCore.MySql
+      - dependency-name: Oracle.EntityFrameworkCore
