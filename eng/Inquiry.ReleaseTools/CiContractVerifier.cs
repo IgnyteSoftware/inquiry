@@ -8,8 +8,8 @@ public static class CiContractVerifier
 {
     private static readonly IReadOnlyDictionary<string, string> ApprovedActions = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["actions/checkout"] = "9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
-        ["actions/setup-dotnet"] = "26b0ec14cb23fa6904739307f278c14f94c95bf1",
+        ["actions/checkout"] = "3d3c42e5aac5ba805825da76410c181273ba90b1",
+        ["actions/setup-dotnet"] = "a98b56852c35b8e3190ac28c8c2271da59106c68",
         ["actions/upload-artifact"] = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
         ["actions/download-artifact"] = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
         ["actions/attest-build-provenance"] = "0f67c3f4856b2e3261c31976d6725780e5e4c373"

@@ -82,7 +82,7 @@
       "project": "src/Inquiry.SqlServer/Inquiry.SqlServer.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
-        "Microsoft.Data.SqlClient": "7.0.1",
+        "Microsoft.Data.SqlClient": "7.0.2",
         "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.8",
@@ -235,7 +235,7 @@
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
         "Ignyte.Inquiry.Sqlite": "1.0.0",
-        "Microsoft.Data.SqlClient": "7.0.1",
+        "Microsoft.Data.SqlClient": "7.0.2",
         "Microsoft.Data.Sqlite": "10.0.9",
         "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
         "Microsoft.Extensions.DependencyInjection": "10.0.8",
