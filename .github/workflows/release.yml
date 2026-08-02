@@ -25,6 +25,7 @@ jobs:
       attestations: write # persist build provenance
       contents: write # push the release tag and create the GitHub release
       id-token: write # NuGet Trusted Publishing (OIDC)
+      packages: write # mirror to the GitHub Packages NuGet registry
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -96,6 +97,14 @@ jobs:
           dotnet nuget push "$RUNNER_TEMP/release/*.nupkg" \
             --source https://api.nuget.org/v3/index.json \
             --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+            --skip-duplicate
+
+      - name: Mirror packages to GitHub Packages
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          dotnet nuget push "$RUNNER_TEMP/release/*.nupkg" \
+            --source "https://nuget.pkg.github.com/IgnyteSoftware/index.json" \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --skip-duplicate
 
       - name: Tag the release and publish GitHub release notes
