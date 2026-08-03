@@ -1031,6 +1031,15 @@ internal static class StoreOperationEmitter
         source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
         source.AppendLine("            {");
         AppendGeneratedStateAliases(source, method.Parameters, state, "                ");
+        // Filter parameters are bound BEFORE the predicate bindings so an IN/NOT IN sentinel
+        // expansion below sees them in command.Parameters.Count — ExpandCore budgets its element
+        // count (and bucket padding) against the command's existing total, so a filter parameter
+        // added after expansion would sit outside that budget and could push a maximally-packed
+        // list one past the configured cap.
+        if (filterBinder is not null)
+        {
+            source.AppendLine($"                {filterBinder}(_c);");
+        }
         for (var i = 0; i < plan.Bindings.Count; i++)
         {
             var binding = plan.Bindings[i];
@@ -1056,10 +1065,6 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{i});");
             }
-        }
-        if (filterBinder is not null)
-        {
-            source.AppendLine($"                {filterBinder}(_c);");
         }
         source.AppendLine("            });");
     }
@@ -1105,6 +1110,13 @@ internal static class StoreOperationEmitter
             pi++;
         }
 
+        // Filter parameters precede the predicate bindings for the same reason as the predicate-select
+        // binder: an IN/NOT IN expansion budgets against the parameters already on the command.
+        if (filterBinder is not null)
+        {
+            source.AppendLine($"                {filterBinder}(_c);");
+        }
+
         // Predicate bindings carry absolute method-parameter indexes (offset past the SET values for
         // an update), so this loop is identical to the predicate-select binder.
         foreach (var binding in plan.Bindings)
@@ -1132,11 +1144,6 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
                 pi++;
             }
-        }
-
-        if (filterBinder is not null)
-        {
-            source.AppendLine($"                {filterBinder}(_c);");
         }
 
         source.AppendLine("            });");
@@ -2122,6 +2129,12 @@ internal static class StoreOperationEmitter
         source.AppendLine("        static _ => _sqlDeleteAll,");
         source.AppendLine("        static (_c, _keys) =>");
         source.AppendLine("        {");
+        // Every current dialect resolves this to a single collection parameter (UseArrayInParameters:
+        // json_each/ANY/JSON table), never the per-element IN expansion — DeleteAll is not a negated
+        // collection, and the array-binding dialects returned above. maxParametersExpression: "0" is
+        // therefore a canary, not a budget: if a future dialect ever routed DeleteAll through
+        // InquiryInExpansion it would throw immediately rather than run with an unbudgeted filter
+        // parameter (the write filter binder below runs after this binding).
         source.AppendLine(CollectionBindingExpression(
             sqlBuilder,
             entity.Keys[0],

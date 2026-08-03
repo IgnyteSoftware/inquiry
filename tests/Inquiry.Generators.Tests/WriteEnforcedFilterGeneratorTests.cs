@@ -242,6 +242,47 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void WriteFilterBindsBeforeCollectionExpansionInPredicateDelete_Sqlite()
+    {
+        // NOT IN always routes through the InquiryInExpansion sentinel (never the array bind), and
+        // ExpandCore budgets its element count and bucket padding against command.Parameters.Count at
+        // entry. The write filter parameter must therefore be on the command BEFORE the expansion runs,
+        // or a maximally-packed list plus the filter parameter would land one past the configured cap.
+        var result = RunGenerator(TenantDocStore("""
+            [InquiryDeleteWhere]
+            [InquiryWhere("Name", Compare.NotIn)]
+            public partial Task<int> DeleteExceptNamesAsync(IReadOnlyList<string> names, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+        var text = GetTenantDocStore(result);
+
+        var binderCall = text.IndexOf("__BindGlobalFiltersWrite(_c);", StringComparison.Ordinal);
+        var expansionCall = text.IndexOf("InquiryInExpansion.ExpandNotIn(_c", StringComparison.Ordinal);
+        Assert.True(binderCall >= 0, "the write filter binder is not called in the predicate delete");
+        Assert.True(expansionCall >= 0, "the NOT IN sentinel expansion was not emitted");
+        Assert.True(binderCall < expansionCall, "the write filter parameter must bind before the IN expansion measures its budget");
+    }
+
+    [Fact]
+    public void DeleteReturningOnWriteEnforcedEntityDegradesCleanly_MySql()
+    {
+        // MySQL has no DELETE ... RETURNING, so the method degrades to an INQ039 stub. The write filter
+        // machinery must not change that: no partially-emitted returning const, and the stub never calls
+        // the write binder (which would bind parameters no SQL references).
+        var result = RunGenerator(TenantDocStore("""
+            [InquiryDeleteOneByKey(ReturnEntity = true)]
+            public partial Task<Doc?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
+            """), dialect: "MySql", unsupportedOperationSeverity: ReportDiagnostic.Warn);
+
+        Assert.Contains(result.RunResult.Diagnostics,
+            static d => d.Id == "INQ039" && d.Severity == DiagnosticSeverity.Warning);
+        var text = GetTenantDocStore(result);
+        Assert.DoesNotContain("_sqlDeleteReturning", text);
+        Assert.Contains("throw new global::System.NotSupportedException", text);
+        Assert.DoesNotContain("__BindGlobalFiltersWrite(_cmd);", text);
+    }
+
+    [Fact]
     public void EnforceOnWritesComposesWithConcurrencyToken_Sqlite()
     {
         var source = TenantDocEntityLf.Replace(

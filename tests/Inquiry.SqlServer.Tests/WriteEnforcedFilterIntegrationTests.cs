@@ -79,9 +79,9 @@ public sealed class WriteEnforcedFilterIntegrationTests
 
         using (Scope(1))
         {
-            // A no-op update changes no column. Where the read-back is emulated and guarded on the
-            // affected-row count, that count is zero under changed-row semantics (MySQL family,
-            // depending on CLIENT_FOUND_ROWS) — the row must still come back, not read as a miss.
+            // SQL Server returns the row natively via OUTPUT INTO, so these cases are less fragile
+            // than on the emulated-returning dialects — but the same contract holds: a no-op update
+            // must still come back with the row, not read as a miss.
             var unchanged = await store.UpdateReturningAsync(
                 new WriteEnforcedDoc { Id = row, TenantId = 1, Title = "A doc" });
             Assert.NotNull(unchanged);

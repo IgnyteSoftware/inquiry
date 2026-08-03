@@ -79,9 +79,8 @@ public sealed class WriteEnforcedFilterIntegrationTests
 
         using (Scope(1))
         {
-            // A no-op update changes no column. Where the read-back is emulated and guarded on the
-            // affected-row count, that count is zero under changed-row semantics (MySQL family,
-            // depending on CLIENT_FOUND_ROWS) — the row must still come back, not read as a miss.
+            // Oracle's emulated read-back gates on SQL%ROWCOUNT, which counts MATCHED rows — so a
+            // no-op update still registers as affected and the row must come back, not read as a miss.
             var unchanged = await store.UpdateReturningAsync(
                 new WriteEnforcedDoc { Id = row, TenantId = 1, Title = "A doc" });
             Assert.NotNull(unchanged);
