@@ -13,9 +13,10 @@ namespace Inquiry.Entities;
 /// non-nullable <see cref="bool"/> and must not double as the key, a generated/database-default column,
 /// the soft-delete indicator, or a concurrency token (INQ059). (Auditing columns are timestamps/strings,
 /// so the bool requirement already precludes them.) An entity may declare several global-filter columns;
-/// they are AND-composed. Unlike the soft-delete filter, a global filter has no per-method opt-out — it
-/// always applies — so it cannot be silently bypassed; reach for an ad-hoc query when an unfiltered read
-/// is genuinely needed.
+/// they are AND-composed. Unlike the soft-delete filter, a global filter has no per-method opt-out on
+/// reads — it always applies — so it cannot be silently bypassed; reach for an ad-hoc query when an
+/// unfiltered read is genuinely needed. Key-based WRITES (update, delete, restore) do not compose the
+/// filter unless <see cref="EnforceOnWrites"/> is set; see that property for what changes when it is.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryGlobalFilterAttribute : Attribute
@@ -50,4 +51,28 @@ public sealed class InquiryGlobalFilterAttribute : Attribute
     /// and leave <see cref="Name"/> unset so it cannot be bypassed.
     /// </summary>
     public string? ContextKey { get; set; }
+
+    /// <summary>
+    /// Extends this filter from reads to key-based WRITES: the generated update, delete, hard-delete,
+    /// restore, and batch-delete statements AND-compose the same predicate onto their key WHERE, so a
+    /// write aimed at a row the filter hides affects zero rows instead of succeeding. Default
+    /// <c>false</c> — every existing store keeps byte-identical write SQL until it opts in.
+    /// </summary>
+    /// <remarks>
+    /// This is the write-side half of a tenant boundary: without it a caller who learns another
+    /// tenant's key can update or delete that row even though it can never read it. Three consequences
+    /// are worth knowing before turning it on.
+    /// <list type="bullet">
+    /// <item>INSERT is never filtered and the filter column is NOT auto-stamped — the entity must carry
+    /// the correct value itself, exactly as before.</item>
+    /// <item>Upsert is rejected at build time (INQ095) on every dialect: its insert branch cannot be
+    /// filtered, so "sometimes enforced" would be worse than not compiling.</item>
+    /// <item>A rows-affected of 0 now means "not found, or concurrency conflict, or hidden by the
+    /// filter" — the three are indistinguishable to the caller.</item>
+    /// </list>
+    /// The soft-delete indicator is never part of the enforced predicate (a hard delete must still
+    /// remove already-deleted rows, and restore must be able to clear the indicator), and
+    /// <c>[InquiryIgnoreFilter]</c> cannot bypass it — that attribute is read-only by design (INQ091).
+    /// </remarks>
+    public bool EnforceOnWrites { get; set; }
 }

@@ -275,12 +275,19 @@ public abstract class SqlBuilder
     public virtual string BuildSetBasedBatchUpdateHeader(string? schema, string tableName)
         => throw new System.NotSupportedException($"Set-based batch update is not supported by {DialectName}.");
 
-    /// <summary>SQL joining a set-based UpdateAll derived table to the target and assigning its values.</summary>
+    /// <summary>
+    /// SQL joining a set-based UpdateAll derived table to the target and assigning its values.
+    /// <paramref name="writeEnforcedTerms"/> carries
+    /// <see cref="SqlBuildContext.WriteEnforcedPredicateTerms"/>; an implementation must qualify each
+    /// term with its own target alias (the column name is ambiguous across the join) and AND them into
+    /// the statement's WHERE. Empty for every store that does not opt into write enforcement.
+    /// </summary>
     public virtual string BuildSetBasedBatchUpdateFooter(
         string? schema,
         string tableName,
         IReadOnlyList<IColumn> keyColumns,
-        IReadOnlyList<IColumn> setColumns)
+        IReadOnlyList<IColumn> setColumns,
+        IReadOnlyList<string> writeEnforcedTerms)
         => throw new System.NotSupportedException($"Set-based batch update is not supported by {DialectName}.");
 
     /// <summary>Emits the provider command assignment that establishes the array-bind row count.</summary>
@@ -604,9 +611,11 @@ public abstract class SqlBuilder
     /// <paramref name="predicates"/> — the ExecuteDelete analog. Used for entities without a
     /// soft-delete column, or with <c>HardDelete = true</c> (mirroring the by-key delete, no
     /// active-row filter is composed: a hard delete may remove already-soft-deleted rows too).
+    /// Write-enforced global filters still compose — they are a boundary, not an activeness test, and
+    /// leaving them off would make this the one delete shape that crosses it.
     /// </summary>
     public virtual string BuildDeleteByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
-        => "DELETE FROM " + context.Table + " WHERE " + RenderPredicates(predicates);
+        => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(RenderPredicates(predicates), context.WriteEnforcedPredicate);
 
     /// <summary>
     /// The soft form of <see cref="BuildDeleteByPredicateSql"/>: an UPDATE that sets the soft-delete
@@ -667,7 +676,7 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual string BuildSoftDeleteByKeySql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
-            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+            + " WHERE " + context.KeyWriteWhereClause;
 
     /// <summary>
     /// Builds a soft-delete update that returns the affected entity. Dialects must opt in because
@@ -678,10 +687,12 @@ public abstract class SqlBuilder
 
     /// <summary>
     /// Builds the restore UPDATE (clear the soft-delete indicator) by key. Concrete and inherited by
-    /// every provider, mirroring <see cref="BuildSoftDeleteByKeySql"/>.
+    /// every provider, mirroring <see cref="BuildSoftDeleteByKeySql"/>. Restore composes no concurrency
+    /// term (a restore targets a row whose token the caller has not read), so it uses the no-concurrency
+    /// write clause rather than <see cref="SqlBuildContext.KeyWriteWhereClause"/>.
     /// </summary>
     public virtual string BuildRestoreByKeySql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SoftDeleteRestoreSetClause + " WHERE " + context.KeyWhereClause;
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteRestoreSetClause + " WHERE " + context.KeyEnforcedWhereClause;
 
     // ---- Batch delete by key collection -----------------------------------------------
 
@@ -693,14 +704,16 @@ public abstract class SqlBuilder
     /// Dialect-uniform (single key guaranteed by validation), so concrete and inherited by every provider.
     /// </summary>
     public virtual string BuildDeleteAllByKeysSql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"), context.KeyColumns[0].TypeClass);
+        => "DELETE FROM " + context.Table + " WHERE "
+            + AppendWhere(RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"), context.KeyColumns[0].TypeClass), context.WriteEnforcedPredicate);
 
     /// <summary>
     /// The soft-delete form of <see cref="BuildDeleteAllByKeysSql"/> — sets the soft-delete indicator
     /// on every row whose key is in the collection instead of physically removing it.
     /// </summary>
     public virtual string BuildSoftDeleteAllByKeysSql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE " + RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"), context.KeyColumns[0].TypeClass);
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause + " WHERE "
+            + AppendWhere(RenderIn(context.QuotedKeyColumns[0], ParameterName("keys"), context.KeyColumns[0].TypeClass), context.WriteEnforcedPredicate);
 
     public abstract string BuildUpsertSql(SqlBuildContext context);
 

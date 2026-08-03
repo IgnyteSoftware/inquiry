@@ -61,6 +61,12 @@ internal sealed record ColumnData : IColumn
     /// </summary>
     public string? GlobalFilterContextKey { get; init; }
 
+    /// <summary>
+    /// InquiryGlobalFilter.EnforceOnWrites. When true the filter's term is AND-composed onto key-based
+    /// writes (update/delete/restore/batch delete) as well as reads.
+    /// </summary>
+    public bool GlobalFilterEnforceOnWrites { get; init; }
+
     public bool IsConcurrencyToken { get; init; }
     public bool IsDatabaseGeneratedToken { get; init; }
     public bool EnumAsString { get; init; }

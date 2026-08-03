@@ -99,13 +99,13 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+            + " WHERE " + context.KeyWriteWhereClause;
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
         => BuildUpdateSql(context) + " RETURNING " + context.SelectColumns;
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+        => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
 
     public override string BuildUpsertSql(SqlBuildContext context)
     {

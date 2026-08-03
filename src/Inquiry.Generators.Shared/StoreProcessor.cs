@@ -1600,7 +1600,7 @@ internal static class StoreProcessor
             }
             else if (method.Operation == StoreOperation.UpdateAll)
             {
-                StoreOperationEmitter.EmitUpdateAllDescriptor(source, method, entity, sqlBuilder);
+                StoreOperationEmitter.EmitUpdateAllDescriptor(source, method, entity, sqlBuilder, ctx.WriteEnforcedPredicateTerms);
             }
             else if (method.Operation == StoreOperation.DeleteAll &&
                 deleteAllCollectionResolutions.TryGetValue(method, out var resolution) &&
@@ -1958,6 +1958,29 @@ internal static class StoreProcessor
                 source, sqlBuilder, binderName, StoreOperationEmitter.ActiveParameterizedFilters(entity, method));
         }
 
+        // The write-site helper (EnforceOnWrites filters). Its set is entity-global, so one body serves
+        // every write in the store; emitted only when a method that composes the write predicate exists,
+        // so a read-only store never carries a dead helper.
+        foreach (var (method, _, _, _) in valid)
+        {
+            if (!StoreOperationEmitter.ComposesWriteEnforcedFilters(method, entity))
+            {
+                continue;
+            }
+
+            var writeBinderName = StoreOperationEmitter.GlobalFilterBinderName(entity, method, StoreOperationEmitter.GlobalFilterSite.Write);
+            if (writeBinderName is null || !emittedFilterBinders.Add(writeBinderName))
+            {
+                break;
+            }
+
+            StoreOperationEmitter.AppendGlobalFilterBinderHelper(
+                source, sqlBuilder, writeBinderName,
+                StoreOperationEmitter.ActiveParameterizedFilters(entity, method, StoreOperationEmitter.GlobalFilterSite.Write),
+                StoreOperationEmitter.GlobalFilterSite.Write);
+            break;
+        }
+
         source.AppendLine();
         source.AppendLine($"    public {store.Name}(global::Inquiry.IInquiry inquiry)");
         source.AppendLine("        : base(inquiry)");
@@ -2180,6 +2203,23 @@ internal static class StoreProcessor
                     InquiryDiagnosticDescriptors.GlobalFilterContextKeyInvalid, method.Location?.ToLocation(),
                     entity.Name, parameterized.PropertyName,
                     $"eager-loading method '{method.Name}' cannot bind runtime-parameterized filters in this release — use non-eager reads for entities with ContextKey filters, or remove the eager method"));
+                return false;
+            }
+        }
+
+        // Upsert cannot be made to honour a write-enforced filter on any dialect (see INQ095), so the
+        // method is DROPPED rather than emitted with unenforced SQL — a suppressed INQ095 must not buy
+        // back a statement that writes across the boundary.
+        if (method.Operation == StoreOperation.Upsert)
+        {
+            var enforced = entity.Columns.AsImmutableArray()
+                .FirstOrDefault(static c => c.IsGlobalFilter && c.GlobalFilterEnforceOnWrites);
+            if (enforced is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.WriteEnforcedFilterInvalid, method.Location?.ToLocation(),
+                    method.Name, entity.Name, enforced.PropertyName,
+                    "an upsert's insert branch cannot be filtered — split the method into an explicit insert and update, or drop EnforceOnWrites from that filter"));
                 return false;
             }
         }

@@ -43,9 +43,12 @@ internal static class StoreOperationEmitter
         var firstParameter = method.Parameters.Count > 1 ? method.Parameters[0].Name : "entity";
         var parameters = GetParameterDeclaration(method.Parameters);
         // Non-null when this method's SQL composes runtime-parameterized filters; every READ binder
-        // below must call it or the command executes with a missing @__gf_* parameter. Writes never
-        // carry the term in this release.
+        // below must call it or the command executes with a missing @__gf_* parameter.
         var filterBinder = GlobalFilterBinderName(entity, method);
+        // The write counterpart: non-null only when the entity has EnforceOnWrites ContextKey filters,
+        // whose terms the key-based write consts compose. The two sets differ, so a write binder must
+        // never be handed `filterBinder` (it would bind parameters the write SQL does not reference).
+        var writeFilterBinder = GlobalFilterBinderName(entity, method, GlobalFilterSite.Write);
 
         // SelectAllByField with a plan (ordered and/or offset-paged) and SelectAll that is offset-paged
         // route through a dedicated emitter (own SQL const + filter/offset/limit binder). Ordered-only
@@ -126,11 +129,11 @@ internal static class StoreOperationEmitter
                 EmitModifiedAuditAssignment(source, entity, firstParameter, indent: "        ");
                 if (method.ReturnsEntity)
                 {
-                    EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlUpdateReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: true, emitConcurrencyGuard: true, forUpdate: true);
+                    EmitFastQuerySingleFromEntity(source, sqlBuilder, "_sqlUpdateReturning", entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: true, emitConcurrencyGuard: true, forUpdate: true, filterBinder: writeFilterBinder);
                 }
                 else
                 {
-                    EmitFastExecuteFromEntity(source, sqlBuilder, "_sqlUpdate", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: true, forUpdate: true);
+                    EmitFastExecuteFromEntity(source, sqlBuilder, "_sqlUpdate", entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: true, forUpdate: true, filterBinder: writeFilterBinder);
                 }
                 source.AppendLine("    }");
                 break;
@@ -187,7 +190,7 @@ internal static class StoreOperationEmitter
                         source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
                         source.AppendLine($"                {returningField},");
                         source.AppendLine($"                {firstParameter},");
-                        AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false);
+                        AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: writeFilterBinder);
                         source.AppendLine("            ),");
                         source.AppendLine("            default,");
                         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -196,11 +199,7 @@ internal static class StoreOperationEmitter
                     }
                     else
                     {
-                        // No filterBinder: DELETE … RETURNING SQL never composes the active-row
-                        // predicate (a delete may remove filtered rows), so binding @__gf_* here
-                        // would add a parameter the SQL does not reference — a provider error on
-                        // strict binders and a spurious missing-scope throw on an unfiltered write.
-                        EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, returningField, entity.Keys, method.Parameters, cancellation, indent: "        ");
+                        EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, returningField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
                     }
                     source.AppendLine("    }");
                     break;
@@ -223,7 +222,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
                     source.AppendLine($"                {deleteField},");
                     source.AppendLine($"                {firstParameter},");
-                    AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false);
+                    AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: writeFilterBinder);
                     source.AppendLine("            ),");
                     source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
                     AppendConcurrencyConflictGuard(source, "        ");
@@ -231,7 +230,7 @@ internal static class StoreOperationEmitter
                 }
                 else
                 {
-                    EmitFastExecuteFromKeys(source, sqlBuilder, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ");
+                    EmitFastExecuteFromKeys(source, sqlBuilder, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
                 }
                 source.AppendLine("    }");
                 break;
@@ -239,7 +238,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.RestoreOneByKey:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastExecuteFromKeys(source, sqlBuilder, "_sqlRestoreByKey", entity.Keys, method.Parameters, cancellation, indent: "        ");
+                EmitFastExecuteFromKeys(source, sqlBuilder, "_sqlRestoreByKey", entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -404,10 +403,11 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.DeleteByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
-                // The SOFT form composes the active-row predicate (it is an UPDATE); the hard form is
-                // deliberately unfiltered, so it binds no filter parameters.
+                // The SOFT form composes the full active-row predicate (it is an UPDATE); the hard form
+                // drops the activeness terms but still carries the write-enforced ones, so it binds the
+                // narrower write set.
                 EmitMutationByPredicate(source, sqlBuilder, method, Array.Empty<ColumnData>(), predicatePlan!, "_sqlDeleteWhere_" + method.Name, cancellation, entity.Schema,
-                    entity.SoftDeleteColumn is not null && !method.HardDelete ? filterBinder : null);
+                    entity.SoftDeleteColumn is not null && !method.HardDelete ? filterBinder : writeFilterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -430,7 +430,8 @@ internal static class StoreOperationEmitter
         string indent,
         bool includeKey,
         bool returnRowsAffectedAsBool,
-        bool forUpdate = false)
+        bool forUpdate = false,
+        string? filterBinder = null)
     {
         var columns = SelectMutationColumns(entity, includeKey, forUpdate);
 
@@ -442,7 +443,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
             source.AppendLine($"{indent}        {sqlField},");
             source.AppendLine($"{indent}        {entityParameter},");
-            AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "        ", trailingComma: false);
+            AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "        ", trailingComma: false, filterBinder: filterBinder);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
             AppendConcurrencyConflictGuard(source, indent);
@@ -457,7 +458,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
         source.AppendLine($"{indent}        {sqlField},");
         source.AppendLine($"{indent}        {entityParameter},");
-        AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "        ", trailingComma: false);
+        AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "        ", trailingComma: false, filterBinder: filterBinder);
         source.AppendLine($"{indent}    ),");
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
     }
@@ -788,7 +789,8 @@ internal static class StoreOperationEmitter
         EquatableArray<ParameterData> methodParameters,
         string cancellation,
         string indent,
-        bool emitConcurrencyGuard = false)
+        bool emitConcurrencyGuard = false,
+        string? filterBinder = null)
     {
         // when the entity has a concurrency token, capture the row count and gate a conflict throw on
         // the runtime option; otherwise emit the original inline `… > 0` tail (byte-identical to before).
@@ -802,7 +804,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{methodParameters[0].TypeDisplay}>(");
             source.AppendLine($"{indent}        {sqlField},");
             source.AppendLine($"{indent}        {keyParamName},");
-            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "        ", emitSizePrecision: true, trailingComma: false);
+            AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "        ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    {cancellation}{tail}");
         }
@@ -814,7 +816,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{tupleType}>(");
             source.AppendLine($"{indent}        {sqlField},");
             source.AppendLine($"{indent}        ({tupleArgs}),");
-            AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "        ", emitSizePrecision: true, trailingComma: false);
+            AppendBinderLambda(source, sqlBuilder, "_keys", keyColumns.AsImmutableArray(), i => $"_keys.Item{i + 1}", indent + "        ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    {cancellation}{tail}");
         }
@@ -1401,7 +1403,8 @@ internal static class StoreOperationEmitter
         bool includeKey,
         bool isAwait,
         bool emitConcurrencyGuard = false,
-        bool forUpdate = false)
+        bool forUpdate = false,
+        string? filterBinder = null)
     {
         var columns = SelectMutationColumns(entity, includeKey, forUpdate);
 
@@ -1413,7 +1416,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
             source.AppendLine($"{indent}        {sqlField},");
             source.AppendLine($"{indent}        {entityParameter},");
-            AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "        ", trailingComma: false);
+            AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "        ", trailingComma: false, filterBinder: filterBinder);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    default,");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false);");
@@ -1429,7 +1432,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
         source.AppendLine($"{indent}        {sqlField},");
         source.AppendLine($"{indent}        {entityParameter},");
-        AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "        ", trailingComma: false);
+        AppendBinderLambda(source, sqlBuilder, "_e", columns, i => $"_e.{columns[i].PropertyName}", indent + "        ", trailingComma: false, filterBinder: filterBinder);
         source.AppendLine($"{indent}    ),");
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation}){returnSuffix};");
@@ -1887,8 +1890,13 @@ internal static class StoreOperationEmitter
         StringBuilder source,
         StoreMethodData method,
         EntityData entity,
-        SqlBuilder sqlBuilder)
+        SqlBuilder sqlBuilder,
+        IReadOnlyList<string> writeEnforcedTerms)
     {
+        var writeFilterBinder = GlobalFilterBinderName(entity, method, GlobalFilterSite.Write);
+        // Parameterized enforced filters cost one bound parameter PER COMMAND (not per item), which the
+        // chunk-size budget has to leave room for. Constant-mode terms are literals and cost nothing.
+        var writeFilterParameters = ActiveParameterizedFilters(entity, method, GlobalFilterSite.Write).Count;
         var entityType = entity.FullyQualifiedName;
         var updateColumns = SelectMutationColumns(entity, includeKey: true, forUpdate: true);
         var setColumns = updateColumns.Where(static column => !column.IsKey).ToArray();
@@ -1911,17 +1919,26 @@ internal static class StoreOperationEmitter
             source.AppendLine($"            _t.AddParameter(_p{i});");
         }
 
+        if (writeFilterBinder is not null)
+        {
+            source.AppendLine($"            {writeFilterBinder}(_t);");
+        }
+
         if (sqlBuilder.UsesArrayBindingForBatchMutations)
         {
             source.AppendLine("        },");
             source.AppendLine("        bindChunk: static (_cmd, _items) =>");
             source.AppendLine("        {");
             EmitEntityArrayChunkBinder(source, entity, updateColumns, sqlBuilder, isInsert: false, indent: "            ");
+            if (writeFilterBinder is not null)
+            {
+                source.AppendLine($"            {writeFilterBinder}(_cmd, _items.Count);");
+            }
             source.AppendLine("        });");
         }
         else if (useSetBasedChunk)
         {
-            EmitSetBasedUpdateChunk(source, entity, updateColumns, setColumns, sqlBuilder);
+            EmitSetBasedUpdateChunk(source, entity, updateColumns, setColumns, sqlBuilder, writeEnforcedTerms, writeFilterBinder, writeFilterParameters);
         }
         else
         {
@@ -1935,16 +1952,23 @@ internal static class StoreOperationEmitter
         EntityData entity,
         IReadOnlyList<ColumnData> updateColumns,
         IReadOnlyList<ColumnData> setColumns,
-        SqlBuilder sqlBuilder)
+        SqlBuilder sqlBuilder,
+        IReadOnlyList<string> writeEnforcedTerms,
+        string? writeFilterBinder,
+        int writeFilterParameters)
     {
         var header = sqlBuilder.BuildSetBasedBatchUpdateHeader(entity.Schema, entity.TableName);
         var footer = sqlBuilder.BuildSetBasedBatchUpdateFooter(
             entity.Schema,
             entity.TableName,
             entity.Keys.AsImmutableArray(),
-            setColumns);
+            setColumns,
+            writeEnforcedTerms);
         var parametersPerItem = updateColumns.Count;
-        var maxItemsPerCommand = sqlBuilder.HardMaxParametersPerCommand / parametersPerItem;
+        // The enforced filter parameters are bound once for the whole chunk, so they come off the top of
+        // the command's parameter budget before it is divided into items. Without this an entity whose
+        // column count divides the ceiling exactly (65535 / 3) would bind one parameter too many.
+        var maxItemsPerCommand = (sqlBuilder.HardMaxParametersPerCommand - writeFilterParameters) / parametersPerItem;
 
         source.AppendLine("        },");
         source.AppendLine("        static _count =>");
@@ -1985,6 +2009,12 @@ internal static class StoreOperationEmitter
             source.AppendLine("                }");
         }
         source.AppendLine("            }");
+        // Bound once per command, not per row: the chunk statement references @__gf_* a single time in
+        // its join WHERE, however many value rows the derived table carries.
+        if (writeFilterBinder is not null)
+        {
+            source.AppendLine($"            {writeFilterBinder}(_cmd);");
+        }
         source.AppendLine("        },");
         EmitSetBasedUpdateSelector(source, entity.Keys.AsImmutableArray());
         source.AppendLine($"        parametersPerItem: {parametersPerItem.ToString(System.Globalization.CultureInfo.InvariantCulture)},");
@@ -2030,6 +2060,7 @@ internal static class StoreOperationEmitter
         SqlBuilder sqlBuilder,
         CollectionParameterResolution resolution)
     {
+        var writeFilterBinder = GlobalFilterBinderName(entity, method, GlobalFilterSite.Write);
         var keyType = entity.Keys[0].Type.DisplayName;
         var prefix = BuildBatchDescriptorFieldName(method);
         source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{keyType}> {prefix} = new(");
@@ -2045,6 +2076,10 @@ internal static class StoreOperationEmitter
             AppendColumnParameterMetadata(source, key, sqlBuilder, "_p", "            ", predicate: true);
             source.AppendLine($"            _p.Value = {BuildParameterValueExpression(key, "_key", sqlBuilder)};");
             source.AppendLine("            _t.AddParameter(_p);");
+            if (writeFilterBinder is not null)
+            {
+                source.AppendLine($"            {writeFilterBinder}(_t);");
+            }
             source.AppendLine("        },");
             source.AppendLine("        bindChunk: static (_cmd, _keys) =>");
             source.AppendLine("        {");
@@ -2075,6 +2110,10 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"            {sqlBuilder.BuildArrayBindSizeAssignment("_p", "_sizes")}");
             }
             source.AppendLine("            _cmd.Parameters.Add(_p);");
+            if (writeFilterBinder is not null)
+            {
+                source.AppendLine($"            {writeFilterBinder}(_cmd, _keys.Count);");
+            }
             source.AppendLine("        });");
             source.AppendLine();
             return;
@@ -2093,6 +2132,10 @@ internal static class StoreOperationEmitter
             elementIsNullable: method.Parameters[0].ElementIsNullable,
             resolution: resolution,
             maxParametersExpression: "0"));
+        if (writeFilterBinder is not null)
+        {
+            source.AppendLine($"            {writeFilterBinder}(_c);");
+        }
         source.AppendLine("        },");
         source.AppendLine("        parametersPerItem: 0,");
         if (sqlBuilder.CollectionBindingBypassesBatchSizeLimit)
@@ -3156,18 +3199,45 @@ internal static class StoreOperationEmitter
                 + ", default, static (_cmd, _) => { " + filterBinder + "(_cmd); })";
 
     /// <summary>
+    /// Which generated statement a filter binder is being derived for. Reads compose the full
+    /// active-row predicate; writes compose only the <c>EnforceOnWrites</c> subset, so the two sites
+    /// select different parameter sets from the same entity.
+    /// </summary>
+    internal enum GlobalFilterSite
+    {
+        Read,
+        Write,
+    }
+
+    /// <summary>
     /// The runtime-parameterized filter columns whose predicate terms end up in the SQL a method's
     /// context composes: the entity's ContextKey filters minus the ones the method bypasses by name.
     /// Mirrors the term selection in SqlBuildContext — the emitter and the const builder must agree
     /// or the command binds a parameter its SQL does not carry (or misses one it does).
     /// </summary>
-    internal static IReadOnlyList<ColumnData> ActiveParameterizedFilters(EntityData entity, StoreMethodData method)
+    internal static IReadOnlyList<ColumnData> ActiveParameterizedFilters(
+        EntityData entity,
+        StoreMethodData method,
+        GlobalFilterSite site = GlobalFilterSite.Read)
     {
         List<ColumnData>? active = null;
         foreach (var column in entity.Columns)
         {
             if (!column.IsGlobalFilter || column.GlobalFilterContextKey is null)
             {
+                continue;
+            }
+
+            if (site == GlobalFilterSite.Write)
+            {
+                // Write SQL composes SqlBuildContext.WriteEnforcedPredicate, which is the opted-in
+                // subset of the FULL filter set — [InquiryIgnoreFilter] is read-only (INQ091), so the
+                // method's bypass names are deliberately not consulted here.
+                if (column.GlobalFilterEnforceOnWrites)
+                {
+                    (active ??= new List<ColumnData>()).Add(column);
+                }
+
                 continue;
             }
 
@@ -3198,10 +3268,17 @@ internal static class StoreOperationEmitter
     /// bypassed a parameterized named filter gets its own reduced helper, suffixed with the method
     /// name. StoreProcessor emits the helper bodies from the same two inputs.
     /// </summary>
-    internal static string? GlobalFilterBinderName(EntityData entity, StoreMethodData method)
+    internal static string? GlobalFilterBinderName(
+        EntityData entity,
+        StoreMethodData method,
+        GlobalFilterSite site = GlobalFilterSite.Read)
     {
-        var active = ActiveParameterizedFilters(entity, method);
+        var active = ActiveParameterizedFilters(entity, method, site);
         if (active.Count == 0) return null;
+
+        // The write set is entity-global (no per-method narrowing), so it needs no set suffix and one
+        // helper name serves every write in the store.
+        if (site == GlobalFilterSite.Write) return "__BindGlobalFiltersWrite";
 
         var full = 0;
         foreach (var column in entity.Columns)
@@ -3227,6 +3304,22 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>
+    /// Whether this method's generated SQL composes <c>SqlBuildContext.WriteEnforcedPredicate</c> — the
+    /// key-based write shapes plus the batch delete. StoreProcessor uses it to decide whether the write
+    /// binder helper is reachable; the emit switch above must stay in step with it.
+    /// </summary>
+    internal static bool ComposesWriteEnforcedFilters(StoreMethodData method, EntityData entity)
+        => method.Operation switch
+        {
+            StoreOperation.Update or StoreOperation.UpdateAll or StoreOperation.DeleteOneByKey
+                or StoreOperation.RestoreOneByKey or StoreOperation.DeleteAll => true,
+            // The soft form composes the full read predicate instead; only the hard DELETE relies on
+            // the write-enforced terms to stay inside the boundary.
+            StoreOperation.DeleteByPredicate => entity.SoftDeleteColumn is null || method.HardDelete,
+            _ => false,
+        };
+
+    /// <summary>
     /// Emits the body of a <c>__BindGlobalFilters*</c> helper: one ambient parameter per active
     /// filter, value read from InquiryFilterContext at execute time (missing scope throws before the
     /// command runs) and routed through the same converter/DbType machinery as a declared parameter.
@@ -3235,24 +3328,111 @@ internal static class StoreOperationEmitter
         StringBuilder source,
         SqlBuilder sqlBuilder,
         string helperName,
-        IReadOnlyList<ColumnData> filters)
+        IReadOnlyList<ColumnData> filters,
+        GlobalFilterSite site = GlobalFilterSite.Read)
+    {
+        AppendGlobalFilterBinderOverload(
+            source, sqlBuilder, helperName, filters,
+            parameterDeclaration: "global::System.Data.Common.DbCommand _cmd",
+            addStatement: i => $"_cmd.Parameters.Add(_fp{i});");
+
+        if (site != GlobalFilterSite.Write)
+        {
+            return;
+        }
+
+        // Batch row binders bind through InquiryParameterTarget (DbCommand or DbBatchCommand), so the
+        // write helper needs the same body against that surface. The trailing constant parameter is
+        // shape-stable across items, which is all InquiryParameterReuseState requires.
+        AppendGlobalFilterBinderOverload(
+            source, sqlBuilder, helperName, filters,
+            parameterDeclaration: "global::Inquiry.Commands.InquiryParameterTarget _cmd",
+            addStatement: i => $"_cmd.AddParameter(_fp{i});");
+
+        if (sqlBuilder.UsesArrayBindingForBatchMutations)
+        {
+            AppendGlobalFilterArrayBinderOverload(source, sqlBuilder, helperName, filters);
+        }
+    }
+
+    private static void AppendGlobalFilterBinderOverload(
+        StringBuilder source,
+        SqlBuilder sqlBuilder,
+        string helperName,
+        IReadOnlyList<ColumnData> filters,
+        string parameterDeclaration,
+        Func<int, string> addStatement)
     {
         source.AppendLine();
-        source.AppendLine($"    private static void {helperName}(global::System.Data.Common.DbCommand _cmd)");
+        source.AppendLine($"    private static void {helperName}({parameterDeclaration})");
         source.AppendLine("    {");
         for (var i = 0; i < filters.Count; i++)
         {
             var column = filters[i];
-            var value = $"global::Inquiry.InquiryFilterContext.GetRequired<{column.Type.DisplayName}>(\"{GeneratorHelpers.Escape(column.GlobalFilterContextKey!)}\")";
             source.AppendLine($"        var _fp{i} = _cmd.CreateParameter();");
             source.AppendLine($"        _fp{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("__gf_" + column.PropertyName))}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_fp{i}", "        ", predicate: true);
-            source.AppendLine($"        _fp{i}.Value = {BuildParameterValueExpression(column, value, sqlBuilder)};");
+            source.AppendLine($"        _fp{i}.Value = {BuildParameterValueExpression(column, AmbientFilterValue(column), sqlBuilder)};");
+            source.AppendLine($"        {addStatement(i)}");
+        }
+
+        source.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// The array-binding form of the write filter binder. A dialect that executes a batch mutation via
+    /// provider array binding sets <c>ArrayBindCount = N</c>, which requires EVERY bound parameter to
+    /// be an N-element array — a scalar filter parameter would fail at execute time. The ambient value
+    /// is read once and repeated across the array, since one command covers one chunk under one scope.
+    /// </summary>
+    private static void AppendGlobalFilterArrayBinderOverload(
+        StringBuilder source,
+        SqlBuilder sqlBuilder,
+        string helperName,
+        IReadOnlyList<ColumnData> filters)
+    {
+        source.AppendLine();
+        source.AppendLine($"    private static void {helperName}(global::System.Data.Common.DbCommand _cmd, int _count)");
+        source.AppendLine("    {");
+        for (var i = 0; i < filters.Count; i++)
+        {
+            var column = filters[i];
+            var sizeExpression = sqlBuilder.BuildArrayBindSizeExpression($"_fv{i}[_i]", $"_fs{i}v", column);
+            source.AppendLine($"        var _fv{i} = new object?[_count];");
+            source.AppendLine($"        var _fval{i} = {BuildParameterValueExpression(column, AmbientFilterValue(column), sqlBuilder)};");
+            if (sizeExpression is not null)
+            {
+                source.AppendLine($"        var _fs{i} = new int[_count];");
+            }
+            source.AppendLine("        for (var _i = 0; _i < _count; _i++)");
+            source.AppendLine("        {");
+            source.AppendLine($"            _fv{i}[_i] = _fval{i};");
+            if (sizeExpression is not null)
+            {
+                source.AppendLine($"            _fs{i}[_i] = {sizeExpression};");
+            }
+            source.AppendLine("        }");
+            source.AppendLine($"        var _fp{i} = _cmd.CreateParameter();");
+            source.AppendLine($"        _fp{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("__gf_" + column.PropertyName))}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_fp{i}", "        ", predicate: true);
+            if (sqlBuilder.BuildArrayBindParameterMetadata($"_fp{i}", column) is { } providerMetadata)
+            {
+                source.AppendLine($"        {providerMetadata}");
+            }
+            source.AppendLine($"        _fp{i}.Value = _fv{i};");
+            if (sizeExpression is not null)
+            {
+                source.AppendLine($"        {sqlBuilder.BuildArrayBindSizeAssignment($"_fp{i}", $"_fs{i}")}");
+            }
             source.AppendLine($"        _cmd.Parameters.Add(_fp{i});");
         }
 
         source.AppendLine("    }");
     }
+
+    /// <summary>The ambient-scope read for one parameterized filter; missing scope throws before execute.</summary>
+    private static string AmbientFilterValue(ColumnData column)
+        => $"global::Inquiry.InquiryFilterContext.GetRequired<{column.Type.DisplayName}>(\"{GeneratorHelpers.Escape(column.GlobalFilterContextKey!)}\")";
 
     private static void AppendGeneratedStateAliases(
         StringBuilder source,

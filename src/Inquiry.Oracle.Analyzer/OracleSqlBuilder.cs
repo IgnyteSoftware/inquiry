@@ -295,10 +295,10 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+            + " WHERE " + context.KeyWriteWhereClause;
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+        => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
 
     /// <remarks>
     /// Oracle MERGE is not serializable against concurrent inserts: a second session can insert
@@ -372,6 +372,11 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     public override string BuildUpdateReturningSql(SqlBuildContext context)
         // SQL%ROWCOUNT = 0 (no row matched the key + concurrency predicate) opens an empty cursor, so the
         // pipeline returns null — matching result-set RETURNING and letting the concurrency guard fire.
+        // The ELSE branch re-selects by KEY only, with no write-enforced term. It runs only when
+        // SQL%ROWCOUNT != 0, which already proves the UPDATE passed the enforced predicate — so the
+        // term could add no protection there, but it could subtract correctness: an update that
+        // legitimately CHANGES the filter column (deactivating your own row, reassigning a tenant)
+        // would re-test the POST-update value and return null for a write that succeeded.
         => "BEGIN " + BuildUpdateSql(context) + "; IF SQL%ROWCOUNT = 0 THEN OPEN " + RefCursorBind +
             " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE 1 = 0; ELSE OPEN " +
             RefCursorBind + " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " +
