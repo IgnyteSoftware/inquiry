@@ -36,8 +36,8 @@
     <PackageVersion Include="Testcontainers.MySql" Version="4.12.0" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.12.0" />
     <PackageVersion Include="Testcontainers.Oracle" Version="4.12.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
     <!-- Transitive pin: overrides SQLitePCLRaw.lib.e_sqlite3 2.1.11 (CVE-2025-6965 / GHSA-2m69-gcr7-jv3q)
          pulled by Microsoft.Data.Sqlite / EF Core Sqlite. Remove once those ship a patched SQLitePCLRaw. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
