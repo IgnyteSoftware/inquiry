@@ -72,10 +72,35 @@ public sealed class PackageAdversarialTests
         }
     }
 
+    [Fact]
+    public void Provider_snupkg_contains_only_lib_pdbs_and_the_pair_verifies()
+    {
+        // The exact layout nuget.org rejected in 1.0.0-preview.6: analyzer PDBs riding in the snupkg
+        // at lib/net8.0 with no matching lib/ DLL in the nupkg. Analyzer symbols are embedded in the
+        // analyzer assemblies instead, so the snupkg must carry lib PDBs ONLY — and the unmutated
+        // pair must still pass the verifier, which now checks the embedded PDBs.
+        var fixture = ProviderFixture.Value;
+        using (var archive = ZipFile.OpenRead(fixture.Snupkg))
+        {
+            var pdbs = archive.Entries.Select(entry => entry.FullName)
+                .Where(path => path.EndsWith(".pdb", StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal).ToArray();
+            Assert.Equal(
+                ["lib/net10.0/Inquiry.Sqlite.pdb", "lib/net8.0/Inquiry.Sqlite.pdb", "lib/net9.0/Inquiry.Sqlite.pdb"],
+                pdbs);
+        }
+
+        PackageVerifier.VerifyPackagePairForTests(
+            RepositoryFixture.Root,
+            Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+            Path.GetDirectoryName(fixture.Nupkg)!,
+            "Ignyte.Inquiry.Sqlite",
+            fixture.Commit);
+    }
+
     [Theory]
-    [InlineData("missing-provider-pdb")]
-    [InlineData("provider-pdb-mismatch")]
-    [InlineData("shared-pdb-mismatch")]
+    [InlineData("analyzer-content-not-an-analyzer")]
+    [InlineData("analyzer-shared-swap")]
     public void Analyzer_symbol_bypass_attempts_are_rejected(string mutation)
     {
         var fixture = ProviderFixture.Value;
@@ -87,20 +112,24 @@ public sealed class PackageAdversarialTests
             File.Copy(fixture.Nupkg, nupkg);
             File.Copy(fixture.Snupkg, snupkg);
 
-            Mutate(snupkg, archive =>
+            Mutate(nupkg, archive =>
             {
-                const string providerPdb = "lib/net8.0/Inquiry.Sqlite.Analyzer.pdb";
-                const string sharedPdb = "lib/net8.0/Inquiry.Generators.Shared.pdb";
+                const string providerAnalyzer = "analyzers/dotnet/cs/Inquiry.Sqlite.Analyzer.dll";
+                const string sharedAnalyzer = "analyzers/dotnet/cs/Inquiry.Generators.Shared.dll";
                 switch (mutation)
                 {
-                    case "missing-provider-pdb":
-                        archive.GetEntry(providerPdb)!.Delete();
+                    case "analyzer-content-not-an-analyzer":
+                        // A lib assembly has an external (not embedded) PDB and a different assembly
+                        // name; either property must reject it standing in for the analyzer.
+                        Replace(archive, providerAnalyzer, providerAnalyzer, Read(archive, "lib/net8.0/Inquiry.Sqlite.dll"));
                         break;
-                    case "provider-pdb-mismatch":
-                        Replace(archive, providerPdb, providerPdb, Read(archive, sharedPdb));
-                        break;
-                    case "shared-pdb-mismatch":
-                        Replace(archive, sharedPdb, sharedPdb, Read(archive, providerPdb));
+                    case "analyzer-shared-swap":
+                        // Content-swapped analyzer DLLs pass every version and SourceLink check on
+                        // their own; the assembly-name-equals-file-name rule is what catches them.
+                        var provider = Read(archive, providerAnalyzer);
+                        var shared = Read(archive, sharedAnalyzer);
+                        Replace(archive, providerAnalyzer, providerAnalyzer, shared);
+                        Replace(archive, sharedAnalyzer, sharedAnalyzer, provider);
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(mutation));
@@ -140,9 +169,12 @@ public sealed class PackageAdversarialTests
                     Directory.Delete(output, recursive: true);
                 }
                 Directory.CreateDirectory(output);
+                // RepositoryBranch is pinned so the fixture verifies positively from any local
+                // checkout — the manifest requires refs/heads/main in the nuspec.
                 _ = Run(root, "dotnet", "pack", project, "--configuration", "Release", "--output", output,
                     "--no-restore", "--disable-build-servers", "-m:1", "-p:ContinuousIntegrationBuild=true",
-                    "-p:MinVerVersionOverride=1.0.0", $"-p:RepositoryCommit={commit}");
+                    "-p:MinVerVersionOverride=1.0.0", $"-p:RepositoryCommit={commit}",
+                    "-p:RepositoryBranch=refs/heads/main");
             }
         }
         finally

@@ -70,7 +70,6 @@ public static class PackageVerifier
             var dependencies = package.Dependencies ?? throw new ReleaseVerificationException($"{package.Id} dependencies must be a non-null object.");
             var libTfms = package.LibTfms ?? throw new ReleaseVerificationException($"{package.Id} libTfms must be an array.");
             var analyzers = package.Analyzers ?? throw new ReleaseVerificationException($"{package.Id} analyzers must be an array.");
-            var analyzerSymbols = package.AnalyzerSymbols ?? throw new ReleaseVerificationException($"{package.Id} analyzerSymbols must be an array.");
             var frameworkReferences = package.FrameworkReferences ?? throw new ReleaseVerificationException($"{package.Id} frameworkReferences must be an array.");
             Require(frameworkReferences.All(reference => !string.IsNullOrWhiteSpace(reference)), $"{package.Id} frameworkReferences must contain only non-empty strings.");
             Require(frameworkReferences.Distinct(StringComparer.Ordinal).Count() == frameworkReferences.Count, $"{package.Id} has duplicate framework references.");
@@ -85,7 +84,6 @@ public static class PackageVerifier
                 $"{package.Id} dependencies must map non-empty IDs to exact versions.");
             Require(libTfms.All(tfm => tfm is not null), $"{package.Id} libTfms must contain only strings.");
             Require(analyzers.All(analyzer => analyzer is not null), $"{package.Id} analyzers must contain only strings.");
-            Require(analyzerSymbols.All(symbol => symbol is not null), $"{package.Id} analyzerSymbols must contain only strings.");
             ValidateRelativePath(package.Project, "project");
             var projectPath = Path.GetFullPath(package.Project, root);
             Require(IsWithin(root, projectPath), $"Project path escapes the repository: {package.Project}");
@@ -94,9 +92,6 @@ public static class PackageVerifier
                 $"Package ID {package.Id} must be {PackageIdPrefix} plus its project name.");
             RequireSequence(libTfms.Order(StringComparer.Ordinal), RequiredTfms.Order(StringComparer.Ordinal), $"{package.Id} lib TFMs");
             Require(analyzers.Distinct(StringComparer.Ordinal).Count() == analyzers.Count, $"{package.Id} has duplicate analyzer assets.");
-            RequireSequence(analyzerSymbols.Order(StringComparer.Ordinal), analyzers
-                .Select(static analyzer => Path.ChangeExtension(analyzer, ".pdb"))
-                .Order(StringComparer.Ordinal), $"{package.Id} analyzer symbol assets");
 
             foreach (var dependency in dependencies.Keys.Where(packagesById.ContainsKey))
             {
@@ -392,11 +387,15 @@ public static class PackageVerifier
                     VerifyAssemblyVersion(archive.GetEntry(dllPath)!, version, expectedCommit));
             }
 
+            // Analyzer assemblies carry their symbols EMBEDDED (DebugType=embedded): a loose analyzer
+            // PDB cannot ship in the snupkg because nuget.org symbol validation requires every snupkg
+            // PDB to match a lib/ DLL, and these live under analyzers/dotnet/cs. Verified here, in the
+            // nupkg, instead of registering a snupkg expectation.
             foreach (var analyzer in package.Analyzers)
             {
                 var dllPath = $"analyzers/dotnet/cs/{analyzer}";
-                identities.Add($"lib/net8.0/{Path.ChangeExtension(analyzer, ".pdb")}",
-                    VerifyAssemblyVersion(archive.GetEntry(dllPath)!, version, expectedCommit));
+                var identity = VerifyAssemblyVersion(archive.GetEntry(dllPath)!, version, expectedCommit);
+                VerifyEmbeddedAnalyzerSymbols(archive.GetEntry(dllPath)!, package.Id, manifest.Assets.RepositoryUrl, expectedCommit, identity);
             }
             return identities;
         }
@@ -422,7 +421,6 @@ public static class PackageVerifier
             var metadata = ReadNuspecMetadata(archive, package, symbols: true);
             VerifyNuspecIdentity(metadata, package, manifest, expectedCommit, version, branch);
             var expectedPdbs = package.LibTfms.Select(tfm => $"lib/{tfm}/{AssemblyName(package)}.pdb")
-                .Concat(package.AnalyzerSymbols.Select(symbol => $"lib/net8.0/{symbol}"))
                 .Order(StringComparer.Ordinal).ToArray();
             var actualPdbs = entries.Where(path => path.EndsWith(".pdb", StringComparison.Ordinal))
                 .Order(StringComparer.Ordinal).ToArray();
@@ -674,16 +672,44 @@ public static class PackageVerifier
         stream.CopyTo(image);
         image.Position = 0;
         using var pdb = MetadataReaderProvider.FromPortablePdbStream(image, MetadataStreamOptions.LeaveOpen);
-        var reader = pdb.GetMetadataReader();
+        VerifyPortablePdb(pdb.GetMetadataReader(), entry.FullName, packageId, repositoryUrl, expectedCommit, expectedIdentity);
+    }
+
+    /// <summary>
+    /// Verifies an analyzer assembly's EMBEDDED portable PDB: analyzer symbols cannot ship as loose
+    /// snupkg PDBs (nuget.org symbol validation requires every snupkg PDB to match a lib/ DLL, and
+    /// analyzer DLLs live under analyzers/dotnet/cs), so the same identity and SourceLink guarantees
+    /// are enforced against the PDB embedded in the DLL itself. The assembly's metadata name must also
+    /// equal its file name — the loose-PDB layout used to catch a content-swapped analyzer DLL through
+    /// the PDB/DLL identity cross-check, and this restores that property for the embedded layout.
+    /// </summary>
+    private static void VerifyEmbeddedAnalyzerSymbols(ZipArchiveEntry entry, string packageId, string repositoryUrl, string expectedCommit, DebugIdentity expectedIdentity)
+    {
+        using var stream = entry.Open();
+        using var image = new MemoryStream();
+        stream.CopyTo(image);
+        image.Position = 0;
+        using var peReader = new PEReader(image);
+        var assemblyName = peReader.GetMetadataReader().GetString(peReader.GetMetadataReader().GetAssemblyDefinition().Name);
+        Require(assemblyName == Path.GetFileNameWithoutExtension(entry.FullName),
+            $"{entry.FullName} assembly name '{assemblyName}' does not match its file name.");
+        var embedded = peReader.ReadDebugDirectory().Where(item => item.Type == DebugDirectoryEntryType.EmbeddedPortablePdb).ToArray();
+        Require(embedded.Length == 1, $"{entry.FullName} must contain exactly one embedded portable PDB.");
+        using var pdb = peReader.ReadEmbeddedPortablePdbDebugDirectoryData(embedded[0]);
+        VerifyPortablePdb(pdb.GetMetadataReader(), $"{entry.FullName} (embedded PDB)", packageId, repositoryUrl, expectedCommit, expectedIdentity);
+    }
+
+    private static void VerifyPortablePdb(MetadataReader reader, string subject, string packageId, string repositoryUrl, string expectedCommit, DebugIdentity expectedIdentity)
+    {
         var pdbId = reader.DebugMetadataHeader?.Id
-            ?? throw new ReleaseVerificationException($"{entry.FullName} has no portable PDB debug metadata header.");
-        Require(pdbId.Length == 20, $"{entry.FullName} has an invalid portable PDB ID.");
+            ?? throw new ReleaseVerificationException($"{subject} has no portable PDB debug metadata header.");
+        Require(pdbId.Length == 20, $"{subject} has an invalid portable PDB ID.");
         Require(new Guid(pdbId.AsSpan(0, 16)) == expectedIdentity.Guid
             && BinaryPrimitives.ReadUInt32LittleEndian(pdbId.AsSpan(16, 4)) == expectedIdentity.Stamp,
-            $"{entry.FullName} does not match its packaged DLL CodeView identity.");
+            $"{subject} does not match its packaged DLL CodeView identity.");
         var documentNames = reader.Documents.Select(handle => reader.GetString(reader.GetDocument(handle).Name)).ToArray();
         Require(documentNames.Length > 0 && documentNames.Distinct(StringComparer.Ordinal).Count() == documentNames.Length,
-            $"{entry.FullName} must contain a non-empty unique document inventory.");
+            $"{subject} must contain a non-empty unique document inventory.");
         foreach (var handle in reader.GetCustomDebugInformation(EntityHandle.ModuleDefinition))
         {
             var debug = reader.GetCustomDebugInformation(handle);
@@ -709,24 +735,24 @@ public static class PackageVerifier
             foreach (var document in documentNames)
             {
                 var matches = mappings.Where(mapping => SourceLinkMatch(mapping.Name, document, out _)).ToArray();
-                Require(matches.Length == 1, $"{entry.FullName} document '{document}' must match exactly one SourceLink mapping.");
+                Require(matches.Length == 1, $"{subject} document '{document}' must match exactly one SourceLink mapping.");
                 _ = SourceLinkMatch(matches[0].Name, document, out var suffix);
                 Require(!suffix.Split('/', '\\').Any(segment => segment is "" or "." or ".."),
-                    $"{entry.FullName} document '{document}' has an unsafe SourceLink suffix.");
+                    $"{subject} document '{document}' has an unsafe SourceLink suffix.");
                 var targetPattern = matches[0].Value.GetString()!;
                 Require(targetPattern.Count(character => character == '*') == 1
                     && targetPattern.Replace("*", suffix.Replace('\\', '/'), StringComparison.Ordinal) == expectedRawPrefix + suffix.Replace('\\', '/'),
-                    $"{entry.FullName} document '{document}' does not resolve to the exact repository commit URL.");
+                    $"{subject} document '{document}' does not resolve to the exact repository commit URL.");
             }
             foreach (var mapping in mappings)
             {
                 Require(documentNames.Any(document => SourceLinkMatch(mapping.Name, document, out _)),
-                    $"{entry.FullName} contains an unused SourceLink mapping '{mapping.Name}'.");
+                    $"{subject} contains an unused SourceLink mapping '{mapping.Name}'.");
             }
             return;
         }
 
-        throw new ReleaseVerificationException($"{packageId} is missing SourceLink data in {entry.FullName}.");
+        throw new ReleaseVerificationException($"{packageId} is missing SourceLink data in {subject}.");
     }
 
     private static bool SourceLinkMatch(string pattern, string document, out string suffix)
@@ -791,10 +817,6 @@ public static class PackageVerifier
         foreach (var tfm in package.LibTfms)
         {
             yield return $"lib/{tfm}/{AssemblyName(package)}.pdb";
-        }
-        foreach (var symbol in package.AnalyzerSymbols)
-        {
-            yield return $"lib/net8.0/{symbol}";
         }
         yield return "[Content_Types].xml";
         yield return coreProperties;

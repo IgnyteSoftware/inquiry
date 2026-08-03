@@ -8,6 +8,8 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <IsPackable>false</IsPackable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Embedded debug info: the analyzer DLLs ship inside provider packages under analyzers/dotnet/cs, where a loose PDB cannot ride in the snupkg (nuget.org symbol validation requires every snupkg PDB to match a lib/ DLL). Embedding keeps the symbols and SourceLink with the assembly itself. -->
+    <DebugType>embedded</DebugType>
     <NoWarn>$(NoWarn);RS1032;RS1036</NoWarn>
     <!-- Microsoft.CodeAnalysis.Analyzers auto-adds AnalyzerReleases.*.md as AdditionalFiles. -->
   </PropertyGroup>
