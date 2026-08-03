@@ -167,6 +167,8 @@ public sealed class CiContractTests
     [InlineData("          fetch-depth: 0", "          fetch-depth: 0\n          ref: prerelease")]
     [InlineData("          dotnet-version: 10.0.x", "          dotnet-version: 10.0.x\n          source-url: https://attacker.invalid/feed")]
     [InlineData("          INQUIRY_SQLSERVER_IMAGE: ${{ matrix.provider == 'SqlServer' && 'inquiry-sqlserver-fts:2022-cu14' || '' }}", "          INQUIRY_SQLSERVER_IMAGE: ${{ matrix.provider == 'SqlServer' && 'inquiry-sqlserver-fts:2022-cu14' || '' }}\n          INQUIRY_REQUIRE_DOCKER: 0")]
+    [InlineData("      TESTCONTAINERS_RYUK_DISABLED: true", "      TESTCONTAINERS_RYUK_DISABLED: false")]
+    [InlineData("      INQUIRY_REQUIRE_DOCKER: 1\n      # Ephemeral runners need no resource reaper, and ryuk's Docker Hub pull is the\n      # matrix's only registry-1.docker.io dependency — a recurring source of flaky legs.\n      TESTCONTAINERS_RYUK_DISABLED: true", "      INQUIRY_REQUIRE_DOCKER: 1")]
     [InlineData("          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}", "          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}\n          UNAPPROVED: bypass")]
     [InlineData("  ci-required-v1:", "  unexpected-job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n\n  ci-required-v1:")]
     public void Contract_drift_is_rejected(string oldValue, string newValue)

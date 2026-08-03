@@ -86,9 +86,13 @@ public static class CiContractVerifier
 
         if (jobId == "integration")
         {
-            var environment = Map(job["env"], "integration.env", "INQUIRY_REQUIRE_DOCKER");
+            var environment = Map(job["env"], "integration.env", "INQUIRY_REQUIRE_DOCKER", "TESTCONTAINERS_RYUK_DISABLED");
             Require(Scalar(environment["INQUIRY_REQUIRE_DOCKER"], "integration.env.INQUIRY_REQUIRE_DOCKER") == "1",
                 "Integration jobs must fail closed when Docker is unavailable.");
+            // Ryuk is pointless on ephemeral runners and its pull is the matrix's only
+            // registry-1.docker.io dependency — a recurring source of flaky legs.
+            Require(Scalar(environment["TESTCONTAINERS_RYUK_DISABLED"], "integration.env.TESTCONTAINERS_RYUK_DISABLED") == "true",
+                "Integration jobs must disable the Testcontainers resource reaper to avoid Docker Hub pulls.");
             var strategy = Map(job["strategy"], "integration.strategy", "fail-fast", "matrix");
             Require(Scalar(strategy["fail-fast"], "integration.strategy.fail-fast") == "false", "Integration matrix must fail-fast false.");
             var matrix = Map(strategy["matrix"], "integration.strategy.matrix", "provider", "tfm");

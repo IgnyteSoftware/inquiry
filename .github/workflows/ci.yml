@@ -68,6 +68,9 @@ jobs:
     timeout-minutes: 40
     env:
       INQUIRY_REQUIRE_DOCKER: 1
+      # Ephemeral runners need no resource reaper, and ryuk's Docker Hub pull is the
+      # matrix's only registry-1.docker.io dependency — a recurring source of flaky legs.
+      TESTCONTAINERS_RYUK_DISABLED: true
     strategy:
       fail-fast: false
       matrix:
