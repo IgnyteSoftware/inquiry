@@ -69,13 +69,20 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
         string? schema,
         string tableName,
         IReadOnlyList<IColumn> keyColumns,
-        IReadOnlyList<IColumn> setColumns)
+        IReadOnlyList<IColumn> setColumns,
+        IReadOnlyList<string> writeEnforcedTerms)
     {
         var join = string.Join(" AND ", keyColumns.Select(column =>
             "`_t`." + QuoteIdentifier(column.ColumnName) + " = `_v`." + QuoteIdentifier(column.ColumnName)));
         var assignments = string.Join(", ", setColumns.Select(column =>
             "`_t`." + QuoteIdentifier(column.ColumnName) + " = `_v`." + QuoteIdentifier(column.ColumnName)));
-        return ") AS `_v` ON " + join + " SET " + assignments;
+        // Qualified with the target alias: the derived table `_v` selects the same column names, so an
+        // unqualified filter term would be ambiguous — and matching `_v` would test the caller's own
+        // payload rather than the stored row, enforcing nothing.
+        var enforced = writeEnforcedTerms.Count == 0
+            ? string.Empty
+            : " WHERE " + string.Join(" AND ", writeEnforcedTerms.Select(static term => "`_t`." + term));
+        return ") AS `_v` ON " + join + " SET " + assignments + enforced;
     }
 
     public override string BuildFullTextSearchSql(SqlBuildContext context, IReadOnlyList<IColumn> searchColumns)
@@ -116,19 +123,46 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+            + " WHERE " + context.KeyWriteWhereClause;
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
     {
-        var returningPredicate = context.ConcurrencyToken is null
-            ? context.KeyWhereClause
-            : AppendWhere(context.KeyWhereClause, "ROW_COUNT() > 0");
+        // The emulated-returning SELECT re-reads the row AFTER the UPDATE, so it must not simply
+        // re-test the write-enforced term: an update that legitimately CHANGES the filter column
+        // (deactivating your own row, reassigning a tenant) would then find the post-update value
+        // outside the predicate and return null for a write that succeeded. What actually proves the
+        // UPDATE passed the enforced predicate is that it affected a row.
+        //
+        // Token entities get that proof from ROW_COUNT() > 0 alone — the version bump guarantees a
+        // successful update changed a column, so the count is non-zero under either semantics below —
+        // and the read-back is the plain key clause.
+        //
+        // Without a token, ROW_COUNT() alone is not safe to rely on: whether it counts rows MATCHED or
+        // rows CHANGED depends on CLIENT_FOUND_ROWS, which callers control through the connection
+        // string (MySqlConnector's UseAffectedRows). Under changed-row semantics a legitimate no-op
+        // update reports 0 and the row would be lost. OR-ing the enforced term back in makes the
+        // statement correct under both: the term is still true for an untouched row the caller owns,
+        // and still false for another tenant's row — which fails BOTH operands, so nothing leaks.
+        string returningPredicate;
+        if (context.ConcurrencyToken is not null)
+        {
+            returningPredicate = AppendWhere(context.KeyWhereClause, "ROW_COUNT() > 0");
+        }
+        else if (context.WriteEnforcedPredicate.Length == 0)
+        {
+            returningPredicate = context.KeyWhereClause;
+        }
+        else
+        {
+            returningPredicate = AppendWhere(
+                context.KeyWhereClause, "(ROW_COUNT() > 0 OR " + context.WriteEnforcedPredicate + ")");
+        }
 
         return BuildUpdateSql(context) + "; SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + returningPredicate;
     }
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+        => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
 
     public override string BuildUpsertSql(SqlBuildContext context)
     {

@@ -142,17 +142,19 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+            + " WHERE " + context.KeyWriteWhereClause;
 
+    // OUTPUT emits only the rows the UPDATE actually touched, so composing the enforced predicate onto
+    // the WHERE is sufficient — the trailing SELECT reads @_out, not the table.
     public override string BuildUpdateReturningSql(SqlBuildContext context)
         => DeclareOutputTable(context)
             + " UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
             + " OUTPUT " + InsertedColumns(context) + " INTO @_out"
-            + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause)
+            + " WHERE " + context.KeyWriteWhereClause
             + "; " + SelectFromOutput(context);
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
-        => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ConcurrencyWhereClause);
+        => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
 
     public override string BuildUpsertSql(SqlBuildContext context)
     {

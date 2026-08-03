@@ -140,14 +140,17 @@ public sealed class SqlBuildContext
         // bypasses via [InquiryIgnoreFilter] (ignoredGlobalFilterNames). They are never suppressed by
         // IncludeDeleted (an "include deleted" read still composes them), and an unnamed filter has no
         // handle to bypass by design.
-        var globalFilterColumns = columns.Where(c => c.IsGlobalFilter).Concat(globalFilterPredicateColumns ?? Array.Empty<IColumn>());
+        var allGlobalFilterColumns = columns.Where(c => c.IsGlobalFilter).Concat(globalFilterPredicateColumns ?? Array.Empty<IColumn>()).ToArray();
+        var globalFilterColumns = (IEnumerable<IColumn>)allGlobalFilterColumns;
         if (ignoredGlobalFilterNames is { Count: > 0 })
         {
             globalFilterColumns = globalFilterColumns.Where(
                 gf => gf.GlobalFilterName is null || !ignoredGlobalFilterNames.Contains(gf.GlobalFilterName));
         }
 
-        foreach (var gf in globalFilterColumns)
+        // One rendering shared by the read predicate and the write-enforced predicate, so a term can
+        // never differ between the SELECT that hides a row and the UPDATE that refuses to touch it.
+        string FilterTerm(IColumn gf)
         {
             var gfQuoted = builder.QuoteIdentifier(gf.ColumnName);
             if (gf.GlobalFilterContextKey is not null)
@@ -159,16 +162,29 @@ public sealed class SqlBuildContext
                 // side derives the same set via StoreOperationEmitter.ActiveParameterizedFilters —
                 // both are pure functions of (columns, ignoredGlobalFilterNames), which is the
                 // agreement that keeps a const's parameters and its binder in lockstep.
-                var gfTerm = gfQuoted + " = " + builder.ParameterName("__gf_" + gf.PropertyName);
-                activeRowPredicates.Add(gfTerm);
-                qualifiedActiveRowPredicates.Add(Table + "." + gfTerm);
-                continue;
+                return gfQuoted + " = " + builder.ParameterName("__gf_" + gf.PropertyName);
             }
 
-            var gfValue = gf.GlobalFilterKeepWhenTrue ? builder.BooleanTrueLiteral : builder.BooleanFalseLiteral;
-            activeRowPredicates.Add(gfQuoted + " = " + gfValue);
-            qualifiedActiveRowPredicates.Add(Table + "." + gfQuoted + " = " + gfValue);
+            return gfQuoted + " = " + (gf.GlobalFilterKeepWhenTrue ? builder.BooleanTrueLiteral : builder.BooleanFalseLiteral);
         }
+
+        foreach (var gf in globalFilterColumns)
+        {
+            var gfTerm = FilterTerm(gf);
+            activeRowPredicates.Add(gfTerm);
+            qualifiedActiveRowPredicates.Add(Table + "." + gfTerm);
+        }
+
+        // Write enforcement (EnforceOnWrites). Built from the FULL filter set on purpose: it is never
+        // narrowed by ignoredGlobalFilterNames ([InquiryIgnoreFilter] is a read-only mechanism, INQ091)
+        // and never suppressed by IncludeDeleted, so a write const built from any context carries the
+        // same terms. The soft-delete term is deliberately absent — a hard delete must still remove an
+        // already-soft-deleted row, and restore must be able to clear the indicator.
+        WriteEnforcedPredicateTerms = allGlobalFilterColumns
+            .Where(static gf => gf.GlobalFilterEnforceOnWrites)
+            .Select(FilterTerm)
+            .ToArray();
+        WriteEnforcedPredicate = string.Join(" AND ", WriteEnforcedPredicateTerms);
 
         ActiveRowPredicate = string.Join(" AND ", activeRowPredicates);
         QualifiedActiveRowPredicate = string.Join(" AND ", qualifiedActiveRowPredicates);
@@ -200,7 +216,19 @@ public sealed class SqlBuildContext
         {
             SetClausesWithVersion = SetClauses;
         }
+
+        // Precomposed write WHERE bodies. Both collapse to today's text when nothing opts into write
+        // enforcement, which is what keeps every non-opted-in store's SQL byte-identical.
+        KeyWriteWhereClause = JoinAnd(JoinAnd(KeyWhereClause, ConcurrencyWhereClause), WriteEnforcedPredicate);
+        KeyEnforcedWhereClause = JoinAnd(KeyWhereClause, WriteEnforcedPredicate);
     }
+
+    /// <summary>
+    /// AND-joins two predicate bodies, skipping empties. Equivalent to <c>SqlBuilder.AppendWhere</c>
+    /// for the clauses composed here (all AND-only, so no OR grouping is ever needed).
+    /// </summary>
+    private static string JoinAnd(string left, string right)
+        => left.Length == 0 ? right : right.Length == 0 ? left : left + " AND " + right;
 
     public string Table { get; }
 
@@ -226,6 +254,39 @@ public sealed class SqlBuildContext
     public IReadOnlyList<string> QuotedKeyColumns { get; }
     public IReadOnlyList<string> KeyParameters { get; }
     public string KeyWhereClause { get; }
+
+    /// <summary>
+    /// The AND-joined terms of every <c>[InquiryGlobalFilter(EnforceOnWrites = true)]</c> column —
+    /// the predicate key-based writes compose so a write aimed at a row the filter hides affects zero
+    /// rows. Empty (and therefore invisible in the generated SQL) unless a filter opts in.
+    /// </summary>
+    public string WriteEnforcedPredicate { get; }
+
+    /// <summary>
+    /// <see cref="WriteEnforcedPredicate"/> as individual terms, for the one caller that must qualify
+    /// them with a table alias (the set-based UpdateAll join, where an unqualified column name is
+    /// ambiguous between the target and the values derived table).
+    /// </summary>
+    public IReadOnlyList<string> WriteEnforcedPredicateTerms { get; }
+
+    /// <summary>
+    /// The full WHERE body for a key-based write: <see cref="KeyWhereClause"/> AND
+    /// <see cref="ConcurrencyWhereClause"/> AND <see cref="WriteEnforcedPredicate"/>. Rows-affected 0
+    /// therefore conflates not-found, stale-token, and filtered-out — documented, not distinguished.
+    /// </summary>
+    public string KeyWriteWhereClause { get; }
+
+    /// <summary>
+    /// <see cref="KeyWhereClause"/> AND <see cref="WriteEnforcedPredicate"/>, with NO concurrency term —
+    /// the restore UPDATE, which targets a row whose token the caller has not read.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT used by the emulated-returning follow-up SELECTs (MySQL family, Oracle). Those
+    /// re-read the row AFTER the write, so re-testing the enforced term there would return null for an
+    /// update that legitimately changed the filter column. They guard the read-back with the affected-row
+    /// count instead; see <c>MySqlFamilySqlBuilder.BuildUpdateReturningSql</c>.
+    /// </remarks>
+    public string KeyEnforcedWhereClause { get; }
 
     /// <summary>
     /// The active-row filter every SELECT AND-composes via <see cref="SqlBuilder.AppendWhere"/>: the

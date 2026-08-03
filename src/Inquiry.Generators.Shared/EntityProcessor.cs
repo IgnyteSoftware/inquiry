@@ -315,6 +315,11 @@ internal static class EntityProcessor
             string? globalFilterName = null;
             string? globalFilterContextKey = null;
             var globalFilterAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryGlobalFilterAttribute");
+            // EnforceOnWrites is read once for both modes and applies only when the filter itself
+            // survives validation below (isGlobalFilter). It carries no validation of its own: every
+            // shape a filter can legally take also composes onto a key-based write.
+            var globalFilterEnforceOnWrites = globalFilterAttribute is not null &&
+                GeneratorHelpers.GetNamedBool(globalFilterAttribute, "EnforceOnWrites");
             var globalFilterContextKeyRaw = globalFilterAttribute is not null
                 ? GeneratorHelpers.GetNamedString(globalFilterAttribute, "ContextKey")
                 : null;
@@ -385,6 +390,19 @@ internal static class EntityProcessor
                         property.Locations.FirstOrDefault(),
                         entitySymbol.Name,
                         property.Name));
+
+                    // An invalid constant-mode filter normally clears the flag so emission stays valid
+                    // (the column may not even be a bool). But when the author asked for WRITE
+                    // enforcement they declared a boundary, and INQ059 is suppressible: dropping the
+                    // flag would silently produce unenforced writes AND silence the INQ095 upsert
+                    // guard — the author gets neither the error nor the protection. So an enforcing
+                    // filter stays active, mirroring the ContextKey branch above. A predicate the
+                    // column cannot satisfy fails loudly at execute time; a missing boundary does not.
+                    if (globalFilterEnforceOnWrites)
+                    {
+                        isGlobalFilter = true;
+                        globalFilterKeepWhenTrue = GeneratorHelpers.GetNamedBool(globalFilterAttribute, "KeepWhen", defaultValue: true);
+                    }
                 }
                 else
                 {
@@ -576,6 +594,7 @@ internal static class EntityProcessor
                 GlobalFilterKeepWhenTrue = globalFilterKeepWhenTrue,
                 GlobalFilterName = globalFilterName,
                 GlobalFilterContextKey = globalFilterContextKey,
+                GlobalFilterEnforceOnWrites = isGlobalFilter && globalFilterEnforceOnWrites,
                 IsConcurrencyToken = isConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 IsCreatedAt = isCreatedAt,

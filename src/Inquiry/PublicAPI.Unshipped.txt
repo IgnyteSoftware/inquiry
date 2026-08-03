@@ -615,6 +615,8 @@ static Inquiry.Seeding.InquirySeedingExtensions.SeedInquiryAsync(this System.ISe
 static readonly Inquiry.Entities.InquiryConverterCache<TConverter>.Instance -> TConverter
 Inquiry.Entities.InquiryGlobalFilterAttribute.ContextKey.get -> string?
 Inquiry.Entities.InquiryGlobalFilterAttribute.ContextKey.set -> void
+Inquiry.Entities.InquiryGlobalFilterAttribute.EnforceOnWrites.get -> bool
+Inquiry.Entities.InquiryGlobalFilterAttribute.EnforceOnWrites.set -> void
 Inquiry.InquiryFilterContext
 Inquiry.InquiryFilterContext.Scope
 Inquiry.InquiryFilterContext.Scope.Dispose() -> void

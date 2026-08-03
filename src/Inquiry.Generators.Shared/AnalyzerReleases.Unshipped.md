@@ -94,3 +94,4 @@ INQ091 | Inquiry | Error | InquiryIgnoreFilter cannot bypass the named filter
 INQ092 | Inquiry | Error | InquiryGlobalFilter Name is invalid
 INQ093 | Inquiry | Error | InquiryGlobalFilter ContextKey configuration is invalid
 INQ094 | Inquiry | Error | InquiryIndex references an unmapped property
+INQ095 | Inquiry | Error | Operation cannot honour a write-enforced InquiryGlobalFilter

@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ086, INQ094. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ095. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -55,6 +55,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ092         Global-filter name              ([InquiryGlobalFilter] Name blank, or duplicated across the entity's filters) [IN USE]
     //   INQ093         Parameterized filter            ([InquiryGlobalFilter] ContextKey blank/conflicting/unbindable, or on SQL the binder cannot cover) [IN USE]
     //   INQ094         Index property resolution       ([InquiryIndex] key or Include naming something that is not a mapped column) [IN USE]
+    //   INQ095         Write-enforced filter           (an operation that cannot honour [InquiryGlobalFilter(EnforceOnWrites = true)] — upsert) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -381,6 +382,20 @@ internal static class InquiryDiagnosticDescriptors
         "INQ093",
         "InquiryGlobalFilter ContextKey configuration is invalid",
         "Entity '{0}' property '{1}' has an invalid runtime-parameterized [InquiryGlobalFilter]: {2}.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // INQ095: an operation that cannot honour a write-enforced [InquiryGlobalFilter]. Reason-
+    // parameterised like INQ090/091/093 so later shapes can join without a new ID. The v1 reason is
+    // upsert, rejected on EVERY dialect rather than "enforced where the dialect happens to allow it":
+    // the insert branch is unfilterable, MySQL's ON DUPLICATE KEY UPDATE has no conditional form, and
+    // SQL Server's UPDATE-first emulation fires its INSERT branch exactly when the filter blocked the
+    // UPDATE (@@ROWCOUNT = 0) — a phantom cross-boundary insert or a duplicate-key error.
+    public static readonly DiagnosticDescriptor WriteEnforcedFilterInvalid = new(
+        "INQ095",
+        "Operation cannot honour a write-enforced InquiryGlobalFilter",
+        "Store method '{0}' cannot be generated: entity '{1}' declares [InquiryGlobalFilter(EnforceOnWrites = true)] on '{2}', and {3}.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

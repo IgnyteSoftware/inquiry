@@ -77,6 +77,13 @@ public interface IColumn
     /// </summary>
     string? GlobalFilterContextKey { get; }
 
+    /// <summary>
+    /// <c>InquiryGlobalFilter.EnforceOnWrites</c>: when true this filter's predicate is also composed
+    /// onto key-based writes (see <c>SqlBuildContext.WriteEnforcedPredicate</c>). Ignored when
+    /// <see cref="IsGlobalFilter"/> is false.
+    /// </summary>
+    bool GlobalFilterEnforceOnWrites { get; }
+
     /// <summary>True when this column is the entity's optimistic-concurrency token.</summary>
     bool IsConcurrencyToken { get; }
 
