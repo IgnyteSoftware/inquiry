@@ -116,11 +116,23 @@ public sealed class SequentialGuidIntegrationTests
             if (i % 5 == 0) await Task.Delay(15);
         }
 
-        // Sort both sides by SqlGuid to use the same comparison SQL Server applies — avoids
-        // relying on unordered SELECT returning clustered-index scan order.
+        // Sort by SqlGuid to use the same comparison SQL Server applies — avoids relying on
+        // unordered SELECT returning clustered-index scan order. The generator's guarantee is
+        // millisecond-granular: keys minted in a later millisecond always sort after earlier
+        // ones, but ties within one millisecond break on random bytes and may interleave, so
+        // compare embedded timestamps rather than the full key sequence.
         var clientOrdered = ids.OrderBy(id => new System.Data.SqlTypes.SqlGuid(id)).ToList();
 
-        Assert.Equal(clientOrdered, ids);
+        Assert.Equal(ids.Select(TimestampOf), clientOrdered.Select(TimestampOf));
+    }
+
+    /// <summary>Extracts the 48-bit Unix-ms timestamp <see cref="InquiryGuid.NewSqlServerSequential"/>
+    /// places in bytes [10..15], the bytes <c>uniqueidentifier</c> compares first.</summary>
+    private static long TimestampOf(Guid id)
+    {
+        var b = id.ToByteArray(bigEndian: true);
+        return ((long)b[10] << 40) | ((long)b[11] << 32) | ((long)b[12] << 24)
+            | ((long)b[13] << 16) | ((long)b[14] << 8) | b[15];
     }
 
     [SkippableFact]
