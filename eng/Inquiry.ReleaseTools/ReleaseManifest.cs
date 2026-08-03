@@ -16,8 +16,10 @@ public sealed record ReleasePackage(
     [property: JsonRequired] string Project,
     [property: JsonRequired] IReadOnlyDictionary<string, string> Dependencies,
     [property: JsonRequired] IReadOnlyList<string> LibTfms,
+    // Analyzer symbols are EMBEDDED in these assemblies (DebugType=embedded), never loose PDBs:
+    // nuget.org symbol validation rejects a snupkg PDB with no matching lib/ DLL, and analyzer
+    // DLLs live under analyzers/dotnet/cs. VerifyNupkg checks the embedded PDB and its SourceLink.
     [property: JsonRequired] IReadOnlyList<string> Analyzers,
-    [property: JsonRequired] IReadOnlyList<string> AnalyzerSymbols,
     [property: JsonRequired] IReadOnlyList<string> FrameworkReferences,
     // Dependencies the SDK prunes from specific TFM groups because a declared framework
     // reference supplies them (e.g. Microsoft.Extensions.* on net10.0 via AspNetCore.App).

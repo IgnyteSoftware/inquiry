@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Testing package with SQLite fixture, recording interceptor, entity factory, transaction sandbox, and Respawn reset.
 - 88 Roslyn analyzer diagnostics (INQ001–INQ093) for compile-time validation.
 
+### Fixed
+
+- Provider packages' symbol packages (`.snupkg`) failed nuget.org validation (first seen on `1.0.0-preview.6`): analyzer PDBs rode in the snupkg at `lib/net8.0/` with no matching `lib/` DLL. Analyzer assemblies (`Inquiry.*.Analyzer`, `Inquiry.Generators.Shared`) now embed their debug info and SourceLink (`DebugType=embedded`), the snupkg carries only the runtime `lib/` PDBs, and the release verifier checks the embedded PDB identity and SourceLink instead of the loose-PDB layout.
+
 ### Changed
 
 - The repository moved from a personal account to the [IgnyteSoftware](https://github.com/IgnyteSoftware) organization. Issue, pull-request, and documentation URLs now live under `github.com/IgnyteSoftware/inquiry`; the packages themselves are unaffected and unreleased.
