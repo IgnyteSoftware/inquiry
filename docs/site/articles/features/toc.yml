@@ -6,6 +6,8 @@
   href: soft-delete.md
 - name: Global query filters
   href: global-filters.md
+- name: PostgreSQL row-level security
+  href: postgres-rls.md
 - name: Auditing
   href: auditing.md
 - name: Projections

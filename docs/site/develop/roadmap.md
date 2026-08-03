@@ -59,10 +59,11 @@ connection-open/pool-wait metrics were deferred as a stretch goal.
 [#80](https://github.com/IgnyteSoftware/inquiry/issues/80) (many-to-many: auto-managed junction, composite
 keys, child filters on eager M:N) closed 2026-07-31, clearing the eager-loading and relationship-correctness
 lane alongside [#70](https://github.com/IgnyteSoftware/inquiry/issues/70).
-[#82](https://github.com/IgnyteSoftware/inquiry/issues/82) is **half done and still open**: named filters
-with a per-method bypass and runtime-parameterized filters bound from ambient context both shipped
-(INQ091–INQ093), leaving write-side enforcement on key-based UPDATE/DELETE and the PostgreSQL RLS session
-helpers. The cancellation contract was tightened in
+[#82](https://github.com/IgnyteSoftware/inquiry/issues/82) is **complete**: named filters with a
+per-method bypass and runtime-parameterized filters bound from ambient context shipped first
+(INQ091–INQ093), and write-side enforcement on key-based UPDATE/DELETE (`EnforceOnWrites`, INQ095)
+plus the PostgreSQL RLS session helpers (`SetLocalAsync`) closed the remaining two criteria.
+The cancellation contract was tightened in
 [#282](https://github.com/IgnyteSoftware/inquiry/issues/282) and
 [#283](https://github.com/IgnyteSoftware/inquiry/issues/283): a cancel that races provider completion now
 normalizes to `OperationCanceledException` carrying the caller's token across single commands and batch
@@ -121,7 +122,7 @@ closed 2026-07-25.
 | Workstream | Issues |
 |---|---|
 | Scaffolding and live/offline validation | [#72](https://github.com/IgnyteSoftware/inquiry/issues/72), [#79](https://github.com/IgnyteSoftware/inquiry/issues/79) |
-| Query composition and tenant safety | [#82](https://github.com/IgnyteSoftware/inquiry/issues/82) (two of four criteria shipped — see below), [#177](https://github.com/IgnyteSoftware/inquiry/issues/177) |
+| Query composition and tenant safety | [#82](https://github.com/IgnyteSoftware/inquiry/issues/82) (all four criteria shipped — see below), [#177](https://github.com/IgnyteSoftware/inquiry/issues/177) |
 | First-party provider authoring and conformance | [#184](https://github.com/IgnyteSoftware/inquiry/issues/184) |
 | Bulk insert production readiness | [#183](https://github.com/IgnyteSoftware/inquiry/issues/183) |
 
@@ -226,17 +227,6 @@ acceptance criteria supersede any older wording that describes an initial implem
   means mapping the junction explicitly, or raw SQL against the generated table.
 - **CTEs and set operations** *(gap research 2026-06-12)*. `WITH` / `UNION` / `INTERSECT` / `EXCEPT`
   composition in the predicate/select model (Kysely-style); ad-hoc SQL covers this today.
-- **Query filters: write-side enforcement + Postgres RLS helpers** *(gap research 2026-06-12, narrowed
-  2026-08-01)*. The static-column form, EF 10 *named* filters with a per-method bypass, and
-  runtime-parameterized filters bound from ambient context have all shipped — see
-  [Recently resolved](#recently-resolved). [#82](https://github.com/IgnyteSoftware/inquiry/issues/82)
-  stays open on its last two acceptance criteria:
-  - Opt-in **write-side enforcement** so a filter also guards **key-based** UPDATE/DELETE. Today those are
-    read-side only, like soft delete and EF `HasQueryFilter`. Note the gap is narrower than it reads:
-    set-based predicate writes (`[InquiryUpdateWhere]` and the soft form of `[InquiryDeleteWhere]`) already
-    compose the filter, so those statements are tenant-scoped — see the
-    [Global query filters](../articles/features/global-filters.md) scope note.
-  - Row-level-security session helpers for PostgreSQL (Drizzle RLS-style `SET LOCAL` around the connection).
 - **Provider-specific column types** *(gap research 2026-06-12)*. SQL Server **vector** columns first
   (EF 10 `SqlVector` parity — AI embeddings / semantic search); spatial and `hierarchyid` by demand.
 - **Additional database engines** *(gap research 2026-06-12)*. XPO supports 15+ engines vs Inquiry's 6;
@@ -333,9 +323,25 @@ new or reframed issue.
   runs on all six providers (`81b0d54`). An auto-managed junction stays **read-only** — writing link
   rows still needs an explicitly-mapped junction or raw SQL, tracked above under the detailed backlog.
 
+- **Write-side filter enforcement and PostgreSQL RLS helpers (#82 complete, 2026-08-02).** The last two
+  of [#82](https://github.com/IgnyteSoftware/inquiry/issues/82)'s four acceptance criteria.
+  `[InquiryGlobalFilter(EnforceOnWrites = true)]` AND-composes the filter's predicate onto key-based
+  update, delete, hard delete, restore, batch delete, and hard predicate delete, so a write aimed at a
+  row the filter hides affects zero rows. Inserts stay unfiltered and the column is never auto-stamped;
+  upsert on such an entity is a build error (INQ095) because its insert branch cannot be filtered, and
+  the diagnostic is fail-closed under suppression. Rows-affected 0 now conflates not-found,
+  stale-token, and filtered-out. Stores that do not opt in generate byte-identical SQL. On PostgreSQL,
+  `SetLocalAsync` on `IInquiryTransaction` sets a transaction-scoped custom GUC through parameterized
+  `set_config(…, true)` for RLS policies to read with `current_setting`; it is transaction-only by
+  design, since a transaction-scoped setting applied outside a transaction does not survive to the
+  next statement and leaves policies reading an unset parameter — fail-closed, but silently.
+  Live-tested on all six engines, including the emulated-returning read-back paths
+  (MySQL/MariaDB/Oracle) and real RLS policies under `FORCE ROW LEVEL SECURITY`. See
+  [PostgreSQL row-level security](../articles/features/postgres-rls.md).
+
 - **Named and runtime-parameterized global filters (#82 partial, 2026-08-01).** Two of
-  [#82](https://github.com/IgnyteSoftware/inquiry/issues/82)'s four acceptance criteria shipped; the
-  issue remains open for write-side enforcement and the PostgreSQL RLS helpers. `[InquiryGlobalFilter]`
+  [#82](https://github.com/IgnyteSoftware/inquiry/issues/82)'s four acceptance criteria.
+  `[InquiryGlobalFilter]`
   takes an optional `Name`, and `[InquiryIgnoreFilter("name")]` drops that one filter's AND-term from a
   method's const SQL at generation time (EF 10 `IgnoreQueryFilters(string[])` parity). The decision is
   resolved entirely by the generator, so the method still gets a constant string; an unknown, unnamed,

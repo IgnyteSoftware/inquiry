@@ -200,6 +200,8 @@ The details that bite:
 
 Enforcement is a defence-in-depth layer, not a replacement for authorization: it stops a write from *reaching* another tenant's row, but a caller still needs to be authorized for the row inside their own tenant.
 
+On PostgreSQL you can put the same predicate one layer lower, in the database itself, so it also covers ad-hoc SQL and anything that never went through a generated store — see [PostgreSQL row-level security](postgres-rls.md).
+
 ## Per-dialect literal
 
 | Dialect | Keep-true literal | Column type |

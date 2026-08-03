@@ -32,9 +32,10 @@ Advanced Security. Both activate when the repository goes public.
 [#70](https://github.com/IgnyteSoftware/inquiry/issues/70) (eager loading) closed 2026-07-26, and
 [#80](https://github.com/IgnyteSoftware/inquiry/issues/80) (many-to-many: auto-managed junction,
 composite keys, child filters on eager M:N) closed 2026-07-31.
-[#82](https://github.com/IgnyteSoftware/inquiry/issues/82) (query filters) is **not** closed: named
-filters with a per-method bypass and runtime-parameterized filters have shipped, but write-side
-enforcement on key-based writes and the PostgreSQL RLS session helpers remain open.
+[#82](https://github.com/IgnyteSoftware/inquiry/issues/82) (query filters) is **complete** as of
+2026-08-02: named filters with a per-method bypass and runtime-parameterized filters shipped first,
+then opt-in write-side enforcement on key-based writes (`EnforceOnWrites`, INQ095) and the PostgreSQL
+RLS session helpers (`SetLocalAsync`) closed the remaining two criteria.
 
 ## Supported database engines (6, all live-tested)
 
