@@ -1,3 +1,17 @@
+# Line endings, pinned rather than left to each machine.
+#
+# This tree is accessed by BOTH Windows git (core.autocrlf=true, checks out CRLF) and
+# WSL/Linux git (native = LF). `text=auto` alone resolves "native" per-platform, so the
+# same working tree looks clean to one git and shows every file modified to the other --
+# all false positives, with no content change. eol=crlf makes both agree.
+#
+# Repo content stays LF. Working tree is CRLF on every platform.
+* text=auto eol=crlf
+
+# Shell scripts must stay LF or they fail to execute.
+*.sh text eol=lf
+*.bash text eol=lf
+
 benchmarks/evidence/issue-180-diagnostic-rows.patch text eol=lf
 benchmarks/evidence/issue-180-diagnostic-matrix/* text eol=lf
 .github/workflows/*.yml text eol=lf
