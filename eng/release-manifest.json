@@ -7,10 +7,10 @@
       "id": "Ignyte.Inquiry",
       "project": "src/Inquiry/Inquiry.csproj",
       "dependencies": {
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10"
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11"
       },
       "libTfms": [
         "net8.0",
@@ -25,10 +25,10 @@
       "project": "src/Inquiry.AspNetCore/Inquiry.AspNetCore.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10"
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11"
       },
       "libTfms": [
         "net8.0",
@@ -53,12 +53,12 @@
       "project": "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
-        "Microsoft.Data.Sqlite": "10.0.10",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-        "SQLitePCLRaw.lib.e_sqlite3": "3.50.3"
+        "Microsoft.Data.Sqlite": "10.0.11",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11",
+        "SQLitePCLRaw.lib.e_sqlite3": "3.53.3"
       },
       "libTfms": [
         "net8.0",
@@ -77,11 +77,11 @@
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
         "Microsoft.Data.SqlClient": "7.0.2",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-        "System.Configuration.ConfigurationManager": "9.0.13"
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11",
+        "System.Configuration.ConfigurationManager": "10.0.11"
       },
       "libTfms": [
         "net8.0",
@@ -99,10 +99,10 @@
       "project": "src/Inquiry.PostgreSql/Inquiry.PostgreSql.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11",
         "Npgsql": "10.0.3"
       },
       "libTfms": [
@@ -121,11 +121,11 @@
       "project": "src/Inquiry.MySql/Inquiry.MySql.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-        "MySqlConnector": "2.6.0"
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11",
+        "MySqlConnector": "2.6.2"
       },
       "libTfms": [
         "net8.0",
@@ -143,11 +143,11 @@
       "project": "src/Inquiry.MariaDb/Inquiry.MariaDb.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-        "MySqlConnector": "2.6.0"
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11",
+        "MySqlConnector": "2.6.2"
       },
       "libTfms": [
         "net8.0",
@@ -165,12 +165,12 @@
       "project": "src/Inquiry.Oracle/Inquiry.Oracle.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-        "Oracle.ManagedDataAccess.Core": "23.26.200",
-        "System.Configuration.ConfigurationManager": "9.0.13"
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11",
+        "Oracle.ManagedDataAccess.Core": "23.26.300",
+        "System.Configuration.ConfigurationManager": "10.0.11"
       },
       "libTfms": [
         "net8.0",
@@ -188,11 +188,11 @@
       "project": "src/Inquiry.Interceptors/Inquiry.Interceptors.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "1.0.0",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10"
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11"
       },
       "libTfms": [
         "net8.0",
@@ -209,15 +209,15 @@
         "Ignyte.Inquiry": "1.0.0",
         "Ignyte.Inquiry.Sqlite": "1.0.0",
         "Microsoft.Data.SqlClient": "7.0.2",
-        "Microsoft.Data.Sqlite": "10.0.10",
-        "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection": "10.0.10",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.10",
-        "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-        "Respawn": "6.2.1",
-        "SQLitePCLRaw.lib.e_sqlite3": "3.50.3",
-        "System.Configuration.ConfigurationManager": "9.0.13"
+        "Microsoft.Data.Sqlite": "10.0.11",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection": "10.0.11",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.11",
+        "Respawn": "7.0.0",
+        "SQLitePCLRaw.lib.e_sqlite3": "3.53.3",
+        "System.Configuration.ConfigurationManager": "10.0.11"
       },
       "libTfms": [
         "net8.0",

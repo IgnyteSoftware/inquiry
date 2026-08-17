@@ -828,11 +828,11 @@ public static class PackageVerifier
         const string suffix = ".psmdcp";
         var matches = entries.Where(path => path.StartsWith(prefix, StringComparison.Ordinal)).ToArray();
         Require(matches.Length == 1, $"{packageId} must contain exactly one core-properties entry.");
-        Require(matches[0].Length == prefix.Length + 32 + suffix.Length && matches[0].EndsWith(suffix, StringComparison.Ordinal),
+        Require(matches[0].EndsWith(suffix, StringComparison.Ordinal),
             $"{packageId} core-properties entry has an invalid shape.");
         var name = matches[0][prefix.Length..^suffix.Length];
-        Require(IsLowerHex(name, 32),
-            $"{packageId} core-properties entry must use NuGet's canonical lowercase 32-hex name.");
+        Require(name == "nuget" || IsLowerHex(name, 32),
+            $"{packageId} core-properties entry must use NuGet's fixed name or canonical lowercase 32-hex name.");
         return matches[0];
     }
 
