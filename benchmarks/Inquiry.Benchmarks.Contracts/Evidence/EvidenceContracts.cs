@@ -686,7 +686,8 @@ public static class EvidenceValidator
                 ResolvedAssetKind.Native =>
                     !asset.LogicalAssetId.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
                     !asset.LogicalAssetId.EndsWith(".so", StringComparison.OrdinalIgnoreCase) &&
-                    !asset.LogicalAssetId.EndsWith(".dylib", StringComparison.OrdinalIgnoreCase),
+                    !asset.LogicalAssetId.EndsWith(".dylib", StringComparison.OrdinalIgnoreCase) &&
+                    !asset.LogicalAssetId.EndsWith(".a", StringComparison.OrdinalIgnoreCase),
                 ResolvedAssetKind.GeneratedSource =>
                     !asset.LogicalAssetId.EndsWith(".cs", StringComparison.OrdinalIgnoreCase),
                 _ => true,

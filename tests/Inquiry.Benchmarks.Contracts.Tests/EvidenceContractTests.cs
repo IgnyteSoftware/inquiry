@@ -17,6 +17,28 @@ namespace Inquiry.Benchmarks.Contracts.Tests;
 public sealed class EvidenceContractTests
 {
     [Fact]
+    public void EvidenceValidatorAcceptsStaticNativeArchivesAsResolvedAssets()
+    {
+        var source = TestData.ProjectSource();
+        var resolved = source.ResolvedDependencies with
+        {
+            Assets = source.ResolvedDependencies.Assets.Select(static asset => asset.Kind == ResolvedAssetKind.Native
+                ? asset with { LogicalAssetId = asset.LogicalAssetId.Replace(".so", ".a", StringComparison.Ordinal) }
+                : asset).ToArray(),
+        };
+        var mutated = source with
+        {
+            ResolvedDependencies = resolved,
+            Artifacts = source.Artifacts.Select(artifact => artifact.Role == SourceArtifactRole.ResolvedDependencyManifest
+                ? artifact with { Sha256 = resolved.ContentSha256 }
+                : artifact).ToArray(),
+        };
+
+        Assert.DoesNotContain(EvidenceValidator.Validate(TestData.Envelope(mutated)),
+            static error => error.Code == "resolved-dependency-manifest");
+    }
+
+    [Fact]
     public void ProductionCollectorDerivesTheCompleteRealResolvedAssetUniverse()
     {
         var metadata = typeof(EvidenceContractTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
