@@ -12,7 +12,7 @@ public static class CiContractVerifier
         ["actions/setup-dotnet"] = "a98b56852c35b8e3190ac28c8c2271da59106c68",
         ["actions/upload-artifact"] = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
         ["actions/download-artifact"] = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-        ["actions/attest-build-provenance"] = "0f67c3f4856b2e3261c31976d6725780e5e4c373"
+        ["actions/attest-build-provenance"] = "4d101475d8b20a2381f78447822ac1eab6504dd8"
     };
 
     private static readonly string[] JobIds =
