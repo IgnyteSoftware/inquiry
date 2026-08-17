@@ -33,7 +33,14 @@ public sealed class InquiryBulkRowReaderTests
             _ => throw new ArgumentOutOfRangeException(nameof(i)),
         },
         columnTypes: new[] { System.Data.DbType.String, System.Data.DbType.Int32, System.Data.DbType.Binary, System.Data.DbType.String },
-        fieldTypes: new[] { typeof(string), typeof(int), typeof(byte[]), typeof(string) });
+        fieldTypes: new[] { typeof(string), typeof(int), typeof(byte[]), typeof(string) },
+        typedAccessors: new IInquiryBulkColumnAccessor<Row>[]
+        {
+            new InquiryBulkColumnAccessor<Row, string>(static row => row.Name),
+            new InquiryBulkColumnAccessor<Row, int>(static row => row.Count!.Value, static row => !row.Count.HasValue),
+            new InquiryBulkColumnAccessor<Row, byte[]>(static row => row.Data),
+            new InquiryBulkColumnAccessor<Row, string>(static row => row.Text),
+        });
 
     [Fact]
     public void ReadsRowsForwardOnlyAndCountsThem()
@@ -55,6 +62,69 @@ public sealed class InquiryBulkRowReaderTests
 
         Assert.False(reader.Read());
         Assert.Equal(2L, reader.RowsRead);
+    }
+
+    [Fact]
+    public void TypedGettersUseGeneratedAccessors()
+    {
+        var id = Guid.NewGuid();
+        var timestamp = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        var definition = new InquiryBulkInsertDefinition<TypedRow>(
+            null,
+            "TypedRows",
+            new[] { "Boolean", "Byte", "Char", "DateTime", "Decimal", "Double", "Single", "Guid", "Int16", "Int32", "Int64", "String" },
+            static (row, ordinal) => ordinal switch
+            {
+                0 => row.Boolean,
+                1 => row.Byte,
+                2 => row.Char,
+                3 => row.DateTime,
+                4 => row.Decimal,
+                5 => row.Double,
+                6 => row.Single,
+                7 => row.Guid,
+                8 => row.Int16,
+                9 => row.Int32,
+                10 => row.Int64,
+                11 => row.String,
+                _ => throw new ArgumentOutOfRangeException(nameof(ordinal)),
+            },
+            null,
+            new[] { typeof(bool), typeof(byte), typeof(char), typeof(DateTime), typeof(decimal), typeof(double), typeof(float), typeof(Guid), typeof(short), typeof(int), typeof(long), typeof(string) },
+            new IInquiryBulkColumnAccessor<TypedRow>[]
+            {
+                new InquiryBulkColumnAccessor<TypedRow, bool>(static row => row.Boolean),
+                new InquiryBulkColumnAccessor<TypedRow, byte>(static row => row.Byte),
+                new InquiryBulkColumnAccessor<TypedRow, char>(static row => row.Char),
+                new InquiryBulkColumnAccessor<TypedRow, DateTime>(static row => row.DateTime),
+                new InquiryBulkColumnAccessor<TypedRow, decimal>(static row => row.Decimal),
+                new InquiryBulkColumnAccessor<TypedRow, double>(static row => row.Double),
+                new InquiryBulkColumnAccessor<TypedRow, float>(static row => row.Single),
+                new InquiryBulkColumnAccessor<TypedRow, Guid>(static row => row.Guid),
+                new InquiryBulkColumnAccessor<TypedRow, short>(static row => row.Int16),
+                new InquiryBulkColumnAccessor<TypedRow, int>(static row => row.Int32),
+                new InquiryBulkColumnAccessor<TypedRow, long>(static row => row.Int64),
+                new InquiryBulkColumnAccessor<TypedRow, string>(static row => row.String),
+            });
+        using var reader = new InquiryBulkRowReader<TypedRow>(definition, new[]
+        {
+            new TypedRow(true, 2, 'c', timestamp, 4.5m, 6.5, 7.5f, id, 8, 9, 10, "value"),
+        });
+
+        Assert.True(reader.Read());
+        Assert.True(reader.GetBoolean(0));
+        Assert.Equal((byte)2, reader.GetByte(1));
+        Assert.Equal('c', reader.GetChar(2));
+        Assert.Equal(timestamp, reader.GetDateTime(3));
+        Assert.Equal(4.5m, reader.GetDecimal(4));
+        Assert.Equal(6.5, reader.GetDouble(5));
+        Assert.Equal(7.5f, reader.GetFloat(6));
+        Assert.Equal(id, reader.GetGuid(7));
+        Assert.Equal((short)8, reader.GetInt16(8));
+        Assert.Equal(9, reader.GetInt32(9));
+        Assert.Equal(10L, reader.GetInt64(10));
+        Assert.Equal("value", reader.GetString(11));
+        Assert.Equal(9, reader.GetFieldValue<int>(9));
     }
 
     [Fact]
@@ -232,4 +302,18 @@ public sealed class InquiryBulkRowReaderTests
         Assert.Throws<ObjectDisposedException>(() => reader.GetValues(Array.Empty<object>()));
         Assert.Throws<ObjectDisposedException>(() => reader.NextResult());
     }
+
+    private sealed record TypedRow(
+        bool Boolean,
+        byte Byte,
+        char Char,
+        DateTime DateTime,
+        decimal Decimal,
+        double Double,
+        float Single,
+        Guid Guid,
+        short Int16,
+        int Int32,
+        long Int64,
+        string String);
 }

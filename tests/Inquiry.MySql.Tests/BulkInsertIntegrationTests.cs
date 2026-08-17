@@ -1,5 +1,6 @@
 using System.Linq;
 using Inquiry.FeatureCatalog;
+using Inquiry.BulkCopy;
 using Inquiry.MySql.Tests.Fixtures;
 
 namespace Inquiry.MySql.Tests;
@@ -53,5 +54,80 @@ public sealed class BulkInsertIntegrationTests
 
         Assert.Equal(0, inserted);
         Assert.Equal(0, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task AmbientBulkInsertFailsBeforeWritingBecauseRegularConnectionDisablesLocalInfile()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.MySqlDdl, "bulktx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<BulkItemStore>();
+        await using var transaction = await inquiry.BeginTransactionAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.BulkInsertAsync(new[] { Item("transaction", 1) }));
+
+        Assert.Contains("AllowLoadLocalInfile", exception.Message);
+        Assert.Contains("[InquiryInsertAll]", exception.Message);
+        Assert.Equal(0, await store.CountAsync());
+        await transaction.RollbackAsync();
+    }
+
+    [SkippableFact]
+    public async Task CancellationStopsStreaming()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.MySqlDdl, "bulkcancel");
+        var store = harness.GetRequiredService<BulkItemStore>();
+        using var cancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.BulkInsertAsync(CancelAfter(1000, 50, cancellation), cancellation.Token));
+    }
+
+    [SkippableFact]
+    public async Task DedicatedBulkInsertsCanRunConcurrently()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.MySqlDdl, "bulkconcurrent");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        await Task.WhenAll(
+            store.BulkInsertAsync(Enumerable.Range(0, 100).Select(i => Item("left", i))),
+            store.BulkInsertAsync(Enumerable.Range(0, 100).Select(i => Item("right", i))));
+
+        Assert.Equal(200, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task TimeoutAndProgressAreSupportedWhileBatchSizeFailsBeforeWriting()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.MySqlDdl, "bulkoptions");
+        var store = harness.GetRequiredService<BulkItemStore>();
+        var progress = new List<long>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.BulkInsertWithOptionsAsync(new[] { Item("unsupported", 1) }, new InquiryBulkInsertOptions { BatchSize = 10 }));
+        Assert.Contains("BatchSize", exception.Message);
+        Assert.Equal(25, await store.BulkInsertWithOptionsAsync(
+            Enumerable.Range(0, 25).Select(i => Item("supported", i)),
+            new InquiryBulkInsertOptions { Timeout = TimeSpan.FromSeconds(60), NotifyAfter = 10, RowsCopied = progress.Add }));
+        Assert.Contains(10, progress);
+        Assert.Contains(20, progress);
+        Assert.Equal(25, await store.CountAsync());
+    }
+
+    private static BulkItem Item(string category, int value) => new() { Category = category, Amount = value };
+
+    private static IEnumerable<BulkItem> CancelAfter(int count, int cancelAt, CancellationTokenSource cancellation)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            if (i == cancelAt) cancellation.Cancel();
+            cancellation.Token.ThrowIfCancellationRequested();
+            yield return Item("cancel", i);
+        }
     }
 }

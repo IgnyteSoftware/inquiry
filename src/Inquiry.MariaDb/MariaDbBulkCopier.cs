@@ -1,101 +1,127 @@
 using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using MySqlConnector;
+using System.Data.Common;
+using System.Diagnostics;
 using System.Linq;
 
 namespace Inquiry.MariaDb;
 
 /// <summary>
 /// Bulk-insert implementation backed by MySqlConnector's <see cref="MySqlBulkCopy"/>, which streams
-/// rows to the server via <c>LOAD DATA LOCAL INFILE</c>. Resolved by the core pipeline for
-/// <c>[InquiryBulkInsert]</c> store methods.
+/// rows to the server via <c>LOAD DATA LOCAL INFILE</c>.
 /// </summary>
 internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
 {
     private readonly IInquiryConnectionFactory _connectionFactory;
 
-    /// <summary>
-    /// Initializes a new instance of <see cref="MariaDbBulkCopier"/>.
-    /// </summary>
     public MariaDbBulkCopier(IInquiryConnectionFactory connectionFactory)
-    {
-        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-    }
+        => _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
 
     /// <inheritdoc />
     public async Task<long> BulkInsertAsync<TEntity>(
         InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
+        InquiryBulkInsertContext context,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        // The bulk connection alone carries AllowLoadLocalInfile (security-scoped — see the
-        // factory); a custom factory falls back to its regular connection, where the actionable
-        // error below explains the missing client flag.
-        await using var connection = _connectionFactory is MariaDbInquiryConnectionFactory mariaDbFactory
-            ? await mariaDbFactory.OpenBulkCopyConnectionAsync(cancellationToken).ConfigureAwait(false)
-            : await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        if (connection is not MySqlConnection mysqlConnection)
+        if (context.Options.BatchSize is not null)
+            throw new InvalidOperationException("MariaDB bulk insert cannot honor option BatchSize before writing any rows.");
+        if (context.Options.TableLock)
+            throw new InvalidOperationException("MariaDB bulk insert cannot honor option TableLock before writing any rows.");
+
+        DbConnection? dedicatedConnection = null;
+        var rawConnection = context.Connection;
+        if (rawConnection is null)
         {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            var openTimestamp = Stopwatch.GetTimestamp();
+            try
+            {
+                rawConnection = _connectionFactory is MariaDbInquiryConnectionFactory mariaDbFactory
+                    ? await mariaDbFactory.OpenBulkCopyConnectionAsync(cancellationToken).ConfigureAwait(false)
+                    : await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+                dedicatedConnection = rawConnection;
+            }
+            finally
+            {
+                context.RecordConnectionOpened(Stopwatch.GetElapsedTime(openTimestamp));
+            }
+        }
+
+        if (rawConnection is not MySqlConnection mysqlConnection)
+        {
+            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
             throw new InvalidOperationException(
-                $"MariaDB bulk insert requires a MySqlConnection but received {connection.GetType().Name}. " +
+                $"MariaDB bulk insert requires a MySqlConnection but received {rawConnection.GetType().Name}. " +
                 "If using a connection wrapper, unwrap the inner connection first.");
         }
+        if (context.Transaction is not null and not MySqlTransaction)
+            throw new InvalidOperationException($"MariaDB bulk insert requires a MySqlTransaction but received {context.Transaction.GetType().Name}.");
+        if (context.IsEnlisted && !new MySqlConnectionStringBuilder(mysqlConnection.ConnectionString).AllowLoadLocalInfile)
+            throw new InvalidOperationException(
+                "MariaDB bulk insert cannot enlist in this Inquiry transaction because its connection does not enable " +
+                "AllowLoadLocalInfile. Inquiry deliberately enables that security-sensitive setting only on dedicated " +
+                "bulk-copy connections. Use [InquiryInsertAll] for transaction-bound inserts.");
 
-        var bulkCopy = new MySqlBulkCopy(mysqlConnection)
-        {
-            DestinationTableName = QualifyTableName(definition.Schema, definition.Table),
-        };
-
-        // The destination table can have columns the definition omits (the AUTO_INCREMENT key), so
-        // positional mapping would shift values into the wrong columns. Map each source ordinal to
-        // its destination column by name instead.
-        for (var i = 0; i < definition.Columns.Count; i++)
-        {
-            bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(i, definition.Columns[i]));
-        }
-
-        using var reader = new InquiryBulkRowReader<TEntity>(definition, rows);
         try
         {
-            var result = await bulkCopy.WriteToServerAsync(reader, cancellationToken).ConfigureAwait(false);
-            if (result.Warnings.Count > 0)
+            var bulkCopy = new MySqlBulkCopy(mysqlConnection, (MySqlTransaction?)context.Transaction)
             {
-                throw new InvalidOperationException(
-                    "MariaDB bulk insert completed with warnings (rows were written but may contain truncated data): " +
-                    string.Join("; ", result.Warnings.Select(w => w.Message)));
+                DestinationTableName = QualifyTableName(definition.Schema, definition.Table),
+            };
+            if (context.Options.Timeout is { } timeout) bulkCopy.BulkCopyTimeout = (int)Math.Ceiling(timeout.TotalSeconds);
+            if (context.Options.NotifyAfter is { } notifyAfter) bulkCopy.NotifyAfter = notifyAfter;
+            if (context.Options.RowsCopied is { } rowsCopied)
+                bulkCopy.MySqlRowsCopied += (_, args) => rowsCopied(args.RowsCopied);
+
+            for (var i = 0; i < definition.Columns.Count; i++)
+            {
+                bulkCopy.ColumnMappings.Add(new MySqlBulkCopyColumnMapping(i, definition.Columns[i]));
             }
-            return result.RowsInserted;
+
+            using var reader = new InquiryBulkRowReader<TEntity>(definition, rows);
+            var copyTimestamp = Stopwatch.GetTimestamp();
+            try
+            {
+                var result = await bulkCopy.WriteToServerAsync(reader, cancellationToken).ConfigureAwait(false);
+                if (result.Warnings.Count > 0)
+                {
+                    throw new InvalidOperationException(
+                        "MariaDB bulk insert completed with warnings (rows were written but may contain truncated data): " +
+                        string.Join("; ", result.Warnings.Select(w => w.Message)));
+                }
+                context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp), result.RowsInserted);
+                return result.RowsInserted;
+            }
+            catch (Exception exception) when (IsLocalInfileDisabled(exception))
+            {
+                context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp));
+                throw new InvalidOperationException(
+                    "MariaDB bulk insert streams rows via LOAD DATA LOCAL INFILE, which is disabled. Inquiry's MariaDB " +
+                    "provider enables the client side automatically on its dedicated bulk-insert connection; the " +
+                    "server must allow it too (local_infile=1). With a custom connection factory, also set " +
+                    "AllowLoadLocalInfile=true on the connection string used for bulk inserts.",
+                    exception);
+            }
+            catch
+            {
+                context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp));
+                throw;
+            }
         }
-        catch (Exception ex) when (IsLocalInfileDisabled(ex))
+        finally
         {
-            throw new InvalidOperationException(
-                "MariaDB bulk insert streams rows via LOAD DATA LOCAL INFILE, which is disabled. Inquiry's MariaDB " +
-                "provider enables the client side automatically on its dedicated bulk-insert connection; the " +
-                "server must allow it too (local_infile=1). With a custom connection factory, also set " +
-                "AllowLoadLocalInfile=true on the connection string used for bulk inserts.",
-                ex);
+            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
         }
     }
 
-    /// <summary>
-    /// Backtick-quotes the destination name; <see cref="MySqlBulkCopy.DestinationTableName"/> is
-    /// pasted verbatim into the generated <c>LOAD DATA</c> statement.
-    /// </summary>
     private static string QualifyTableName(string? schema, string table)
         => schema is null ? Quote(table) : Quote(schema) + "." + Quote(table);
 
     private static string Quote(string identifier)
         => "`" + identifier.Replace("`", "``") + "`";
 
-    /// <summary>
-    /// Matches the errors raised when <c>LOAD DATA LOCAL INFILE</c> support is switched off:
-    /// server-side by error number — 3948 "Loading local data is disabled" and 1148
-    /// ER_NOT_ALLOWED_COMMAND — plus MySqlConnector's client-side refusal, which names the
-    /// <c>AllowLoadLocalInfile</c> setting. Keying off the number (not message text) avoids
-    /// misclassifying unrelated failures behind the actionable message.
-    /// </summary>
     private static bool IsLocalInfileDisabled(Exception exception)
         => exception is MySqlException { Number: 1148 or 3948 }
             || exception.Message.Contains("AllowLoadLocalInfile", StringComparison.OrdinalIgnoreCase);

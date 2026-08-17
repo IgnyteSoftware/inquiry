@@ -4,7 +4,30 @@ const Inquiry.Diagnostics.InquiryTelemetry.MeterName = "Inquiry" -> string!
 const Inquiry.InquiryOptions.DefaultMaxBatchSize = 1000 -> int
 const Inquiry.InquiryOptions.DefaultMaxParametersPerCommand = 2000 -> int
 Inquiry.BulkCopy.IInquiryBulkCopier
-Inquiry.BulkCopy.IInquiryBulkCopier.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
+Inquiry.BulkCopy.IInquiryBulkCopier.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, Inquiry.BulkCopy.InquiryBulkInsertContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
+Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity>
+Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity>.Accessor.get -> System.Delegate!
+Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity>.FieldType.get -> System.Type!
+Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity>.IsNull(TEntity! entity) -> bool
+Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity>.WriteAsync<TWriter>(TEntity! entity, TWriter writer, int ordinal, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Inquiry.BulkCopy.IInquiryBulkValueWriter
+Inquiry.BulkCopy.IInquiryBulkValueWriter.WriteAsync<T>(T value, int ordinal, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>
+Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.Accessor.get -> System.Delegate!
+Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.FieldType.get -> System.Type!
+Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.InquiryBulkColumnAccessor(System.Func<TEntity!, TValue>! getValue) -> void
+Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.InquiryBulkColumnAccessor(System.Func<TEntity!, TValue>! getValue, System.Func<TEntity!, bool>? isNull) -> void
+Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.IsNull(TEntity! entity) -> bool
+Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.WriteAsync<TWriter>(TEntity! entity, TWriter writer, int ordinal, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior
+Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.Automatic = 0 -> Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior
+Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.RequireAmbientTransaction = 1 -> Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior
+Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.RequireDedicatedConnection = 2 -> Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior
+Inquiry.BulkCopy.InquiryBulkInsertContext
+Inquiry.BulkCopy.InquiryBulkInsertContext.Connection.get -> System.Data.Common.DbConnection?
+Inquiry.BulkCopy.InquiryBulkInsertContext.IsEnlisted.get -> bool
+Inquiry.BulkCopy.InquiryBulkInsertContext.Options.get -> Inquiry.BulkCopy.InquiryBulkInsertOptions!
+Inquiry.BulkCopy.InquiryBulkInsertContext.Transaction.get -> System.Data.Common.DbTransaction?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Columns.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.ColumnTypes.get -> System.Collections.Generic.IReadOnlyList<System.Data.DbType>?
@@ -13,9 +36,26 @@ Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.GetValue.get -> System.Fun
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue) -> void
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes) -> void
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes, System.Type![]? fieldTypes) -> void
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes, System.Type![]? fieldTypes, Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity!>![]? typedAccessors) -> void
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Schema.get -> string?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Table.get -> string!
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.TypedAccessors.get -> System.Collections.Generic.IReadOnlyList<Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity!>!>?
+Inquiry.BulkCopy.InquiryBulkInsertOptions
+Inquiry.BulkCopy.InquiryBulkInsertOptions.BatchSize.get -> int?
+Inquiry.BulkCopy.InquiryBulkInsertOptions.BatchSize.set -> void
+Inquiry.BulkCopy.InquiryBulkInsertOptions.ConnectionBehavior.get -> Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior
+Inquiry.BulkCopy.InquiryBulkInsertOptions.ConnectionBehavior.set -> void
+Inquiry.BulkCopy.InquiryBulkInsertOptions.InquiryBulkInsertOptions() -> void
+Inquiry.BulkCopy.InquiryBulkInsertOptions.NotifyAfter.get -> int?
+Inquiry.BulkCopy.InquiryBulkInsertOptions.NotifyAfter.set -> void
+Inquiry.BulkCopy.InquiryBulkInsertOptions.RowsCopied.get -> System.Action<long>?
+Inquiry.BulkCopy.InquiryBulkInsertOptions.RowsCopied.set -> void
+Inquiry.BulkCopy.InquiryBulkInsertOptions.TableLock.get -> bool
+Inquiry.BulkCopy.InquiryBulkInsertOptions.TableLock.set -> void
+Inquiry.BulkCopy.InquiryBulkInsertOptions.Timeout.get -> System.TimeSpan?
+Inquiry.BulkCopy.InquiryBulkInsertOptions.Timeout.set -> void
 Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>
+override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetFieldValue<T>(int ordinal) -> T
 Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.InquiryBulkRowReader(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows) -> void
 Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.RowsRead.get -> long
 Inquiry.Commands.InquiryBatchCommand<TItem>
@@ -251,6 +291,7 @@ Inquiry.GroupCount<TKey>.Key.get -> TKey
 Inquiry.IInquiry
 Inquiry.IInquiry.BeginTransactionAsync(System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Transactions.IInquiryTransaction!>!
 Inquiry.IInquiry.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
+Inquiry.IInquiry.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, Inquiry.BulkCopy.InquiryBulkInsertOptions? options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
 Inquiry.IInquiry.ExecuteAsync(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
 Inquiry.IInquiry.ExecuteAsync(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
 Inquiry.IInquiry.ExecuteAsync<TArgs>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!

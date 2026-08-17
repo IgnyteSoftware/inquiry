@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Inquiry.FeatureCatalog;
+using Inquiry.BulkCopy;
 using Inquiry.PostgreSql.Tests.Fixtures;
 
 namespace Inquiry.PostgreSql.Tests;
@@ -57,5 +58,92 @@ public sealed class BulkInsertIntegrationTests
 
         Assert.Equal(0L, await store.BulkInsertAsync(new List<BulkItem>()));
         Assert.Equal(0L, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task AmbientBulkInsertRollsBack()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.PostgreSqlDdl, "bulkrollback");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<BulkItemStore>();
+        await using var transaction = await inquiry.BeginTransactionAsync();
+
+        Assert.Equal(1, await store.BulkInsertAsync(new[] { Item("rollback", 1) }));
+        await transaction.RollbackAsync();
+
+        Assert.Equal(0, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task AmbientBulkInsertCommits()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.PostgreSqlDdl, "bulkcommit");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<BulkItemStore>();
+        await using var transaction = await inquiry.BeginTransactionAsync();
+
+        Assert.Equal(1, await store.BulkInsertAsync(new[] { Item("commit", 1) }));
+        await transaction.CommitAsync();
+
+        Assert.Equal(1, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task CancellationInsideTransactionLeavesNoRows()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.PostgreSqlDdl, "bulkcancel");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<BulkItemStore>();
+        using var cancellation = new CancellationTokenSource();
+        await using var transaction = await inquiry.BeginTransactionAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.BulkInsertAsync(CancelAfter(1000, 50, cancellation), cancellation.Token));
+        await transaction.RollbackAsync();
+
+        Assert.Equal(0, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task DedicatedBulkInsertsCanRunConcurrently()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.PostgreSqlDdl, "bulkconcurrent");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        await Task.WhenAll(
+            store.BulkInsertAsync(Enumerable.Range(0, 100).Select(i => Item("left", i))),
+            store.BulkInsertAsync(Enumerable.Range(0, 100).Select(i => Item("right", i))));
+
+        Assert.Equal(200, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task TimeoutIsSupportedAndOtherProviderOptionsFailBeforeWriting()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.PostgreSqlDdl, "bulkoptions");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        Assert.Equal(1, await store.BulkInsertWithOptionsAsync(new[] { Item("timeout", 1) }, new InquiryBulkInsertOptions { Timeout = TimeSpan.FromSeconds(60) }));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.BulkInsertWithOptionsAsync(new[] { Item("unsupported", 2) }, new InquiryBulkInsertOptions { BatchSize = 10 }));
+        Assert.Contains("BatchSize", exception.Message);
+        Assert.Equal(1, await store.CountAsync());
+    }
+
+    private static BulkItem Item(string category, int value) => new() { Category = category, Amount = value };
+
+    private static IEnumerable<BulkItem> CancelAfter(int count, int cancelAt, CancellationTokenSource cancellation)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            if (i == cancelAt) cancellation.Cancel();
+            cancellation.Token.ThrowIfCancellationRequested();
+            yield return Item("cancel", i);
+        }
     }
 }

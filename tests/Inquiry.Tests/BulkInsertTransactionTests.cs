@@ -7,7 +7,7 @@ namespace Inquiry.Tests;
 public sealed class BulkInsertTransactionTests
 {
     [Fact]
-    public async Task NativeBulkInsertInsideAmbientTransactionFailsBeforeCallingCopier()
+    public async Task NativeBulkInsertInsideAmbientTransactionPassesBorrowedConnectionAndTransactionToCopier()
     {
         var copier = new RecordingBulkCopier();
         await using var fixture = await SqliteInquiryFixture.CreateAsync(
@@ -21,12 +21,13 @@ public sealed class BulkInsertTransactionTests
             new[] { "Id" },
             static (row, _) => row.Id);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => inquiry.BulkInsertAsync(definition, new[] { new Row(1) }));
+        var written = await inquiry.BulkInsertAsync(definition, new[] { new Row(1) });
 
-        Assert.Contains("cannot run inside an Inquiry transaction", exception.Message);
-        Assert.Contains("[InquiryInsertAll]", exception.Message);
-        Assert.False(copier.Called);
+        Assert.Equal(1, written);
+        Assert.True(copier.Called);
+        Assert.Same(transaction.Connection, copier.Context!.Connection);
+        Assert.Same(transaction.Transaction, copier.Context.Transaction);
+        Assert.True(copier.Context.IsEnlisted);
     }
 
     [Fact]
@@ -61,20 +62,62 @@ public sealed class BulkInsertTransactionTests
         Assert.False(copier.Called);
     }
 
+    [Fact]
+    public async Task RequiredAmbientTransactionFailsBeforeCallingCopierWhenNoneIsActive()
+    {
+        var copier = new RecordingBulkCopier();
+        await using var fixture = await SqliteInquiryFixture.CreateAsync(
+            services => services.AddSingleton<IInquiryBulkCopier>(copier));
+        using var scope = fixture.CreateScope();
+        var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
+        var definition = new InquiryBulkInsertDefinition<Row>(null, "Rows", new[] { "Id" }, static (row, _) => row.Id);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => inquiry.BulkInsertAsync(
+            definition,
+            new[] { new Row(1) },
+            new InquiryBulkInsertOptions { ConnectionBehavior = InquiryBulkInsertConnectionBehavior.RequireAmbientTransaction }));
+
+        Assert.Contains("requires an ambient Inquiry transaction", exception.Message);
+        Assert.False(copier.Called);
+    }
+
+    [Fact]
+    public async Task RequiredDedicatedConnectionFailsBeforeCallingCopierInsideTransaction()
+    {
+        var copier = new RecordingBulkCopier();
+        await using var fixture = await SqliteInquiryFixture.CreateAsync(
+            services => services.AddSingleton<IInquiryBulkCopier>(copier));
+        using var scope = fixture.CreateScope();
+        var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
+        await using var transaction = await inquiry.BeginTransactionAsync();
+        var definition = new InquiryBulkInsertDefinition<Row>(null, "Rows", new[] { "Id" }, static (row, _) => row.Id);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => inquiry.BulkInsertAsync(
+            definition,
+            new[] { new Row(1) },
+            new InquiryBulkInsertOptions { ConnectionBehavior = InquiryBulkInsertConnectionBehavior.RequireDedicatedConnection }));
+
+        Assert.Contains("requires a dedicated connection", exception.Message);
+        Assert.False(copier.Called);
+    }
+
     private sealed record Row(int Id);
 
     private sealed class RecordingBulkCopier : IInquiryBulkCopier
     {
         public bool Called { get; private set; }
+        public InquiryBulkInsertContext? Context { get; private set; }
 
         public Task<long> BulkInsertAsync<TEntity>(
             InquiryBulkInsertDefinition<TEntity> definition,
             IEnumerable<TEntity> rows,
+            InquiryBulkInsertContext context,
             CancellationToken cancellationToken = default)
             where TEntity : class
         {
             Called = true;
-            return Task.FromResult(0L);
+            Context = context;
+            return Task.FromResult(rows.LongCount());
         }
     }
 }

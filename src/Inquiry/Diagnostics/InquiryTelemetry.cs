@@ -43,6 +43,16 @@ public static class InquiryTelemetry
         unit: "s",
         description: "Duration of database commands executed by the Inquiry pipeline.");
 
+    internal static readonly Histogram<double> BulkConnectionOpenDuration = Meter.CreateHistogram<double>(
+        "inquiry.bulk_insert.connection_open.duration",
+        unit: "s",
+        description: "Duration of opening or acquiring the connection used for a native bulk insert.");
+
+    internal static readonly Histogram<double> BulkCopyDuration = Meter.CreateHistogram<double>(
+        "inquiry.bulk_insert.copy.duration",
+        unit: "s",
+        description: "Duration of the provider-native copy phase of a bulk insert.");
+
     internal static string MapDbSystem(System.Data.Common.DbCommand command) => command.GetType().Name switch
     {
         "SqliteCommand" => "sqlite",
