@@ -18,7 +18,10 @@ public sealed class BulkAllTypesIntegrationTests
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(
             _fixture.AdminConnectionString, FeatureSchema.BulkAllTypesPostgreSqlDdl, "bulkalltypes");
+        var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<BulkAllTypesItemStore>();
+        await using var transaction = await inquiry.BeginTransactionAsync();
         await BulkAllTypesCases.RunAsync(store);
+        await transaction.CommitAsync();
     }
 }

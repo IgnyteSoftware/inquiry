@@ -275,14 +275,26 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
 
     /// <inheritdoc />
+    public Task<long> BulkInsertAsync<TEntity>(
+        Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
+        IEnumerable<TEntity> rows,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        => BulkInsertAsync(definition, rows, options: null, cancellationToken);
+
+    /// <inheritdoc />
     public async Task<long> BulkInsertAsync<TEntity>(
         Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
+        Inquiry.BulkCopy.InquiryBulkInsertOptions? options,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
         if (definition is null) throw new ArgumentNullException(nameof(definition));
         if (rows is null) throw new ArgumentNullException(nameof(rows));
+
+        options ??= new Inquiry.BulkCopy.InquiryBulkInsertOptions();
+        options.Validate();
 
         var ambientSlot = _ambientSlot.Value;
         if (ambientSlot?.State == AmbientTransactionSlotState.Closed)
@@ -290,37 +302,65 @@ internal sealed class DefaultInquiry : IInquiry
             throw CreateClosedAmbientTransactionException();
         }
 
-        if (ambientSlot?.Pipeline is not null)
-        {
-            throw new InvalidOperationException(
-                "Native bulk insert cannot run inside an Inquiry transaction because it uses a dedicated connection " +
-                "and would not participate in rollback. Use [InquiryInsertAll] for transaction-bound inserts, or " +
-                "run [InquiryBulkInsert] outside the transaction.");
-        }
+        var pipeline = ambientSlot?.Pipeline;
+        if (options.ConnectionBehavior == Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.RequireAmbientTransaction
+            && pipeline is null)
+            throw new InvalidOperationException("Bulk insert option ConnectionBehavior requires an ambient Inquiry transaction, but none is active.");
+        if (options.ConnectionBehavior == Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.RequireDedicatedConnection
+            && pipeline is not null)
+            throw new InvalidOperationException("Bulk insert option ConnectionBehavior requires a dedicated connection, but an ambient Inquiry transaction is active.");
 
         var copier = _serviceProvider.GetService<Inquiry.BulkCopy.IInquiryBulkCopier>()
             ?? throw new InvalidOperationException(
                 "No IInquiryBulkCopier is registered. Bulk insert needs a provider with a native bulk-copy API " +
                 "(SQL Server, PostgreSQL, MySQL); on other providers use the [InquiryInsertAll] batch insert.");
 
-        var (activity, startTimestamp, dbSystem) = StartBulkInsertActivity(definition.Table);
+        var enlisted = pipeline is not null;
+        var (activity, startTimestamp, dbSystem) = StartBulkInsertActivity(definition.Table, enlisted);
+        var context = new Inquiry.BulkCopy.InquiryBulkInsertContext(
+            pipeline?.Connection,
+            pipeline?.Transaction,
+            options,
+            duration => RecordBulkConnectionOpen(activity, dbSystem, enlisted, duration),
+            (duration, rowCount) => RecordBulkCopy(activity, dbSystem, enlisted, duration, rowCount));
+        IDisposable? operationLease = null;
         try
         {
-            var rowCount = await copier.BulkInsertAsync(definition, rows, cancellationToken).ConfigureAwait(false);
-            RecordBulkInsertCompletion(activity, startTimestamp, dbSystem, rowCount);
+            operationLease = pipeline?.EnterExclusiveOperation();
+            if (enlisted) context.RecordConnectionOpened(TimeSpan.Zero);
+            // Same cancellation contract as the command pipeline (#282/#283): a driver-native error
+            // surfaced after the caller's token fired (MySqlConnector wraps the cancel in a
+            // MySqlException during LOAD DATA LOCAL INFILE) normalizes to an OCE carrying the
+            // caller's token, and completion that beat the token is trusted.
+            var rowCount = await InquiryCancellation.AwaitEnforcingCallerToken(
+                copier.BulkInsertAsync(definition, rows, context, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+            RecordBulkInsertCompletion(activity, startTimestamp, dbSystem, enlisted, rowCount);
             return rowCount;
+        }
+        catch (OperationCanceledException exception) when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            RecordBulkInsertFailure(activity, startTimestamp, dbSystem, enlisted, normalized);
+            throw normalized;
         }
         catch (Exception exception)
         {
-            RecordBulkInsertFailure(activity, startTimestamp, dbSystem, exception);
+            RecordBulkInsertFailure(activity, startTimestamp, dbSystem, enlisted, exception);
             throw;
+        }
+        finally
+        {
+            operationLease?.Dispose();
         }
     }
 
-    private (Activity? activity, long startTimestamp, string dbSystem) StartBulkInsertActivity(string table)
+    private (Activity? activity, long startTimestamp, string dbSystem) StartBulkInsertActivity(string table, bool enlisted)
     {
         if (!Diagnostics.InquiryTelemetry.ActivitySource.HasListeners()
-            && !Diagnostics.InquiryTelemetry.CommandDuration.Enabled)
+            && !Diagnostics.InquiryTelemetry.CommandDuration.Enabled
+            && !Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Enabled
+            && !Diagnostics.InquiryTelemetry.BulkCopyDuration.Enabled)
             return (null, 0, "");
 
         var dbSystem = Diagnostics.InquiryTelemetry.MapDbSystem(_connectionFactory);
@@ -334,20 +374,22 @@ internal sealed class DefaultInquiry : IInquiry
                 activity.SetTag("db.system.name", dbSystem);
                 activity.SetTag("db.operation.name", "BULK_INSERT");
                 activity.SetTag("db.collection.name", table);
+                activity.SetTag("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated");
             }
         }
 
         return (activity, startTimestamp, dbSystem);
     }
 
-    private static void RecordBulkInsertCompletion(Activity? activity, long startTimestamp, string dbSystem, long rowCount)
+    private static void RecordBulkInsertCompletion(Activity? activity, long startTimestamp, string dbSystem, bool enlisted, long rowCount)
     {
         if (startTimestamp == 0) return;
 
         Diagnostics.InquiryTelemetry.CommandDuration.Record(
             System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
-            new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"));
+            new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"),
+            new KeyValuePair<string, object?>("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated"));
 
         if (activity is not null)
         {
@@ -356,7 +398,7 @@ internal sealed class DefaultInquiry : IInquiry
         }
     }
 
-    private static void RecordBulkInsertFailure(Activity? activity, long startTimestamp, string dbSystem, Exception exception)
+    private static void RecordBulkInsertFailure(Activity? activity, long startTimestamp, string dbSystem, bool enlisted, Exception exception)
     {
         var errorType = exception.GetType().FullName ?? exception.GetType().Name;
 
@@ -366,6 +408,7 @@ internal sealed class DefaultInquiry : IInquiry
                 System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
                 new KeyValuePair<string, object?>("db.system.name", dbSystem),
                 new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"),
+                new KeyValuePair<string, object?>("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated"),
                 new KeyValuePair<string, object?>("error.type", errorType));
         }
 
@@ -375,6 +418,35 @@ internal sealed class DefaultInquiry : IInquiry
             activity.SetStatus(ActivityStatusCode.Error, exception.Message);
             activity.Dispose();
         }
+    }
+
+    private static void RecordBulkConnectionOpen(Activity? activity, string dbSystem, bool enlisted, TimeSpan duration)
+    {
+        Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Record(
+            duration.TotalSeconds,
+            new KeyValuePair<string, object?>("db.system.name", dbSystem),
+            new KeyValuePair<string, object?>("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated"));
+        activity?.AddEvent(new ActivityEvent(
+            enlisted ? "connection.reused" : "connection.opened",
+            tags: new ActivityTagsCollection
+            {
+                { "inquiry.bulk_insert.connection_open.duration", duration.TotalSeconds },
+            }));
+    }
+
+    private static void RecordBulkCopy(Activity? activity, string dbSystem, bool enlisted, TimeSpan duration, long? rowCount)
+    {
+        Diagnostics.InquiryTelemetry.BulkCopyDuration.Record(
+            duration.TotalSeconds,
+            new KeyValuePair<string, object?>("db.system.name", dbSystem),
+            new KeyValuePair<string, object?>("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated"));
+        activity?.AddEvent(new ActivityEvent(
+            rowCount.HasValue ? "copy.completed" : "copy.failed",
+            tags: new ActivityTagsCollection
+            {
+                { "inquiry.bulk_insert.copy.duration", duration.TotalSeconds },
+                { "db.response.affected_rows", rowCount },
+            }));
     }
 
     /// <inheritdoc />

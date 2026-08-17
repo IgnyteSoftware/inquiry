@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
+using Inquiry.BulkCopy;
 using Inquiry.Sqlite.Tests.Fixtures;
 
 namespace Inquiry.Sqlite.Tests;
@@ -46,5 +47,18 @@ public sealed class BulkInsertFallbackIntegrationTests
 
         Assert.Equal(0L, await store.BulkInsertAsync(new List<BulkItem>()));
         Assert.Equal(0L, await store.CountAsync());
+    }
+
+    [Fact]
+    public async Task NativeOptionsAreRejectedBeforeFallbackWrites()
+    {
+        await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.SqliteDdl, "BulkFallbackOptions");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.BulkInsertWithOptionsAsync(new[] { new BulkItem { Category = "unsupported" } }, new InquiryBulkInsertOptions { Timeout = TimeSpan.FromSeconds(1) }));
+
+        Assert.Contains("not supported", exception.Message);
+        Assert.Equal(0, await store.CountAsync());
     }
 }

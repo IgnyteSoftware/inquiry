@@ -60,6 +60,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("new global::System.Type[] {", text);
         Assert.Contains("typeof(string)", text);
         Assert.Contains("typeof(decimal)", text);
+        Assert.Contains("new global::Inquiry.BulkCopy.IInquiryBulkColumnAccessor<global::Demo.Item>[]", text);
+        Assert.Contains("InquiryBulkColumnAccessor<global::Demo.Item, string>(static _e => _e.Category)", text);
+        Assert.Contains("InquiryBulkColumnAccessor<global::Demo.Item, decimal>(static _e => _e.Amount)", text);
+        Assert.Contains("static _e => _e.Note is null", text);
 
         // The body streams through the copier; no batch-SQL machinery is emitted.
         Assert.Contains("return Inquiry.BulkInsertAsync(_bulkDef_BulkInsertAsync, ((global::System.Collections.Generic.IEnumerable<global::Demo.Item>?)items) ?? global::System.Array.Empty<global::Demo.Item>(),", text);
@@ -245,5 +249,45 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ005");
+    }
+
+    [Theory]
+    [InlineData("PostgreSql", true)]
+    [InlineData("Sqlite", false)]
+    public void BulkInsertAcceptsPerCallOptionsAndRoutesOrRejectsThem(string dialect, bool native)
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.BulkCopy;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Item")]
+            public sealed class Item
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+            }
+
+            public partial class ItemStore : InquiryStore<Item>
+            {
+                [InquiryBulkInsert]
+                public partial Task<long> BulkAsync(IEnumerable<Item> items, InquiryBulkInsertOptions? options, CancellationToken ct = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: dialect);
+        AssertNoErrors(result);
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static tree => tree.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        if (native)
+            Assert.Contains("Inquiry.BulkInsertAsync(_bulkDef_BulkAsync", text);
+        else
+            Assert.Contains("Native bulk-insert options are not supported by this provider's batch-SQL fallback", text);
     }
 }

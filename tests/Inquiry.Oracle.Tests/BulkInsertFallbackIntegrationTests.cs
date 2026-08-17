@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Inquiry.FeatureCatalog;
+using Inquiry.BulkCopy;
 using Inquiry.Oracle.Tests.Fixtures;
 
 namespace Inquiry.Oracle.Tests;
@@ -57,5 +58,20 @@ public sealed class BulkInsertFallbackIntegrationTests
 
         Assert.Equal(0L, await store.BulkInsertAsync(new List<BulkItem>()));
         Assert.Equal(0L, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task NativeOptionsAreRejectedBeforeFallbackWrites()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString, FeatureSchema.OracleDdl, "bulkoptions");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.BulkInsertWithOptionsAsync(new[] { new BulkItem { Category = "unsupported" } }, new InquiryBulkInsertOptions { Timeout = TimeSpan.FromSeconds(1) }));
+
+        Assert.Contains("not supported", exception.Message);
+        Assert.Equal(0, await store.CountAsync());
     }
 }

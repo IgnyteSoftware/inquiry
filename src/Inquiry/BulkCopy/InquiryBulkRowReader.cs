@@ -75,7 +75,25 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
 
     /// <inheritdoc />
     public override bool IsDBNull(int ordinal)
-        => GetValue(ordinal) is DBNull;
+    {
+        ValidateOrdinal(ordinal);
+        return _definition.TypedAccessors is { } typedAccessors
+            ? typedAccessors[ordinal].IsNull(Current)
+            : _definition.GetValue(Current, ordinal) is DBNull;
+    }
+
+    /// <inheritdoc />
+    public override T GetFieldValue<T>(int ordinal)
+    {
+        ValidateOrdinal(ordinal);
+        if (_definition.TypedAccessors is { } typedAccessors
+            && typedAccessors[ordinal].Accessor is Func<TEntity, T> accessor)
+        {
+            return accessor(Current);
+        }
+
+        return (T)GetValue(ordinal);
+    }
 
     /// <inheritdoc />
     public override string GetName(int ordinal)
@@ -207,17 +225,17 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     }
 
     /// <inheritdoc />
-    public override bool GetBoolean(int ordinal) => (bool)GetValue(ordinal);
+    public override bool GetBoolean(int ordinal) => GetFieldValue<bool>(ordinal);
 
     /// <inheritdoc />
-    public override byte GetByte(int ordinal) => (byte)GetValue(ordinal);
+    public override byte GetByte(int ordinal) => GetFieldValue<byte>(ordinal);
 
     /// <inheritdoc />
     public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
     {
         ValidateOrdinal(ordinal);
         ValidateCopyArguments(dataOffset, buffer, bufferOffset, length);
-        if (GetValue(ordinal) is not byte[] value)
+        if (GetFieldValue<byte[]>(ordinal) is not { } value)
         {
             throw new InvalidCastException($"Column {ordinal} does not contain a byte array.");
         }
@@ -238,14 +256,14 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     }
 
     /// <inheritdoc />
-    public override char GetChar(int ordinal) => (char)GetValue(ordinal);
+    public override char GetChar(int ordinal) => GetFieldValue<char>(ordinal);
 
     /// <inheritdoc />
     public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length)
     {
         ValidateOrdinal(ordinal);
         ValidateCopyArguments(dataOffset, buffer, bufferOffset, length);
-        if (GetValue(ordinal) is not string value)
+        if (GetFieldValue<string>(ordinal) is not { } value)
         {
             throw new InvalidCastException($"Column {ordinal} does not contain a string.");
         }
@@ -266,31 +284,31 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     }
 
     /// <inheritdoc />
-    public override DateTime GetDateTime(int ordinal) => (DateTime)GetValue(ordinal);
+    public override DateTime GetDateTime(int ordinal) => GetFieldValue<DateTime>(ordinal);
 
     /// <inheritdoc />
-    public override decimal GetDecimal(int ordinal) => (decimal)GetValue(ordinal);
+    public override decimal GetDecimal(int ordinal) => GetFieldValue<decimal>(ordinal);
 
     /// <inheritdoc />
-    public override double GetDouble(int ordinal) => (double)GetValue(ordinal);
+    public override double GetDouble(int ordinal) => GetFieldValue<double>(ordinal);
 
     /// <inheritdoc />
-    public override float GetFloat(int ordinal) => (float)GetValue(ordinal);
+    public override float GetFloat(int ordinal) => GetFieldValue<float>(ordinal);
 
     /// <inheritdoc />
-    public override Guid GetGuid(int ordinal) => (Guid)GetValue(ordinal);
+    public override Guid GetGuid(int ordinal) => GetFieldValue<Guid>(ordinal);
 
     /// <inheritdoc />
-    public override short GetInt16(int ordinal) => (short)GetValue(ordinal);
+    public override short GetInt16(int ordinal) => GetFieldValue<short>(ordinal);
 
     /// <inheritdoc />
-    public override int GetInt32(int ordinal) => (int)GetValue(ordinal);
+    public override int GetInt32(int ordinal) => GetFieldValue<int>(ordinal);
 
     /// <inheritdoc />
-    public override long GetInt64(int ordinal) => (long)GetValue(ordinal);
+    public override long GetInt64(int ordinal) => GetFieldValue<long>(ordinal);
 
     /// <inheritdoc />
-    public override string GetString(int ordinal) => (string)GetValue(ordinal);
+    public override string GetString(int ordinal) => GetFieldValue<string>(ordinal);
 
     private void ValidateOrdinal(int ordinal)
     {
