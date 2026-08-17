@@ -22,7 +22,7 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
     /// coercions already applied by the generator; <see cref="DBNull.Value"/> for null.
     /// </param>
     public InquiryBulkInsertDefinition(string? schema, string table, string[] columns, Func<TEntity, int, object> getValue)
-        : this(schema, table, columns, getValue, columnTypes: null, fieldTypes: null)
+        : this(schema, table, columns, getValue, columnTypes: null, fieldTypes: null, typedAccessors: null)
     {
     }
 
@@ -33,7 +33,7 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
     /// <param name="getValue"><inheritdoc cref="GetValue" path="/summary"/></param>
     /// <param name="columnTypes"><inheritdoc cref="ColumnTypes" path="/summary"/></param>
     public InquiryBulkInsertDefinition(string? schema, string table, string[] columns, Func<TEntity, int, object> getValue, System.Data.DbType[]? columnTypes)
-        : this(schema, table, columns, getValue, columnTypes, fieldTypes: null)
+        : this(schema, table, columns, getValue, columnTypes, fieldTypes: null, typedAccessors: null)
     {
     }
 
@@ -51,6 +51,19 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
         Func<TEntity, int, object> getValue,
         System.Data.DbType[]? columnTypes,
         Type[]? fieldTypes)
+        : this(schema, table, columns, getValue, columnTypes, fieldTypes, typedAccessors: null)
+    {
+    }
+
+    /// <summary>Initializes the definition with wire, reader, and strongly typed accessor metadata.</summary>
+    public InquiryBulkInsertDefinition(
+        string? schema,
+        string table,
+        string[] columns,
+        Func<TEntity, int, object> getValue,
+        System.Data.DbType[]? columnTypes,
+        Type[]? fieldTypes,
+        IInquiryBulkColumnAccessor<TEntity>[]? typedAccessors)
     {
         if (columns is null) throw new ArgumentNullException(nameof(columns));
         if (columns.Length == 0) throw new ArgumentException("A bulk insert needs at least one column.", nameof(columns));
@@ -58,6 +71,8 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
             throw new ArgumentException("Column type metadata must have one entry per column.", nameof(columnTypes));
         if (fieldTypes is not null && fieldTypes.Length != columns.Length)
             throw new ArgumentException("Field type metadata must have one entry per column.", nameof(fieldTypes));
+        if (typedAccessors is not null && typedAccessors.Length != columns.Length)
+            throw new ArgumentException("Typed accessor metadata must have one entry per column.", nameof(typedAccessors));
 
         Schema = schema;
         Table = table ?? throw new ArgumentNullException(nameof(table));
@@ -67,6 +82,7 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
         GetValue = getValue ?? throw new ArgumentNullException(nameof(getValue));
         ColumnTypes = columnTypes is null ? null : (System.Data.DbType[])columnTypes.Clone();
         FieldTypes = fieldTypes is null ? null : (Type[])fieldTypes.Clone();
+        TypedAccessors = typedAccessors is null ? null : (IInquiryBulkColumnAccessor<TEntity>[])typedAccessors.Clone();
     }
 
     /// <summary>Raw schema name, or null for the provider default.</summary>
@@ -94,4 +110,7 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
     /// first row and when a current value is <see cref="DBNull.Value"/>.
     /// </summary>
     public IReadOnlyList<Type>? FieldTypes { get; }
+
+    /// <summary>Strongly typed per-column accessors emitted by the generator, or null for manual definitions.</summary>
+    public IReadOnlyList<IInquiryBulkColumnAccessor<TEntity>>? TypedAccessors { get; }
 }

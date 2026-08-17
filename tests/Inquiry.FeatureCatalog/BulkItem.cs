@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Inquiry.Entities;
+using Inquiry.BulkCopy;
 using Inquiry.Stores;
 
 namespace Inquiry.FeatureCatalog;
@@ -31,6 +32,9 @@ public partial class BulkItemStore : InquiryStore<BulkItem>
 {
     [InquiryBulkInsert]
     public partial Task<long> BulkInsertAsync(IEnumerable<BulkItem> items, CancellationToken cancellationToken = default);
+
+    [InquiryBulkInsert]
+    public partial Task<long> BulkInsertWithOptionsAsync(IEnumerable<BulkItem> items, InquiryBulkInsertOptions? options, CancellationToken cancellationToken = default);
 
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);

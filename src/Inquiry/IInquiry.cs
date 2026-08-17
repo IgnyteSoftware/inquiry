@@ -137,9 +137,9 @@ public interface IInquiry
     /// Streams rows into a table via the provider's native bulk-copy API (SqlBulkCopy / binary
     /// COPY / MySqlBulkCopy). Generated <c>[InquiryBulkInsert]</c> methods on bulk-capable
     /// dialects call this; dialects without a bulk-copy API fall back to batch SQL at compile
-    /// time and never do. Bulk insert opens a dedicated connection and bypasses interceptors and
-    /// telemetry. The built-in implementation rejects calls made inside an ambient Inquiry
-    /// transaction because the dedicated connection could not participate in its rollback.
+    /// time and never do. Native bulk insert enlists in an ambient Inquiry transaction when the
+    /// provider supports it; otherwise it fails before writing. Outside a transaction it opens a
+    /// dedicated connection. Bulk-copy operations bypass command interceptors but emit telemetry.
     /// </summary>
     /// <remarks>The default throws; <see cref="DefaultInquiry"/> resolves the provider's
     /// registered <see cref="Inquiry.BulkCopy.IInquiryBulkCopier"/>, so existing
@@ -150,6 +150,24 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
         => throw new NotSupportedException("Bulk insert requires the built-in DefaultInquiry with a provider-registered IInquiryBulkCopier.");
+
+    /// <summary>Streams rows through the provider's native bulk-copy API with per-call options.</summary>
+    /// <remarks>
+    /// A provider throws <see cref="InvalidOperationException"/> before copying when it cannot honor
+    /// a requested option. SQLite and Oracle generated bulk-insert methods use batch SQL instead and
+    /// reject any non-null native bulk-copy options before executing the fallback.
+    /// </remarks>
+    Task<long> BulkInsertAsync<TEntity>(
+        Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
+        IEnumerable<TEntity> rows,
+        Inquiry.BulkCopy.InquiryBulkInsertOptions? options,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+    {
+        if (options is not null)
+            throw new InvalidOperationException("This IInquiry implementation does not support native bulk-insert options.");
+        return BulkInsertAsync(definition, rows, cancellationToken);
+    }
 
     // ---- Execute (no materializer) ----------------------------------------------------
 

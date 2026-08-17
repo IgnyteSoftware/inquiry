@@ -2907,7 +2907,11 @@ internal static class StoreProcessor
             StoreOperation.SelectAll or StoreOperation.SelectAllEager or StoreOperation.Count or StoreOperation.Aggregate
                 or StoreOperation.SelectTopByOrder or StoreOperation.GroupCount => parameters.Count == 1,
             StoreOperation.FullTextSearch => parameters.Count == 2 && parameters[0].ComparisonDisplay == "string",
-            StoreOperation.InsertAll or StoreOperation.BulkInsert or StoreOperation.UpdateAll => parameters.Count == 2 && IsEnumerableOfEntity(parameters[0], entity),
+            StoreOperation.InsertAll or StoreOperation.UpdateAll => parameters.Count == 2 && IsEnumerableOfEntity(parameters[0], entity),
+            StoreOperation.BulkInsert =>
+                (parameters.Count == 2 ||
+                    (parameters.Count == 3 && parameters[1].ComparisonDisplay == "global::Inquiry.BulkCopy.InquiryBulkInsertOptions")) &&
+                IsEnumerableOfEntity(parameters[0], entity),
             // DeleteAll takes a collection of the single key's type; composite-key entities are unsupported.
             StoreOperation.DeleteAll => entity.Keys.Count == 1 && parameters.Count == 2 && IsEnumerableOfType(parameters[0], entity.Keys[0].Type.DisplayName),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.RestoreOneByKey =>

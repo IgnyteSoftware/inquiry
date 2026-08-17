@@ -3,12 +3,14 @@ using Inquiry.Connections;
 using Npgsql;
 using NpgsqlTypes;
 using System.Data;
+using System.Data.Common;
+using System.Diagnostics;
 
 namespace Inquiry.PostgreSql;
 
 /// <summary>
 /// <see cref="IInquiryBulkCopier"/> for PostgreSQL: streams rows into the target table through
-/// Npgsql's binary <c>COPY ... FROM STDIN</c> protocol on a dedicated connection.
+/// Npgsql's binary <c>COPY ... FROM STDIN</c> protocol on an ambient or dedicated connection.
 /// </summary>
 internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
 {
@@ -24,6 +26,7 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
     public async Task<long> BulkInsertAsync<TEntity>(
         InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
+        InquiryBulkInsertContext context,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
@@ -31,42 +34,104 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
         var sql = BuildCopyCommand(definition);
         var npgsqlTypes = MapColumnTypes(definition);
 
-        var rawConnection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        if (context.Options.BatchSize is not null)
+            throw new InvalidOperationException("PostgreSQL bulk insert cannot honor option BatchSize before writing any rows.");
+        if (context.Options.TableLock)
+            throw new InvalidOperationException("PostgreSQL bulk insert cannot honor option TableLock before writing any rows.");
+        if (context.Options.NotifyAfter is not null || context.Options.RowsCopied is not null)
+            throw new InvalidOperationException("PostgreSQL bulk insert cannot honor options NotifyAfter or RowsCopied before writing any rows.");
+
+        DbConnection? dedicatedConnection = null;
+        var rawConnection = context.Connection;
+        if (rawConnection is null)
+        {
+            var openTimestamp = Stopwatch.GetTimestamp();
+            try
+            {
+                rawConnection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+                dedicatedConnection = rawConnection;
+            }
+            finally
+            {
+                context.RecordConnectionOpened(Stopwatch.GetElapsedTime(openTimestamp));
+            }
+        }
         if (rawConnection is not NpgsqlConnection connection)
         {
-            await rawConnection.DisposeAsync().ConfigureAwait(false);
+            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
             throw new InvalidOperationException(
                 $"PostgreSQL bulk insert requires an NpgsqlConnection but received {rawConnection.GetType().Name}. " +
                 "If using a connection wrapper, unwrap the inner connection first.");
         }
 
-        await using (connection)
-        await using (var writer = await connection.BeginBinaryImportAsync(sql, cancellationToken).ConfigureAwait(false))
+        try
         {
-            foreach (var row in rows)
+            await using var writer = await connection.BeginBinaryImportAsync(sql, cancellationToken).ConfigureAwait(false);
+            if (context.Options.Timeout is { } timeout) writer.Timeout = timeout;
+            var typedWriter = new NpgsqlBulkValueWriter(writer, npgsqlTypes);
+            var copyTimestamp = Stopwatch.GetTimestamp();
+            long rowCount = 0;
+            try
             {
-                await writer.StartRowAsync(cancellationToken).ConfigureAwait(false);
-                for (var ordinal = 0; ordinal < columnCount; ordinal++)
+                foreach (var row in rows)
                 {
-                    var value = definition.GetValue(row, ordinal);
-                    if (value is DBNull)
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await writer.StartRowAsync(cancellationToken).ConfigureAwait(false);
+                    for (var ordinal = 0; ordinal < columnCount; ordinal++)
                     {
-                        await writer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
+                        if (definition.TypedAccessors is { } typedAccessors)
+                        {
+                            var accessor = typedAccessors[ordinal];
+                            if (accessor.IsNull(row))
+                                await writer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
+                            else
+                                await accessor.WriteAsync(row, typedWriter, ordinal, cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            var value = definition.GetValue(row, ordinal);
+                            if (value is DBNull)
+                                await writer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
+                            else if (npgsqlTypes is not null)
+                                await writer.WriteAsync(value, npgsqlTypes[ordinal], cancellationToken).ConfigureAwait(false);
+                            else
+                                await writer.WriteAsync(value, cancellationToken).ConfigureAwait(false);
+                        }
                     }
-                    else if (npgsqlTypes is not null)
-                    {
-                        await writer.WriteAsync(value, npgsqlTypes[ordinal], cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await writer.WriteAsync(value, cancellationToken).ConfigureAwait(false);
-                    }
+                    rowCount++;
                 }
-            }
 
-            var written = await writer.CompleteAsync(cancellationToken).ConfigureAwait(false);
-            return (long)written;
+                var written = await writer.CompleteAsync(cancellationToken).ConfigureAwait(false);
+                context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp), (long)written);
+                return (long)written;
+            }
+            catch
+            {
+                context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp));
+                throw;
+            }
         }
+        finally
+        {
+            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private readonly struct NpgsqlBulkValueWriter : IInquiryBulkValueWriter
+    {
+        private readonly NpgsqlBinaryImporter _writer;
+        private readonly NpgsqlDbType[]? _types;
+
+        public NpgsqlBulkValueWriter(NpgsqlBinaryImporter writer, NpgsqlDbType[]? types)
+        {
+            _writer = writer;
+            _types = types;
+        }
+
+        public ValueTask WriteAsync<T>(T value, int ordinal, CancellationToken cancellationToken)
+            => new(_types is null
+                ? _writer.WriteAsync(value, cancellationToken)
+                : _writer.WriteAsync(value, _types[ordinal], cancellationToken));
     }
 
     private static NpgsqlDbType[]? MapColumnTypes<TEntity>(InquiryBulkInsertDefinition<TEntity> definition)

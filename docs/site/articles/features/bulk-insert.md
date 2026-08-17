@@ -28,17 +28,34 @@ The method takes `IEnumerable<T>` (lazy sequences stream end-to-end) and returns
 - **Column set matches insert**: database-generated keys, database-default columns, and database-generated concurrency tokens are omitted; converters and enum mappings apply per value exactly as in single-row inserts.
 - **Stamps still happen**: [sequential GUID keys](crud.md#key-generation-sequential-guids) and [auditing timestamps](auditing.md) are assigned per row as the stream is enumerated.
 - **No parameter cap** on bulk-copy dialects — that's the point. The SQLite/Oracle fallback is the batch `INSERT` and keeps its cap; chunk accordingly there.
-- **Dedicated connection, no ambient transaction**: on native bulk-copy dialects, bulk insert uses its own provider connection, and interceptors/telemetry do not observe it. Inquiry rejects `[InquiryBulkInsert]` while an ambient Inquiry transaction is active because those writes could not participate in rollback. Use `[InquiryInsertAll]` for transaction-bound rows. If you need larger transactional bulk loads, load into a staging table outside the transaction and swap inside it. The SQLite/Oracle batch fallback participates in ambient transactions like any other batch insert.
+- **Transactional where the native API permits it**: SQL Server and PostgreSQL reuse the open ambient Inquiry connection, participate in commit/rollback, and never dispose the borrowed connection. MySQL/MariaDB regular connections deliberately omit `AllowLoadLocalInfile`; those providers therefore fail before writing and point to `[InquiryInsertAll]`. They can enlist only when a custom ambient connection explicitly enables that setting. Outside a transaction, native bulk insert keeps using an independently owned connection. The SQLite/Oracle batch fallback already participates in ambient transactions.
+- **Observable without row data**: native bulk insert emits a `BULK_INSERT` client span and duration metrics for the whole operation, connection open/acquisition, and native copy phase. Tags identify enlisted versus dedicated use, affected-row count, cancellation, and failures; values from inserted cells are never recorded.
 - **MySQL prerequisites**: `MySqlBulkCopy` uses `LOAD DATA LOCAL INFILE` under the hood. Inquiry enables `AllowLoadLocalInfile` **only on the dedicated bulk-insert connection** (never on regular pipeline connections — the flag widens what a SQL-injection bug could do, so it stays scoped), and the **server** must run with `local_infile=1`.
+
+## Per-call options
+
+Add an `InquiryBulkInsertOptions?` parameter before the cancellation token on a generated native bulk method when a caller needs tuning:
+
+```csharp
+[InquiryBulkInsert]
+public partial Task<long> BulkInsertAsync(
+    IEnumerable<Shipper> shippers,
+    InquiryBulkInsertOptions? options,
+    CancellationToken ct = default);
+```
+
+`Timeout`, `BatchSize`, `TableLock`, `NotifyAfter`/`RowsCopied`, and `ConnectionBehavior` are validated before copying. SQL Server supports every tuning option. PostgreSQL supports `Timeout`; its binary COPY API has no batch, table-lock, or progress option. MySQL/MariaDB support `Timeout` and progress, but not batch size or table locking. A provider throws `InvalidOperationException` naming an unsupported requested option before it opens a connection or enumerates rows. `ConnectionBehavior` can require an ambient transaction or require dedicated operation, preventing an accidental change in atomicity.
+
+SQLite and Oracle compile `[InquiryBulkInsert]` to batch SQL. Their generated methods may accept the same parameter shape for cross-provider store interfaces, but reject any non-null native options before executing the fallback.
 
 ## SQL Server tuning notes
 
 `SqlBulkCopy` ships with defaults that are fine for small loads but can bite on large ones:
 
-- **`BulkCopyTimeout` defaults to 30 seconds.** A bulk insert that exceeds this will throw a timeout exception. Inquiry does not override this default. If you're loading large datasets, consider chunking into smaller batches or increasing the server-side timeout at the connection/command level.
-- **No `TableLock` option is exposed.** Without `SqlBulkCopyOptions.TableLock`, SQL Server acquires row-level locks and the insert is not minimally logged (even under the `SIMPLE` or `BULK_LOGGED` recovery model). For maximum throughput on an empty or dedicated table, a direct `SqlBulkCopy` call with `TableLock` will outperform the Inquiry path — use `[InquiryBulkInsert]` for convenience and type safety on moderate loads, and drop to raw ADO.NET when you need full control.
+- **`BulkCopyTimeout` defaults to 30 seconds.** Set `InquiryBulkInsertOptions.Timeout` for larger loads.
+- **`TableLock` is opt-in.** Set it only when the destination and workload make a table-level lock acceptable.
 
-PostgreSQL binary `COPY` and `MySqlBulkCopy` do not have analogous timeout/locking knobs at the client API level.
+PostgreSQL binary `COPY` and `MySqlBulkCopy` expose only the options described above.
 
 ## When to use which tier
 

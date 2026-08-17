@@ -371,6 +371,10 @@ internal static class StoreOperationEmitter
                 if (method.Operation == StoreOperation.BulkInsert)
                 {
                     AppendHeader(source, method, parameters, isAsync: true);
+                    if (method.Parameters.Count == 3)
+                    {
+                        source.AppendLine($"        if ({method.Parameters[1].Name} is not null) throw new global::System.InvalidOperationException(\"Native bulk-insert options are not supported by this provider's batch-SQL fallback.\");");
+                    }
                     source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation}).ConfigureAwait(false);");
                 }
                 else
@@ -703,6 +707,9 @@ internal static class StoreOperationEmitter
             ProviderIsDateTimeOffset: providerType?.NonNullableDisplayName == "global::System.DateTimeOffset"));
 
     private static string BulkFieldTypeExpression(ColumnData column, SqlBuilder sqlBuilder)
+        => $"typeof({BulkFieldTypeName(column, sqlBuilder)})";
+
+    private static string BulkFieldTypeName(ColumnData column, SqlBuilder sqlBuilder)
     {
         TypeData? providerType;
         SpecialType providerSpecialType;
@@ -716,7 +723,7 @@ internal static class StoreOperationEmitter
         }
         else if (column.EnumAsString)
         {
-            return "typeof(global::System.String)";
+            return "global::System.String";
         }
         else if (column.Type.IsEnum)
         {
@@ -743,7 +750,7 @@ internal static class StoreOperationEmitter
         };
         if (reinterpretedType is not null)
         {
-            return $"typeof({reinterpretedType})";
+            return reinterpretedType;
         }
 
         var context = new ParameterValueExpressionContext(
@@ -753,7 +760,47 @@ internal static class StoreOperationEmitter
             ProviderIsDateOnly: providerType?.IsDateOnly == true,
             ProviderIsTimeOnly: providerType?.IsTimeOnly == true,
             ProviderIsDateTimeOffset: providerType?.NonNullableDisplayName == "global::System.DateTimeOffset");
-        return $"typeof({sqlBuilder.BuildParameterValueTypeName(context)})";
+        return sqlBuilder.BuildParameterValueTypeName(context);
+    }
+
+    private static string BuildBulkTypedValueExpression(ColumnData column, string accessor, SqlBuilder sqlBuilder)
+    {
+        if (column.Converter is { } converter)
+        {
+            var toProvider = ConverterInvocationEmitter.ToProvider(converter, NonNullableValueExpression(column.Type, accessor));
+            var bridged = BridgeProviderValue(sqlBuilder, converter.ProviderType, converter.ProviderSpecialType, converter.ProviderTypeDisplay, toProvider);
+            return ReinterpretUnsignedProviderValue(converter.ProviderSpecialType, bridged);
+        }
+
+        if (column.EnumAsString)
+            return NonNullableValueExpression(column.Type, accessor) + ".ToString()";
+
+        if (!column.Type.IsEnum)
+        {
+            var value = NonNullableValueExpression(column.Type, accessor);
+            var bridged = BridgeProviderValue(sqlBuilder, column.Type, column.Type.SpecialType, column.Type.NonNullableDisplayName, value);
+            return ReinterpretUnsignedProviderValue(column.Type.SpecialType, bridged);
+        }
+
+        var typeName = column.Type.EnumUnderlyingSpecialType switch
+        {
+            SpecialType.System_Byte => "byte",
+            SpecialType.System_SByte => "byte",
+            SpecialType.System_Int16 => "short",
+            SpecialType.System_UInt16 => "short",
+            SpecialType.System_Int32 => "int",
+            SpecialType.System_UInt32 => "int",
+            SpecialType.System_Int64 => "long",
+            SpecialType.System_UInt64 => "long",
+            _ => "int",
+        };
+        var enumValue = NonNullableValueExpression(column.Type, accessor);
+        return column.Type.EnumUnderlyingSpecialType is SpecialType.System_SByte
+            or SpecialType.System_UInt16
+            or SpecialType.System_UInt32
+            or SpecialType.System_UInt64
+            ? $"unchecked(({typeName}){enumValue})"
+            : $"({typeName}){enumValue}";
     }
 
     private static string BuildInlineParameterValueExpression(ColumnData column, string accessor, SqlBuilder sqlBuilder)
@@ -2944,10 +2991,12 @@ internal static class StoreOperationEmitter
         var insertable = SelectMutationColumns(entity, includeKey: false);
         var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
         var definitionField = $"_bulkDef_{method.Name}";
+        var optionsExpression = method.Parameters.Count == 3 ? method.Parameters[1].Name : "null";
 
         var dbTypeExprs = insertable.Select(c => ResolveDbType(c, sqlBuilder)).ToArray();
         var hasColumnTypes = dbTypeExprs.All(e => e is not null);
         var fieldTypeExprs = insertable.Select(c => BulkFieldTypeExpression(c, sqlBuilder)).ToArray();
+        var fieldTypeNames = insertable.Select(c => BulkFieldTypeName(c, sqlBuilder)).ToArray();
 
         source.AppendLine($"    private static readonly global::Inquiry.BulkCopy.InquiryBulkInsertDefinition<{entityType}> {definitionField} = new(");
         source.AppendLine($"        {GeneratorHelpers.Literal(entity.Schema)},");
@@ -2970,7 +3019,20 @@ internal static class StoreOperationEmitter
         {
             source.AppendLine("        null,");
         }
-        source.AppendLine($"        new global::System.Type[] {{ {string.Join(", ", fieldTypeExprs)} }});");
+        source.AppendLine($"        new global::System.Type[] {{ {string.Join(", ", fieldTypeExprs)} }},");
+        source.AppendLine($"        new global::Inquiry.BulkCopy.IInquiryBulkColumnAccessor<{entityType}>[]");
+        source.AppendLine("        {");
+        for (var i = 0; i < insertable.Length; i++)
+        {
+            var column = insertable[i];
+            var accessor = "_e." + column.PropertyName;
+            var typedValue = BuildBulkTypedValueExpression(column, accessor, sqlBuilder);
+            var nullPredicate = column.Type.IsNullable
+                ? column.Type.IsValueType ? $", static _e => !{accessor}.HasValue" : $", static _e => {accessor} is null"
+                : string.Empty;
+            source.AppendLine($"            new global::Inquiry.BulkCopy.InquiryBulkColumnAccessor<{entityType}, {fieldTypeNames[i]}>(static _e => {typedValue}{nullPredicate}),");
+        }
+        source.AppendLine("        });");
         source.AppendLine();
 
         var hasStamps = HasSequentialGuidKey(entity);
@@ -2989,7 +3051,7 @@ internal static class StoreOperationEmitter
         AppendHeader(source, method, parameters, isAsync: false);
         if (hasStamps)
         {
-            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, _Stamped({itemsExpression}), {cancellation});");
+            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, _Stamped({itemsExpression}), {optionsExpression}, {cancellation});");
             source.AppendLine();
             source.AppendLine($"        static global::System.Collections.Generic.IEnumerable<{entityType}> _Stamped(global::System.Collections.Generic.IEnumerable<{entityType}> _source)");
             source.AppendLine("        {");
@@ -3003,7 +3065,7 @@ internal static class StoreOperationEmitter
         }
         else
         {
-            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, {itemsExpression}, {cancellation});");
+            source.AppendLine($"        return Inquiry.BulkInsertAsync({definitionField}, {itemsExpression}, {optionsExpression}, {cancellation});");
         }
 
         source.AppendLine("    }");

@@ -621,6 +621,9 @@ public sealed class InquiryTelemetryTests
         Assert.Equal("BULK_INSERT", bulkActivity.GetTagItem("db.operation.name"));
         Assert.Equal("Items", bulkActivity.GetTagItem("db.collection.name"));
         Assert.Equal(5L, bulkActivity.GetTagItem("db.response.affected_rows"));
+        Assert.Equal("dedicated", bulkActivity.GetTagItem("inquiry.bulk_insert.connection_mode"));
+        Assert.Contains(bulkActivity.Events, static activityEvent => activityEvent.Name == "connection.opened");
+        Assert.Contains(bulkActivity.Events, static activityEvent => activityEvent.Name == "copy.completed");
         Assert.NotEqual(ActivityStatusCode.Error, bulkActivity.Status);
         Assert.True(bulkActivity.Duration > TimeSpan.Zero);
     }
@@ -632,7 +635,10 @@ public sealed class InquiryTelemetryTests
         using var meterListener = new MeterListener();
         meterListener.InstrumentPublished = (instrument, l) =>
         {
-            if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name is
+                "db.client.operation.duration" or
+                "inquiry.bulk_insert.connection_open.duration" or
+                "inquiry.bulk_insert.copy.duration")
                 l.EnableMeasurementEvents(instrument);
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
@@ -655,9 +661,12 @@ public sealed class InquiryTelemetryTests
 
         meterListener.Dispose();
 
-        var bulkMeasurement = Assert.Single(measurements, m => (string?)m.Tags["db.operation.name"] == "BULK_INSERT");
+        var bulkMeasurement = Assert.Single(measurements, m =>
+            m.Tags.TryGetValue("db.operation.name", out var operation) && (string?)operation == "BULK_INSERT");
         Assert.True(bulkMeasurement.Value >= 0);
         Assert.Equal("sqlite", bulkMeasurement.Tags["db.system.name"]);
+        Assert.Single(measurements, m => m.Tags.ContainsKey("inquiry.bulk_insert.connection_mode") && m.Value == 0.001);
+        Assert.Single(measurements, m => m.Tags.ContainsKey("inquiry.bulk_insert.connection_mode") && m.Value == 0.002);
     }
 
     [Fact]
@@ -700,6 +709,27 @@ public sealed class InquiryTelemetryTests
 
         var bulkMeasurement = Assert.Single(measurements, m => (string?)m.Tags["db.operation.name"] == "BULK_INSERT");
         Assert.Equal(typeof(InvalidOperationException).FullName, bulkMeasurement.Tags["error.type"]);
+    }
+
+    [Fact]
+    public async Task BulkInsertCancellationRecordsOperationCanceledErrorType()
+    {
+        var activities = new List<Activity>();
+        using var listener = CreateActivityListener(activities);
+        await using var fixture = await SqliteInquiryFixture.CreateAsync(services =>
+            services.AddSingleton<IInquiryBulkCopier>(new FakeBulkCopier()));
+        using var scope = fixture.CreateScope();
+        var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
+        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", new[] { "Id" }, static (item, _) => item.Id);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }, cancellation.Token));
+
+        var bulkActivity = Assert.Single(activities, activity => activity.DisplayName == "BULK_INSERT");
+        Assert.Equal(typeof(OperationCanceledException).FullName, bulkActivity.GetTagItem("error.type"));
+        Assert.Equal(ActivityStatusCode.Error, bulkActivity.Status);
     }
 
     private static void BindBatchItem(InquiryParameterTarget target, (int Id, string Name, int IsActive) item)
@@ -811,10 +841,19 @@ public sealed class InquiryTelemetryTests
         public Task<long> BulkInsertAsync<TEntity>(
             InquiryBulkInsertDefinition<TEntity> definition,
             IEnumerable<TEntity> rows,
+            InquiryBulkInsertContext context,
             CancellationToken cancellationToken = default)
             where TEntity : class
         {
-            if (_throws) throw new InvalidOperationException("Bulk insert failed.");
+            context.RecordConnectionOpened(TimeSpan.FromMilliseconds(1));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_throws)
+            {
+                context.RecordCopyCompleted(TimeSpan.FromMilliseconds(2));
+                throw new InvalidOperationException("Bulk insert failed.");
+            }
+
+            context.RecordCopyCompleted(TimeSpan.FromMilliseconds(2), _rowCount);
             return Task.FromResult(_rowCount);
         }
     }
