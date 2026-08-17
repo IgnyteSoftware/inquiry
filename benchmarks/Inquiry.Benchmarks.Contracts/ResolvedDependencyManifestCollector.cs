@@ -240,7 +240,8 @@ public static class ResolvedDependencyManifestCollector
                 extension.Equals(".dll", StringComparison.OrdinalIgnoreCase),
             ResolvedAssetKind.Native => extension.Equals(".dll", StringComparison.OrdinalIgnoreCase) ||
                 extension.Equals(".so", StringComparison.OrdinalIgnoreCase) ||
-                extension.Equals(".dylib", StringComparison.OrdinalIgnoreCase),
+                extension.Equals(".dylib", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".a", StringComparison.OrdinalIgnoreCase),
             ResolvedAssetKind.GeneratedSource => extension.Equals(".cs", StringComparison.OrdinalIgnoreCase),
             _ => false,
         };
