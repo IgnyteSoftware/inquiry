@@ -1336,8 +1336,8 @@ public sealed partial class InquiryGeneratorTests
             """
                         long _jParentKey = reader.GetInt64(0);
                         long _jChildKey = reader.GetInt64(1);
-            """.TrimStart(),
-            text);
+            """.TrimStart().ReplaceLineEndings("\n"),
+            text.ReplaceLineEndings("\n"));
     }
 
     [Fact]
