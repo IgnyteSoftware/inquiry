@@ -1,5 +1,11 @@
 # Inquiry
 
+[![NuGet](https://img.shields.io/nuget/vpre/Ignyte.Inquiry?label=NuGet)](https://www.nuget.org/packages/Ignyte.Inquiry)
+[![NuGet downloads](https://img.shields.io/nuget/dt/Ignyte.Inquiry?label=downloads)](https://www.nuget.org/packages/Ignyte.Inquiry)
+[![CI](https://github.com/IgnyteSoftware/inquiry/actions/workflows/ci.yml/badge.svg)](https://github.com/IgnyteSoftware/inquiry/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-ignytesoftware.github.io-blue)](https://ignytesoftware.github.io/inquiry/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Inquiry is an experimental **.NET 8+** source-generated micro-ORM. You write attributed entity classes and `partial` store classes with `partial` method declarations; a Roslyn source generator emits the matching partial with method bodies, materializers, and dependency-injection wiring. Every SQL string is built at compile time by a provider-specific `SqlBuilder` and baked into the generated source as `const string` fields, so each database can be tuned independently and **the runtime carries no SQL**.
 
 > **Documentation lives in the DocFX site** ([`docs/site/`](docs/site/)) — getting-started, features, per-dialect notes, the architecture deep-dive, security, and an auto-generated API reference, plus a **Develop** area with project status and the roadmap. The published site lives at <https://ignytesoftware.github.io/inquiry/> (deployed by `docs.yml` on every push to `main`); preview locally with `docfx docs/site/docfx.json --serve` (see [`docs/site/README.md`](docs/site/README.md)).
