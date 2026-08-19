@@ -128,6 +128,43 @@ public sealed class InquiryBulkRowReaderTests
     }
 
     [Fact]
+    public void TypedAccessorNullColumnsFollowDbDataReaderNullContract()
+    {
+        var definition = new InquiryBulkInsertDefinition<Row>(
+            null,
+            "T",
+            new[] { "Name", "Count" },
+            static (row, i) => i switch
+            {
+                0 => (object?)row.Name ?? DBNull.Value,
+                1 => (object?)row.Count ?? DBNull.Value,
+                _ => throw new ArgumentOutOfRangeException(nameof(i)),
+            },
+            null,
+            new[] { typeof(string), typeof(int) },
+            new IInquiryBulkColumnAccessor<Row>[]
+            {
+                new InquiryBulkColumnAccessor<Row, string>(static row => row.Name, static row => row.Name is null),
+                new InquiryBulkColumnAccessor<Row, int>(static row => row.Count!.Value, static row => !row.Count.HasValue),
+            });
+        using var reader = new InquiryBulkRowReader<Row>(definition, new[]
+        {
+            new Row { Name = null!, Count = null },
+            new Row { Name = "present", Count = 3 },
+        });
+
+        Assert.True(reader.Read());
+        Assert.Same(DBNull.Value, reader.GetFieldValue<object>(0));
+        Assert.Same(DBNull.Value, reader.GetFieldValue<object>(1));
+        Assert.Throws<InvalidCastException>(() => reader.GetString(0));
+        Assert.Throws<InvalidCastException>(() => reader.GetInt32(1));
+
+        Assert.True(reader.Read());
+        Assert.Equal("present", reader.GetString(0));
+        Assert.Equal(3, reader.GetInt32(1));
+    }
+
+    [Fact]
     public void ResolvesColumnNamesCaseInsensitively()
     {
         using var reader = new InquiryBulkRowReader<Row>(Definition, Array.Empty<Row>());
@@ -151,6 +188,8 @@ public sealed class InquiryBulkRowReaderTests
         Assert.Throws<ArgumentNullException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", new[] { "C" }, null!));
         Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", new[] { "C" }, static (_, _) => 1, Array.Empty<System.Data.DbType>()));
         Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", new[] { "C" }, static (_, _) => 1, new[] { System.Data.DbType.Int32 }, Array.Empty<Type>()));
+        Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(
+            null, "T", new[] { "C" }, static (_, _) => 1, null, null, new IInquiryBulkColumnAccessor<Row>[] { null! }));
     }
 
     [Fact]

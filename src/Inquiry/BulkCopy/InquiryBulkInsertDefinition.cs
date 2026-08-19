@@ -71,8 +71,13 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
             throw new ArgumentException("Column type metadata must have one entry per column.", nameof(columnTypes));
         if (fieldTypes is not null && fieldTypes.Length != columns.Length)
             throw new ArgumentException("Field type metadata must have one entry per column.", nameof(fieldTypes));
-        if (typedAccessors is not null && typedAccessors.Length != columns.Length)
-            throw new ArgumentException("Typed accessor metadata must have one entry per column.", nameof(typedAccessors));
+        if (typedAccessors is not null)
+        {
+            if (typedAccessors.Length != columns.Length)
+                throw new ArgumentException("Typed accessor metadata must have one entry per column.", nameof(typedAccessors));
+            if (Array.IndexOf(typedAccessors, null) >= 0)
+                throw new ArgumentException("Typed accessor metadata must not contain null entries.", nameof(typedAccessors));
+        }
 
         Schema = schema;
         Table = table ?? throw new ArgumentNullException(nameof(table));

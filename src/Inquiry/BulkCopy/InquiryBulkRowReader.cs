@@ -86,10 +86,20 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     public override T GetFieldValue<T>(int ordinal)
     {
         ValidateOrdinal(ordinal);
-        if (_definition.TypedAccessors is { } typedAccessors
-            && typedAccessors[ordinal].Accessor is Func<TEntity, T> accessor)
+        if (_definition.TypedAccessors is { } typedAccessors)
         {
-            return accessor(Current);
+            var typedAccessor = typedAccessors[ordinal];
+            if (typedAccessor.IsNull(Current))
+            {
+                // DbDataReader null contract: GetFieldValue<object> yields DBNull.Value; a typed
+                // request on a null column throws InvalidCastException via the failed cast.
+                return (T)(object)DBNull.Value;
+            }
+
+            if (typedAccessor.Accessor is Func<TEntity, T> accessor)
+            {
+                return accessor(Current);
+            }
         }
 
         return (T)GetValue(ordinal);
