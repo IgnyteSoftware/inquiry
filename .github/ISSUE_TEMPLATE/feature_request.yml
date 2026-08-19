@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a new capability or an improvement to an existing one
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the scenario, not the solution — what can't you do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape (optional)
+      description: >
+        If you have an API or attribute shape in mind, sketch it. For query features,
+        the ideal sketch is the store method declaration plus the SQL you'd expect the
+        generator to emit.
+      render: csharp
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Providers affected
+      multiple: true
+      options:
+        - All / provider-independent
+        - SQLite
+        - SQL Server
+        - PostgreSQL
+        - MySQL
+        - MariaDB
+        - Oracle
