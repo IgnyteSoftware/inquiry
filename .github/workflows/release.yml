@@ -115,9 +115,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
+          # Body = this version's curated CHANGELOG section (when present); gh appends the
+          # auto-generated commit list after it. No section -> generated notes alone.
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          awk -v ver="$VERSION" '
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$notes_file"
           flags=(--title "$TAG" --generate-notes)
+          if [ -s "$notes_file" ]; then
+            flags+=(--notes-file "$notes_file")
+          fi
           if [ "$PRERELEASE" = "true" ]; then
             flags+=(--prerelease)
           fi

@@ -27,6 +27,7 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
     <!-- MinVer: version derived from nearest git tag (v1.0.0 → 1.0.0) -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
     <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
