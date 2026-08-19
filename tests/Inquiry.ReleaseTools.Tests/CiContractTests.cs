@@ -28,6 +28,15 @@ public sealed class CiContractTests
         Assert.Contains("./eng/pack-release.ps1", workflow, StringComparison.Ordinal);
         Assert.Contains("--skip-duplicate", workflow, StringComparison.Ordinal);
         Assert.Contains("environment: nuget-release", workflow, StringComparison.Ordinal);
+
+        // Release notes: the curated CHANGELOG section is the body (exact-anchor extraction,
+        // fail-closed when missing) and the tag ref is read from the environment, never
+        // interpolated into the script.
+        Assert.Contains("--notes-file", workflow, StringComparison.Ordinal);
+        Assert.Contains("index($0, \"## [\" ver \"]\") == 1", workflow, StringComparison.Ordinal);
+        Assert.Contains("CHANGELOG.md has no", workflow, StringComparison.Ordinal);
+        Assert.Contains("$ref = $env:GITHUB_REF", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("$ref = '${{", workflow, StringComparison.Ordinal);
     }
 
     [Theory]
