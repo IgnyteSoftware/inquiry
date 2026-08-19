@@ -48,7 +48,9 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $ref = '${{ github.ref }}'
+          # Read the ref from the environment, never via expression interpolation: a crafted
+          # tag name could otherwise break out of the string and execute in this job.
+          $ref = $env:GITHUB_REF
           if ($ref -notmatch '^refs/tags/v(.+)$') {
             throw "Refusing to release from unexpected ref '$ref'."
           }
@@ -115,9 +117,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
-          flags=(--title "$TAG" --generate-notes)
+          # Body = this version's curated CHANGELOG section; gh appends the auto-generated
+          # commit list after it. Fails closed if the section is missing so a tag pushed
+          # before the changelog cut cannot publish an immutable release with bare notes.
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          awk -v ver="$VERSION" '
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found && /^\[[^]]+\]: / { exit }
+            found { print }
+          ' CHANGELOG.md > "$notes_file"
+          if [ ! -s "$notes_file" ]; then
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section. Cut the changelog before tagging." >&2
+            exit 1
+          fi
+          flags=(--title "$TAG" --generate-notes --notes-file "$notes_file")
           if [ "$PRERELEASE" = "true" ]; then
             flags+=(--prerelease)
           fi

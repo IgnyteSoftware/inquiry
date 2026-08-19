@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-preview.8] - 2026-08-17
+
+### Added
+
+- Native bulk insert is now transactional, configurable, observable, and allocation-efficient: it enlists in the ambient Inquiry transaction on SQL Server and PostgreSQL; on MySQL/MariaDB, whose security-isolated `AllowLoadLocalInfile` bulk connection cannot be shared, a bulk insert inside a transaction throws before any rows are written. Per-call `InquiryBulkInsertOptions` cover timeout, batch size, table lock, progress notification, and connection behavior; options a provider cannot honor throw before writing, and the SQLite/Oracle batch-SQL fallback rejects non-null options. Telemetry adds connection-open and copy-duration histograms, per-phase span events, and an enlisted/dedicated connection-mode tag; the generator emits typed per-column accessors so the PostgreSQL binary COPY path and the bulk row reader avoid per-cell boxing.
+
+### Changed
+
+- Package dependency floors raised: `Microsoft.Extensions.*`, `Microsoft.Data.Sqlite`, and `System.Configuration.ConfigurationManager` to 10.0.11, `MySqlConnector` to 2.6.2, `Oracle.ManagedDataAccess.Core` to 23.26.300, `SQLitePCLRaw.lib.e_sqlite3` to 3.53.3, and `Respawn` (Testing package) to 7.0.0.
+
+## [1.0.0-preview.7] - 2026-08-03
+
+### Fixed
+
+- Provider packages' symbol packages (`.snupkg`) failed nuget.org validation (first seen on `1.0.0-preview.6`): analyzer PDBs rode in the snupkg at `lib/net8.0/` with no matching `lib/` DLL. Analyzer assemblies (`Inquiry.*.Analyzer`, `Inquiry.Generators.Shared`) now embed their debug info and SourceLink (`DebugType=embedded`), the snupkg carries only the runtime `lib/` PDBs, and the release verifier checks the embedded PDB identity and SourceLink instead of the loose-PDB layout.
+
+## [1.0.0-preview.6] - 2026-08-03
+
+First changelog-tracked preview. Earlier previews (`1.0.0-preview.3` through `.5`) predate this
+changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
+
 ### Added
 
 - Compile-time SQL source generator with six database providers (SQLite, SQL Server, PostgreSQL, MySQL, MariaDB, Oracle).
@@ -15,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Many-to-many eager loading across all three junction shapes: an explicitly-mapped junction, a composite-key related entity, and an auto-managed junction whose table the generator synthesizes into the schema DDL. An auto-managed junction is read-only.
 - Stored procedure support with OUTPUT, RETURN, INOUT parameters, multiple result sets, Oracle REF CURSOR, and SQL Server TVP parameters.
 - Batch mutations with provider-selected transports (TVP, unnest, multi-row VALUES, individual commands).
-- Bulk insert via provider-native copy APIs. Native bulk insert enlists in the ambient Inquiry transaction on SQL Server and PostgreSQL; on MySQL/MariaDB, whose security-isolated `AllowLoadLocalInfile` bulk connection cannot be shared, a bulk insert inside a transaction throws before any rows are written. Per-call `InquiryBulkInsertOptions` cover timeout, batch size, table lock, progress notification, and connection behavior; options a provider cannot honor throw before writing, and the SQLite/Oracle batch-SQL fallback rejects non-null options. Telemetry adds connection-open and copy-duration histograms, per-phase span events, and an enlisted/dedicated connection-mode tag; the generator emits typed per-column accessors so the PostgreSQL binary COPY path and the bulk row reader avoid per-cell boxing.
+- Bulk insert via provider-native copy APIs.
 - A uniform cancellation contract across single commands and batch DML: when a cancel races provider completion, both a lying success and a native driver error normalize to `OperationCanceledException` carrying the caller's token, with the driver exception preserved as the inner exception. Work that genuinely completed before the token fired is never re-labelled cancelled, including a durably committed batch.
 - Paged select with `InquiryPagedResult<T>` paired SELECT+COUNT return shape.
 - WHERE predicates: comparison, IN-collection, LIKE, BETWEEN, IS NULL, full-text search, JSON containment.
@@ -50,16 +71,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ASP.NET Core audit-context middleware via `UseInquiryAuditContext()` for stamping `CreatedBy`/`ModifiedBy` from the current user identity.
 - Interceptors package with slow-query logging, sqlcommenter trace-context tagging, and N+1 query detection.
 - Testing package with SQLite fixture, recording interceptor, entity factory, transaction sandbox, and Respawn reset.
-- 88 Roslyn analyzer diagnostics (INQ001–INQ093) for compile-time validation.
-
-### Fixed
-
-- Provider packages' symbol packages (`.snupkg`) failed nuget.org validation (first seen on `1.0.0-preview.6`): analyzer PDBs rode in the snupkg at `lib/net8.0/` with no matching `lib/` DLL. Analyzer assemblies (`Inquiry.*.Analyzer`, `Inquiry.Generators.Shared`) now embed their debug info and SourceLink (`DebugType=embedded`), the snupkg carries only the runtime `lib/` PDBs, and the release verifier checks the embedded PDB identity and SourceLink instead of the loose-PDB layout.
+- Roslyn analyzer diagnostics (INQ001–INQ095) for compile-time validation.
 
 ### Changed
 
-- The repository moved from a personal account to the [IgnyteSoftware](https://github.com/IgnyteSoftware) organization. Issue, pull-request, and documentation URLs now live under `github.com/IgnyteSoftware/inquiry`; the packages themselves are unaffected and unreleased.
-- Package dependency floors raised: `Microsoft.Extensions.*`, `Microsoft.Data.Sqlite`, and `System.Configuration.ConfigurationManager` to 10.0.11, `MySqlConnector` to 2.6.2, `Oracle.ManagedDataAccess.Core` to 23.26.300, `SQLitePCLRaw.lib.e_sqlite3` to 3.53.3, and `Respawn` (Testing package) to 7.0.0.
+- The repository moved from a personal account to the [IgnyteSoftware](https://github.com/IgnyteSoftware) organization. Issue, pull-request, and documentation URLs now live under `github.com/IgnyteSoftware/inquiry`; the packages themselves are unaffected.
 
 ### Documentation
 
@@ -67,4 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [GraphQL DataLoader recipe](docs/site/articles/features/graphql-dataloader.md) — batching Hot Chocolate resolver fan-out onto a single `Compare.In` predicate method.
 - [Migrations recipe](docs/site/articles/features/migrations.md) — using `InquiryGeneratedSchema.Ddl` as the baseline script for DbUp or FluentMigrator, plus `ProviderArtifactsDdl` and `ProviderArtifactsValidationSql` for deploying and checking the SQL Server TVP types.
 
-[Unreleased]: https://github.com/IgnyteSoftware/inquiry/commits/main
+[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.8...HEAD
+[1.0.0-preview.8]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.7...v1.0.0-preview.8
+[1.0.0-preview.7]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.6...v1.0.0-preview.7
+[1.0.0-preview.6]: https://github.com/IgnyteSoftware/inquiry/releases/tag/v1.0.0-preview.6

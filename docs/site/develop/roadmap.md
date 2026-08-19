@@ -1,13 +1,14 @@
 # Roadmap
 
-> Inquiry's first public release will be **1.0.0**. Package versioning is independent of the .NET 8
-> runtime floor.
+> Inquiry's first stable release will be **1.0.0**; `1.0.0-preview` packages are published on
+> nuget.org. Package versioning is independent of the .NET 8 runtime floor.
 >
 > Inquiry is the **compile-time .NET micro-ORM**: generated constant SQL, binders, and materializers;
 > predictable allocations; NativeAOT support; and explicit, validated SQL escape hatches. It is not
 > trying to become a stateful ORM with change tracking or a runtime LINQ provider.
 >
-> **Last reconciled against source and GitHub:** 2026-08-01. All
+> **Last reconciled against source and GitHub:** 2026-08-18 (governance and release-engineering
+> claims; issue counts were last reconciled 2026-08-01). All
 > providers are restored; [#171](https://github.com/IgnyteSoftware/inquiry/issues/171) records that
 > completed restoration gate.
 
@@ -20,13 +21,14 @@ SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs with Docker fai
 fail closed.
 
 [#220](https://github.com/IgnyteSoftware/inquiry/pull/220) installed the immutable release-engineering foundation: an exact-commit detached-worktree pack,
-the canonical nine-package manifest, package/bundle and CI-contract verification, package producer and
-independent verifier jobs, and the `ci-required-v1` aggregate required gate. Public promotion is still
-disabled. [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25 across all nine
+the canonical package manifest (nine packages then, ten today), package/bundle and CI-contract
+verification, package producer and
+independent verifier jobs, and the `ci-required-v1` aggregate required gate. Preview publishing is now
+live on nuget.org. [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25 across all nine
 acceptance criteria, adding APICompat and analyzer release tracking, isolated net8/net9/net10 and NativeAOT
 installs from the produced nupkgs, a CycloneDX SBOM plus SLSA build provenance and dependency auditing,
 hosted versioned documentation, release/support/security policies, CODEOWNERS and branch protection, and
-CodeQL plus dependency scanning. Branch protection and CodeQL activate when the repository goes public.
+CodeQL plus dependency scanning. Branch protection and CodeQL are active now that the repository is public.
 
 The fresh [#220](https://github.com/IgnyteSoftware/inquiry/pull/220) security diff scan and threat-model review found and fixed a custom-shell CI bypass.
 The post-fix scan reported no remaining reportable findings. Release evidence and governance shipped with
@@ -73,9 +75,9 @@ re-typing, in-transaction semantics, and `DbBatch`/chunk-route coverage.
 The repository moved from a personal account to the
 [IgnyteSoftware](https://github.com/IgnyteSoftware) organization on 2026-08-01; every tracked
 `github.com` URL was retargeted, including the two functional ones (the branch-protection script and the
-`repositoryUrl` the package verifier checks for metadata drift). The repository is still private, and the
-org is on the free plan, so branch protection and rulesets remain unavailable — releases now pack from
-`main`, and `ci.yml` gained a push trigger there as post-merge signal, not a gate.
+`repositoryUrl` the package verifier checks for metadata drift). The repository is now public, and
+branch-protection rulesets are active (`eng/configure-branch-protection.ps1`); releases pack from `main`
+and publish to nuget.org on `v*` tags.
 
 ## Product contract
 
@@ -99,7 +101,7 @@ For 1.0, "feature complete" means:
 3. **Performance:** corrected baselines and current competitors cover CRUD, streaming, eager/M:N,
    collections, paging, batch/bulk, transactions, cold/warm startup, and concurrency; stable regression
    budgets guard latency and allocations.
-4. **Packaging:** clean projects consume the actual nine `.nupkg` files on .NET 8/9/10 and NativeAOT;
+4. **Packaging:** clean projects consume the actual ten `.nupkg` files on .NET 8/9/10 and NativeAOT;
    SourceLink, symbols, metadata, icon, provenance, and dependency/security evidence are verified.
 5. **Documentation and governance:** hosted versioned docs match generated behavior, the tracker and roadmap
    agree, release/support/security policies are published, and required review/status checks protect releases.
@@ -191,7 +193,7 @@ acceptance criteria supersede any older wording that describes an initial implem
 - **~~Testing follow-ups: transaction sandbox + data factories~~** *(resolved 2026-07-14)*.
   See [Recently resolved](#recently-resolved) and [Testing](../articles/features/testing.md).
 - **Release engineering & governance — remaining scope** *(reconciled 2026-07-25)*. [#220](https://github.com/IgnyteSoftware/inquiry/pull/220) shipped
-  exact-commit immutable packing, the canonical nine-package manifest, package/bundle verification,
+  exact-commit immutable packing, the canonical package manifest (nine packages then, ten today), package/bundle verification,
   and the versioned required CI gate. Governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), the
   public API baseline (PublicApiAnalyzers + EnablePackageValidation), and package verification fixes
   have shipped. [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25, also
@@ -406,14 +408,14 @@ new or reframed issue.
   operations.
 
 - **ASP.NET Core audit-context middleware (#213, 2026-07-15).** `Inquiry.AspNetCore` ships middleware
-  that sets `InquiryAuditContext.CurrentUser` from the ambient `ClaimsPrincipal` per request. The
-  package is not part of the nine-package 1.0 release manifest (non-packable).
+  that sets `InquiryAuditContext.CurrentUser` from the ambient `ClaimsPrincipal` per request. Initially
+  non-packable; it has since been added to the release manifest and ships as `Ignyte.Inquiry.AspNetCore`.
 
 - **Release governance documents (#89 partial, 2026-07-15).** SECURITY.md, SUPPORT.md, and
   CHANGELOG.md shipped. Public API baseline established with `Microsoft.CodeAnalysis.PublicApiAnalyzers`
   and `EnablePackageValidation`. Package verification fixes applied (`.artifacts` path filter,
-  `Inquiry.AspNetCore` marked non-packable). [#89](https://github.com/IgnyteSoftware/inquiry/issues/89)
-  remains open for remaining release-engineering steps.
+  `Inquiry.AspNetCore` marked non-packable — since reversed; it now ships in the manifest).
+  [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25.
 
 - **Generated execution hot path (#179, 2026-07-14).** Parameterless generated operations bypass
   `InquiryCommand`; predicate, paging, keyset, and aggregate paths carry immutable value state through
@@ -597,10 +599,10 @@ new or reframed issue.
 - **Release engineering — immutable packaging and required CI gate (#220, 2026-07-14).** `RepositoryUrl` placeholder replaced
   with the real GitHub URL; `RepositoryType`, `PackageProjectUrl` added. SourceLink
   (`Microsoft.SourceLink.GitHub`) embeds commit metadata and the `.snupkg` symbol packages enable
-  step-through debugging. Root `README.md` wired as the NuGet package readme for all 9 shippable
-  packages. MinVer tag-based versioning is configured for the first public release (`v1.0.0` tag →
+  step-through debugging. Root `README.md` wired as the NuGet package readme for all shippable
+  packages (nine then, ten today). MinVer tag-based versioning is configured for the first stable release (`v1.0.0` tag →
   version `1.0.0`) with `MinVerMinimumMajorMinor=1.0`. The unsafe tag-triggered rebuild-and-wildcard-push
-  workflow has been removed. A canonical nine-package manifest, exact-commit detached-worktree pack,
+  workflow has been removed. A canonical package manifest, exact-commit detached-worktree pack,
   package/bundle verifier, package producer and independent verifier jobs, and versioned
   `ci-required-v1` aggregate required gate are in place. APICompat/analyzer release tracking,
   isolated net8/net9/net10 and NativeAOT installs from the produced nupkgs,
