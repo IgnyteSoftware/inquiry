@@ -73,9 +73,9 @@ re-typing, in-transaction semantics, and `DbBatch`/chunk-route coverage.
 The repository moved from a personal account to the
 [IgnyteSoftware](https://github.com/IgnyteSoftware) organization on 2026-08-01; every tracked
 `github.com` URL was retargeted, including the two functional ones (the branch-protection script and the
-`repositoryUrl` the package verifier checks for metadata drift). The repository is still private, and the
-org is on the free plan, so branch protection and rulesets remain unavailable — releases now pack from
-`main`, and `ci.yml` gained a push trigger there as post-merge signal, not a gate.
+`repositoryUrl` the package verifier checks for metadata drift). The repository is now public, and
+branch-protection rulesets are active (`eng/configure-branch-protection.ps1`); releases pack from `main`
+and publish to nuget.org on `v*` tags.
 
 ## Product contract
 
@@ -99,7 +99,7 @@ For 1.0, "feature complete" means:
 3. **Performance:** corrected baselines and current competitors cover CRUD, streaming, eager/M:N,
    collections, paging, batch/bulk, transactions, cold/warm startup, and concurrency; stable regression
    budgets guard latency and allocations.
-4. **Packaging:** clean projects consume the actual nine `.nupkg` files on .NET 8/9/10 and NativeAOT;
+4. **Packaging:** clean projects consume the actual ten `.nupkg` files on .NET 8/9/10 and NativeAOT;
    SourceLink, symbols, metadata, icon, provenance, and dependency/security evidence are verified.
 5. **Documentation and governance:** hosted versioned docs match generated behavior, the tracker and roadmap
    agree, release/support/security policies are published, and required review/status checks protect releases.
@@ -406,8 +406,8 @@ new or reframed issue.
   operations.
 
 - **ASP.NET Core audit-context middleware (#213, 2026-07-15).** `Inquiry.AspNetCore` ships middleware
-  that sets `InquiryAuditContext.CurrentUser` from the ambient `ClaimsPrincipal` per request. The
-  package is not part of the nine-package 1.0 release manifest (non-packable).
+  that sets `InquiryAuditContext.CurrentUser` from the ambient `ClaimsPrincipal` per request. Initially
+  non-packable; it has since been added to the release manifest and ships as `Ignyte.Inquiry.AspNetCore`.
 
 - **Release governance documents (#89 partial, 2026-07-15).** SECURITY.md, SUPPORT.md, and
   CHANGELOG.md shipped. Public API baseline established with `Microsoft.CodeAnalysis.PublicApiAnalyzers`

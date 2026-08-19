@@ -1,0 +1,57 @@
+name: Bug report
+description: Report incorrect behavior, a crash, or wrong generated SQL
+labels: [bug]
+body:
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      description: Which database provider does this affect?
+      multiple: true
+      options:
+        - SQLite
+        - SQL Server
+        - PostgreSQL
+        - MySQL
+        - MariaDB
+        - Oracle
+        - All / provider-independent
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: The Ignyte.Inquiry.* version (e.g. 1.0.0-preview.8)
+      placeholder: 1.0.0-preview.8
+    validations:
+      required: true
+  - type: dropdown
+    id: tfm
+    attributes:
+      label: Target framework
+      multiple: true
+      options:
+        - net8.0
+        - net9.0
+        - net10.0
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead? Include the exception message and stack trace if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >
+        The smallest entity + store declaration that reproduces the problem. For SQL-shape
+        issues, include the generated SQL (hover the generated `const string`, or check
+        `obj/.../generated/`).
+      render: csharp
+    validations:
+      required: true
