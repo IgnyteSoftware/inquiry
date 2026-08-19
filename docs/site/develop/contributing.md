@@ -58,8 +58,12 @@ Run the code-review workflow on a feature branch before merging; fix Critical/Im
 
 ## Pull requests
 
-Development is trunk-based: all changes land through reviewed pull requests into `main`. Direct
-pushes, force-pushes, branch deletion, and merge commits are not part of the supported workflow.
+Development for the next version happens on a **prerelease branch** (`prerelease/v<next-version>`,
+e.g. `prerelease/v1.0.0-preview.9`), cut from `main` when work on a version begins. Feature and fix
+branches open reviewed pull requests into the active prerelease branch — not into `main`. When the
+version is ready, the prerelease branch merges into `main` in a single reviewed PR, and the release
+tag is pushed from there (the tag-driven release process below is unchanged). Direct pushes to
+`main`, force-pushes, branch deletion, and merge commits are not part of the supported workflow.
 
 Repository rulesets (applied by [`eng/configure-branch-protection.ps1`](https://github.com/IgnyteSoftware/inquiry/blob/main/eng/configure-branch-protection.ps1))
 protect `main`: linear history, an up-to-date branch, resolved conversations, one human approval with
@@ -80,7 +84,8 @@ approach is the convention.)
 ## CI
 
 [`.github/workflows/ci.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/ci.yml)
-runs for pull requests into `main`, and for merge-queue `merge_group` events:
+runs for pull requests into `main` and into `prerelease/*` branches, and for merge-queue
+`merge_group` events:
 
 - a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker);
 - an **aot-smoke** job — publishes the `Inquiry.AotSmoke` sample as a native binary and executes it,

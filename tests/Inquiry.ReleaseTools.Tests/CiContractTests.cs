@@ -149,7 +149,7 @@ public sealed class CiContractTests
 
     [Theory]
     [InlineData("if: always()", "if: success()")]
-    [InlineData("branches: [main]", "branches: [main, prerelease]")]
+    [InlineData("branches: [main, prerelease/*]", "branches: [main, prerelease]")]
     [InlineData("tfm: [net8.0, net9.0, net10.0]", "tfm: [net8.0, net9.0]")]
     [InlineData("fail-fast: false", "fail-fast: \"false\"")]
     [InlineData("name: CI", "name: &workflow-name CI")]

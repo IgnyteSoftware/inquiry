@@ -6,6 +6,16 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+## Branching: PRs target the prerelease branch
+
+Development for the next version happens on a prerelease branch, not `main`:
+
+- Open feature/fix PRs against the **active prerelease branch** (`prerelease/v<next-version>` — currently `prerelease/v1.0.0-preview.9`), never against `main`.
+- `main` only receives the prerelease branch itself, merged in one reviewed PR when the version is cut, followed by the release tag.
+- If no prerelease branch exists for the next version, create it from `main` (`prerelease/v<next-version>`) before opening PRs.
+
+See [Contributing — Pull requests](docs/site/develop/contributing.md#pull-requests).
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
