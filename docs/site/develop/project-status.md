@@ -3,7 +3,8 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code and GitHub:** 2026-08-01.
+**Last reconciled against the code and GitHub:** 2026-08-18 (governance and release-engineering
+claims; issue counts were last reconciled 2026-08-01).
 
 **1.0.0 is not release-ready**, though the stop-ship lane is now clear. GitHub has 61 open issues: 12 are
 assigned to the `1.0.0` milestone (6 P1, 5 P2, and one unlabelled eager-grid performance gap, #265); five
@@ -38,12 +39,12 @@ RLS session helpers (`SetLocalAsync`) closed the remaining two criteria.
 
 | Dialect (`[assembly: InquiryDialect("…")]`) | Runtime package | Analyzer (source generator) | Live test status |
 |---|---|---|---|
-| `Sqlite` | `Inquiry.Sqlite` | `Inquiry.Sqlite.Analyzer` | in-process (no Docker) |
-| `SqlServer` | `Inquiry.SqlServer` | `Inquiry.SqlServer.Analyzer` | Testcontainers (CI integration matrix) |
-| `PostgreSql` | `Inquiry.PostgreSql` | `Inquiry.PostgreSql.Analyzer` | Testcontainers (CI integration matrix) |
-| `MySql` | `Inquiry.MySql` | `Inquiry.MySql.Analyzer` | Testcontainers (CI integration matrix) |
-| `MariaDb` | `Inquiry.MariaDb` | `Inquiry.MariaDb.Analyzer` | Testcontainers (CI integration matrix) |
-| `Oracle` | `Inquiry.Oracle` | `Inquiry.Oracle.Analyzer` | Testcontainers (CI integration matrix) |
+| `Sqlite` | `Ignyte.Inquiry.Sqlite` | `Inquiry.Sqlite.Analyzer` | in-process (no Docker) |
+| `SqlServer` | `Ignyte.Inquiry.SqlServer` | `Inquiry.SqlServer.Analyzer` | Testcontainers (CI integration matrix) |
+| `PostgreSql` | `Ignyte.Inquiry.PostgreSql` | `Inquiry.PostgreSql.Analyzer` | Testcontainers (CI integration matrix) |
+| `MySql` | `Ignyte.Inquiry.MySql` | `Inquiry.MySql.Analyzer` | Testcontainers (CI integration matrix) |
+| `MariaDb` | `Ignyte.Inquiry.MariaDb` | `Inquiry.MariaDb.Analyzer` | Testcontainers (CI integration matrix) |
+| `Oracle` | `Ignyte.Inquiry.Oracle` | `Inquiry.Oracle.Analyzer` | Testcontainers (CI integration matrix) |
 
 The shared generator framework lives in `Inquiry.Generators.Shared` and is bundled privately into each
 `*.Analyzer` (Roslyn loads each analyzer in its own `AssemblyLoadContext`, so the framework cannot be a
@@ -105,8 +106,8 @@ and threat-model review then found a custom-shell CI bypass; [#220](https://gith
 The post-fix review reported no remaining reportable findings. Security evidence, policies, and release
 governance shipped with [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (closed 2026-07-25):
 SECURITY.md, a CycloneDX SBOM and SLSA build provenance on every packed artifact, NuGetAudit over direct
-and transitive dependencies, and a CodeQL + dependency-scanning workflow. CodeQL activates when the
-repository goes public or GitHub Advanced Security is enabled.
+and transitive dependencies, and a CodeQL + dependency-scanning workflow. CodeQL is active now that the
+repository is public.
 
 ## Test status
 

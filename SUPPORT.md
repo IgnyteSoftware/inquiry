@@ -37,18 +37,19 @@ Behavioral bug fixes that correct documented-but-wrong behavior are not consider
 
 ## Provider support matrix
 
-| Provider       | Package              | ADO.NET driver                |
-|----------------|----------------------|-------------------------------|
-| SQLite         | `Inquiry.Sqlite`     | `Microsoft.Data.Sqlite`       |
-| SQL Server     | `Inquiry.SqlServer`  | `Microsoft.Data.SqlClient`    |
-| PostgreSQL     | `Inquiry.PostgreSql` | `Npgsql`                      |
-| MySQL          | `Inquiry.MySql`      | `MySqlConnector`              |
-| MariaDB        | `Inquiry.MariaDb`    | `MySqlConnector`              |
-| Oracle         | `Inquiry.Oracle`     | `Oracle.ManagedDataAccess.Core` |
+| Provider       | Package                     | ADO.NET driver                |
+|----------------|-----------------------------|-------------------------------|
+| SQLite         | `Ignyte.Inquiry.Sqlite`     | `Microsoft.Data.Sqlite`       |
+| SQL Server     | `Ignyte.Inquiry.SqlServer`  | `Microsoft.Data.SqlClient`    |
+| PostgreSQL     | `Ignyte.Inquiry.PostgreSql` | `Npgsql`                      |
+| MySQL          | `Ignyte.Inquiry.MySql`      | `MySqlConnector`              |
+| MariaDB        | `Ignyte.Inquiry.MariaDb`    | `MySqlConnector`              |
+| Oracle         | `Ignyte.Inquiry.Oracle`     | `Oracle.ManagedDataAccess.Core` |
 
 ## Companion packages
 
-| Package              | Purpose                                                        |
-|----------------------|----------------------------------------------------------------|
-| `Inquiry.Interceptors` | Slow-query logging, sqlcommenter trace-context tagging, N+1 detection |
-| `Inquiry.Testing`      | SQLite fixture, recording interceptor, entity factory, transaction sandbox, Respawn reset |
+| Package                       | Purpose                                                        |
+|-------------------------------|----------------------------------------------------------------|
+| `Ignyte.Inquiry.AspNetCore`   | ASP.NET Core audit-context middleware (`UseInquiryAuditContext`) |
+| `Ignyte.Inquiry.Interceptors` | Slow-query logging, sqlcommenter trace-context tagging, N+1 detection |
+| `Ignyte.Inquiry.Testing`      | SQLite fixture, recording interceptor, entity factory, transaction sandbox, Respawn reset |
