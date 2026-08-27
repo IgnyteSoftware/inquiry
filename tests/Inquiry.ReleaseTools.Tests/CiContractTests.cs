@@ -31,10 +31,18 @@ public sealed class CiContractTests
 
         // Release notes: the curated CHANGELOG section is the body, extracted by the
         // behaviorally tested ReleaseNotesExtractor (exact heading match, fail-closed when
-        // missing), and the tag ref is read from the environment, never interpolated into
-        // the script.
+        // missing) in a step that must not hold GH_TOKEN (the tool build would otherwise
+        // run with the release-creating token in its environment), guarded by explicit
+        // fail-closed shell options, and the tag ref is read from the environment, never
+        // interpolated into the script.
         Assert.Contains("--notes-file", workflow, StringComparison.Ordinal);
         Assert.Contains("extract-notes CHANGELOG.md \"$VERSION\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("set -euo pipefail", workflow, StringComparison.Ordinal);
+        Assert.Contains("test -s \"$RUNNER_TEMP/release-notes.md\"", workflow, StringComparison.Ordinal);
+        var extractStep = workflow.IndexOf("Extract release notes", StringComparison.Ordinal);
+        var tokenUse = workflow.IndexOf("GH_TOKEN", StringComparison.Ordinal);
+        Assert.True(extractStep >= 0 && (tokenUse < 0 || extractStep < tokenUse),
+            "The release-notes extraction step must run before (and without) GH_TOKEN.");
         Assert.Contains("$ref = $env:GITHUB_REF", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("$ref = '${{", workflow, StringComparison.Ordinal);
     }
