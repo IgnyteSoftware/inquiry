@@ -42,6 +42,16 @@ public sealed class ReleaseNotesExtractorTests
     }
 
     [Fact]
+    public void Preserves_indentation_on_boundary_content_lines()
+    {
+        const string changelog = "## [1.0.0]\n\n    indented code line\n- bullet\n\n## [0.9.0]\n";
+
+        var notes = ReleaseNotesExtractor.Extract(changelog, "1.0.0");
+
+        Assert.Equal("    indented code line\n- bullet\n", notes);
+    }
+
+    [Fact]
     public void Accepts_a_heading_without_a_date_suffix()
     {
         var notes = ReleaseNotesExtractor.Extract("## [1.0.0]\n\n- stable notes\n", "1.0.0");

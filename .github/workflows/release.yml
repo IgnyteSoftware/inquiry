@@ -113,21 +113,32 @@ jobs:
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --skip-duplicate
 
+      - name: Extract release notes from the changelog
+        # Token-free on purpose: this step restores and builds the tool, and a build must
+        # never run with the release-creating GH_TOKEN in its environment.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The extractor matches the '## [VERSION]' heading exactly (a longer version that
+          # merely extends the requested one is rejected) and fails closed if the section is
+          # missing, so a tag pushed before the changelog cut cannot publish an immutable
+          # release with bare or wrong-version notes. The test -s guard keeps that fail-closed
+          # even if a later edit stops the tool's exit code from aborting the step.
+          set -euo pipefail
+          dotnet run --project eng/Inquiry.ReleaseTools --configuration Release -- \
+            extract-notes CHANGELOG.md "$VERSION" "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
+
       - name: Publish GitHub release notes
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.version }}
-          VERSION: ${{ steps.version.outputs.version }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
-          # Body = this version's curated CHANGELOG section; gh appends the auto-generated
-          # commit list after it. The extractor matches the '## [VERSION]' heading exactly
-          # (a longer version that merely extends the requested one is rejected) and fails
-          # closed if the section is missing, so a tag pushed before the changelog cut
-          # cannot publish an immutable release with bare or wrong-version notes.
+          # Body = the extracted curated CHANGELOG section; gh appends the auto-generated
+          # commit list after it.
           notes_file="$RUNNER_TEMP/release-notes.md"
-          dotnet run --project eng/Inquiry.ReleaseTools --configuration Release -- \
-            extract-notes CHANGELOG.md "$VERSION" "$notes_file"
+          test -s "$notes_file"
           flags=(--title "$TAG" --generate-notes --notes-file "$notes_file")
           if [ "$PRERELEASE" = "true" ]; then
             flags+=(--prerelease)

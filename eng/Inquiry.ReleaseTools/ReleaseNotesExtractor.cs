@@ -35,14 +35,25 @@ public static class ReleaseNotesExtractor
                 $"CHANGELOG.md has no '## [{version}]' section. Cut the changelog before tagging.");
         }
 
-        var text = string.Join('\n', notes).Trim();
-        if (text.Length == 0)
+        // Trim only surrounding blank lines: content lines keep their exact whitespace so
+        // indented Markdown (code blocks, nested lists) survives into the release notes.
+        while (notes.Count > 0 && string.IsNullOrWhiteSpace(notes[0]))
+        {
+            notes.RemoveAt(0);
+        }
+
+        while (notes.Count > 0 && string.IsNullOrWhiteSpace(notes[^1]))
+        {
+            notes.RemoveAt(notes.Count - 1);
+        }
+
+        if (notes.Count == 0)
         {
             throw new ReleaseVerificationException(
                 $"The '## [{version}]' CHANGELOG.md section is empty. Cut the changelog before tagging.");
         }
 
-        return text + "\n";
+        return string.Join('\n', notes) + "\n";
     }
 
     // Matches the awk exit condition this replaced: a link-reference line such as '[unreleased]: https://...'.
