@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Many-to-many eager loading across all three junction shapes: an explicitly-mapped junction, a composite-key related entity, and an auto-managed junction whose table the generator synthesizes into the schema DDL. An auto-managed junction is read-only.
 - Stored procedure support with OUTPUT, RETURN, INOUT parameters, multiple result sets, Oracle REF CURSOR, and SQL Server TVP parameters.
 - Batch mutations with provider-selected transports (TVP, unnest, multi-row VALUES, individual commands).
-- Bulk insert via provider-native copy APIs.
+- Bulk insert via provider-native copy APIs. Native bulk insert enlists in the ambient Inquiry transaction on SQL Server and PostgreSQL; on MySQL/MariaDB, whose security-isolated `AllowLoadLocalInfile` bulk connection cannot be shared, a bulk insert inside a transaction throws before any rows are written. Per-call `InquiryBulkInsertOptions` cover timeout, batch size, table lock, progress notification, and connection behavior; options a provider cannot honor throw before writing, and the SQLite/Oracle batch-SQL fallback rejects non-null options. Telemetry adds connection-open and copy-duration histograms, per-phase span events, and an enlisted/dedicated connection-mode tag; the generator emits typed per-column accessors so the PostgreSQL binary COPY path and the bulk row reader avoid per-cell boxing.
 - A uniform cancellation contract across single commands and batch DML: when a cancel races provider completion, both a lying success and a native driver error normalize to `OperationCanceledException` carrying the caller's token, with the driver exception preserved as the inner exception. Work that genuinely completed before the token fired is never re-labelled cancelled, including a durably committed batch.
 - Paged select with `InquiryPagedResult<T>` paired SELECT+COUNT return shape.
 - WHERE predicates: comparison, IN-collection, LIKE, BETWEEN, IS NULL, full-text search, JSON containment.
@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The repository moved from a personal account to the [IgnyteSoftware](https://github.com/IgnyteSoftware) organization. Issue, pull-request, and documentation URLs now live under `github.com/IgnyteSoftware/inquiry`; the packages themselves are unaffected and unreleased.
+- Package dependency floors raised: `Microsoft.Extensions.*`, `Microsoft.Data.Sqlite`, and `System.Configuration.ConfigurationManager` to 10.0.11, `MySqlConnector` to 2.6.2, `Oracle.ManagedDataAccess.Core` to 23.26.300, `SQLitePCLRaw.lib.e_sqlite3` to 3.53.3, and `Respawn` (Testing package) to 7.0.0.
 
 ### Documentation
 
