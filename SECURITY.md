@@ -2,11 +2,12 @@
 
 ## Supported versions
 
-| Version | Supported                                    |
-|---------|----------------------------------------------|
-| 1.0.x   | Supported once released — not yet published  |
+| Version         | Supported                                        |
+|-----------------|--------------------------------------------------|
+| 1.0.0-preview.x | Fixes ship only in the latest preview            |
+| 1.0.x           | Supported once the stable release ships          |
 
-No public release has shipped. 1.0.0 will be the first. Until then, prereleases receive fixes only in the latest preview.
+No stable release has shipped yet; `1.0.0-preview` packages are published on nuget.org and receive fixes only in the latest preview.
 
 Once released, only the latest patch of each supported major.minor receives security fixes.
 

@@ -3,7 +3,8 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code and GitHub:** 2026-08-01.
+**Last reconciled against the code and GitHub:** 2026-08-18 (governance and release-engineering
+claims; issue counts were last reconciled 2026-08-01).
 
 **1.0.0 is not release-ready**, though the stop-ship lane is now clear. GitHub has 61 open issues: 12 are
 assigned to the `1.0.0` milestone (6 P1, 5 P2, and one unlabelled eager-grid performance gap, #265); five
@@ -23,12 +24,9 @@ middleware), #219 (generated query contracts),
 [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (release engineering and governance) closed
 2026-07-25: governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), public API baseline
 (PublicApiAnalyzers + EnablePackageValidation), package verification, CycloneDX SBOM and SLSA build
-provenance, hosted docs, CODEOWNERS and branch protection, and CodeQL plus dependency scanning. Two of
-those still cannot activate: branch protection
-(`eng/configure-branch-protection.ps1`) and CodeQL code scanning. Moving to the IgnyteSoftware
-organization did not change that — the repository is still private and the org is on GitHub's free plan,
-where the branch-protection and rulesets APIs return 403 and CodeQL needs a public repository or GitHub
-Advanced Security. Both activate when the repository goes public.
+provenance, hosted docs, CODEOWNERS and branch protection, and CodeQL plus dependency scanning. The repository is now public
+under the IgnyteSoftware organization, so branch-protection rulesets
+(`eng/configure-branch-protection.ps1`) and CodeQL code scanning are both active.
 [#70](https://github.com/IgnyteSoftware/inquiry/issues/70) (eager loading) closed 2026-07-26, and
 [#80](https://github.com/IgnyteSoftware/inquiry/issues/80) (many-to-many: auto-managed junction,
 composite keys, child filters on eager M:N) closed 2026-07-31.
@@ -41,12 +39,12 @@ RLS session helpers (`SetLocalAsync`) closed the remaining two criteria.
 
 | Dialect (`[assembly: InquiryDialect("…")]`) | Runtime package | Analyzer (source generator) | Live test status |
 |---|---|---|---|
-| `Sqlite` | `Inquiry.Sqlite` | `Inquiry.Sqlite.Analyzer` | in-process (no Docker) |
-| `SqlServer` | `Inquiry.SqlServer` | `Inquiry.SqlServer.Analyzer` | Testcontainers (CI integration matrix) |
-| `PostgreSql` | `Inquiry.PostgreSql` | `Inquiry.PostgreSql.Analyzer` | Testcontainers (CI integration matrix) |
-| `MySql` | `Inquiry.MySql` | `Inquiry.MySql.Analyzer` | Testcontainers (CI integration matrix) |
-| `MariaDb` | `Inquiry.MariaDb` | `Inquiry.MariaDb.Analyzer` | Testcontainers (CI integration matrix) |
-| `Oracle` | `Inquiry.Oracle` | `Inquiry.Oracle.Analyzer` | Testcontainers (CI integration matrix) |
+| `Sqlite` | `Ignyte.Inquiry.Sqlite` | `Inquiry.Sqlite.Analyzer` | in-process (no Docker) |
+| `SqlServer` | `Ignyte.Inquiry.SqlServer` | `Inquiry.SqlServer.Analyzer` | Testcontainers (CI integration matrix) |
+| `PostgreSql` | `Ignyte.Inquiry.PostgreSql` | `Inquiry.PostgreSql.Analyzer` | Testcontainers (CI integration matrix) |
+| `MySql` | `Ignyte.Inquiry.MySql` | `Inquiry.MySql.Analyzer` | Testcontainers (CI integration matrix) |
+| `MariaDb` | `Ignyte.Inquiry.MariaDb` | `Inquiry.MariaDb.Analyzer` | Testcontainers (CI integration matrix) |
+| `Oracle` | `Ignyte.Inquiry.Oracle` | `Inquiry.Oracle.Analyzer` | Testcontainers (CI integration matrix) |
 
 The shared generator framework lives in `Inquiry.Generators.Shared` and is bundled privately into each
 `*.Analyzer` (Roslyn loads each analyzer in its own `AssemblyLoadContext`, so the framework cannot be a
@@ -79,17 +77,19 @@ Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roa
 
 ## Release engineering
 
-Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags. No public release has
-shipped yet; the first release will use the `v1.0.0` tag and package version `1.0.0`. Every package embeds
+Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags. Preview releases
+(`v1.0.0-preview.N`) are published on nuget.org; the first stable release will use the `v1.0.0` tag and
+package version `1.0.0`. Every package embeds
 SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg` symbol package, including the
 provider analyzer PDBs. The verifier binds each PDB to its DLL CodeView identity and checks complete
 SourceLink document coverage at the exact commit. The previous
 tag-triggered rebuild-and-wildcard-push workflow was removed because it did not prove the complete provider
 or package-consumer gates and could not safely recover from partial publication. `eng/release-manifest.json`
-now defines the exact nine-package 1.0 bundle, and the cross-platform verifier rejects inventory, version,
+now defines the exact ten-package 1.0 bundle, and the cross-platform verifier rejects inventory, version,
 dependency, repository-commit, metadata, symbol, and SourceLink drift. `eng/pack-release.ps1` packs from
 an exact commit in a detached worktree, and CI separates the package producer from an independent verifier
-before the versioned `ci-required-v1` aggregate gate can pass. Public publishing remains disabled.
+before the versioned `ci-required-v1` aggregate gate can pass. Publishing is live: release tags publish
+to nuget.org via Trusted Publishing (see [Contributing — Releasing](contributing.md#releasing)).
 [#87](https://github.com/IgnyteSoftware/inquiry/issues/87) (benchmark truth and regression gates) is closed:
 corrected baselines committed, weekly regression budgets enforced, and EF Core coverage gaps closed.
 [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25 across all nine acceptance
@@ -106,8 +106,8 @@ and threat-model review then found a custom-shell CI bypass; [#220](https://gith
 The post-fix review reported no remaining reportable findings. Security evidence, policies, and release
 governance shipped with [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (closed 2026-07-25):
 SECURITY.md, a CycloneDX SBOM and SLSA build provenance on every packed artifact, NuGetAudit over direct
-and transitive dependencies, and a CodeQL + dependency-scanning workflow. CodeQL activates when the
-repository goes public or GitHub Advanced Security is enabled.
+and transitive dependencies, and a CodeQL + dependency-scanning workflow. CodeQL is active now that the
+repository is public.
 
 ## Test status
 
@@ -139,12 +139,12 @@ are green at 20/20 required checks each, including every one of the 15 PostgreSQ
 SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs. Docker-gated suites skip locally
 (not in CI) when Docker is unavailable.
 
-The normal CI workflow runs on pull requests targeting `prerelease` and `main`, and on merge-queue events:
+The normal CI workflow runs on pull requests targeting `main`, and on merge-queue events:
 **build-and-unit** (generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and
 runs the NativeAOT smoke app), an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server,
 Oracle × net8.0/net9.0/net10.0 via Testcontainers — exactly 15 required legs), **package-producer**,
 and the independent **package-verifier**. The `ci-required-v1` aggregator runs even after failures and
-fails unless all required jobs and matrix legs succeed. Direct merging has been retired; external
-rulesets must protect both branches with this context and the review requirements documented under
+fails unless all required jobs and matrix legs succeed. Direct merging has been retired; repository
+rulesets protect `main` with this context and the review requirements documented under
 [#89](https://github.com/IgnyteSoftware/inquiry/issues/89). A separate **scheduled weekly workflow**
 (`scheduled.yml`) repeats the full provider × net8.0/net9.0/net10.0 matrix every Monday.
