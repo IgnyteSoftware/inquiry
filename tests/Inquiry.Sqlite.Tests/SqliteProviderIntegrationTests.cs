@@ -34,6 +34,20 @@ public sealed class SqliteProviderIntegrationTests
     }
 
     [Fact]
+    public async Task DataSourceOverloadUsesSuppliedDataSource()
+    {
+        await using var dataSource = new RecordingDbDataSource();
+        await using var serviceProvider = new ServiceCollection()
+            .AddInquirySqlite(dataSource)
+            .BuildServiceProvider();
+
+        var factory = serviceProvider.GetRequiredService<IInquiryConnectionFactory>();
+        await using var connection = await factory.OpenConnectionAsync();
+
+        Assert.True(dataSource.Opened);
+    }
+
+    [Fact]
     public async Task GeneratedStoreExecutesCrudAgainstSqlite()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl);

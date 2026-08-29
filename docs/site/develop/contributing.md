@@ -152,6 +152,7 @@ namespaces remain `Inquiry.*`:
 | `Ignyte.Inquiry.MariaDb` | MariaDB provider + bundled analyzer |
 | `Ignyte.Inquiry.Oracle` | Oracle provider + bundled analyzer |
 | `Ignyte.Inquiry.Sqlite` | SQLite provider + bundled analyzer |
+| `Ignyte.Inquiry.Aspire` | Aspire resource-name registration, telemetry, and health checks |
 | `Ignyte.Inquiry.AspNetCore` | ASP.NET Core audit-context middleware |
 | `Ignyte.Inquiry.Interceptors` | Opt-in slow-query logging + sqlcommenter |
 | `Ignyte.Inquiry.Testing` | SQLite fixture, recording interceptor, Respawn reset |

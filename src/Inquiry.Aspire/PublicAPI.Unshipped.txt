@@ -1,0 +1,8 @@
+#nullable enable
+Microsoft.Extensions.Hosting.InquiryAspireExtensions
+static Microsoft.Extensions.Hosting.InquiryAspireExtensions.AddInquiryMariaDb(this Microsoft.Extensions.Hosting.IHostApplicationBuilder! builder, string! resourceName) -> void
+static Microsoft.Extensions.Hosting.InquiryAspireExtensions.AddInquiryMySql(this Microsoft.Extensions.Hosting.IHostApplicationBuilder! builder, string! resourceName) -> void
+static Microsoft.Extensions.Hosting.InquiryAspireExtensions.AddInquiryOracle(this Microsoft.Extensions.Hosting.IHostApplicationBuilder! builder, string! resourceName) -> void
+static Microsoft.Extensions.Hosting.InquiryAspireExtensions.AddInquiryPostgreSql(this Microsoft.Extensions.Hosting.IHostApplicationBuilder! builder, string! resourceName) -> void
+static Microsoft.Extensions.Hosting.InquiryAspireExtensions.AddInquirySqlite(this Microsoft.Extensions.Hosting.IHostApplicationBuilder! builder, string! resourceName) -> void
+static Microsoft.Extensions.Hosting.InquiryAspireExtensions.AddInquirySqlServer(this Microsoft.Extensions.Hosting.IHostApplicationBuilder! builder, string! resourceName) -> void

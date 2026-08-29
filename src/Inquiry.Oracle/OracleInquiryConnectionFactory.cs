@@ -12,6 +12,7 @@ namespace Inquiry.Oracle;
 /// </summary>
 internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 {
+    private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;
     private readonly RetryingConnectionOpener? _retryingOpener;
@@ -24,6 +25,17 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     public OracleInquiryConnectionFactory(string connectionString)
         : this(connectionString, new OracleInquiryOptions())
     {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="OracleInquiryConnectionFactory"/> that opens
+    /// connections from an externally owned data source.
+    /// </summary>
+    public OracleInquiryConnectionFactory(DbDataSource dataSource)
+    {
+        _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+        _connectionString = dataSource.ConnectionString;
+        _openPrimary = dataSource.OpenConnectionAsync;
     }
 
     /// <summary>
@@ -61,6 +73,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
+        if (_dataSource is not null)
+        {
+            return _dataSource.OpenConnectionAsync(cancellationToken);
+        }
+
         if (_failoverConnectionString is { } failover)
         {
             return FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, _retryingOpener, cancellationToken);

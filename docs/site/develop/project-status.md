@@ -85,7 +85,7 @@ provider analyzer PDBs. The verifier binds each PDB to its DLL CodeView identity
 SourceLink document coverage at the exact commit. The previous
 tag-triggered rebuild-and-wildcard-push workflow was removed because it did not prove the complete provider
 or package-consumer gates and could not safely recover from partial publication. `eng/release-manifest.json`
-now defines the exact ten-package 1.0 bundle, and the cross-platform verifier rejects inventory, version,
+now defines the exact eleven-package 1.0 bundle, and the cross-platform verifier rejects inventory, version,
 dependency, repository-commit, metadata, symbol, and SourceLink drift. `eng/pack-release.ps1` packs from
 an exact commit in a detached worktree, and CI separates the package producer from an independent verifier
 before the versioned `ci-required-v1` aggregate gate can pass. Publishing is live: release tags publish

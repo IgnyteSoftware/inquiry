@@ -3,6 +3,7 @@ using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Data.Common;
 
 namespace Inquiry.SqlServer.DependencyInjection;
 
@@ -11,6 +12,22 @@ namespace Inquiry.SqlServer.DependencyInjection;
 /// </summary>
 public static class SqlServerInquiryServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the SQL Server connection factory with an externally owned data source.
+    /// </summary>
+    public static IServiceCollection AddInquirySqlServer(
+        this IServiceCollection services,
+        DbDataSource dataSource)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(dataSource);
+
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "SqlServer");
+        services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(dataSource));
+        services.AddSingleton<IInquiryBulkCopier, SqlServerBulkCopier>();
+        return services;
+    }
+
     /// <summary>
     /// Registers the SQL Server connection factory used by generated Inquiry stores.
     /// </summary>

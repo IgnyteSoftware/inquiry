@@ -9,6 +9,7 @@ namespace Inquiry.Sqlite;
 /// </summary>
 internal sealed class SqliteInquiryConnectionFactory : IInquiryConnectionFactory
 {
+    private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
 
     /// <summary>
@@ -24,9 +25,24 @@ internal sealed class SqliteInquiryConnectionFactory : IInquiryConnectionFactory
         _connectionString = connectionString;
     }
 
+    /// <summary>
+    /// Initializes a new instance of <see cref="SqliteInquiryConnectionFactory"/> that opens
+    /// connections from an externally owned data source.
+    /// </summary>
+    public SqliteInquiryConnectionFactory(DbDataSource dataSource)
+    {
+        _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+        _connectionString = dataSource.ConnectionString;
+    }
+
     /// <inheritdoc />
     public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
+        if (_dataSource is not null)
+        {
+            return await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         var connection = new SqliteConnection(_connectionString);
 
         try

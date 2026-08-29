@@ -153,8 +153,16 @@ public sealed class PackageAdversarialTests
     {
         var root = RepositoryFixture.Root;
         var commit = Run(root, "git", "rev-parse", "HEAD").Trim();
-        var inputStamp = string.Join('-', new[] { "Directory.Build.props", "Directory.Build.targets", "README.md", "icon.png", project }
-            .Select(path => File.GetLastWriteTimeUtc(Path.Combine(root, path)).Ticks));
+        var inputs = new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "README.md", "icon.png", project }
+            .Select(path => File.GetLastWriteTimeUtc(Path.Combine(root, path)).Ticks)
+            .ToList();
+        var assetsFile = Path.Combine(root, Path.GetDirectoryName(project)!, "obj", "project.assets.json");
+        if (File.Exists(assetsFile))
+        {
+            inputs.Add(File.GetLastWriteTimeUtc(assetsFile).Ticks);
+        }
+
+        var inputStamp = string.Join('-', inputs);
         var output = Path.Combine(Path.GetTempPath(), "inquiry-release-tools-fixture", packageId + "-" + commit + "-" + inputStamp);
         using var fixtureLock = new Mutex(false, "Inquiry.ReleaseTools.PackageFixture." + packageId + "." + commit + "." + inputStamp);
         Assert.True(fixtureLock.WaitOne(TimeSpan.FromMinutes(2)), "Timed out waiting for the shared package fixture.");

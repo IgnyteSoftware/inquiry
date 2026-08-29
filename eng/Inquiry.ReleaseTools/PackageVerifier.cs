@@ -23,6 +23,7 @@ public static class PackageVerifier
     private static readonly string[] RequiredPackageIds =
     [
         "Ignyte.Inquiry",
+        "Ignyte.Inquiry.Aspire",
         "Ignyte.Inquiry.AspNetCore",
         "Ignyte.Inquiry.Interceptors",
         "Ignyte.Inquiry.MariaDb",

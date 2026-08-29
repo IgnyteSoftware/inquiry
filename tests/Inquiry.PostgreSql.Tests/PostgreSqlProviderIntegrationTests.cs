@@ -2,6 +2,7 @@ using Inquiry.Connections;
 using Inquiry.Pipeline;
 using Inquiry.PostgreSql.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -17,6 +18,20 @@ public sealed class PostgreSqlProviderIntegrationTests
         Assert.IsType<PostgreSqlInquiryConnectionFactory>(serviceProvider.GetRequiredService<IInquiryConnectionFactory>());
         Assert.Null(serviceProvider.GetService<IInquiry>());
         Assert.Null(serviceProvider.GetService<IInquiryRequestPipeline>());
+    }
+
+    [Fact]
+    public async Task PostgreSqlProviderOpensConnectionsFromRegisteredDataSource()
+    {
+        var dataSource = NpgsqlDataSource.Create("Host=localhost;Database=postgres;Username=postgres;Password=postgres");
+        using var serviceProvider = new ServiceCollection()
+            .AddInquiryPostgreSql(dataSource)
+            .BuildServiceProvider();
+        var factory = serviceProvider.GetRequiredService<IInquiryConnectionFactory>();
+
+        await dataSource.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await factory.OpenConnectionAsync());
     }
 
     [Fact]
