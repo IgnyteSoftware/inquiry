@@ -2,6 +2,7 @@ using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Data.Common;
 
 namespace Inquiry.Oracle.DependencyInjection;
 
@@ -10,6 +11,19 @@ namespace Inquiry.Oracle.DependencyInjection;
 /// </summary>
 public static class OracleInquiryServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the Oracle connection factory with an externally owned data source.
+    /// </summary>
+    public static IServiceCollection AddInquiryOracle(this IServiceCollection services, DbDataSource dataSource)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(dataSource);
+
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Oracle");
+        services.AddSingleton<IInquiryConnectionFactory>(_ => new OracleInquiryConnectionFactory(dataSource));
+        return services;
+    }
+
     /// <summary>
     /// Registers the Oracle connection factory used by generated Inquiry stores.
     /// </summary>

@@ -23,6 +23,7 @@ public static class PackageVerifier
     private static readonly string[] RequiredPackageIds =
     [
         "Ignyte.Inquiry",
+        "Ignyte.Inquiry.Aspire",
         "Ignyte.Inquiry.AspNetCore",
         "Ignyte.Inquiry.Interceptors",
         "Ignyte.Inquiry.MariaDb",
@@ -545,7 +546,8 @@ public static class PackageVerifier
                 RequireSequence(dependency.Attributes().Select(attribute => attribute.Name.LocalName), ["id", "version", "exclude"],
                     $"{packageId} dependency attributes");
                 var dependencyId = (string?)dependency.Attribute("id");
-                var expectedExclude = packageId != "Ignyte.Inquiry.Oracle" && dependencyId == "System.Configuration.ConfigurationManager"
+                var usesSystemConfigurationAtCompileTime = package.Dependencies.ContainsKey("Oracle.ManagedDataAccess.Core");
+                var expectedExclude = !usesSystemConfigurationAtCompileTime && dependencyId == "System.Configuration.ConfigurationManager"
                     ? "Compile,Build,Analyzers"
                     : "Build,Analyzers";
                 Require((string?)dependency.Attribute("exclude") == expectedExclude,

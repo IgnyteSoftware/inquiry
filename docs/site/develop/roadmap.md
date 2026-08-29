@@ -158,7 +158,7 @@ correctness one, and is tracked unlabelled on the milestone as
 The sections below preserve research and implementation context. The priority index and GitHub issue
 acceptance criteria supersede any older wording that describes an initial implementation as fully complete.
 
-- **Aspire integration package** *(integration research 2026-06-12)*. An `Inquiry.Aspire` client
+- **Aspire integration package (implemented 2026-08-29).** The `Inquiry.Aspire` client
   integration in the standard shape every mainstream data library now ships: resolve the
   Aspire-provisioned connection string by resource name, register the provider factory, and
   auto-wire the existing telemetry (`AddInquiryTelemetry()`) and health check so Inquiry lights up
@@ -166,9 +166,11 @@ acceptance criteria supersede any older wording that describes an initial implem
   **`System.Data.Common.DbDataSource`** (the .NET 7+ pooled primitive Aspire registers) instead of
   raw connection strings. *(Foundation started 2026-06-21: `PostgreSqlInquiryConnectionFactory` now
   builds and owns one app-lifetime `NpgsqlDataSource` — a `DbDataSource` — in #54/PR #99.
-  MySQL and MariaDB refactored to `MySqlDataSource` on 2026-07-09. Remaining: SQL Server
-  (`Microsoft.Data.SqlClient` does not yet ship a public `DbDataSource`), SQLite
-  (`Microsoft.Data.Sqlite` has no `DbDataSource`), Oracle (ODP.NET has no `DbDataSource`).)*
+    MySQL and MariaDB refactored to `MySqlDataSource` on 2026-07-09. External data-source overloads
+    now accept those three provider types. SQL Server accepts the generic `DbDataSource` returned by
+    `SqlClientFactory.CreateDataSource`; SQLite and Oracle use the default `DbDataSource`
+    implementations returned by their provider factories.)* See
+  [Aspire integration](../articles/features/aspire.md).
 - **Build-time SQL validation against a dev database** *(integration research 2026-06-12)*. The
   Rust sqlx `query!` / Go sqlc model: because Inquiry's SQL is compile-time constant, an opt-in
   build step or test helper can `PREPARE`/`EXPLAIN` every generated SQL const against a

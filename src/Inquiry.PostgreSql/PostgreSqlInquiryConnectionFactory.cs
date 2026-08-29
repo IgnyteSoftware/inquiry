@@ -26,6 +26,7 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
     // here, so these are built once and reused for every open, then disposed with the factory.
     private readonly NpgsqlDataSource _primaryDataSource;
     private readonly NpgsqlDataSource? _failoverDataSource;
+    private readonly bool _ownsDataSources;
 
     // Cached so the retry path doesn't allocate a closure per open (OpenConnectionAsync runs once
     // per pipeline operation).
@@ -70,6 +71,7 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
         _failoverDataSource = failoverConnectionString is { } failover
             ? new NpgsqlDataSourceBuilder(failover).Build()
             : null;
+        _ownsDataSources = true;
         _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
 
         var detector = CreateDetector(options.Compatibility);
@@ -77,6 +79,17 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
         {
             _retryingOpener = new RetryingConnectionOpener(detector, options.MaxAttempts, options.RetryBaseDelay, maxDelay: options.RetryMaxDelay);
         }
+    }
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="PostgreSqlInquiryConnectionFactory"/> that opens
+    /// connections from an externally owned data source.
+    /// </summary>
+    public PostgreSqlInquiryConnectionFactory(NpgsqlDataSource dataSource)
+    {
+        _primaryDataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+        _connectionString = dataSource.ConnectionString;
+        _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
     }
 
     /// <inheritdoc />
@@ -125,6 +138,11 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
     /// <summary>Disposes the underlying data source(s), draining their connection pools.</summary>
     public async ValueTask DisposeAsync()
     {
+        if (!_ownsDataSources)
+        {
+            return;
+        }
+
         await _primaryDataSource.DisposeAsync().ConfigureAwait(false);
         if (_failoverDataSource is not null)
         {
@@ -135,6 +153,11 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
     /// <summary>Disposes the underlying data source(s), draining their connection pools.</summary>
     public void Dispose()
     {
+        if (!_ownsDataSources)
+        {
+            return;
+        }
+
         _primaryDataSource.Dispose();
         _failoverDataSource?.Dispose();
     }

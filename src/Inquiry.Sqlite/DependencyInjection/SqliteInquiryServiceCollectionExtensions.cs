@@ -2,6 +2,7 @@ using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Data.Common;
 
 namespace Inquiry.Sqlite.DependencyInjection;
 
@@ -10,6 +11,19 @@ namespace Inquiry.Sqlite.DependencyInjection;
 /// </summary>
 public static class SqliteInquiryServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the SQLite connection factory with an externally owned data source.
+    /// </summary>
+    public static IServiceCollection AddInquirySqlite(this IServiceCollection services, DbDataSource dataSource)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(dataSource);
+
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite");
+        services.AddSingleton<IInquiryConnectionFactory>(_ => new SqliteInquiryConnectionFactory(dataSource));
+        return services;
+    }
+
     /// <summary>
     /// Registers the SQLite connection factory used by generated Inquiry stores.
     /// </summary>

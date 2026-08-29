@@ -3,6 +3,7 @@ using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MySqlConnector;
 
 namespace Inquiry.MySql.DependencyInjection;
 
@@ -11,6 +12,29 @@ namespace Inquiry.MySql.DependencyInjection;
 /// </summary>
 public static class MySqlInquiryServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the MySQL connection factory with an externally owned data source.
+    /// </summary>
+    public static IServiceCollection AddInquiryMySql(
+        this IServiceCollection services,
+        MySqlDataSource dataSource)
+    {
+        if (services is null)
+        {
+            throw new ArgumentNullException(nameof(services));
+        }
+
+        if (dataSource is null)
+        {
+            throw new ArgumentNullException(nameof(dataSource));
+        }
+
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MySql");
+        services.AddSingleton<IInquiryConnectionFactory>(_ => new MySqlInquiryConnectionFactory(dataSource));
+        services.AddSingleton<IInquiryBulkCopier, MySqlBulkCopier>();
+        return services;
+    }
+
     /// <summary>
     /// Registers the MySQL/MariaDB connection factory used by generated Inquiry stores.
     /// </summary>

@@ -7,7 +7,9 @@ namespace Inquiry.ReleaseTools.Tests;
 public sealed class PackageAdversarialTests
 {
     private static readonly Lazy<PackageFixture> Fixture = new(() => CreateFixture("Ignyte.Inquiry", "src/Inquiry/Inquiry.csproj"));
+    private static readonly Lazy<PackageFixture> AspireFixture = new(() => CreateFixture("Ignyte.Inquiry.Aspire", "src/Inquiry.Aspire/Inquiry.Aspire.csproj"));
     private static readonly Lazy<PackageFixture> ProviderFixture = new(() => CreateFixture("Ignyte.Inquiry.Sqlite", "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj"));
+    private static readonly Lazy<PackageFixture> SqlServerFixture = new(() => CreateFixture("Ignyte.Inquiry.SqlServer", "src/Inquiry.SqlServer/Inquiry.SqlServer.csproj"));
 
     [Theory]
     [InlineData("extra-entry")]
@@ -98,6 +100,49 @@ public sealed class PackageAdversarialTests
             fixture.Commit);
     }
 
+    [Fact]
+    public void Aspire_package_pair_verifies()
+    {
+        var fixture = AspireFixture.Value;
+
+        PackageVerifier.VerifyPackagePairForTests(
+            RepositoryFixture.Root,
+            Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+            Path.GetDirectoryName(fixture.Nupkg)!,
+            "Ignyte.Inquiry.Aspire",
+            fixture.Commit);
+    }
+
+    [Fact]
+    public void Non_Oracle_package_cannot_include_System_Configuration_compile_assets()
+    {
+        var fixture = SqlServerFixture.Value;
+        var directory = Directory.CreateTempSubdirectory("inquiry-system-configuration-mutation-");
+        try
+        {
+            var nupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.SqlServer.1.0.0.nupkg");
+            var snupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.SqlServer.1.0.0.snupkg");
+            File.Copy(fixture.Nupkg, nupkg);
+            File.Copy(fixture.Snupkg, snupkg);
+            Mutate(nupkg, archive => ReplaceText(
+                archive,
+                "Ignyte.Inquiry.SqlServer.nuspec",
+                "exclude=\"Compile,Build,Analyzers\"",
+                "exclude=\"Build,Analyzers\""));
+
+            Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyPackagePairForTests(
+                RepositoryFixture.Root,
+                Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+                directory.FullName,
+                "Ignyte.Inquiry.SqlServer",
+                fixture.Commit));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("analyzer-content-not-an-analyzer")]
     [InlineData("analyzer-shared-swap")]
@@ -153,8 +198,16 @@ public sealed class PackageAdversarialTests
     {
         var root = RepositoryFixture.Root;
         var commit = Run(root, "git", "rev-parse", "HEAD").Trim();
-        var inputStamp = string.Join('-', new[] { "Directory.Build.props", "Directory.Build.targets", "README.md", "icon.png", project }
-            .Select(path => File.GetLastWriteTimeUtc(Path.Combine(root, path)).Ticks));
+        var inputs = new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "README.md", "icon.png", project }
+            .Select(path => File.GetLastWriteTimeUtc(Path.Combine(root, path)).Ticks)
+            .ToList();
+        var assetsFile = Path.Combine(root, Path.GetDirectoryName(project)!, "obj", "project.assets.json");
+        if (File.Exists(assetsFile))
+        {
+            inputs.Add(File.GetLastWriteTimeUtc(assetsFile).Ticks);
+        }
+
+        var inputStamp = string.Join('-', inputs);
         var output = Path.Combine(Path.GetTempPath(), "inquiry-release-tools-fixture", packageId + "-" + commit + "-" + inputStamp);
         using var fixtureLock = new Mutex(false, "Inquiry.ReleaseTools.PackageFixture." + packageId + "." + commit + "." + inputStamp);
         Assert.True(fixtureLock.WaitOne(TimeSpan.FromMinutes(2)), "Timed out waiting for the shared package fixture.");

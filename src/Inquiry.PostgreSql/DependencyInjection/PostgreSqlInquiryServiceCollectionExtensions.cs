@@ -3,6 +3,7 @@ using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Inquiry.PostgreSql.DependencyInjection;
 
@@ -11,6 +12,29 @@ namespace Inquiry.PostgreSql.DependencyInjection;
 /// </summary>
 public static class PostgreSqlInquiryServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the PostgreSQL connection factory with an externally owned data source.
+    /// </summary>
+    public static IServiceCollection AddInquiryPostgreSql(
+        this IServiceCollection services,
+        NpgsqlDataSource dataSource)
+    {
+        if (services is null)
+        {
+            throw new ArgumentNullException(nameof(services));
+        }
+
+        if (dataSource is null)
+        {
+            throw new ArgumentNullException(nameof(dataSource));
+        }
+
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
+        services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(dataSource));
+        services.AddSingleton<IInquiryBulkCopier, PostgreSqlBulkCopier>();
+        return services;
+    }
+
     /// <summary>
     /// Registers the PostgreSQL connection factory used by generated Inquiry stores.
     /// </summary>

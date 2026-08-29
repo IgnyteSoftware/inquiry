@@ -3,6 +3,7 @@ using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MySqlConnector;
 
 namespace Inquiry.MariaDb.DependencyInjection;
 
@@ -11,6 +12,29 @@ namespace Inquiry.MariaDb.DependencyInjection;
 /// </summary>
 public static class MariaDbInquiryServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the MariaDB connection factory with an externally owned data source.
+    /// </summary>
+    public static IServiceCollection AddInquiryMariaDb(
+        this IServiceCollection services,
+        MySqlDataSource dataSource)
+    {
+        if (services is null)
+        {
+            throw new ArgumentNullException(nameof(services));
+        }
+
+        if (dataSource is null)
+        {
+            throw new ArgumentNullException(nameof(dataSource));
+        }
+
+        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MariaDb");
+        services.AddSingleton<IInquiryConnectionFactory>(_ => new MariaDbInquiryConnectionFactory(dataSource));
+        services.AddSingleton<IInquiryBulkCopier, MariaDbBulkCopier>();
+        return services;
+    }
+
     /// <summary>
     /// Registers the MariaDB connection factory used by generated Inquiry stores.
     /// </summary>
