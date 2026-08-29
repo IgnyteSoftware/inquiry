@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-preview.9] - 2026-08-29
+
+### Added
+
+- The new `Ignyte.Inquiry.Aspire` package registers SQL Server, PostgreSQL, MySQL, MariaDB, SQLite, or Oracle from an Aspire connection-resource name. Each registration uses the provider's shared data source or connection factory and adds Inquiry telemetry and health checks.
+- Provider dependency-injection extensions now accept externally owned shared data sources for SQL Server, PostgreSQL, MySQL, MariaDB, SQLite, and Oracle.
+
+### Fixed
+
+- Generated typed data-reader access now honors the `DbDataReader` null contract and rejects null accessor entries.
+
+### Documentation
+
+- [Aspire integration](docs/site/articles/features/aspire.md) covers package setup, connection-resource registration, defaults, and existing data-source registration.
+
 ## [1.0.0-preview.8] - 2026-08-17
 
 ### Added
@@ -83,7 +98,8 @@ changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
 - [GraphQL DataLoader recipe](docs/site/articles/features/graphql-dataloader.md) — batching Hot Chocolate resolver fan-out onto a single `Compare.In` predicate method.
 - [Migrations recipe](docs/site/articles/features/migrations.md) — using `InquiryGeneratedSchema.Ddl` as the baseline script for DbUp or FluentMigrator, plus `ProviderArtifactsDdl` and `ProviderArtifactsValidationSql` for deploying and checking the SQL Server TVP types.
 
-[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.8...HEAD
+[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.9...HEAD
+[1.0.0-preview.9]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.8...v1.0.0-preview.9
 [1.0.0-preview.8]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.7...v1.0.0-preview.8
 [1.0.0-preview.7]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.6...v1.0.0-preview.7
 [1.0.0-preview.6]: https://github.com/IgnyteSoftware/inquiry/releases/tag/v1.0.0-preview.6
