@@ -12,7 +12,11 @@ namespace Inquiry.Generators.Models;
 internal sealed record PredicateData(
     string Field,
     SqlCompareOp Op,
-    bool IsOr)
+    bool IsOr,
+    int OpenGroups,
+    int CloseGroups,
+    bool IsNegated,
+    bool IsOptional)
 {
     /// <summary>
     /// JSON path (<c>$.a.b</c>) when this criterion filters inside a JSON column ([InquiryWhere.JsonPath]),

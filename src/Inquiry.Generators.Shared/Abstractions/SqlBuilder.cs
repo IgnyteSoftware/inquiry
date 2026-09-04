@@ -44,6 +44,33 @@ public abstract class SqlBuilder
         => SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false).Failures;
 
     public virtual string RenderComputedExpression(string expression) => expression;
+
+    internal IReadOnlyList<string> ValidateSetExpression(string expression)
+    {
+        var analysis = SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false);
+        var failures = new System.Collections.Generic.List<string>(analysis.Failures);
+        if (analysis.HasComment) failures.Add("contains a comment");
+        if (analysis.HasTopLevelComma) failures.Add("contains a top-level comma");
+        if (analysis.HasUserVariableAssignment) failures.Add("contains a side-effecting variable assignment");
+        foreach (var token in analysis.ValueIdentifierTokens)
+        {
+            if (!SetExpressionKeywords.Contains(token))
+            {
+                failures.Add("contains bare identifier '" + token + "'; use a {Field} placeholder for mapped columns");
+            }
+        }
+        return failures;
+    }
+
+    private static readonly HashSet<string> SetExpressionKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "and", "or", "not", "null", "true", "false", "case", "when", "then", "else", "end",
+        "as", "is", "between", "like", "in", "current_date", "current_time", "current_timestamp",
+        "date", "time", "timestamp", "interval", "year", "month", "day", "hour", "minute", "second",
+        "from", "int", "integer", "smallint", "bigint", "decimal", "numeric", "real", "float", "double",
+        "text", "char", "nchar", "varchar", "nvarchar", "binary", "varbinary", "blob", "boolean",
+    };
+
     public virtual bool ComputedColumnDeclaresStoreType => false;
     public virtual bool RequiresBoundedComputedStrings => false;
     protected virtual bool DefaultExpressionPrecedesInlineConstraints => false;
@@ -606,6 +633,23 @@ public abstract class SqlBuilder
             + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
     }
 
+    internal string BuildUpdateByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlSetAssignment> assignments, IReadOnlyList<SqlPredicate> predicates)
+    {
+        var set = new System.Text.StringBuilder();
+        for (var i = 0; i < assignments.Count; i++)
+        {
+            if (i > 0)
+            {
+                set.Append(", ");
+            }
+
+            set.Append(QuoteIdentifier(assignments[i].Column.ColumnName)).Append(" = ").Append(assignments[i].Expression);
+        }
+
+        return "UPDATE " + context.Table + " SET " + set.ToString()
+            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
+    }
+
     /// <summary>
     /// Builds a set-based literal DELETE whose WHERE clause is the AND/OR composition of
     /// <paramref name="predicates"/> — the ExecuteDelete analog. Used for entities without a
@@ -754,6 +798,14 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual string BuildAggregateSql(SqlBuildContext context, string function, string quotedColumn)
         => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
+
+    internal string BuildAggregateSql(SqlBuildContext context, string function, string quotedColumn, IReadOnlyList<SqlPredicate> predicates)
+        => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table
+            + WhereSuffix(AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate));
+
+    internal string BuildCountByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+        => "SELECT " + CountExpression + " FROM " + context.Table
+            + WhereSuffix(AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate));
 
     /// <summary>
     /// Builds a top-1-by-order SELECT: all columns, optional active-row filter, ORDER BY, and a
@@ -1203,7 +1255,33 @@ public abstract class SqlBuilder
                 sb.Append(predicates[i].IsOr ? " OR " : " AND ");
             }
 
-            sb.Append(RenderPredicate(predicates[i]));
+            var predicate = predicates[i];
+            if (predicate.IsNegated)
+            {
+                sb.Append("NOT ");
+            }
+
+            for (var group = 0; group < predicate.OpenGroups; group++)
+            {
+                sb.Append('(');
+            }
+
+            if (predicate.IsNegated && predicate.OpenGroups == 0)
+            {
+                sb.Append('(');
+            }
+
+            sb.Append(RenderPredicate(predicate));
+
+            if (predicate.IsNegated && predicate.OpenGroups == 0)
+            {
+                sb.Append(')');
+            }
+
+            for (var group = 0; group < predicate.CloseGroups; group++)
+            {
+                sb.Append(')');
+            }
         }
 
         return sb.ToString();
@@ -1217,27 +1295,31 @@ public abstract class SqlBuilder
         var column = predicate.JsonPath is { } jsonPath
             ? RenderJsonPathExtract(QuoteIdentifier(predicate.Column.ColumnName), jsonPath)
             : QuoteIdentifier(predicate.Column.ColumnName);
-        switch (predicate.Op)
+        var rendered = predicate.Op switch
         {
             // SqlPredicate carries the bare logical parameter name; apply the dialect sigil here
             // (':' on Oracle, '@' elsewhere) so predicate SQL matches the dialect like every other clause.
-            case SqlCompareOp.Equal: return column + " = " + ParameterName(predicate.ParameterName!);
-            case SqlCompareOp.NotEqual: return column + " <> " + ParameterName(predicate.ParameterName!);
-            case SqlCompareOp.GreaterThan: return column + " > " + ParameterName(predicate.ParameterName!);
-            case SqlCompareOp.GreaterThanOrEqual: return column + " >= " + ParameterName(predicate.ParameterName!);
-            case SqlCompareOp.LessThan: return column + " < " + ParameterName(predicate.ParameterName!);
-            case SqlCompareOp.LessThanOrEqual: return column + " <= " + ParameterName(predicate.ParameterName!);
-            case SqlCompareOp.Between: return column + " BETWEEN " + ParameterName(predicate.ParameterName!) + " AND " + ParameterName(predicate.ParameterNameHi!);
-            case SqlCompareOp.NotBetween: return column + " NOT BETWEEN " + ParameterName(predicate.ParameterName!) + " AND " + ParameterName(predicate.ParameterNameHi!);
-            case SqlCompareOp.IsNull: return column + " IS NULL";
-            case SqlCompareOp.IsNotNull: return column + " IS NOT NULL";
-            case SqlCompareOp.Like: return RenderLike(column, ParameterName(predicate.ParameterName!));
+            SqlCompareOp.Equal => column + " = " + ParameterName(predicate.ParameterName!),
+            SqlCompareOp.NotEqual => column + " <> " + ParameterName(predicate.ParameterName!),
+            SqlCompareOp.GreaterThan => column + " > " + ParameterName(predicate.ParameterName!),
+            SqlCompareOp.GreaterThanOrEqual => column + " >= " + ParameterName(predicate.ParameterName!),
+            SqlCompareOp.LessThan => column + " < " + ParameterName(predicate.ParameterName!),
+            SqlCompareOp.LessThanOrEqual => column + " <= " + ParameterName(predicate.ParameterName!),
+            SqlCompareOp.Between => column + " BETWEEN " + ParameterName(predicate.ParameterName!) + " AND " + ParameterName(predicate.ParameterNameHi!),
+            SqlCompareOp.NotBetween => column + " NOT BETWEEN " + ParameterName(predicate.ParameterName!) + " AND " + ParameterName(predicate.ParameterNameHi!),
+            SqlCompareOp.IsNull => column + " IS NULL",
+            SqlCompareOp.IsNotNull => column + " IS NOT NULL",
+            SqlCompareOp.Like => RenderLike(column, ParameterName(predicate.ParameterName!)),
             // NOT LIKE reuses the LIKE hook so any dialect ESCAPE handling stays consistent.
-            case SqlCompareOp.NotLike: return "NOT (" + RenderLike(column, ParameterName(predicate.ParameterName!)) + ")";
-            case SqlCompareOp.In: return RenderIn(column, ParameterName(predicate.ParameterName!), predicate.Column.TypeClass);
-            case SqlCompareOp.NotIn: return RenderNotIn(column, ParameterName(predicate.ParameterName!));
-            default: return column + " = " + ParameterName(predicate.ParameterName!);
-        }
+            SqlCompareOp.NotLike => "NOT (" + RenderLike(column, ParameterName(predicate.ParameterName!)) + ")",
+            SqlCompareOp.In => RenderIn(column, ParameterName(predicate.ParameterName!), predicate.Column.TypeClass),
+            SqlCompareOp.NotIn => RenderNotIn(column, ParameterName(predicate.ParameterName!)),
+            _ => column + " = " + ParameterName(predicate.ParameterName!),
+        };
+
+        return predicate.IsOptional
+            ? "(" + ParameterName(predicate.ParameterName!) + " IS NULL OR " + rendered + ")"
+            : rendered;
     }
 
     /// <summary>

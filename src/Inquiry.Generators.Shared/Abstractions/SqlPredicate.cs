@@ -37,7 +37,28 @@ public enum SqlCompareOp
 /// </remarks>
 public sealed class SqlPredicate
 {
-    public SqlPredicate(IColumn column, SqlCompareOp op, string? parameterName, string? parameterNameHi, bool isOr, string? jsonPath = null)
+    public SqlPredicate(
+        IColumn column,
+        SqlCompareOp op,
+        string? parameterName,
+        string? parameterNameHi,
+        bool isOr,
+        string? jsonPath = null)
+        : this(column, op, parameterName, parameterNameHi, isOr, jsonPath, 0, 0, false, false)
+    {
+    }
+
+    internal SqlPredicate(
+        IColumn column,
+        SqlCompareOp op,
+        string? parameterName,
+        string? parameterNameHi,
+        bool isOr,
+        string? jsonPath,
+        int openGroups = 0,
+        int closeGroups = 0,
+        bool isNegated = false,
+        bool isOptional = false)
     {
         Column = column;
         Op = op;
@@ -45,6 +66,10 @@ public sealed class SqlPredicate
         ParameterNameHi = parameterNameHi;
         IsOr = isOr;
         JsonPath = jsonPath;
+        OpenGroups = openGroups;
+        CloseGroups = closeGroups;
+        IsNegated = isNegated;
+        IsOptional = isOptional;
     }
 
     public IColumn Column { get; }
@@ -52,6 +77,10 @@ public sealed class SqlPredicate
     public string? ParameterName { get; }
     public string? ParameterNameHi { get; }
     public bool IsOr { get; }
+    internal int OpenGroups { get; }
+    internal int CloseGroups { get; }
+    internal bool IsNegated { get; }
+    internal bool IsOptional { get; }
 
     /// <summary>
     /// A JSON path (<c>$.a.b</c>) when this criterion filters inside <see cref="Column"/> (a JSON text
@@ -67,4 +96,17 @@ public sealed class SqlPredicate
         SqlCompareOp.Between or SqlCompareOp.NotBetween => 2,
         _ => 1,
     };
+}
+
+/// <summary>One compile-time-resolved SET assignment.</summary>
+internal sealed class SqlSetAssignment
+{
+    public SqlSetAssignment(IColumn column, string expression)
+    {
+        Column = column;
+        Expression = expression;
+    }
+
+    public IColumn Column { get; }
+    public string Expression { get; }
 }

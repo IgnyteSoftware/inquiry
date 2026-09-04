@@ -38,6 +38,7 @@ internal sealed record StoreMethodData(
     EquatableArray<ParameterData> Parameters,
     EquatableArray<string> FieldNames,
     EquatableArray<PredicateData> Predicates,
+    EquatableArray<SetExpressionData> SetExpressions,
     string? ProcedureName,
     bool ReturnsEntity,
     bool ReturnsList,

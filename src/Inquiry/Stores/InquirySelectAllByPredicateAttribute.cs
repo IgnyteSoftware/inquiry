@@ -8,6 +8,15 @@ namespace Inquiry.Stores;
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquirySelectAllByPredicateAttribute : Attribute
 {
+    /// <summary>Gets or sets a compile-time ORDER BY specification.</summary>
+    public string? OrderBy { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the method emits an offset-paginated query. A paged
+    /// method takes <c>int offset</c> and <c>int limit</c> after its predicate parameters.
+    /// </summary>
+    public bool Paged { get; set; }
+
     /// <summary>
     /// Gets or sets a value indicating whether the generated query includes soft-deleted rows. Has an
     /// effect only when the entity declares an <c>[InquirySoftDelete]</c> column: when false (the

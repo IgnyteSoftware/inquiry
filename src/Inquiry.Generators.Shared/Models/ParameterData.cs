@@ -26,6 +26,12 @@ internal sealed record ParameterData(
     /// <summary>Whether the collection element is a nullable value or annotated reference type.</summary>
     public bool ElementIsNullable { get; init; }
 
+    /// <summary>The parameter type with nullable wrappers and annotations removed.</summary>
+    public string NonNullableComparisonDisplay { get; init; } = string.Empty;
+
+    /// <summary>Whether the parameter can carry null.</summary>
+    public bool IsNullable { get; init; }
+
     /// <summary>
     /// Source rendering of the parameter's explicit default value (e.g. <c>default</c>, <c>null</c>,
     /// <c>true</c>, a quoted string, or a fully-qualified enum cast), or null when the parameter has

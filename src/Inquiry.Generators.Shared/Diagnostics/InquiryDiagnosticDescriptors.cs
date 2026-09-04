@@ -905,4 +905,19 @@ internal static class InquiryDiagnosticDescriptors
         "Entity '{0}' declares an [InquiryIndex] over '{1}', which is not a mapped column.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor PredicateStructureInvalid = new(
+        "INQ097", "InquiryWhere groups are unbalanced",
+        "Store method '{0}' has an invalid InquiryWhere group structure. OpenGroups and CloseGroups must be non-negative, balanced, and properly nested.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor OptionalPredicateInvalid = new(
+        "INQ098", "Optional InquiryWhere criterion is invalid",
+        "Store method '{0}' marks field '{1}' optional, but optional criteria require one nullable scalar parameter and do not support In or NotIn.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor SetExpressionInvalid = new(
+        "INQ099", "InquirySet expression is invalid",
+        "Store method '{0}' has an invalid InquirySet assignment for field '{1}': {2}",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
 }
