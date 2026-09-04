@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Generated store-method XML documentation now includes the provider-specific SQL used by the method. IntelliSense labels operations that use multiple commands and retains XML comments from the defining partial declaration.
+
 ## [1.0.0-preview.9] - 2026-08-29
 
 ### Added
