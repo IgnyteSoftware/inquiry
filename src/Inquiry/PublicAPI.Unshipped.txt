@@ -519,6 +519,10 @@ Inquiry.Stores.InquirySelectAllByPredicateAttribute.IncludeDeleted.set -> void
 Inquiry.Stores.InquirySelectAllByPredicateAttribute.InquirySelectAllByPredicateAttribute() -> void
 Inquiry.Stores.InquirySelectAllByPredicateAttribute.LockMode.get -> Inquiry.Stores.InquiryLockMode
 Inquiry.Stores.InquirySelectAllByPredicateAttribute.LockMode.set -> void
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.OrderBy.get -> string?
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.OrderBy.set -> void
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.Paged.get -> bool
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.Paged.set -> void
 Inquiry.Stores.InquirySelectAllEagerAttribute
 Inquiry.Stores.InquirySelectAllEagerAttribute.IncludeDeleted.get -> bool
 Inquiry.Stores.InquirySelectAllEagerAttribute.IncludeDeleted.set -> void
@@ -540,6 +544,12 @@ Inquiry.Stores.InquirySelectTopByOrderAttribute.Descending.set -> void
 Inquiry.Stores.InquirySelectTopByOrderAttribute.IncludeDeleted.get -> bool
 Inquiry.Stores.InquirySelectTopByOrderAttribute.IncludeDeleted.set -> void
 Inquiry.Stores.InquirySelectTopByOrderAttribute.InquirySelectTopByOrderAttribute(string! column) -> void
+Inquiry.Stores.InquirySetAttribute
+Inquiry.Stores.InquirySetAttribute.Expression.get -> string!
+Inquiry.Stores.InquirySetAttribute.Field.get -> string!
+Inquiry.Stores.InquirySetAttribute.InquirySetAttribute(string! field, string! expression) -> void
+Inquiry.Stores.InquirySpecificationAttribute
+Inquiry.Stores.InquirySpecificationAttribute.InquirySpecificationAttribute() -> void
 Inquiry.Stores.InquiryStore<TEntity>
 Inquiry.Stores.InquiryStore<TEntity>.Inquiry.get -> Inquiry.IInquiry!
 Inquiry.Stores.InquiryStore<TEntity>.InquiryStore(Inquiry.IInquiry! inquiry) -> void
@@ -561,10 +571,18 @@ Inquiry.Stores.InquiryUpsertAttribute.InquiryUpsertAttribute() -> void
 Inquiry.Stores.InquiryUpsertAttribute.ReturnEntity.get -> bool
 Inquiry.Stores.InquiryUpsertAttribute.ReturnEntity.set -> void
 Inquiry.Stores.InquiryWhereAttribute
+Inquiry.Stores.InquiryWhereAttribute.CloseGroups.get -> int
+Inquiry.Stores.InquiryWhereAttribute.CloseGroups.set -> void
 Inquiry.Stores.InquiryWhereAttribute.Field.get -> string!
 Inquiry.Stores.InquiryWhereAttribute.InquiryWhereAttribute(string! field, Inquiry.Stores.Compare op = Inquiry.Stores.Compare.Equal) -> void
 Inquiry.Stores.InquiryWhereAttribute.JsonPath.get -> string?
 Inquiry.Stores.InquiryWhereAttribute.JsonPath.set -> void
+Inquiry.Stores.InquiryWhereAttribute.Not.get -> bool
+Inquiry.Stores.InquiryWhereAttribute.Not.set -> void
+Inquiry.Stores.InquiryWhereAttribute.OpenGroups.get -> int
+Inquiry.Stores.InquiryWhereAttribute.OpenGroups.set -> void
+Inquiry.Stores.InquiryWhereAttribute.Optional.get -> bool
+Inquiry.Stores.InquiryWhereAttribute.Optional.set -> void
 Inquiry.Stores.InquiryWhereAttribute.Op.get -> Inquiry.Stores.Compare
 Inquiry.Stores.InquiryWhereAttribute.Or.get -> bool
 Inquiry.Stores.InquiryWhereAttribute.Or.set -> void

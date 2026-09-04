@@ -9,10 +9,10 @@ namespace Inquiry.Stores;
 /// Parameter consumption per operator: scalar operators (comparison and <see cref="Compare.Like"/>)
 /// take one parameter; <see cref="Compare.Between"/> takes two (low then high); <see cref="Compare.In"/>
 /// takes one collection parameter; <see cref="Compare.IsNull"/> and <see cref="Compare.IsNotNull"/>
-/// take none. Criteria join with AND unless <see cref="Or"/> is set, in which case the criterion joins
-/// to the previous one with OR (a single flat OR level — no nested grouping or parentheses).
+/// take none. Criteria join with AND unless <see cref="Or"/> is set. Use <see cref="OpenGroups"/>,
+/// <see cref="CloseGroups"/>, and <see cref="Not"/> for explicit Boolean grouping.
 /// </remarks>
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class InquiryWhereAttribute : Attribute
 {
     /// <summary>
@@ -42,6 +42,23 @@ public sealed class InquiryWhereAttribute : Attribute
     /// (rather than the default AND). Has no effect on the first criterion.
     /// </summary>
     public bool Or { get; set; }
+
+    /// <summary>Gets or sets the number of parenthesized groups opened before this criterion.</summary>
+    public int OpenGroups { get; set; }
+
+    /// <summary>Gets or sets the number of parenthesized groups closed after this criterion.</summary>
+    public int CloseGroups { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this criterion, or the group opened by it, is negated.
+    /// </summary>
+    public bool Not { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a null parameter disables this criterion. Optional
+    /// criteria support one-parameter scalar operators and keep one constant SQL shape.
+    /// </summary>
+    public bool Optional { get; set; }
 
     /// <summary>
     /// Gets or sets a JSON path (e.g. <c>"$.address.city"</c>) to filter <em>inside</em> a JSON column.

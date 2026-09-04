@@ -194,4 +194,27 @@ public sealed class PredicateSelectIntegrationTests
         Assert.Equal(2, dup.Count);
         Assert.All(dup, p => Assert.Equal(c1, p.CategoryID));
     }
+
+    [SkippableFact]
+    public async Task ComposedQueriesKeepOneStaticShape()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "predcompose");
+        await SeedAsync(harness);
+        var products = harness.GetRequiredService<ProductStore>();
+
+        var available = await products.AvailableStockAsync(true, 15, null);
+        Assert.Equal(2, available.Count);
+
+        var chai = Assert.Single(await products.AvailableStockAsync(true, 15, "Chai"));
+        Assert.Equal("Chai", chai.ProductName);
+
+        var page = await products.PageByDiscontinuedAsync(false, 0, 1);
+        Assert.Equal(3, page.TotalCount);
+        Assert.Equal("Chai", Assert.Single(page.Items).ProductName);
+
+        Assert.Equal(27m, await products.SumUnitPriceByDiscontinuedAsync(true));
+        Assert.Equal(1, await products.AddUnitsInStockAsync(2, chai.ProductID));
+        Assert.Equal((short?)41, (await products.SelectByKeyAsync(chai.ProductID))!.UnitsInStock);
+    }
 }

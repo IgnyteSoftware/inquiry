@@ -96,3 +96,6 @@ INQ093 | Inquiry | Error | InquiryGlobalFilter ContextKey configuration is inval
 INQ094 | Inquiry | Error | InquiryIndex references an unmapped property
 INQ095 | Inquiry | Error | Operation cannot honour a write-enforced InquiryGlobalFilter
 INQ096 | Inquiry | Error | Mutation target is invalid
+INQ097 | Inquiry | Error | InquiryWhere groups are unbalanced
+INQ098 | Inquiry | Error | Optional InquiryWhere criterion is invalid
+INQ099 | Inquiry | Error | InquirySet expression is invalid

@@ -4,7 +4,8 @@ namespace Inquiry.Stores;
 /// Generates an update method. Without <see cref="InquiryWhereAttribute"/> criteria, the method
 /// accepts an entity and updates it by primary key. With one or more criteria, the method performs
 /// a partial update: leading parameters map by name to SET columns and trailing parameters bind the
-/// criteria positionally.
+/// criteria positionally. <see cref="InquirySetAttribute"/> can replace the inferred SET columns with
+/// compile-time expressions.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryUpdateAttribute : Attribute

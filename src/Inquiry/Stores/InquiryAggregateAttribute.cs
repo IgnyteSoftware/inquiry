@@ -18,10 +18,9 @@ public enum InquiryAggregateFunction
 
 /// <summary>
 /// Generates a method returning a scalar aggregate (<c>SUM/AVG/MIN/MAX</c>) over a mapped column.
-/// The method takes only a <see cref="System.Threading.CancellationToken"/> and returns
-/// <c>Task&lt;T&gt;</c> where <c>T</c> is the aggregate's result type (use a nullable <c>T</c> to
-/// receive <see langword="null"/> when there are no rows). Respects the soft-delete active filter
-/// when the entity declares one.
+/// The method returns <c>Task&lt;T&gt;</c> where <c>T</c> is the aggregate's result type. It can take
+/// parameters for <see cref="InquiryWhereAttribute"/> criteria followed by a cancellation token.
+/// Use a nullable <c>T</c> to receive <see langword="null"/> when there are no matching rows.
 /// </summary>
 /// <remarks>
 /// The scalar result is coerced to <c>T</c> from the provider's returned type. SUM/AVG over a

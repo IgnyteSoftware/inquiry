@@ -4,6 +4,14 @@ using Inquiry.Stores;
 
 namespace Inquiry.Northwind.Stores;
 
+[InquirySpecification]
+[InquiryWhere("Discontinued", OpenGroups = 1, Not = true)]
+[InquiryWhere("UnitsInStock", Compare.LessThan, Or = true, CloseGroups = 1)]
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class AvailableStockAttribute : Attribute
+{
+}
+
 public partial class ProductStore : InquiryStore<Product>
 {
 
@@ -60,6 +68,15 @@ public partial class ProductStore : InquiryStore<Product>
     [InquiryWhere("UnitsInStock", Compare.LessThan, Or = true)]
     public partial Task<IReadOnlyList<Product>> DiscontinuedOrLowStockAsync(bool discontinued, short? threshold, CancellationToken cancellationToken = default);
 
+    [InquirySelectAllByPredicate]
+    [AvailableStock]
+    [InquiryWhere("ProductName", Optional = true)]
+    public partial Task<IReadOnlyList<Product>> AvailableStockAsync(bool discontinued, short? threshold, string? productName, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate(OrderBy = "ProductID ASC", Paged = true)]
+    [InquiryWhere("Discontinued")]
+    public partial Task<InquiryPagedResult<Product>> PageByDiscontinuedAsync(bool discontinued, int offset, int limit, CancellationToken cancellationToken = default);
+
     [InquiryInsert]
     public partial Task<int> InsertAsync(Product product, CancellationToken cancellationToken = default);
 
@@ -92,6 +109,15 @@ public partial class ProductStore : InquiryStore<Product>
 
     [InquiryAggregate(InquiryAggregateFunction.Sum, "UnitPrice")]
     public partial Task<decimal?> SumUnitPriceAsync(CancellationToken cancellationToken = default);
+
+    [InquiryAggregate(InquiryAggregateFunction.Sum, "UnitPrice")]
+    [InquiryWhere("Discontinued")]
+    public partial Task<decimal?> SumUnitPriceByDiscontinuedAsync(bool discontinued, CancellationToken cancellationToken = default);
+
+    [InquiryUpdate]
+    [InquirySet("UnitsInStock", "{UnitsInStock} + @amount")]
+    [InquiryWhere("ProductID")]
+    public partial Task<int> AddUnitsInStockAsync(short? amount, int? productID, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]
     public partial Task<IReadOnlyList<ProductSummary>> SummariesAsync(CancellationToken cancellationToken = default);

@@ -38,6 +38,20 @@ internal sealed class PredicateBinding
     public CollectionParameterResolution? CollectionResolution { get; set; }
 }
 
+internal sealed class SetBinding
+{
+    public SetBinding(string sqlParameterName, int methodParameterIndex, ColumnData column)
+    {
+        SqlParameterName = sqlParameterName;
+        MethodParameterIndex = methodParameterIndex;
+        Column = column;
+    }
+
+    public string SqlParameterName { get; }
+    public int MethodParameterIndex { get; }
+    public ColumnData Column { get; }
+}
+
 /// <summary>
 /// A <c>SelectAllByPredicate</c> method's criteria resolved against the entity: the
 /// <see cref="SqlPredicate"/> list handed to the <see cref="SqlBuilder"/> and the parallel parameter
@@ -56,4 +70,6 @@ internal sealed class ResolvedPredicatePlan
     public IReadOnlyList<SqlPredicate> Predicates { get; }
     public IReadOnlyList<PredicateBinding> Bindings { get; }
     public bool HasIn { get; }
+    public IReadOnlyList<SqlSetAssignment> SetAssignments { get; init; } = System.Array.Empty<SqlSetAssignment>();
+    public IReadOnlyList<SetBinding> SetBindings { get; init; } = System.Array.Empty<SetBinding>();
 }

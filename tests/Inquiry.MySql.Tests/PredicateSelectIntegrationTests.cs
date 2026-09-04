@@ -193,4 +193,27 @@ public sealed class PredicateSelectIntegrationTests
         var all = await products.NotInCategoriesAsync(Array.Empty<int>());
         Assert.Equal(5, all.Count);
     }
+
+    [SkippableFact]
+    public async Task ComposedQueriesKeepOneStaticShape()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "predcompose");
+        await SeedAsync(harness);
+        var products = harness.GetRequiredService<ProductStore>();
+
+        var available = await products.AvailableStockAsync(true, 15, null);
+        Assert.Equal(2, available.Count);
+
+        var chai = Assert.Single(await products.AvailableStockAsync(true, 15, "Chai"));
+        Assert.Equal("Chai", chai.ProductName);
+
+        var page = await products.PageByDiscontinuedAsync(false, 0, 1);
+        Assert.Equal(3, page.TotalCount);
+        Assert.Equal("Chai", Assert.Single(page.Items).ProductName);
+
+        Assert.Equal(27m, await products.SumUnitPriceByDiscontinuedAsync(true));
+        Assert.Equal(1, await products.AddUnitsInStockAsync(2, chai.ProductID));
+        Assert.Equal((short?)41, (await products.SelectByKeyAsync(chai.ProductID))!.UnitsInStock);
+    }
 }

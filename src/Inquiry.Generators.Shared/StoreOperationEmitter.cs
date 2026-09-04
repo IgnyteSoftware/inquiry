@@ -55,6 +55,7 @@ internal static class StoreOperationEmitter
         // SelectAll has no parameters to bind, so it falls through to the shared SelectAll case below
         // (which references selectPlan.SqlFieldName).
         if (selectPlan is not null &&
+            method.Operation is (StoreOperation.SelectAll or StoreOperation.SelectAllByField) &&
             (selectPlan.Pagination == Pagination.Offset || method.Operation == StoreOperation.SelectAllByField))
         {
             AppendHeader(source, method, parameters, isAsync: method.ReturnsPagedResult);
@@ -104,8 +105,8 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.SelectAllByPredicate:
-                AppendHeader(source, method, parameters, isAsync: false);
-                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, entityType, structMat, cancellation, entity.Schema, filterBinder);
+                AppendHeader(source, method, parameters, isAsync: method.ReturnsPagedResult);
+                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, selectPlan, entityType, structMat, cancellation, entity.Schema, filterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -274,7 +275,16 @@ internal static class StoreOperationEmitter
             case StoreOperation.Aggregate:
                 // SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
                 AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, byte>({EmptyGeneratedCommand("_sqlAgg_" + method.Name, filterBinder)}, {cancellation});");
+                if (predicatePlan!.Bindings.Count == 0)
+                {
+                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, byte>({EmptyGeneratedCommand("_sqlAgg_" + method.Name, filterBinder)}, {cancellation});");
+                }
+                else
+                {
+                    EmitPredicateBoundCommand(source, sqlBuilder, method, predicatePlan, "_sqlAgg_" + method.Name, entity.Schema, filterBinder);
+                    var aggregateState = new GeneratedCommandState(method.Parameters, includeMaxParameters: predicatePlan.Bindings.Any(binding => binding.IsCollection));
+                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, {aggregateState.Type}>(_cmd, {cancellation});");
+                }
                 source.AppendLine("    }");
                 break;
 
@@ -610,19 +620,20 @@ internal static class StoreOperationEmitter
             ? converter.ProviderSpecialType == SpecialType.System_Decimal
             : !column.Type.IsEnum && column.Type.SpecialType == SpecialType.System_Decimal;
 
-    private static string BuildParameterValueExpression(ColumnData column, string accessor, SqlBuilder sqlBuilder)
+    private static string BuildParameterValueExpression(ColumnData column, string accessor, SqlBuilder sqlBuilder, bool? sourceIsNullable = null)
     {
+        var isNullable = sourceIsNullable ?? column.Type.IsNullable;
         // a converter column binds ToProvider(value); a null nullable model → NULL (converter not called).
         if (column.Converter is { } converter)
         {
             // converters are stateless; bind through the shared cached instance instead of allocating one per bind.
-            var toProvider = ConverterInvocationEmitter.ToProvider(converter, NonNullableValueExpression(column.Type, accessor));
+            var toProvider = ConverterInvocationEmitter.ToProvider(converter, NonNullableValueExpression(column.Type, accessor, sourceIsNullable));
             // An unsigned/sbyte provider type is bound via its same-width storage partner (DbTypeMapper maps
             // the provider DbType to that signed/byte type): SqlClient rejects DbType.UInt*/SByte and would
             // overflow on a checked Convert past the signed max, so reinterpret the bit pattern with unchecked().
             var bridged = BridgeProviderValue(sqlBuilder, converter.ProviderType, converter.ProviderSpecialType, converter.ProviderTypeDisplay, toProvider);
             var providerValue = ReinterpretUnsignedProviderValue(converter.ProviderSpecialType, bridged);
-            return column.Type.IsNullable
+            return isNullable
                 ? $"{accessor} is null ? global::System.DBNull.Value : (object){providerValue}"
                 : $"(object){providerValue}";
         }
@@ -630,7 +641,7 @@ internal static class StoreOperationEmitter
         // enum-as-string binds the enum's member name (a string). A null nullable-enum → NULL.
         if (column.EnumAsString)
         {
-            return column.Type.IsNullable
+            return isNullable
                 ? $"{accessor}.HasValue ? (object){accessor}.Value.ToString() : global::System.DBNull.Value"
                 : $"(object){accessor}.ToString()";
         }
@@ -642,26 +653,26 @@ internal static class StoreOperationEmitter
             // partner is lossless (same bit pattern) and the materializer reverses the cast on read.
             var reinterpretedValue = column.Type.SpecialType switch
             {
-                SpecialType.System_SByte  => column.Type.IsNullable
+                SpecialType.System_SByte  => isNullable
                     ? $"{accessor}.HasValue ? (object)unchecked((byte){accessor}.Value) : global::System.DBNull.Value"
                     : $"(object)unchecked((byte){accessor})",
-                SpecialType.System_UInt16 => column.Type.IsNullable
+                SpecialType.System_UInt16 => isNullable
                     ? $"{accessor}.HasValue ? (object)unchecked((short){accessor}.Value) : global::System.DBNull.Value"
                     : $"(object)unchecked((short){accessor})",
-                SpecialType.System_UInt32 => column.Type.IsNullable
+                SpecialType.System_UInt32 => isNullable
                     ? $"{accessor}.HasValue ? (object)unchecked((int){accessor}.Value) : global::System.DBNull.Value"
                     : $"(object)unchecked((int){accessor})",
-                SpecialType.System_UInt64 => column.Type.IsNullable
+                SpecialType.System_UInt64 => isNullable
                     ? $"{accessor}.HasValue ? (object)unchecked((long){accessor}.Value) : global::System.DBNull.Value"
                     : $"(object)unchecked((long){accessor})",
                 _ => null,
             };
             if (reinterpretedValue is not null) return reinterpretedValue;
 
-            var nonNullable = NonNullableValueExpression(column.Type, accessor);
+            var nonNullable = NonNullableValueExpression(column.Type, accessor, sourceIsNullable);
             var bridged = BridgeProviderValue(sqlBuilder, column.Type, column.Type.SpecialType, column.Type.NonNullableDisplayName, nonNullable);
             if (bridged == nonNullable) return $"(object?){accessor} ?? global::System.DBNull.Value";
-            return column.Type.IsNullable
+            return isNullable
                 ? $"{accessor}.HasValue ? (object){bridged} : global::System.DBNull.Value"
                 : $"(object){bridged}";
         }
@@ -684,7 +695,7 @@ internal static class StoreOperationEmitter
         var (typeName, needsUnchecked) = underlying;
         var castExpr      = needsUnchecked ? $"unchecked(({typeName}){accessor})"       : $"({typeName}){accessor}";
         var castExprValue = needsUnchecked ? $"unchecked(({typeName}){accessor}.Value)" : $"({typeName}){accessor}.Value";
-        return column.Type.IsNullable
+        return isNullable
             ? $"{accessor}.HasValue ? (object){castExprValue} : global::System.DBNull.Value"
             : $"(object){castExpr}";
     }
@@ -1018,18 +1029,37 @@ internal static class StoreOperationEmitter
         SqlBuilder sqlBuilder,
         StoreMethodData method,
         ResolvedPredicatePlan plan,
+        ResolvedSelectPlan? selectPlan,
         string entityType,
         string structMat,
         string cancellation,
         string? owningSchema,
         string? filterBinder = null)
     {
-        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlPredicate_" + method.Name, owningSchema, filterBinder);
+        var paged = selectPlan?.Pagination == Pagination.Offset;
+        var sqlField = selectPlan?.SqlFieldName ?? "_sqlPredicate_" + method.Name;
+        if (paged)
+        {
+            var offsetArg = method.Parameters[method.Parameters.Count - 3].Name;
+            var limitArg = method.Parameters[method.Parameters.Count - 2].Name;
+            source.AppendLine($"        if ({offsetArg} < 0) throw new global::System.ArgumentOutOfRangeException(nameof({offsetArg}), {offsetArg}, \"Pagination offset must be >= 0.\");");
+            source.AppendLine($"        if ({limitArg} <= 0) throw new global::System.ArgumentOutOfRangeException(nameof({limitArg}), {limitArg}, \"Pagination limit must be > 0.\");");
+        }
+
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, owningSchema, filterBinder, includePaging: paged);
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
 
-        if (method.ReturnsList)
+        var capacity = paged ? $", capacityHint: {method.Parameters[method.Parameters.Count - 2].Name}" : string.Empty;
+        if (method.ReturnsPagedResult)
         {
-            source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation});");
+            source.AppendLine($"        var _items = await Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{capacity}).ConfigureAwait(false);");
+            EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlCount_" + method.Name, owningSchema, filterBinder, commandVariable: "_countCmd");
+            source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, {state.Type}>(_countCmd, {cancellation}).ConfigureAwait(false);");
+            source.AppendLine($"        return new global::Inquiry.Paging.InquiryPagedResult<{entityType}>(_items, _total);");
+        }
+        else if (method.ReturnsList)
+        {
+            source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{capacity});");
         }
         else
         {
@@ -1061,10 +1091,19 @@ internal static class StoreOperationEmitter
     /// binder runs after the pipeline assigns the
     /// command text, so <c>InquiryInExpansion</c> can rewrite an IN/NOT IN sentinel.
     /// </summary>
-    private static void EmitPredicateBoundCommand(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string sqlField, string? owningSchema, string? filterBinder = null)
+    private static void EmitPredicateBoundCommand(
+        StringBuilder source,
+        SqlBuilder sqlBuilder,
+        StoreMethodData method,
+        ResolvedPredicatePlan plan,
+        string sqlField,
+        string? owningSchema,
+        string? filterBinder = null,
+        bool includePaging = false,
+        string commandVariable = "_cmd")
     {
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
-        source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
+        source.AppendLine($"        var {commandVariable} = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
         source.AppendLine($"            {sqlField},");
         source.AppendLine($"            {state.Value},");
         source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
@@ -1101,9 +1140,15 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                var _p{i} = _c.CreateParameter();");
                 source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterNameFromSql(binding.SqlParameterName))}\";");
                 AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{i}", "                ", predicate: true);
-                source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder)};");
+                source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder, method.Parameters[binding.MethodParameterIndex].IsNullable)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{i});");
             }
+        }
+        if (includePaging)
+        {
+            var pi = plan.Bindings.Count;
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, "__offset", method.Parameters[method.Parameters.Count - 3].Name);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, "__limit", method.Parameters[method.Parameters.Count - 2].Name);
         }
         source.AppendLine("            });");
     }
@@ -1111,7 +1156,7 @@ internal static class StoreOperationEmitter
     /// <summary>
     /// Emits a set-based predicate mutation body ([InquiryUpdate]/[InquiryDelete]),
     /// following the <see cref="EmitSelectAllByPredicate"/> immutable generated-command pattern
-    /// pattern (the binder runs after the pipeline assigns the command text, which lets
+    /// (the binder runs after the pipeline assigns the command text, which lets
     /// <c>InquiryInExpansion</c> rewrite an IN sentinel). Binds the SET parameters first — with
     /// DbType stamping and converter/enum-aware value expressions, matching the single-row update
     /// binder — then the predicate bindings, and returns the rows-affected count via ExecuteAsync.
@@ -1135,16 +1180,32 @@ internal static class StoreOperationEmitter
         source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
         source.AppendLine("            {");
         var pi = 0;
-        for (var i = 0; i < setColumns.Count; i++)
+        if (plan.SetAssignments.Count > 0)
         {
-            var column = setColumns[i];
-            var arg = state.Reference(i);
-            source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
-            source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
-            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
-            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(column, arg, sqlBuilder)};");
-            source.AppendLine($"                _c.Parameters.Add(_p{pi});");
-            pi++;
+            foreach (var binding in plan.SetBindings)
+            {
+                var arg = state.Reference(binding.MethodParameterIndex);
+                source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+                source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterNameFromSql(binding.SqlParameterName))}\";");
+                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
+                source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder, method.Parameters[binding.MethodParameterIndex].IsNullable)};");
+                source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+                pi++;
+            }
+        }
+        else
+        {
+            for (var i = 0; i < setColumns.Count; i++)
+            {
+                var column = setColumns[i];
+                var arg = state.Reference(i);
+                source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+                source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
+                AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
+                source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(column, arg, sqlBuilder)};");
+                source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+                pi++;
+            }
         }
 
         // Filter parameters precede the predicate bindings for the same reason as the predicate-select
@@ -1177,7 +1238,7 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterNameFromSql(binding.SqlParameterName))}\";");
                 AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: true);
-                source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder)};");
+                source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder, method.Parameters[binding.MethodParameterIndex].IsNullable)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
                 pi++;
             }
@@ -2103,9 +2164,9 @@ internal static class StoreOperationEmitter
     private static string NullableLocalType(TypeData type)
         => type.IsNullable ? type.NonNullableDisplayName + "?" : type.DisplayName;
 
-    private static string NonNullableValueExpression(TypeData type, string accessor)
+    private static string NonNullableValueExpression(TypeData type, string accessor, bool? sourceIsNullable = null)
     {
-        if (!type.IsNullable) return accessor;
+        if (!(sourceIsNullable ?? type.IsNullable)) return accessor;
         return type.IsValueType ? $"{accessor}.Value" : $"{accessor}!";
     }
 

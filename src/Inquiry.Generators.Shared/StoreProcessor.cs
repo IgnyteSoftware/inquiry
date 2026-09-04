@@ -168,12 +168,12 @@ internal static class StoreProcessor
         }
 
         var predicates = ImmutableArray<PredicateData>.Empty;
-        if (operation is StoreOperation.SelectAllByPredicate or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate or StoreOperation.Exists)
+        if (operation is StoreOperation.SelectAllByPredicate or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate or StoreOperation.Exists or StoreOperation.Aggregate)
         {
             predicates = ReadWherePredicates(method);
             // [InquiryExists] is valid with no criteria (tests whether the table has any row at all);
             // the other predicate operations require at least one criterion.
-            if (predicates.Length == 0 && operation is not StoreOperation.Exists)
+            if (predicates.Length == 0 && operation is not StoreOperation.Exists and not StoreOperation.Aggregate)
             {
                 // A predicate select with no criteria is a parameter mismatch (INQ019); a set-based
                 // mutation with no criteria would touch every row, so it gets its own diagnostic (INQ023).
@@ -185,6 +185,10 @@ internal static class StoreProcessor
                 return null;
             }
         }
+
+        var setExpressions = operation == StoreOperation.UpdateByPredicate
+            ? ReadSetExpressions(method)
+            : ImmutableArray<SetExpressionData>.Empty;
 
         string? procedureName = null;
         if (operation == StoreOperation.StoredProcedure)
@@ -240,7 +244,7 @@ internal static class StoreProcessor
         string? resultElementTypeFqn = null;
         bool returnsList;
         var returnsPagedResult = false;
-        if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
+        if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate)
         {
             if (IsTaskOfInquiryPagedResult(method.ReturnType, out var pagedElement))
             {
@@ -334,7 +338,7 @@ internal static class StoreProcessor
         var keysetFields = ImmutableArray<string>.Empty;
         var keysetDescending = false;
 
-        if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField)
+        if (operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate)
         {
             orderBy = ParseOrderBy(GeneratorHelpers.GetNamedString(attribute, "OrderBy"), method.Name, location, diagnostics);
             if (GeneratorHelpers.GetNamedBool(attribute, "Paged") || returnsPagedResult)
@@ -420,6 +424,7 @@ internal static class StoreProcessor
             Parameters: new EquatableArray<ParameterData>(parameters),
             FieldNames: new EquatableArray<string>(fieldNames),
             Predicates: new EquatableArray<PredicateData>(predicates),
+            SetExpressions: new EquatableArray<SetExpressionData>(setExpressions),
             ProcedureName: procedureName,
             ReturnsEntity: returnsEntity,
             ReturnsList: returnsList,
@@ -641,6 +646,8 @@ internal static class StoreProcessor
             ElementComparisonDisplay = GetEnumerableElementComparisonDisplay(parameter.Type),
             ElementNonNullableComparisonDisplay = elementTypeData?.NonNullableDisplayName,
             ElementIsNullable = elementTypeData?.IsNullable == true,
+            NonNullableComparisonDisplay = typeData.NonNullableDisplayName,
+            IsNullable = typeData.IsNullable,
             DefaultValueLiteral = GetDefaultValueLiteral(parameter),
             DbTypeExpression = dbType,
             IsStringType = typeData.SpecialType == SpecialType.System_String,
@@ -834,34 +841,76 @@ internal static class StoreProcessor
         var builder = ImmutableArray.CreateBuilder<PredicateData>();
         foreach (var candidate in method.GetAttributes())
         {
-            if (candidate.AttributeClass?.Name != "InquiryWhereAttribute" || !GeneratorHelpers.IsStoreAttribute(candidate))
+            if (candidate.AttributeClass?.Name == "InquiryWhereAttribute" && GeneratorHelpers.IsStoreAttribute(candidate))
+            {
+                Add(candidate);
+                continue;
+            }
+
+            var specification = candidate.AttributeClass?.GetAttributes().Any(static attribute =>
+                attribute.AttributeClass?.Name == "InquirySpecificationAttribute" &&
+                GeneratorHelpers.IsStoreAttribute(attribute)) == true;
+            if (!specification)
             {
                 continue;
             }
 
+            foreach (var criterion in candidate.AttributeClass!.GetAttributes())
+            {
+                if (criterion.AttributeClass?.Name == "InquiryWhereAttribute" && GeneratorHelpers.IsStoreAttribute(criterion))
+                {
+                    Add(criterion);
+                }
+            }
+        }
+
+        return builder.ToImmutable();
+
+        void Add(AttributeData candidate)
+        {
             if (candidate.ConstructorArguments.Length == 0 || candidate.ConstructorArguments[0].Value is not string field)
             {
-                continue;
+                return;
             }
 
-            var op = SqlCompareOp.Equal;
-            if (candidate.ConstructorArguments.Length > 1 && candidate.ConstructorArguments[1].Value is int opValue)
-            {
-                op = (SqlCompareOp)opValue;
-            }
-
-            builder.Add(new PredicateData(field, op, GeneratorHelpers.GetNamedBool(candidate, "Or"))
+            var op = candidate.ConstructorArguments.Length > 1 && candidate.ConstructorArguments[1].Value is int opValue
+                ? (SqlCompareOp)opValue
+                : SqlCompareOp.Equal;
+            builder.Add(new PredicateData(
+                field,
+                op,
+                GeneratorHelpers.GetNamedBool(candidate, "Or"),
+                GeneratorHelpers.GetNamedInt(candidate, "OpenGroups") ?? 0,
+                GeneratorHelpers.GetNamedInt(candidate, "CloseGroups") ?? 0,
+                GeneratorHelpers.GetNamedBool(candidate, "Not"),
+                GeneratorHelpers.GetNamedBool(candidate, "Optional"))
             {
                 JsonPath = GeneratorHelpers.GetNamedString(candidate, "JsonPath"),
             });
         }
-
-        return builder.ToImmutable();
     }
 
     private static bool HasWhereCriteria(IMethodSymbol method)
-        => method.GetAttributes().Any(static candidate =>
-            candidate.AttributeClass?.Name == "InquiryWhereAttribute" && GeneratorHelpers.IsStoreAttribute(candidate));
+        => ReadWherePredicates(method).Length > 0;
+
+    private static ImmutableArray<SetExpressionData> ReadSetExpressions(IMethodSymbol method)
+    {
+        var builder = ImmutableArray.CreateBuilder<SetExpressionData>();
+        foreach (var candidate in method.GetAttributes())
+        {
+            if (candidate.AttributeClass?.Name != "InquirySetAttribute" || !GeneratorHelpers.IsStoreAttribute(candidate) ||
+                candidate.ConstructorArguments.Length < 2 ||
+                candidate.ConstructorArguments[0].Value is not string field ||
+                candidate.ConstructorArguments[1].Value is not string expression)
+            {
+                continue;
+            }
+
+            builder.Add(new SetExpressionData(field, expression));
+        }
+
+        return builder.ToImmutable();
+    }
 
     /// <summary>
     /// Parses an <c>OrderBy</c> attribute string (<c>"field [ASC|DESC], field2 [ASC|DESC]"</c>) into
@@ -973,7 +1022,11 @@ internal static class StoreProcessor
             // resolved against the projection registry at emit.
             StoreOperation.SelectAll or StoreOperation.SelectAllByField =>
                 TryGetSelectElementType(returnType, out _, out _) || IsTaskOfInquiryPagedResult(returnType, out _),
-            StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch =>
+            StoreOperation.SelectAllByPredicate =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
+                IsTaskOfReadOnlyList(returnType, entityType) ||
+                IsTaskOfInquiryPagedResult(returnType, out var predicatePageType) && SymbolEqualityComparer.Default.Equals(predicatePageType, entityType),
+            StoreOperation.FullTextSearch =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
                 IsTaskOfReadOnlyList(returnType, entityType),
             StoreOperation.KeysetPage =>
@@ -1731,9 +1784,9 @@ internal static class StoreProcessor
         }
 
         var lockErrors = new Dictionary<string, string>(System.StringComparer.Ordinal);
-        foreach (var (method, _, predicatePlan, _) in valid)
+        foreach (var (method, _, predicatePlan, predicateSelectPlan) in valid)
         {
-            if (method.Operation == StoreOperation.SelectAllByPredicate && predicatePlan is not null)
+            if (method.Operation == StoreOperation.SelectAllByPredicate && predicatePlan is not null && predicateSelectPlan is null)
             {
                 var predSql = sqlBuilder.BuildSelectByPredicateSql(CtxFor(method), predicatePlan.Predicates, method.Distinct);
                 if (method.LockMode != 0)
@@ -1761,7 +1814,9 @@ internal static class StoreProcessor
 
             if (method.Operation == StoreOperation.UpdateByPredicate)
             {
-                AppendSql("_sqlUpdateWhere_" + method.Name, sqlBuilder.BuildUpdateByPredicateSql(ctx, ToColumnList(fieldColumns), predicatePlan.Predicates));
+                AppendSql("_sqlUpdateWhere_" + method.Name, predicatePlan.SetAssignments.Count > 0
+                    ? sqlBuilder.BuildUpdateByPredicateSql(ctx, predicatePlan.SetAssignments, predicatePlan.Predicates)
+                    : sqlBuilder.BuildUpdateByPredicateSql(ctx, ToColumnList(fieldColumns), predicatePlan.Predicates));
             }
             else if (method.Operation == StoreOperation.DeleteByPredicate)
             {
@@ -1771,12 +1826,13 @@ internal static class StoreProcessor
             }
         }
 
-        foreach (var (method, _, _, _) in valid)
+        foreach (var (method, _, aggregatePredicatePlan, _) in valid)
         {
             if (method.Operation == StoreOperation.Aggregate)
             {
                 var aggColumn = FindColumn(entity, method.AggregateColumn!)!;
-                AppendSql("_sqlAgg_" + method.Name, sqlBuilder.BuildAggregateSql(CtxFor(method), method.AggregateFunction!, sqlBuilder.QuoteIdentifier(aggColumn.ColumnName)));
+                AppendSql("_sqlAgg_" + method.Name, sqlBuilder.BuildAggregateSql(
+                    CtxFor(method), method.AggregateFunction!, sqlBuilder.QuoteIdentifier(aggColumn.ColumnName), aggregatePredicatePlan!.Predicates));
             }
             else if (method.Operation == StoreOperation.SelectTopByOrder)
             {
@@ -1800,7 +1856,7 @@ internal static class StoreProcessor
 
         // Ordered / paged / keyset selects each get a self-contained per-method const built from the
         // base SELECT plus a uniform ORDER BY and a (dialect-specific) pagination or keyset tail.
-        foreach (var (method, fieldColumns, _, selectPlan) in valid)
+        foreach (var (method, fieldColumns, plannedPredicates, selectPlan) in valid)
         {
             if (selectPlan is not null)
             {
@@ -1815,7 +1871,7 @@ internal static class StoreProcessor
                         globalFilterPredicateColumns: entityGlobalFilters,
                         ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null)
                     : CtxFor(method);
-                var planSql = BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan, method.Distinct);
+                var planSql = BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan, method.Distinct, plannedPredicates);
                 if (method.LockMode != 0)
                 {
                     var lockError = TryApplyLockClause(ref planSql, sqlBuilder, planCtx, method);
@@ -1833,7 +1889,9 @@ internal static class StoreProcessor
 
                 if (method.ReturnsPagedResult)
                 {
-                    AppendSql("_sqlCount_" + method.Name, sqlBuilder.BuildCountByFieldSql(planCtx, ToColumnList(fieldColumns)));
+                    AppendSql("_sqlCount_" + method.Name, plannedPredicates is not null
+                        ? sqlBuilder.BuildCountByPredicateSql(planCtx, plannedPredicates.Predicates)
+                        : sqlBuilder.BuildCountByFieldSql(planCtx, ToColumnList(fieldColumns)));
                 }
             }
         }
@@ -2630,9 +2688,10 @@ internal static class StoreProcessor
             return false;
         }
 
-        if (method.Operation is StoreOperation.SelectAllByPredicate or StoreOperation.Exists)
+        if (method.Operation is StoreOperation.SelectAllByPredicate or StoreOperation.Exists or StoreOperation.Aggregate)
         {
-            if (!TryResolvePredicates(context, method, entity, sqlBuilder, out predicatePlan))
+            var pagingParameterCount = method.Operation == StoreOperation.SelectAllByPredicate && method.Pagination == Pagination.Offset ? 2 : 0;
+            if (!TryResolvePredicates(context, method, entity, sqlBuilder, out predicatePlan, trailingParameterCount: pagingParameterCount))
             {
                 return false;
             }
@@ -2643,6 +2702,40 @@ internal static class StoreProcessor
             {
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
                 return false;
+            }
+
+            if (method.Operation == StoreOperation.SelectAllByPredicate &&
+                (method.OrderBy.Count > 0 || method.Pagination != Pagination.None))
+            {
+                if (!TryResolveOrderColumns(context, method, entity, out var orderColumns))
+                {
+                    return false;
+                }
+
+                if (method.ReturnsPagedResult && method.Distinct)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PagedResultDistinctNotSupported, method.Location?.ToLocation(), method.Name));
+                    return false;
+                }
+
+                if (method.Pagination == Pagination.Offset)
+                {
+                    var offsetIndex = method.Parameters.Count - 3;
+                    if (orderColumns.Count == 0 || !method.ReturnsList || offsetIndex < 0 ||
+                        method.Parameters[offsetIndex].ComparisonDisplay != "int" ||
+                        method.Parameters[offsetIndex + 1].ComparisonDisplay != "int")
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PagingRequiresOrderBy, method.Location?.ToLocation(), method.Name));
+                        return false;
+                    }
+                }
+
+                selectPlan = new ResolvedSelectPlan
+                {
+                    SqlFieldName = "_sql_" + method.Name,
+                    OrderColumns = orderColumns,
+                    Pagination = method.Pagination,
+                };
             }
 
             return true;
@@ -2657,7 +2750,20 @@ internal static class StoreProcessor
             }
 
             var setColumns = new List<ColumnData>();
+            IReadOnlyList<SqlSetAssignment> setAssignments = Array.Empty<SqlSetAssignment>();
+            IReadOnlyList<SetBinding> setBindings = Array.Empty<SetBinding>();
+            var expressionParameterCount = 0;
             if (method.Operation == StoreOperation.UpdateByPredicate)
+            {
+                if (method.SetExpressions.Count > 0)
+                {
+                    if (!TryResolveSetExpressions(context, method, entity, sqlBuilder, setColumns,
+                        out setAssignments, out setBindings, out expressionParameterCount))
+                    {
+                        return false;
+                    }
+                }
+                else
             {
                 var predicateParameterCount = 0;
                 foreach (var predicate in method.Predicates)
@@ -2699,7 +2805,7 @@ internal static class StoreProcessor
                         return false;
                     }
 
-                    if (column.IsKey || column.IsGenerated || column.SoftDelete != SoftDeleteKind.None || column.IsConcurrencyToken)
+                        if (!IsSettableColumn(column))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SetFieldNotUpdatable, method.Location?.ToLocation(), method.Name, parameter.Name));
                         return false;
@@ -2714,9 +2820,28 @@ internal static class StoreProcessor
                     setColumns.Add(column);
                 }
             }
+            }
 
             fieldColumns = setColumns;
-            return TryResolvePredicates(context, method, entity, sqlBuilder, out predicatePlan, setColumns);
+            if (!TryResolvePredicates(
+                context,
+                method,
+                entity,
+                sqlBuilder,
+                out predicatePlan,
+                setColumns,
+                leadingParameterCount: method.SetExpressions.Count > 0 ? expressionParameterCount : null,
+                reservedParameterNames: setBindings.Select(static binding => binding.SqlParameterName.Substring(1)).ToArray()))
+            {
+                return false;
+            }
+
+            predicatePlan = new ResolvedPredicatePlan(predicatePlan!.Predicates, predicatePlan.Bindings, predicatePlan.HasIn)
+            {
+                SetAssignments = setAssignments,
+                SetBindings = setBindings,
+            };
+            return true;
         }
 
         if (method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager && entity.Keys.Count > 1)
@@ -2945,19 +3070,226 @@ internal static class StoreProcessor
     }
 
     /// <summary>
-    /// Resolves each <c>[InquiryWhere]</c> criterion against the entity columns and binds the operators
-    /// positionally to the method parameters. Reports INQ007 for an unknown field, INQ018 for a bad
-    /// <c>In</c> collection, and INQ019 for any arity / parameter-order / Like-on-non-string mismatch.
+    /// Resolves expression-based SET assignments and their leading method parameters.
     /// </summary>
-    private static bool TryResolvePredicates(SourceProductionContext context, StoreMethodData method, EntityData entity, SqlBuilder sqlBuilder, out ResolvedPredicatePlan? plan, IReadOnlyList<ColumnData>? setColumns = null)
+    private static bool TryResolveSetExpressions(
+        SourceProductionContext context,
+        StoreMethodData method,
+        EntityData entity,
+        SqlBuilder sqlBuilder,
+        List<ColumnData> setColumns,
+        out IReadOnlyList<SqlSetAssignment> assignments,
+        out IReadOnlyList<SetBinding> bindings,
+        out int leadingParameterCount)
+    {
+        assignments = Array.Empty<SqlSetAssignment>();
+        bindings = Array.Empty<SetBinding>();
+        leadingParameterCount = 0;
+        var resolvedAssignments = new List<SqlSetAssignment>(method.SetExpressions.Count);
+        var resolvedBindings = new Dictionary<string, SetBinding>(StringComparer.Ordinal);
+        var assignedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var highestParameterIndex = -1;
+
+        foreach (var setExpression in method.SetExpressions)
+        {
+            if (string.IsNullOrWhiteSpace(setExpression.Expression))
+            {
+                return Fail("the expression is empty");
+            }
+
+            var target = FindColumn(entity, setExpression.Field);
+            if (target is null)
+            {
+                return Fail("the target is not a mapped field");
+            }
+
+            if (!assignedColumns.Add(target.PropertyName))
+            {
+                return Fail("the target is assigned more than once");
+            }
+
+            if (!IsSettableColumn(target))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SetFieldNotUpdatable,
+                    method.Location?.ToLocation(), method.Name, setExpression.Field));
+                return false;
+            }
+
+            var expression = new StringBuilder(setExpression.Expression.Length);
+            var validationExpression = new StringBuilder(setExpression.Expression.Length);
+            var inStringLiteral = false;
+            for (var i = 0; i < setExpression.Expression.Length; i++)
+            {
+                var ch = setExpression.Expression[i];
+                if (ch == '\'')
+                {
+                    expression.Append(ch);
+                    validationExpression.Append(ch);
+                    if (inStringLiteral && i + 1 < setExpression.Expression.Length && setExpression.Expression[i + 1] == '\'')
+                    {
+                        expression.Append('\'');
+                        validationExpression.Append('\'');
+                        i++;
+                    }
+                    else
+                    {
+                        inStringLiteral = !inStringLiteral;
+                    }
+                    continue;
+                }
+
+                if (inStringLiteral)
+                {
+                    expression.Append(ch);
+                    validationExpression.Append(ch);
+                    continue;
+                }
+
+                if (ch is '"' or '`' or '[' or ']')
+                {
+                    return Fail("raw quoted identifiers are not allowed; use a {Field} placeholder");
+                }
+
+                if (ch == '{')
+                {
+                    var close = setExpression.Expression.IndexOf('}', i + 1);
+                    if (close < 0)
+                    {
+                        return Fail("a column placeholder has no closing brace");
+                    }
+
+                    var field = setExpression.Expression.Substring(i + 1, close - i - 1);
+                    var column = FindColumn(entity, field);
+                    if (column is null)
+                    {
+                        return Fail($"column placeholder '{{{field}}}' is not mapped");
+                    }
+
+                    expression.Append(sqlBuilder.QuoteIdentifier(column.ColumnName));
+                    validationExpression.Append('0');
+                    i = close;
+                    continue;
+                }
+
+                if (ch == '@')
+                {
+                    var start = i + 1;
+                    var end = start;
+                    while (end < setExpression.Expression.Length &&
+                        (char.IsLetterOrDigit(setExpression.Expression[end]) || setExpression.Expression[end] == '_'))
+                    {
+                        end++;
+                    }
+
+                    if (end == start)
+                    {
+                        return Fail("a parameter marker has no parameter name");
+                    }
+
+                    var name = setExpression.Expression.Substring(start, end - start);
+                    var parameterIndex = -1;
+                    for (var candidate = 0; candidate < method.Parameters.Count - 1; candidate++)
+                    {
+                        if (string.Equals(method.Parameters[candidate].Name, name, StringComparison.Ordinal))
+                        {
+                            parameterIndex = candidate;
+                            break;
+                        }
+                    }
+
+                    if (parameterIndex < 0)
+                    {
+                        return Fail($"parameter '@{name}' is not declared by the method");
+                    }
+
+                    if (!ParameterMatchesColumnIgnoringNullability(method.Parameters[parameterIndex], target))
+                    {
+                        return Fail($"parameter '@{name}' does not match the target column type");
+                    }
+
+                    highestParameterIndex = Math.Max(highestParameterIndex, parameterIndex);
+                    if (resolvedBindings.TryGetValue(name, out var existingBinding) &&
+                        !string.Equals(existingBinding.Column.PropertyName, target.PropertyName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Fail($"parameter '@{name}' cannot bind assignments with different target-column metadata");
+                    }
+
+                    if (!resolvedBindings.ContainsKey(name))
+                    {
+                        resolvedBindings.Add(name, new SetBinding("@" + name, parameterIndex, target));
+                    }
+                    expression.Append(sqlBuilder.ParameterName(name));
+                    validationExpression.Append('0');
+                    i = end - 1;
+                    continue;
+                }
+
+                if (ch == '}')
+                {
+                    return Fail("the expression contains an unmatched closing brace");
+                }
+
+                expression.Append(ch);
+                validationExpression.Append(ch);
+            }
+
+            var failures = sqlBuilder.ValidateSetExpression(validationExpression.ToString());
+            if (failures.Count > 0)
+            {
+                return Fail(string.Join("; ", failures));
+            }
+
+            setColumns.Add(target);
+            resolvedAssignments.Add(new SqlSetAssignment(target, sqlBuilder.RenderComputedExpression(expression.ToString())));
+
+            bool Fail(string reason)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SetExpressionInvalid,
+                    method.Location?.ToLocation(), method.Name, setExpression.Field, reason));
+                return false;
+            }
+        }
+
+        leadingParameterCount = highestParameterIndex + 1;
+        for (var i = 0; i < leadingParameterCount; i++)
+        {
+            if (!resolvedBindings.Values.Any(binding => binding.MethodParameterIndex == i))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SetExpressionInvalid,
+                    method.Location?.ToLocation(), method.Name, method.SetExpressions[0].Field,
+                    "SET parameters must form a contiguous prefix before predicate parameters"));
+                return false;
+            }
+        }
+
+        assignments = resolvedAssignments;
+        bindings = resolvedBindings.Values.OrderBy(static binding => binding.MethodParameterIndex).ToArray();
+        return true;
+    }
+
+    private static bool IsSettableColumn(ColumnData column)
+        => !column.IsKey && !column.IsGenerated && column.SoftDelete == SoftDeleteKind.None &&
+            !column.IsConcurrencyToken && string.IsNullOrEmpty(column.ComputedExpression);
+
+    private static bool TryResolvePredicates(
+        SourceProductionContext context,
+        StoreMethodData method,
+        EntityData entity,
+        SqlBuilder sqlBuilder,
+        out ResolvedPredicatePlan? plan,
+        IReadOnlyList<ColumnData>? setColumns = null,
+        int trailingParameterCount = 0,
+        int? leadingParameterCount = null,
+        IReadOnlyCollection<string>? reservedParameterNames = null)
     {
         plan = null;
-        var nonCancellationCount = method.Parameters.Count - 1;
+        var nonCancellationCount = method.Parameters.Count - 1 - trailingParameterCount;
         var predicates = new List<SqlPredicate>(method.Predicates.Count);
         var bindings = new List<PredicateBinding>();
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
         var paramIndex = 0;
         var hasIn = false;
+        var groupDepth = 0;
 
         // For a set-based UPDATE the leading parameters supply the SET values (bound as
         // "@{PropertyName}"), so predicate binding starts after them and the SET property names are
@@ -2965,15 +3297,36 @@ internal static class StoreProcessor
         // "@{PropertyName}2" via UniqueName, so SET and WHERE parameters can never collide.
         if (setColumns is not null)
         {
-            paramIndex = setColumns.Count;
+            paramIndex = leadingParameterCount ?? setColumns.Count;
             foreach (var setColumn in setColumns)
             {
                 usedNames.Add(setColumn.PropertyName);
             }
         }
 
+        if (reservedParameterNames is not null)
+        {
+            foreach (var reservedName in reservedParameterNames)
+            {
+                usedNames.Add(reservedName);
+            }
+        }
+
         foreach (var predicate in method.Predicates.AsImmutableArray())
         {
+            if (predicate.OpenGroups < 0 || predicate.CloseGroups < 0)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateStructureInvalid, method.Location?.ToLocation(), method.Name));
+                return false;
+            }
+
+            groupDepth += predicate.OpenGroups;
+            if (predicate.CloseGroups > groupDepth)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateStructureInvalid, method.Location?.ToLocation(), method.Name));
+                return false;
+            }
+
             var column = FindColumn(entity, predicate.Field);
             if (column is null)
             {
@@ -2985,6 +3338,13 @@ internal static class StoreProcessor
             if (paramIndex + arity > nonCancellationCount)
             {
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
+                return false;
+            }
+
+            if (predicate.IsOptional &&
+                (arity != 1 || predicate.Op is SqlCompareOp.In or SqlCompareOp.NotIn || !method.Parameters[paramIndex].IsNullable))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.OptionalPredicateInvalid, method.Location?.ToLocation(), method.Name, predicate.Field));
                 return false;
             }
 
@@ -3012,7 +3372,7 @@ internal static class StoreProcessor
             {
                 case SqlCompareOp.IsNull:
                 case SqlCompareOp.IsNotNull:
-                    predicates.Add(new SqlPredicate(column, predicate.Op, null, null, predicate.IsOr, predicate.JsonPath));
+                    predicates.Add(ToSqlPredicate(predicate, column, null, null));
                     break;
 
                 case SqlCompareOp.Between:
@@ -3031,7 +3391,7 @@ internal static class StoreProcessor
                     // dialect sigil (':' on Oracle, '@' elsewhere) when emitting the SQL. The runtime
                     // PredicateBinding keeps '@' — the binder is dialect-agnostic and FinalizeCommand
                     // reconciles the sigil on Oracle.
-                    predicates.Add(new SqlPredicate(column, predicate.Op, lo, hi, predicate.IsOr, predicate.JsonPath));
+                    predicates.Add(ToSqlPredicate(predicate, column, lo, hi));
                     bindings.Add(new PredicateBinding("@" + lo, paramIndex, column, isCollection: false));
                     bindings.Add(new PredicateBinding("@" + hi, paramIndex + 1, column, isCollection: false));
                     paramIndex += 2;
@@ -3052,7 +3412,7 @@ internal static class StoreProcessor
                     }
 
                     var name = UniqueName(usedNames, paramBase);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr, predicate.JsonPath));
+                    predicates.Add(ToSqlPredicate(predicate, column, name, null));
                     // Unlike scalar bindings (which keep the runtime binder's '@' form and let Oracle's
                     // FinalizeCommand reconcile the sigil), IN/NOT IN route through InquiryInExpansion, which
                     // rewrites the command TEXT by locating the baked sentinel. That sentinel takes the
@@ -3079,7 +3439,7 @@ internal static class StoreProcessor
                     }
 
                     var name = UniqueName(usedNames, paramBase);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr, predicate.JsonPath));
+                    predicates.Add(ToSqlPredicate(predicate, column, name, null));
                     bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
                     paramIndex += 1;
                     break;
@@ -3087,33 +3447,46 @@ internal static class StoreProcessor
 
                 default:
                 {
-                    if (!ParameterMatchesColumn(method.Parameters[paramIndex], column))
+                    if (!(predicate.IsOptional
+                        ? ParameterMatchesColumnIgnoringNullability(method.Parameters[paramIndex], column)
+                        : ParameterMatchesColumn(method.Parameters[paramIndex], column)))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
                         return false;
                     }
 
                     var name = UniqueName(usedNames, paramBase);
-                    predicates.Add(new SqlPredicate(column, predicate.Op, name, null, predicate.IsOr, predicate.JsonPath));
+                    predicates.Add(ToSqlPredicate(predicate, column, name, null));
                     bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
                     paramIndex += 1;
                     break;
                 }
             }
+
+            groupDepth -= predicate.CloseGroups;
         }
 
-        if (paramIndex != nonCancellationCount)
+        if (paramIndex != nonCancellationCount || groupDepth != 0)
         {
-            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
+            context.ReportDiagnostic(Diagnostic.Create(
+                groupDepth == 0 ? InquiryDiagnosticDescriptors.PredicateParameterMismatch : InquiryDiagnosticDescriptors.PredicateStructureInvalid,
+                method.Location?.ToLocation(), method.Name));
             return false;
         }
 
         plan = new ResolvedPredicatePlan(predicates, bindings, hasIn);
         return true;
+
+        static SqlPredicate ToSqlPredicate(PredicateData source, ColumnData column, string? parameterName, string? parameterNameHi)
+            => new(column, source.Op, parameterName, parameterNameHi, source.IsOr, source.JsonPath,
+                source.OpenGroups, source.CloseGroups, source.IsNegated, source.IsOptional);
     }
 
     private static bool ParameterMatchesColumn(ParameterData parameter, ColumnData column)
         => parameter.ComparisonDisplay == column.Type.DisplayName;
+
+    private static bool ParameterMatchesColumnIgnoringNullability(ParameterData parameter, ColumnData column)
+        => parameter.NonNullableComparisonDisplay == column.Type.NonNullableDisplayName;
 
     private static string UniqueName(HashSet<string> used, string candidate)
     {
@@ -3530,7 +3903,7 @@ internal static class StoreProcessor
     /// base SELECT (with WHERE for SelectAllByField or the keyset cursor predicate), a uniform ORDER BY,
     /// and the dialect-specific pagination tail.
     /// </summary>
-    private static string BuildSelectPlanSql(SqlBuilder sqlBuilder, SqlBuildContext ctx, IReadOnlyList<ColumnData> fieldColumns, ResolvedSelectPlan plan, bool distinct = false)
+    private static string BuildSelectPlanSql(SqlBuilder sqlBuilder, SqlBuildContext ctx, IReadOnlyList<ColumnData> fieldColumns, ResolvedSelectPlan plan, bool distinct = false, ResolvedPredicatePlan? predicatePlan = null)
     {
         var orderTerms = new List<OrderByTerm>(plan.OrderColumns.Count);
         foreach (var (column, descending) in plan.OrderColumns)
@@ -3577,7 +3950,9 @@ internal static class StoreProcessor
                 ? new SqlSelectOptions(orderTerms, offsetParameter: sqlBuilder.ParameterName(OffsetLogicalName), limitParameter: sqlBuilder.ParameterName(LimitLogicalName))
                 : new SqlSelectOptions(orderTerms);
 
-            baseSql = fieldColumns.Count > 0
+            baseSql = predicatePlan is not null
+                ? sqlBuilder.BuildSelectByPredicateSql(ctx, predicatePlan.Predicates, distinct)
+                : fieldColumns.Count > 0
                 ? sqlBuilder.BuildSelectByFieldSql(ctx, ToColumnList(fieldColumns), distinct)
                 : sqlBuilder.BuildSelectAllSql(ctx, distinct);
         }
