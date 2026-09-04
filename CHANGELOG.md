@@ -6,9 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-preview.10] - 2026-09-04
+
 ### Added
 
+- Compile-time query composition now supports nested `AND`/`OR` groups, negation, optional predicates, reusable specifications, filtered aggregates, predicate paging, and SQL `SET` expressions.
 - Generated store-method XML documentation now includes the provider-specific SQL used by the method. IntelliSense labels operations that use multiple commands and retains XML comments from the defining partial declaration.
+
+### Changed
+
+- Mutation methods now compose `[InquiryUpdate]` or `[InquiryDelete]` with `[InquiryWhere]`. Partial updates infer their target columns from leading parameter names, while table-wide deletion requires `[InquiryDeleteAll]`.
 
 ## [1.0.0-preview.9] - 2026-08-29
 
@@ -102,7 +109,8 @@ changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
 - [GraphQL DataLoader recipe](docs/site/articles/features/graphql-dataloader.md) — batching Hot Chocolate resolver fan-out onto a single `Compare.In` predicate method.
 - [Migrations recipe](docs/site/articles/features/migrations.md) — using `InquiryGeneratedSchema.Ddl` as the baseline script for DbUp or FluentMigrator, plus `ProviderArtifactsDdl` and `ProviderArtifactsValidationSql` for deploying and checking the SQL Server TVP types.
 
-[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.9...HEAD
+[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.10...HEAD
+[1.0.0-preview.10]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.9...v1.0.0-preview.10
 [1.0.0-preview.9]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.8...v1.0.0-preview.9
 [1.0.0-preview.8]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.7...v1.0.0-preview.8
 [1.0.0-preview.7]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.6...v1.0.0-preview.7
