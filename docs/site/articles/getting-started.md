@@ -188,6 +188,11 @@ Behind the scenes, the source generator turned your `partial` declarations into:
 - A **partial store class** — for each method, a private `const string _sql...` field with the baked SQL, plus a body that calls the request pipeline.
 - A **DI registration class** - `InquiryGeneratedServiceRegistration` - that wires up every store and materializer.
 
+Inquiry also appends the provider-specific SQL to each generated method's XML documentation. Hover a
+store method in the IDE to inspect its query without opening the generated file. For operations that
+run more than one command, such as eager loading or paged queries, the documentation labels each
+command separately. Any XML comments on your partial declaration remain in place.
+
 For the **full annotated generator output** of the example above, see the [CRUD feature page](features/crud.md).
 
 ## Troubleshooting: red squiggles under `partial` methods

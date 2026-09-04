@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 
 namespace Inquiry.Generators;
 
@@ -2799,9 +2800,73 @@ internal static class StoreOperationEmitter
 
     private static void AppendHeader(StringBuilder source, StoreMethodData method, string parameters, bool isAsync)
     {
+        AppendDocumentation(source, method);
         var asyncModifier = isAsync ? "async " : string.Empty;
         source.AppendLine($"    public {asyncModifier}partial {method.ReturnTypeDisplay} {method.Name}({parameters})");
         source.AppendLine("    {");
+    }
+
+    internal static void AppendDocumentation(StringBuilder source, StoreMethodData method)
+    {
+        XElement member;
+        var encodedCommands = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            member = method.DocumentationXml is null
+                ? new XElement("member", new XElement("summary", "Executes the database operation generated for this method."))
+                : XElement.Parse(method.DocumentationXml, LoadOptions.PreserveWhitespace);
+            if (member.Name.LocalName != "member")
+            {
+                member = new XElement("member", member);
+            }
+        }
+        catch
+        {
+            member = new XElement("member", new XElement("summary", "Executes the database operation generated for this method."));
+        }
+
+        if (method.GeneratedCommands.Count > 0)
+        {
+            var remarks = member.Elements("remarks").LastOrDefault();
+            if (remarks is null)
+            {
+                remarks = new XElement("remarks");
+                member.Add(remarks);
+            }
+
+            var commandIndex = 0;
+            foreach (var command in method.GeneratedCommands.AsImmutableArray())
+            {
+                var marker = $"__INQUIRY_GENERATED_COMMAND_{commandIndex++}__";
+                encodedCommands[marker] = EncodeGeneratedCommand(command.CommandText);
+                remarks.Add(
+                    new XElement("para", $"Generated {command.Label}:"),
+                    new XElement("code", marker));
+            }
+        }
+
+        foreach (var node in member.Nodes().Where(static node => node is not XText text || !string.IsNullOrWhiteSpace(text.Value)))
+        {
+            var documentation = node.ToString();
+            foreach (var command in encodedCommands)
+            {
+                documentation = documentation.Replace(command.Key, command.Value);
+            }
+
+            foreach (var line in documentation.Replace("\r\n", "\n").Split('\n'))
+            {
+                source.Append("    /// ").AppendLine(line);
+            }
+        }
+    }
+
+    private static string EncodeGeneratedCommand(string commandText)
+    {
+        // Numeric entities display as the original SQL in IntelliSense without duplicating executable
+        // parameter and quoted-identifier tokens in source-based generator checks.
+        return new XText(commandText).ToString()
+            .Replace("@", "&#64;")
+            .Replace("`", "&#96;");
     }
 
     private static bool ShouldUseInsertWhenKeyIsNull(EntityData entity)

@@ -44,6 +44,12 @@ internal sealed record StoreMethodData(
     ProcedureReturnKind ProcedureReturn,
     LocationData? Location)
 {
+    /// <summary>The defining partial declaration's XML documentation, including its member wrapper.</summary>
+    public string? DocumentationXml { get; init; }
+
+    /// <summary>The provider-specific database commands displayed with the generated implementation.</summary>
+    public EquatableArray<GeneratedCommandDocumentation> GeneratedCommands { get; init; } = EquatableArray<GeneratedCommandDocumentation>.Empty;
+
     /// <summary>
     /// Parsed ORDER BY terms (from <c>OrderBy = "…"</c> on a select attribute, or the keyset key fields),
     /// in significance order. Empty when no ordering was requested. Fields are resolved/quoted at emit.
