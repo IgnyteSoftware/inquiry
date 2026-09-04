@@ -40,7 +40,7 @@ public partial class ConvertedDeleteItemStore : InquiryStore<ConvertedDeleteItem
     [InquirySelectAll]
     public partial Task<IReadOnlyList<ConvertedDeleteItem>> AllAsync(CancellationToken ct = default);
 
-    [InquiryDeleteAll]
+    [InquiryDelete, InquiryWhere("Id", Compare.In)]
     public partial Task<int> DeleteAllAsync(IEnumerable<DeleteId?>? ids, CancellationToken ct = default);
 }
 

@@ -72,7 +72,7 @@ public partial class ShipperStore : InquiryStore<Shipper>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Shipper shipper, CancellationToken ct = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int? id, CancellationToken ct = default);
 }
 ```

@@ -6,7 +6,7 @@ namespace Inquiry.Generators.Tests;
 
 /// <summary>
 /// Write-side enforcement of <c>[InquiryGlobalFilter(EnforceOnWrites = true)]</c>: the filter's term
-/// AND-composes onto every key-based write (update, delete, hard delete, restore, batch delete) on all
+/// AND-composes onto every targeted write (update, delete, hard delete, restore, predicate delete) on all
 /// six dialects, the emulated-returning follow-up SELECTs carry it too (the cross-tenant read-back
 /// leak), the write binder is a distinct helper from the read binder, and upsert is rejected outright
 /// (INQ095). The regression that matters most is the negative one: an entity that does NOT opt in must
@@ -68,7 +68,7 @@ public sealed partial class InquiryGeneratorTests
         [InquiryUpdate(ReturnEntity = true)]
         public partial Task<Doc?> UpdateReturningAsync(Doc doc, CancellationToken cancellationToken = default);
 
-        [InquiryDeleteOneByKey]
+        [InquiryDelete]
         public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
         """;
 
@@ -133,7 +133,7 @@ public sealed partial class InquiryGeneratorTests
             .Replace(
                 "[InquiryColumn(\"TenantId\"), InquiryGlobalFilter(ContextKey = \"TenantId\", EnforceOnWrites = true)]\n    public long TenantId { get; set; }",
                 "[InquiryColumn(\"IsActive\"), InquiryGlobalFilter(EnforceOnWrites = true)]\n    public bool IsActive { get; set; }");
-        var result = RunGenerator(source + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n[InquiryDeleteOneByKey]\npublic partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);\n}\n");
+        var result = RunGenerator(source + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n[InquiryDelete]\npublic partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);\n}\n");
         AssertNoErrors(result);
         var text = GetTenantDocStore(result);
 
@@ -180,14 +180,17 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>
             {
-                [InquiryDeleteOneByKey]
+                [InquiryDelete]
                 public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
 
-                [InquiryDeleteOneByKey(HardDelete = true)]
+                [InquiryDelete(HardDelete = true)]
                 public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
 
                 [InquiryRestoreOneByKey]
                 public partial Task<bool> RestoreAsync(long id, CancellationToken cancellationToken = default);
+
+                [InquiryDeleteAll]
+                public partial Task<int> DeleteAllAsync(CancellationToken cancellationToken = default);
             }
             """);
         AssertNoErrors(result);
@@ -205,22 +208,24 @@ public sealed partial class InquiryGeneratorTests
         var hardDelete = GeneratedConst(text, "_sqlHardDeleteByKey");
         Assert.Equal("DELETE FROM \\\"TDoc\\\" WHERE \\\"Id\\\" = @Id AND \\\"TenantId\\\" = @__gf_TenantId", hardDelete);
         Assert.DoesNotContain("IsDeleted", hardDelete);
+        Assert.Equal(
+            "UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"IsDeleted\\\" = 0 AND \\\"TenantId\\\" = @__gf_TenantId",
+            GeneratedConst(text, "_sqlDeleteAll_DeleteAllAsync"));
     }
 
     [Fact]
-    public void EnforceOnWritesComposesOntoBatchDelete_Sqlite()
+    public void EnforceOnWritesComposesOntoCollectionPredicateDelete_Sqlite()
     {
         var result = RunGenerator(TenantDocStore("""
-            [InquiryDeleteAll]
+            [InquiryDelete, InquiryWhere("Id", Compare.In)]
             public partial Task<int> DeleteAllAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
             """));
         AssertNoErrors(result);
         var text = GetTenantDocStore(result);
 
         Assert.Equal(
-            "DELETE FROM \\\"TDoc\\\" WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@keys)) AND \\\"TenantId\\\" = @__gf_TenantId",
-            GeneratedConst(text, "_sqlDeleteAll"));
-        // The collection route binds the chunk through a DbCommand, so the DbCommand overload is called.
+            "DELETE FROM \\\"TDoc\\\" WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@Id)) AND \\\"TenantId\\\" = @__gf_TenantId",
+            GeneratedConst(text, "_sqlDeleteWhere_DeleteAllAsync"));
         Assert.Contains("__BindGlobalFiltersWrite(_c);", text);
     }
 
@@ -228,7 +233,7 @@ public sealed partial class InquiryGeneratorTests
     public void EnforceOnWritesComposesOntoHardDeleteByPredicate_Sqlite()
     {
         var result = RunGenerator(TenantDocStore("""
-            [InquiryDeleteWhere]
+            [InquiryDelete]
             [InquiryWhere("Name")]
             public partial Task<int> DeleteByNameAsync(string name, CancellationToken cancellationToken = default);
             """));
@@ -249,7 +254,7 @@ public sealed partial class InquiryGeneratorTests
         // entry. The write filter parameter must therefore be on the command BEFORE the expansion runs,
         // or a maximally-packed list plus the filter parameter would land one past the configured cap.
         var result = RunGenerator(TenantDocStore("""
-            [InquiryDeleteWhere]
+            [InquiryDelete]
             [InquiryWhere("Name", Compare.NotIn)]
             public partial Task<int> DeleteExceptNamesAsync(IReadOnlyList<string> names, CancellationToken cancellationToken = default);
             """));
@@ -270,7 +275,7 @@ public sealed partial class InquiryGeneratorTests
         // machinery must not change that: no partially-emitted returning const, and the stub never calls
         // the write binder (which would bind parameters no SQL references).
         var result = RunGenerator(TenantDocStore("""
-            [InquiryDeleteOneByKey(ReturnEntity = true)]
+            [InquiryDelete(ReturnEntity = true)]
             public partial Task<Doc?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
             """), dialect: "MySql", unsupportedOperationSeverity: ReportDiagnostic.Warn);
 
@@ -387,7 +392,7 @@ public sealed partial class InquiryGeneratorTests
     public void EmulatedDeleteReturningCarriesEnforcedTerm_MariaDb()
     {
         var result = RunGenerator(TenantDocStore("""
-            [InquiryDeleteOneByKey(ReturnEntity = true)]
+            [InquiryDelete(ReturnEntity = true)]
             public partial Task<Doc?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
             """), dialect: "MariaDb");
         AssertNoErrors(result);
@@ -429,22 +434,18 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void BatchDeleteArrayBindRepeatsFilterValueAcrossTheArray_Oracle()
+    public void CollectionPredicateDeleteBindsScalarFilter_Oracle()
     {
         var result = RunGenerator(TenantDocStore("""
-            [InquiryDeleteAll]
+            [InquiryDelete, InquiryWhere("Id", Compare.In)]
             public partial Task<int> DeleteAllAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
             """), dialect: "Oracle");
         AssertNoErrors(result);
         var text = GetTenantDocStore(result);
 
-        // ArrayBindCount = N requires EVERY parameter to be an N-element array, so the ambient value is
-        // read once and repeated rather than bound as a scalar.
-        Assert.Contains("private static void __BindGlobalFiltersWrite(global::System.Data.Common.DbCommand _cmd, int _count)", text);
-        Assert.Contains("var _fv0 = new object?[_count];", text);
-        Assert.Contains("__BindGlobalFiltersWrite(_cmd, _keys.Count);", text);
-        // The per-item route (no array binding) still binds a scalar through the target overload.
-        Assert.Contains("__BindGlobalFiltersWrite(_t);", text);
+        Assert.Contains("private static void __BindGlobalFiltersWrite(global::System.Data.Common.DbCommand _cmd)", text);
+        Assert.Contains("__BindGlobalFiltersWrite(_c);", text);
+        Assert.DoesNotContain("ArrayBindCount", text);
     }
 
     [Fact]
@@ -522,7 +523,7 @@ public sealed partial class InquiryGeneratorTests
             "[InquiryColumn(\"TenantId\"), InquiryGlobalFilter(ContextKey = \"TenantId\", EnforceOnWrites = true)]\n    public long TenantId { get; set; }",
             "[InquiryColumn(\"IsActive\"), InquiryGlobalFilter(EnforceOnWrites = true)]\n    public bool? IsActive { get; set; }");
         var result = RunGenerator(
-            source + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n[InquiryDeleteOneByKey]\npublic partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);\n\n[InquiryUpsert]\npublic partial Task<int> UpsertAsync(Doc doc, CancellationToken cancellationToken = default);\n}\n",
+            source + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n[InquiryDelete]\npublic partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);\n\n[InquiryUpsert]\npublic partial Task<int> UpsertAsync(Doc doc, CancellationToken cancellationToken = default);\n}\n",
             additionalDiagnosticOptions: new Dictionary<string, ReportDiagnostic> { ["INQ059"] = ReportDiagnostic.Suppress });
 
         Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ059");

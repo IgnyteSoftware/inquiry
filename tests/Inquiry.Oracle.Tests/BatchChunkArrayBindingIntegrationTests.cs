@@ -26,7 +26,7 @@ public partial class BatchChunkItemStore : InquiryStore<BatchChunkItem>
     [InquiryUpdateAll]
     public partial Task<int> UpdateAllAsync(IEnumerable<BatchChunkItem> items, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteAll]
+    [InquiryDelete, InquiryWhere("Id", Compare.In)]
     public partial Task<int> DeleteAllAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default);
 }
 
@@ -63,7 +63,13 @@ public sealed class BatchChunkArrayBindingIntegrationTests
         context.Probe.Reset();
         var ids = updated.Select(static item => item.Id).ToArray();
         Assert.Equal(5, await context.Store.DeleteAllAsync(ids));
-        AssertDeleteChunkEvidence(context.Probe, ids, [2, 2, 1]);
+        Assert.Empty(context.Probe.InitializedChunkSizes);
+        var deleteCommand = Assert.Single(context.Probe.FinalizedCommands);
+        Assert.Contains("DELETE", deleteCommand.CommandText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("JSON_TABLE", deleteCommand.CommandText, StringComparison.OrdinalIgnoreCase);
+        var deleteEvidence = Assert.IsType<OracleCommandEvidence>(deleteCommand.Metadata);
+        Assert.Equal(0, deleteEvidence.ArrayBindCount);
+        Assert.False(Assert.Single(deleteEvidence.Parameters).ValueIsObjectArray);
         Assert.Empty(await ReadAllAsync(context.Harness.ConnectionString));
     }
 
@@ -191,36 +197,6 @@ public sealed class BatchChunkArrayBindingIntegrationTests
             var expectedText = items.Skip(offset).Take(chunkSize).Select(static item => (object?)item.ValueText).ToArray();
             Assert.Equal(expectedText, text.Values);
             Assert.Equal(expectedText.Select(static value => ((string)value!).Length), text.ArrayBindSize);
-            offset += chunkSize;
-        }
-    }
-
-    private static void AssertDeleteChunkEvidence(
-        BatchExecutionProbe probe,
-        IReadOnlyList<int> ids,
-        IReadOnlyList<int> chunkSizes)
-    {
-        Assert.Equal(chunkSizes, probe.InitializedChunkSizes);
-        Assert.Equal(chunkSizes.Count, probe.FinalizedCommands.Count);
-        Assert.Equal(1, probe.BeginTransactionCount);
-        Assert.Equal(0, probe.CreateBatchCount);
-
-        var offset = 0;
-        for (var chunkIndex = 0; chunkIndex < chunkSizes.Count; chunkIndex++)
-        {
-            var command = probe.FinalizedCommands[chunkIndex];
-            Assert.Contains("DELETE", command.CommandText, StringComparison.OrdinalIgnoreCase);
-            var evidence = Assert.IsType<OracleCommandEvidence>(command.Metadata);
-            var chunkSize = chunkSizes[chunkIndex];
-            Assert.Equal(chunkSize, evidence.ArrayBindCount);
-            var id = Assert.Single(evidence.Parameters);
-            Assert.StartsWith("iq1$", id.Name, StringComparison.Ordinal);
-            Assert.Equal(OracleDbType.Int32, id.OracleDbType);
-            Assert.Equal(DbType.Int32, id.DbType);
-            Assert.Equal(0, id.Size);
-            Assert.True(id.ValueIsObjectArray);
-            Assert.Equal(ids.Skip(offset).Take(chunkSize).Select(static value => (object?)value), id.Values);
-            Assert.Null(id.ArrayBindSize);
             offset += chunkSize;
         }
     }

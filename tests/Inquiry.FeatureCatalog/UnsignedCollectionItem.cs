@@ -36,7 +36,7 @@ public partial class UnsignedCollectionItemStore : InquiryStore<UnsignedCollecti
     [InquirySelectAllByPredicate, InquiryWhere("Code", Compare.In)] public partial Task<IReadOnlyList<UnsignedCollectionItem>> ByCodeAsync(IReadOnlyList<UnsignedCollectionCode> values, CancellationToken ct = default);
     [InquirySelectAllByPredicate, InquiryWhere("State", Compare.In)] public partial Task<IReadOnlyList<UnsignedCollectionItem>> ByStateAsync(IReadOnlyList<UnsignedCollectionState> values, CancellationToken ct = default);
     [InquirySelectAllByPredicate, InquiryWhere("U32", Compare.NotIn)] public partial Task<IReadOnlyList<UnsignedCollectionItem>> NotU32Async(IReadOnlyList<uint> values, CancellationToken ct = default);
-    [InquiryDeleteAll] public partial Task<int> DeleteAllAsync(IReadOnlyList<uint> ids, CancellationToken ct = default);
+    [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IReadOnlyList<uint> ids, CancellationToken ct = default);
 }
 
 [InquiryTable("UnsignedConverterKey")]
@@ -47,7 +47,7 @@ public sealed class UnsignedConverterKey
 public partial class UnsignedConverterKeyStore : InquiryStore<UnsignedConverterKey>
 {
     [InquiryInsert] public partial Task<int> InsertAsync(UnsignedConverterKey item, CancellationToken ct = default);
-    [InquiryDeleteAll] public partial Task<int> DeleteAllAsync(IReadOnlyList<UnsignedCollectionCode> ids, CancellationToken ct = default);
+    [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IReadOnlyList<UnsignedCollectionCode> ids, CancellationToken ct = default);
 }
 
 [InquiryTable("UnsignedEnumKey")]
@@ -58,5 +58,5 @@ public sealed class UnsignedEnumKey
 public partial class UnsignedEnumKeyStore : InquiryStore<UnsignedEnumKey>
 {
     [InquiryInsert] public partial Task<int> InsertAsync(UnsignedEnumKey item, CancellationToken ct = default);
-    [InquiryDeleteAll] public partial Task<int> DeleteAllAsync(IReadOnlyList<UnsignedCollectionState> ids, CancellationToken ct = default);
+    [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IReadOnlyList<UnsignedCollectionState> ids, CancellationToken ct = default);
 }

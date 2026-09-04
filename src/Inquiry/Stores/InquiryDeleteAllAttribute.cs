@@ -1,26 +1,20 @@
 namespace Inquiry.Stores;
 
 /// <summary>
-/// Generates a batch delete: a single <c>DELETE FROM t WHERE key IN (…)</c> removing every row whose
-/// key is in the supplied collection. The method takes an
-/// <see cref="System.Collections.Generic.IEnumerable{T}"/> of the entity's key type plus a
-/// <see cref="System.Threading.CancellationToken"/> and returns <c>Task&lt;int&gt;</c> (rows affected).
-/// An empty collection matches no rows and returns 0.
+/// Generates an explicit table-wide delete. The method takes only a
+/// <see cref="System.Threading.CancellationToken"/> and returns the number of affected rows.
 /// </summary>
 /// <remarks>
-/// Single-key entities only (the <c>IN</c> list is over the one key column). For a soft-delete entity
-/// the matched rows are soft-deleted (an <c>UPDATE</c> of the indicator) rather than physically
-/// removed, mirroring <c>[InquiryDeleteOneByKey]</c>; v1 has no <c>HardDelete</c> escape hatch for the
-/// batch form (intentional scope cut). Batch delete is not generated for entities with
-/// <c>[InquiryConcurrencyToken]</c>; use <c>[InquiryDeleteOneByKey]</c> so each row can match its
-/// token. The key collection becomes one bound parameter per element, so a
-/// call must stay under the provider's parameter cap; chunk large collections at the call site.
-/// <para>
-/// Like every parameterized predicate, the <c>IN</c> placeholder is baked with the <c>@</c> sigil, so on
-/// Oracle this shares the documented synthetic-parameter limitation (see <c>OracleSqlBuilder</c>).
-/// </para>
+/// For a soft-delete entity, the default form marks every active row as deleted. Set
+/// <see cref="HardDelete"/> to emit a literal <c>DELETE</c>. Global filters continue to enforce their
+/// configured write behavior.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryDeleteAllAttribute : Attribute
 {
+    /// <summary>
+    /// Gets or sets a value indicating whether the method emits a literal <c>DELETE</c> for an entity
+    /// with an <c>[InquirySoftDelete]</c> column. The default form updates the soft-delete indicator.
+    /// </summary>
+    public bool HardDelete { get; set; }
 }

@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ095. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -56,6 +56,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ093         Parameterized filter            ([InquiryGlobalFilter] ContextKey blank/conflicting/unbindable, or on SQL the binder cannot cover) [IN USE]
     //   INQ094         Index property resolution       ([InquiryIndex] key or Include naming something that is not a mapped column) [IN USE]
     //   INQ095         Write-enforced filter           (an operation that cannot honour [InquiryGlobalFilter(EnforceOnWrites = true)] — upsert) [IN USE]
+    //   INQ096         Mutation target                 (targetless delete, conflicting all/predicate, or unsupported returning mode) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -219,13 +220,21 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    // INQ023: an [InquiryUpdateWhere]/[InquiryDeleteWhere] method with no [InquiryWhere] criteria would
+    // INQ023: an [InquiryUpdate]/[InquiryDelete] method with no [InquiryWhere] criteria would
     // mutate every row in the table — almost certainly a bug. Whole-collection mutations have explicit
-    // operations ([InquiryUpdateAll]/[InquiryDeleteAll]), so the unfiltered form is rejected up front.
+    // operations, so the unfiltered form is rejected up front.
     public static readonly DiagnosticDescriptor PredicateMutationRequiresWhere = new(
         "INQ023",
         "Set-based mutation requires at least one InquiryWhere criterion",
-        "Store method '{0}' uses a set-based update/delete with no [InquiryWhere] criteria. An unfiltered set-based mutation would affect every row; add at least one [InquiryWhere], or use [InquiryUpdateAll]/[InquiryDeleteAll] for whole-collection operations.",
+        "Store method '{0}' uses a set-based update/delete with no [InquiryWhere] criteria. Add at least one valid [InquiryWhere] criterion.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MutationTargetInvalid = new(
+        "INQ096",
+        "Mutation target is invalid",
+        "Store method '{0}' has an invalid mutation target. {1}",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -791,12 +800,12 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    // INQ044: an [InquiryUpdateWhere] SET field that resolved to a column the ORM must not assign.
+    // INQ044: an [InquiryUpdate] SET field that resolved to a column the ORM must not assign.
     // Keys and database-generated columns are immutable; the soft-delete indicator is owned by the
     // delete/restore operations; a concurrency token is matched/advanced only by single-row updates.
     public static readonly DiagnosticDescriptor SetFieldNotUpdatable = new(
         "INQ044",
-        "InquiryUpdateWhere SET field is not an updatable column",
+        "InquiryUpdate SET field is not an updatable column",
         "Store method '{0}' assigns field '{1}', which cannot be SET by a set-based update. SET fields must map to a mutable column — not a key, a database-generated column, the soft-delete indicator, or a concurrency token.",
         "Inquiry",
         DiagnosticSeverity.Error,

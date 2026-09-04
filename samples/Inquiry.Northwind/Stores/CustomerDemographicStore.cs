@@ -18,6 +18,6 @@ public partial class CustomerDemographicStore : InquiryStore<CustomerDemographic
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(CustomerDemographic demographic, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(string customerTypeID, CancellationToken cancellationToken = default);
 }

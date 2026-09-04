@@ -25,7 +25,7 @@ public partial class ExistsWidgetStore : InquiryStore<ExistsWidget>
     [InquiryInsert(ReturnEntity = true)]
     public partial Task<ExistsWidget?> InsertAsync(ExistsWidget widget, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> SoftDeleteAsync(long id, CancellationToken cancellationToken = default);
 
     [InquiryExists]

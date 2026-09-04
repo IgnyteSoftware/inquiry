@@ -23,7 +23,7 @@ public sealed partial class InquiryGeneratorTests
         }
         public partial class ConvertedKeyStore : InquiryStore<ConvertedKey>
         {
-            [InquiryDeleteAll]
+            [InquiryDelete, InquiryWhere("Id", Compare.In)]
             public partial Task<int> DeleteAllAsync(IEnumerable<StrongId> ids, CancellationToken ct = default);
         }
         """;
@@ -43,28 +43,16 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(ConverterDeleteAllSource, dialect: dialect);
         AssertNoErrors(result);
         var store = ConverterDeleteAllStore(result, "ConvertedKeyStore");
-        const string projected = "_keys is null ? null : global::System.Linq.Enumerable.Select(_keys, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e))";
+        const string projected = "_args.Arg0 is null ? null : global::System.Linq.Enumerable.Select(_args.Arg0, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e))";
 
         Assert.Contains(providerDdl, ExtractSchemaDdl(result));
         Assert.Contains(ExpectedDeleteAllSql(dialect, "ConvertedKeys", providerIsString: false), store);
-        if (dialect == "Oracle")
-        {
-            Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleCommand)_cmd).ArrayBindCount = _keys.Count;", store);
-            Assert.Contains("_values[_i] = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_keys[_i]);", store);
-            Assert.DoesNotContain("InquiryJsonArrayParameter.Bind", store);
-            // The fixed fallback and array binder each contain one conversion site; the runtime selects
-            // exactly one path for a chunk, so an element is never converted by both.
-            Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(
-                store,
-                "StrongIdConverter>.Instance.ToProvider\\(").Count);
-            return;
-        }
         var typeName = dialect == "SqlServer"
             ? ", \"[dbo].[Inquiry_Tvp_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc]\", _inquiryTvpDescriptor_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc"
             : string.Empty;
-        var parameterName = dialect == "Oracle" ? ":iq1$keysxx$d6859d157d8d31" : "@keys";
+        var parameterName = dialect == "Oracle" ? ":iq1$Idxxxx$30d4cf864d6e68" : "@Id";
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {projected}{typeName});", store);
-        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _keys);", store);
+        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", store);
         Assert.Contains("static _e =>", store);
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(
             store,
@@ -102,7 +90,7 @@ public sealed partial class InquiryGeneratorTests
             { [InquiryKey(Converter = typeof(StrongIdConverter))] public StrongId? Id { get; set; } }
             public partial class NullableKeyStore : InquiryStore<NullableKey>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Id", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IEnumerable<StrongId?> ids, CancellationToken ct = default);
             }
 
@@ -111,7 +99,7 @@ public sealed partial class InquiryGeneratorTests
             { [InquiryKey(Length = 64, Converter = typeof(RefIdConverter))] public RefId Id { get; set; } = new(); }
             public partial class ReferenceKeyStore : InquiryStore<ReferenceKey>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Id", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IEnumerable<RefId> ids, CancellationToken ct = default);
             }
             """;
@@ -120,23 +108,12 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var nullableValue = ConverterDeleteAllStore(result, "NullableKeyStore");
         var reference = ConverterDeleteAllStore(result, "ReferenceKeyStore");
-        var parameterName = dialect == "Oracle" ? ":iq1$keysxx$d6859d157d8d31" : "@keys";
-        const string nullableProjection = "_keys is null ? null : global::System.Linq.Enumerable.Select(_keys, static _e => _e.HasValue ? (long?)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e.Value) : null)";
-        const string referenceProjection = "_keys is null ? null : global::System.Linq.Enumerable.Select(_keys, static _e => _e is null ? (string?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_e))";
+        var parameterName = dialect == "Oracle" ? ":iq1$Idxxxx$30d4cf864d6e68" : "@Id";
+        const string nullableProjection = "_args.Arg0 is null ? null : global::System.Linq.Enumerable.Select(_args.Arg0, static _e => _e.HasValue ? (long?)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e.Value) : null)";
+        const string referenceProjection = "_args.Arg0 is null ? null : global::System.Linq.Enumerable.Select(_args.Arg0, static _e => _e is null ? (string?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_e))";
 
         Assert.Contains(ExpectedDeleteAllSql(dialect, "NullableKeys", providerIsString: false), nullableValue);
         Assert.Contains(ExpectedDeleteAllSql(dialect, "ReferenceKeys", providerIsString: true), reference);
-        if (dialect == "Oracle")
-        {
-            Assert.Contains("ArrayBindCount = _keys.Count;", nullableValue);
-            Assert.Contains("_values[_i] = _keys[_i] is null ? global::System.DBNull.Value : (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_keys[_i].Value);", nullableValue);
-            Assert.Contains("_values[_i] = (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_keys[_i]);", reference);
-            Assert.DoesNotContain("InquiryJsonArrayParameter.Bind", nullableValue);
-            Assert.DoesNotContain("InquiryJsonArrayParameter.Bind", reference);
-            Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(nullableValue, "StrongIdConverter>.Instance.ToProvider\\(").Count);
-            Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(reference, "RefIdConverter>.Instance.ToProvider\\(").Count);
-            return;
-        }
         var nullableTypeName = dialect == "SqlServer"
             ? ", \"[dbo].[Inquiry_Tvp_cbf1884dfb169a6aea6812ce91ba77ade5483b7a07639554520bb82e4b08cfa7]\", _inquiryTvpDescriptor_cbf1884dfb169a6aea6812ce91ba77ade5483b7a07639554520bb82e4b08cfa7"
             : string.Empty;
@@ -145,8 +122,8 @@ public sealed partial class InquiryGeneratorTests
             : string.Empty;
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {nullableProjection}{nullableTypeName});", nullableValue);
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {referenceProjection}{referenceTypeName});", reference);
-        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _keys);", nullableValue);
-        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _keys);", reference);
+        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", nullableValue);
+        Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", reference);
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(nullableValue, "StrongIdConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
         Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(reference, "RefIdConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
     }
@@ -172,7 +149,7 @@ public sealed partial class InquiryGeneratorTests
             }
             public partial class SoftKeyStore : InquiryStore<SoftKey>
             {
-                [InquiryDeleteAll] public partial Task<int> DeleteAllAsync(IEnumerable<StrongId> ids, CancellationToken ct = default);
+                [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IEnumerable<StrongId> ids, CancellationToken ct = default);
             }
             public enum Code { A, B }
             [InquiryTable("EnumKeys")]
@@ -180,7 +157,7 @@ public sealed partial class InquiryGeneratorTests
             { [InquiryKey, InquiryEnumAsString] public Code Id { get; set; } }
             public partial class EnumKeyStore : InquiryStore<EnumKey>
             {
-                [InquiryDeleteAll] public partial Task<int> DeleteAllAsync(IEnumerable<Code> ids, CancellationToken ct = default);
+                [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IEnumerable<Code> ids, CancellationToken ct = default);
             }
             """;
 
@@ -190,8 +167,8 @@ public sealed partial class InquiryGeneratorTests
         var enumStore = ConverterDeleteAllStore(result, "EnumKeyStore");
 
         Assert.Contains("UPDATE \\\"SoftKeys\\\" SET \\\"IsDeleted\\\" = 1", softDelete);
-        Assert.Contains("Enumerable.Select(_keys, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e))", softDelete);
-        Assert.Contains("Enumerable.Select(_keys, static _e => _e.ToString())", enumStore);
+        Assert.Contains("Enumerable.Select(_args.Arg0, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e))", softDelete);
+        Assert.Contains("Enumerable.Select(_args.Arg0, static _e => _e.ToString())", enumStore);
     }
 
     private static string ConverterDeleteAllStore(GeneratorTestResult result, string name)
@@ -204,11 +181,11 @@ public sealed partial class InquiryGeneratorTests
     private static string ExpectedDeleteAllSql(string dialect, string table, bool providerIsString)
         => dialect switch
         {
-            "Sqlite" => $"private const string _sqlDeleteAll = \"DELETE FROM \\\"{table}\\\" WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@keys))\";",
-            "SqlServer" => $"private const string _sqlDeleteAll = \"DELETE FROM [{table}] WHERE [Id] IN (SELECT [Value] FROM @keys)\";",
-            "PostgreSql" => $"private const string _sqlDeleteAll = \"DELETE FROM \\\"{table}\\\" WHERE \\\"Id\\\" = ANY(@keys)\";",
-            "MySql" or "MariaDb" => $"private const string _sqlDeleteAll = \"DELETE FROM `{table}` WHERE `Id` IN (SELECT jt.val FROM JSON_TABLE(@keys, '$[*]' COLUMNS(val {(providerIsString ? "LONGTEXT" : "BIGINT")} PATH '$')) jt)\";",
-            "Oracle" => $"private const string _sqlDeleteAll = \"DELETE FROM {table} WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:iq1$keysxx$d6859d157d8d31, '$[*]' COLUMNS(val {(providerIsString ? "VARCHAR2(4000)" : "NUMBER(19)")} PATH '$')) jt)\";",
+            "Sqlite" => $"private const string _sqlDeleteWhere_DeleteAllAsync = \"DELETE FROM \\\"{table}\\\" WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@Id))\";",
+            "SqlServer" => $"private const string _sqlDeleteWhere_DeleteAllAsync = \"DELETE FROM [{table}] WHERE [Id] IN (SELECT [Value] FROM @Id)\";",
+            "PostgreSql" => $"private const string _sqlDeleteWhere_DeleteAllAsync = \"DELETE FROM \\\"{table}\\\" WHERE \\\"Id\\\" = ANY(@Id)\";",
+            "MySql" or "MariaDb" => $"private const string _sqlDeleteWhere_DeleteAllAsync = \"DELETE FROM `{table}` WHERE `Id` IN (SELECT jt.val FROM JSON_TABLE(@Id, '$[*]' COLUMNS(val {(providerIsString ? "LONGTEXT" : "BIGINT")} PATH '$')) jt)\";",
+            "Oracle" => $"private const string _sqlDeleteWhere_DeleteAllAsync = \"DELETE FROM {table} WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:iq1$Idxxxx$30d4cf864d6e68, '$[*]' COLUMNS(val {(providerIsString ? "VARCHAR2(4000)" : "NUMBER(19)")} PATH '$')) jt)\";",
             _ => throw new global::System.ArgumentOutOfRangeException(nameof(dialect)),
         };
 }

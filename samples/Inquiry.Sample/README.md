@@ -59,7 +59,7 @@ generated stores. Specifically:
   `[InquiryInsert]`, `[InquiryInsert(ReturnEntity = true)]`,
   `[InquiryUpdate]`, `[InquiryUpdate(ReturnEntity = true)]`,
   `[InquiryUpsert]`, `[InquiryUpsert(ReturnEntity = true)]`,
-  `[InquiryDeleteOneByKey]`
+  `[InquiryDelete]`
 - Eager loading on both Region↔Territory (non-nullable key) and Category↔Product
   (nullable IDENTITY key)
 - DI registration through `AddInquiry()` + `AddInquiryGeneratedStores()` +

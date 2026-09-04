@@ -44,7 +44,7 @@ constructor; converter structs are also supported. Inquiry reports a diagnostic 
 `INQ082` for a missing public parameterless constructor. Explicit interface implementations are
 supported; generated calls use the selected closed contract without boxing struct converters.
 
-Collection predicates and `[InquiryDeleteAll]` accept model values and project each non-null element through the cached converter exactly once before binding. Null collections retain the operation's empty/no-op behavior. Null elements do not invoke `ToProvider`; they bind as NULL and cannot match a non-null key. The projection is deferred and uses a static selector, so it adds no captured closure or intermediate list.
+Collection predicates accept model values and project each non-null element through the cached converter exactly once before binding. Null collections retain the operation's empty/no-op behavior. Null elements do not invoke `ToProvider`; they bind as NULL and cannot match a non-null key. The projection is deferred and uses a static selector, so it adds no captured closure or intermediate list.
 
 ## Enum-as-string
 

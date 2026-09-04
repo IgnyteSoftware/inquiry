@@ -80,7 +80,7 @@ public partial class ProductStore : InquiryStore<Product>
     public partial Task<Product?> UpsertReturningAsync(Product product, CancellationToken cancellationToken = default);
 #endif
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int? productID, CancellationToken cancellationToken = default);
 
     // Aggregations + projection over the live Northwind data.

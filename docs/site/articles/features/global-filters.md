@@ -134,7 +134,7 @@ The rules:
 - **A missing ambient value throws `InquiryFilterValueMissingException` before the command executes.** No scope, an absent key, or a wrong-typed value never binds `NULL` or returns an empty result — an empty result would be indistinguishable from working tenant isolation, which is the failure this mode exists to prevent. Exception messages name the key, never the value.
 - The column may be any **non-nullable mapped scalar** — `Guid`, `long`, `string`, an enum, a converter column — and, unlike the constant-bool form, it **may be a key component** (a tenant id inside a composite key is the norm). Explicitly setting `KeepWhen` alongside `ContextKey` is a build error (`INQ093`), as is a blank key, a nullable column, or a column whose role other machinery owns.
 - `ContextKey` is the value's identity; `Name` remains the bypass identity. A tenant boundary should set `ContextKey` and leave `Name` unset — then nothing can bypass it. A filter with both is bypassable like any named filter, and the bypassing method's SQL loses the term *and* its binder loses the parameter together.
-- **Key-based writes** (insert, update, delete, restore, upsert) do not compose the filter unless it sets [`EnforceOnWrites = true`](#enforcing-a-filter-on-writes). **Set-based predicate writes** (`[InquiryUpdateWhere]` and the soft form of `[InquiryDeleteWhere]`) compose it exactly as they always have, so those statements ARE tenant-scoped and throw `InquiryFilterValueMissingException` without an ambient scope. Eager-loading methods reject entities with parameterized filters anywhere in their relation tree (`INQ093`) — their shared relation consts cannot bind per-method parameters yet; use non-eager reads with these filters for now.
+- **Key-based writes** (insert, update, delete, restore, upsert) do not compose the filter unless it sets [`EnforceOnWrites = true`](#enforcing-a-filter-on-writes). **Set-based predicate writes** (`[InquiryUpdate]` and the soft form of `[InquiryDelete]`) compose it exactly as they always have, so those statements ARE tenant-scoped and throw `InquiryFilterValueMissingException` without an ambient scope. Eager-loading methods reject entities with parameterized filters anywhere in their relation tree (`INQ093`) — their shared relation consts cannot bind per-method parameters yet; use non-eager reads with these filters for now.
 - For a `string` tenant key, remember the equality inherits the column's **collation**: on a case-insensitive default (SQL Server, MySQL) `'acme'`, `'ACME'`, and — with SQL Server's trailing-blank semantics — `'acme '` all match. Prefer a `Guid` or integral tenant key, or a binary/case-sensitive collation, when tenant identifiers are user-influenced.
 
 This also means the filter and soft delete compose cleanly: on an entity with **both**, `IncludeDeleted = true` drops only the soft-delete term — the global filter still applies, so an "include deleted" read still respects tenant isolation.
@@ -160,8 +160,8 @@ A global filter composes correctly with everything else the generator emits, usi
 
 A global filter is composed into **exactly the same statements as the [soft-delete](soft-delete.md) active filter** — that invariant is the whole point of sharing the machinery:
 
-- **Composed** (the filter participates): every read (SELECT / COUNT / aggregate, including paged, keyset, and projection reads), set-based `[InquiryUpdateWhere]`, and set-based predicate soft-deletes. A set-based update therefore can't touch a row the filter hides.
-- **Not composed** (the statement targets rows by key, or deletes literally): key-based `UPDATE` / `DELETE`, key-based soft-delete / restore, and hard `[InquiryDeleteWhere]` — unless the filter sets [`EnforceOnWrites`](#enforcing-a-filter-on-writes), which moves every one of these into the composed column.
+- **Composed** (the filter participates): every read (SELECT / COUNT / aggregate, including paged, keyset, and projection reads), set-based `[InquiryUpdate]`, and set-based predicate soft-deletes. A set-based update therefore can't touch a row the filter hides.
+- **Not composed** (the statement targets rows by key, or deletes literally): key-based `UPDATE` / `DELETE`, key-based soft-delete / restore, and hard `[InquiryDelete]` — unless the filter sets [`EnforceOnWrites`](#enforcing-a-filter-on-writes), which moves every one of these into the composed column.
 
 By default this mirrors [soft delete](soft-delete.md) and EF Core's `HasQueryFilter`: it's a **query** filter. So if you know a row's primary key you can still update or delete it by key even when the filter would hide it from reads. `EnforceOnWrites = true` closes that gap for one filter — see the next section.
 
@@ -179,11 +179,11 @@ Every affected statement gains the same term it already carries on reads — so 
 | Statement | Without `EnforceOnWrites` | With `EnforceOnWrites` |
 |---|---|---|
 | `[InquiryUpdate]` (and `ReturnEntity`) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
-| `[InquiryDeleteOneByKey]` (soft or hard) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
+| `[InquiryDelete]` (soft or hard) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
 | `[InquiryRestoreOneByKey]` | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
-| `[InquiryDeleteAll]` | `WHERE "Id" IN (…)` | `… AND "TenantId" = @__gf_TenantId` |
+| `[InquiryDeleteAll]` | `DELETE FROM "Docs"` | `WHERE "TenantId" = @__gf_TenantId` |
 | `[InquiryUpdateAll]` | key join only | key join `AND` the term |
-| hard `[InquiryDeleteWhere]` | criteria only | criteria `AND` the term |
+| hard `[InquiryDelete]` | criteria only | criteria `AND` the term |
 | `[InquiryInsert]` / `[InquiryInsertAll]` / `[InquiryBulkInsert]` | *(never filtered)* | *(never filtered)* |
 | `[InquiryUpsert]` | supported | **build error `INQ095`** |
 

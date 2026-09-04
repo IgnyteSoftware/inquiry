@@ -22,6 +22,6 @@ public partial class DeleteReturningItemStore : InquiryStore<DeleteReturningItem
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(DeleteReturningItem item, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey(ReturnEntity = true)]
+    [InquiryDelete(ReturnEntity = true)]
     public partial Task<DeleteReturningItem?> DeleteReturningAsync(DeleteReturningItem item, CancellationToken cancellationToken = default);
 }

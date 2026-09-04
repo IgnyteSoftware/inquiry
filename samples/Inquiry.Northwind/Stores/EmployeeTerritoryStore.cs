@@ -18,6 +18,6 @@ public partial class EmployeeTerritoryStore : InquiryStore<EmployeeTerritory>
     [InquiryInsert]
     public partial Task<int> InsertAsync(EmployeeTerritory employeeTerritory, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int employeeID, string territoryID, CancellationToken cancellationToken = default);
 }

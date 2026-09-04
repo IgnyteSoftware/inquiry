@@ -21,10 +21,10 @@ public sealed partial class InquiryGeneratorTests
 
         public partial class WidgetStore : InquiryStore<Widget>
         {
-            [InquiryDeleteOneByKey(ReturnEntity = true)]
+            [InquiryDelete(ReturnEntity = true)]
             public partial Task<Widget?> DeleteFirstAsync(long id, CancellationToken cancellationToken = default);
 
-            [InquiryDeleteOneByKey(ReturnEntity = true)]
+            [InquiryDelete(ReturnEntity = true)]
             public partial Task<Widget?> DeleteSecondAsync(long id, CancellationToken cancellationToken = default);
         }
         """;

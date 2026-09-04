@@ -124,7 +124,7 @@ partial Task<int> BulkLookupAsync(
     CancellationToken cancellationToken = default);
 ```
 
-The generator resolves the element type's physical SQL Server mapping at compile time and emits an `InquiryTvpParameter.Bind` call with a cached `InquiryTvpDescriptor`. The user-defined type must already exist on the target database — the generator does not emit DDL for procedure TVP types (unlike `Compare.In` / `[InquiryDeleteAll]` collections, whose types are fully managed).
+The generator resolves the element type's physical SQL Server mapping at compile time and emits an `InquiryTvpParameter.Bind` call with a cached `InquiryTvpDescriptor`. The user-defined type must already exist on the target database — the generator does not emit DDL for procedure TVP types (unlike `Compare.In` collections, whose types are fully managed).
 
 Omitting `TvpTypeName` on a collection parameter reports `INQ086`. Non-SQL Server providers do not currently support TVP parameters on stored procedures.
 

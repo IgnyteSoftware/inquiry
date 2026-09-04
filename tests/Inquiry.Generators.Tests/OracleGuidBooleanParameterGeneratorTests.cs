@@ -46,7 +46,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryUpdate(ReturnEntity = true)] public partial Task<BindingItem?> UpdateAsync(BindingItem item, CancellationToken ct = default);
             [InquiryUpsert(ReturnEntity = true)] public partial Task<BindingItem?> UpsertAsync(BindingItem item, CancellationToken ct = default);
             [InquirySelectOneByKey] public partial Task<BindingItem?> GetAsync(Guid id, CancellationToken ct = default);
-            [InquiryDeleteOneByKey] public partial Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
+            [InquiryDelete] public partial Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
             [InquirySelectAllByField("OptionalToken", OrderBy = "Id", Paged = true)]
             public partial Task<IReadOnlyList<BindingItem>> PageAsync(Guid? token, int offset, int limit, CancellationToken ct = default);
             [InquirySelectAllByPredicate]
@@ -56,10 +56,10 @@ public sealed partial class InquiryGeneratorTests
             [InquiryExists]
             [InquiryWhere("ConvertedEnabled")]
             public partial Task<bool> ExistsAsync(Toggle enabled, CancellationToken ct = default);
-            [InquiryUpdateWhere("Enabled")]
+            [InquiryUpdate]
             [InquiryWhere("OptionalToken")]
             public partial Task<int> SetEnabledAsync(bool enabled, Guid? token, CancellationToken ct = default);
-            [InquiryDeleteWhere]
+            [InquiryDelete]
             [InquiryWhere("OptionalConvertedEnabled")]
             public partial Task<int> DeleteFlagAsync(Toggle? enabled, CancellationToken ct = default);
             [InquiryKeysetPage("Id")]

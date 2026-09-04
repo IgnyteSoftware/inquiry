@@ -94,8 +94,8 @@ internal sealed record StoreMethodData(
     public int LockMode { get; init; }
 
     /// <summary>
-    /// For <see cref="StoreOperation.DeleteOneByKey"/>, whether <c>HardDelete = true</c> was set so
-    /// a literal <c>DELETE</c> is emitted even when the entity declares a soft-delete column.
+    /// Whether <c>HardDelete = true</c> was set so a key, predicate, or table-wide delete emits a
+    /// literal <c>DELETE</c> even when the entity declares a soft-delete column.
     /// </summary>
     public bool HardDelete { get; init; }
 
