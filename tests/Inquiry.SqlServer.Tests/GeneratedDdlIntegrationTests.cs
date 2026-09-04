@@ -39,7 +39,7 @@ public partial class GeneratedRowversionDocumentStore : InquiryStore<GeneratedRo
     [InquiryUpdate(ReturnEntity = true)]
     public partial Task<GeneratedRowversionDocument?> UpdateAsync(GeneratedRowversionDocument document, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteAsync(GeneratedRowversionDocument document, CancellationToken cancellationToken = default);
 
     [InquiryBulkInsert]

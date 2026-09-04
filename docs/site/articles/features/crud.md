@@ -14,9 +14,12 @@ This page shows the **complete, unedited generator output** for a `Shipper` stor
 | `[InquirySelectAllByField]` (field-less) | `Task<IReadOnlyList<T>>` | Filter columns **derived from the method name** — see below |
 | `[InquiryInsert]` | `Task<int>` (rows affected) | `INSERT INTO <table> (cols) VALUES (params)` |
 | `[InquiryInsert(ReturnEntity = true)]` | `Task<T?>` | `INSERT … RETURNING <columns>` (or per-dialect equivalent) |
-| `[InquiryUpdate]` | `Task<bool>` or `Task<int>` | `UPDATE <table> SET … WHERE <pk> = @key` |
+| `[InquiryUpdate]` | `Task<bool>` | Updates an entity by primary key |
+| `[InquiryUpdate]` + `[InquiryWhere]` | `Task<int>` | Partially updates inferred columns for matching rows |
 | `[InquiryUpsert]` | `Task<int>` | Dialect-specific (`ON CONFLICT`, `MERGE`, `ON DUPLICATE KEY UPDATE`, …) |
-| `[InquiryDeleteOneByKey]` | `Task<bool>` or `Task<int>` | `DELETE FROM <table> WHERE <pk> = @key` |
+| `[InquiryDelete]` | `Task<bool>` | Deletes one row by primary key |
+| `[InquiryDelete]` + `[InquiryWhere]` | `Task<int>` | Deletes rows matching the predicate |
+| `[InquiryDeleteAll]` | `Task<int>` | Explicitly deletes every row |
 
 ## You write
 
@@ -72,12 +75,37 @@ public partial class ShipperStore : InquiryStore<Shipper>
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(Shipper shipper, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);
 }
 ```
 
 That's the entire source you write. There is no body — every method is `partial` with the body left to the generator.
+
+For partial updates and predicate deletes, compose the operation with `[InquiryWhere]`. Update
+parameters come first and map to entity properties or columns by name; predicate parameters follow:
+
+```csharp
+[InquiryUpdate]
+[InquiryWhere(nameof(Shipper.ShipperID))]
+public partial Task<int> UpdatePhoneAsync(string? phone, int? shipperID, CancellationToken ct = default);
+
+[InquiryDelete]
+[InquiryWhere(nameof(Shipper.CompanyName))]
+public partial Task<int> DeleteByCompanyNameAsync(string companyName, CancellationToken ct = default);
+
+[InquiryDelete]
+[InquiryWhere(nameof(Shipper.ShipperID), Compare.In)]
+public partial Task<int> DeleteByKeysAsync(IReadOnlyList<int?> shipperIDs, CancellationToken ct = default);
+
+[InquiryDeleteAll]
+public partial Task<int> DeleteAllAsync(CancellationToken ct = default);
+```
+
+`[InquiryDelete]` with neither key parameters nor `[InquiryWhere]` is rejected at compile time. The
+separate `[InquiryDeleteAll]` attribute makes a table-wide operation explicit at the declaration site.
+See [Set-based mutations](set-based-mutations.md) for predicate operators, soft-delete behavior, and
+parameter rules.
 
 ## The generator emits
 

@@ -27,6 +27,6 @@ public partial class CategoryStore : InquiryStore<Category>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Category category, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int? categoryID, CancellationToken cancellationToken = default);
 }

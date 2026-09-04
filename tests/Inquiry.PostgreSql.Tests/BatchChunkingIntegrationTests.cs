@@ -35,11 +35,11 @@ public sealed class BatchChunkingIntegrationTests
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
-        Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
-        Assert.Equal(3, probe.FinalizedCommands.Count);
+        Assert.Empty(probe.InitializedChunkSizes);
+        Assert.Single(probe.FinalizedCommands);
         Assert.All(probe.FinalizedCommands, command =>
         {
-            Assert.Contains("= ANY(@keys)", command.CommandText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("= ANY(@Id)", command.CommandText, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(
                 NpgsqlDbType.Array | NpgsqlDbType.Integer,
                 Assert.IsType<NpgsqlDbType>(command.Metadata));

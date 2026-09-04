@@ -86,7 +86,7 @@ All store attributes live in `Inquiry.Stores`. The method must be a `partial` de
 | `[InquiryInsert]` / `[InquiryInsert(ReturnEntity = true)]` | `BuildInsertSql` / `BuildInsertReturningSql` |
 | `[InquiryUpdate]` / `[InquiryUpdate(ReturnEntity = true)]` | `BuildUpdateSql` / `BuildUpdateReturningSql` |
 | `[InquiryUpsert]` / `[InquiryUpsert(ReturnEntity = true)]` | `BuildUpsertSql` / `BuildUpsertReturningSql` |
-| `[InquiryDeleteOneByKey]` | `BuildDeleteByKeySql` |
+| `[InquiryDelete]` | `BuildDeleteByKeySql` |
 | `[InquiryStoredProcedure("Proc")]` | raw `InquiryCommand` with `CommandType.StoredProcedure` |
 
 Entity-mapping attributes live in `Inquiry.Entities`: `[InquiryTable]`, `[InquiryColumn]`, `[InquiryKey]`, `[InquiryForeignKey]`, `[InquiryRelation]`. Beyond this core surface Inquiry also supports richer WHERE predicates, ORDER BY + pagination, batch operations, projections + aggregations, optimistic concurrency, soft deletes, full-text search, and value-converter columns — see [Features](features/crud.md).

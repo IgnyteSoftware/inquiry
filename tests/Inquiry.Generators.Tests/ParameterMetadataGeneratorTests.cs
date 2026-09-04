@@ -32,10 +32,10 @@ public sealed partial class InquiryGeneratorTests
             [InquiryExists]
             [InquiryWhere("Code", Compare.Equal)]
             public partial Task<bool> ExistsAsync(string code, CancellationToken ct = default);
-            [InquiryUpdateWhere("Code")]
+            [InquiryUpdate]
             [InquiryWhere("Id", Compare.Equal)]
             public partial Task<int> RenameAsync(string code, int id, CancellationToken ct = default);
-            [InquiryDeleteWhere]
+            [InquiryDelete]
             [InquiryWhere("Payload", Compare.Equal)]
             public partial Task<int> DeleteAsync(byte[] payload, CancellationToken ct = default);
             [InquiryKeysetPage("Id")]
@@ -111,7 +111,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(".Size = 64;", exists);
 
         var rename = Method(text, "RenameAsync");
-        var setValue = rename.IndexOf(".Value = (object?)code", StringComparison.Ordinal);
+        var setValue = rename.IndexOf(".Value = (object?)_args.Arg0", StringComparison.Ordinal);
         var whereParameter = rename.IndexOf("ParameterName = \"@Id\"", StringComparison.Ordinal);
         Assert.True(setValue >= 0 && whereParameter > setValue);
         var setBlock = rename[rename.IndexOf("ParameterName = \"@Code\"", StringComparison.Ordinal)..whereParameter];

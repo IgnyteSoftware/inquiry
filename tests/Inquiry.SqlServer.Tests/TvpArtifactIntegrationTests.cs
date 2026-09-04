@@ -22,7 +22,7 @@ public partial class TenantGadgetStore : InquiryStore<TenantGadget>
 {
     [InquiryInsert] public partial Task<int> InsertAsync(TenantGadget gadget, CancellationToken cancellationToken = default);
     [InquiryCount] public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
-    [InquiryDeleteAll] public partial Task<int> DeleteAllAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default);
+    [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default);
     [InquiryExists, InquiryWhere("IsActive", Compare.In)] public partial Task<bool> ExistsActiveAsync(IReadOnlyList<bool> values, CancellationToken cancellationToken = default);
 }
 

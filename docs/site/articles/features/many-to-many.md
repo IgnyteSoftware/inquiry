@@ -85,7 +85,7 @@ The related entity's own active-row predicate — its `[InquirySoftDelete]` term
 
 ## Writing associations
 
-This attribute is read-side: it populates the navigation on eager loads. To **associate** or **dissociate**, write to the junction entity through its own store — the junction is a normal `[InquiryTable]`, so give it an `[InquiryInsert]` / `[InquiryDeleteOneByKey]`:
+This attribute is read-side: it populates the navigation on eager loads. To **associate** or **dissociate**, write to the junction entity through its own store — the junction is a normal `[InquiryTable]`, so give it an `[InquiryInsert]` / `[InquiryDelete]`:
 
 ```csharp
 public partial class OrderProductStore : InquiryStore<OrderProduct>

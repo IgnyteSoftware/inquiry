@@ -23,7 +23,7 @@ public sealed partial class InquiryGeneratorTests
 
         public partial class WidgetStore : InquiryStore<Widget>
         {
-            [InquiryDeleteOneByKey(ReturnEntity = true)]
+            [InquiryDelete(ReturnEntity = true)]
             public partial Task<Widget?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
         }
         """;
@@ -67,7 +67,7 @@ public sealed partial class InquiryGeneratorTests
     public void MariaDbSoftDeleteReturningReportsINQ039InsteadOfPhysicallyDeleting()
     {
         var source = WidgetStore("""
-            [InquiryDeleteOneByKey(ReturnEntity = true)]
+            [InquiryDelete(ReturnEntity = true)]
             public partial Task<Widget?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
             """);
         var result = RunGenerator(source, dialect: "MariaDb");
@@ -82,7 +82,7 @@ public sealed partial class InquiryGeneratorTests
     public void MariaDbHardDeleteReturningOverridesSoftDeleteAndUsesNativeSql()
     {
         var source = WidgetStore("""
-            [InquiryDeleteOneByKey(ReturnEntity = true, HardDelete = true)]
+            [InquiryDelete(ReturnEntity = true, HardDelete = true)]
             public partial Task<Widget?> PurgeReturningAsync(long id, CancellationToken cancellationToken = default);
             """);
         var result = RunGenerator(source, dialect: "MariaDb");
@@ -112,7 +112,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class DocumentStore : InquiryStore<Document>
             {
-                [InquiryDeleteOneByKey(ReturnEntity = true)]
+                [InquiryDelete(ReturnEntity = true)]
                 public partial Task<Document?> DeleteReturningAsync(Document document, CancellationToken cancellationToken = default);
             }
             """;
@@ -157,7 +157,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class EnrollmentStore : InquiryStore<Enrollment>
             {
-                [InquiryDeleteOneByKey(ReturnEntity = true)]
+                [InquiryDelete(ReturnEntity = true)]
                 public partial Task<Enrollment?> DeleteReturningAsync(long studentId, int courseId, CancellationToken cancellationToken = default);
             }
             """;

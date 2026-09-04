@@ -44,9 +44,9 @@ public sealed class BatchChunkingIntegrationTests
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
-        Assert.Equal(new[] { 5 }, probe.InitializedChunkSizes);
+        Assert.Empty(probe.InitializedChunkSizes);
         var command = Assert.Single(probe.FinalizedCommands);
-        Assert.Contains("IN (SELECT [Value] FROM @keys)", command.CommandText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("IN (SELECT [Value] FROM @Id)", command.CommandText, StringComparison.OrdinalIgnoreCase);
         var metadata = Assert.IsType<StructuredParameterMetadata>(command.Metadata);
         Assert.Equal(SqlDbType.Structured, metadata.DbType);
         Assert.StartsWith("[dbo].[Inquiry_Tvp_", metadata.TypeName, StringComparison.Ordinal);

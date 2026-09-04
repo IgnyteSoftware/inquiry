@@ -44,7 +44,7 @@ INQ040 | Inquiry | Error | InquiryRelation references an unmapped foreign-key pr
 INQ041 | Inquiry | Error | InquiryRelation child entity has an unsupported composite primary key
 INQ042 | Inquiry | Error | OrderBy term has an invalid direction token
 INQ043 | Inquiry | Error | Unknown Inquiry SQL dialect
-INQ044 | Inquiry | Error | InquiryUpdateWhere SET field is not an updatable column
+INQ044 | Inquiry | Error | InquiryUpdate SET field is not an updatable column
 INQ045 | Inquiry | Error | Ad-hoc DTO declares no mappable properties
 INQ046 | Inquiry | Error | Ad-hoc DTO must be constructible
 INQ047 | Inquiry | Error | SequentialGuid requires a client-supplied Guid key
@@ -95,3 +95,4 @@ INQ092 | Inquiry | Error | InquiryGlobalFilter Name is invalid
 INQ093 | Inquiry | Error | InquiryGlobalFilter ContextKey configuration is invalid
 INQ094 | Inquiry | Error | InquiryIndex references an unmapped property
 INQ095 | Inquiry | Error | Operation cannot honour a write-enforced InquiryGlobalFilter
+INQ096 | Inquiry | Error | Mutation target is invalid

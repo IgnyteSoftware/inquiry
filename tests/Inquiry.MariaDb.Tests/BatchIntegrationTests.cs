@@ -8,7 +8,7 @@ namespace Inquiry.MariaDb.Tests;
 /// <summary>
 /// Batch operations over the Northwind <c>Region</c> entity (client-supplied int key) against real
 /// MariaDB: <c>InsertAll</c> inserts a collection in one statement, <c>UpdateAll</c> updates each row
-/// by key, <c>DeleteAll</c> removes a key set via IN-expansion, and each empty collection is a no-op.
+/// by key, a predicate delete with <c>Compare.In</c> removes a key set, and each empty collection is a no-op.
 /// </summary>
 [Collection(MariaDbCollection.Name)]
 public sealed class BatchIntegrationTests
@@ -71,7 +71,7 @@ public sealed class BatchIntegrationTests
             await regions.InsertAsync(new Region { RegionID = i, RegionDescription = "R" + i });
         }
 
-        var affected = await regions.DeleteAllAsync(new[] { 1, 3, 5 });
+        var affected = await regions.DeleteByKeysAsync(new[] { 1, 3, 5 });
 
         Assert.Equal(3, affected);
         var remaining = await regions.SelectAllAsync().ToListAsync();
@@ -88,7 +88,7 @@ public sealed class BatchIntegrationTests
 
         Assert.Equal(0, await regions.InsertAllAsync(System.Array.Empty<Region>()));
         Assert.Equal(0, await regions.UpdateAllAsync(System.Array.Empty<Region>()));
-        Assert.Equal(0, await regions.DeleteAllAsync(System.Array.Empty<int>()));
+        Assert.Equal(0, await regions.DeleteByKeysAsync(System.Array.Empty<int>()));
         Assert.Single(await regions.SelectAllAsync().ToListAsync());
     }
 }

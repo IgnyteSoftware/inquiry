@@ -60,10 +60,10 @@ public partial class SoftItemStore : InquiryStore<SoftItem>
     [InquirySelectOneByKey]
     public partial Task<SoftItem?> ByIdAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> SoftDeleteAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey(HardDelete = true)]
+    [InquiryDelete(HardDelete = true)]
     public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
 
     [InquiryRestoreOneByKey]

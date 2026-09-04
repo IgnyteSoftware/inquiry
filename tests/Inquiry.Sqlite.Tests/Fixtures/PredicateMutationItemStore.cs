@@ -11,11 +11,11 @@ public partial class PredicateMutationItemStore : InquiryStore<PredicateMutation
     [InquirySelectAll]
     public partial Task<IReadOnlyList<PredicateMutationItem>> SelectAllAsync(CancellationToken cancellationToken = default);
 
-    [InquiryUpdateWhere("Price")]
+    [InquiryUpdate]
     [InquiryWhere("Category")]
     public partial Task<int> RepriceCategoryAsync(decimal price, string category, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteWhere]
+    [InquiryDelete]
     [InquiryWhere("Category")]
     public partial Task<int> DeleteCategoryAsync(string category, CancellationToken cancellationToken = default);
 }

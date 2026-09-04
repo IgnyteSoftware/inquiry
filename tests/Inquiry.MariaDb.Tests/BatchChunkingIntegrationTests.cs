@@ -62,12 +62,12 @@ public sealed class BatchChunkingIntegrationTests
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
-        Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
+        Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(0, probe.CreateBatchCount);
-        Assert.Equal(new[] { "[1,2]", "[3,4]", "[5]" }, probe.FinalizedCommands.Select(JsonValue));
+        Assert.Equal("[1,2,3,4,5]", JsonValue(Assert.Single(probe.FinalizedCommands)));
         Assert.All(probe.FinalizedCommands, command =>
         {
-            Assert.Contains("JSON_TABLE(@keys, '$[*]' COLUMNS(val INT PATH '$'))", command.CommandText, StringComparison.Ordinal);
+            Assert.Contains("JSON_TABLE(@Id, '$[*]' COLUMNS(val INT PATH '$'))", command.CommandText, StringComparison.Ordinal);
             var parameter = Assert.Single(Assert.IsType<CommandMetadata>(command.Metadata).Parameters);
             Assert.Equal(DbType.String, parameter.DbType);
         });

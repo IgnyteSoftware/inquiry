@@ -431,17 +431,15 @@ Inquiry.Stores.InquiryBulkInsertAttribute.InquiryBulkInsertAttribute() -> void
 Inquiry.Stores.InquiryCountAttribute
 Inquiry.Stores.InquiryCountAttribute.InquiryCountAttribute() -> void
 Inquiry.Stores.InquiryDeleteAllAttribute
+Inquiry.Stores.InquiryDeleteAllAttribute.HardDelete.get -> bool
+Inquiry.Stores.InquiryDeleteAllAttribute.HardDelete.set -> void
 Inquiry.Stores.InquiryDeleteAllAttribute.InquiryDeleteAllAttribute() -> void
-Inquiry.Stores.InquiryDeleteOneByKeyAttribute
-Inquiry.Stores.InquiryDeleteOneByKeyAttribute.HardDelete.get -> bool
-Inquiry.Stores.InquiryDeleteOneByKeyAttribute.HardDelete.set -> void
-Inquiry.Stores.InquiryDeleteOneByKeyAttribute.InquiryDeleteOneByKeyAttribute() -> void
-Inquiry.Stores.InquiryDeleteOneByKeyAttribute.ReturnEntity.get -> bool
-Inquiry.Stores.InquiryDeleteOneByKeyAttribute.ReturnEntity.set -> void
-Inquiry.Stores.InquiryDeleteWhereAttribute
-Inquiry.Stores.InquiryDeleteWhereAttribute.HardDelete.get -> bool
-Inquiry.Stores.InquiryDeleteWhereAttribute.HardDelete.set -> void
-Inquiry.Stores.InquiryDeleteWhereAttribute.InquiryDeleteWhereAttribute() -> void
+Inquiry.Stores.InquiryDeleteAttribute
+Inquiry.Stores.InquiryDeleteAttribute.HardDelete.get -> bool
+Inquiry.Stores.InquiryDeleteAttribute.HardDelete.set -> void
+Inquiry.Stores.InquiryDeleteAttribute.InquiryDeleteAttribute() -> void
+Inquiry.Stores.InquiryDeleteAttribute.ReturnEntity.get -> bool
+Inquiry.Stores.InquiryDeleteAttribute.ReturnEntity.set -> void
 Inquiry.Stores.InquiryExistsAttribute
 Inquiry.Stores.InquiryExistsAttribute.InquiryExistsAttribute() -> void
 Inquiry.Stores.InquiryFullTextSearchAttribute
@@ -558,9 +556,6 @@ Inquiry.Stores.InquiryUpdateAttribute
 Inquiry.Stores.InquiryUpdateAttribute.InquiryUpdateAttribute() -> void
 Inquiry.Stores.InquiryUpdateAttribute.ReturnEntity.get -> bool
 Inquiry.Stores.InquiryUpdateAttribute.ReturnEntity.set -> void
-Inquiry.Stores.InquiryUpdateWhereAttribute
-Inquiry.Stores.InquiryUpdateWhereAttribute.InquiryUpdateWhereAttribute(params string![]! setFields) -> void
-Inquiry.Stores.InquiryUpdateWhereAttribute.SetFields.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Inquiry.Stores.InquiryUpsertAttribute
 Inquiry.Stores.InquiryUpsertAttribute.InquiryUpsertAttribute() -> void
 Inquiry.Stores.InquiryUpsertAttribute.ReturnEntity.get -> bool

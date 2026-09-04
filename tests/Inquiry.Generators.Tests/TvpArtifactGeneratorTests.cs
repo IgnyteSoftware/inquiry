@@ -23,8 +23,8 @@ public sealed partial class InquiryGeneratorTests
             {
                 [InquirySelectAllByPredicate, InquiryWhere("Id", Compare.In)]
                 public partial Task<IReadOnlyList<Item>> ByIdsAsync(IReadOnlyList<int> ids, CancellationToken ct = default);
-                [InquiryDeleteAll] public partial Task<int> DeleteAllAsync(IReadOnlyList<int> ids, CancellationToken ct = default);
-                [InquiryDeleteWhere, InquiryWhere("Code", Compare.In)]
+                [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IReadOnlyList<int> ids, CancellationToken ct = default);
+                [InquiryDelete, InquiryWhere("Code", Compare.In)]
                 public partial Task<int> DeleteCodesAsync(IReadOnlyList<string> codes, CancellationToken ct = default);
                 [InquirySelectAllByPredicate, InquiryWhere("Id", Compare.NotIn)]
                 public partial Task<IReadOnlyList<Item>> NotIdsAsync(IReadOnlyList<int> ids, CancellationToken ct = default);
@@ -72,7 +72,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("sys.default_constraints", schema);
 
         Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Id\", ids, \"[dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]\", _inquiryTvpDescriptor_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c)", itemStore);
-        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Code\", codes, \"[dbo].[Inquiry_Tvp_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f]\", _inquiryTvpDescriptor_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f)", itemStore);
+        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Code\", _args.Arg0, \"[dbo].[Inquiry_Tvp_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f]\", _inquiryTvpDescriptor_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f)", itemStore);
         Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Id\", ids, \"[tenant].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]\", _inquiryTvpDescriptor_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c)", tenantStore);
         Assert.DoesNotContain("BindUnsupported", itemStore);
         Assert.DoesNotContain("BindUnsupported", tenantStore);
@@ -164,7 +164,7 @@ public sealed partial class InquiryGeneratorTests
             }
             public partial class SecondStore : InquiryStore<Item>
             {
-                [InquiryUpdateWhere("Price"), InquiryWhere("State", Compare.In)]
+                [InquiryUpdate, InquiryWhere("State", Compare.In)]
                 public partial Task<int> UpdateAsync(decimal price, IReadOnlyList<State> states, CancellationToken ct = default);
             }
             """;

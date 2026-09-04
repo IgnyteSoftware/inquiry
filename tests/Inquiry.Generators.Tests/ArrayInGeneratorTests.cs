@@ -118,7 +118,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ItemStore : Inquiry.Stores.InquiryStore<Demo.Item>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Id", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IReadOnlyList<long> ids, CancellationToken cancellationToken = default);
             }
             """;
@@ -129,8 +129,8 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("\\\"Id\\\" = ANY(@keys)", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"@keys\", _keys);", text);
+        Assert.Contains("\\\"Id\\\" = ANY(@Id)", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"@Id\", _args.Arg0);", text);
         Assert.DoesNotContain("InquiryInExpansion", text);
     }
 
@@ -159,7 +159,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ItemStore : Inquiry.Stores.InquiryStore<Demo.Item>
             {
-                [InquiryDeleteWhere]
+                [InquiryDelete]
                 [InquiryWhere("Category", Compare.In)]
                 public partial Task<int> DeleteCategoriesAsync(IReadOnlyList<string> categories, CancellationToken cancellationToken = default);
             }
@@ -172,6 +172,6 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("\\\"Category\\\" = ANY(@Category)", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"@Category\", categories);", text);
+        Assert.Contains("global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"@Category\", _args.Arg0);", text);
     }
 }

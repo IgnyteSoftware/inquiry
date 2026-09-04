@@ -8,8 +8,8 @@ namespace Inquiry.Oracle.Tests;
 /// <summary>
 /// Batch operations over the Northwind <c>Region</c> entity against real Oracle. Batch <c>InsertAll</c>
 /// works via Oracle's set-based <c>INSERT INTO … SELECT … FROM dual UNION ALL</c> (a single statement, so the affected
-/// row count round-trips), and <c>DeleteAll</c> works via the dialect-aware <c>:keys</c> IN-expansion sentinel
-/// (an empty collection rewrites to <c>IN (NULL)</c> — a no-op). <c>UpdateAll</c> executes the single-row
+/// row count round-trips), and collection predicate delete works through <c>JSON_TABLE</c>
+/// (an empty collection matches no rows). <c>UpdateAll</c> executes the single-row
 /// UPDATE once per item through the runtime batch API (sequential same-connection fallback on Oracle).
 /// </summary>
 [Collection(OracleCollection.Name)]
@@ -30,7 +30,7 @@ public sealed class BatchDeleteIntegrationTests
             await regions.InsertAsync(new Region { RegionID = i, RegionDescription = "R" + i });
         }
 
-        var affected = await regions.DeleteAllAsync(new[] { 1, 3, 5 });
+        var affected = await regions.DeleteByKeysAsync(new[] { 1, 3, 5 });
 
         Assert.Equal(3, affected);
         var remaining = await regions.SelectAllAsync().ToListAsync();
@@ -46,7 +46,7 @@ public sealed class BatchDeleteIntegrationTests
 
         await regions.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
 
-        Assert.Equal(0, await regions.DeleteAllAsync(System.Array.Empty<int>()));
+        Assert.Equal(0, await regions.DeleteByKeysAsync(System.Array.Empty<int>()));
         Assert.Single(await regions.SelectAllAsync().ToListAsync());
     }
 

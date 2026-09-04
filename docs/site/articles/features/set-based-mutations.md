@@ -9,18 +9,36 @@ operations return the affected row count.
 ```csharp
 public partial class CustomerStore : InquiryStore<Customer>
 {
-    // First parameter feeds the SET column (declared on the attribute);
-    // remaining parameters bind the [InquiryWhere] criteria positionally.
-    [InquiryUpdateWhere("IsActive")]
+    // Leading parameters map to SET columns by name. Trailing parameters
+    // bind the [InquiryWhere] criteria positionally.
+    [InquiryUpdate]
     [InquiryWhere("LastSeen", Compare.LessThan)]
     public partial Task<int> DeactivateStaleAsync(bool isActive, DateTime cutoff, CancellationToken ct = default);
 
-    [InquiryDeleteWhere]
+    [InquiryDelete]
     [InquiryWhere("IsActive", Compare.Equal)]
     [InquiryWhere("CreatedAt", Compare.LessThan)]
     public partial Task<int> PurgeInactiveBeforeAsync(bool isActive, DateTime cutoff, CancellationToken ct = default);
 }
 ```
+
+For an update, Inquiry calculates how many trailing parameters the predicates consume, then maps every
+leading parameter to a mutable entity property or column with the same name (case-insensitive). In the
+example, `isActive` maps to `Customer.IsActive`; `cutoff` belongs to the predicate. This makes a
+single-column partial update concise:
+
+```csharp
+[InquiryUpdate]
+[InquiryWhere(nameof(Member.Key))]
+public partial Task<int> UpdateEmailAsync(
+    string email,
+    int key,
+    CancellationToken ct = default);
+```
+
+This emits the equivalent of `UPDATE Member SET Email = @Email WHERE Key = @Key`. Add more leading
+parameters to update more columns. Each update parameter must have a unique name that resolves to its
+target property or mapped column.
 
 `[InquiryWhere]` works exactly as on
 [predicate selects](crud.md): repeat it per criterion, criteria combine in declaration order
@@ -33,19 +51,47 @@ set is the comparisons (`Equal`, `NotEqual`, `GreaterThan`, …), `Like` / `NotL
 ## Rules
 
 - The method must return `Task<int>` (rows affected).
-- **At least one `[InquiryWhere]` is required** — an unfiltered set-based mutation is almost
-  always a bug; use `[InquiryUpdateAll]`/`[InquiryDeleteAll]` for whole-collection operations.
-- `[InquiryUpdateWhere]`'s SET fields must be ordinary mutable columns: not the key, not
+- **At least one `[InquiryWhere]` is required** for parameter-inferred updates and predicate deletes.
+  `[InquiryUpdate]` without a predicate remains the entity-by-key update. A targetless
+  `[InquiryDelete]` is a compile error; use `[InquiryDeleteAll]` for an explicit table-wide delete.
+- `[InquiryUpdate]`'s SET fields must be ordinary mutable columns: not the key, not
   database-generated, not the soft-delete indicator, not a concurrency token.
 - **Concurrency-token entities are rejected** for both operations (same rationale as batch
   mutations: a set-based statement cannot check per-row tokens).
 
 ## Soft-delete entities
 
-On a soft-delete entity, `[InquiryDeleteWhere]` emits the **soft UPDATE form** (sets the
+On a soft-delete entity, `[InquiryDelete]` emits the **soft UPDATE form** (sets the
 indicator) and both operations compose the active-row filter into the WHERE — already-deleted
-rows are never updated or re-deleted. `[InquiryDeleteWhere(HardDelete = true)]` forces a literal
-`DELETE`, mirroring `[InquiryDeleteOneByKey]`.
+rows are never updated or re-deleted. `[InquiryDelete(HardDelete = true)]` forces a literal
+`DELETE`, matching the key-delete behavior.
+
+## Delete targeting
+
+Use the narrowest form that expresses the intended target:
+
+```csharp
+// One row by primary key.
+[InquiryDelete]
+public partial Task<bool> DeleteByKeyAsync(int key, CancellationToken ct = default);
+
+// Every row matching a predicate.
+[InquiryDelete]
+[InquiryWhere(nameof(Member.Email))]
+public partial Task<int> DeleteByEmailAsync(string email, CancellationToken ct = default);
+
+// Every row whose key is in the supplied collection.
+[InquiryDelete]
+[InquiryWhere(nameof(Member.Key), Compare.In)]
+public partial Task<int> DeleteByKeysAsync(IReadOnlyList<int> keys, CancellationToken ct = default);
+
+// Every row in the table. The explicit attribute is required.
+[InquiryDeleteAll]
+public partial Task<int> DeleteAllAsync(CancellationToken ct = default);
+```
+
+`[InquiryDeleteAll]` performs the normal soft-delete update for a soft-delete entity. Set
+`HardDelete = true` to emit a literal table-wide `DELETE`. Write-enforced global filters still apply.
 
 ## Transactions and timeouts
 

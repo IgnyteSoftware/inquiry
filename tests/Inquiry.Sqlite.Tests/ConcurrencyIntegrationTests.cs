@@ -35,7 +35,7 @@ public partial class VersionedDocStore : InquiryStore<VersionedDoc>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(VersionedDoc doc, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteAsync(VersionedDoc doc, CancellationToken cancellationToken = default);
 }
 

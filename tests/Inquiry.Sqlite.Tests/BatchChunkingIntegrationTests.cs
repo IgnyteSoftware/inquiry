@@ -37,8 +37,8 @@ public sealed class BatchChunkingIntegrationTests
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
-        Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
-        Assert.Equal(3, probe.FinalizedCommands.Count);
+        Assert.Empty(probe.InitializedChunkSizes);
+        Assert.Single(probe.FinalizedCommands);
         Assert.All(probe.FinalizedCommands, command =>
         {
             Assert.Contains("json_each", command.CommandText, StringComparison.OrdinalIgnoreCase);
@@ -145,7 +145,7 @@ public sealed class BatchChunkingIntegrationTests
     private static object? InspectJsonParameter(System.Data.Common.DbCommand command)
     {
         var parameter = command.Parameters.Cast<SqliteParameter>()
-            .SingleOrDefault(candidate => candidate.ParameterName == "@keys");
+            .SingleOrDefault(candidate => candidate.ParameterName == "@Id" && candidate.Value is string);
         return parameter is null
             ? null
             : new JsonParameterMetadata(parameter.SqliteType, Assert.IsType<string>(parameter.Value));

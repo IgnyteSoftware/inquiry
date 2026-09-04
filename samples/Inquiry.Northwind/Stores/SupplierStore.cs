@@ -21,6 +21,6 @@ public partial class SupplierStore : InquiryStore<Supplier>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Supplier supplier, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int? supplierID, CancellationToken cancellationToken = default);
 }

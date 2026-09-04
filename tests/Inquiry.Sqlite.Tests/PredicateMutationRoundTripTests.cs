@@ -3,8 +3,8 @@ using Inquiry.Sqlite.Tests.Fixtures;
 namespace Inquiry.Sqlite.Tests;
 
 /// <summary>
-/// Runtime round-trips for the set-based predicate mutations: <c>[InquiryUpdateWhere]</c> and
-/// <c>[InquiryDeleteWhere]</c> must affect exactly the rows matching their <c>[InquiryWhere]</c>
+/// Runtime round-trips for the set-based predicate mutations: <c>[InquiryUpdate]</c> and
+/// <c>[InquiryDelete]</c> must affect exactly the rows matching their <c>[InquiryWhere]</c>
 /// criteria and return the affected-row count.
 /// </summary>
 public sealed class PredicateMutationRoundTripTests

@@ -266,7 +266,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void SetColumnOfPredicateUpdateIsNotFlaggedAsFilter_Sqlite()
     {
-        // An [InquiryUpdateWhere] SET column is written, not filtered — only its WHERE column is a filter.
+        // An [InquiryUpdate] SET column is written, not filtered — only its WHERE column is a filter.
         const string source = """
             using System.Threading;
             using System.Threading.Tasks;
@@ -286,7 +286,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class UserStore : Inquiry.Stores.InquiryStore<Demo.User>
             {
-                [InquiryUpdateWhere("LastSeen")]
+                [InquiryUpdate]
                 [InquiryWhere("Status")]
                 public partial Task<int> TouchByStatusAsync(string lastSeen, string status, CancellationToken cancellationToken = default);
             }

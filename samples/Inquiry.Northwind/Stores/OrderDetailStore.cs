@@ -21,6 +21,6 @@ public partial class OrderDetailStore : InquiryStore<OrderDetail>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(OrderDetail orderDetail, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int orderID, int productID, CancellationToken cancellationToken = default);
 }

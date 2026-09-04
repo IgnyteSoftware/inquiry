@@ -21,7 +21,7 @@ public partial class BatchChunkItemStore : InquiryStore<BatchChunkItem>
     [InquiryUpdateAll]
     public partial Task<int> UpdateAllAsync(IEnumerable<BatchChunkItem> items, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteAll]
+    [InquiryDelete, InquiryWhere("Id", Compare.In)]
     public partial Task<int> DeleteAllAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default);
 
     [InquiryCount]

@@ -39,7 +39,7 @@
         },
         {
           "operation": "delete", "benchmarkCategory": "Delete", "selectedMethod": "Inquiry_SelectedDeleteAll",
-          "productionExecutionMode": "generatedChunkBound", "sqlShape": "json-each-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "productionExecutionMode": "generatedSingleStatementPredicate", "sqlShape": "json-each-keyset-delete", "chunkPolicy": "none-single-statement",
           "comparisons": [
             { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
             { "method": "Raw_PreSerializedJsonEachDeleteFloor", "role": "precomputedTransportFloor", "capabilityId": null },
@@ -99,7 +99,7 @@
         },
         {
           "operation": "delete", "benchmarkCategory": "Delete", "selectedMethod": "Inquiry_SelectedDeleteAll",
-          "productionExecutionMode": "generatedChunkBound", "sqlShape": "tvp-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "productionExecutionMode": "generatedSingleStatementPredicate", "sqlShape": "tvp-keyset-delete", "chunkPolicy": "none-single-statement",
           "comparisons": [
             { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
             { "method": "Native_DbBatchDelete", "role": "nativeTransport", "capabilityId": "db-batch" },
@@ -151,7 +151,7 @@
         },
         {
           "operation": "delete", "benchmarkCategory": "Delete", "selectedMethod": "Inquiry_SelectedDeleteAll",
-          "productionExecutionMode": "generatedChunkBound", "sqlShape": "any-array-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "productionExecutionMode": "generatedSingleStatementPredicate", "sqlShape": "any-array-keyset-delete", "chunkPolicy": "none-single-statement",
           "comparisons": [
             { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
             { "method": "Raw_AnyArrayDelete", "role": "alternativeTransport", "capabilityId": null }
@@ -203,7 +203,7 @@
         },
         {
           "operation": "delete", "benchmarkCategory": "BatchDelete", "selectedMethod": "Inquiry_SelectedDeleteAll",
-          "productionExecutionMode": "generatedChunkBound", "sqlShape": "json-table-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "productionExecutionMode": "generatedSingleStatementPredicate", "sqlShape": "json-table-keyset-delete", "chunkPolicy": "none-single-statement",
           "comparisons": [
             { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
             { "method": "Native_DbBatchDelete", "role": "nativeTransport", "capabilityId": null },
@@ -257,7 +257,7 @@
         },
         {
           "operation": "delete", "benchmarkCategory": "BatchDelete", "selectedMethod": "Inquiry_SelectedDeleteAll",
-          "productionExecutionMode": "generatedChunkBound", "sqlShape": "json-table-keyset-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "productionExecutionMode": "generatedSingleStatementPredicate", "sqlShape": "json-table-keyset-delete", "chunkPolicy": "none-single-statement",
           "comparisons": [
             { "method": "Direct_ReusedPreparedDelete", "role": "directDriver", "capabilityId": null },
             { "method": "Native_DbBatchDelete", "role": "nativeTransport", "capabilityId": null },
@@ -311,7 +311,7 @@
         },
         {
           "operation": "delete", "benchmarkCategory": "BatchDelete", "selectedMethod": "Inquiry_SelectedDeleteAll",
-          "productionExecutionMode": "generatedArrayBinding", "sqlShape": "single-statement-array-binding-delete", "chunkPolicy": "effective-max-batch-and-parameters",
+          "productionExecutionMode": "generatedSingleStatementPredicate", "sqlShape": "json-table-keyset-delete", "chunkPolicy": "none-single-statement",
           "comparisons": [
             { "method": "Delete_ReusedPreparedCommand", "role": "directDriver", "capabilityId": null },
             { "method": "Delete_GeneratedChunkBinderControl", "role": "control", "capabilityId": null },

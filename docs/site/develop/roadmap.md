@@ -330,7 +330,7 @@ new or reframed issue.
 - **Write-side filter enforcement and PostgreSQL RLS helpers (#82 complete, 2026-08-02).** The last two
   of [#82](https://github.com/IgnyteSoftware/inquiry/issues/82)'s four acceptance criteria.
   `[InquiryGlobalFilter(EnforceOnWrites = true)]` AND-composes the filter's predicate onto key-based
-  update, delete, hard delete, restore, batch delete, and hard predicate delete, so a write aimed at a
+  update, delete, hard delete, restore, collection predicate delete, and hard predicate delete, so a write aimed at a
   row the filter hides affects zero rows. Inserts stay unfiltered and the column is never auto-stamped;
   upsert on such an entity is a build error (INQ095) because its insert branch cannot be filtered, and
   the diagnostic is fail-closed under suppression. Rows-affected 0 now conflates not-found,
@@ -465,7 +465,7 @@ new or reframed issue.
   `BulkInsertFallbackIntegrationTests` to the Oracle test project, verifying the multi-row batch
   insert (`INSERT ALL ... SELECT 1 FROM dual`) fallback path that the generator compiles
   `[InquiryBulkInsert]` to on dialects without a native bulk-copy API. Also added Northwind-based
-  `BatchIntegrationTests` (InsertAll, UpdateAll, DeleteAll over `Region`) to close the last
+  `BatchIntegrationTests` (InsertAll, UpdateAll, and collection predicate delete over `Region`) to close the last
   cross-provider test parity gap.
 
 - **Guard Oracle `:rc` ref-cursor finalize-once invariant (#136, 2026-07-09).** `FinalizeCommand` now
@@ -555,7 +555,7 @@ new or reframed issue.
   suite is cloned to `tests/Inquiry.MariaDb.Tests` against a Testcontainers `mariadb:11.4` image, and
   MariaDb joined the CI provider matrix. Unblocked #58, #169, and #170.
 - **Table-valued-parameter foundation for SQL Server (#69, 2026-07-09; hardened 2026-07-19).** SQL Server
-  IN collections (`Compare.In` predicates and `[InquiryDeleteAll]`) bind as table-valued parameters (TVPs)
+  IN collections (`Compare.In` predicates) bind as table-valued parameters (TVPs)
   instead of per-element sentinel expansion. The SQL stays constant across list lengths
   (`col IN (SELECT [Value] FROM @param)`) — one cached plan for all cardinalities, no per-element
   parameter cap, and no power-of-two bucketing overhead. The initial foundation shipped generated TVP
@@ -885,7 +885,7 @@ new or reframed issue.
   provider's analyzer assembly) warns with **INQ048** when a non-constant string reaches
   `InquiryCommand`'s command text — literals, consts, `nameof`, and constant concatenation stay
   silent; generated code is excluded. Documented in [Security](../articles/security.md).
-- **PostgreSQL array `IN` parameters (2026-06-12):** `Compare.In` predicates, `[InquiryDeleteAll]`,
+- **PostgreSQL array `IN` parameters (2026-06-12):** `Compare.In` predicates,
   and IN criteria on set-based mutations now render `col = ANY(@ids)` on PostgreSQL and bind the
   collection as one native array parameter (new `InquiryArrayParameter`; enum elements coerce to
   their underlying type, empty lists bind an empty array). The SQL stays constant across list
@@ -914,11 +914,11 @@ new or reframed issue.
   that are neither entities nor projections — closing the "I'd just use Dapper for this one query"
   escape. Property-less or non-constructible DTOs (e.g. positional records) are rejected at build
   time (new INQ045/INQ046). See [Ad-hoc DTOs](../articles/features/ad-hoc-dtos.md).
-- **Set-based predicate mutations (2026-06-12):** `[InquiryUpdateWhere(setFields…)]` and
-  `[InquiryDeleteWhere]` (with `HardDelete`) — UPDATE/DELETE by `[InquiryWhere]` predicate without
+- **Set-based predicate mutations (2026-06-12):** `[InquiryUpdate]` and `[InquiryDelete]` composed
+  with `[InquiryWhere]` (and `HardDelete` for deletes) — UPDATE/DELETE by predicate without
   loading entities, reusing the compile-time predicate model (IN expansion included). Soft-delete
   entities get the soft UPDATE form and compose the active-row filter; concurrency-token entities are
-  rejected (INQ022); at least one predicate is required (new INQ023) and SET fields are validated
+  rejected (INQ022); at least one predicate is required (new INQ023) and inferred SET columns are validated
   (new INQ044). See [Set-based mutations](../articles/features/set-based-mutations.md).
 - **Configuration binding (2026-06-12):** every provider gained
   `AddInquiry{Provider}(IConfiguration, connectionStringName = "Inquiry")` overloads (+ options

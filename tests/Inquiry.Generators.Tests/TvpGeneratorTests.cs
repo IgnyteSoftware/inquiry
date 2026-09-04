@@ -58,7 +58,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class TvpItemStore : Inquiry.Stores.InquiryStore<Demo.TvpItem>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Id", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IReadOnlyList<long> ids, CancellationToken cancellationToken = default);
             }
             """;
@@ -70,8 +70,8 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("TvpItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("[Id] IN (SELECT [Value] FROM @keys)", text);
-        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@keys\", _keys, \"{BigIntTvpTypeName}\", _inquiryTvpDescriptor_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc);", text);
+        Assert.Contains("[Id] IN (SELECT [Value] FROM @Id)", text);
+        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Id\", _args.Arg0, \"{BigIntTvpTypeName}\", _inquiryTvpDescriptor_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc);", text);
         Assert.DoesNotContain("InquiryInExpansion", text);
         Assert.DoesNotContain("InquiryArrayParameter", text);
     }
@@ -119,7 +119,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class TvpMutItemStore : Inquiry.Stores.InquiryStore<Demo.TvpMutItem>
             {
-                [InquiryDeleteWhere]
+                [InquiryDelete]
                 [InquiryWhere("Category", Compare.In)]
                 public partial Task<int> DeleteCategoriesAsync(IReadOnlyList<string> categories, CancellationToken cancellationToken = default);
             }
@@ -133,7 +133,7 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("[Category] IN (SELECT [Value] FROM @Category)", text);
-        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Category\", categories, \"{StringTvpTypeName}\", _inquiryTvpDescriptor_3dd8e5db30a8f837bbccaa41878576af742a2993aa5655c580e8a7ed2e31ea71);", text);
+        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Category\", _args.Arg0, \"{StringTvpTypeName}\", _inquiryTvpDescriptor_3dd8e5db30a8f837bbccaa41878576af742a2993aa5655c580e8a7ed2e31ea71);", text);
     }
 
     [Fact]

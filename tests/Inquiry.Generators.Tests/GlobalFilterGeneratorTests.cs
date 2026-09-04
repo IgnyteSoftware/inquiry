@@ -762,7 +762,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryCount]
             public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
 
-            [InquiryUpdateWhere("Title")]
+            [InquiryUpdate]
             [InquiryWhere("Id")]
             public partial Task<int> RetitleAsync(string title, long id, CancellationToken cancellationToken = default);
             """).Replace("public long TenantId { get; set; }", "public long TenantId { get; set; }\n\n    [InquiryColumn(\"Title\")]\n    public string Title { get; set; } = string.Empty;\n\n    [InquiryColumn(\"T2\"), InquiryGlobalFilter(ContextKey = \"T2\")]\n    public long T2 { get; set; }"));
