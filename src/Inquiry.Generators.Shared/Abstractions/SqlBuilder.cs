@@ -54,7 +54,7 @@ public abstract class SqlBuilder
         if (analysis.HasUserVariableAssignment) failures.Add("contains a side-effecting variable assignment");
         foreach (var token in analysis.ValueIdentifierTokens)
         {
-            if (!IsSetExpressionKeyword(token))
+            if (!SetExpressionKeywords.Contains(token))
             {
                 failures.Add("contains bare identifier '" + token + "'; use a {Field} placeholder for mapped columns");
             }
@@ -62,55 +62,15 @@ public abstract class SqlBuilder
         return failures;
     }
 
-    private static bool IsSetExpressionKeyword(string token)
-        => token.Equals("and", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("or", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("not", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("null", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("true", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("false", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("case", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("when", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("then", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("else", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("end", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("as", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("is", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("between", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("like", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("in", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("current_date", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("current_time", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("current_timestamp", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("date", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("time", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("timestamp", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("interval", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("year", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("month", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("day", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("hour", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("minute", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("second", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("from", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("int", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("integer", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("smallint", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("bigint", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("decimal", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("numeric", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("real", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("float", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("double", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("text", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("char", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("nchar", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("varchar", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("nvarchar", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("binary", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("varbinary", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("blob", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("boolean", StringComparison.OrdinalIgnoreCase);
+    private static readonly HashSet<string> SetExpressionKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "and", "or", "not", "null", "true", "false", "case", "when", "then", "else", "end",
+        "as", "is", "between", "like", "in", "current_date", "current_time", "current_timestamp",
+        "date", "time", "timestamp", "interval", "year", "month", "day", "hour", "minute", "second",
+        "from", "int", "integer", "smallint", "bigint", "decimal", "numeric", "real", "float", "double",
+        "text", "char", "nchar", "varchar", "nvarchar", "binary", "varbinary", "blob", "boolean",
+    };
+
     public virtual bool ComputedColumnDeclaresStoreType => false;
     public virtual bool RequiresBoundedComputedStrings => false;
     protected virtual bool DefaultExpressionPrecedesInlineConstraints => false;
