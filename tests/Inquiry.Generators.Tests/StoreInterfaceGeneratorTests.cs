@@ -50,7 +50,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryInsert]
             public partial Task<int> InsertAsync(Customer customer, CancellationToken cancellationToken = default);
 
-            [InquiryDeleteOneByKey]
+            [InquiryDelete]
             public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
         }
         """;

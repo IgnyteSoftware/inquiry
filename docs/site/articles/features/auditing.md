@@ -67,7 +67,7 @@ In ASP.NET Core apps, the `Ignyte.Inquiry.AspNetCore` package wraps this in read
 
 - A timestamp column must be `DateTime`/`DateTimeOffset`; a user column must be `string` (nullable allowed). Combining either with a key, `IsGenerated`, `UseDatabaseDefault`, `[InquirySoftDelete]`, or `[InquiryConcurrencyToken]` is a build-time error (`INQ049` for timestamps, `INQ055` for users). At most one of each per entity (`INQ050` / `INQ056`).
 - Timestamps are generated **client-side in UTC**; user values come from `InquiryAuditContext.CurrentUser` (null when no scope is open). For database-clock stamping use `[InquiryColumn(DefaultExpression = ...)]` instead.
-- **Set-based mutations (`[InquiryUpdateWhere]`) and soft-delete/restore do not touch auditing columns** — they update rows without materializing entities. Stamp explicitly (add the column to the SET fields) when that matters.
+- **Predicate updates (`[InquiryUpdate]` plus `[InquiryWhere]`) and soft-delete/restore do not touch auditing columns** — they update rows without materializing entities. Add an audit-column parameter explicitly when that matters.
 - For a full who/when/what change *history*, see the audit-trail interceptor on the roadmap.
 
 ## See also

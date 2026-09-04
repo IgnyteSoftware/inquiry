@@ -33,6 +33,6 @@ public partial class CustomerStore : InquiryStore<Customer>
     [InquiryUpsert(ReturnEntity = true)]
     public partial Task<Customer?> UpsertReturningAsync(Customer customer, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(string customerID, CancellationToken cancellationToken = default);
 }

@@ -15,6 +15,6 @@ public partial class CustomerCustomerDemoStore : InquiryStore<CustomerCustomerDe
     [InquiryInsert]
     public partial Task<int> InsertAsync(CustomerCustomerDemo entry, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(string customerID, string customerTypeID, CancellationToken cancellationToken = default);
 }

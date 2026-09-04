@@ -8,7 +8,7 @@ namespace Inquiry.Entities;
 /// </summary>
 /// <remarks>
 /// This is an orthogonal marker — the property still needs <c>[InquiryColumn]</c> (or
-/// <c>[InquiryKey]</c>). When present, generated <c>[InquiryDeleteOneByKey]</c> methods become a soft
+/// <c>[InquiryKey]</c>). When present, generated <c>[InquiryDelete]</c> and <c>[InquiryDeleteAll]</c> methods become a soft
 /// UPDATE (unless <c>HardDelete = true</c>), and every generated SELECT auto-appends the active filter
 /// (unless the select opts out with <c>IncludeDeleted = true</c>). The delete/restore timestamp is
 /// sourced from the database clock (<c>CURRENT_TIMESTAMP</c> / <c>GETUTCDATE()</c> / <c>now()</c>).

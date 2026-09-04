@@ -10,7 +10,7 @@ namespace Inquiry.Entities;
 /// per entity.
 /// </summary>
 /// <remarks>
-/// Set-based mutations (<c>[InquiryUpdateWhere]</c>) never touch auditing columns. Timestamps are
+/// Predicate updates (<c>[InquiryUpdate]</c> with <c>[InquiryWhere]</c>) never touch auditing columns. Timestamps are
 /// generated client-side in UTC.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]

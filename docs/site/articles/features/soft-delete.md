@@ -34,7 +34,7 @@ public partial class CustomerStore : InquiryStore<Customer>
     public partial Task<IReadOnlyList<Customer>> SelectByCompanyAsync(string companyName, CancellationToken ct = default);
 
     // Soft delete: emits UPDATE … SET IsDeleted = 1, not DELETE
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteAsync(string customerID, CancellationToken ct = default);
 
     // Opt-out: include soft-deleted rows in this select
@@ -42,7 +42,7 @@ public partial class CustomerStore : InquiryStore<Customer>
     public partial Task<IReadOnlyList<Customer>> SelectAllIncludingDeletedAsync(CancellationToken ct = default);
 
     // Opt-out: literal DELETE, bypassing the soft-delete column
-    [InquiryDeleteOneByKey(HardDelete = true)]
+    [InquiryDelete(HardDelete = true)]
     public partial Task<bool> HardDeleteAsync(string customerID, CancellationToken ct = default);
 }
 ```

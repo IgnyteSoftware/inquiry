@@ -44,6 +44,12 @@ internal sealed record StoreMethodData(
     ProcedureReturnKind ProcedureReturn,
     LocationData? Location)
 {
+    /// <summary>The defining partial declaration's XML documentation, including its member wrapper.</summary>
+    public string? DocumentationXml { get; init; }
+
+    /// <summary>The provider-specific database commands displayed with the generated implementation.</summary>
+    public EquatableArray<GeneratedCommandDocumentation> GeneratedCommands { get; init; } = EquatableArray<GeneratedCommandDocumentation>.Empty;
+
     /// <summary>
     /// Parsed ORDER BY terms (from <c>OrderBy = "…"</c> on a select attribute, or the keyset key fields),
     /// in significance order. Empty when no ordering was requested. Fields are resolved/quoted at emit.
@@ -94,8 +100,8 @@ internal sealed record StoreMethodData(
     public int LockMode { get; init; }
 
     /// <summary>
-    /// For <see cref="StoreOperation.DeleteOneByKey"/>, whether <c>HardDelete = true</c> was set so
-    /// a literal <c>DELETE</c> is emitted even when the entity declares a soft-delete column.
+    /// Whether <c>HardDelete = true</c> was set so a key, predicate, or table-wide delete emits a
+    /// literal <c>DELETE</c> even when the entity declares a soft-delete column.
     /// </summary>
     public bool HardDelete { get; init; }
 

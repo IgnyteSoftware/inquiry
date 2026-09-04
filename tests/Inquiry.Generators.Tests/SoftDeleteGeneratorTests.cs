@@ -6,7 +6,7 @@ namespace Inquiry.Generators.Tests;
 
 /// <summary>
 /// Soft-delete emission tests: every SELECT AND-composes the active-row filter (via the
-/// <c>AppendWhere</c> primitive), <c>[InquiryDeleteOneByKey]</c> becomes a soft UPDATE,
+/// <c>AppendWhere</c> primitive), <c>[InquiryDelete]</c> becomes a soft UPDATE,
 /// <c>HardDelete = true</c> keeps a literal DELETE, <c>IncludeDeleted = true</c> opts out, and
 /// <c>[InquiryRestoreOneByKey]</c> clears the indicator. Also verifies the filter composes with the
 /// predicate path and the paged path, the per-dialect literals (PG TRUE/FALSE, SqlServer
@@ -60,7 +60,7 @@ public sealed partial class InquiryGeneratorTests
         [InquirySelectAllByField("Name")]
         public partial Task<IReadOnlyList<Widget>> SelectByNameAsync(string name, CancellationToken cancellationToken = default);
 
-        [InquiryDeleteOneByKey]
+        [InquiryDelete]
         public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
 
         [InquiryRestoreOneByKey]
@@ -89,7 +89,7 @@ public sealed partial class InquiryGeneratorTests
     public void HardDeleteKeepsLiteralDeleteAlongsideSoftDefault_Sqlite()
     {
         var result = RunGenerator(WidgetStore("""
-            [InquiryDeleteOneByKey(HardDelete = true)]
+            [InquiryDelete(HardDelete = true)]
             public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
             """));
         AssertNoErrors(result);
@@ -259,7 +259,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquirySelectAll]
                 public partial Task<IReadOnlyList<Doc>> SelectAllAsync(CancellationToken cancellationToken = default);
 
-                [InquiryDeleteOneByKey]
+                [InquiryDelete]
                 public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
             }
             """;

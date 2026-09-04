@@ -27,6 +27,6 @@ public partial class TerritoryStore : InquiryStore<Territory>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Territory territory, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(string territoryID, CancellationToken cancellationToken = default);
 }

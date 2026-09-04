@@ -25,11 +25,11 @@ public partial class GadgetStore : InquiryStore<Gadget>
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
 
-    [InquiryDeleteAll]
+    [InquiryDelete, InquiryWhere("Id", Compare.In)]
     public partial Task<int> DeleteAllAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Batch delete end-to-end against SQL Server: DELETE ... WHERE Id IN (...) removes exactly the
+/// <summary>Collection predicate delete end-to-end against SQL Server: DELETE ... WHERE Id IN (...) removes exactly the
 /// listed rows; an empty collection is a no-op.</summary>
 [Collection(SqlServerCollection.Name)]
 public sealed class BatchDeleteIntegrationTests

@@ -21,6 +21,6 @@ public partial class EmployeeStore : InquiryStore<Employee>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Employee employee, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int? employeeID, CancellationToken cancellationToken = default);
 }

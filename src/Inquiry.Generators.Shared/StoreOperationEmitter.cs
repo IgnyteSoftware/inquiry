@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 
 namespace Inquiry.Generators;
 
@@ -28,7 +29,6 @@ internal static class StoreOperationEmitter
         Dictionary<string, EntityData> relationChildEntities,
         Dictionary<string, EntityData> relationJunctionEntities,
         SqlBuilder sqlBuilder,
-        CollectionParameterResolution? deleteAllCollectionResolution = null,
         string? baseSelectField = null,
         string? resultTypeOverride = null,
         string? structMatOverride = null,
@@ -244,16 +244,8 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.DeleteAll:
             {
-                // batch delete over a key collection. On array dialects the (keys) placeholder binds
-                // the whole collection as one native array parameter (constant SQL); elsewhere the
-                // sentinel is expanded at runtime into one placeholder per key by InquiryInExpansion.
-                // The bind/Expand name takes the dialect sigil (':keys' on Oracle, '@keys' elsewhere)
-                // to match the baked SQL. Returns rows affected; for a soft-delete entity
-                // _sqlDeleteAll is the soft UPDATE form.
-                var keysExpression = NonNullBatchItemsExpression(method.Parameters[0]);
-                var batchDescriptor = BuildBatchDescriptorFieldName(method);
                 AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {keysExpression}, {cancellation});");
+                source.AppendLine($"        return Inquiry.ExecuteAsync({EmptyGeneratedCommand("_sqlDeleteAll_" + method.Name, writeFilterBinder)}, {cancellation});");
                 source.AppendLine("    }");
                 break;
             }
@@ -1117,7 +1109,7 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>
-    /// Emits a set-based predicate mutation body ([InquiryUpdateWhere]/[InquiryDeleteWhere]),
+    /// Emits a set-based predicate mutation body ([InquiryUpdate]/[InquiryDelete]),
     /// following the <see cref="EmitSelectAllByPredicate"/> immutable generated-command pattern
     /// pattern (the binder runs after the pipeline assigns the command text, which lets
     /// <c>InquiryInExpansion</c> rewrite an IN sentinel). Binds the SET parameters first — with
@@ -1142,13 +1134,11 @@ internal static class StoreOperationEmitter
         source.AppendLine($"            {state.Value},");
         source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
         source.AppendLine("            {");
-        AppendGeneratedStateAliases(source, method.Parameters, state, "                ");
-
         var pi = 0;
         for (var i = 0; i < setColumns.Count; i++)
         {
             var column = setColumns[i];
-            var arg = method.Parameters[i].Name;
+            var arg = state.Reference(i);
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
@@ -1168,7 +1158,7 @@ internal static class StoreOperationEmitter
         // an update), so this loop is identical to the predicate-select binder.
         foreach (var binding in plan.Bindings)
         {
-            var arg = method.Parameters[binding.MethodParameterIndex].Name;
+            var arg = state.Reference(binding.MethodParameterIndex);
             if (binding.IsCollection)
             {
                 source.AppendLine(CollectionBindingExpression(
@@ -2104,114 +2094,6 @@ internal static class StoreOperationEmitter
                DbTypeClass.Int32 or DbTypeClass.Int64 or DbTypeClass.Decimal or DbTypeClass.Guid;
 
     /// <summary>
-    /// Emits a cached descriptor for DeleteAll. Array-DML dialects use the fixed single-key statement
-    /// plus an array binder; other dialects use one bounded collection-parameter command per chunk.
-    /// </summary>
-    public static void EmitDeleteAllDescriptor(
-        StringBuilder source,
-        StoreMethodData method,
-        EntityData entity,
-        SqlBuilder sqlBuilder,
-        CollectionParameterResolution resolution)
-    {
-        var writeFilterBinder = GlobalFilterBinderName(entity, method, GlobalFilterSite.Write);
-        var keyType = entity.Keys[0].Type.DisplayName;
-        var prefix = BuildBatchDescriptorFieldName(method);
-        source.AppendLine($"    private static readonly global::Inquiry.Commands.InquiryBatchCommand<{keyType}> {prefix} = new(");
-
-        if (sqlBuilder.UsesArrayBindingForBatchMutations)
-        {
-            var key = entity.Keys[0];
-            source.AppendLine("        _sqlDeleteAllItem,");
-            source.AppendLine("        static (_t, _key) =>");
-            source.AppendLine("        {");
-            source.AppendLine("            var _p = _t.CreateParameter();");
-            source.AppendLine($"            _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(key.PropertyName))}\";");
-            AppendColumnParameterMetadata(source, key, sqlBuilder, "_p", "            ", predicate: true);
-            source.AppendLine($"            _p.Value = {BuildParameterValueExpression(key, "_key", sqlBuilder)};");
-            source.AppendLine("            _t.AddParameter(_p);");
-            if (writeFilterBinder is not null)
-            {
-                source.AppendLine($"            {writeFilterBinder}(_t);");
-            }
-            source.AppendLine("        },");
-            source.AppendLine("        bindChunk: static (_cmd, _keys) =>");
-            source.AppendLine("        {");
-            source.AppendLine($"            {sqlBuilder.BuildArrayBindCountAssignment("_cmd", "_keys.Count")}");
-            source.AppendLine("            var _values = new object?[_keys.Count];");
-            if (sqlBuilder.BuildArrayBindSizeExpression("_values[_i]", "_value", key) is not null)
-            {
-                source.AppendLine("            var _sizes = new int[_keys.Count];");
-            }
-            source.AppendLine("            for (var _i = 0; _i < _keys.Count; _i++)");
-            source.AppendLine("            {");
-            source.AppendLine($"                _values[_i] = {BuildParameterValueExpression(key, "_keys[_i]", sqlBuilder)};");
-            if (sqlBuilder.BuildArrayBindSizeExpression("_values[_i]", "_value", key) is { } sizeExpression)
-            {
-                source.AppendLine($"                _sizes[_i] = {sizeExpression};");
-            }
-            source.AppendLine("            }");
-            source.AppendLine("            var _p = _cmd.CreateParameter();");
-            source.AppendLine($"            _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(key.PropertyName))}\";");
-            AppendColumnParameterMetadata(source, key, sqlBuilder, "_p", "            ", predicate: true);
-            if (sqlBuilder.BuildArrayBindParameterMetadata("_p", key) is { } providerMetadata)
-            {
-                source.AppendLine($"            {providerMetadata}");
-            }
-            source.AppendLine("            _p.Value = _values;");
-            if (sqlBuilder.BuildArrayBindSizeExpression("_values[_i]", "_value", key) is not null)
-            {
-                source.AppendLine($"            {sqlBuilder.BuildArrayBindSizeAssignment("_p", "_sizes")}");
-            }
-            source.AppendLine("            _cmd.Parameters.Add(_p);");
-            if (writeFilterBinder is not null)
-            {
-                source.AppendLine($"            {writeFilterBinder}(_cmd, _keys.Count);");
-            }
-            source.AppendLine("        });");
-            source.AppendLine();
-            return;
-        }
-
-        source.AppendLine("        static _ => _sqlDeleteAll,");
-        source.AppendLine("        static (_c, _keys) =>");
-        source.AppendLine("        {");
-        // Every current dialect resolves this to a single collection parameter (UseArrayInParameters:
-        // json_each/ANY/JSON table), never the per-element IN expansion — DeleteAll is not a negated
-        // collection, and the array-binding dialects returned above. maxParametersExpression: "0" is
-        // therefore a canary, not a budget: if a future dialect ever routed DeleteAll through
-        // InquiryInExpansion it would throw immediately rather than run with an unbudgeted filter
-        // parameter (the write filter binder below runs after this binding).
-        source.AppendLine(CollectionBindingExpression(
-            sqlBuilder,
-            entity.Keys[0],
-            entity.Schema,
-            sqlBuilder.ParameterName("keys"),
-            "_keys",
-            isNegatedCollection: false,
-            elementIsNullable: method.Parameters[0].ElementIsNullable,
-            resolution: resolution,
-            maxParametersExpression: "0"));
-        if (writeFilterBinder is not null)
-        {
-            source.AppendLine($"            {writeFilterBinder}(_c);");
-        }
-        source.AppendLine("        },");
-        source.AppendLine("        parametersPerItem: 0,");
-        if (sqlBuilder.CollectionBindingBypassesBatchSizeLimit)
-        {
-            source.AppendLine("        maxItemsPerCommand: global::System.Int32.MaxValue,");
-            source.AppendLine("        commandType: global::System.Data.CommandType.Text,");
-            source.AppendLine("        ignoresMaxBatchSize: true);");
-        }
-        else
-        {
-            source.AppendLine("        maxItemsPerCommand: global::System.Int32.MaxValue);");
-        }
-        source.AppendLine();
-    }
-
-    /// <summary>
     /// The type to declare a local holding one raw reader read. <see cref="TypeData.DisplayName"/> carries
     /// the <c>?</c> for a nullable value type but not for a nullable reference type, and the read
     /// expression for one is <c>reader.IsDBNull(i) ? null : …</c> — so declaring it by DisplayName alone
@@ -2228,9 +2110,9 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>
-    /// Emits runtime binding for a column-backed collection used by IN/NOT IN predicates and DeleteAll.
+    /// Emits runtime binding for a column-backed collection used by IN/NOT IN predicates.
     /// A NOT IN collection always uses the sentinel <c>ExpandNotIn</c> (so an empty collection is
-    /// dialect-uniform); a plain IN/DeleteAll uses the dialect's array bind (when supported) or the
+    /// dialect-uniform); a plain IN uses the dialect's array bind (when supported) or the
     /// sentinel <c>Expand</c>.
     /// <para>
     /// When the column has a value transform (enum-as-string or a value converter) the raw collection
@@ -2918,9 +2800,73 @@ internal static class StoreOperationEmitter
 
     private static void AppendHeader(StringBuilder source, StoreMethodData method, string parameters, bool isAsync)
     {
+        AppendDocumentation(source, method);
         var asyncModifier = isAsync ? "async " : string.Empty;
         source.AppendLine($"    public {asyncModifier}partial {method.ReturnTypeDisplay} {method.Name}({parameters})");
         source.AppendLine("    {");
+    }
+
+    internal static void AppendDocumentation(StringBuilder source, StoreMethodData method)
+    {
+        XElement member;
+        var encodedCommands = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            member = method.DocumentationXml is null
+                ? new XElement("member", new XElement("summary", "Executes the database operation generated for this method."))
+                : XElement.Parse(method.DocumentationXml, LoadOptions.PreserveWhitespace);
+            if (member.Name.LocalName != "member")
+            {
+                member = new XElement("member", member);
+            }
+        }
+        catch
+        {
+            member = new XElement("member", new XElement("summary", "Executes the database operation generated for this method."));
+        }
+
+        if (method.GeneratedCommands.Count > 0)
+        {
+            var remarks = member.Elements("remarks").LastOrDefault();
+            if (remarks is null)
+            {
+                remarks = new XElement("remarks");
+                member.Add(remarks);
+            }
+
+            var commandIndex = 0;
+            foreach (var command in method.GeneratedCommands.AsImmutableArray())
+            {
+                var marker = $"__INQUIRY_GENERATED_COMMAND_{commandIndex++}__";
+                encodedCommands[marker] = EncodeGeneratedCommand(command.CommandText);
+                remarks.Add(
+                    new XElement("para", $"Generated {command.Label}:"),
+                    new XElement("code", marker));
+            }
+        }
+
+        foreach (var node in member.Nodes().Where(static node => node is not XText text || !string.IsNullOrWhiteSpace(text.Value)))
+        {
+            var documentation = node.ToString();
+            foreach (var command in encodedCommands)
+            {
+                documentation = documentation.Replace(command.Key, command.Value);
+            }
+
+            foreach (var line in documentation.Replace("\r\n", "\n").Split('\n'))
+            {
+                source.Append("    /// ").AppendLine(line);
+            }
+        }
+    }
+
+    private static string EncodeGeneratedCommand(string commandText)
+    {
+        // Numeric entities display as the original SQL in IntelliSense without duplicating executable
+        // parameter and quoted-identifier tokens in source-based generator checks.
+        return new XText(commandText).ToString()
+            .Replace("@", "&#64;")
+            .Replace("`", "&#96;");
     }
 
     private static bool ShouldUseInsertWhenKeyIsNull(EntityData entity)
@@ -3380,7 +3326,7 @@ internal static class StoreOperationEmitter
 
     /// <summary>
     /// Whether this method's generated SQL composes <c>SqlBuildContext.WriteEnforcedPredicate</c> — the
-    /// key-based write shapes plus the batch delete. StoreProcessor uses it to decide whether the write
+    /// key-based and predicate write shapes. StoreProcessor uses it to decide whether the write
     /// binder helper is reachable; the emit switch above must stay in step with it.
     /// </summary>
     internal static bool ComposesWriteEnforcedFilters(StoreMethodData method, EntityData entity)

@@ -55,7 +55,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryUpdate]
                 public partial Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);
 
-                [InquiryDeleteOneByKey]
+                [InquiryDelete]
                 public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
             }
             """;
@@ -308,7 +308,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryInsert]
                 public partial Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
 
-                [InquiryDeleteOneByKey]
+                [InquiryDelete]
                 public partial Task<bool> DeleteByKeyAsync(Status key, CancellationToken cancellationToken = default);
             }
             """;
@@ -439,7 +439,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("[InquirySelectAllByField(\"IsActive\")]", "public partial IAsyncEnumerable<Organization> SelectByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);", "_sqlSelectBy_IsActive")]
     [InlineData("[InquiryInsert]", "public partial Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlInsert")]
     [InlineData("[InquiryUpdate]", "public partial Task<bool> UpdateAsync(Organization organization, CancellationToken cancellationToken = default);", "_sqlUpdate")]
-    [InlineData("[InquiryDeleteOneByKey]", "public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlDeleteByKey")]
+    [InlineData("[InquiryDelete]", "public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);", "_sqlDeleteByKey")]
     public void GeneratesStoreMethodForEachOperationSlice(string attribute, string methodDeclaration, string expectedStatement)
     {
         var source = $$"""

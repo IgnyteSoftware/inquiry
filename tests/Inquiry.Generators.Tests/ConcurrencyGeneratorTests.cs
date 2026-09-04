@@ -53,7 +53,7 @@ public sealed partial class InquiryGeneratorTests
         [InquiryUpdate]
         public partial Task<bool> UpdateAsync(Widget widget, CancellationToken cancellationToken = default);
 
-        [InquiryDeleteOneByKey]
+        [InquiryDelete]
         public partial Task<bool> DeleteAsync(Widget widget, CancellationToken cancellationToken = default);
         """;
 
@@ -145,7 +145,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryUpdate]
                 public partial Task<bool> UpdateAsync(Plain plain, CancellationToken cancellationToken = default);
 
-                [InquiryDeleteOneByKey]
+                [InquiryDelete]
                 public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
             }
             """;
@@ -423,7 +423,7 @@ public sealed partial class InquiryGeneratorTests
     public void BatchDeleteOnTokenEntityIsRejected()
     {
         var result = RunGenerator(TokenStore("""
-            [InquiryDeleteAll]
+            [InquiryDelete, InquiryWhere("Id", Compare.In)]
             public partial Task<int> DeleteAllAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
             """));
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ022");

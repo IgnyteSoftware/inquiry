@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Description>Aspire client integration for Inquiry resource-name registration, telemetry, and health checks.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\Inquiry.MariaDb\Inquiry.MariaDb.csproj" />
+    <ProjectReference Include="..\Inquiry.MySql\Inquiry.MySql.csproj" />
+    <ProjectReference Include="..\Inquiry.Oracle\Inquiry.Oracle.csproj" />
+    <ProjectReference Include="..\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
+    <ProjectReference Include="..\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
+    <ProjectReference Include="..\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" VersionOverride="10.0.11" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" VersionOverride="1.18.0" />
+  </ItemGroup>
+</Project>

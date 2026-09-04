@@ -24,6 +24,7 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory,
 
     private readonly MySqlDataSource _primaryDataSource;
     private readonly MySqlDataSource? _failoverDataSource;
+    private readonly bool _ownsDataSources;
 
     private readonly Func<CancellationToken, ValueTask<DbConnection>> _openPrimary;
 
@@ -65,6 +66,7 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory,
         _failoverDataSource = failoverConnectionString is { } fcs
             ? new MySqlDataSourceBuilder(fcs).Build()
             : null;
+        _ownsDataSources = true;
         _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
 
         if (options.Compatibility != MySqlCompatibility.None)
@@ -75,6 +77,17 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory,
                 options.RetryBaseDelay,
                 maxDelay: options.RetryMaxDelay);
         }
+    }
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="MySqlInquiryConnectionFactory"/> that opens
+    /// connections from an externally owned data source.
+    /// </summary>
+    public MySqlInquiryConnectionFactory(MySqlDataSource dataSource)
+    {
+        _primaryDataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+        _connectionString = dataSource.ConnectionString;
+        _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
     }
 
     private static string WithUserVariables(string connectionString)
@@ -143,6 +156,11 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory,
     /// <summary>Disposes the underlying data source(s), draining their connection pools.</summary>
     public async ValueTask DisposeAsync()
     {
+        if (!_ownsDataSources)
+        {
+            return;
+        }
+
         await _primaryDataSource.DisposeAsync().ConfigureAwait(false);
         if (_failoverDataSource is not null)
         {
@@ -153,6 +171,11 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory,
     /// <summary>Disposes the underlying data source(s), draining their connection pools.</summary>
     public void Dispose()
     {
+        if (!_ownsDataSources)
+        {
+            return;
+        }
+
         _primaryDataSource.Dispose();
         _failoverDataSource?.Dispose();
     }

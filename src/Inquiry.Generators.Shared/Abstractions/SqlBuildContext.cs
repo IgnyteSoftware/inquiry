@@ -113,9 +113,10 @@ public sealed class SqlBuildContext
             var quoted = builder.QuoteIdentifier(softDeleteColumn.ColumnName);
             if (softDeleteColumn.SoftDelete == SoftDeleteKind.BooleanFlag)
             {
+                SoftDeletePredicate = quoted + " = " + builder.BooleanFalseLiteral;
                 if (!suppressSoftDelete)
                 {
-                    activeRowPredicates.Add(quoted + " = " + builder.BooleanFalseLiteral);
+                    activeRowPredicates.Add(SoftDeletePredicate);
                     qualifiedActiveRowPredicates.Add(Table + "." + quoted + " = " + builder.BooleanFalseLiteral);
                 }
                 SoftDeleteSetClause = quoted + " = " + builder.BooleanTrueLiteral;
@@ -123,9 +124,10 @@ public sealed class SqlBuildContext
             }
             else
             {
+                SoftDeletePredicate = quoted + " IS NULL";
                 if (!suppressSoftDelete)
                 {
-                    activeRowPredicates.Add(quoted + " IS NULL");
+                    activeRowPredicates.Add(SoftDeletePredicate);
                     qualifiedActiveRowPredicates.Add(Table + "." + quoted + " IS NULL");
                 }
                 var timestampExpr = softDeleteColumn.TypeClass == DbTypeClass.DateTimeOffset
@@ -302,6 +304,9 @@ public sealed class SqlBuildContext
     /// (e.g. many-to-many JOINs) where an unqualified column name would be ambiguous.
     /// </summary>
     public string QualifiedActiveRowPredicate { get; } = string.Empty;
+
+    /// <summary>The predicate that identifies an active soft-delete row. Empty when the entity has no soft-delete column.</summary>
+    public string SoftDeletePredicate { get; } = string.Empty;
 
 
     /// <summary>

@@ -63,7 +63,7 @@ internal sealed record ColumnData : IColumn
 
     /// <summary>
     /// InquiryGlobalFilter.EnforceOnWrites. When true the filter's term is AND-composed onto key-based
-    /// writes (update/delete/restore/batch delete) as well as reads.
+    /// writes (update/delete/restore) as well as reads.
     /// </summary>
     public bool GlobalFilterEnforceOnWrites { get; init; }
 

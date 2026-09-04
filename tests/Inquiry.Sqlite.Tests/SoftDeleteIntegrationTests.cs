@@ -51,10 +51,10 @@ public partial class SoftDeleteWidgetStore : InquiryStore<SoftDeleteWidget>
     [InquirySelectOneByKey]
     public partial Task<SoftDeleteWidget?> ByIdAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> SoftDeleteAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey(HardDelete = true)]
+    [InquiryDelete(HardDelete = true)]
     public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
 
     [InquiryRestoreOneByKey]

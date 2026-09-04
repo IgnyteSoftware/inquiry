@@ -11,7 +11,7 @@ namespace Inquiry.Entities;
 /// entity, so the caller observes the stamped value. At most one per entity.
 /// </summary>
 /// <remarks>
-/// Set-based mutations (<c>[InquiryUpdateWhere]</c>) never touch auditing columns. Timestamps are
+/// Predicate updates (<c>[InquiryUpdate]</c> with <c>[InquiryWhere]</c>) never touch auditing columns. Timestamps are
 /// generated client-side in UTC; for database-clock stamping use
 /// <c>[InquiryColumn(DefaultExpression = …)]</c> instead.
 /// </remarks>

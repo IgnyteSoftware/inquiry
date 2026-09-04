@@ -23,6 +23,7 @@ Inquiry is an experimental **.NET 8+** source-generated micro-ORM. You write att
 | `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,MariaDb,Oracle}.Analyzer` | Per-dialect Roslyn analyzers — each a `[Generator]` that bundles the shared framework and emits only when its dialect matches the resolved `[InquiryDialect]`. |
 | `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,MariaDb,Oracle}` | Per-dialect runtime providers: `AddInquiry<Dialect>(...)` DI extension, provider options, internal connection factory, and the `[assembly: InquiryDialect("...")]` marker. |
 | `src/Inquiry.AspNetCore` | ASP.NET Core audit-context middleware that stamps `CreatedBy`/`ModifiedBy` from the current user identity. |
+| `src/Inquiry.Aspire` | Aspire resource-name registration with automatic Inquiry telemetry and health checks. |
 | `src/Inquiry.Interceptors` | Opt-in companion: slow-query warning logging, sqlcommenter trace-context tagging, and N+1 query detection. |
 | `src/Inquiry.Testing` | Test helpers: SQLite fixture, recording command interceptor, entity factory, transaction sandbox, and Respawn reset wrapper. |
 | `tests/…` | Core runtime tests, source-generator tests, the shared `Inquiry.IntegrationTesting` and `Inquiry.FeatureCatalog` support libraries, and per-dialect end-to-end suites (SQLite in-process; the rest via Testcontainers). |
@@ -98,6 +99,7 @@ Packages ship on nuget.org under the `Ignyte.` prefix (assemblies and namespaces
 
 ```powershell
 dotnet add package Ignyte.Inquiry.Sqlite      # or .SqlServer / .PostgreSql / .MySql / .MariaDb / .Oracle
+dotnet add package Ignyte.Inquiry.Aspire      # optional Aspire client integration
 dotnet add package Ignyte.Inquiry.Testing     # optional test helpers
 ```
 

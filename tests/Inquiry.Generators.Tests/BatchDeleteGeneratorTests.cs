@@ -3,14 +3,13 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// Batch-delete emission: <c>[InquiryDeleteAll]</c> emits a <c>DELETE … WHERE key IN (@keys)</c>
-/// const plus a binder that expands the key collection via <c>InquiryInExpansion</c>; a soft-delete
-/// entity instead emits the soft-delete UPDATE form.
+/// Delete emission covers explicit table-wide deletion and collection predicates composed from
+/// <c>[InquiryDelete]</c> with <c>[InquiryWhere]</c>.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
     [Fact]
-    public void DeleteAllEmitsKeyInClauseAndJsonArrayBinder()
+    public void DeleteAllEmitsExplicitTableWideDelete()
     {
         const string source = """
             using System.Collections.Generic;
@@ -35,7 +34,7 @@ public sealed partial class InquiryGeneratorTests
             public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
             {
                 [InquiryDeleteAll]
-                public partial Task<int> DeleteAllAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
+                public partial Task<int> DeleteAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 
@@ -44,17 +43,12 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM \\\"TThing\\\" WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@keys))\";", text);
-        Assert.Contains("private static readonly global::Inquiry.Commands.InquiryBatchCommand<", text);
-        Assert.Contains("_batch_DeleteAllAsync_", text);
-        Assert.Contains("static _ => _sqlDeleteAll,", text);
-        Assert.Contains("static (_c, _keys) =>", text);
-        Assert.Contains("parametersPerItem: 0,", text);
-        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@keys\", _keys);", text);
-        Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_DeleteAllAsync_", text);
+        Assert.Contains("private const string _sqlDeleteAll_DeleteAllAsync = \"DELETE FROM \\\"TThing\\\"\";", text);
+        Assert.Contains("return Inquiry.ExecuteAsync(new global::Inquiry.Commands.InquiryGeneratedCommand<byte>(_sqlDeleteAll_DeleteAllAsync", text);
+        Assert.DoesNotContain("InquiryBatchCommand", text);
     }
 
-    // #69: SQL Server now uses TVPs for batch deletes — the SQL is constant and no per-element expansion is
+    // #69: SQL Server uses TVPs for collection predicates — the SQL is constant and no per-element expansion is
     // needed, so the declared-length Size threading (#112) is superseded by the TVP binder.
     [Fact]
     public void DeleteAllOnSqlServerUsesTvpBinderNotExpansion()
@@ -77,7 +71,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Code", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IEnumerable<string> codes, CancellationToken cancellationToken = default);
             }
             """;
@@ -87,8 +81,8 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("[Code] IN (SELECT [Value] FROM @keys)", text);
-        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@keys\", _keys, \"[dbo].[Inquiry_Tvp_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f]\", _inquiryTvpDescriptor_f2eaaa262a5392ae45922f38ea30b9ed4c414a6e6c502340e41458a5e1eded0f);", text);
+        Assert.Contains("[Code] IN (SELECT [Value] FROM @Code)", text);
+        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Code\", _args.Arg0", text);
         Assert.DoesNotContain("InquiryInExpansion", text);
     }
 
@@ -116,7 +110,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Id", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IEnumerable<long?>? ids, CancellationToken cancellationToken = default);
             }
             """;
@@ -127,8 +121,7 @@ public sealed partial class InquiryGeneratorTests
         var text = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
-        Assert.Contains("((global::System.Collections.Generic.IEnumerable<long?>?)ids) ?? global::System.Array.Empty<long?>()", text);
-        Assert.DoesNotContain("Enumerable.ToList", text);
+        Assert.Contains("_sqlDeleteWhere_DeleteAllAsync", text);
         if (dialect == "SqlServer")
         {
             Assert.Contains("?? throw new global::System.InvalidOperationException(\"SQL Server TVP descriptor resolution returned null.\")", text);
@@ -136,7 +129,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void OracleDeleteAllUsesSingleKeySqlWithArrayBinding()
+    public void OracleDeleteWithInPredicateUsesJsonTableBinding()
     {
         const string source = """
             using System.Collections.Generic;
@@ -160,7 +153,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Id", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
             }
             """;
@@ -170,19 +163,13 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // The JSON_TABLE constant remains available for query/transport consistency, but Oracle's
-        // production batch path uses its faster native DML array binding over the fixed key statement.
-        Assert.Contains("private const string _sqlDeleteAll = \"DELETE FROM TThing WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:iq1$keysxx$d6859d157d8d31, '$[*]' COLUMNS(val NUMBER(19) PATH '$')) jt)\";", text);
-        Assert.Contains("private const string _sqlDeleteAllItem = \"DELETE FROM TThing WHERE Id = :iq1$Idxxxx$30d4cf864d6e68\";", text);
-        Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleCommand)_cmd).ArrayBindCount = _keys.Count;", text);
-        Assert.Contains("_p.ParameterName = \"iq1$Idxxxx$30d4cf864d6e68\";", text);
-        Assert.Contains("_p.Value = _values;", text);
-        Assert.DoesNotContain("ArrayBindSize", text);
-        Assert.DoesNotContain("InquiryJsonArrayParameter.Bind(_c, \":iq1$keysxx$d6859d157d8d31\", ids);", text);
+        Assert.Contains("private const string _sqlDeleteWhere_DeleteAllAsync = \"DELETE FROM TThing WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:iq1$Idxxxx$30d4cf864d6e68, '$[*]' COLUMNS(val NUMBER(19) PATH '$')) jt)\";", text);
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Idxxxx$30d4cf864d6e68\", _args.Arg0);", text);
+        Assert.DoesNotContain("ArrayBindCount", text);
     }
 
     [Fact]
-    public void OracleStringDeleteAllEmitsPerElementArrayBindSizes()
+    public void OracleStringDeleteWithInPredicateUsesJsonTableBinding()
     {
         const string source = """
             using System.Collections.Generic;
@@ -201,7 +188,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Code", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IEnumerable<string> codes, CancellationToken ct = default);
             }
             """;
@@ -211,9 +198,9 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("var _sizes = new int[_keys.Count];", text);
-        Assert.Contains("_sizes[_i] = _values[_i] is string _value ? _value.Length : 0;", text);
-        Assert.Contains("((global::Oracle.ManagedDataAccess.Client.OracleParameter)_p).ArrayBindSize = _sizes;", text);
+        Assert.Contains("WHERE Code IN (SELECT jt.val FROM JSON_TABLE(:iq1$Codexx$", text);
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Codexx$", text);
+        Assert.DoesNotContain("ArrayBindSize", text);
     }
 
     [Fact]
@@ -238,12 +225,18 @@ public sealed partial class InquiryGeneratorTests
 
                 [InquiryColumn("IsDeleted"), InquirySoftDelete]
                 public bool IsDeleted { get; set; }
+
+                [InquiryColumn("TenantId"), InquiryGlobalFilter(ContextKey = "TenantId")]
+                public long TenantId { get; set; }
             }
 
             public partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>
             {
                 [InquiryDeleteAll]
-                public partial Task<int> DeleteAllAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
+                public partial Task<int> DeleteAllAsync(CancellationToken cancellationToken = default);
+
+                [InquiryDeleteAll(HardDelete = true)]
+                public partial Task<int> PurgeAllAsync(CancellationToken cancellationToken = default);
             }
             """;
 
@@ -252,7 +245,9 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("_sqlDeleteAll = \"UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"Id\\\" IN (SELECT value FROM json_each(@keys))\";", text);
+        Assert.Contains("_sqlDeleteAll_DeleteAllAsync = \"UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"IsDeleted\\\" = 0\";", text);
+        Assert.Contains("_sqlDeleteAll_PurgeAllAsync = \"DELETE FROM \\\"TDoc\\\"\";", text);
+        Assert.DoesNotContain("__BindGlobalFiltersWrite", text);
     }
 
     [Theory]
@@ -278,7 +273,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryDeleteAll]
+                [InquiryDelete, InquiryWhere("Id", Compare.In)]
                 public partial Task<int> DeleteAllAsync(IEnumerable<long> {{parameterName}}, CancellationToken ct = default);
             }
             """;
@@ -288,8 +283,8 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \"@keys\", _keys);", text);
-        Assert.DoesNotContain("var _keys = _keys;", text);
-        Assert.DoesNotContain("var _c = _keys;", text);
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \"@Id\", _args.Arg0);", text);
+        Assert.DoesNotContain("var _keys =", text);
+        Assert.DoesNotContain("var _c =", text);
     }
 }

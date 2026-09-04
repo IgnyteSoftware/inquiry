@@ -24,11 +24,11 @@ public partial class RegionStore : InquiryStore<Region>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Region region, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int regionID, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteAll]
-    public partial Task<int> DeleteAllAsync(IEnumerable<int> regionIDs, CancellationToken cancellationToken = default);
+    [InquiryDelete, InquiryWhere(nameof(Region.RegionID), Compare.In)]
+    public partial Task<int> DeleteByKeysAsync(IEnumerable<int> regionIDs, CancellationToken cancellationToken = default);
 
     // Batch insert/update over a region collection.
     [InquiryInsertAll]

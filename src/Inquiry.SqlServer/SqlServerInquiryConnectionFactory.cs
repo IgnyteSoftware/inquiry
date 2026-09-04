@@ -9,6 +9,7 @@ namespace Inquiry.SqlServer;
 /// </summary>
 internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFactory
 {
+    private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;
     private readonly SqlServerInquiryOptions _options;
@@ -25,6 +26,18 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
     public SqlServerInquiryConnectionFactory(string connectionString)
         : this(connectionString, new SqlServerInquiryOptions())
     {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="SqlServerInquiryConnectionFactory"/> that opens
+    /// connections from an externally owned data source.
+    /// </summary>
+    public SqlServerInquiryConnectionFactory(DbDataSource dataSource)
+    {
+        _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+        _connectionString = dataSource.ConnectionString;
+        _options = new SqlServerInquiryOptions();
+        _openPrimary = dataSource.OpenConnectionAsync;
     }
 
     /// <summary>
@@ -58,6 +71,11 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
     /// <inheritdoc />
     public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
+        if (_dataSource is not null)
+        {
+            return _dataSource.OpenConnectionAsync(cancellationToken);
+        }
+
         if (_failoverConnectionString is { } failover)
         {
             return FailoverConnectionOpener.OpenAsync(OpenCoreAsync, _connectionString, failover, _retryingOpener, cancellationToken);

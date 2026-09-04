@@ -56,7 +56,7 @@ public sealed class InquiryOptions
 
     /// <summary>
     /// Gets or sets the maximum number of parameters Inquiry will bind into one generated command.
-    /// This bounds <c>Compare.In</c>, batch delete, batch insert, and batch update expansion before a
+    /// This bounds <c>Compare.In</c>, batch insert, and batch update expansion before a
     /// provider-specific parameter cap is hit. Defaults to <see cref="DefaultMaxParametersPerCommand"/>.
     /// </summary>
     public int MaxParametersPerCommand

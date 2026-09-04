@@ -30,10 +30,10 @@ public sealed partial class InquiryGeneratorTests
             [InquiryExists, InquiryWhere("U64", Compare.In)] public partial Task<bool> U64In(IReadOnlyList<ulong> values, CancellationToken ct = default);
             [InquiryExists, InquiryWhere("Converted", Compare.In)] public partial Task<bool> ConvertedIn(IReadOnlyList<Strong> values, CancellationToken ct = default);
             [InquiryExists, InquiryWhere("Converted", Compare.NotIn)] public partial Task<bool> ConvertedNotIn(IReadOnlyList<Strong> values, CancellationToken ct = default);
-            [InquiryUpdateWhere("U32"), InquiryWhere("Converted", Compare.In)] public partial Task<int> UpdateConverted(uint u32, IReadOnlyList<Strong> values, CancellationToken ct = default);
+            [InquiryUpdate, InquiryWhere("Converted", Compare.In)] public partial Task<int> UpdateConverted(uint u32, IReadOnlyList<Strong> values, CancellationToken ct = default);
             [InquiryExists, InquiryWhere("State", Compare.In)] public partial Task<bool> EnumIn(IReadOnlyList<UnsignedState> values, CancellationToken ct = default);
             [InquiryExists, InquiryWhere("U32", Compare.NotIn)] public partial Task<bool> U32NotIn(IReadOnlyList<uint> values, CancellationToken ct = default);
-            [InquiryDeleteAll] public partial Task<int> DeleteAll(IReadOnlyList<uint> values, CancellationToken ct = default);
+            [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAll(IReadOnlyList<uint> values, CancellationToken ct = default);
         }
         """;
 
@@ -85,12 +85,12 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void NullablePredicateElementsOutsideTheSupportedModelContractReportDiagnostic()
+    public void NullablePredicateElementsAreAcceptedForNonNullableColumns()
     {
         var source = UnsignedCollectionSource.Replace(
             "[InquiryExists, InquiryWhere(\"U32\", Compare.In)] public partial Task<bool> U32In(IReadOnlyList<uint> values, CancellationToken ct = default);",
             "[InquiryExists, InquiryWhere(\"U32\", Compare.In)] public partial Task<bool> U32In(IReadOnlyList<uint?> values, CancellationToken ct = default);");
         var result = RunGenerator(source, dialect: "PostgreSql");
-        Assert.Contains(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ018");
+        AssertNoErrors(result);
     }
 }

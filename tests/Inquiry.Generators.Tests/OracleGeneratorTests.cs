@@ -86,7 +86,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryUpdate]
                 public partial Task<bool> UpdateAsync(Organization o, CancellationToken cancellationToken = default);
 
-                [InquiryDeleteOneByKey]
+                [InquiryDelete]
                 public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
                 [InquiryUpsert]
@@ -488,7 +488,7 @@ public sealed partial class InquiryGeneratorTests
         // set-based `INSERT ALL INTO t (cols) VALUES (...) ... SELECT 1 FROM dual` form (a single INSERT
         // statement, so ExecuteNonQuery returns the inserted-row count) with ':'-sigil parameters.
         // UpdateAll now routes through the runtime batch API (one single-row UPDATE per item), so Oracle
-        // generates a working body too — no INQ039, no throwing stub. Batch DELETE (IN-expansion) works.
+        // generates a working body too — no INQ039, no throwing stub. Collection predicate DELETE works.
         var result = RunGenerator(BatchStoreSource, dialect: "Oracle");
 
         var inq039 = result.RunResult.Diagnostics.Concat(result.GeneratorDiagnostics)
@@ -509,11 +509,12 @@ public sealed partial class InquiryGeneratorTests
         // UpdateAll executes the single-row UPDATE per item via the batch API; no stub, no template const.
         Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_InsertAllAsync_", text);
         Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_UpdateAllAsync_", text);
-        Assert.Contains("return Inquiry.ExecuteBatchAsync(_batch_DeleteAllAsync_", text);
+        Assert.Contains("_sqlDeleteWhere_DeleteAllAsync", text);
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Region$", text);
         Assert.Contains("_sqlUpdate,", text);
         Assert.DoesNotContain("throw new global::System.NotSupportedException(", text);
         Assert.DoesNotContain("_sqlUpdateAllRow", text);
-        Assert.Contains("_sqlDeleteAllItem", text);
+        Assert.DoesNotContain("_sqlDeleteAllItem", text);
     }
 
     [Fact]
@@ -540,7 +541,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("throw new global::System.NotSupportedException(", text);
     }
 
-    // A client-keyed entity with all three batch operations (InsertAll/UpdateAll/DeleteAll).
+    // A client-keyed entity with batch insert/update and a collection predicate delete.
     private const string BatchStoreSource = """
         using System;
         using System.Collections.Generic;
@@ -570,7 +571,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryUpdateAll]
             public partial Task<int> UpdateAllAsync(IEnumerable<Region> regions, CancellationToken cancellationToken = default);
 
-            [InquiryDeleteAll]
+            [InquiryDelete, InquiryWhere("RegionId", Compare.In)]
             public partial Task<int> DeleteAllAsync(IEnumerable<int> regionIds, CancellationToken cancellationToken = default);
         }
         """;

@@ -54,7 +54,7 @@ public sealed class InquiryGlobalFilterAttribute : Attribute
 
     /// <summary>
     /// Extends this filter from reads to key-based WRITES: the generated update, delete, hard-delete,
-    /// restore, and batch-delete statements AND-compose the same predicate onto their key WHERE, so a
+    /// restore, predicate-delete, and table-wide-delete statements AND-compose the same predicate, so a
     /// write aimed at a row the filter hides affects zero rows instead of succeeding. Default
     /// <c>false</c> — every existing store keeps byte-identical write SQL until it opts in.
     /// </summary>

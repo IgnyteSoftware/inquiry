@@ -25,6 +25,20 @@ public sealed class OracleProviderIntegrationTests
     }
 
     [Fact]
+    public async Task DataSourceOverloadUsesSuppliedDataSource()
+    {
+        await using var dataSource = new RecordingDbDataSource();
+        await using var serviceProvider = new ServiceCollection()
+            .AddInquiryOracle(dataSource)
+            .BuildServiceProvider();
+
+        var factory = serviceProvider.GetRequiredService<IInquiryConnectionFactory>();
+        await using var connection = await factory.OpenConnectionAsync();
+
+        Assert.True(dataSource.Opened);
+    }
+
+    [Fact]
     public void GeneratedInsertAllChunkBinderSetsOracleArrayMetadataAndValues()
     {
         var descriptorField = typeof(ProviderReadAllTypesStore)

@@ -23,7 +23,7 @@ public partial class TvpLifetimeStore : InquiryStore<TvpLifetimeItem>
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
 
-    [InquiryDeleteAll]
+    [InquiryDelete, InquiryWhere("Id", Compare.In)]
     public partial Task<int> DeleteAllAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByPredicate, InquiryWhere("Id", Compare.In)]

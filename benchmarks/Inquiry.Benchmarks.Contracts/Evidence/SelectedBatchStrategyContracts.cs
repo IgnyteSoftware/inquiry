@@ -100,22 +100,22 @@ public static class SelectedBatchStrategyValidator
         {
             { ("sqlite", BatchMutationOperation.Insert), new("Insert", "Inquiry_SelectedInsertAll", "generatedReusedRowPreferPrepareOnce", "single-row-insert", "configured-max-batch-size") },
             { ("sqlite", BatchMutationOperation.Update), new("Update", "Inquiry_SelectedUpdateAll", "generatedReusedCommand", "single-row-update", "effective-max-batch-and-parameters") },
-            { ("sqlite", BatchMutationOperation.Delete), new("Delete", "Inquiry_SelectedDeleteAll", "generatedChunkBound", "json-each-keyset-delete", "effective-max-batch-and-parameters") },
+            { ("sqlite", BatchMutationOperation.Delete), new("Delete", "Inquiry_SelectedDeleteAll", "generatedSingleStatementPredicate", "json-each-keyset-delete", "none-single-statement") },
             { ("sqlserver", BatchMutationOperation.Insert), new("Insert", "Inquiry_SelectedInsertAll", "generatedAdaptiveSetBasedBelow250DbBatchAtOrAbove250WithReusedFallback", "multi-row-values-when-below-250-and-within-parameter-limit-otherwise-single-row-insert", "configured-max-batch-size-capped-at-1000-with-independent-set-based-parameter-limit") },
             { ("sqlserver", BatchMutationOperation.Update), new("Update", "Inquiry_SelectedUpdateAll", "generatedDbBatch", "single-row-update-db-batch", "effective-max-batch-and-parameters") },
-            { ("sqlserver", BatchMutationOperation.Delete), new("Delete", "Inquiry_SelectedDeleteAll", "generatedChunkBound", "tvp-keyset-delete", "effective-max-batch-and-parameters") },
+            { ("sqlserver", BatchMutationOperation.Delete), new("Delete", "Inquiry_SelectedDeleteAll", "generatedSingleStatementPredicate", "tvp-keyset-delete", "none-single-statement") },
             { ("postgresql", BatchMutationOperation.Insert), new("Insert", "Inquiry_SelectedInsertAll", "generatedChunkBound", "multi-row-values", "effective-max-batch-and-parameters") },
             { ("postgresql", BatchMutationOperation.Update), new("Update", "Inquiry_SelectedUpdateAll", "generatedDbBatch", "single-row-update-db-batch", "effective-max-batch-and-parameters") },
-            { ("postgresql", BatchMutationOperation.Delete), new("Delete", "Inquiry_SelectedDeleteAll", "generatedChunkBound", "any-array-keyset-delete", "effective-max-batch-and-parameters") },
+            { ("postgresql", BatchMutationOperation.Delete), new("Delete", "Inquiry_SelectedDeleteAll", "generatedSingleStatementPredicate", "any-array-keyset-delete", "none-single-statement") },
             { ("mysql", BatchMutationOperation.Insert), new("BatchInsert", "Inquiry_SelectedInsertAll", "generatedChunkBound", "multi-row-values", "effective-max-batch-and-parameters") },
             { ("mysql", BatchMutationOperation.Update), new("BatchUpdate", "Inquiry_SelectedUpdateAll", "generatedSelectableHybrid", "derived-table-join-with-db-batch-single-row-tail", "effective-max-batch-and-parameters") },
-            { ("mysql", BatchMutationOperation.Delete), new("BatchDelete", "Inquiry_SelectedDeleteAll", "generatedChunkBound", "json-table-keyset-delete", "effective-max-batch-and-parameters") },
+            { ("mysql", BatchMutationOperation.Delete), new("BatchDelete", "Inquiry_SelectedDeleteAll", "generatedSingleStatementPredicate", "json-table-keyset-delete", "none-single-statement") },
             { ("mariadb", BatchMutationOperation.Insert), new("BatchInsert", "Inquiry_SelectedInsertAll", "generatedChunkBound", "multi-row-values", "effective-max-batch-and-parameters") },
             { ("mariadb", BatchMutationOperation.Update), new("BatchUpdate", "Inquiry_SelectedUpdateAll", "generatedSelectableHybrid", "derived-table-join-with-db-batch-single-row-tail", "effective-max-batch-and-parameters") },
-            { ("mariadb", BatchMutationOperation.Delete), new("BatchDelete", "Inquiry_SelectedDeleteAll", "generatedChunkBound", "json-table-keyset-delete", "effective-max-batch-and-parameters") },
+            { ("mariadb", BatchMutationOperation.Delete), new("BatchDelete", "Inquiry_SelectedDeleteAll", "generatedSingleStatementPredicate", "json-table-keyset-delete", "none-single-statement") },
             { ("oracle", BatchMutationOperation.Insert), new("BatchInsert", "Inquiry_SelectedInsertAll", "generatedArrayBinding", "single-statement-array-binding-insert", "effective-max-batch-and-parameters") },
             { ("oracle", BatchMutationOperation.Update), new("BatchUpdate", "Inquiry_SelectedUpdateAll", "generatedArrayBinding", "single-statement-array-binding-update", "effective-max-batch-and-parameters") },
-            { ("oracle", BatchMutationOperation.Delete), new("BatchDelete", "Inquiry_SelectedDeleteAll", "generatedArrayBinding", "single-statement-array-binding-delete", "effective-max-batch-and-parameters") },
+            { ("oracle", BatchMutationOperation.Delete), new("BatchDelete", "Inquiry_SelectedDeleteAll", "generatedSingleStatementPredicate", "json-table-keyset-delete", "none-single-statement") },
         };
 
     private static readonly IReadOnlyDictionary<string, ComparisonMethodRole> CheckedComparisonRoles =

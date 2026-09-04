@@ -1,6 +1,6 @@
 # Batch operations
 
-`[InquiryInsertAll]`, `[InquiryUpdateAll]`, and `[InquiryDeleteAll]` treat a collection as one
+`[InquiryInsertAll]` and `[InquiryUpdateAll]` treat a collection as one
 **logical batch operation**. That does not mean every provider uses one SQL statement or one network
 round trip. Inquiry selects a bounded execution shape for the provider and operation: a set-based
 statement, `DbBatch`, a reused row command, or native array binding.
@@ -16,14 +16,17 @@ public partial class ShipperStore : InquiryStore<Shipper>
     [InquiryUpdateAll]
     public partial Task<int> UpdateAllAsync(IReadOnlyList<Shipper> shippers, CancellationToken ct = default);
 
-    [InquiryDeleteAll]
-    public partial Task<int> DeleteAllByKeyAsync(IReadOnlyList<int> shipperIDs, CancellationToken ct = default);
+    [InquiryDelete]
+    [InquiryWhere(nameof(Shipper.ShipperID), Compare.In)]
+    public partial Task<int> DeleteByKeysAsync(IReadOnlyList<int> shipperIDs, CancellationToken ct = default);
 }
 ```
 
-Inquiry enumerates the input once, buffers at most one bounded chunk, and returns the affected-row
-total across all physical commands. An empty collection is a zero-row no-op and does not open a
-connection.
+For insert and update batches, Inquiry enumerates the input once, buffers at most one bounded chunk,
+and returns the affected-row total across all physical commands. An empty collection is a zero-row
+no-op and does not open a connection. A collection predicate delete is a set-based mutation, not a
+batch operation; it binds the collection through the provider's `IN` transport and executes one
+statement. See [Set-based mutations](set-based-mutations.md).
 
 ## Atomicity and transactions
 
@@ -60,13 +63,13 @@ the database, driver, packet, and statement limits that apply to your schema.
 
 For entities with at least one bound insert column, the normal generated paths are:
 
-| Provider | `InsertAll` | `UpdateAll` | `DeleteAll` |
+| Provider | `InsertAll` | `UpdateAll` | Collection predicate delete |
 |---|---|---|---|
-| SQLite | Fixed single-row command with reused parameters; under `PrepareStatements.Auto`, Inquiry prefers one preparation for the batch | Reused single-row command | One bounded `json_each` key-set delete per chunk |
-| SQL Server | Multi-row `VALUES` below 250 rows when the statement fits; `DbBatch` of fixed one-row inserts at or above 250 | `DbBatch` of fixed one-row updates | One bounded TVP key-set delete per chunk |
-| PostgreSQL | One bounded multi-row `VALUES` insert per chunk | `DbBatch` of fixed one-row updates | One bounded native-array (`ANY`) key-set delete per chunk |
-| MySQL / MariaDB | One bounded multi-row `VALUES` insert per chunk | Set-based derived-table update for eligible chunks; fixed row commands otherwise | One bounded `JSON_TABLE` key-set delete per chunk |
-| Oracle | Native array binding over one fixed insert statement per chunk | Native array binding over one fixed update statement per chunk | Native array binding over one fixed delete statement per chunk |
+| SQLite | Fixed single-row command with reused parameters; under `PrepareStatements.Auto`, Inquiry prefers one preparation for the batch | Reused single-row command | `json_each` |
+| SQL Server | Multi-row `VALUES` below 250 rows when the statement fits; `DbBatch` of fixed one-row inserts at or above 250 | `DbBatch` of fixed one-row updates | TVP |
+| PostgreSQL | One bounded multi-row `VALUES` insert per chunk | `DbBatch` of fixed one-row updates | Native array (`ANY`) |
+| MySQL / MariaDB | One bounded multi-row `VALUES` insert per chunk | Set-based derived-table update for eligible chunks; fixed row commands otherwise | `JSON_TABLE` |
+| Oracle | Native array binding over one fixed insert statement per chunk | Native array binding over one fixed update statement per chunk | `JSON_TABLE` |
 
 An entity with no bound insert columns uses its provider's fixed, default-only insert once per row
 instead of a multi-row or array-bound shape. SQLite reuses that command with its normal preparation
@@ -113,7 +116,8 @@ For example, a set-based insert may produce:
 // VALUES (@p0_0, @p0_1), (@p1_0, @p1_1), ...
 ```
 
-`[InquiryDeleteAll]` takes keys in the entity's model type, including strongly typed IDs. Inquiry passes
+An `[InquiryDelete]` method with a `Compare.In` key predicate takes keys in the entity's model type,
+including strongly typed IDs. Inquiry passes
 each non-null key through its configured value converter exactly once, then uses the provider's generated
 collection transport (for example JSON table, native array, or TVP). A null key element is not converted
 and cannot match a non-null primary key.

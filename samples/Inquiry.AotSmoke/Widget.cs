@@ -30,6 +30,6 @@ public partial class WidgetStore : InquiryStore<Widget>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Widget widget, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 }

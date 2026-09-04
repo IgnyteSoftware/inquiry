@@ -37,6 +37,6 @@ public partial class VersionedItemStore : InquiryStore<VersionedItem>
     [InquiryUpdate(ReturnEntity = true)]
     public partial Task<VersionedItem?> UpdateReturningAsync(VersionedItem item, CancellationToken cancellationToken = default);
 
-    [InquiryDeleteOneByKey]
+    [InquiryDelete]
     public partial Task<bool> DeleteAsync(VersionedItem item, CancellationToken cancellationToken = default);
 }
