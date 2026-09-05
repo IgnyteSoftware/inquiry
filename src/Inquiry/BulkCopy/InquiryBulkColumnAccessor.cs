@@ -37,14 +37,8 @@ public sealed class InquiryBulkColumnAccessor<TEntity, TValue> : IInquiryBulkCol
     private readonly Func<TEntity, TValue> _getValue;
     private readonly Func<TEntity, bool>? _isNull;
 
-    /// <summary>Initializes a non-nullable accessor.</summary>
-    public InquiryBulkColumnAccessor(Func<TEntity, TValue> getValue)
-        : this(getValue, null)
-    {
-    }
-
     /// <summary>Initializes an accessor with an optional database-null predicate.</summary>
-    public InquiryBulkColumnAccessor(Func<TEntity, TValue> getValue, Func<TEntity, bool>? isNull)
+    public InquiryBulkColumnAccessor(Func<TEntity, TValue> getValue, Func<TEntity, bool>? isNull = null)
     {
         _getValue = getValue ?? throw new ArgumentNullException(nameof(getValue));
         _isNull = isNull;

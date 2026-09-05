@@ -15,7 +15,7 @@ public partial class EmployeeStore : InquiryStore<Employee>
     [InquiryInsert]
     public partial Task<int> InsertAsync(Employee employee, CancellationToken cancellationToken = default);
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<Employee?> InsertReturningAsync(Employee employee, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]

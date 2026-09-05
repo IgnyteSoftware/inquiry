@@ -1,7 +1,5 @@
 using Inquiry.Commands;
-using System.ComponentModel;
 using System.Data;
-using System.Reflection;
 
 namespace Inquiry.Tests;
 
@@ -41,31 +39,6 @@ public sealed class BatchCommandContractTests
             "work", static (_, _) => { }, CommandType.Text, bindChunk: null, preferPrepareOnce: true);
 
         Assert.True(command.PreferPrepareOnce);
-
-        var type = typeof(InquiryBatchCommand<int>);
-        var legacy = type.GetConstructor([
-            typeof(string),
-            typeof(Action<InquiryParameterTarget, int>),
-            typeof(CommandType),
-            typeof(Action<System.Data.Common.DbCommand, IReadOnlyList<int>>),
-        ]);
-        var preferred = type.GetConstructor([
-            typeof(string),
-            typeof(Action<InquiryParameterTarget, int>),
-            typeof(CommandType),
-            typeof(Action<System.Data.Common.DbCommand, IReadOnlyList<int>>),
-            typeof(bool),
-        ]);
-
-        Assert.NotNull(legacy);
-        Assert.NotNull(preferred);
-        Assert.Equal(
-            EditorBrowsableState.Never,
-            preferred!.GetCustomAttribute<EditorBrowsableAttribute>()?.State);
-        Assert.Equal(
-            EditorBrowsableState.Never,
-            type.GetProperty(nameof(command.PreferPrepareOnce))!
-                .GetCustomAttribute<EditorBrowsableAttribute>()?.State);
     }
 
     [Fact]
@@ -132,25 +105,9 @@ public sealed class BatchCommandContractTests
     }
 
     [Fact]
-    public void SelectableDefinitionPreservesLegacySignatureAndAddsExplicitSetBasedLimit()
+    public void SelectableDefinitionPreservesExplicitSetBasedLimit()
     {
-        var type = typeof(InquiryBatchCommand<int>);
-        Type[] legacyParameterTypes =
-        [
-            typeof(string),
-            typeof(Action<InquiryParameterTarget, int>),
-            typeof(Func<int, string>),
-            typeof(Action<System.Data.Common.DbCommand, IReadOnlyList<int>>),
-            typeof(Func<IReadOnlyList<int>, bool>),
-            typeof(int),
-            typeof(int),
-            typeof(CommandType),
-        ];
-
-        Assert.NotNull(type.GetConstructor(legacyParameterTypes));
-        Assert.NotNull(type.GetConstructor([.. legacyParameterTypes, typeof(int)]));
-
-        var legacy = new InquiryBatchCommand<int>(
+        var unbounded = new InquiryBatchCommand<int>(
             "row", static (_, _) => { }, static _ => "chunk", static (_, _) => { },
             static _ => true, parametersPerItem: 1, maxItemsPerCommand: 10, commandType: CommandType.Text);
         var bounded = new InquiryBatchCommand<int>(
@@ -158,7 +115,7 @@ public sealed class BatchCommandContractTests
             static _ => true, parametersPerItem: 1, maxItemsPerCommand: 10,
             commandType: CommandType.Text, setBasedMaxItemsPerCommand: 3);
 
-        Assert.Equal(int.MaxValue, legacy.SetBasedMaxItemsPerCommand);
+        Assert.Equal(int.MaxValue, unbounded.SetBasedMaxItemsPerCommand);
         Assert.Equal(3, bounded.SetBasedMaxItemsPerCommand);
     }
 }

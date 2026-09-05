@@ -42,9 +42,9 @@ public sealed partial class InquiryGeneratorTests
 
         public partial class BindingStore : InquiryStore<BindingItem>
         {
-            [InquiryInsert(ReturnEntity = true)] public partial Task<BindingItem?> InsertAsync(BindingItem item, CancellationToken ct = default);
-            [InquiryUpdate(ReturnEntity = true)] public partial Task<BindingItem?> UpdateAsync(BindingItem item, CancellationToken ct = default);
-            [InquiryUpsert(ReturnEntity = true)] public partial Task<BindingItem?> UpsertAsync(BindingItem item, CancellationToken ct = default);
+            [InquiryInsert] public partial Task<BindingItem?> InsertAsync(BindingItem item, CancellationToken ct = default);
+            [InquiryUpdate] public partial Task<BindingItem?> UpdateAsync(BindingItem item, CancellationToken ct = default);
+            [InquiryUpsert] public partial Task<BindingItem?> UpsertAsync(BindingItem item, CancellationToken ct = default);
             [InquirySelectOneByKey] public partial Task<BindingItem?> GetAsync(Guid id, CancellationToken ct = default);
             [InquiryDelete] public partial Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
             [InquirySelectAllByField("OptionalToken", OrderBy = "Id", Paged = true)]

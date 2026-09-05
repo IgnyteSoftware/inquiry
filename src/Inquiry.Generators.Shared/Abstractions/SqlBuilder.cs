@@ -657,7 +657,7 @@ public abstract class SqlBuilder
     /// <summary>
     /// Builds a set-based literal DELETE whose WHERE clause is the AND/OR composition of
     /// <paramref name="predicates"/> — the ExecuteDelete analog. Used for entities without a
-    /// soft-delete column, or with <c>HardDelete = true</c> (mirroring the by-key delete, no
+    /// soft-delete column, or with <c>[InquiryHardDelete]</c> (mirroring the by-key delete, no
     /// active-row filter is composed: a hard delete may remove already-soft-deleted rows too).
     /// Write-enforced global filters still compose — they are a boundary, not an activeness test, and
     /// leaving them off would make this the one delete shape that crosses it.

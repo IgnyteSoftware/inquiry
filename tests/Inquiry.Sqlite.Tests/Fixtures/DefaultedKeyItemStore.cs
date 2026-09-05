@@ -5,9 +5,9 @@ namespace Inquiry.Sqlite.Tests.Fixtures;
 public partial class DefaultedKeyItemStore : InquiryStore<DefaultedKeyItem>
 {
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<DefaultedKeyItem?> InsertReturningAsync(DefaultedKeyItem item, CancellationToken cancellationToken = default);
 
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<DefaultedKeyItem?> UpsertReturningAsync(DefaultedKeyItem item, CancellationToken cancellationToken = default);
 }

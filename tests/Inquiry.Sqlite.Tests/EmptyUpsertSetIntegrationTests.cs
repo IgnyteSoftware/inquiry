@@ -20,7 +20,7 @@ public partial class KeyOnlyItemStore : InquiryStore<KeyOnlyItem>
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(KeyOnlyItem item, CancellationToken ct = default);
 
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<KeyOnlyItem?> UpsertReturningAsync(KeyOnlyItem item, CancellationToken ct = default);
 
     [InquirySelectAll]

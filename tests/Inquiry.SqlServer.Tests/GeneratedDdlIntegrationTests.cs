@@ -30,13 +30,13 @@ public sealed class GeneratedRowversionDocument
 
 public partial class GeneratedRowversionDocumentStore : InquiryStore<GeneratedRowversionDocument>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<GeneratedRowversionDocument?> InsertAsync(GeneratedRowversionDocument document, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
     public partial Task<GeneratedRowversionDocument?> SelectAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryUpdate(ReturnEntity = true)]
+    [InquiryUpdate]
     public partial Task<GeneratedRowversionDocument?> UpdateAsync(GeneratedRowversionDocument document, CancellationToken cancellationToken = default);
 
     [InquiryDelete]

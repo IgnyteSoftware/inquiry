@@ -38,7 +38,7 @@ public sealed class PostgreSqlDateTimeItem
 
 public partial class PostgreSqlDateTimeItemStore : InquiryStore<PostgreSqlDateTimeItem>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<PostgreSqlDateTimeItem?> InsertAsync(PostgreSqlDateTimeItem item, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByPredicate]

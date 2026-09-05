@@ -70,7 +70,7 @@ public sealed class SecretRecord
 
 public partial class SecretRecordStore : InquiryStore<SecretRecord>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<SecretRecord?> InsertAsync(SecretRecord record, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]

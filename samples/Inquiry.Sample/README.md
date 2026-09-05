@@ -56,10 +56,8 @@ generated stores. Specifically:
 - Store generation with `[InquirySelectAll]`, `[InquirySelectOneByKey]`,
   `[InquirySelectAllByField]` (single- and multi-column),
   `[InquirySelectAllEager]`, `[InquirySelectOneByKeyEager]`,
-  `[InquiryInsert]`, `[InquiryInsert(ReturnEntity = true)]`,
-  `[InquiryUpdate]`, `[InquiryUpdate(ReturnEntity = true)]`,
-  `[InquiryUpsert]`, `[InquiryUpsert(ReturnEntity = true)]`,
-  `[InquiryDelete]`
+  `[InquiryInsert]`, `[InquiryUpdate]`, and `[InquiryUpsert]` with return-type-selected returning
+  variants, and `[InquiryDelete]`
 - Eager loading on both Region↔Territory (non-nullable key) and Category↔Product
   (nullable IDENTITY key)
 - DI registration through `AddInquiry()` + `AddInquiryGeneratedStores()` +

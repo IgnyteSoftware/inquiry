@@ -165,7 +165,7 @@ public sealed partial class InquiryGeneratorTests
     public void HardDeleteWhereOnSoftDeleteEntityEmitsLiteralDelete()
     {
         var result = RunGenerator(SoftDocStore("""
-            [InquiryDelete(HardDelete = true)]
+            [InquiryHardDelete]
             [InquiryWhere("Title")]
             public partial Task<int> PurgeByTitleAsync(string title, CancellationToken cancellationToken = default);
             """));

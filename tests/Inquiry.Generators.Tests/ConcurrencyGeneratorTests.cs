@@ -76,7 +76,7 @@ public sealed partial class InquiryGeneratorTests
     public void OrmTokenUpdateReturningKeepsTokenProjected_Sqlite()
     {
         var result = RunGenerator(TokenStore("""
-            [InquiryUpdate(ReturnEntity = true)]
+            [InquiryUpdate]
             public partial Task<Widget?> UpdateAsync(Widget widget, CancellationToken cancellationToken = default);
             """));
         AssertNoErrors(result);
@@ -92,7 +92,7 @@ public sealed partial class InquiryGeneratorTests
     public void OrmTokenUpdateReturningRequiresAffectedRow_MySql(string dialect)
     {
         var result = RunGenerator(TokenStore("""
-            [InquiryUpdate(ReturnEntity = true)]
+            [InquiryUpdate]
             public partial Task<Widget?> UpdateAsync(Widget widget, CancellationToken cancellationToken = default);
             """), dialect: dialect);
         AssertNoErrors(result);
@@ -192,7 +192,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryInsert]
                 public partial Task<int> InsertAsync(Doc doc, CancellationToken cancellationToken = default);
 
-                [InquiryUpdate(ReturnEntity = true)]
+                [InquiryUpdate]
                 public partial Task<Doc?> UpdateAsync(Doc doc, CancellationToken cancellationToken = default);
             }
             """;

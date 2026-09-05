@@ -112,22 +112,6 @@ internal static class StoreProcessor
             return null;
         }
 
-        var returnEntityRequested = GeneratorHelpers.GetNamedBool(attribute, "ReturnEntity");
-        if (operation is StoreOperation.InsertAll or StoreOperation.UpdateAll && returnEntityRequested)
-        {
-            var attributeName = operation == StoreOperation.InsertAll ? "InquiryInsert" : "InquiryUpdate";
-            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, location, method.Name,
-                $"[{attributeName}] with an entity collection reads as a batch operation, which cannot return entities. Remove ReturnEntity, or pass one entity to use the single-row mode."));
-            return null;
-        }
-
-        if (operation is StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate && returnEntityRequested)
-        {
-            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, location, method.Name,
-                "ReturnEntity is supported only for entity updates and key-based deletes."));
-            return null;
-        }
-
         if (operation == StoreOperation.DeleteAll && HasWhereCriteria(method))
         {
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, location, method.Name,
@@ -145,7 +129,7 @@ internal static class StoreProcessor
         }
 
         var returnsEntity = operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert or StoreOperation.DeleteOneByKey &&
-            returnEntityRequested;
+            GeneratorHelpers.IsGenericType(method.ReturnType, "System.Threading.Tasks.Task<TResult>", entityType);
 
         var hasInOutParam = operation == StoreOperation.StoredProcedure && HasInputOutputParameter(method);
         if (!HasSupportedReturnType(operation, method.ReturnType, entityType, returnsEntity, attribute, hasInOutParam))
@@ -432,8 +416,7 @@ internal static class StoreProcessor
         var distinct = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField
             or StoreOperation.SelectAllByPredicate &&
             GeneratorHelpers.GetNamedBool(attribute, "Distinct");
-        var hardDelete = operation is StoreOperation.DeleteOneByKey or StoreOperation.DeleteByPredicate or StoreOperation.DeleteAll &&
-            GeneratorHelpers.GetNamedBool(attribute, "HardDelete");
+        var hardDelete = attribute.AttributeClass?.Name is "InquiryHardDeleteAttribute" or "InquiryHardDeleteAllAttribute";
         var lockMode = operation is StoreOperation.SelectAll or StoreOperation.SelectOneByKey
             or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
             ? GeneratorHelpers.GetNamedInt(attribute, "LockMode") ?? 0
@@ -1053,10 +1036,12 @@ internal static class StoreProcessor
                 case "InquiryFullTextSearchAttribute": attribute = candidate; return StoreOperation.FullTextSearch;
                 case "InquiryBulkInsertAttribute": attribute = candidate; return StoreOperation.BulkInsert;
                 case "InquiryDeleteAllAttribute": attribute = candidate; return StoreOperation.DeleteAll;
+                case "InquiryHardDeleteAllAttribute": attribute = candidate; return StoreOperation.DeleteAll;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
                 case "InquiryUpdateAttribute": attribute = candidate; return HasWhereCriteria(method) ? StoreOperation.UpdateByPredicate : StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
                 case "InquiryDeleteAttribute": attribute = candidate; return HasWhereCriteria(method) ? StoreOperation.DeleteByPredicate : StoreOperation.DeleteOneByKey;
+                case "InquiryHardDeleteAttribute": attribute = candidate; return HasWhereCriteria(method) ? StoreOperation.DeleteByPredicate : StoreOperation.DeleteOneByKey;
                 case "InquiryRestoreOneByKeyAttribute": attribute = candidate; return StoreOperation.RestoreOneByKey;
                 case "InquiryStoredProcedureAttribute": attribute = candidate; return StoreOperation.StoredProcedure;
                 case "InquirySelectTopByOrderAttribute": attribute = candidate; return StoreOperation.SelectTopByOrder;

@@ -49,7 +49,7 @@ public sealed class InquiryOptions
     /// <summary>
     /// Gets or sets whether a 0-row UPDATE/DELETE on an optimistic-concurrency token entity
     /// throws <see cref="InquiryConcurrencyException"/> instead of returning <see langword="false"/>
-    /// (or a <see langword="null"/> <c>ReturnEntity</c> result). Defaults to <see langword="false"/>,
+    /// (or a <see langword="null"/> entity result). Defaults to <see langword="false"/>,
     /// preserving the backward-compatible "not found" contract.
     /// </summary>
     public bool ThrowOnConcurrencyConflict { get; set; }

@@ -7,7 +7,7 @@ namespace Inquiry.Generators.Tests;
 /// <summary>
 /// Soft-delete emission tests: every SELECT AND-composes the active-row filter (via the
 /// <c>AppendWhere</c> primitive), <c>[InquiryDelete]</c> becomes a soft UPDATE,
-/// <c>HardDelete = true</c> keeps a literal DELETE, <c>IncludeDeleted = true</c> opts out, and
+/// <c>[InquiryHardDelete]</c> keeps a literal DELETE, <c>IncludeDeleted = true</c> opts out, and
 /// <c>[InquiryRestoreOneByKey]</c> clears the indicator. Also verifies the filter composes with the
 /// predicate path and the paged path, the per-dialect literals (PG TRUE/FALSE, SqlServer
 /// GETUTCDATE), the timestamp form, and the duplicate-column diagnostic.
@@ -89,7 +89,7 @@ public sealed partial class InquiryGeneratorTests
     public void HardDeleteKeepsLiteralDeleteAlongsideSoftDefault_Sqlite()
     {
         var result = RunGenerator(WidgetStore("""
-            [InquiryDelete(HardDelete = true)]
+            [InquiryHardDelete]
             public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
             """));
         AssertNoErrors(result);

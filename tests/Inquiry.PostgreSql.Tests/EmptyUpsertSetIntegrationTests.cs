@@ -21,7 +21,7 @@ public partial class PgKeyOnlyItemStore : InquiryStore<PgKeyOnlyItem>
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(PgKeyOnlyItem item, CancellationToken ct = default);
 
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<PgKeyOnlyItem?> UpsertReturningAsync(PgKeyOnlyItem item, CancellationToken ct = default);
 
     [InquirySelectAll]

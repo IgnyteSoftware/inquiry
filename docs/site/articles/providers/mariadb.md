@@ -35,7 +35,7 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
 | Upsert | `INSERT … ON DUPLICATE KEY UPDATE …` |
 | Insert-returning | Native `INSERT … RETURNING` (MariaDB 10.5+) |
 | Upsert-returning | Native `INSERT … ON DUPLICATE KEY UPDATE … RETURNING` |
-| Delete-returning | Native `DELETE … RETURNING` via `[InquiryDelete(ReturnEntity = true)]` |
+| Delete-returning | Native `DELETE … RETURNING` when `[InquiryDelete]` returns `Task<TEntity?>` |
 | Update-returning | Emulated two-statement batch (`UPDATE …; SELECT …`) — MariaDB lacks `UPDATE…RETURNING` |
 | IN binding | `JSON_TABLE` subquery (MariaDB 10.6+): `col IN (SELECT jt.val FROM JSON_TABLE(@param, …) jt)` — constant SQL, single parameter |
 | Pagination | `LIMIT @limit OFFSET @offset` |
@@ -51,9 +51,9 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
   `INSERT…ON DUPLICATE KEY UPDATE…RETURNING` for insert-returning and upsert-returning operations.
   This halves round trips compared to the emulated two-statement batch that MySQL requires.
   `UPDATE…RETURNING` is not supported by MariaDB, so update-returning stays emulated.
-- **Delete returning:** declare a by-key method returning `Task<TEntity?>` and set
-  `ReturnEntity = true` to receive the deleted row, or `null` when no row matches. On an entity with
-  `[InquirySoftDelete]`, use `HardDelete = true`; MariaDB has no `UPDATE…RETURNING`, so soft-delete
+- **Delete returning:** declare a by-key method returning `Task<TEntity?>` to receive the deleted row,
+  or `null` when no row matches. On an entity with `[InquirySoftDelete]`, use `[InquiryHardDelete]`;
+  MariaDB has no `UPDATE…RETURNING`, so soft-delete
   returning is rejected at compile time with `INQ039` rather than being changed into a physical delete.
 - **No `AllowUserVariables` required:** unlike the MySQL provider, MariaDB's native `RETURNING`
   eliminates the collision-safe capture variable that MySQL's emulated path needs for non-auto

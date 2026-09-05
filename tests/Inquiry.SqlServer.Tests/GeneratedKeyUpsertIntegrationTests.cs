@@ -19,7 +19,7 @@ public sealed class SsGenItem
 
 public partial class SsGenItemStore : InquiryStore<SsGenItem>
 {
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<SsGenItem?> UpsertReturningAsync(SsGenItem item, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]

@@ -26,7 +26,7 @@ public sealed class Article
 
 public partial class ArticleStore : InquiryStore<Article>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<Article?> InsertAsync(Article article, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]

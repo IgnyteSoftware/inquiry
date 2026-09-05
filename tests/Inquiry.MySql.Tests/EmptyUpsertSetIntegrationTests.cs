@@ -19,7 +19,7 @@ public partial class MySqlKeyOnlyItemStore : InquiryStore<MySqlKeyOnlyItem>
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(MySqlKeyOnlyItem item, CancellationToken ct = default);
 
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<MySqlKeyOnlyItem?> UpsertReturningAsync(MySqlKeyOnlyItem item, CancellationToken ct = default);
 
     [InquirySelectAll]

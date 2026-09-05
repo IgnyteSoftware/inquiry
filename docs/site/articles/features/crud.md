@@ -12,16 +12,21 @@ This page shows the **complete, unedited generator output** for a `Shipper` stor
 | `[InquirySelectOneByKey]` | `Task<T?>` | `SELECT <columns> FROM <table> WHERE <pk> = @key` |
 | `[InquirySelectAllByField("Col1", "Col2")]` | `Task<IReadOnlyList<T>>` | `SELECT … WHERE Col1 = @Col1 AND Col2 = @Col2` |
 | `[InquirySelectAllByField]` (field-less) | `Task<IReadOnlyList<T>>` | Filter columns **derived from the method name** — see below |
-| `[InquiryInsert]` | `Task<int>` (rows affected) | `INSERT INTO <table> (cols) VALUES (params)` |
+| `[InquiryInsert]` | `Task<int>` or `Task<T?>` | Inserts one entity; the return type selects rows-affected or returning SQL |
 | `[InquiryInsert]` with `IEnumerable<T>` | `Task<int>` | Batched inserts in one transaction |
-| `[InquiryInsert(ReturnEntity = true)]` | `Task<T?>` | `INSERT … RETURNING <columns>` (or per-dialect equivalent) |
-| `[InquiryUpdate]` | `Task<bool>` | Updates an entity by primary key |
+| `[InquiryUpdate]` | `Task<bool>` or `Task<T?>` | Updates an entity by primary key; the return type selects the command shape |
 | `[InquiryUpdate]` with `IEnumerable<T>` | `Task<int>` | Batched updates, each row matched by primary key |
 | `[InquiryUpdate]` + `[InquiryWhere]` | `Task<int>` | Partially updates inferred columns for matching rows |
-| `[InquiryUpsert]` | `Task<int>` | Dialect-specific (`ON CONFLICT`, `MERGE`, `ON DUPLICATE KEY UPDATE`, …) |
-| `[InquiryDelete]` | `Task<bool>` | Deletes one row by primary key |
+| `[InquiryUpsert]` | `Task<int>` or `Task<T?>` | Dialect-specific, with returning SQL selected by the return type |
+| `[InquiryDelete]` | `Task<bool>` or `Task<T?>` | Deletes one row by primary key; the return type selects the command shape |
 | `[InquiryDelete]` + `[InquiryWhere]` | `Task<int>` | Deletes rows matching the predicate |
 | `[InquiryDeleteAll]` | `Task<int>` | Explicitly deletes every row |
+| `[InquiryHardDelete]` | `Task<bool>` or `Task<T?>`; `Task<int>` with `[InquiryWhere]` | Bypasses soft delete for one row or for rows matching a predicate |
+| `[InquiryHardDeleteAll]` | `Task<int>` | Bypasses soft delete for every row |
+
+For single-entity insert, update, upsert, and key-delete methods, `Task<TEntity?>` selects the
+returning SQL shape. Non-returning methods use `Task<int>` or `Task<bool>` as shown above. Batch and
+predicate mutations cannot return entities, so their return type remains `Task<int>`.
 
 ## You write
 
@@ -68,7 +73,7 @@ public partial class ShipperStore : InquiryStore<Shipper>
     [InquiryInsert]
     public partial Task<int> InsertAsync(Shipper shipper, CancellationToken cancellationToken = default);
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<Shipper?> InsertReturningAsync(Shipper shipper, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]
@@ -335,7 +340,7 @@ On **MySQL** and **MariaDB**, an empty-SET upsert (an entity with only key colum
 must still emit an assignment because MySQL has no `DO NOTHING` equivalent. Client/non-auto keys use
 the no-op `ON DUPLICATE KEY UPDATE key = key`; an `AUTO_INCREMENT` key uses
 `key = LAST_INSERT_ID(key)` once so returning paths can recover the winning key.
-The returning variant (`ReturnEntity = true`) therefore returns the matched row on conflict rather
+The `Task<TEntity?>` variant therefore returns the matched row on conflict rather
 than `null`, unlike PostgreSQL, SQLite, and SQL Server which return `null` when no columns are
 modified. Design for this if your code branches on the returning upsert's null/non-null result.
 

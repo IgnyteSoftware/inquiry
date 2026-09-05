@@ -141,32 +141,23 @@ public interface IInquiry
     /// provider supports it; otherwise it fails before writing. Outside a transaction it opens a
     /// dedicated connection. Bulk-copy operations bypass command interceptors but emit telemetry.
     /// </summary>
-    /// <remarks>The default throws; <see cref="DefaultInquiry"/> resolves the provider's
-    /// registered <see cref="Inquiry.BulkCopy.IInquiryBulkCopier"/>, so existing
-    /// <see cref="IInquiry"/> implementations (e.g. test mocks) stay source-compatible.</remarks>
-    Task<long> BulkInsertAsync<TEntity>(
-        Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
-        IEnumerable<TEntity> rows,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => throw new NotSupportedException("Bulk insert requires the built-in DefaultInquiry with a provider-registered IInquiryBulkCopier.");
-
-    /// <summary>Streams rows through the provider's native bulk-copy API with per-call options.</summary>
     /// <remarks>
     /// A provider throws <see cref="InvalidOperationException"/> before copying when it cannot honor
     /// a requested option. SQLite and Oracle generated bulk-insert methods use batch SQL instead and
     /// reject any non-null native bulk-copy options before executing the fallback.
+    /// The default throws; <see cref="DefaultInquiry"/> resolves the provider's registered
+    /// <see cref="Inquiry.BulkCopy.IInquiryBulkCopier"/>.
     /// </remarks>
     Task<long> BulkInsertAsync<TEntity>(
         Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
-        Inquiry.BulkCopy.InquiryBulkInsertOptions? options,
+        Inquiry.BulkCopy.InquiryBulkInsertOptions? options = null,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
         if (options is not null)
             throw new InvalidOperationException("This IInquiry implementation does not support native bulk-insert options.");
-        return BulkInsertAsync(definition, rows, cancellationToken);
+        throw new NotSupportedException("Bulk insert requires the built-in DefaultInquiry with a provider-registered IInquiryBulkCopier.");
     }
 
     // ---- Execute (no materializer) ----------------------------------------------------

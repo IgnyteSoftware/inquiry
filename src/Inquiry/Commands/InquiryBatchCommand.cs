@@ -13,19 +13,8 @@ public readonly struct InquiryBatchCommand<TItem>
         string commandText,
         Action<InquiryParameterTarget, TItem> bindItem,
         CommandType commandType = CommandType.Text,
-        Action<DbCommand, IReadOnlyList<TItem>>? bindChunk = null)
-        : this(commandText, bindItem, commandType, bindChunk, preferPrepareOnce: false)
-    {
-    }
-
-    /// <summary>Initializes a generated row-command definition with descriptor-scoped preparation preference.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public InquiryBatchCommand(
-        string commandText,
-        Action<InquiryParameterTarget, TItem> bindItem,
-        CommandType commandType,
-        Action<DbCommand, IReadOnlyList<TItem>>? bindChunk,
-        bool preferPrepareOnce)
+        Action<DbCommand, IReadOnlyList<TItem>>? bindChunk = null,
+        bool preferPrepareOnce = false)
     {
         if (string.IsNullOrWhiteSpace(commandText))
         {
@@ -47,6 +36,7 @@ public readonly struct InquiryBatchCommand<TItem>
         SetBasedMaxItemsPerCommand = int.MaxValue;
         UseChunk = null;
         PreferPrepareOnce = preferPrepareOnce;
+        IgnoresMaxBatchSize = false;
     }
 
     /// <summary>Initializes a whole-chunk generated batch command definition.</summary>
@@ -55,20 +45,8 @@ public readonly struct InquiryBatchCommand<TItem>
         Action<DbCommand, IReadOnlyList<TItem>> bindChunk,
         int parametersPerItem,
         int maxItemsPerCommand = int.MaxValue,
-        CommandType commandType = CommandType.Text)
-        : this(commandTextFactory, bindChunk, parametersPerItem, maxItemsPerCommand, commandType, ignoresMaxBatchSize: false)
-    {
-    }
-
-    /// <summary>Initializes a whole-chunk command whose binding streams the entire source natively.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public InquiryBatchCommand(
-        Func<int, string> commandTextFactory,
-        Action<DbCommand, IReadOnlyList<TItem>> bindChunk,
-        int parametersPerItem,
-        int maxItemsPerCommand,
-        CommandType commandType,
-        bool ignoresMaxBatchSize)
+        CommandType commandType = CommandType.Text,
+        bool ignoresMaxBatchSize = false)
     {
         if (!Enum.IsDefined(commandType))
         {
@@ -102,24 +80,8 @@ public readonly struct InquiryBatchCommand<TItem>
         Func<IReadOnlyList<TItem>, bool> useChunk,
         int parametersPerItem,
         int maxItemsPerCommand = int.MaxValue,
-        CommandType commandType = CommandType.Text)
-        : this(commandText, bindItem, chunkCommandTextFactory, bindChunk, useChunk, parametersPerItem,
-            maxItemsPerCommand, commandType, int.MaxValue)
-    {
-    }
-
-    /// <summary>Initializes a generated selectable command with an explicit set-based row limit.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public InquiryBatchCommand(
-        string commandText,
-        Action<InquiryParameterTarget, TItem> bindItem,
-        Func<int, string> chunkCommandTextFactory,
-        Action<DbCommand, IReadOnlyList<TItem>> bindChunk,
-        Func<IReadOnlyList<TItem>, bool> useChunk,
-        int parametersPerItem,
-        int maxItemsPerCommand,
-        CommandType commandType,
-        int setBasedMaxItemsPerCommand)
+        CommandType commandType = CommandType.Text,
+        int setBasedMaxItemsPerCommand = int.MaxValue)
         : this(chunkCommandTextFactory, bindChunk, parametersPerItem, maxItemsPerCommand, commandType)
     {
         if (string.IsNullOrWhiteSpace(commandText))
@@ -134,40 +96,37 @@ public readonly struct InquiryBatchCommand<TItem>
     }
 
     /// <summary>Gets the fixed-row SQL or stored-procedure name, or null for a whole-chunk-only definition.</summary>
-    public string? CommandText { get; }
+    internal string? CommandText { get; }
 
     /// <summary>Gets the ADO.NET command type.</summary>
-    public CommandType CommandType { get; }
+    internal CommandType CommandType { get; }
 
     /// <summary>Gets the binder invoked for one item.</summary>
-    public Action<InquiryParameterTarget, TItem>? BindItem { get; }
+    internal Action<InquiryParameterTarget, TItem>? BindItem { get; }
 
     /// <summary>Gets the optional provider array/whole-chunk binder.</summary>
-    public Action<DbCommand, IReadOnlyList<TItem>>? BindChunk { get; }
+    internal Action<DbCommand, IReadOnlyList<TItem>>? BindChunk { get; }
 
     /// <summary>Gets the optional whole-chunk SQL factory.</summary>
-    public Func<int, string>? CommandTextFactory { get; }
+    internal Func<int, string>? CommandTextFactory { get; }
 
     /// <summary>Gets the number of generated parameters contributed by each chunk item.</summary>
-    public int ParametersPerItem { get; }
+    internal int ParametersPerItem { get; }
 
     /// <summary>Gets the generated dialect/statement row limit.</summary>
-    public int MaxItemsPerCommand { get; }
+    internal int MaxItemsPerCommand { get; }
 
     /// <summary>Gets the generated provider limit for one set-based command.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public int SetBasedMaxItemsPerCommand { get; }
+    internal int SetBasedMaxItemsPerCommand { get; }
 
     /// <summary>Gets the optional per-chunk set-based eligibility selector.</summary>
-    public Func<IReadOnlyList<TItem>, bool>? UseChunk { get; }
+    internal Func<IReadOnlyList<TItem>, bool>? UseChunk { get; }
 
     /// <summary>Gets whether the binding streams the entire source natively, bypassing MaxBatchSize chunking.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public bool IgnoresMaxBatchSize { get; }
+    internal bool IgnoresMaxBatchSize { get; }
 
     /// <summary>Gets whether <see cref="PreparedStatementMode.Auto"/> may prepare the reused command once for this batch.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public bool PreferPrepareOnce { get; }
+    internal bool PreferPrepareOnce { get; }
 
     internal void Validate()
     {

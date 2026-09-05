@@ -182,10 +182,9 @@ public sealed class AttributeTests
     }
 
     [Fact]
-    public void MutationAttributesCanRequestReturnedEntity()
+    public void HardDeleteAttributesCanBeConstructed()
     {
-        Assert.True(new InquiryInsertAttribute { ReturnEntity = true }.ReturnEntity);
-        Assert.True(new InquiryUpdateAttribute { ReturnEntity = true }.ReturnEntity);
-        Assert.True(new InquiryUpsertAttribute { ReturnEntity = true }.ReturnEntity);
+        Assert.NotNull(new InquiryHardDeleteAttribute());
+        Assert.NotNull(new InquiryHardDeleteAllAttribute());
     }
 }

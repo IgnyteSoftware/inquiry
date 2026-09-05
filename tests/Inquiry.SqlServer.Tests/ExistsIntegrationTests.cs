@@ -19,7 +19,7 @@ public sealed class ExistsWidget
 
 public partial class ExistsWidgetStore : InquiryStore<ExistsWidget>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<ExistsWidget?> InsertAsync(ExistsWidget widget, CancellationToken cancellationToken = default);
 
     [InquiryDelete]

@@ -275,18 +275,10 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
 
     /// <inheritdoc />
-    public Task<long> BulkInsertAsync<TEntity>(
-        Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
-        IEnumerable<TEntity> rows,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => BulkInsertAsync(definition, rows, options: null, cancellationToken);
-
-    /// <inheritdoc />
     public async Task<long> BulkInsertAsync<TEntity>(
         Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
-        Inquiry.BulkCopy.InquiryBulkInsertOptions? options,
+        Inquiry.BulkCopy.InquiryBulkInsertOptions? options = null,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {

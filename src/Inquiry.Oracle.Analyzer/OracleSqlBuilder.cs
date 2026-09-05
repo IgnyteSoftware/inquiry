@@ -20,7 +20,7 @@ namespace Inquiry.Oracle.Analyzer;
 /// not legal unquoted (e.g. the embedded space in <c>Order Details</c>), which <see cref="QuoteIdentifier"/>
 /// double-quotes.</description></item>
 /// <item><description><c>RETURNING … INTO</c> binds OUT parameters rather than producing a result set,
-/// so <c>ReturnEntity = true</c> ops are emitted as an anonymous PL/SQL block that mutates and OPENs a ref
+/// so returning mutations are emitted as an anonymous PL/SQL block that mutates and OPENs a ref
 /// cursor over the affected row; <c>ExecuteReader</c> on the block returns that cursor, which the reader
 /// pipeline materializes unchanged (the OUT cursor is bound by <c>OracleInquiryConnectionFactory</c>). See
 /// the returning builders below.</description></item>
@@ -342,7 +342,7 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         "only) and could not round-trip the generated value. Use a client-supplied key for upsert, or " +
         "split into explicit insert/update.";
 
-    // --- Returning DML (ReturnEntity = true) ----------------------------------------------------
+    // --- Returning DML --------------------------------------------------------------------------
     // Oracle's RETURNING … INTO binds OUT parameters, not a result set, so it cannot feed the reader
     // pipeline directly. Instead each returning op is emitted as an anonymous PL/SQL block that performs
     // the mutation and OPENs a ref cursor (:rc) over the affected row. ExecuteReader on such a block

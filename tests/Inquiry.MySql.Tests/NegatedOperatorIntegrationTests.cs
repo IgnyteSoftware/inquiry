@@ -19,7 +19,7 @@ public sealed class NegatedProduct
 
 public partial class NegatedProductStore : InquiryStore<NegatedProduct>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<NegatedProduct?> InsertAsync(NegatedProduct product, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByPredicate]

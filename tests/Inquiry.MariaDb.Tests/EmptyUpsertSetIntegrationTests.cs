@@ -19,7 +19,7 @@ public partial class MariaDbKeyOnlyItemStore : InquiryStore<MariaDbKeyOnlyItem>
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(MariaDbKeyOnlyItem item, CancellationToken ct = default);
 
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<MariaDbKeyOnlyItem?> UpsertReturningAsync(MariaDbKeyOnlyItem item, CancellationToken ct = default);
 
     [InquirySelectAll]

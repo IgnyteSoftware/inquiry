@@ -1513,8 +1513,8 @@ internal static class StoreOperationEmitter
     {
         var columns = SelectMutationColumns(entity, includeKey, forUpdate);
 
-        // a ReturnEntity update on a token entity captures the (nullable) result so a null — which
-        // otherwise conflates "stale token" with "row deleted" — can throw when the runtime option is set.
+        // A returning update on a token entity captures the nullable result. This lets the runtime
+        // distinguish a stale token from a deleted row and throw when the option is set.
         if (emitConcurrencyGuard && entity.ConcurrencyToken is not null)
         {
             source.AppendLine($"{indent}var _result = await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");

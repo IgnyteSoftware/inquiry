@@ -15,8 +15,7 @@ Inquiry.BulkCopy.IInquiryBulkValueWriter.WriteAsync<T>(T value, int ordinal, Sys
 Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>
 Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.Accessor.get -> System.Delegate!
 Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.FieldType.get -> System.Type!
-Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.InquiryBulkColumnAccessor(System.Func<TEntity!, TValue>! getValue) -> void
-Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.InquiryBulkColumnAccessor(System.Func<TEntity!, TValue>! getValue, System.Func<TEntity!, bool>? isNull) -> void
+Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.InquiryBulkColumnAccessor(System.Func<TEntity!, TValue>! getValue, System.Func<TEntity!, bool>? isNull = null) -> void
 Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.IsNull(TEntity! entity) -> bool
 Inquiry.BulkCopy.InquiryBulkColumnAccessor<TEntity, TValue>.WriteAsync<TWriter>(TEntity! entity, TWriter writer, int ordinal, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior
@@ -33,10 +32,7 @@ Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Columns.get -> System.Coll
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.ColumnTypes.get -> System.Collections.Generic.IReadOnlyList<System.Data.DbType>?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.FieldTypes.get -> System.Collections.Generic.IReadOnlyList<System.Type!>?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.GetValue.get -> System.Func<TEntity!, int, object!>!
-Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue) -> void
-Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes) -> void
-Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes, System.Type![]? fieldTypes) -> void
-Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes, System.Type![]? fieldTypes, Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity!>![]? typedAccessors) -> void
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes = null, System.Type![]? fieldTypes = null, Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity!>![]? typedAccessors = null) -> void
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Schema.get -> string?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Table.get -> string!
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.TypedAccessors.get -> System.Collections.Generic.IReadOnlyList<Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity!>!>?
@@ -59,24 +55,10 @@ override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetFieldValue<T>(int ord
 Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.InquiryBulkRowReader(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows) -> void
 Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.RowsRead.get -> long
 Inquiry.Commands.InquiryBatchCommand<TItem>
-Inquiry.Commands.InquiryBatchCommand<TItem>.BindChunk.get -> System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>?
-Inquiry.Commands.InquiryBatchCommand<TItem>.BindItem.get -> System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>?
-Inquiry.Commands.InquiryBatchCommand<TItem>.CommandText.get -> string?
-Inquiry.Commands.InquiryBatchCommand<TItem>.CommandTextFactory.get -> System.Func<int, string!>?
-Inquiry.Commands.InquiryBatchCommand<TItem>.CommandType.get -> System.Data.CommandType
 Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand() -> void
-Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Data.CommandType commandType = System.Data.CommandType.Text, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>? bindChunk = null) -> void
-Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Data.CommandType commandType, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>? bindChunk, bool preferPrepareOnce) -> void
-Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Func<int, string!>! chunkCommandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, System.Func<System.Collections.Generic.IReadOnlyList<TItem>!, bool>! useChunk, int parametersPerItem, int maxItemsPerCommand = 2147483647, System.Data.CommandType commandType = System.Data.CommandType.Text) -> void
-Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Func<int, string!>! chunkCommandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, System.Func<System.Collections.Generic.IReadOnlyList<TItem>!, bool>! useChunk, int parametersPerItem, int maxItemsPerCommand, System.Data.CommandType commandType, int setBasedMaxItemsPerCommand) -> void
-Inquiry.Commands.InquiryBatchCommand<TItem>.IgnoresMaxBatchSize.get -> bool
-Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(System.Func<int, string!>! commandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, int parametersPerItem, int maxItemsPerCommand, System.Data.CommandType commandType, bool ignoresMaxBatchSize) -> void
-Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(System.Func<int, string!>! commandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, int parametersPerItem, int maxItemsPerCommand = 2147483647, System.Data.CommandType commandType = System.Data.CommandType.Text) -> void
-Inquiry.Commands.InquiryBatchCommand<TItem>.MaxItemsPerCommand.get -> int
-Inquiry.Commands.InquiryBatchCommand<TItem>.ParametersPerItem.get -> int
-Inquiry.Commands.InquiryBatchCommand<TItem>.PreferPrepareOnce.get -> bool
-Inquiry.Commands.InquiryBatchCommand<TItem>.SetBasedMaxItemsPerCommand.get -> int
-Inquiry.Commands.InquiryBatchCommand<TItem>.UseChunk.get -> System.Func<System.Collections.Generic.IReadOnlyList<TItem>!, bool>?
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Data.CommandType commandType = System.Data.CommandType.Text, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>? bindChunk = null, bool preferPrepareOnce = false) -> void
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(string! commandText, System.Action<Inquiry.Commands.InquiryParameterTarget, TItem>! bindItem, System.Func<int, string!>! chunkCommandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, System.Func<System.Collections.Generic.IReadOnlyList<TItem>!, bool>! useChunk, int parametersPerItem, int maxItemsPerCommand = 2147483647, System.Data.CommandType commandType = System.Data.CommandType.Text, int setBasedMaxItemsPerCommand = 2147483647) -> void
+Inquiry.Commands.InquiryBatchCommand<TItem>.InquiryBatchCommand(System.Func<int, string!>! commandTextFactory, System.Action<System.Data.Common.DbCommand!, System.Collections.Generic.IReadOnlyList<TItem>!>! bindChunk, int parametersPerItem, int maxItemsPerCommand = 2147483647, System.Data.CommandType commandType = System.Data.CommandType.Text, bool ignoresMaxBatchSize = false) -> void
 Inquiry.Commands.InquiryBatchExecutionMode
 Inquiry.Commands.InquiryBatchExecutionMode.ArrayBinding = 2 -> Inquiry.Commands.InquiryBatchExecutionMode
 Inquiry.Commands.InquiryBatchExecutionMode.DbBatch = 0 -> Inquiry.Commands.InquiryBatchExecutionMode
@@ -102,10 +84,6 @@ Inquiry.Commands.InquiryCommandFailedContext.Exception.get -> System.Exception!
 Inquiry.Commands.InquiryCommandFailedContext.InquiryCommandFailedContext(Inquiry.Commands.InquiryCommand! commandDefinition, System.Data.Common.DbCommand! command, System.Exception! exception) -> void
 Inquiry.Commands.InquiryCommandResources
 Inquiry.Commands.InquiryGeneratedCommand<TArgs>
-Inquiry.Commands.InquiryGeneratedCommand<TArgs>.Args.get -> TArgs
-Inquiry.Commands.InquiryGeneratedCommand<TArgs>.BindParameters.get -> System.Action<System.Data.Common.DbCommand!, TArgs>!
-Inquiry.Commands.InquiryGeneratedCommand<TArgs>.CommandText.get -> string!
-Inquiry.Commands.InquiryGeneratedCommand<TArgs>.CommandType.get -> System.Data.CommandType
 Inquiry.Commands.InquiryGeneratedCommand<TArgs>.InquiryGeneratedCommand() -> void
 Inquiry.Commands.InquiryGeneratedCommand<TArgs>.InquiryGeneratedCommand(string! commandText, TArgs args, System.Action<System.Data.Common.DbCommand!, TArgs>! bindParameters, System.Data.CommandType commandType = System.Data.CommandType.Text) -> void
 Inquiry.Commands.InquiryParameterTarget
@@ -290,8 +268,7 @@ Inquiry.GroupCount<TKey>.GroupCount(TKey key, long count) -> void
 Inquiry.GroupCount<TKey>.Key.get -> TKey
 Inquiry.IInquiry
 Inquiry.IInquiry.BeginTransactionAsync(System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Transactions.IInquiryTransaction!>!
-Inquiry.IInquiry.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
-Inquiry.IInquiry.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, Inquiry.BulkCopy.InquiryBulkInsertOptions? options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
+Inquiry.IInquiry.BulkInsertAsync<TEntity>(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows, Inquiry.BulkCopy.InquiryBulkInsertOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
 Inquiry.IInquiry.ExecuteAsync(Inquiry.Commands.InquiryCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
 Inquiry.IInquiry.ExecuteAsync(System.FormattableString! commandText, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
 Inquiry.IInquiry.ExecuteAsync<TArgs>(Inquiry.Commands.InquiryGeneratedCommand<TArgs> command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
@@ -431,15 +408,9 @@ Inquiry.Stores.InquiryBulkInsertAttribute.InquiryBulkInsertAttribute() -> void
 Inquiry.Stores.InquiryCountAttribute
 Inquiry.Stores.InquiryCountAttribute.InquiryCountAttribute() -> void
 Inquiry.Stores.InquiryDeleteAllAttribute
-Inquiry.Stores.InquiryDeleteAllAttribute.HardDelete.get -> bool
-Inquiry.Stores.InquiryDeleteAllAttribute.HardDelete.set -> void
 Inquiry.Stores.InquiryDeleteAllAttribute.InquiryDeleteAllAttribute() -> void
 Inquiry.Stores.InquiryDeleteAttribute
-Inquiry.Stores.InquiryDeleteAttribute.HardDelete.get -> bool
-Inquiry.Stores.InquiryDeleteAttribute.HardDelete.set -> void
 Inquiry.Stores.InquiryDeleteAttribute.InquiryDeleteAttribute() -> void
-Inquiry.Stores.InquiryDeleteAttribute.ReturnEntity.get -> bool
-Inquiry.Stores.InquiryDeleteAttribute.ReturnEntity.set -> void
 Inquiry.Stores.InquiryExistsAttribute
 Inquiry.Stores.InquiryExistsAttribute.InquiryExistsAttribute() -> void
 Inquiry.Stores.InquiryFullTextSearchAttribute
@@ -452,10 +423,12 @@ Inquiry.Stores.InquiryGroupCountAttribute.Column.get -> string!
 Inquiry.Stores.InquiryGroupCountAttribute.IncludeDeleted.get -> bool
 Inquiry.Stores.InquiryGroupCountAttribute.IncludeDeleted.set -> void
 Inquiry.Stores.InquiryGroupCountAttribute.InquiryGroupCountAttribute(string! column) -> void
+Inquiry.Stores.InquiryHardDeleteAllAttribute
+Inquiry.Stores.InquiryHardDeleteAllAttribute.InquiryHardDeleteAllAttribute() -> void
+Inquiry.Stores.InquiryHardDeleteAttribute
+Inquiry.Stores.InquiryHardDeleteAttribute.InquiryHardDeleteAttribute() -> void
 Inquiry.Stores.InquiryInsertAttribute
 Inquiry.Stores.InquiryInsertAttribute.InquiryInsertAttribute() -> void
-Inquiry.Stores.InquiryInsertAttribute.ReturnEntity.get -> bool
-Inquiry.Stores.InquiryInsertAttribute.ReturnEntity.set -> void
 Inquiry.Stores.InquiryKeysetPageAttribute
 Inquiry.Stores.InquiryKeysetPageAttribute.Direction.get -> Inquiry.Stores.KeysetDirection
 Inquiry.Stores.InquiryKeysetPageAttribute.Direction.set -> void
@@ -560,12 +533,8 @@ Inquiry.Stores.InquiryStoredProcedureAttribute.ReturnsValue.get -> bool
 Inquiry.Stores.InquiryStoredProcedureAttribute.ReturnsValue.set -> void
 Inquiry.Stores.InquiryUpdateAttribute
 Inquiry.Stores.InquiryUpdateAttribute.InquiryUpdateAttribute() -> void
-Inquiry.Stores.InquiryUpdateAttribute.ReturnEntity.get -> bool
-Inquiry.Stores.InquiryUpdateAttribute.ReturnEntity.set -> void
 Inquiry.Stores.InquiryUpsertAttribute
 Inquiry.Stores.InquiryUpsertAttribute.InquiryUpsertAttribute() -> void
-Inquiry.Stores.InquiryUpsertAttribute.ReturnEntity.get -> bool
-Inquiry.Stores.InquiryUpsertAttribute.ReturnEntity.set -> void
 Inquiry.Stores.InquiryWhereAttribute
 Inquiry.Stores.InquiryWhereAttribute.CloseGroups.get -> int
 Inquiry.Stores.InquiryWhereAttribute.CloseGroups.set -> void

@@ -39,7 +39,7 @@ public sealed class ComputedPerson
 
 public partial class ComputedPersonStore : InquiryStore<ComputedPerson>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<ComputedPerson?> InsertReturningAsync(ComputedPerson person, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]

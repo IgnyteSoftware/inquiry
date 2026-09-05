@@ -28,7 +28,7 @@ public partial class AuditDocStore : InquiryStore<AuditDoc>
     [InquiryInsert]
     public partial Task<int> InsertAsync(AuditDoc doc, CancellationToken cancellationToken = default);
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<AuditDoc?> InsertReturningAsync(AuditDoc doc, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]

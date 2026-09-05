@@ -63,7 +63,7 @@ set is the comparisons (`Equal`, `NotEqual`, `GreaterThan`, …), `Like` / `NotL
 
 On a soft-delete entity, `[InquiryDelete]` emits the **soft UPDATE form** (sets the
 indicator) and both operations compose the active-row filter into the WHERE — already-deleted
-rows are never updated or re-deleted. `[InquiryDelete(HardDelete = true)]` forces a literal
+rows are never updated or re-deleted. `[InquiryHardDelete]` forces a literal
 `DELETE`, matching the key-delete behavior.
 
 ## Delete targeting
@@ -90,8 +90,8 @@ public partial Task<int> DeleteByKeysAsync(IReadOnlyList<int> keys, Cancellation
 public partial Task<int> DeleteAllAsync(CancellationToken ct = default);
 ```
 
-`[InquiryDeleteAll]` performs the normal soft-delete update for a soft-delete entity. Set
-`HardDelete = true` to emit a literal table-wide `DELETE`. Write-enforced global filters still apply.
+`[InquiryDeleteAll]` performs the normal soft-delete update for a soft-delete entity. Use
+`[InquiryHardDeleteAll]` to emit a literal table-wide `DELETE`. Write-enforced global filters still apply.
 
 ## Transactions and timeouts
 

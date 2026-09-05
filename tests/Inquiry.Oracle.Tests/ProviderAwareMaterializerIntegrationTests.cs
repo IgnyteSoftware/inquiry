@@ -45,13 +45,13 @@ public sealed class ProviderReadItem
 
 public partial class ProviderReadItemStore : InquiryStore<ProviderReadItem>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<ProviderReadItem?> InsertReturningAsync(ProviderReadItem item, CancellationToken ct = default);
 
     [InquirySelectOneByKey]
     public partial Task<ProviderReadItem?> SelectByKeyAsync(int id, CancellationToken ct = default);
 
-    [InquiryUpdate(ReturnEntity = true)]
+    [InquiryUpdate]
     public partial Task<ProviderReadItem?> UpdateReturningAsync(ProviderReadItem item, CancellationToken ct = default);
 
     [InquirySelectAllByField("EventDate")]
@@ -90,13 +90,13 @@ public sealed class ProviderReadAllTypes
 
 public partial class ProviderReadAllTypesStore : InquiryStore<ProviderReadAllTypes>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<ProviderReadAllTypes?> InsertReturningAsync(ProviderReadAllTypes item, CancellationToken ct = default);
 
     [InquirySelectOneByKey]
     public partial Task<ProviderReadAllTypes?> SelectByKeyAsync(int id, CancellationToken ct = default);
 
-    [InquiryUpdate(ReturnEntity = true)]
+    [InquiryUpdate]
     public partial Task<ProviderReadAllTypes?> UpdateReturningAsync(ProviderReadAllTypes item, CancellationToken ct = default);
 
     [InquirySelectAllByField("Token")]
@@ -384,19 +384,19 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         Guid? optionalToken,
         bool convertedEnabled,
         Guid convertedToken) => new()
-    {
-        Id = id,
-        NumberValue = id * 10,
-        Enabled = enabled,
-        Token = token,
-        OptionalEnabled = optionalEnabled,
-        OptionalToken = optionalToken,
-        ConvertedEnabled = new OracleToggle(convertedEnabled),
-        ConvertedToken = new OracleExternalId(convertedToken),
-        Payload = [(byte)id, (byte)(id + 1)],
-        Name = $"item-{id}",
-        OccurredAt = new DateTime(2026, 7, 11, 12, 34, id),
-    };
+        {
+            Id = id,
+            NumberValue = id * 10,
+            Enabled = enabled,
+            Token = token,
+            OptionalEnabled = optionalEnabled,
+            OptionalToken = optionalToken,
+            ConvertedEnabled = new OracleToggle(convertedEnabled),
+            ConvertedToken = new OracleExternalId(convertedToken),
+            Payload = [(byte)id, (byte)(id + 1)],
+            Name = $"item-{id}",
+            OccurredAt = new DateTime(2026, 7, 11, 12, 34, id),
+        };
 
     private static void AssertAllTypes(ProviderReadAllTypes expected, ProviderReadAllTypes actual)
     {

@@ -21,7 +21,7 @@ public sealed class JsonPathDoc
 
 public partial class JsonPathDocStore : InquiryStore<JsonPathDoc>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<JsonPathDoc?> InsertAsync(JsonPathDoc doc, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByPredicate]

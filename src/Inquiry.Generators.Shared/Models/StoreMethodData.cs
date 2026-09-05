@@ -101,7 +101,7 @@ internal sealed record StoreMethodData(
     public int LockMode { get; init; }
 
     /// <summary>
-    /// Whether <c>HardDelete = true</c> was set so a key, predicate, or table-wide delete emits a
+    /// Whether a hard-delete operation was selected so a key, predicate, or table-wide delete emits a
     /// literal <c>DELETE</c> even when the entity declares a soft-delete column.
     /// </summary>
     public bool HardDelete { get; init; }

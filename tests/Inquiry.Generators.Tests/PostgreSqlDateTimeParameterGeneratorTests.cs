@@ -31,7 +31,7 @@ public sealed partial class InquiryGeneratorTests
 
         public partial class TemporalStore : InquiryStore<TemporalItem>
         {
-            [InquiryInsert(ReturnEntity = true)] public partial Task<TemporalItem?> InsertAsync(TemporalItem item, CancellationToken ct = default);
+            [InquiryInsert] public partial Task<TemporalItem?> InsertAsync(TemporalItem item, CancellationToken ct = default);
             [InquiryBulkInsert] public partial Task<long> BulkAsync(IEnumerable<TemporalItem> items, CancellationToken ct = default);
             [InquirySelectAllByPredicate][InquiryWhere("OccurredAt")] public partial Task<IReadOnlyList<TemporalItem>> ByOccurredAsync(DateTime value, CancellationToken ct = default);
             [InquirySelectAllByPredicate][InquiryWhere("OptionalAt")] public partial Task<IReadOnlyList<TemporalItem>> ByOptionalAsync(DateTime? value, CancellationToken ct = default);
