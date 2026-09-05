@@ -44,7 +44,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryUpdate]
             public partial Task<bool> UpdateAsync(Doc doc, CancellationToken cancellationToken = default);
 
-            [InquiryUpdateAll]
+            [InquiryUpdate]
             public partial Task<int> UpdateAllAsync(IEnumerable<Doc> docs, CancellationToken cancellationToken = default);
         }
         """;

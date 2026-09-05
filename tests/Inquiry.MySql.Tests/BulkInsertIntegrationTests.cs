@@ -69,7 +69,7 @@ public sealed class BulkInsertIntegrationTests
             store.BulkInsertAsync(new[] { Item("transaction", 1) }));
 
         Assert.Contains("AllowLoadLocalInfile", exception.Message);
-        Assert.Contains("[InquiryInsertAll]", exception.Message);
+        Assert.Contains("[InquiryInsert]", exception.Message);
         Assert.Equal(0, await store.CountAsync());
         await transaction.RollbackAsync();
     }

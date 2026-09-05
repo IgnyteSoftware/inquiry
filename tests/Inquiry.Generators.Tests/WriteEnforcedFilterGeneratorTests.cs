@@ -319,7 +319,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquirySelectAll]
                 public partial Task<IReadOnlyList<Doc>> SelectAllAsync(CancellationToken cancellationToken = default);
 
-                [InquiryUpdateAll]
+                [InquiryUpdate]
                 public partial Task<int> UpdateAllAsync(IEnumerable<Doc> docs, CancellationToken cancellationToken = default);
             }
             """);
@@ -476,7 +476,7 @@ public sealed partial class InquiryGeneratorTests
     public void SetBasedUpdateAllQualifiesEnforcedTermWithTargetAlias_MySql()
     {
         var result = RunGenerator(TenantDocStore("""
-            [InquiryUpdateAll]
+            [InquiryUpdate]
             public partial Task<int> UpdateAllAsync(IEnumerable<Doc> docs, CancellationToken cancellationToken = default);
             """), dialect: "MySql");
         AssertNoErrors(result);
@@ -497,7 +497,7 @@ public sealed partial class InquiryGeneratorTests
         // divides exactly. Without reserving the once-per-command filter parameter the descriptor would
         // admit 21845 items and bind 65536 parameters, one over the protocol limit.
         var enforced = RunGenerator(TenantDocStore("""
-            [InquiryUpdateAll]
+            [InquiryUpdate]
             public partial Task<int> UpdateAllAsync(IEnumerable<Doc> docs, CancellationToken cancellationToken = default);
             """), dialect: "MySql");
         AssertNoErrors(enforced);
@@ -507,7 +507,7 @@ public sealed partial class InquiryGeneratorTests
         // the emitted SQL around it — is unchanged.
         var plain = RunGenerator(
             TenantDocEntityLf.Replace(", EnforceOnWrites = true", string.Empty)
-                + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n[InquiryUpdateAll]\npublic partial Task<int> UpdateAllAsync(IEnumerable<Doc> docs, CancellationToken cancellationToken = default);\n}\n",
+                + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n[InquiryUpdate]\npublic partial Task<int> UpdateAllAsync(IEnumerable<Doc> docs, CancellationToken cancellationToken = default);\n}\n",
             dialect: "MySql");
         AssertNoErrors(plain);
         Assert.Contains("maxItemsPerCommand: 21845);", GetTenantDocStore(plain));

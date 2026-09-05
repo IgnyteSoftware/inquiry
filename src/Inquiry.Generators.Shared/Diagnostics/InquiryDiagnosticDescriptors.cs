@@ -221,8 +221,8 @@ internal static class InquiryDiagnosticDescriptors
         isEnabledByDefault: true);
 
     // INQ023: an [InquiryUpdate]/[InquiryDelete] method with no [InquiryWhere] criteria would
-    // mutate every row in the table — almost certainly a bug. Whole-collection mutations have explicit
-    // operations, so the unfiltered form is rejected up front.
+    // mutate every row in the table. Whole-collection mutations use entity
+    // collection parameters, so the unfiltered scalar form is rejected up front.
     public static readonly DiagnosticDescriptor PredicateMutationRequiresWhere = new(
         "INQ023",
         "Set-based mutation requires at least one InquiryWhere criterion",

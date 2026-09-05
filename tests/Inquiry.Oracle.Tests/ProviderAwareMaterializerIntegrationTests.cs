@@ -63,10 +63,10 @@ public partial class ProviderReadItemStore : InquiryStore<ProviderReadItem>
     [InquirySelectAllByField("OffsetAt")]
     public partial Task<IReadOnlyList<ProviderReadItem>> ByOffsetAsync(DateTimeOffset value, CancellationToken ct = default);
 
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<ProviderReadItem> items, CancellationToken ct = default);
 
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IEnumerable<ProviderReadItem> items, CancellationToken ct = default);
 }
 
@@ -148,10 +148,10 @@ public partial class ProviderReadAllTypesStore : InquiryStore<ProviderReadAllTyp
     [InquiryWhere("ConvertedEnabled", Compare.NotIn)]
     public partial Task<IReadOnlyList<ProviderReadAllTypes>> NotInConvertedEnabledAsync(IReadOnlyList<OracleToggle> enabled, CancellationToken ct = default);
 
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<ProviderReadAllTypes> items, CancellationToken ct = default);
 
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IEnumerable<ProviderReadAllTypes> items, CancellationToken ct = default);
 }
 
@@ -167,8 +167,8 @@ public sealed class TemporalBatchItem
 
 public partial class TemporalBatchItemStore : InquiryStore<TemporalBatchItem>
 {
-    [InquiryInsertAll] public partial Task<int> InsertAllAsync(IEnumerable<TemporalBatchItem> items, CancellationToken ct = default);
-    [InquiryUpdateAll] public partial Task<int> UpdateAllAsync(IEnumerable<TemporalBatchItem> items, CancellationToken ct = default);
+    [InquiryInsert] public partial Task<int> InsertAllAsync(IEnumerable<TemporalBatchItem> items, CancellationToken ct = default);
+    [InquiryUpdate] public partial Task<int> UpdateAllAsync(IEnumerable<TemporalBatchItem> items, CancellationToken ct = default);
     [InquirySelectOneByKey] public partial Task<TemporalBatchItem?> SelectByKeyAsync(int id, CancellationToken ct = default);
 }
 

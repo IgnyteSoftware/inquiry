@@ -3,7 +3,7 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// Batch-insert emission: <c>[InquiryInsertAll]</c> emits a prefix const plus a runtime-built
+/// Batch-insert emission: <c>[InquiryInsert]</c> emits a prefix const plus a runtime-built
 /// multi-row VALUES clause, bound through the existing ExecuteAsync&lt;TArgs&gt; fast path.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
@@ -33,7 +33,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Thing> things, CancellationToken cancellationToken = default);
             }
             """;
@@ -77,7 +77,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Thing> things, CancellationToken cancellationToken = default);
             }
             """;
@@ -125,7 +125,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Doc> docs, CancellationToken cancellationToken = default);
             }
             """;
@@ -167,7 +167,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Thing> things, CancellationToken ct = default);
             }
             """;
@@ -203,7 +203,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Thing> things, CancellationToken ct = default);
             }
             """;
@@ -252,7 +252,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class WideStore : InquiryStore<Wide>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Wide> items, CancellationToken ct = default);
             }
             """;
@@ -293,7 +293,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Thing> things, CancellationToken ct = default);
             }
             """;
@@ -336,7 +336,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Thing> things, CancellationToken ct = default);
             }
             """;
@@ -387,7 +387,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class DefaultStore : InquiryStore<DefaultItem>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<DefaultItem> items, CancellationToken ct = default);
             }
             """;
@@ -437,11 +437,11 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> SaveAll(IEnumerable<Thing> items, CancellationToken ct = default);
 
-                [InquiryInsertAll]
-                public partial Task<int> SaveAll(IReadOnlyList<Thing> items, CancellationToken ct = default);
+                [InquiryInsert]
+                public partial Task<int> SaveAll(Thing[] items, CancellationToken ct = default);
             }
             """;
 
@@ -484,10 +484,10 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryInsertAll]
+                [InquiryInsert]
                 public partial Task<int> InsertAllAsync(IEnumerable<Thing>? items, CancellationToken ct = default);
 
-                [InquiryUpdateAll]
+                [InquiryUpdate]
                 public partial Task<int> UpdateAllAsync(IReadOnlyList<Thing>? items, CancellationToken ct = default);
 
                 [InquiryBulkInsert]

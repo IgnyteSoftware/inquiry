@@ -313,7 +313,7 @@ internal sealed class DefaultInquiry : IInquiry
         var copier = _serviceProvider.GetService<Inquiry.BulkCopy.IInquiryBulkCopier>()
             ?? throw new InvalidOperationException(
                 "No IInquiryBulkCopier is registered. Bulk insert needs a provider with a native bulk-copy API " +
-                "(SQL Server, PostgreSQL, MySQL); on other providers use the [InquiryInsertAll] batch insert.");
+                "(SQL Server, PostgreSQL, MySQL); on other providers use [InquiryInsert] with a collection.");
 
         var enlisted = pipeline is not null;
         var (activity, startTimestamp, dbSystem) = StartBulkInsertActivity(definition.Table, enlisted);

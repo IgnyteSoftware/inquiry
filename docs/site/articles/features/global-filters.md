@@ -182,9 +182,9 @@ Every affected statement gains the same term it already carries on reads — so 
 | `[InquiryDelete]` (soft or hard) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
 | `[InquiryRestoreOneByKey]` | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
 | `[InquiryDeleteAll]` | `DELETE FROM "Docs"` | `WHERE "TenantId" = @__gf_TenantId` |
-| `[InquiryUpdateAll]` | key join only | key join `AND` the term |
+| `[InquiryUpdate]` with a collection | key join only | key join `AND` the term |
 | hard `[InquiryDelete]` | criteria only | criteria `AND` the term |
-| `[InquiryInsert]` / `[InquiryInsertAll]` / `[InquiryBulkInsert]` | *(never filtered)* | *(never filtered)* |
+| `[InquiryInsert]` / `[InquiryBulkInsert]` | *(never filtered)* | *(never filtered)* |
 | `[InquiryUpsert]` | supported | **build error `INQ095`** |
 
 The details that bite:

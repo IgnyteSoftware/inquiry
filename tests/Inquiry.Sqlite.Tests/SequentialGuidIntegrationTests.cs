@@ -24,7 +24,7 @@ public partial class SeqDocStore : InquiryStore<SeqDoc>
     [InquiryInsert]
     public partial Task<int> InsertAsync(SeqDoc doc, CancellationToken cancellationToken = default);
 
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<SeqDoc> docs, CancellationToken cancellationToken = default);
 
     [InquiryUpsert]

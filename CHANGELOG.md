@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `[InquiryInsert]` and `[InquiryUpdate]` now infer batch operations from entity collection parameters. The separate `[InquiryInsertAll]` and `[InquiryUpdateAll]` attributes were removed.
+
 ## [1.0.0-preview.10] - 2026-09-04
 
 ### Added

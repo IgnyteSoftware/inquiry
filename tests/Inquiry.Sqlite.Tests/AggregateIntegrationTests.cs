@@ -21,7 +21,7 @@ public partial class SaleStore : InquiryStore<Sale>
     [InquiryInsert]
     public partial Task<int> InsertAsync(Sale sale, CancellationToken cancellationToken = default);
 
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(System.Collections.Generic.IEnumerable<Sale> sales, CancellationToken cancellationToken = default);
 
     [InquiryCount]

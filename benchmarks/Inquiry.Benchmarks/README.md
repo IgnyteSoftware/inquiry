@@ -112,7 +112,7 @@ a like-for-like comparison it is omitted (noted in each class's doc comment).
 | `PaginationBenchmarks`           | OffsetPage, KeysetPage    | `LIMIT/OFFSET` vs keyset seek (`ProductID > @after`) at a deep page (offset ≈ `Rows / 2`).                 |
 | `ProjectionAggregateBenchmarks`  | Projection, Count, Sum    | 3-column `ProductSummary` projection, `COUNT(*)`, and `SUM(UnitPrice)`.                                     |
 | `PredicateBenchmarks`            | Search, InList            | Two-clause AND predicate (`UnitPrice >=` + `ProductName LIKE`) and `CategoryID IN (...)`.                   |
-| `BatchBenchmarks`                | BatchInsert               | One batched multi-row INSERT (`[InquiryInsertAll]`) vs an N-row INSERT loop in a transaction.               |
+| `BatchBenchmarks`                | BatchInsert               | One batched multi-row INSERT (`[InquiryInsert]`) vs an N-row INSERT loop in a transaction.               |
 | `EagerLoadingBenchmarks`         | EagerAll                  | Eager load of the `Product.Category` reference vs a Dapper/ADO two-query-then-stitch of the same shape.     |
 | `EagerGridBenchmarks`            | EagerGrid                 | `Region → Territories` collection, one grid command vs two queries stitched. Density: `RegionCount` 4 (dense) or 100 (sparse). |
 | `EagerGridMixedRelationBenchmarks` | EagerGridMixed          | 1 parent + 2 relations (`MixedBenchPost` → to-one `Author`, to-many `Tags`), one grid command vs three queries stitched. `Rows` is the **tag** count; `PostCount` 4 (dense) or 100 (sparse). Seeds only its own tables (`CreateAsync(seedRows: 0)`), unlike the classes above. |

@@ -15,10 +15,10 @@ public sealed class BatchChunkItem
 
 public partial class BatchChunkItemStore : InquiryStore<BatchChunkItem>
 {
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<BatchChunkItem> items, CancellationToken cancellationToken = default);
 
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IEnumerable<BatchChunkItem> items, CancellationToken cancellationToken = default);
 
     [InquiryDelete, InquiryWhere("Id", Compare.In)]

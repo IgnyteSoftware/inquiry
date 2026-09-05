@@ -413,7 +413,7 @@ public sealed partial class InquiryGeneratorTests
     public void BatchUpdateOnTokenEntityIsRejected()
     {
         var result = RunGenerator(TokenStore("""
-            [InquiryUpdateAll]
+            [InquiryUpdate]
             public partial Task<int> UpdateAllAsync(IEnumerable<Widget> widgets, CancellationToken cancellationToken = default);
             """));
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ022");

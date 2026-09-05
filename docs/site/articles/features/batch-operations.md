@@ -1,19 +1,23 @@
 # Batch operations
 
-`[InquiryInsertAll]` and `[InquiryUpdateAll]` treat a collection as one
+`[InquiryInsert]` and `[InquiryUpdate]` select batch mode when their entity parameter is a collection. They treat that collection as one
 **logical batch operation**. That does not mean every provider uses one SQL statement or one network
 round trip. Inquiry selects a bounded execution shape for the provider and operation: a set-based
 statement, `DbBatch`, a reused row command, or native array binding.
+
+The same attributes select single-row mode when the parameter is one entity. `[InquiryUpdate]` with
+`[InquiryWhere]` selects a predicate update and takes scalar `SET` parameters. An entity collection
+cannot be combined with `[InquiryWhere]`.
 
 ## You write
 
 ```csharp
 public partial class ShipperStore : InquiryStore<Shipper>
 {
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(IReadOnlyList<Shipper> shippers, CancellationToken ct = default);
 
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IReadOnlyList<Shipper> shippers, CancellationToken ct = default);
 
     [InquiryDelete]
@@ -63,7 +67,7 @@ the database, driver, packet, and statement limits that apply to your schema.
 
 For entities with at least one bound insert column, the normal generated paths are:
 
-| Provider | `InsertAll` | `UpdateAll` | Collection predicate delete |
+| Provider | Collection insert | Collection update | Collection predicate delete |
 |---|---|---|---|
 | SQLite | Fixed single-row command with reused parameters; under `PrepareStatements.Auto`, Inquiry prefers one preparation for the batch | Reused single-row command | `json_each` |
 | SQL Server | Multi-row `VALUES` below 250 rows when the statement fits; `DbBatch` of fixed one-row inserts at or above 250 | `DbBatch` of fixed one-row updates | TVP |

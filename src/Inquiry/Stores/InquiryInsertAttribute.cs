@@ -1,7 +1,9 @@
 namespace Inquiry.Stores;
 
 /// <summary>
-/// Generates a method that inserts an entity.
+/// Generates an insert method. A method that accepts one entity inserts one row. A method that accepts
+/// an <see cref="System.Collections.Generic.IEnumerable{T}"/> of entities executes batched DML in the
+/// current transaction and returns the total rows affected.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryInsertAttribute : Attribute
