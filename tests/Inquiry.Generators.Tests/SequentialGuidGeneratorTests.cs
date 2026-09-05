@@ -37,7 +37,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryUpsert]
             public partial Task<int> UpsertAsync(Doc doc, CancellationToken cancellationToken = default);
 
-            [InquiryInsertAll]
+            [InquiryInsert]
             public partial Task<int> InsertAllAsync(IEnumerable<Doc> docs, CancellationToken cancellationToken = default);
         }
         """;

@@ -62,7 +62,7 @@ public partial class WriteEnforcedDocStore : InquiryStore<WriteEnforcedDoc>
     /// <c>UPDATE … JOIN</c> where the enforced term has to be qualified with the target alias. Needs
     /// two or more distinct keys per call before the runtime picks that route over the row route.
     /// </summary>
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IEnumerable<WriteEnforcedDoc> docs, CancellationToken cancellationToken = default);
 
     /// <summary>

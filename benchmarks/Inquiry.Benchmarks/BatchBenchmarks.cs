@@ -12,7 +12,7 @@ namespace Inquiry.Benchmarks;
 
 /// <summary>
 /// Batch-insert comparison: write <see cref="BatchSize"/> <c>Region</c> rows per iteration. Inquiry's
-/// <c>[InquiryInsertAll]</c> emits a single multi-row INSERT statement; Dapper and the ADO baseline
+/// <c>[InquiryInsert]</c> emits a single multi-row INSERT statement; Dapper and the ADO baseline
 /// loop a prepared single-row INSERT inside one transaction. This isolates the cost of one batched
 /// round-trip versus N parameterized round-trips against the same engine.
 /// </summary>

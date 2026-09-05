@@ -298,7 +298,9 @@ public sealed partial class InquiryGeneratorTests
             [InquiryUpdate]
             public partial Task<bool> RepriceAllAsync(decimal price, CancellationToken cancellationToken = default);
             """));
-        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ006");
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ096");
+        Assert.Contains("reads as an update by entity key", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("Add [InquiryWhere] to select predicate-update mode", diagnostic.GetMessage(), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -34,7 +34,7 @@ public partial class AuditDocStore : InquiryStore<AuditDoc>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(AuditDoc doc, CancellationToken cancellationToken = default);
 
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IEnumerable<AuditDoc> docs, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]

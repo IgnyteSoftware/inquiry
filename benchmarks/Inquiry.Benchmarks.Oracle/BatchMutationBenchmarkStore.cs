@@ -15,10 +15,10 @@ public sealed class BatchMutationBenchmarkItem
 
 public partial class BatchMutationBenchmarkStore : InquiryStore<BatchMutationBenchmarkItem>
 {
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<BatchMutationBenchmarkItem> items, CancellationToken cancellationToken = default);
 
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IEnumerable<BatchMutationBenchmarkItem> items, CancellationToken cancellationToken = default);
 
     [InquiryDelete, InquiryWhere("Id", Compare.In)]

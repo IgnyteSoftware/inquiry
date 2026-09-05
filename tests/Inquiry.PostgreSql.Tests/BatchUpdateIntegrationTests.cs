@@ -28,7 +28,7 @@ public partial class SkuStore : InquiryStore<Sku>
     [InquirySelectOneByKey]
     public partial Task<Sku?> GetAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IEnumerable<Sku> products, CancellationToken cancellationToken = default);
 }
 

@@ -1,6 +1,8 @@
 # Bulk insert
 
-`[InquiryBulkInsert]` is the 100k+-row tier above [batch operations](batch-operations.md): rows **stream** to the server through the provider's native bulk-copy API instead of being bound as SQL parameters.
+`[InquiryInsert]` with a collection runs batched DML in a transaction. `[InquiryBulkInsert]` is a
+separate high-volume operation. It streams rows through the provider's native bulk-copy API instead of
+binding each row as SQL parameters.
 
 | Dialect | Mechanism |
 |---|---|
@@ -28,7 +30,7 @@ The method takes `IEnumerable<T>` (lazy sequences stream end-to-end) and returns
 - **Column set matches insert**: database-generated keys, database-default columns, and database-generated concurrency tokens are omitted; converters and enum mappings apply per value exactly as in single-row inserts.
 - **Stamps still happen**: [sequential GUID keys](crud.md#key-generation-sequential-guids) and [auditing timestamps](auditing.md) are assigned per row as the stream is enumerated.
 - **No parameter cap** on bulk-copy dialects — that's the point. The SQLite/Oracle fallback is the batch `INSERT` and keeps its cap; chunk accordingly there.
-- **Transactional where the native API permits it**: SQL Server and PostgreSQL reuse the open ambient Inquiry connection, participate in commit/rollback, and never dispose the borrowed connection. MySQL/MariaDB regular connections deliberately omit `AllowLoadLocalInfile`; those providers therefore fail before writing and point to `[InquiryInsertAll]`. They can enlist only when a custom ambient connection explicitly enables that setting. Outside a transaction, native bulk insert keeps using an independently owned connection. The SQLite/Oracle batch fallback already participates in ambient transactions.
+- **Transactional where the native API permits it**: SQL Server and PostgreSQL reuse the open ambient Inquiry connection, participate in commit/rollback, and never dispose the borrowed connection. MySQL/MariaDB regular connections deliberately omit `AllowLoadLocalInfile`; those providers therefore fail before writing and point to `[InquiryInsert]`. They can enlist only when a custom ambient connection explicitly enables that setting. Outside a transaction, native bulk insert keeps using an independently owned connection. The SQLite/Oracle batch fallback already participates in ambient transactions.
 - **Observable without row data**: native bulk insert emits a `BULK_INSERT` client span and duration metrics for the whole operation, connection open/acquisition, and native copy phase. Tags identify enlisted versus dedicated use, affected-row count, cancellation, and failures; values from inserted cells are never recorded.
 - **MySQL prerequisites**: `MySqlBulkCopy` uses `LOAD DATA LOCAL INFILE` under the hood. Inquiry enables `AllowLoadLocalInfile` **only on the dedicated bulk-insert connection** (never on regular pipeline connections — the flag widens what a SQL-injection bug could do, so it stays scoped), and the **server** must run with `local_infile=1`.
 
@@ -59,7 +61,7 @@ PostgreSQL binary `COPY` and `MySqlBulkCopy` expose only the options described a
 
 ## When to use which tier
 
-- 1–~2k rows: [`[InquiryInsertAll]`](batch-operations.md) — one multi-row `INSERT`, joins transactions and interceptors.
+- 1–~2k rows: [`[InquiryInsert]`](batch-operations.md) — one multi-row `INSERT`, joins transactions and interceptors.
 - More than that, or unbounded streams: `[InquiryBulkInsert]`.
 
 The `Inquiry.Benchmarks.PostgreSql` project's `BulkInsertBenchmarks` compares the two tiers (chunked `VALUES` batches vs one binary `COPY`) head-to-head on a live server.

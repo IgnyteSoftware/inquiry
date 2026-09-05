@@ -926,7 +926,7 @@ new or reframed issue.
 - **`DbBatch` pipeline support (2026-06-12):** `IInquiry.ExecuteBatchAsync` executes one command text
   per item with per-item parameters — a single ADO.NET `DbBatch` round trip on Npgsql / SqlClient /
   MySqlConnector (capability-probed), sequential same-connection execution elsewhere.
-  `[InquiryUpdateAll]` now routes through it reusing the single-row `_sqlUpdate` const: the
+  `[InquiryUpdate]` now routes through it reusing the single-row `_sqlUpdate` const: the
   multi-statement `{r}`-template machinery and per-row parameter mangling are gone, the UpdateAll
   parameter cap no longer applies, and **Oracle UpdateAll works** (the `INQ039` stub is removed; live
   Oracle batch-update test added). Interceptors fire per item on the sequential path only.
