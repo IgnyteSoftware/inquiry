@@ -1,6 +1,13 @@
 # Adding a provider
 
-A provider is two projects mirroring the existing ones (SQLite / SQL Server / PostgreSQL / MySQL / MariaDB / Oracle):
+> [!IMPORTANT]
+> This page is for first-party providers maintained in the Inquiry repository. Inquiry 1.0 has a closed
+> provider set. `Inquiry.Generators.Shared`, `InquiryGeneratorBase`, and `SqlBuilder` are unpackaged
+> implementation details, not a supported third-party provider SDK. Their signatures may change in any
+> release, including a patch or minor release. A packaged provider SDK and conformance suite are tracked
+> separately for 1.1.
+
+A first-party provider is two projects mirroring the existing ones (SQLite / SQL Server / PostgreSQL / MySQL / MariaDB / Oracle):
 
 - **`Inquiry.<Dialect>`** (runtime) — the connection factory, the `AddInquiry<Dialect>(…)` DI extension, and
   `[assembly: InquiryDialect("<Dialect>")]`.

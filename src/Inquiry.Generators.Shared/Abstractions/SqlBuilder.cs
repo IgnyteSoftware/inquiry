@@ -34,6 +34,10 @@ public enum BatchInsertStrategy { SetBased, Row, Adaptive }
 /// concurrency token, soft-delete) MUST compose through <see cref="AppendWhere"/> so AND-joining is
 /// implemented once rather than duplicated (and divergently) across providers.
 /// </remarks>
+/// <remarks>
+/// This type supports only the first-party provider analyzers in this repository. It is not a stable
+/// provider SDK and may change without a major-version release.
+/// </remarks>
 public abstract class SqlBuilder
 {
     public abstract string DialectName { get; }
@@ -74,7 +78,7 @@ public abstract class SqlBuilder
     public virtual bool ComputedColumnDeclaresStoreType => false;
     public virtual bool RequiresBoundedComputedStrings => false;
     protected virtual bool DefaultExpressionPrecedesInlineConstraints => false;
-    public virtual string? GetSchemaManifestStoreType(IColumn column)
+    internal virtual string? GetSchemaManifestStoreType(IColumn column)
         => !string.IsNullOrEmpty(column.ComputedExpression) && !ComputedColumnDeclaresStoreType ? null : ColumnType(column);
     /// <summary>Returns the provider's stable physical-name ordering key for manifest output.</summary>
     public virtual string GetPhysicalIdentifierSortKey(string identifier) => identifier;
@@ -97,9 +101,9 @@ public abstract class SqlBuilder
         return new string(chars);
     }
     public virtual string GetProviderArtifactKind(CollectionParameterArtifact artifact) => "collection-type";
-    public virtual string GetProviderArtifactSignature(CollectionParameterArtifact artifact) => artifact.ElementSignature;
-    public virtual string RenderDefaultExpression(string expression) => expression;
-    public virtual string RenderCheckExpression(string expression) => expression;
+    internal virtual string GetProviderArtifactSignature(CollectionParameterArtifact artifact) => artifact.ElementSignature;
+    internal virtual string RenderDefaultExpression(string expression) => expression;
+    internal virtual string RenderCheckExpression(string expression) => expression;
 
     /// <summary>Whether this provider has a native database-generated concurrency-token contract.</summary>
     public virtual bool SupportsDatabaseGeneratedConcurrencyToken => false;
@@ -234,9 +238,9 @@ public abstract class SqlBuilder
 
     /// <summary>The DbType expression emitted for a <see cref="System.Boolean"/> parameter.</summary>
     public virtual string BooleanDbTypeExpression => "global::System.Data.DbType.Boolean";
-    public virtual string? DateOnlyDbTypeExpression => "global::System.Data.DbType.Date";
+    internal virtual string? DateOnlyDbTypeExpression => "global::System.Data.DbType.Date";
     public virtual string? TimeOnlyDbTypeExpression => "global::System.Data.DbType.Time";
-    public virtual string? DateTimeOffsetDbTypeExpression => "global::System.Data.DbType.DateTimeOffset";
+    internal virtual string? DateTimeOffsetDbTypeExpression => "global::System.Data.DbType.DateTimeOffset";
 
     /// <summary>
     /// Whether generated binders emit <c>Size</c> (variable-length string) and <c>Precision</c>/
@@ -331,7 +335,7 @@ public abstract class SqlBuilder
     /// <summary>Emits provider-only metadata needed before assigning an array parameter value.</summary>
     public virtual string? BuildArrayBindParameterMetadata(string parameterExpression, IColumn column) => null;
 
-    public string QuoteTable(string? schema, string tableName)
+    internal string QuoteTable(string? schema, string tableName)
     {
         return string.IsNullOrEmpty(schema)
             ? QuoteIdentifier(tableName)
@@ -340,10 +344,10 @@ public abstract class SqlBuilder
 
     public abstract string QuoteIdentifier(string identifier);
 
-    public virtual string BuildSelectAllSql(SqlBuildContext context, bool distinct = false)
+    internal virtual string BuildSelectAllSql(SqlBuildContext context, bool distinct = false)
         => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
-    public string BuildSelectAllFilteredSql(
+    internal string BuildSelectAllFilteredSql(
         SqlBuildContext childContext,
         string childFilterColumnName,
         SqlBuildContext parentContext,
@@ -357,7 +361,7 @@ public abstract class SqlBuilder
             + " WHERE " + AppendWhere(inPredicate, childContext.ActiveRowPredicate);
     }
 
-    public string BuildSelectByKeySubquerySql(
+    internal string BuildSelectByKeySubquerySql(
         SqlBuildContext childContext,
         string childKeyColumnName,
         SqlBuildContext parentContext,
@@ -519,7 +523,7 @@ public abstract class SqlBuilder
 
     public abstract string BuildSelectByKeySql(SqlBuildContext context);
 
-    public virtual string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns, bool distinct = false)
+    internal virtual string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns, bool distinct = false)
     {
         var parts = new string[filterColumns.Count];
         for (var i = 0; i < filterColumns.Count; i++)
@@ -535,7 +539,7 @@ public abstract class SqlBuilder
     /// junction takes a space alias (no <c>AS</c>, which Oracle rejects for table aliases). All names are
     /// quoted through <see cref="QuoteIdentifier"/> / <see cref="QuoteTable"/>.
     /// </summary>
-    public virtual string BuildManyToManySelectByParentSql(
+    internal virtual string BuildManyToManySelectByParentSql(
         SqlBuildContext childContext,
         IReadOnlyList<IColumn> childColumns,
         string? junctionSchema,
@@ -600,7 +604,7 @@ public abstract class SqlBuilder
     /// override a hook when their LIKE/IN syntax differs. The composed predicate body is routed through
     /// <see cref="AppendWhere"/> so it stays consistent with key/field WHERE shaping.
     /// </summary>
-    public virtual string BuildSelectByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates, bool distinct = false)
+    internal virtual string BuildSelectByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates, bool distinct = false)
         => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table
             + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
 
@@ -616,7 +620,7 @@ public abstract class SqlBuilder
     /// update never touches soft-deleted rows. Dialect-uniform (quoting, sigils, and operator
     /// rendering all route through the shared hooks), so concrete and inherited by every provider.
     /// </summary>
-    public virtual string BuildUpdateByPredicateSql(SqlBuildContext context, IReadOnlyList<IColumn> setColumns, IReadOnlyList<SqlPredicate> predicates)
+    internal virtual string BuildUpdateByPredicateSql(SqlBuildContext context, IReadOnlyList<IColumn> setColumns, IReadOnlyList<SqlPredicate> predicates)
     {
         var set = new System.Text.StringBuilder();
         for (var i = 0; i < setColumns.Count; i++)
@@ -658,7 +662,7 @@ public abstract class SqlBuilder
     /// Write-enforced global filters still compose — they are a boundary, not an activeness test, and
     /// leaving them off would make this the one delete shape that crosses it.
     /// </summary>
-    public virtual string BuildDeleteByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+    internal virtual string BuildDeleteByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
         => "DELETE FROM " + context.Table + " WHERE " + AppendWhere(RenderPredicates(predicates), context.WriteEnforcedPredicate);
 
     /// <summary>
@@ -667,7 +671,7 @@ public abstract class SqlBuilder
     /// AND-composes the active-row filter — soft-deleting an already-deleted row is a no-op, and
     /// excluding those rows keeps the returned rows-affected count meaningful.
     /// </summary>
-    public virtual string BuildSoftDeleteByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+    internal virtual string BuildSoftDeleteByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
         => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
             + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
 
@@ -718,7 +722,7 @@ public abstract class SqlBuilder
     /// emitted when the entity has a soft-delete column; callers pick this over
     /// <see cref="BuildDeleteByKeySql"/> for a non-hard delete.
     /// </summary>
-    public virtual string BuildSoftDeleteByKeySql(SqlBuildContext context)
+    internal virtual string BuildSoftDeleteByKeySql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
             + " WHERE " + context.KeyWriteWhereClause;
 
@@ -726,7 +730,7 @@ public abstract class SqlBuilder
     /// Builds a soft-delete update that returns the affected entity. Dialects must opt in because
     /// support for UPDATE RETURNING differs independently from DELETE RETURNING.
     /// </summary>
-    public virtual string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
+    internal virtual string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
         => throw new System.NotSupportedException("Soft-delete returning requires UPDATE RETURNING, which is not supported by this dialect.");
 
     /// <summary>
@@ -735,7 +739,7 @@ public abstract class SqlBuilder
     /// term (a restore targets a row whose token the caller has not read), so it uses the no-concurrency
     /// write clause rather than <see cref="SqlBuildContext.KeyWriteWhereClause"/>.
     /// </summary>
-    public virtual string BuildRestoreByKeySql(SqlBuildContext context)
+    internal virtual string BuildRestoreByKeySql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SoftDeleteRestoreSetClause + " WHERE " + context.KeyEnforcedWhereClause;
 
     // ---- Explicit table-wide delete ---------------------------------------------------
@@ -743,13 +747,13 @@ public abstract class SqlBuilder
     /// <summary>
     /// Builds the explicit table-wide hard delete. Write-enforced global filters remain composed.
     /// </summary>
-    public virtual string BuildDeleteAllSql(SqlBuildContext context)
+    internal virtual string BuildDeleteAllSql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + WhereSuffix(context.WriteEnforcedPredicate);
 
     /// <summary>
     /// Builds the explicit table-wide soft delete over active rows.
     /// </summary>
-    public virtual string BuildSoftDeleteAllSql(SqlBuildContext context)
+    internal virtual string BuildSoftDeleteAllSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
             + WhereSuffix(AppendWhere(context.SoftDeletePredicate, context.WriteEnforcedPredicate));
 
@@ -764,10 +768,10 @@ public abstract class SqlBuilder
     /// </summary>
     protected virtual string CountExpression => "COUNT(*)";
 
-    public virtual string BuildCountSql(SqlBuildContext context)
+    internal virtual string BuildCountSql(SqlBuildContext context)
         => "SELECT " + CountExpression + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
-    public virtual string BuildCountByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
+    internal virtual string BuildCountByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         if (filterColumns.Count == 0)
             return BuildCountSql(context);
@@ -796,7 +800,7 @@ public abstract class SqlBuilder
     /// ANSI function name (SUM/AVG/MIN/MAX) and <paramref name="quotedColumn"/> is already dialect-quoted.
     /// Dialect-uniform, so concrete and inherited; composes the soft-delete active filter.
     /// </summary>
-    public virtual string BuildAggregateSql(SqlBuildContext context, string function, string quotedColumn)
+    internal virtual string BuildAggregateSql(SqlBuildContext context, string function, string quotedColumn)
         => "SELECT " + function + "(" + quotedColumn + ") FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
 
     internal string BuildAggregateSql(SqlBuildContext context, string function, string quotedColumn, IReadOnlyList<SqlPredicate> predicates)
@@ -811,7 +815,7 @@ public abstract class SqlBuilder
     /// Builds a top-1-by-order SELECT: all columns, optional active-row filter, ORDER BY, and a
     /// dialect-specific LIMIT 1 tail. Returns at most one row.
     /// </summary>
-    public virtual string BuildSelectTopByOrderSql(SqlBuildContext context, string quotedColumn, bool descending)
+    internal virtual string BuildSelectTopByOrderSql(SqlBuildContext context, string quotedColumn, bool descending)
         => "SELECT " + context.SelectColumns + " FROM " + context.Table
             + WhereSuffix(context.ActiveRowPredicate)
             + " ORDER BY " + quotedColumn + (descending ? " DESC" : " ASC")
@@ -821,7 +825,7 @@ public abstract class SqlBuilder
     /// Builds a grouped COUNT: <c>SELECT col, COUNT(*) FROM t GROUP BY col</c>, with the active-row
     /// filter composed when the entity has soft delete.
     /// </summary>
-    public virtual string BuildGroupCountSql(SqlBuildContext context, string quotedColumn)
+    internal virtual string BuildGroupCountSql(SqlBuildContext context, string quotedColumn)
         => "SELECT " + quotedColumn + ", " + CountExpression + " FROM " + context.Table
             + WhereSuffix(context.ActiveRowPredicate)
             + " GROUP BY " + quotedColumn;
@@ -851,7 +855,7 @@ public abstract class SqlBuilder
     /// <c>MultiResultBatch*</c> hooks below. A dialect without any multi-result shape would override to
     /// <see langword="false"/> and fall back to the per-relation (multi-round-trip) eager-load path.
     /// </summary>
-    public virtual bool SupportsMultiResultBatch => true;
+    internal virtual bool SupportsMultiResultBatch => true;
 
     /// <summary>
     /// Text prepended to the combined multi-result eager-load command, before the first SELECT.
@@ -877,7 +881,7 @@ public abstract class SqlBuilder
     /// <c>ORDER BY "Name" ASC, "Id" DESC</c>. Dialect-uniform, so this is the single implementation all
     /// providers inherit. Returns the empty string when there are no terms.
     /// </summary>
-    public virtual string BuildOrderByClause(SqlSelectOptions options)
+    internal virtual string BuildOrderByClause(SqlSelectOptions options)
     {
         if (options.OrderBy.Count == 0)
         {
@@ -948,7 +952,7 @@ public abstract class SqlBuilder
     /// <item>foreign keys become table-level <c>FOREIGN KEY … REFERENCES …</c> when the entity opts in.</item>
     /// </list>
     /// </summary>
-    public virtual string BuildCreateTableSql(SqlBuildContext context)
+    internal virtual string BuildCreateTableSql(SqlBuildContext context)
     {
         var keyColumns = context.KeyColumns;
         var singleGeneratedKey = keyColumns.Count == 1 && keyColumns[0].IsGenerated;
@@ -1065,7 +1069,7 @@ public abstract class SqlBuilder
     /// <c>IX_&lt;table&gt;_&lt;column&gt;</c> (<c>UX_</c> for unique). Dialect-uniform apart from the
     /// idempotency guard, which is gated by <see cref="SupportsCreateIndexIfNotExists"/>.
     /// </summary>
-    public virtual IReadOnlyList<string> BuildCreateIndexSql(SqlBuildContext context)
+    internal virtual IReadOnlyList<string> BuildCreateIndexSql(SqlBuildContext context)
     {
         if (context.NormalizedIndexes is not null)
         {

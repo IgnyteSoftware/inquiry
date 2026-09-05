@@ -30,6 +30,10 @@ namespace Inquiry.Generators;
 /// matches the resolved attribute does the emission. If the dialect is ambiguous, only the generator
 /// whose dialect sorts first ordinally emits materializers and the INQ014 diagnostic.
 /// </remarks>
+/// <remarks>
+/// This type supports only the first-party provider analyzers in this repository. It is not a stable
+/// provider SDK and may change without a major-version release.
+/// </remarks>
 public abstract class InquiryGeneratorBase : IIncrementalGenerator
 {
     private const string DialectAttributeFullName = "Inquiry.InquiryDialectAttribute";
@@ -40,7 +44,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     /// <summary>Factory for the dialect-specific SQL builder.</summary>
     protected abstract SqlBuilder CreateSqlBuilder();
 
-    public void Initialize(IncrementalGeneratorInitializationContext context)
+    void IIncrementalGenerator.Initialize(IncrementalGeneratorInitializationContext context)
     {
         // Entities via the attribute index; each [InquiryTable] class is projected into an
         // equatable EntityData (diagnostics carried as data) so the transform caches.
