@@ -334,21 +334,20 @@ internal static class StoreOperationEmitter
                 // full-text predicate over the searched columns.
                 var searchArg = method.Parameters[0].Name;
                 AppendHeader(source, method, parameters, isAsync: false);
-                // Buffered and streaming both use the static-binder overload, which the built-in
-                // pipeline lowers to an immutable generated command without captured state.
                 var ftsQueryMethod = method.ReturnsList ? "QueryListAsync" : "QueryAsync";
                 source.AppendLine($"        return Inquiry.{ftsQueryMethod}<{entityType}, string, {structMat}>(");
-                source.AppendLine($"            _sqlFts_{method.Name},");
-                source.AppendLine($"            {searchArg},");
-                source.AppendLine("            static (_cmd, _arg) =>");
-                source.AppendLine("            {");
-                source.AppendLine("                var _p = _cmd.CreateParameter();");
-                source.AppendLine($"                _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("searchTerm"))}\";");
-                source.AppendLine("                _p.DbType = global::System.Data.DbType.String;");
-                source.AppendLine("                _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
-                source.AppendLine("                _cmd.Parameters.Add(_p);");
-                if (filterBinder is not null) source.AppendLine($"                {filterBinder}(_cmd);");
-                source.AppendLine("            },");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryGeneratedCommand<string>(");
+                source.AppendLine($"                _sqlFts_{method.Name},");
+                source.AppendLine($"                {searchArg},");
+                source.AppendLine("                static (_cmd, _arg) =>");
+                source.AppendLine("                {");
+                source.AppendLine("                    var _p = _cmd.CreateParameter();");
+                source.AppendLine($"                    _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("searchTerm"))}\";");
+                source.AppendLine("                    _p.DbType = global::System.Data.DbType.String;");
+                source.AppendLine("                    _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
+                source.AppendLine("                    _cmd.Parameters.Add(_p);");
+                if (filterBinder is not null) source.AppendLine($"                    {filterBinder}(_cmd);");
+                source.AppendLine("                }),");
                 source.AppendLine("            default,");
                 source.AppendLine($"            {cancellation});");
                 source.AppendLine("    }");

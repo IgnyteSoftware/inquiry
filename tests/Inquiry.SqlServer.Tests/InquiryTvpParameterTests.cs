@@ -98,19 +98,6 @@ public sealed class InquiryTvpParameterTests
     }
 
     [Fact]
-    public void UnsupportedBinderFailsWithoutOpeningConnection()
-    {
-        using var command = new SqlCommand();
-
-        var exception = Assert.Throws<NotSupportedException>(() =>
-            InquiryTvpParameter.BindUnsupported(command, "@values", new[] { DateOnly.MinValue }));
-
-        Assert.Contains(typeof(DateOnly).FullName!, exception.Message);
-        Assert.Null(command.Connection);
-        Assert.Empty(command.Parameters.Cast<SqlParameter>());
-    }
-
-    [Fact]
     public void BindUsesExplicitQualifiedTypeWithoutConnectionIo()
     {
         using var command = new SqlCommand();

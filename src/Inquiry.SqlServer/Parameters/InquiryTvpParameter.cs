@@ -14,15 +14,6 @@ namespace Inquiry.SqlServer.Parameters;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class InquiryTvpParameter
 {
-    /// <summary>Throws for a collection binding that cannot be represented as an exact SQL Server TVP.</summary>
-    public static void BindUnsupported<T>(DbCommand command, string parameterName, IEnumerable<T>? values)
-    {
-        _ = command ?? throw new ArgumentNullException(nameof(command));
-        _ = parameterName ?? throw new ArgumentNullException(nameof(parameterName));
-        _ = values;
-        throw new NotSupportedException($"No TVP type mapping for {typeof(T).FullName}.");
-    }
-
     /// <summary>
     /// Binds one exact TVP descriptor. Nonempty sources are peeked once and then retained as a
     /// single-pass sequence; custom pipelines must call <see cref="InquiryCommandResources.Dispose"/>
