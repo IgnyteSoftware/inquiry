@@ -3,37 +3,13 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**Last reconciled against the code and GitHub:** 2026-08-18 (governance and release-engineering
-claims; issue counts were last reconciled 2026-08-01).
-
-**1.0.0 is not release-ready**, though the stop-ship lane is now clear. GitHub has 61 open issues: 12 are
-assigned to the `1.0.0` milestone (6 P1, 5 P2, and one unlabelled eager-grid performance gap, #265); five
-are explicitly planned for 1.x or demand-driven work; and 44 are non-blocking `review-gate` follow-ups
-(#242–#288). **No P0 remains**
-— [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (release engineering and governance) closed
-2026-07-25. The [Roadmap](roadmap.md) records the complete priority inventory.
-
-Delivery is active. Since 2026-07-14, thirteen prioritized issues have closed: #214 (SequentialGuid sort
-order), #78 (stored-procedure INOUT / multi-result-set / Oracle REF CURSOR), #156 (end-to-end
-cancellation), #178 (pessimistic row-level locking), #188 (stored-procedure metadata), #210 (column-list
-constants), #211 (InquiryPagedResult), #212 (typed FK attribute), #213 (ASP.NET Core audit-context
-middleware), #219 (generated query contracts),
-[#69](https://github.com/IgnyteSoftware/inquiry/issues/69) (SQL Server TVP production hardening),
-[#87](https://github.com/IgnyteSoftware/inquiry/issues/87) (benchmark truth and regression gates), and
-[#86](https://github.com/IgnyteSoftware/inquiry/issues/86) (unified telemetry for all execution paths).
-[#89](https://github.com/IgnyteSoftware/inquiry/issues/89) (release engineering and governance) closed
-2026-07-25: governance docs (SECURITY.md, SUPPORT.md, CHANGELOG.md), public API baseline
-(PublicApiAnalyzers + EnablePackageValidation), package verification, CycloneDX SBOM and SLSA build
-provenance, hosted docs, CODEOWNERS and branch protection, and CodeQL plus dependency scanning. The repository is now public
-under the IgnyteSoftware organization, so branch-protection rulesets
-(`eng/configure-branch-protection.ps1`) and CodeQL code scanning are both active.
-[#70](https://github.com/IgnyteSoftware/inquiry/issues/70) (eager loading) closed 2026-07-26, and
-[#80](https://github.com/IgnyteSoftware/inquiry/issues/80) (many-to-many: auto-managed junction,
-composite keys, child filters on eager M:N) closed 2026-07-31.
-[#82](https://github.com/IgnyteSoftware/inquiry/issues/82) (query filters) is **complete** as of
-2026-08-02: named filters with a per-method bypass and runtime-parameterized filters shipped first,
-then opt-in write-side enforcement on key-based writes (`EnforceOnWrites`, INQ095) and the PostgreSQL
-RLS session helpers (`SetLocalAsync`) closed the remaining two criteria.
+**1.0.0 is not release-ready yet.** Live status, priority, open/closed counts, and delivery history live
+in GitHub — the single source of truth. See the [`1.0.0` milestone](https://github.com/IgnyteSoftware/inquiry/milestone/1),
+the [open milestone issues](https://github.com/IgnyteSoftware/inquiry/issues?q=is%3Aissue+is%3Aopen+milestone%3A1.0.0),
+and [`CHANGELOG.md`](https://github.com/IgnyteSoftware/inquiry/blob/main/CHANGELOG.md) for shipped work.
+The [Roadmap](roadmap.md) holds the durable product contract, the 1.0 release gates, and what is out of
+scope. This page describes the durable shape of the project — supported engines, target frameworks, and
+test layout.
 
 ## Supported database engines (6, all live-tested)
 
