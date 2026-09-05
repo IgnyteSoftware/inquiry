@@ -5,7 +5,7 @@ using Inquiry.Oracle.Tests.Fixtures;
 namespace Inquiry.Oracle.Tests;
 
 /// <summary>
-/// <c>ReturnEntity = true</c> (RETURNING) against real Oracle. Oracle has no result-set RETURNING, so each
+/// Exercises returning mutations against real Oracle. Oracle has no result-set RETURNING, so each
 /// op is emitted as an anonymous PL/SQL block that mutates and OPENs a ref cursor over the affected row;
 /// <c>ExecuteReader</c> on the block returns that cursor, which the reader pipeline materializes unchanged.
 /// A database-generated key is captured via <c>RETURNING … INTO</c> a <c>%TYPE</c> local and re-selected;

@@ -36,7 +36,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryUpsert]
             public partial Task<int> UpsertAsync(Ledger ledger, CancellationToken cancellationToken = default);
 
-            [InquiryUpsert(ReturnEntity = true)]
+            [InquiryUpsert]
             public partial Task<Ledger?> UpsertReturningAsync(Ledger ledger, CancellationToken cancellationToken = default);
         }
         """;
@@ -152,7 +152,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryUpsert]
             public partial Task<int> UpsertAsync(Tag tag, CancellationToken cancellationToken = default);
 
-            [InquiryUpsert(ReturnEntity = true)]
+            [InquiryUpsert]
             public partial Task<Tag?> UpsertReturningAsync(Tag tag, CancellationToken cancellationToken = default);
         }
         """;
@@ -217,7 +217,7 @@ public sealed partial class InquiryGeneratorTests
             }
             public partial class WidgetStore : InquiryStore<Widget>
             {
-                [InquiryUpsert(ReturnEntity = true)] public partial Task<Widget?> UpsertAsync(Widget item, CancellationToken ct = default);
+                [InquiryUpsert] public partial Task<Widget?> UpsertAsync(Widget item, CancellationToken ct = default);
             }
             """;
         var result = RunGenerator(source, dialect: "SqlServer");

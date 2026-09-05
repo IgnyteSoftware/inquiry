@@ -19,7 +19,7 @@ public sealed class PgGenItem
 
 public partial class PgGenItemStore : InquiryStore<PgGenItem>
 {
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<PgGenItem?> UpsertReturningAsync(PgGenItem item, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]

@@ -36,7 +36,7 @@ public sealed partial class InquiryGeneratorTests
             public sealed class EventReport { public TimeOnly EventTime { get; set; } }
             public partial class ProviderEventStore : InquiryStore<ProviderEvent>
             {
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<ProviderEvent?> InsertReturningAsync(ProviderEvent value, CancellationToken ct = default);
                 [InquirySelectAll]
                 public partial Task<IReadOnlyList<EventProjection>> ProjectAsync(CancellationToken ct = default);

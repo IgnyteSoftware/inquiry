@@ -263,7 +263,7 @@ public sealed class M2MOrderProduct
 
 public partial class M2MOrderStore : InquiryStore<M2MOrder>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<M2MOrder?> InsertAsync(M2MOrder order, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKeyEager]
@@ -278,7 +278,7 @@ public partial class M2MOrderStore : InquiryStore<M2MOrder>
 
 public partial class M2MProductStore : InquiryStore<M2MProduct>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<M2MProduct?> InsertAsync(M2MProduct product, CancellationToken cancellationToken = default);
 }
 
@@ -352,7 +352,7 @@ public sealed class M2MPostTag
 
 public partial class M2MPostStore : InquiryStore<M2MPost>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<M2MPost?> InsertAsync(M2MPost post, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKeyEager]

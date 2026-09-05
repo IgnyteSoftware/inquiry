@@ -26,7 +26,7 @@ public sealed class VersionedDoc
 
 public partial class VersionedDocStore : InquiryStore<VersionedDoc>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<VersionedDoc?> InsertAsync(VersionedDoc doc, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]

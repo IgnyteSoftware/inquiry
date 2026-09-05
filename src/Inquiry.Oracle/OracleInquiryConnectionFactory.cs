@@ -214,7 +214,7 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         if (renames is { Count: > 0 })
             command.CommandText = RewriteBindTokens(command.CommandText, renames);
 
-        // ReturnEntity = true ops are emitted (OracleSqlBuilder) as an anonymous PL/SQL block that runs the
+        // Returning mutations are emitted (OracleSqlBuilder) as an anonymous PL/SQL block that runs the
         // mutation and OPENs a ref cursor (:rc) over the affected row. ExecuteReader on such a block returns
         // that cursor's reader, so the shared reader pipeline materializes it unchanged — but the OUT ref
         // cursor must be bound here, since the dialect-agnostic binder cannot create an OracleDbType.RefCursor.

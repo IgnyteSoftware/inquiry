@@ -1,6 +1,6 @@
 # Optimistic concurrency
 
-Mark a column with `[InquiryConcurrencyToken]` and every `UPDATE` / `DELETE` will add a `WHERE RowVersion = @RowVersion` check. If another transaction has bumped the version since you read the row, the affected-row count is 0 and the operation returns `false` (or `null` for a `ReturnEntity = true` update). Set `InquiryOptions.ThrowOnConcurrencyConflict = true` to throw `InquiryConcurrencyException` instead.
+Mark a column with `[InquiryConcurrencyToken]` and every `UPDATE` / `DELETE` will add a `WHERE RowVersion = @RowVersion` check. If another transaction has bumped the version since you read the row, the affected-row count is 0 and the operation returns `false` (or `null` for an update returning `Task<TEntity?>`). Set `InquiryOptions.ThrowOnConcurrencyConflict = true` to throw `InquiryConcurrencyException` instead.
 
 ## You write
 

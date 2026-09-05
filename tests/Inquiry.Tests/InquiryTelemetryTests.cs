@@ -725,7 +725,7 @@ public sealed class InquiryTelemetryTests
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }, cancellation.Token));
+            inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }, cancellationToken: cancellation.Token));
 
         var bulkActivity = Assert.Single(activities, activity => activity.DisplayName == "BULK_INSERT");
         Assert.Equal(typeof(OperationCanceledException).FullName, bulkActivity.GetTagItem("error.type"));

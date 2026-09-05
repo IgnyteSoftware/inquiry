@@ -18,19 +18,19 @@ public partial class CustomerStore : InquiryStore<Customer>
     [InquiryInsert]
     public partial Task<int> InsertAsync(Customer customer, CancellationToken cancellationToken = default);
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<Customer?> InsertReturningAsync(Customer customer, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(Customer customer, CancellationToken cancellationToken = default);
 
-    [InquiryUpdate(ReturnEntity = true)]
+    [InquiryUpdate]
     public partial Task<Customer?> UpdateReturningAsync(Customer customer, CancellationToken cancellationToken = default);
 
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(Customer customer, CancellationToken cancellationToken = default);
 
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<Customer?> UpsertReturningAsync(Customer customer, CancellationToken cancellationToken = default);
 
     [InquiryDelete]

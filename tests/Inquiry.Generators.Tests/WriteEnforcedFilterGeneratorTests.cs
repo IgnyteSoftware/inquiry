@@ -65,7 +65,7 @@ public sealed partial class InquiryGeneratorTests
         [InquiryUpdate]
         public partial Task<bool> UpdateAsync(Doc doc, CancellationToken cancellationToken = default);
 
-        [InquiryUpdate(ReturnEntity = true)]
+        [InquiryUpdate]
         public partial Task<Doc?> UpdateReturningAsync(Doc doc, CancellationToken cancellationToken = default);
 
         [InquiryDelete]
@@ -183,7 +183,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryDelete]
                 public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
 
-                [InquiryDelete(HardDelete = true)]
+                [InquiryHardDelete]
                 public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
 
                 [InquiryRestoreOneByKey]
@@ -275,7 +275,7 @@ public sealed partial class InquiryGeneratorTests
         // machinery must not change that: no partially-emitted returning const, and the stub never calls
         // the write binder (which would bind parameters no SQL references).
         var result = RunGenerator(TenantDocStore("""
-            [InquiryDelete(ReturnEntity = true)]
+            [InquiryDelete]
             public partial Task<Doc?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
             """), dialect: "MySql", unsupportedOperationSeverity: ReportDiagnostic.Warn);
 
@@ -343,7 +343,7 @@ public sealed partial class InquiryGeneratorTests
     public void EmulatedUpdateReturningGuardsReadBackWithRowCountOrTerm_MySql()
     {
         var result = RunGenerator(TenantDocStore("""
-            [InquiryUpdate(ReturnEntity = true)]
+            [InquiryUpdate]
             public partial Task<Doc?> UpdateReturningAsync(Doc doc, CancellationToken cancellationToken = default);
             """), dialect: "MySql");
         AssertNoErrors(result);
@@ -377,7 +377,7 @@ public sealed partial class InquiryGeneratorTests
             "    [InquiryColumn(\"TenantId\")",
             "    [InquiryColumn(\"Version\"), InquiryConcurrencyToken]\n    public int Version { get; set; }\n\n    [InquiryColumn(\"TenantId\")");
         var result = RunGenerator(
-            source + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n[InquiryUpdate(ReturnEntity = true)]\npublic partial Task<Doc?> UpdateReturningAsync(Doc doc, CancellationToken cancellationToken = default);\n}\n",
+            source + "\n\npublic partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>\n{\n[InquiryUpdate]\npublic partial Task<Doc?> UpdateReturningAsync(Doc doc, CancellationToken cancellationToken = default);\n}\n",
             dialect: "MySql");
         AssertNoErrors(result);
         var text = GetTenantDocStore(result);
@@ -392,7 +392,7 @@ public sealed partial class InquiryGeneratorTests
     public void EmulatedDeleteReturningCarriesEnforcedTerm_MariaDb()
     {
         var result = RunGenerator(TenantDocStore("""
-            [InquiryDelete(ReturnEntity = true)]
+            [InquiryDelete]
             public partial Task<Doc?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
             """), dialect: "MariaDb");
         AssertNoErrors(result);
@@ -408,7 +408,7 @@ public sealed partial class InquiryGeneratorTests
     public void UpdateReturningElseBranchReselectsByKeyOnly_Oracle()
     {
         var result = RunGenerator(TenantDocStore("""
-            [InquiryUpdate(ReturnEntity = true)]
+            [InquiryUpdate]
             public partial Task<Doc?> UpdateReturningAsync(Doc doc, CancellationToken cancellationToken = default);
             """), dialect: "Oracle");
         AssertNoErrors(result);

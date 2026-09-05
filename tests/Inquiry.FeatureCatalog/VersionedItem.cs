@@ -25,7 +25,7 @@ public sealed class VersionedItem
 
 public partial class VersionedItemStore : InquiryStore<VersionedItem>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<VersionedItem?> InsertAsync(VersionedItem item, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
@@ -34,7 +34,7 @@ public partial class VersionedItemStore : InquiryStore<VersionedItem>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(VersionedItem item, CancellationToken cancellationToken = default);
 
-    [InquiryUpdate(ReturnEntity = true)]
+    [InquiryUpdate]
     public partial Task<VersionedItem?> UpdateReturningAsync(VersionedItem item, CancellationToken cancellationToken = default);
 
     [InquiryDelete]

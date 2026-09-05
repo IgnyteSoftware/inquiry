@@ -129,7 +129,7 @@ public sealed partial class InquiryGeneratorTests
         }
         public partial class TemporalStore : InquiryStore<TemporalItem>
         {
-            [InquiryInsert(ReturnEntity = true)] public partial Task<TemporalItem?> InsertAsync(TemporalItem item, CancellationToken ct = default);
+            [InquiryInsert] public partial Task<TemporalItem?> InsertAsync(TemporalItem item, CancellationToken ct = default);
             [InquiryUpdate] public partial Task<bool> UpdateAsync(TemporalItem item, CancellationToken ct = default);
             [InquiryInsert] public partial Task<int> InsertAllAsync(IEnumerable<TemporalItem> items, CancellationToken ct = default);
             [InquiryUpdate] public partial Task<int> UpdateAllAsync(IEnumerable<TemporalItem> items, CancellationToken ct = default);

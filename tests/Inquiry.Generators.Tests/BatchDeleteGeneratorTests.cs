@@ -235,7 +235,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryDeleteAll]
                 public partial Task<int> DeleteAllAsync(CancellationToken cancellationToken = default);
 
-                [InquiryDeleteAll(HardDelete = true)]
+                [InquiryHardDeleteAll]
                 public partial Task<int> PurgeAllAsync(CancellationToken cancellationToken = default);
             }
             """;

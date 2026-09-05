@@ -42,13 +42,13 @@ public partial class WriteEnforcedDocStore : InquiryStore<WriteEnforcedDoc>
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(WriteEnforcedDoc doc, CancellationToken cancellationToken = default);
 
-    [InquiryUpdate(ReturnEntity = true)]
+    [InquiryUpdate]
     public partial Task<WriteEnforcedDoc?> UpdateReturningAsync(WriteEnforcedDoc doc, CancellationToken cancellationToken = default);
 
     [InquiryDelete]
     public partial Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryDelete(HardDelete = true)]
+    [InquiryHardDelete]
     public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
 
     [InquiryRestoreOneByKey]
@@ -69,7 +69,7 @@ public partial class WriteEnforcedDocStore : InquiryStore<WriteEnforcedDoc>
     /// A HARD set-based delete: it drops the soft-delete activeness term but must still carry the
     /// enforced tenant term, which is the one predicate-write shape that composed nothing before.
     /// </summary>
-    [InquiryDelete(HardDelete = true)]
+    [InquiryHardDelete]
     [InquiryWhere("Title")]
     public partial Task<int> PurgeByTitleAsync(string title, CancellationToken cancellationToken = default);
 }

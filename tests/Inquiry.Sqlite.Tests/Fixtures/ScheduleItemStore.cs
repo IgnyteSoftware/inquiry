@@ -5,7 +5,7 @@ namespace Inquiry.Sqlite.Tests.Fixtures;
 public partial class ScheduleItemStore : InquiryStore<ScheduleItem>
 {
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<ScheduleItem?> InsertReturningAsync(ScheduleItem item, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]

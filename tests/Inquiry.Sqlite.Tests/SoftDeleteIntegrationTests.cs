@@ -32,7 +32,7 @@ public sealed record SoftDeleteWidgetName
 
 public partial class SoftDeleteWidgetStore : InquiryStore<SoftDeleteWidget>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<SoftDeleteWidget?> InsertAsync(SoftDeleteWidget widget, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]
@@ -54,7 +54,7 @@ public partial class SoftDeleteWidgetStore : InquiryStore<SoftDeleteWidget>
     [InquiryDelete]
     public partial Task<bool> SoftDeleteAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryDelete(HardDelete = true)]
+    [InquiryHardDelete]
     public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
 
     [InquiryRestoreOneByKey]

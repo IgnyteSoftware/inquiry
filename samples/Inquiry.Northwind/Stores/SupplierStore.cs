@@ -15,7 +15,7 @@ public partial class SupplierStore : InquiryStore<Supplier>
     [InquiryInsert]
     public partial Task<int> InsertAsync(Supplier supplier, CancellationToken cancellationToken = default);
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<Supplier?> InsertReturningAsync(Supplier supplier, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]

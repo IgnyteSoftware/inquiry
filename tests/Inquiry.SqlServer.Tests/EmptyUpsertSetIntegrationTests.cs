@@ -26,7 +26,7 @@ public partial class SsKeyOnlyItemStore : InquiryStore<SsKeyOnlyItem>
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(SsKeyOnlyItem item, CancellationToken ct = default);
 
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<SsKeyOnlyItem?> UpsertReturningAsync(SsKeyOnlyItem item, CancellationToken ct = default);
 
     [InquirySelectAll]
@@ -45,7 +45,7 @@ public sealed class SsAuditOnlyItem
 
 public partial class SsAuditOnlyItemStore : InquiryStore<SsAuditOnlyItem>
 {
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<SsAuditOnlyItem?> UpsertReturningAsync(SsAuditOnlyItem item, CancellationToken ct = default);
 
     [InquirySelectAll]
@@ -64,7 +64,7 @@ public sealed class SsFailingAuditOnlyItem
 
 public partial class SsFailingAuditOnlyItemStore : InquiryStore<SsFailingAuditOnlyItem>
 {
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<SsFailingAuditOnlyItem?> UpsertReturningAsync(SsFailingAuditOnlyItem item, CancellationToken ct = default);
 
     [InquiryCount]

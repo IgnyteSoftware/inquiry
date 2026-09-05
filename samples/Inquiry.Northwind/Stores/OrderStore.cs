@@ -21,7 +21,7 @@ public partial class OrderStore : InquiryStore<Order>
     [InquiryInsert]
     public partial Task<int> InsertAsync(Order order, CancellationToken cancellationToken = default);
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<Order?> InsertReturningAsync(Order order, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]

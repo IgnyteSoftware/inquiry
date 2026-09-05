@@ -178,7 +178,7 @@ Every affected statement gains the same term it already carries on reads — so 
 
 | Statement | Without `EnforceOnWrites` | With `EnforceOnWrites` |
 |---|---|---|
-| `[InquiryUpdate]` (and `ReturnEntity`) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
+| `[InquiryUpdate]` (including `Task<TEntity?>`) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
 | `[InquiryDelete]` (soft or hard) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
 | `[InquiryRestoreOneByKey]` | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
 | `[InquiryDeleteAll]` | `DELETE FROM "Docs"` | `WHERE "TenantId" = @__gf_TenantId` |
@@ -194,7 +194,7 @@ The details that bite:
 - **Rows-affected `0` now has three meanings** — not found, stale [concurrency token](concurrency.md), or hidden by the filter. They are indistinguishable to the caller, and there is no new exception type for the third. If you need to tell them apart, read the row first (the read is filtered, so a `null` there means "not yours or not there").
 - **The soft-delete indicator is never part of the enforced predicate.** A hard delete must still be able to remove an already-soft-deleted row, and restore must be able to clear the indicator, so those statements carry the tenant term but not the activeness term.
 - **`[InquiryIgnoreFilter]` cannot bypass it.** That attribute is read-only by design (`INQ091`); there is no write-side bypass in this release.
-- **`ReturnEntity` still returns the row when the write changes the filter column.** An update that moves a row out of your own scope (reassigning its tenant, clearing its active flag) succeeds and returns the updated row, even though a subsequent read would no longer see it. The dialects that emulate `RETURNING` with a follow-up `SELECT` guard that read-back on the affected-row count rather than re-testing the predicate, precisely so a legitimate write is not reported as a miss.
+- **A returning mutation still returns the row when the write changes the filter column.** An update that moves a row out of your own scope (reassigning its tenant, clearing its active flag) succeeds and returns the updated row, even though a subsequent read would no longer see it. The dialects that emulate `RETURNING` with a follow-up `SELECT` guard that read-back on the affected-row count rather than re-testing the predicate, precisely so a legitimate write is not reported as a miss.
 - **A store with only reads shows no difference.** `EnforceOnWrites` is a property of the *entity*, but its effect is visible only in generated write statements — if a store declares none, turning it on changes nothing. Check the store that actually writes.
 - Under `ContextKey` mode the write, like a read, throws `InquiryFilterValueMissingException` **before executing** when no ambient scope is set. A write with no scope is never silently a no-op.
 

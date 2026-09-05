@@ -19,10 +19,10 @@ public sealed class DefaultedKeyItem
 
 public partial class DefaultedKeyItemStore : InquiryStore<DefaultedKeyItem>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<DefaultedKeyItem?> InsertReturningAsync(DefaultedKeyItem item, CancellationToken cancellationToken = default);
 
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<DefaultedKeyItem?> UpsertReturningAsync(DefaultedKeyItem item, CancellationToken cancellationToken = default);
 }
 
@@ -41,7 +41,7 @@ public sealed class DefaultedUniqueKeyItem
 
 public partial class DefaultedUniqueKeyItemStore : InquiryStore<DefaultedUniqueKeyItem>
 {
-    [InquiryUpsert(ReturnEntity = true)]
+    [InquiryUpsert]
     public partial Task<DefaultedUniqueKeyItem?> UpsertReturningAsync(DefaultedUniqueKeyItem item, CancellationToken cancellationToken = default);
 }
 

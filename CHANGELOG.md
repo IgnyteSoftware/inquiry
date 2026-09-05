@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `[InquiryInsert]` and `[InquiryUpdate]` now infer batch operations from entity collection parameters. The separate `[InquiryInsertAll]` and `[InquiryUpdateAll]` attributes were removed.
+- Insert, update, upsert, and key-delete methods now infer returning behavior from `Task<TEntity?>`; the `ReturnEntity` attribute property was removed. `[InquiryHardDelete]` and `[InquiryHardDeleteAll]` replace `HardDelete = true`.
+- Generated batch and bulk-copy descriptors now expose one constructor per supported shape. Runtime-only generated-command and batch-command state is internal.
 
 ## [1.0.0-preview.10] - 2026-09-04
 

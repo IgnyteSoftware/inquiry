@@ -23,7 +23,7 @@ public sealed class AuditUserDoc
 
 public partial class AuditUserDocStore : InquiryStore<AuditUserDoc>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<AuditUserDoc?> InsertReturningAsync(AuditUserDoc doc, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]

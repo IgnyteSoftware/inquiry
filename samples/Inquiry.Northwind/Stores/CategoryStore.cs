@@ -21,7 +21,7 @@ public partial class CategoryStore : InquiryStore<Category>
     [InquiryInsert]
     public partial Task<int> InsertAsync(Category category, CancellationToken cancellationToken = default);
 
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<Category?> InsertReturningAsync(Category category, CancellationToken cancellationToken = default);
 
     [InquiryUpdate]

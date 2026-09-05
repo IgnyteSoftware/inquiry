@@ -223,7 +223,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class DefaultedKeyStore : InquiryStore<DefaultedKey>
             {
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<DefaultedKey?> UpsertReturningAsync(DefaultedKey item, CancellationToken cancellationToken = default);
             }
             """;
@@ -391,7 +391,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void OracleInsertReturningEmitsPlSqlRefCursorBlock()
     {
-        // Oracle has no result-set RETURNING, so a ReturnEntity insert is emitted as an anonymous PL/SQL
+        // Oracle has no result-set RETURNING, so a returning insert is emitted as an anonymous PL/SQL
         // block: INSERT, capture the database-generated key into a %TYPE local via RETURNING … INTO, then
         // OPEN a ref cursor (:rc) over the row. No INQ039, no throwing stub — ExecuteReader on the block
         // returns the cursor's reader (the OUT cursor is bound by OracleInquiryConnectionFactory).
@@ -417,7 +417,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class WidgetStore : InquiryStore<Widget>
             {
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<Widget?> InsertReturningAsync(Widget widget, CancellationToken cancellationToken = default);
 
                 [InquirySelectOneByKey]

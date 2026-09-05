@@ -9,7 +9,7 @@ namespace Inquiry.FeatureCatalog;
 /// <summary>
 /// Soft-delete fixture shared by every dialect test project. <see cref="IsDeleted"/> is the
 /// soft-delete flag: normal selects filter it out, <c>IncludeDeleted</c> opts back in, a delete flips it
-/// (unless <c>HardDelete</c>), and restore clears it.
+/// (unless the method uses <c>[InquiryHardDelete]</c>), and restore clears it.
 /// </summary>
 [InquiryTable("SoftItem")]
 public sealed class SoftItem
@@ -41,7 +41,7 @@ public sealed record SoftItemName
 
 public partial class SoftItemStore : InquiryStore<SoftItem>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<SoftItem?> InsertAsync(SoftItem item, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]
@@ -63,7 +63,7 @@ public partial class SoftItemStore : InquiryStore<SoftItem>
     [InquiryDelete]
     public partial Task<bool> SoftDeleteAsync(long id, CancellationToken cancellationToken = default);
 
-    [InquiryDelete(HardDelete = true)]
+    [InquiryHardDelete]
     public partial Task<bool> PurgeAsync(long id, CancellationToken cancellationToken = default);
 
     [InquiryRestoreOneByKey]

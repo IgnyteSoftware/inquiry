@@ -8,7 +8,7 @@ namespace Inquiry.Commands;
 /// Immutable command definition used by generated stores to carry value-state and a static
 /// parameter binder without allocating an <see cref="InquiryCommand"/>.
 /// </summary>
-/// <typeparam name="TArgs">The value-state consumed by <see cref="BindParameters"/>.</typeparam>
+/// <typeparam name="TArgs">The value-state consumed by the generated parameter binder.</typeparam>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public readonly struct InquiryGeneratedCommand<TArgs>
 {
@@ -31,16 +31,16 @@ public readonly struct InquiryGeneratedCommand<TArgs>
     }
 
     /// <summary>Gets the SQL or stored-procedure name.</summary>
-    public string CommandText { get; }
+    internal string CommandText { get; }
 
     /// <summary>Gets the ADO.NET command type.</summary>
-    public CommandType CommandType { get; }
+    internal CommandType CommandType { get; }
 
     /// <summary>Gets the binder value-state.</summary>
-    public TArgs Args { get; }
+    internal TArgs Args { get; }
 
     /// <summary>Gets the static parameter binder.</summary>
-    public Action<DbCommand, TArgs> BindParameters { get; }
+    internal Action<DbCommand, TArgs> BindParameters { get; }
 
     internal InquiryCommand ToInquiryCommand()
     {

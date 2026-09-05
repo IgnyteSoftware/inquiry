@@ -24,7 +24,7 @@ public sealed class GlobalFilterDoc
 
 public partial class GlobalFilterDocStore : InquiryStore<GlobalFilterDoc>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<GlobalFilterDoc?> InsertAsync(GlobalFilterDoc doc, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]
@@ -62,7 +62,7 @@ public sealed class GlobalFilterTicket
 
 public partial class GlobalFilterTicketStore : InquiryStore<GlobalFilterTicket>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<GlobalFilterTicket?> InsertAsync(GlobalFilterTicket ticket, CancellationToken cancellationToken = default);
 
     [InquirySelectAll]

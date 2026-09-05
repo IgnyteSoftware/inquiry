@@ -22,7 +22,7 @@ public sealed class MySqlFamilyJsonTableItem
 
 public partial class MySqlFamilyJsonTableItemStore : InquiryStore<MySqlFamilyJsonTableItem>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<MySqlFamilyJsonTableItem?> InsertAsync(MySqlFamilyJsonTableItem item, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByPredicate, InquiryWhere("OccurredAt", Compare.In)]

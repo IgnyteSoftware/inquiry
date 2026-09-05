@@ -49,7 +49,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryInsert]
                 public partial Task<int> InsertAsync(Organization organization, CancellationToken cancellationToken = default);
 
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<Organization?> InsertReturningAsync(Organization organization, CancellationToken cancellationToken = default);
 
                 [InquiryUpdate]
@@ -875,7 +875,7 @@ public sealed partial class InquiryGeneratorTests
 
         // Enum read casts are wrapped in unchecked() so reinterpreted out-of-range values don't throw
         // OverflowException in consumers compiled with CheckForOverflowUnderflow=true.
-        Assert.Contains("SB = unchecked((global::Demo.SByteEnum)reader.GetByte(",   entityText);
+        Assert.Contains("SB = unchecked((global::Demo.SByteEnum)reader.GetByte(", entityText);
         Assert.Contains("U16 = unchecked((global::Demo.UInt16Enum)reader.GetInt16(", entityText);
         Assert.Contains("U32 = unchecked((global::Demo.UInt32Enum)reader.GetInt32(", entityText);
         Assert.Contains("U64 = unchecked((global::Demo.UInt64Enum)reader.GetInt64(", entityText);
@@ -887,20 +887,20 @@ public sealed partial class InquiryGeneratorTests
         var storeText = storeTree.GetText().ToString();
 
         // DbType must be the signed partner (not SByte/UInt16/UInt32/UInt64).
-        Assert.DoesNotContain("DbType.SByte",  storeText);
+        Assert.DoesNotContain("DbType.SByte", storeText);
         Assert.DoesNotContain("DbType.UInt16", storeText);
         Assert.DoesNotContain("DbType.UInt32", storeText);
         Assert.DoesNotContain("DbType.UInt64", storeText);
-        Assert.Contains("DbType.Byte",  storeText);
+        Assert.Contains("DbType.Byte", storeText);
         Assert.Contains("DbType.Int16", storeText);
         Assert.Contains("DbType.Int32", storeText);
         Assert.Contains("DbType.Int64", storeText);
 
         // Binder must emit unchecked casts to the signed partner.
-        Assert.Contains("unchecked((byte)",  storeText);
+        Assert.Contains("unchecked((byte)", storeText);
         Assert.Contains("unchecked((short)", storeText);
-        Assert.Contains("unchecked((int)",   storeText);
-        Assert.Contains("unchecked((long)",  storeText);
+        Assert.Contains("unchecked((int)", storeText);
+        Assert.Contains("unchecked((long)", storeText);
     }
 
     [Fact]
@@ -1162,10 +1162,10 @@ public sealed partial class InquiryGeneratorTests
                 [InquirySelectAll]
                 public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
 
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
-                [InquiryUpdate(ReturnEntity = true)]
+                [InquiryUpdate]
                 public partial Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
                 [InquiryUpsert]
@@ -1224,7 +1224,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class WidgetStore : InquiryStore<Widget>
             {
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<Widget?> UpsertReturningAsync(Widget w, CancellationToken cancellationToken = default);
             }
             """;
@@ -1282,7 +1282,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquirySelectAll]
                 public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
 
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
                 [InquiryUpsert]
@@ -1337,7 +1337,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class WidgetStore : InquiryStore<Widget>
             {
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<Widget?> UpsertReturningAsync(Widget w, CancellationToken cancellationToken = default);
             }
             """;
@@ -1610,10 +1610,10 @@ public sealed partial class InquiryGeneratorTests
                 [InquirySelectAll]
                 public partial IAsyncEnumerable<Organization> SelectAllAsync(CancellationToken cancellationToken = default);
 
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
-                [InquiryUpdate(ReturnEntity = true)]
+                [InquiryUpdate]
                 public partial Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
                 [InquiryUpsert]
@@ -1672,10 +1672,10 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class CategoryStore : InquiryStore<Category>
             {
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<Category?> InsertReturningAsync(Category c, CancellationToken cancellationToken = default);
 
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<Category?> UpsertReturningAsync(Category c, CancellationToken cancellationToken = default);
             }
             """;
@@ -1732,7 +1732,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryUpsert]
                 public partial Task<int> UpsertAsync(GuidItem g, CancellationToken cancellationToken = default);
 
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<GuidItem?> UpsertReturningAsync(GuidItem g, CancellationToken cancellationToken = default);
             }
             """;
@@ -1788,13 +1788,13 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class OrganizationStore : InquiryStore<Organization>
             {
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<Organization?> InsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
-                [InquiryUpdate(ReturnEntity = true)]
+                [InquiryUpdate]
                 public partial Task<Organization?> UpdateReturningAsync(Organization o, CancellationToken cancellationToken = default);
 
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<Organization?> UpsertReturningAsync(Organization o, CancellationToken cancellationToken = default);
             }
             """;
@@ -1842,13 +1842,13 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class GuidItemStore : InquiryStore<GuidItem>
             {
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<GuidItem?> InsertReturningAsync(GuidItem g, CancellationToken cancellationToken = default);
 
                 [InquiryUpsert]
                 public partial Task<int> UpsertAsync(GuidItem g, CancellationToken cancellationToken = default);
 
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<GuidItem?> UpsertReturningAsync(GuidItem g, CancellationToken cancellationToken = default);
             }
             """;

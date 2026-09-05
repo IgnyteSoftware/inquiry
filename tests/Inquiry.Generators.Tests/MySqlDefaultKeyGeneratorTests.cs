@@ -32,7 +32,7 @@ public sealed partial class InquiryGeneratorTests
             extraMethods: """
                 [InquiryInsert] public partial Task<int> InsertAsync(DefaultedItem item, CancellationToken cancellationToken = default);
                 [InquiryUpsert] public partial Task<int> UpsertAsync(DefaultedItem item, CancellationToken cancellationToken = default);
-                [InquiryUpsert(ReturnEntity = true)] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);
+                [InquiryUpsert] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);
                 """,
             includeInsertReturning: true), dialect: "MySql", unsupportedOperationSeverity: ReportDiagnostic.Warn);
 
@@ -50,7 +50,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(DefaultKeySource(
             "[InquiryKey(UseDatabaseDefault = true, Length = 255)]",
             "string",
-            extraMethods: "[InquiryUpsert(ReturnEntity = true)] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
+            extraMethods: "[InquiryUpsert] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
             includeInsertReturning: true),
             dialect: "MySql",
             unsupportedOperationSeverity: ReportDiagnostic.Warn);
@@ -75,7 +75,7 @@ public sealed partial class InquiryGeneratorTests
             keyAttribute,
             "string",
             "[InquiryColumn(Length = 255)] public string Code { get; set; } = string.Empty;",
-            extraMethods: "[InquiryUpsert(ReturnEntity = true)] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
+            extraMethods: "[InquiryUpsert] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
             tableAttribute: tableAttribute), dialect: "MySql");
 
         AssertNoGeneratorErrors(result);
@@ -189,7 +189,7 @@ public sealed partial class InquiryGeneratorTests
             "[InquiryKey(UseDatabaseDefault = true, Length = 255)]",
             "string",
             $"{codeAttribute} public string Code {{ get; set; }} = string.Empty;",
-            extraMethods: "[InquiryUpsert(ReturnEntity = true)] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
+            extraMethods: "[InquiryUpsert] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
             tableAttribute: tableAttribute), dialect: "MySql");
 
         Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ039");
@@ -213,9 +213,9 @@ public sealed partial class InquiryGeneratorTests
             }
             public partial class CompositeItemStore : InquiryStore<CompositeItem>
             {
-                [InquiryInsert(ReturnEntity = true)]
+                [InquiryInsert]
                 public partial Task<CompositeItem?> InsertReturningAsync(CompositeItem item, CancellationToken cancellationToken = default);
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<CompositeItem?> UpsertReturningAsync(CompositeItem item, CancellationToken cancellationToken = default);
             }
             """;
@@ -234,7 +234,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(DefaultKeySource(
             "[InquiryKey(UseDatabaseDefault = true, Length = 255)]",
             "string?",
-            extraMethods: "[InquiryUpsert(ReturnEntity = true)] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
+            extraMethods: "[InquiryUpsert] public partial Task<DefaultedItem?> UpsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);",
             includeInsertReturning: true), dialect: "MariaDb");
 
         AssertNoGeneratorErrors(result);
@@ -258,7 +258,7 @@ public sealed partial class InquiryGeneratorTests
             public sealed class KeyOnly { [InquiryKey(IsGenerated = true)] public int? Id { get; set; } }
             public partial class KeyOnlyStore : InquiryStore<KeyOnly>
             {
-                [InquiryUpsert(ReturnEntity = true)]
+                [InquiryUpsert]
                 public partial Task<KeyOnly?> UpsertReturningAsync(KeyOnly item, CancellationToken cancellationToken = default);
             }
             """;
@@ -293,7 +293,7 @@ public sealed partial class InquiryGeneratorTests
             }
             public partial class DefaultedItemStore : InquiryStore<DefaultedItem>
             {
-                {{(includeInsertReturning ? "[InquiryInsert(ReturnEntity = true)] public partial Task<DefaultedItem?> InsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);" : "")}}
+                {{(includeInsertReturning ? "[InquiryInsert] public partial Task<DefaultedItem?> InsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);" : "")}}
                 {{extraMethods}}
             }
             """;

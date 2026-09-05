@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Inquiry.Tests" />
+    <InternalsVisibleTo Include="Inquiry.Benchmarks" />
     <InternalsVisibleTo Include="Inquiry.Sqlite" />
     <InternalsVisibleTo Include="Inquiry.Sqlite.Tests" />
     <InternalsVisibleTo Include="Inquiry.SqlServer" />

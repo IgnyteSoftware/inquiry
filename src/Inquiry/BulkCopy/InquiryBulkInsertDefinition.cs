@@ -21,49 +21,17 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
     /// Returns the provider-primitive value for (entity, columnOrdinal) — converters and enum
     /// coercions already applied by the generator; <see cref="DBNull.Value"/> for null.
     /// </param>
-    public InquiryBulkInsertDefinition(string? schema, string table, string[] columns, Func<TEntity, int, object> getValue)
-        : this(schema, table, columns, getValue, columnTypes: null, fieldTypes: null, typedAccessors: null)
-    {
-    }
-
-    /// <summary>Initializes the definition with explicit per-column type annotations.</summary>
-    /// <param name="schema"><inheritdoc cref="Schema" path="/summary"/></param>
-    /// <param name="table"><inheritdoc cref="Table" path="/summary"/></param>
-    /// <param name="columns"><inheritdoc cref="Columns" path="/summary"/></param>
-    /// <param name="getValue"><inheritdoc cref="GetValue" path="/summary"/></param>
-    /// <param name="columnTypes"><inheritdoc cref="ColumnTypes" path="/summary"/></param>
-    public InquiryBulkInsertDefinition(string? schema, string table, string[] columns, Func<TEntity, int, object> getValue, System.Data.DbType[]? columnTypes)
-        : this(schema, table, columns, getValue, columnTypes, fieldTypes: null, typedAccessors: null)
-    {
-    }
-
-    /// <summary>Initializes the definition with explicit wire and reader field type annotations.</summary>
-    /// <param name="schema"><inheritdoc cref="Schema" path="/summary"/></param>
-    /// <param name="table"><inheritdoc cref="Table" path="/summary"/></param>
-    /// <param name="columns"><inheritdoc cref="Columns" path="/summary"/></param>
-    /// <param name="getValue"><inheritdoc cref="GetValue" path="/summary"/></param>
     /// <param name="columnTypes"><inheritdoc cref="ColumnTypes" path="/summary"/></param>
     /// <param name="fieldTypes"><inheritdoc cref="FieldTypes" path="/summary"/></param>
+    /// <param name="typedAccessors"><inheritdoc cref="TypedAccessors" path="/summary"/></param>
     public InquiryBulkInsertDefinition(
         string? schema,
         string table,
         string[] columns,
         Func<TEntity, int, object> getValue,
-        System.Data.DbType[]? columnTypes,
-        Type[]? fieldTypes)
-        : this(schema, table, columns, getValue, columnTypes, fieldTypes, typedAccessors: null)
-    {
-    }
-
-    /// <summary>Initializes the definition with wire, reader, and strongly typed accessor metadata.</summary>
-    public InquiryBulkInsertDefinition(
-        string? schema,
-        string table,
-        string[] columns,
-        Func<TEntity, int, object> getValue,
-        System.Data.DbType[]? columnTypes,
-        Type[]? fieldTypes,
-        IInquiryBulkColumnAccessor<TEntity>[]? typedAccessors)
+        System.Data.DbType[]? columnTypes = null,
+        Type[]? fieldTypes = null,
+        IInquiryBulkColumnAccessor<TEntity>[]? typedAccessors = null)
     {
         if (columns is null) throw new ArgumentNullException(nameof(columns));
         if (columns.Length == 0) throw new ArgumentException("A bulk insert needs at least one column.", nameof(columns));

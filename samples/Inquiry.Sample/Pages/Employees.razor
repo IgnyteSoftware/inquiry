@@ -3,7 +3,7 @@
 
 <h1>Employees</h1>
 
-<p>Uses <code>[InquiryInsert(ReturnEntity = true)]</code> for create — the database assigns
+<p>Uses <code>[InquiryInsert]</code> returning <code>Task&lt;Employee?&gt;</code> for create — the database assigns
    the IDENTITY-backed <code>EmployeeID</code> and Inquiry materializes the inserted row
    back into a strongly-typed entity.</p>
 

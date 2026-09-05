@@ -13,7 +13,7 @@ public sealed class DeleteReturningItem
 
 public partial class DeleteReturningItemStore : InquiryStore<DeleteReturningItem>
 {
-    [InquiryInsert(ReturnEntity = true)]
+    [InquiryInsert]
     public partial Task<DeleteReturningItem?> InsertAsync(DeleteReturningItem item, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByKey]
@@ -22,6 +22,6 @@ public partial class DeleteReturningItemStore : InquiryStore<DeleteReturningItem
     [InquiryUpdate]
     public partial Task<bool> UpdateAsync(DeleteReturningItem item, CancellationToken cancellationToken = default);
 
-    [InquiryDelete(ReturnEntity = true)]
+    [InquiryDelete]
     public partial Task<DeleteReturningItem?> DeleteReturningAsync(DeleteReturningItem item, CancellationToken cancellationToken = default);
 }

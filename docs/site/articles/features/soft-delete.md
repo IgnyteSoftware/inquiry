@@ -42,7 +42,7 @@ public partial class CustomerStore : InquiryStore<Customer>
     public partial Task<IReadOnlyList<Customer>> SelectAllIncludingDeletedAsync(CancellationToken ct = default);
 
     // Opt-out: literal DELETE, bypassing the soft-delete column
-    [InquiryDelete(HardDelete = true)]
+    [InquiryHardDelete]
     public partial Task<bool> HardDeleteAsync(string customerID, CancellationToken ct = default);
 }
 ```
@@ -104,7 +104,7 @@ Soft delete is right when you need:
 Soft delete is **not** right when:
 
 - Storage is the constraint (deleted rows still occupy disk)
-- True compliance erasure is mandatory (use `HardDelete = true` instead)
+- True compliance erasure is mandatory (use `[InquiryHardDelete]` instead)
 - Foreign keys cascade is the desired behavior
 
 ## See also

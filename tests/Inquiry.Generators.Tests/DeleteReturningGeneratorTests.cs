@@ -23,7 +23,7 @@ public sealed partial class InquiryGeneratorTests
 
         public partial class WidgetStore : InquiryStore<Widget>
         {
-            [InquiryDelete(ReturnEntity = true)]
+            [InquiryDelete]
             public partial Task<Widget?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
         }
         """;
@@ -67,7 +67,7 @@ public sealed partial class InquiryGeneratorTests
     public void MariaDbSoftDeleteReturningReportsINQ039InsteadOfPhysicallyDeleting()
     {
         var source = WidgetStore("""
-            [InquiryDelete(ReturnEntity = true)]
+            [InquiryDelete]
             public partial Task<Widget?> DeleteReturningAsync(long id, CancellationToken cancellationToken = default);
             """);
         var result = RunGenerator(source, dialect: "MariaDb");
@@ -82,7 +82,7 @@ public sealed partial class InquiryGeneratorTests
     public void MariaDbHardDeleteReturningOverridesSoftDeleteAndUsesNativeSql()
     {
         var source = WidgetStore("""
-            [InquiryDelete(ReturnEntity = true, HardDelete = true)]
+            [InquiryHardDelete]
             public partial Task<Widget?> PurgeReturningAsync(long id, CancellationToken cancellationToken = default);
             """);
         var result = RunGenerator(source, dialect: "MariaDb");
@@ -112,7 +112,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class DocumentStore : InquiryStore<Document>
             {
-                [InquiryDelete(ReturnEntity = true)]
+                [InquiryDelete]
                 public partial Task<Document?> DeleteReturningAsync(Document document, CancellationToken cancellationToken = default);
             }
             """;
@@ -125,15 +125,6 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_e.Id", text);
         Assert.Contains("_e.Version", text);
         Assert.Contains("if (_result is null && Inquiry.ThrowOnConcurrencyConflict)", text);
-    }
-
-    [Fact]
-    public void DeleteReturningRejectsNonEntityTask()
-    {
-        var source = DeleteReturningSource.Replace("Task<Widget?> DeleteReturningAsync", "Task<bool> DeleteReturningAsync", StringComparison.Ordinal);
-        var result = RunGenerator(source, dialect: "MariaDb");
-
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ005");
     }
 
     [Fact]
@@ -157,7 +148,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class EnrollmentStore : InquiryStore<Enrollment>
             {
-                [InquiryDelete(ReturnEntity = true)]
+                [InquiryDelete]
                 public partial Task<Enrollment?> DeleteReturningAsync(long studentId, int courseId, CancellationToken cancellationToken = default);
             }
             """;
