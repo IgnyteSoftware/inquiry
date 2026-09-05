@@ -13,8 +13,10 @@ This page shows the **complete, unedited generator output** for a `Shipper` stor
 | `[InquirySelectAllByField("Col1", "Col2")]` | `Task<IReadOnlyList<T>>` | `SELECT … WHERE Col1 = @Col1 AND Col2 = @Col2` |
 | `[InquirySelectAllByField]` (field-less) | `Task<IReadOnlyList<T>>` | Filter columns **derived from the method name** — see below |
 | `[InquiryInsert]` | `Task<int>` (rows affected) | `INSERT INTO <table> (cols) VALUES (params)` |
+| `[InquiryInsert]` with `IEnumerable<T>` | `Task<int>` | Batched inserts in one transaction |
 | `[InquiryInsert(ReturnEntity = true)]` | `Task<T?>` | `INSERT … RETURNING <columns>` (or per-dialect equivalent) |
 | `[InquiryUpdate]` | `Task<bool>` | Updates an entity by primary key |
+| `[InquiryUpdate]` with `IEnumerable<T>` | `Task<int>` | Batched updates, each row matched by primary key |
 | `[InquiryUpdate]` + `[InquiryWhere]` | `Task<int>` | Partially updates inferred columns for matching rows |
 | `[InquiryUpsert]` | `Task<int>` | Dialect-specific (`ON CONFLICT`, `MERGE`, `ON DUPLICATE KEY UPDATE`, …) |
 | `[InquiryDelete]` | `Task<bool>` | Deletes one row by primary key |

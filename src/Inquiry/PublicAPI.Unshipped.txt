@@ -452,8 +452,6 @@ Inquiry.Stores.InquiryGroupCountAttribute.Column.get -> string!
 Inquiry.Stores.InquiryGroupCountAttribute.IncludeDeleted.get -> bool
 Inquiry.Stores.InquiryGroupCountAttribute.IncludeDeleted.set -> void
 Inquiry.Stores.InquiryGroupCountAttribute.InquiryGroupCountAttribute(string! column) -> void
-Inquiry.Stores.InquiryInsertAllAttribute
-Inquiry.Stores.InquiryInsertAllAttribute.InquiryInsertAllAttribute() -> void
 Inquiry.Stores.InquiryInsertAttribute
 Inquiry.Stores.InquiryInsertAttribute.InquiryInsertAttribute() -> void
 Inquiry.Stores.InquiryInsertAttribute.ReturnEntity.get -> bool
@@ -560,8 +558,6 @@ Inquiry.Stores.InquiryStoredProcedureAttribute.OutputParameter.set -> void
 Inquiry.Stores.InquiryStoredProcedureAttribute.ProcedureName.get -> string!
 Inquiry.Stores.InquiryStoredProcedureAttribute.ReturnsValue.get -> bool
 Inquiry.Stores.InquiryStoredProcedureAttribute.ReturnsValue.set -> void
-Inquiry.Stores.InquiryUpdateAllAttribute
-Inquiry.Stores.InquiryUpdateAllAttribute.InquiryUpdateAllAttribute() -> void
 Inquiry.Stores.InquiryUpdateAttribute
 Inquiry.Stores.InquiryUpdateAttribute.InquiryUpdateAttribute() -> void
 Inquiry.Stores.InquiryUpdateAttribute.ReturnEntity.get -> bool

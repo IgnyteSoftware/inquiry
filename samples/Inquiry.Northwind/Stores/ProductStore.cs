@@ -33,6 +33,10 @@ public partial class ProductStore : InquiryStore<Product>
     [InquirySelectOneByKey]
     public partial Task<Product?> SelectByKeyAsync(int? productID, CancellationToken cancellationToken = default);
 
+    [InquiryExists]
+    [InquiryWhere("ProductID")]
+    public partial Task<bool> ExistsByKeyAsync(int? productID, CancellationToken cancellationToken = default);
+
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<Product> SelectAllWithCategoryAsync(CancellationToken cancellationToken = default);
 

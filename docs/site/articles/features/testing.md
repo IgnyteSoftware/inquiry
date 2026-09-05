@@ -79,7 +79,7 @@ disposal failures in the order they occurred.
 
 Generated transactional store methods participate in the sandbox. Native `[InquiryBulkInsert]`
 does not: its dedicated provider connection cannot join the ambient transaction, so Inquiry rejects
-it inside a sandbox or any other Inquiry transaction. Use `[InquiryInsertAll]` for rollback-safe
+it inside a sandbox or any other Inquiry transaction. Use `[InquiryInsert]` for rollback-safe
 test setup.
 
 Nested `RunAsync` calls in the same async context are rejected. When application code deliberately

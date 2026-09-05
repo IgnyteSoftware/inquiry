@@ -100,6 +100,12 @@ internal static class StoreProcessor
     {
         var location = method.Locations.FirstOrDefault();
 
+        operation = InferMutationMode(method, operation, entityType, location, diagnostics);
+        if (operation == StoreOperation.None)
+        {
+            return null;
+        }
+
         if (!method.IsPartialDefinition)
         {
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MethodMustBePartial, location, method.Name));
@@ -107,6 +113,14 @@ internal static class StoreProcessor
         }
 
         var returnEntityRequested = GeneratorHelpers.GetNamedBool(attribute, "ReturnEntity");
+        if (operation is StoreOperation.InsertAll or StoreOperation.UpdateAll && returnEntityRequested)
+        {
+            var attributeName = operation == StoreOperation.InsertAll ? "InquiryInsert" : "InquiryUpdate";
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, location, method.Name,
+                $"[{attributeName}] with an entity collection reads as a batch operation, which cannot return entities. Remove ReturnEntity, or pass one entity to use the single-row mode."));
+            return null;
+        }
+
         if (operation is StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate && returnEntityRequested)
         {
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, location, method.Name,
@@ -136,6 +150,14 @@ internal static class StoreProcessor
         var hasInOutParam = operation == StoreOperation.StoredProcedure && HasInputOutputParameter(method);
         if (!HasSupportedReturnType(operation, method.ReturnType, entityType, returnsEntity, attribute, hasInOutParam))
         {
+            if (operation is StoreOperation.InsertAll or StoreOperation.UpdateAll)
+            {
+                var attributeName = operation == StoreOperation.InsertAll ? "InquiryInsert" : "InquiryUpdate";
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, location, method.Name,
+                    $"[{attributeName}] with an entity collection reads as a batch operation, which must return Task<int>. Pass one entity instead to use the single-row mode."));
+                return null;
+            }
+
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.UnsupportedReturnType, location, method.Name, method.ReturnType.ToDisplayString()));
             return null;
         }
@@ -458,6 +480,45 @@ internal static class StoreProcessor
             ProcedureInOutParameterName = procInOutParameterName,
             ProcedureResultSetTypeFqns = new EquatableArray<string>(procResultSetTypeFqns),
         };
+    }
+
+    private static StoreOperation InferMutationMode(
+        IMethodSymbol method,
+        StoreOperation operation,
+        ITypeSymbol entityType,
+        Location? location,
+        ImmutableArray<DiagnosticData>.Builder diagnostics)
+    {
+        if (operation is not StoreOperation.Insert and not StoreOperation.Update and not StoreOperation.UpdateByPredicate)
+        {
+            return operation;
+        }
+
+        var targetParameters = method.Parameters
+            .Where(static parameter => !GeneratorHelpers.IsCancellationToken(parameter.Type))
+            .ToArray();
+        var hasEntity = targetParameters.Any(parameter =>
+            SymbolEqualityComparer.Default.Equals(parameter.Type, entityType));
+        var hasEntityCollection = targetParameters.Any(parameter =>
+            SymbolEqualityComparer.Default.Equals(GetEnumerableElementSymbol(parameter.Type), entityType));
+
+        if (operation == StoreOperation.UpdateByPredicate && (hasEntity || hasEntityCollection))
+        {
+            var writtenShape = hasEntityCollection ? "an entity collection" : "an entity parameter";
+            diagnostics.Add(DiagnosticData.Create(
+                InquiryDiagnosticDescriptors.MutationTargetInvalid,
+                location,
+                method.Name,
+                $"[InquiryUpdate] with [InquiryWhere] and {writtenShape} reads as a predicate update, but predicate updates require scalar SET parameters. Remove [InquiryWhere] to update each entity by its key."));
+            return StoreOperation.None;
+        }
+
+        if (hasEntityCollection)
+        {
+            return operation == StoreOperation.Insert ? StoreOperation.InsertAll : StoreOperation.UpdateAll;
+        }
+
+        return operation;
     }
 
     private static string? ExtractDocumentationXml(IMethodSymbol method)
@@ -990,10 +1051,8 @@ internal static class StoreProcessor
                 case "InquiryExistsAttribute": attribute = candidate; return StoreOperation.Exists;
                 case "InquiryAggregateAttribute": attribute = candidate; return StoreOperation.Aggregate;
                 case "InquiryFullTextSearchAttribute": attribute = candidate; return StoreOperation.FullTextSearch;
-                case "InquiryInsertAllAttribute": attribute = candidate; return StoreOperation.InsertAll;
                 case "InquiryBulkInsertAttribute": attribute = candidate; return StoreOperation.BulkInsert;
                 case "InquiryDeleteAllAttribute": attribute = candidate; return StoreOperation.DeleteAll;
-                case "InquiryUpdateAllAttribute": attribute = candidate; return StoreOperation.UpdateAll;
                 case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
                 case "InquiryUpdateAttribute": attribute = candidate; return HasWhereCriteria(method) ? StoreOperation.UpdateByPredicate : StoreOperation.Update;
                 case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
@@ -1127,18 +1186,9 @@ internal static class StoreProcessor
     private static bool IsEnumerableOfEntity(ParameterData parameter, EntityData entity)
         => IsEnumerableOfType(parameter, entity.FullyQualifiedName);
 
-    /// <summary>True when the parameter is a common read-only collection of <paramref name="elementTypeDisplay"/>.</summary>
+    /// <summary>True when the parameter implements <c>IEnumerable&lt;T&gt;</c> for <paramref name="elementTypeDisplay"/>.</summary>
     private static bool IsEnumerableOfType(ParameterData parameter, string elementTypeDisplay)
-    {
-        var fqn = elementTypeDisplay;
-        var d = parameter.ComparisonDisplay;
-        return d == "global::System.Collections.Generic.IEnumerable<" + fqn + ">"
-            || d == "global::System.Collections.Generic.IReadOnlyList<" + fqn + ">"
-            || d == "global::System.Collections.Generic.IReadOnlyCollection<" + fqn + ">"
-            || d == "global::System.Collections.Generic.IList<" + fqn + ">"
-            || d == "global::System.Collections.Generic.ICollection<" + fqn + ">"
-            || d == "global::System.Collections.Generic.List<" + fqn + ">";
-    }
+        => parameter.ElementComparisonDisplay == elementTypeDisplay;
 
     private static bool IsTaskOfSingleTypeArgument(ITypeSymbol returnType)
         => returnType is INamedTypeSymbol task
@@ -2940,7 +2990,44 @@ internal static class StoreProcessor
 
         if (!HasSupportedParameters(method, entity, fieldColumns))
         {
-            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
+            if (method.Operation is StoreOperation.Insert or StoreOperation.InsertAll or StoreOperation.Update or StoreOperation.UpdateAll)
+            {
+                var isInsert = method.Operation is StoreOperation.Insert or StoreOperation.InsertAll;
+                var isBatch = method.Operation is StoreOperation.InsertAll or StoreOperation.UpdateAll;
+                var attributeName = isInsert ? "InquiryInsert" : "InquiryUpdate";
+                var operationName = isInsert ? "insert" : "update";
+                var writtenShape = isBatch ? "contains an entity collection" : "does not contain an entity collection";
+                var expectedShape = isBatch ? "one IEnumerable<TEntity>" : "one TEntity";
+                var inferredMode = isBatch
+                    ? $"a batch {operationName}"
+                    : isInsert ? "a single-row insert" : "an update by entity key";
+                string correction;
+                if (isBatch)
+                {
+                    correction = $"Pass one entity to select single-row {operationName} mode.";
+                }
+                else if (isInsert)
+                {
+                    correction = "Pass an IEnumerable<TEntity> to select batch mode.";
+                }
+                else if (method.Parameters.AsImmutableArray().Any(parameter => parameter.ComparisonDisplay == entity.FullyQualifiedName))
+                {
+                    correction = "Remove the extra parameters to update that entity by key.";
+                }
+                else
+                {
+                    correction = "Add [InquiryWhere] to select predicate-update mode with scalar SET parameters.";
+                }
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.MutationTargetInvalid,
+                    method.Location?.ToLocation(),
+                    method.Name,
+                    $"Its [{attributeName}] signature {writtenShape}, so it reads as {inferredMode}. This mode requires exactly {expectedShape} followed by CancellationToken. {correction}"));
+            }
+            else
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
+            }
             return false;
         }
 

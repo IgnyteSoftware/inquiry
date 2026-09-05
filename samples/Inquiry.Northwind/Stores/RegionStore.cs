@@ -31,9 +31,9 @@ public partial class RegionStore : InquiryStore<Region>
     public partial Task<int> DeleteByKeysAsync(IEnumerable<int> regionIDs, CancellationToken cancellationToken = default);
 
     // Batch insert/update over a region collection.
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<Region> regions, CancellationToken cancellationToken = default);
 
-    [InquiryUpdateAll]
+    [InquiryUpdate]
     public partial Task<int> UpdateAllAsync(IEnumerable<Region> regions, CancellationToken cancellationToken = default);
 }

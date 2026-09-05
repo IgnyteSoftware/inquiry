@@ -80,8 +80,8 @@ public sealed partial class InquiryGeneratorTests
             [InquiryWhere("ConvertedToken", Compare.NotIn)]
             [InquiryWhere("ConvertedEnabled", Compare.NotIn)]
             public partial Task<IReadOnlyList<BindingItem>> NotInConvertedAsync(IReadOnlyList<ExternalId> tokens, IReadOnlyList<Toggle> enabled, CancellationToken ct = default);
-            [InquiryInsertAll] public partial Task<int> InsertAllAsync(IEnumerable<BindingItem> items, CancellationToken ct = default);
-            [InquiryUpdateAll] public partial Task<int> UpdateAllAsync(IEnumerable<BindingItem> items, CancellationToken ct = default);
+            [InquiryInsert] public partial Task<int> InsertAllAsync(IEnumerable<BindingItem> items, CancellationToken ct = default);
+            [InquiryUpdate] public partial Task<int> UpdateAllAsync(IEnumerable<BindingItem> items, CancellationToken ct = default);
             [InquiryBulkInsert] public partial Task<long> BulkWriteAsync(IEnumerable<BindingItem> items, CancellationToken ct = default);
         }
 

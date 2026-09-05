@@ -8,7 +8,7 @@ namespace Inquiry.Benchmarks.PostgreSql;
 
 /// <summary>
 /// The bulk-insert tiers on PostgreSQL: cap-respecting multi-row <c>INSERT … VALUES</c> batches
-/// (<c>[InquiryInsertAll]</c>, chunked to stay under the parameter cap — the realistic usage
+/// (<c>[InquiryInsert]</c>, chunked to stay under the parameter cap — the realistic usage
 /// pattern) versus a single binary <c>COPY</c> stream (<c>[InquiryBulkInsert]</c>). Each iteration
 /// truncates the table so growth doesn't skew timings.
 /// </summary>

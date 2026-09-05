@@ -3,7 +3,7 @@ using System;
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// Batch-update emission: <c>[InquiryUpdateAll]</c> reuses the single-row <c>_sqlUpdate</c> const and
+/// Batch-update emission: <c>[InquiryUpdate]</c> reuses the single-row <c>_sqlUpdate</c> const and
 /// routes through <c>Inquiry.ExecuteBatchAsync</c> — one UPDATE per item, a single DbBatch round trip
 /// where the provider supports it — with a per-item binder mirroring the single-row update binder.
 /// </summary>
@@ -37,7 +37,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
             {
-                [InquiryUpdateAll]
+                [InquiryUpdate]
                 public partial Task<int> UpdateAllAsync(IEnumerable<Thing> things, CancellationToken cancellationToken = default);
             }
             """;
@@ -94,7 +94,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : Inquiry.Stores.InquiryStore<Demo.Thing>
             {
-                [InquiryUpdateAll]
+                [InquiryUpdate]
                 public partial Task<int> UpdateAllAsync(IEnumerable<Thing> things, CancellationToken cancellationToken = default);
             }
             """;
@@ -141,7 +141,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class OrderLineStore : Inquiry.Stores.InquiryStore<Demo.OrderLine>
             {
-                [InquiryUpdateAll]
+                [InquiryUpdate]
                 public partial Task<int> UpdateAllAsync(IEnumerable<OrderLine> lines, CancellationToken cancellationToken = default);
             }
             """;
@@ -188,7 +188,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryUpdateAll]
+                [InquiryUpdate]
                 public partial Task<int> UpdateAllAsync(IEnumerable<Thing> things, CancellationToken ct = default);
             }
             """;
@@ -235,7 +235,7 @@ public sealed partial class InquiryGeneratorTests
 
             public partial class ThingStore : InquiryStore<Thing>
             {
-                [InquiryUpdateAll]
+                [InquiryUpdate]
                 public partial Task<int> UpdateAllAsync(IEnumerable<Thing> things, CancellationToken ct = default);
             }
             """;

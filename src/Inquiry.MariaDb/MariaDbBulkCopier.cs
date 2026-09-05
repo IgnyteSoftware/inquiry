@@ -62,7 +62,7 @@ internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
             throw new InvalidOperationException(
                 "MariaDB bulk insert cannot enlist in this Inquiry transaction because its connection does not enable " +
                 "AllowLoadLocalInfile. Inquiry deliberately enables that security-sensitive setting only on dedicated " +
-                "bulk-copy connections. Use [InquiryInsertAll] for transaction-bound inserts.");
+                "bulk-copy connections. Use [InquiryInsert] with a collection for transaction-bound inserts.");
 
         try
         {

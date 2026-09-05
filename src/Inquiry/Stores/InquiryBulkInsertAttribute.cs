@@ -1,7 +1,9 @@
 namespace Inquiry.Stores;
 
 /// <summary>
-/// Generates a provider-native bulk insert — the 100k+-row tier above <see cref="InquiryInsertAllAttribute"/>.
+/// Generates a provider-native bulk insert for high-volume writes. Unlike an
+/// <see cref="InquiryInsertAttribute"/> method that accepts a collection and executes batched DML in a
+/// transaction, this operation uses the provider's native bulk-copy transport.
 /// On SQL Server this rides <c>SqlBulkCopy</c>, on PostgreSQL binary <c>COPY</c>, and on MySQL
 /// <c>MySqlBulkCopy</c>; on dialects without a bulk-copy API (SQLite, Oracle) the generator falls
 /// back to the multi-row batch <c>INSERT</c> at compile time. The method takes an
@@ -16,7 +18,7 @@ namespace Inquiry.Stores;
 /// per row as the stream is enumerated. On native bulk-copy dialects, bulk insert opens a dedicated
 /// connection that interceptors and telemetry do not observe; calls inside an ambient Inquiry
 /// transaction are rejected because that connection could not participate in rollback. Use
-/// <see cref="InquiryInsertAllAttribute"/> for transaction-bound rows. The SQLite and Oracle fallback
+/// <see cref="InquiryInsertAttribute"/> with a collection for transaction-bound rows. The SQLite and Oracle fallback
 /// uses the normal batch pipeline, so it participates in ambient transactions and is observed by
 /// interceptors and telemetry.
 /// On MySQL, <c>MySqlBulkCopy</c> requires <c>local_infile=1</c> on the server; the client-side

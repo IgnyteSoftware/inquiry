@@ -32,7 +32,7 @@ public partial class ShipperStore : InquiryStore<Shipper>
     [InquiryDelete]
     public partial Task<bool> DeleteByKeyAsync(int? shipperID, CancellationToken cancellationToken = default);
 
-    [InquiryInsertAll]
+    [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<Shipper> shippers, CancellationToken cancellationToken = default);
 
     [InquiryBulkInsert]

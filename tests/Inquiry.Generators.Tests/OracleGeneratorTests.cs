@@ -565,10 +565,10 @@ public sealed partial class InquiryGeneratorTests
 
         public partial class RegionStore : InquiryStore<Region>
         {
-            [InquiryInsertAll]
+            [InquiryInsert]
             public partial Task<int> InsertAllAsync(IEnumerable<Region> regions, CancellationToken cancellationToken = default);
 
-            [InquiryUpdateAll]
+            [InquiryUpdate]
             public partial Task<int> UpdateAllAsync(IEnumerable<Region> regions, CancellationToken cancellationToken = default);
 
             [InquiryDelete, InquiryWhere("RegionId", Compare.In)]
