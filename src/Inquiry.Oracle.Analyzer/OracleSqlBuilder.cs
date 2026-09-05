@@ -447,7 +447,7 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     // Oracle's VARCHAR2 caps at 4000 bytes; NVARCHAR2 caps at 2000 characters under the default
     // AL16UTF16 national charset (2 bytes/char × 2000 = 4000 bytes internal limit).
-    protected override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 2000 : 4000;
+    protected internal override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 2000 : 4000;
     public override bool RequiresBoundedComputedStrings => true;
 
     protected override string RenderComputedColumn(IColumn column)

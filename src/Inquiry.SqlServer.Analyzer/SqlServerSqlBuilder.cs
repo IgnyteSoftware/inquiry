@@ -398,16 +398,16 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     // nvarchar tops out at 4000 chars, varchar at 8000; a longer declared Length maps to NVARCHAR(MAX) /
     // VARCHAR(MAX), which cannot be keyed or indexed (see MapColumnType).
-    protected override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 4000 : 8000;
+    protected internal override int MaxBoundedStringLength(bool isUnicode) => isUnicode ? 4000 : 8000;
 
     protected override string MapColumnType(IColumn column)
         => SqlServerTvpResolver.InferredColumnDdl(column);
 
-        // A declared Length beyond the fixed-width ceiling (nvarchar 4000 / varchar 8000) is not a legal
-        // bounded type — NVARCHAR(5000) is a DDL error — so it maps to the MAX type instead of emitting
-        // invalid SQL. For a regular column that yields valid DDL; for a string KEY or indexed column the
-        // MAX type cannot be keyed/indexed, which INQ031/INQ032 now report (the over-ceiling case is folded
-        // into MapsToUnboundedString via MaxBoundedStringLength).
+    // A declared Length beyond the fixed-width ceiling (nvarchar 4000 / varchar 8000) is not a legal
+    // bounded type — NVARCHAR(5000) is a DDL error — so it maps to the MAX type instead of emitting
+    // invalid SQL. For a regular column that yields valid DDL; for a string KEY or indexed column the
+    // MAX type cannot be keyed/indexed, which INQ031/INQ032 now report (the over-ceiling case is folded
+    // into MapsToUnboundedString via MaxBoundedStringLength).
 
     protected override string ColumnType(IColumn column)
         => column.IsDatabaseGeneratedToken ? "ROWVERSION" : base.ColumnType(column);

@@ -7,5 +7,5 @@ Contributor-facing documentation for working on Inquiry itself.
 - **[Batch performance evidence](batch-mutation-diagnostic-matrix.md)** — the retained six-provider
   diagnostic matrix for generated batch mutation strategies.
 - **[Contributing](contributing.md)** — how the project is built: the skill-first workflow, TDD, live testing, and CI.
-- **[Adding a provider](adding-a-provider.md)** — the append-point checklist for a new database dialect.
+- **[Adding a provider](adding-a-provider.md)** — the internal checklist for first-party database dialects.
 - **[Design notes](design-notes.md)** — the compile-time architecture decisions and the design/dependency record.
