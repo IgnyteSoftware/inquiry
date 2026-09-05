@@ -177,35 +177,6 @@ public interface IInquiry
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Executes a SQL command, binding parameters via a caller-supplied static delegate. The
-    /// generated-store path uses this overload to avoid allocating an <c>InquiryParameter[]</c>
-    /// or <c>InquiryCommand</c> per call — the delegate writes directly into the
-    /// <see cref="DbCommand"/>'s parameter collection.
-    /// </summary>
-    /// <remarks>
-    /// The default implementation routes the call through <c>ExecuteAsync(InquiryCommand, …)</c>
-    /// via <see cref="InquiryCommand.DbCommandBinder"/>, so existing <see cref="IInquiry"/>
-    /// implementations (e.g. test mocks) stay source-compatible. <see cref="DefaultInquiry"/>
-    /// overrides this and delegates to the pipeline's allocation-free fast path.
-    /// </remarks>
-    /// <typeparam name="TArgs">
-    /// The bound state (typically the entity or key). Pass a static method group / static
-    /// lambda for <paramref name="bindParameters"/> to keep this allocation-free.
-    /// </typeparam>
-    Task<int> ExecuteAsync<TArgs>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        CancellationToken cancellationToken = default)
-    {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
-        return ExecuteAsync(
-            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
-            cancellationToken);
-    }
-
-    /// <summary>
     /// Executes <paramref name="commandText"/> once per item in <paramref name="items"/>, binding
     /// each item's parameters via the caller-supplied static delegate, and returns the total
     /// affected row count. An empty list returns 0 without touching the database. Generated batch
@@ -213,10 +184,10 @@ public interface IInquiry
     /// <see cref="DbBatch"/> round trip when the provider supports it.
     /// </summary>
     /// <remarks>
-    /// The default implementation loops over <c>ExecuteAsync&lt;TArgs&gt;(string, TArgs, Action&lt;DbCommand, TArgs&gt;, …)</c>
-    /// per item, so existing <see cref="IInquiry"/> implementations (e.g. test mocks) stay
-    /// source-compatible. <see cref="DefaultInquiry"/> overrides this and delegates to the
-    /// pipeline's fast path, which uses provider batching where available.
+    /// The default implementation creates a generated command descriptor per item, so existing
+    /// <see cref="IInquiry"/> implementations (e.g. test mocks) stay source-compatible.
+    /// <see cref="DefaultInquiry"/> overrides this and delegates to the pipeline's fast path,
+    /// which uses provider batching where available.
     /// </remarks>
     /// <typeparam name="TItem">
     /// The bound state per command (typically the entity or key). Pass a static method group /
@@ -236,9 +207,8 @@ public interface IInquiry
         for (var i = 0; i < items.Count; i++)
         {
             total += await ExecuteAsync(
-                commandText,
-                items[i],
-                (cmd, item) => bindParameters(new InquiryParameterTarget(cmd), item),
+                new InquiryGeneratedCommand<TItem>(commandText, items[i],
+                    (cmd, item) => bindParameters(new InquiryParameterTarget(cmd), item)),
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -338,93 +308,6 @@ public interface IInquiry
         string readBackParameterName,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Stored-procedure output execution requires the built-in DefaultInquiry.");
-
-    /// <summary>Scalar query binding parameters via a caller-supplied static delegate (fast path).</summary>
-    Task<T> ExecuteScalarAsync<T, TArgs>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        CancellationToken cancellationToken = default)
-    {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
-        return ExecuteScalarAsync<T>(
-            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// Streaming query with a struct materializer, binding parameters via a caller-supplied static
-    /// delegate. The generated-store path uses this overload to avoid allocating an
-    /// <c>InquiryParameter[]</c> or <c>InquiryCommand</c> per call — the delegate writes directly
-    /// into the <see cref="DbCommand"/>'s parameter collection.
-    /// </summary>
-    /// <remarks>
-    /// The default implementation routes through <c>QueryAsync&lt;TEntity, TMaterializer&gt;(InquiryCommand, …)</c>,
-    /// so existing <see cref="IInquiry"/> implementations stay source-compatible.
-    /// <see cref="DefaultInquiry"/> overrides this and delegates to the pipeline's allocation-free fast path.
-    /// </remarks>
-    IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-    {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
-        return QueryAsync<TEntity, TMaterializer>(
-            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
-    }
-
-    /// <summary>
-    /// Buffered query with a struct materializer, binding parameters via a caller-supplied static
-    /// delegate. The generated-store path uses this overload to avoid allocating an
-    /// <c>InquiryParameter[]</c> or <c>InquiryCommand</c> per call — the delegate writes directly
-    /// into the <see cref="DbCommand"/>'s parameter collection.
-    /// </summary>
-    /// <remarks>
-    /// The default implementation routes through <c>QueryListAsync&lt;TEntity, TMaterializer&gt;(InquiryCommand, …)</c>,
-    /// so existing <see cref="IInquiry"/> implementations stay source-compatible.
-    /// <see cref="DefaultInquiry"/> overrides this and delegates to the pipeline's allocation-free fast path.
-    /// </remarks>
-    Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-    {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
-        return QueryListAsync<TEntity, TMaterializer>(
-            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
-    }
-
-    /// <summary>
-    /// Single-or-default query with a struct materializer, binding parameters via a caller-supplied
-    /// static delegate. See
-    /// <see cref="QueryListAsync{TEntity, TArgs, TMaterializer}(string, TArgs, Action{DbCommand, TArgs}, TMaterializer, CancellationToken)"/>
-    /// for the allocation rationale.
-    /// </summary>
-    Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-    {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
-        return QuerySingleOrDefaultAsync<TEntity, TMaterializer>(
-            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
-    }
 
     // ---- Immutable generated-command path ---------------------------------------------
 
