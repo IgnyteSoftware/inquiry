@@ -25,6 +25,7 @@ public class ProductCrudBenchmarks
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
     private DataOptions _linqToDbOptions = null!;
+    private CancellationTokenSource _cancellationTokenSource = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
     [Params(1000, 100000)] public int Rows;
@@ -40,10 +41,15 @@ public class ProductCrudBenchmarks
         _db = BenchmarkDatabase.CreateAsync(Rows).GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
         _linqToDbOptions = _db.LinqToDbOptions;
+        _cancellationTokenSource = new CancellationTokenSource();
     }
 
     [GlobalCleanup]
-    public void GlobalCleanup() => _db.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    public void GlobalCleanup()
+    {
+        _cancellationTokenSource.Dispose();
+        _db.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
 
     // Read every column the Inquiry-mapped Product entity reads, so AdoNet/Dapper do equal
     // per-row work to Inquiry (a fair comparison — not a hand-picked 6-of-10 subset).
@@ -170,6 +176,14 @@ public class ProductCrudBenchmarks
     [BenchmarkCategory("SelectByKey"), Benchmark]
     public async Task<Product?> SelectByKey_Inquiry()
         => await _db.Products.SelectByKeyAsync(TargetProductId);
+
+    [BenchmarkCategory("CancellationPointRead"), Benchmark]
+    public async Task<bool> PointRead_Inquiry()
+        => await _db.Products.ExistsByKeyAsync(TargetProductId);
+
+    [BenchmarkCategory("CancellationPointRead"), Benchmark]
+    public async Task<bool> PointRead_Inquiry_Cancellable()
+        => await _db.Products.ExistsByKeyAsync(TargetProductId, _cancellationTokenSource.Token);
 
     // ---- SelectByField (CategoryID) -----------------------------------------------------
 
@@ -315,6 +329,17 @@ public class ProductCrudBenchmarks
             Discontinued = false,
         });
 
+    [BenchmarkCategory("CancellationInsert"), Benchmark]
+    public async Task<int> Insert_Inquiry_Cancellable()
+        => await _db.Products.InsertAsync(new Product
+        {
+            ProductName  = "Bench Product",
+            CategoryID   = TargetCategoryId,
+            UnitPrice    = 9.99m,
+            UnitsInStock = 42,
+            Discontinued = false,
+        }, _cancellationTokenSource.Token);
+
     // ---- Update -------------------------------------------------------------------------
 
     [BenchmarkCategory("Update"), Benchmark(Baseline = true)]
@@ -400,6 +425,18 @@ public class ProductCrudBenchmarks
             UnitsInStock = 7,
             Discontinued = false,
         });
+
+    [BenchmarkCategory("CancellationUpdate"), Benchmark]
+    public async Task<bool> Update_Inquiry_Cancellable()
+        => await _db.Products.UpdateAsync(new Product
+        {
+            ProductID    = TargetProductId,
+            ProductName  = "Updated Product",
+            CategoryID   = TargetCategoryId,
+            UnitPrice    = 19.99m,
+            UnitsInStock = 7,
+            Discontinued = false,
+        }, _cancellationTokenSource.Token);
 
     // ---- Upsert -------------------------------------------------------------------------
 
