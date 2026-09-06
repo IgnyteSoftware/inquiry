@@ -148,93 +148,169 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     /// </summary>
     public void FinalizeCommand(DbCommand command)
     {
-        var rewriteText = command.CommandType != System.Data.CommandType.StoredProcedure;
-        List<BindRename>? renames = null;
-        var logicalNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var providerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (DbParameter parameter in command.Parameters)
+        var returningBlock = HasReturningBlockPrefix(command.CommandText);
+        if (command.CommandType == System.Data.CommandType.StoredProcedure)
         {
-            if (!string.IsNullOrEmpty(parameter.ParameterName))
+            FinalizeStoredProcedure(command);
+            AddRefCursor(command, returningBlock && ContainsBindToken(command.CommandText, "rc"));
+            return;
+        }
+
+        switch (command.Parameters.Count)
+        {
+            case 0:
+                AddRefCursor(command, returningBlock && ContainsBindToken(command.CommandText, "rc"));
+                return;
+            case 1:
+                FinalizeSingleParameter(command, returningBlock);
+                return;
+        }
+
+        FinalizeMultipleParameters(command, returningBlock);
+    }
+
+    private static void FinalizeStoredProcedure(DbCommand command)
+    {
+        for (var index = 0; index < command.Parameters.Count; index++)
+        {
+            var parameter = command.Parameters[index];
+            NormalizeBoolean(parameter);
+            if (string.IsNullOrEmpty(parameter.ParameterName)) continue;
+
+            var logicalName = GetLogicalName(parameter.ParameterName);
+            for (var previous = 0; previous < index; previous++)
             {
-                var parameterName = parameter.ParameterName;
-                var logicalName = parameterName[0] == '@' || parameterName[0] == ':'
-                    ? parameterName.Substring(1)
-                    : parameterName;
-                if (!logicalNames.Add(logicalName))
+                var previousName = command.Parameters[previous].ParameterName;
+                if (!string.IsNullOrEmpty(previousName)
+                    && string.Equals(previousName, logicalName, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException($"Oracle parameter names must be unique ignoring case; '{logicalName}' is duplicated.");
                 }
+            }
 
-                if (rewriteText)
+            // Stored-procedure parameters are formal names, not SQL bind tokens. Preserve
+            // their spelling and only remove Inquiry's transport sigil.
+            parameter.ParameterName = logicalName;
+        }
+    }
+
+    private static void FinalizeSingleParameter(DbCommand command, bool returningBlock)
+    {
+        var parameter = command.Parameters[0];
+        NormalizeBoolean(parameter);
+
+        if (string.IsNullOrEmpty(parameter.ParameterName))
+        {
+            AddRefCursor(command, returningBlock && ContainsBindToken(command.CommandText, "rc"));
+            return;
+        }
+
+        var logicalName = GetLogicalName(parameter.ParameterName);
+        var encoded = OracleBindName.IsEncoded(logicalName);
+        var safeName = encoded ? logicalName : OracleBindName.Encode(logicalName);
+        command.CommandText = RewriteSingleBindToken(
+            command.CommandText,
+            logicalName,
+            safeName,
+            !encoded,
+            returningBlock,
+            out var tokenFound,
+            out var containsRefCursor);
+
+        // An encoded logical name is trusted only when the SQL contains that generated token.
+        parameter.ParameterName = encoded && !tokenFound ? OracleBindName.Encode(logicalName) : safeName;
+        AddRefCursor(command, containsRefCursor);
+    }
+
+    private static void FinalizeMultipleParameters(DbCommand command, bool returningBlock)
+    {
+        var bindings = new BindParameter[command.Parameters.Count];
+        var bindingCount = 0;
+
+        for (var index = 0; index < command.Parameters.Count; index++)
+        {
+            var parameter = command.Parameters[index];
+            NormalizeBoolean(parameter);
+            if (string.IsNullOrEmpty(parameter.ParameterName)) continue;
+
+            var logicalName = GetLogicalName(parameter.ParameterName);
+            for (var previous = 0; previous < bindingCount; previous++)
+            {
+                if (string.Equals(bindings[previous].Logical, logicalName, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Generator-emitted Oracle SQL already uses a safe encoded token. All other
-                    // logical names are encoded even when their raw text happens to resemble our
-                    // encoded namespace; Encode itself is deliberately not idempotent.
-                    var generatedName = OracleBindName.IsEncoded(logicalName)
-                        && ContainsBindToken(command.CommandText, logicalName);
-                    var safeName = generatedName ? logicalName : OracleBindName.Encode(logicalName);
-                    if (!providerNames.Add(safeName))
-                    {
-                        throw new InvalidOperationException(
-                            $"Oracle parameter names '{logicalName}' and another command parameter resolve to the same provider bind '{safeName}'.");
-                    }
-
-                    // Whether the encoded target token already appears elsewhere is irrelevant:
-                    // every raw occurrence of this logical token still has to be rewritten.
-                    if (!generatedName && ContainsBindToken(command.CommandText, logicalName))
-                    {
-                        (renames ??= new List<BindRename>()).Add(new BindRename(logicalName, safeName));
-                    }
-
-                    parameter.ParameterName = safeName;
-                }
-                else
-                {
-                    // Stored-procedure parameters are formal names, not SQL bind tokens. Preserve
-                    // their spelling and only remove Inquiry's transport sigil.
-                    if (!providerNames.Add(logicalName))
-                    {
-                        throw new InvalidOperationException($"Oracle stored-procedure formal parameter '{logicalName}' is duplicated ignoring case.");
-                    }
-                    parameter.ParameterName = logicalName;
+                    throw new InvalidOperationException($"Oracle parameter names must be unique ignoring case; '{logicalName}' is duplicated.");
                 }
             }
 
-            if (parameter.DbType == System.Data.DbType.Boolean)
+            bindings[bindingCount++] = new BindParameter(parameter, logicalName);
+        }
+
+        var rewrittenText = RewriteBindTokens(
+            command.CommandText,
+            bindings.AsSpan(0, bindingCount),
+            returningBlock,
+            out var containsRefCursor);
+
+        for (var index = 0; index < bindingCount; index++)
+        {
+            ref var binding = ref bindings[index];
+            if (binding.Encoded && !binding.Found)
             {
-                if (parameter.Value is bool boolValue)
+                binding.Safe = OracleBindName.Encode(binding.Logical);
+            }
+
+            for (var previous = 0; previous < index; previous++)
+            {
+                if (string.Equals(bindings[previous].Safe, binding.Safe, StringComparison.OrdinalIgnoreCase))
                 {
-                    parameter.Value = boolValue ? 1 : 0;
+                    throw new InvalidOperationException(
+                        $"Oracle parameter names '{binding.Logical}' and another command parameter resolve to the same provider bind '{binding.Safe}'.");
                 }
-                parameter.DbType = System.Data.DbType.Int32;
             }
         }
 
-        if (renames is { Count: > 0 })
-            command.CommandText = RewriteBindTokens(command.CommandText, renames);
+        for (var index = 0; index < bindingCount; index++)
+        {
+            bindings[index].Parameter.ParameterName = bindings[index].Safe;
+        }
+        command.CommandText = rewrittenText;
+        AddRefCursor(command, containsRefCursor);
+    }
 
+    private static string GetLogicalName(string parameterName)
+        => parameterName[0] == '@' || parameterName[0] == ':'
+            ? parameterName.Substring(1)
+            : parameterName;
+
+    private static void NormalizeBoolean(DbParameter parameter)
+    {
+        if (parameter.DbType != System.Data.DbType.Boolean) return;
+        if (parameter.Value is bool boolValue)
+        {
+            parameter.Value = boolValue ? 1 : 0;
+        }
+        parameter.DbType = System.Data.DbType.Int32;
+    }
+
+    private static void AddRefCursor(DbCommand command, bool containsRefCursor)
+    {
         // Returning mutations are emitted (OracleSqlBuilder) as an anonymous PL/SQL block that runs the
         // mutation and OPENs a ref cursor (:rc) over the affected row. ExecuteReader on such a block returns
         // that cursor's reader, so the shared reader pipeline materializes it unchanged — but the OUT ref
         // cursor must be bound here, since the dialect-agnostic binder cannot create an OracleDbType.RefCursor.
-        if (command is OracleCommand oracleCommand && IsReturningBlock(oracleCommand.CommandText) && !oracleCommand.Parameters.Contains("rc"))
+        if (containsRefCursor && command is OracleCommand oracleCommand && !oracleCommand.Parameters.Contains("rc"))
         {
             oracleCommand.Parameters.Add(new OracleParameter("rc", OracleDbType.RefCursor) { Direction = System.Data.ParameterDirection.Output });
         }
     }
 
     // A returning op is the only SQL Inquiry emits as an anonymous PL/SQL block; normal CRUD never starts
-    // with these tokens. Must stay in sync with the leading token of OracleSqlBuilder's returning builders
-    // (DECLARE for a generated-key insert, BEGIN otherwise) AND with the synthetic `:rc` OUT ref-cursor
-    // bind name. Requiring both gates the auto-bind to generator-emitted SQL: user-authored ad-hoc PL/SQL
-    // that happens to start with DECLARE/BEGIN (a `SELECT INTO`, a local-only block, a hand-written
-    // procedure call) does not reference `:rc`, so it does not gain a stray OUT parameter that would
-    // change its shape (audit P2 #7).
-    private static bool IsReturningBlock(string commandText)
+    // with these tokens. The prefix must stay in sync with OracleSqlBuilder's returning builders (DECLARE
+    // for a generated-key insert, BEGIN otherwise). Callers also require the synthetic `:rc` OUT bind so
+    // user-authored blocks do not gain a stray parameter that changes their shape (audit P2 #7).
+    private static bool HasReturningBlockPrefix(string commandText)
         => (commandText.StartsWith("DECLARE", System.StringComparison.Ordinal)
-            || commandText.StartsWith("BEGIN", System.StringComparison.Ordinal))
-           && ContainsBindToken(commandText, "rc");
+            || commandText.StartsWith("BEGIN", System.StringComparison.Ordinal));
 
     private static bool ContainsBindToken(string commandText, string bindName)
     {
@@ -268,8 +344,17 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         return false;
     }
 
-    private static string RewriteBindTokens(string commandText, List<BindRename> renames)
+    private static string RewriteSingleBindToken(
+        string commandText,
+        string logicalName,
+        string safeName,
+        bool rewrite,
+        bool returningBlock,
+        out bool tokenFound,
+        out bool containsRefCursor)
     {
+        tokenFound = false;
+        containsRefCursor = false;
         StringBuilder? rewritten = null;
         var copiedThrough = 0;
         for (var i = 0; i < commandText.Length;)
@@ -289,20 +374,18 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                     end += width;
                 }
 
-                for (var r = 0; r < renames.Count; r++)
+                var matched = TokenEquals(commandText, nameStart, end, logicalName);
+                tokenFound |= matched;
+                if (matched && rewrite)
                 {
-                    var rename = renames[r];
-                    if (end - nameStart != rename.Original.Length
-                        || string.Compare(commandText, nameStart, rename.Original, 0, rename.Original.Length, StringComparison.OrdinalIgnoreCase) != 0)
-                    {
-                        continue;
-                    }
-
                     rewritten ??= new StringBuilder(commandText.Length + 16);
                     rewritten.Append(commandText, copiedThrough, tokenStart - copiedThrough);
-                    rewritten.Append(':').Append(rename.Safe);
+                    rewritten.Append(':').Append(safeName);
                     copiedThrough = end;
-                    break;
+                }
+                else if (returningBlock && TokenEquals(commandText, nameStart, end, "rc"))
+                {
+                    containsRefCursor = true;
                 }
 
                 i = end;
@@ -316,6 +399,71 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         rewritten.Append(commandText, copiedThrough, commandText.Length - copiedThrough);
         return rewritten.ToString();
     }
+
+    private static string RewriteBindTokens(
+        string commandText,
+        Span<BindParameter> bindings,
+        bool returningBlock,
+        out bool containsRefCursor)
+    {
+        containsRefCursor = false;
+        StringBuilder? rewritten = null;
+        var copiedThrough = 0;
+        for (var i = 0; i < commandText.Length;)
+        {
+            if (TrySkipQuotedOrComment(commandText, ref i)) continue;
+
+            if ((commandText[i] == ':' || commandText[i] == '@')
+                && !(commandText[i] == '@' && IsDatabaseLinkAtSign(commandText, i)))
+            {
+                var tokenStart = i;
+                var nameStart = i + 1;
+                var end = nameStart;
+                while (end < commandText.Length)
+                {
+                    var width = BindNameCharWidth(commandText, end);
+                    if (width == 0) break;
+                    end += width;
+                }
+
+                var rewrittenToken = false;
+                for (var bindingIndex = 0; bindingIndex < bindings.Length; bindingIndex++)
+                {
+                    ref var binding = ref bindings[bindingIndex];
+                    if (!TokenEquals(commandText, nameStart, end, binding.Logical)) continue;
+
+                    binding.Found = true;
+                    if (!binding.Encoded)
+                    {
+                        rewritten ??= new StringBuilder(commandText.Length + 16);
+                        rewritten.Append(commandText, copiedThrough, tokenStart - copiedThrough);
+                        rewritten.Append(':').Append(binding.Safe);
+                        copiedThrough = end;
+                        rewrittenToken = true;
+                    }
+                    break;
+                }
+
+                if (!rewrittenToken && returningBlock && TokenEquals(commandText, nameStart, end, "rc"))
+                {
+                    containsRefCursor = true;
+                }
+
+                i = end;
+                continue;
+            }
+
+            i++;
+        }
+
+        if (rewritten is null) return commandText;
+        rewritten.Append(commandText, copiedThrough, commandText.Length - copiedThrough);
+        return rewritten.ToString();
+    }
+
+    private static bool TokenEquals(string commandText, int start, int end, string expected)
+        => end - start == expected.Length
+           && string.Compare(commandText, start, expected, 0, expected.Length, StringComparison.OrdinalIgnoreCase) == 0;
 
     private static bool TrySkipQuotedOrComment(string text, ref int index)
     {
@@ -396,10 +544,21 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             : 0;
     }
 
-    private readonly struct BindRename
+    private struct BindParameter
     {
-        public BindRename(string original, string safe) => (Original, Safe) = (original, safe);
-        public string Original { get; }
-        public string Safe { get; }
+        public BindParameter(DbParameter parameter, string logical)
+        {
+            Parameter = parameter;
+            Logical = logical;
+            Encoded = OracleBindName.IsEncoded(logical);
+            Safe = Encoded ? logical : OracleBindName.Encode(logical);
+            Found = false;
+        }
+
+        public DbParameter Parameter { get; }
+        public string Logical { get; }
+        public bool Encoded { get; }
+        public string Safe { get; set; }
+        public bool Found { get; set; }
     }
 }

@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Inquiry.Benchmarks.Oracle" />
     <InternalsVisibleTo Include="Inquiry.Oracle.Tests" />
     <Compile Include="..\Inquiry.Oracle.Shared\OracleBindName.cs" Link="OracleBindName.cs" />
   </ItemGroup>
