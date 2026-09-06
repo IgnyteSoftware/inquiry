@@ -14,10 +14,13 @@ namespace Inquiry.Commands;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class InquiryCommandResources
 {
+    private const int ResourceSignalMask = 1023;
     private static readonly ConditionalWeakTable<DbCommand, ResourceSet> Resources = new();
+    private static readonly object ResourceSignalGate = new();
+    private static readonly WeakReference<DbCommand>[]?[] ResourceSignals = new WeakReference<DbCommand>[ResourceSignalMask + 1][];
 
     internal static void Register(DbCommand command, IInquiryExecutionResource resource)
-        => Resources.GetOrCreateValue(command).Add(resource);
+        => Resources.GetValue(command, static key => new ResourceSet(key)).Add(resource);
 
     internal static void Unregister(DbCommand command, IInquiryExecutionResource resource)
     {
@@ -38,9 +41,59 @@ public static class InquiryCommandResources
     public static void Dispose(DbCommand command)
     {
         if (command is null) throw new ArgumentNullException(nameof(command));
+        if (!HasResourceSignal(command)) return;
         if (!Resources.TryGetValue(command, out var set)) return;
         Resources.Remove(command);
         set.Dispose();
+    }
+
+    internal static bool HasResourceSignal(DbCommand command)
+    {
+        var signals = Volatile.Read(ref ResourceSignals[GetSignalIndex(command)]);
+        if (signals is null) return false;
+        foreach (var signal in signals)
+        {
+            if (signal.TryGetTarget(out var target) && ReferenceEquals(target, command)) return true;
+        }
+        return false;
+    }
+
+    private static int GetSignalIndex(DbCommand command)
+        => RuntimeHelpers.GetHashCode(command) & ResourceSignalMask;
+
+    private static void AddResourceSignal(int signalIndex, WeakReference<DbCommand> signal)
+    {
+        lock (ResourceSignalGate)
+        {
+            var current = ResourceSignals[signalIndex];
+            var next = current is null ? new WeakReference<DbCommand>[1] : new WeakReference<DbCommand>[current.Length + 1];
+            if (current is not null) Array.Copy(current, next, current.Length);
+            next[^1] = signal;
+            Volatile.Write(ref ResourceSignals[signalIndex], next);
+        }
+    }
+
+    private static void RemoveResourceSignal(int signalIndex, WeakReference<DbCommand> signal)
+    {
+        lock (ResourceSignalGate)
+        {
+            var current = ResourceSignals[signalIndex];
+            if (current is null) return;
+            if (current.Length == 1)
+            {
+                Volatile.Write(ref ResourceSignals[signalIndex], null);
+                return;
+            }
+
+            var next = new WeakReference<DbCommand>[current.Length - 1];
+            var destination = 0;
+            foreach (var candidate in current)
+            {
+                if (ReferenceEquals(candidate, signal)) continue;
+                next[destination++] = candidate;
+            }
+            Volatile.Write(ref ResourceSignals[signalIndex], next);
+        }
     }
 
     /// <summary>
@@ -107,7 +160,20 @@ public static class InquiryCommandResources
     private sealed class ResourceSet : IDisposable
     {
         private readonly object _gate = new();
+        private readonly int _signalIndex;
+        private readonly WeakReference<DbCommand> _signal;
         private List<IInquiryExecutionResource>? _items = new();
+        private int _signalReleased;
+
+        public ResourceSet(DbCommand command)
+        {
+            _signalIndex = GetSignalIndex(command);
+            _signal = new WeakReference<DbCommand>(command);
+            AddResourceSignal(_signalIndex, _signal);
+        }
+
+        // Finalization removes the weak signal when a command is abandoned without explicit cleanup.
+        ~ResourceSet() => ReleaseSignal();
 
         public void Add(IInquiryExecutionResource resource)
         {
@@ -125,6 +191,8 @@ public static class InquiryCommandResources
 
         public void Dispose()
         {
+            ReleaseSignal();
+            GC.SuppressFinalize(this);
             List<IInquiryExecutionResource>? items;
             lock (_gate)
             {
@@ -145,6 +213,12 @@ public static class InquiryCommandResources
                 }
             }
             InquiryCleanup.ThrowIfAny(exceptions);
+        }
+
+        private void ReleaseSignal()
+        {
+            if (Interlocked.Exchange(ref _signalReleased, 1) == 0)
+                RemoveResourceSignal(_signalIndex, _signal);
         }
     }
 }
