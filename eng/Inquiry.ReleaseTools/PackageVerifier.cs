@@ -31,6 +31,7 @@ public static class PackageVerifier
         "Ignyte.Inquiry.Oracle",
         "Ignyte.Inquiry.PostgreSql",
         "Ignyte.Inquiry.Sqlite",
+        "Ignyte.Inquiry.Sqlite.Testing",
         "Ignyte.Inquiry.SqlServer",
         "Ignyte.Inquiry.Testing"
     ];

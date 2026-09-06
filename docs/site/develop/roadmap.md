@@ -143,7 +143,9 @@ initial implementation as fully complete.
 - **Multi-database in one container.** Inquiry binds a single global `IInquiryConnectionFactory` per
   service collection (now enforced — registering two providers throws a clear exception). True
   multi-provider support would require keyed/named factories or per-provider store scopes — .NET 8
-  keyed DI services are the natural mechanism *(integration research 2026-06-12)*.
+  keyed DI services are the natural mechanism *(integration research 2026-06-12)*. Keep
+  `InquiryStore<TEntity>` dependent on `IInquiry`, not `IInquiryConnectionFactory`, so keyed provider
+  support can remain additive.
 - **Optional Roslyn bump.** `Microsoft.CodeAnalysis.CSharp` is intentionally held at 4.8.0 to keep the
   analyzer's minimum-SDK floor low; revisit only if a newer Roslyn API is needed.
 

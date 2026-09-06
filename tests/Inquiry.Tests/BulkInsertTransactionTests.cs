@@ -1,5 +1,6 @@
 using Inquiry.BulkCopy;
 using Inquiry.Testing;
+using Inquiry.Sqlite.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Tests;

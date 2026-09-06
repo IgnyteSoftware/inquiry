@@ -155,7 +155,8 @@ namespaces remain `Inquiry.*`:
 | `Ignyte.Inquiry.Aspire` | Aspire resource-name registration, telemetry, and health checks |
 | `Ignyte.Inquiry.AspNetCore` | ASP.NET Core audit-context middleware |
 | `Ignyte.Inquiry.Interceptors` | Opt-in slow-query logging + sqlcommenter |
-| `Ignyte.Inquiry.Testing` | SQLite fixture, recording interceptor, Respawn reset |
+| `Ignyte.Inquiry.Sqlite.Testing` | In-memory SQLite fixture |
+| `Ignyte.Inquiry.Testing` | Provider-neutral sandboxes, factories, recording, and reset helpers |
 
 Benchmark, sample, test, and analyzer projects are marked `IsPackable=false` and excluded from
 `dotnet pack`. A new packable project must be added to `eng/release-manifest.json`; the package
