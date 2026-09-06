@@ -24,17 +24,18 @@ namespace Microsoft.Extensions.Hosting;
 public static class InquiryAspireExtensions
 {
     /// <summary>Registers the MariaDB provider, telemetry, and health check.</summary>
-    public static void AddInquiryMariaDb(this IHostApplicationBuilder builder, string resourceName)
+    public static IHostApplicationBuilder AddInquiryMariaDb(this IHostApplicationBuilder builder, string resourceName)
     {
         Validate(builder, resourceName);
         var dataSource = new MySqlDataSourceBuilder(GetRequiredConnectionString(builder, resourceName)).Build();
         builder.Services.AddSingleton(_ => dataSource);
         builder.Services.AddInquiryMariaDb(dataSource);
         AddAspireDefaults(builder);
+        return builder;
     }
 
     /// <summary>Registers the MySQL provider, telemetry, and health check.</summary>
-    public static void AddInquiryMySql(this IHostApplicationBuilder builder, string resourceName)
+    public static IHostApplicationBuilder AddInquiryMySql(this IHostApplicationBuilder builder, string resourceName)
     {
         Validate(builder, resourceName);
         var connectionString = new MySqlConnectionStringBuilder(GetRequiredConnectionString(builder, resourceName))
@@ -45,46 +46,51 @@ public static class InquiryAspireExtensions
         builder.Services.AddSingleton(_ => dataSource);
         builder.Services.AddInquiryMySql(dataSource);
         AddAspireDefaults(builder);
+        return builder;
     }
 
     /// <summary>Registers the Oracle provider, telemetry, and health check.</summary>
-    public static void AddInquiryOracle(this IHostApplicationBuilder builder, string resourceName)
+    public static IHostApplicationBuilder AddInquiryOracle(this IHostApplicationBuilder builder, string resourceName)
     {
         Validate(builder, resourceName);
         var dataSource = OracleClientFactory.Instance.CreateDataSource(GetRequiredConnectionString(builder, resourceName));
         builder.Services.AddSingleton(_ => dataSource);
         builder.Services.AddInquiryOracle(dataSource);
         AddAspireDefaults(builder);
+        return builder;
     }
 
     /// <summary>Registers the PostgreSQL provider, telemetry, and health check.</summary>
-    public static void AddInquiryPostgreSql(this IHostApplicationBuilder builder, string resourceName)
+    public static IHostApplicationBuilder AddInquiryPostgreSql(this IHostApplicationBuilder builder, string resourceName)
     {
         Validate(builder, resourceName);
         var dataSource = new NpgsqlDataSourceBuilder(GetRequiredConnectionString(builder, resourceName)).Build();
         builder.Services.AddSingleton(_ => dataSource);
         builder.Services.AddInquiryPostgreSql(dataSource);
         AddAspireDefaults(builder);
+        return builder;
     }
 
     /// <summary>Registers the SQLite provider, telemetry, and health check.</summary>
-    public static void AddInquirySqlite(this IHostApplicationBuilder builder, string resourceName)
+    public static IHostApplicationBuilder AddInquirySqlite(this IHostApplicationBuilder builder, string resourceName)
     {
         Validate(builder, resourceName);
         var dataSource = SqliteFactory.Instance.CreateDataSource(GetRequiredConnectionString(builder, resourceName));
         builder.Services.AddSingleton(_ => dataSource);
         builder.Services.AddInquirySqlite(dataSource);
         AddAspireDefaults(builder);
+        return builder;
     }
 
     /// <summary>Registers the SQL Server provider, telemetry, and health check.</summary>
-    public static void AddInquirySqlServer(this IHostApplicationBuilder builder, string resourceName)
+    public static IHostApplicationBuilder AddInquirySqlServer(this IHostApplicationBuilder builder, string resourceName)
     {
         Validate(builder, resourceName);
         var dataSource = SqlClientFactory.Instance.CreateDataSource(GetRequiredConnectionString(builder, resourceName));
         builder.Services.AddSingleton(_ => dataSource);
         builder.Services.AddInquirySqlServer(dataSource);
         AddAspireDefaults(builder);
+        return builder;
     }
 
     private static void AddAspireDefaults(IHostApplicationBuilder builder)

@@ -3,7 +3,7 @@ using Inquiry.Sqlite.DependencyInjection;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Inquiry.Testing;
+namespace Inquiry.Sqlite.Testing;
 
 /// <summary>
 /// A self-contained Inquiry test fixture backed by a unique shared-cache in-memory SQLite

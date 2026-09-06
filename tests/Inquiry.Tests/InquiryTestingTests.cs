@@ -2,6 +2,7 @@ using Inquiry.Commands;
 using Inquiry.Interceptors;
 using Inquiry.Parameters;
 using Inquiry.Testing;
+using Inquiry.Sqlite.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;

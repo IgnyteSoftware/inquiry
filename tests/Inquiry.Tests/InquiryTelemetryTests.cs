@@ -8,6 +8,7 @@ using Inquiry.Materialization;
 using Inquiry.Parameters;
 using Inquiry.Pipeline;
 using Inquiry.Testing;
+using Inquiry.Sqlite.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

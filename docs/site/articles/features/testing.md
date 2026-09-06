@@ -1,7 +1,7 @@
 # Testing
 
-Inquiry ships two test seams: **generated store interfaces** for unit-testing services without a
-database, and the **`Inquiry.Testing`** package for integration-testing against real engines.
+Inquiry ships generated store interfaces for unit-testing services without a database, the
+provider-neutral **`Inquiry.Testing`** package, and **`Inquiry.Sqlite.Testing`** for SQLite fixtures.
 
 ## Mocking stores: `[InquiryGenerateInterface]`
 
@@ -23,11 +23,13 @@ registers the interface in DI as a forward to the **same scoped store instance**
 depend on `IOrganizationStore` and tests can hand them a mock, while production keeps direct,
 devirtualized calls. The interface is `partial`, so you can extend it with your own members.
 
-## Integration testing: the `Inquiry.Testing` package
+## Integration testing packages
 
-Test-framework-agnostic helpers (no xunit/NUnit dependency):
+Both packages are test-framework-agnostic and have no xunit or NUnit dependency.
 
 ### `SqliteInquiryFixture`
+
+Install `Ignyte.Inquiry.Sqlite.Testing` and import `Inquiry.Sqlite.Testing`.
 
 Spins up a uniquely named shared-cache in-memory SQLite database (held alive by a keeper
 connection), wires `AddInquiry()` + `AddInquirySqlite(...)`, and lets you add your generated
@@ -46,6 +48,8 @@ Each fixture is an isolated database; use one per test (or per test class) — d
 down.
 
 ### `InquirySandbox`
+
+The remaining helpers come from the provider-neutral `Ignyte.Inquiry.Testing` package.
 
 Runs each callback in a fresh DI scope and transaction, then rolls the transaction back on success,
 failure, or cancellation. Resolve generated stores from `context.Services` so they share the same

@@ -45,7 +45,7 @@ public sealed class InitialSchema : Migration
 
 Two practices make this setup self-policing:
 
-- **Schema-drift test.** In CI, create a database from your migration chain and another from `InquiryGeneratedSchema.Ddl`, then compare (table/column dumps are enough). If a migration drifts from what the entities declare, the test fails before production does. The `Inquiry.Testing` SQLite fixture makes the entity-side database a one-liner.
+- **Schema-drift test.** In CI, create a database from your migration chain and another from `InquiryGeneratedSchema.Ddl`, then compare (table/column dumps are enough). If a migration drifts from what the entities declare, the test fails before production does. The `Inquiry.Sqlite.Testing` fixture makes the entity-side database a one-liner.
 - **Never edit migration 0001.** When entities change, write a new `ALTER` migration; the regenerated `Ddl` constant is your reference for what the end-state should be, not a script to re-run.
 
 ## What stays out of scope

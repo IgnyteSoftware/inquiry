@@ -9,6 +9,7 @@
             "Inquiry.Aspire/Inquiry.Aspire.csproj",
             "Inquiry.Testing/Inquiry.Testing.csproj",
             "Inquiry.Sqlite/Inquiry.Sqlite.csproj",
+            "Inquiry.Sqlite.Testing/Inquiry.Sqlite.Testing.csproj",
             "Inquiry.SqlServer/Inquiry.SqlServer.csproj",
             "Inquiry.PostgreSql/Inquiry.PostgreSql.csproj",
             "Inquiry.MySql/Inquiry.MySql.csproj",

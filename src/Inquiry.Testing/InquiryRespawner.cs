@@ -11,7 +11,7 @@ namespace Inquiry.Testing;
 /// </summary>
 /// <remarks>
 /// Respawn supports SQL Server, PostgreSQL, MySQL, and Oracle — it does <b>not</b> support
-/// SQLite. For SQLite, use a fresh <see cref="SqliteInquiryFixture"/> per test instead. The
+/// SQLite. For SQLite, use a fresh <c>Inquiry.Sqlite.Testing.SqliteInquiryFixture</c> per test. The
 /// underlying <see cref="Respawner"/> caches the schema graph at creation time, but each
 /// <c>ResetAsync</c> call still needs an open connection — hence the factory-based reset
 /// overload that opens and disposes one around the reset.

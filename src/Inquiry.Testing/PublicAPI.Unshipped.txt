@@ -33,12 +33,5 @@ Inquiry.Testing.RecordingCommandInterceptor.CommandExecutingAsync(Inquiry.Comman
 Inquiry.Testing.RecordingCommandInterceptor.CommandFailedAsync(Inquiry.Commands.InquiryCommandFailedContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Inquiry.Testing.RecordingCommandInterceptor.Commands.get -> System.Collections.Generic.IReadOnlyList<Inquiry.Testing.RecordedCommand!>!
 Inquiry.Testing.RecordingCommandInterceptor.RecordingCommandInterceptor() -> void
-Inquiry.Testing.SqliteInquiryFixture
-Inquiry.Testing.SqliteInquiryFixture.ConnectionString.get -> string!
-Inquiry.Testing.SqliteInquiryFixture.CreateScope() -> Microsoft.Extensions.DependencyInjection.IServiceScope!
-Inquiry.Testing.SqliteInquiryFixture.DisposeAsync() -> System.Threading.Tasks.ValueTask
-Inquiry.Testing.SqliteInquiryFixture.ExecuteDdlAsync(string! ddl, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
-Inquiry.Testing.SqliteInquiryFixture.Services.get -> System.IServiceProvider!
 static Inquiry.Testing.InquiryRespawner.CreateAsync(Inquiry.Connections.IInquiryConnectionFactory! factory, Respawn.RespawnerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Testing.InquiryRespawner!>!
 static Inquiry.Testing.InquiryRespawner.CreateAsync(System.Data.Common.DbConnection! openConnection, Respawn.RespawnerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Testing.InquiryRespawner!>!
-static Inquiry.Testing.SqliteInquiryFixture.CreateAsync(System.Action<Microsoft.Extensions.DependencyInjection.IServiceCollection!>? configureServices = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Inquiry.Testing.SqliteInquiryFixture!>!
