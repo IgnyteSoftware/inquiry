@@ -73,11 +73,10 @@ single multi-result-set command — so a `Ratio` or `Alloc Ratio` below 1.00 is 
 difference being measured, not baseline drift. Do not "fix" it.
 
 Ratios in the committed `EagerGridBenchmarks` baseline (`Grid_Inquiry` ÷ `Grid_AdoNet`, median): 0.97 at
-(1000, 4), 1.00 at (1000, 100), **1.15 at (100000, 4)**, 0.98 at (100000, 100). That dense-100k outlier
-predates the children-first streaming change (#70) and has not been re-measured since. It is tracked as
-[#265](https://github.com/IgnyteSoftware/inquiry/issues/265) — because the baseline pins 1.15 as the
-expected value, the regression gate will never flag it. `EagerLoadingBenchmarks` is **not** exempt — it
-runs 1.11–1.13× and the ordinary rule applies.
+(1000, 4), 0.99 at (1000, 100), 0.97 at (100000, 4), and 0.92 at (100000, 100). The post-#70 default-job
+remeasurement for [#265](https://github.com/IgnyteSoftware/inquiry/issues/265) no longer reproduces the
+former 1.15 dense-100k outlier. `EagerLoadingBenchmarks` is **not** exempt — it runs 1.11–1.13× and the
+ordinary rule applies.
 
 ## What it measures
 
