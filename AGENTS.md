@@ -6,6 +6,12 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+## Issue management
+
+Before creating, rewriting, splitting or triaging GitHub issues, read and follow the
+[issue standard](docs/site/develop/issue-standard.md). Use its shared template, title format, label
+families and milestone rules for both browser and API/CLI writes, then verify the saved issue.
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**

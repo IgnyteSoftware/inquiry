@@ -3,6 +3,12 @@
 How Inquiry is developed. A few hard conventions keep the parallel, source-generator-heavy work merge-clean
 and verifiable.
 
+## Issues
+
+Follow the [issue standard](issue-standard.md) when creating, rewriting, splitting or triaging work.
+All issues use the same title format, six body sections and three label families. The standard also
+defines duplicate handling and the boundary between 1.0 release work and later milestones.
+
 ## Skill-first workflow
 
 Start work through the relevant workflow skill: brainstorm a new feature into a spec, turn the spec into an

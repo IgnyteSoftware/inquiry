@@ -5,6 +5,12 @@ getting a change from idea to published package. The deeper conventions (worktre
 style, generator "hot spine" rules) live in the
 [contributor docs](docs/site/develop/contributing.md).
 
+## Issues
+
+Use the [shared issue template](https://github.com/IgnyteSoftware/inquiry/issues/new?template=work-item.md)
+for all work items. Follow the [issue standard](docs/site/develop/issue-standard.md) when creating or
+editing titles, bodies, labels and milestones, including through the API or CLI.
+
 ## TL;DR workflow
 
 ```
