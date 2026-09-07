@@ -6,6 +6,8 @@
   href: batch-mutation-diagnostic-matrix.md
 - name: Contributing
   href: contributing.md
+- name: Issue standard
+  href: issue-standard.md
 - name: Adding a provider
   href: adding-a-provider.md
 - name: Design notes

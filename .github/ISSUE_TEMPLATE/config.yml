@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Question / usage help
     url: https://github.com/IgnyteSoftware/inquiry/discussions
-    about: Ask "how do I…" questions in Discussions — the issue tracker is for bugs and feature requests.
+    about: Ask usage questions in Discussions; the issue tracker is for actionable work items.
   - name: Security vulnerability
     url: https://github.com/IgnyteSoftware/inquiry/security/advisories/new
     about: Do not open a public issue — use private vulnerability reporting (see SECURITY.md).
