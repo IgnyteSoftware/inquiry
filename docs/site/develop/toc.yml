@@ -4,6 +4,8 @@
   href: roadmap.md
 - name: Batch performance evidence
   href: batch-mutation-diagnostic-matrix.md
+- name: Batch insert threshold evidence
+  href: batch-insert-threshold-evidence.md
 - name: Contributing
   href: contributing.md
 - name: Issue standard
