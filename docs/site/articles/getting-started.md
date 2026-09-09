@@ -151,6 +151,9 @@ in the host.
 
 If a partial method reports CS8795, inspect the generator diagnostics first.
 
+Use the [diagnostic repair index](diagnostics.md) for failing shapes, accepted declarations, and
+suppression guidance. Every active INQ diagnostic has an IDE help link to its entry.
+
 1. Reference a provider such as `Ignyte.Inquiry.Sqlite`; `Ignyte.Inquiry` alone contains no generator.
 2. Check that dialect inference selects the provider you intend. An `INQ` diagnostic explains
    unresolved or invalid declarations.

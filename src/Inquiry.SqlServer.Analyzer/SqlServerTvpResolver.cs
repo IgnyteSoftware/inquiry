@@ -12,7 +12,8 @@ internal static class SqlServerTvpResolver
     private static readonly DiagnosticDescriptor InvalidMapping = new(
         "INQ076", "SQL Server TVP collection mapping is invalid",
         "Collection method '{0}' cannot use the SQL Server TVP mapping for column '{1}': {2}",
-        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq076");
 
     private static readonly Regex TypePattern = new(
         @"^\s*(?<name>[A-Za-z][A-Za-z0-9_]*)(?:\s*\(\s*(?<a>MAX|[0-9]+)\s*(?:,\s*(?<b>[0-9]+)\s*)?\))?\s*$",
