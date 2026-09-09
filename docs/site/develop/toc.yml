@@ -6,10 +6,6 @@
   href: batch-mutation-diagnostic-matrix.md
 - name: Batch insert threshold evidence
   href: batch-insert-threshold-evidence.md
-- name: Generator build and edit evidence
-  href: generator-build-evidence.md
-- name: Generator benchmark comparisons
-  href: generator-benchmark-comparisons.md
 - name: Contributing
   href: contributing.md
 - name: Issue standard
@@ -18,3 +14,7 @@
   href: adding-a-provider.md
 - name: Design notes
   href: design-notes.md
+- name: Generator build and edit evidence
+  href: generator-build-evidence.md
+- name: Generator benchmark comparisons
+  href: generator-benchmark-comparisons.md
