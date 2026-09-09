@@ -920,4 +920,9 @@ internal static class InquiryDiagnosticDescriptors
         "Store method '{0}' has an invalid InquirySet assignment for field '{1}': {2}",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
+    public static readonly DiagnosticDescriptor NullableKeysetField = new(
+        "INQ100", "Keyset ordering field must be non-nullable",
+        "Keyset method '{0}' uses nullable field '{1}'. Choose non-nullable ordering fields or use offset pagination; a null keyset cursor is reserved for the first page.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
 }

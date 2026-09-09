@@ -3094,6 +3094,13 @@ internal static class StoreProcessor
                 return false;
             }
 
+            if (column.IsNullable || column.ProviderValueIsNullable)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.NullableKeysetField,
+                    method.Location?.ToLocation(), method.Name, name));
+                return false;
+            }
+
             keysetColumns.Add(column);
         }
 
@@ -3128,11 +3135,9 @@ internal static class StoreProcessor
     {
         if (keysetColumns.Count == 1)
         {
-            // The cursor is the nullable form of the key (null = first page). For a nullable key column
-            // (e.g. int?) that is the column's own display; for a non-nullable key (e.g. long) it is the
-            // key type plus "?".
+            // Null selects the first page; the ordering field itself cannot be null.
             var columnType = keysetColumns[0].Type;
-            var expectedNullable = columnType.IsNullable ? columnType.DisplayName : columnType.NonNullableDisplayName + "?";
+            var expectedNullable = columnType.NonNullableDisplayName + "?";
             return cursor.TypeDisplay == expectedNullable;
         }
 
