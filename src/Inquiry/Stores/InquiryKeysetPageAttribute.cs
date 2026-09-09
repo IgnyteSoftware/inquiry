@@ -21,6 +21,9 @@ public enum KeysetDirection
 /// listed key fields; on the first page a null cursor selects from the start. <c>pageSize + 1</c> rows
 /// are requested so the generated body can report <see cref="Paging.InquiryPage{TEntity,TCursor}.HasMore"/>
 /// without a second query.
+/// Every ordering column must be non-nullable in the database, including composite keyset columns.
+/// A generated key may use a nullable CLR property to represent an entity that has not been inserted.
+/// Use offset pagination when the ordering must include null values.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryKeysetPageAttribute : Attribute

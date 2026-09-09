@@ -99,3 +99,4 @@ INQ096 | Inquiry | Error | Mutation target is invalid
 INQ097 | Inquiry | Error | InquiryWhere groups are unbalanced
 INQ098 | Inquiry | Error | Optional InquiryWhere criterion is invalid
 INQ099 | Inquiry | Error | InquirySet expression is invalid
+INQ100 | Inquiry | Error | Keyset ordering field must be non-nullable
