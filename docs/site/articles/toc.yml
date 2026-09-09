@@ -1,5 +1,7 @@
 - name: Getting started
   href: getting-started.md
+- name: Registering data libraries
+  href: library-registration.md
 - name: How it works
   href: concepts.md
 - name: Architecture
