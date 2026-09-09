@@ -1260,7 +1260,7 @@ public abstract class SqlBuilder
             }
 
             var predicate = predicates[i];
-            if (predicate.IsNegated)
+            if (predicate.IsNegated && predicate.OpenGroups > 0)
             {
                 sb.Append("NOT ");
             }
@@ -1270,17 +1270,7 @@ public abstract class SqlBuilder
                 sb.Append('(');
             }
 
-            if (predicate.IsNegated && predicate.OpenGroups == 0)
-            {
-                sb.Append('(');
-            }
-
             sb.Append(RenderPredicate(predicate));
-
-            if (predicate.IsNegated && predicate.OpenGroups == 0)
-            {
-                sb.Append(')');
-            }
 
             for (var group = 0; group < predicate.CloseGroups; group++)
             {
@@ -1320,6 +1310,11 @@ public abstract class SqlBuilder
             SqlCompareOp.NotIn => RenderNotIn(column, ParameterName(predicate.ParameterName!)),
             _ => column + " = " + ParameterName(predicate.ParameterName!),
         };
+
+        if (predicate.IsNegated && predicate.OpenGroups == 0)
+        {
+            rendered = "NOT (" + rendered + ")";
+        }
 
         return predicate.IsOptional
             ? "(" + ParameterName(predicate.ParameterName!) + " IS NULL OR " + rendered + ")"
