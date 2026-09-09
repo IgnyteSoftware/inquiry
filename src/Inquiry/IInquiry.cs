@@ -9,6 +9,12 @@ namespace Inquiry;
 /// <summary>
 /// Provides simple database access for user-defined Inquiry stores and application services.
 /// </summary>
+/// <remarks>
+/// DefaultInquiry is the supported production runtime. Custom implementations are test doubles,
+/// not production replacements. Default members preserve source compatibility but may throw for
+/// unsupported operations or provide weaker batch guarantees. Generated-command and materializer
+/// overloads support generated stores; applications should prefer store methods and ad-hoc SQL overloads.
+/// </remarks>
 public interface IInquiry
 {
     /// <summary>
