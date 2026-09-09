@@ -18,17 +18,19 @@ namespace Inquiry.Paging;
 public readonly struct InquiryPagedResult<TEntity>
     where TEntity : class
 {
+    private readonly IReadOnlyList<TEntity>? _items;
+
     /// <summary>Initializes a new instance of the <see cref="InquiryPagedResult{TEntity}"/> struct.</summary>
     /// <param name="items">The page items, in sort order.</param>
     /// <param name="totalCount">The total number of rows matching the query filters (from the paired COUNT).</param>
     public InquiryPagedResult(IReadOnlyList<TEntity> items, long totalCount)
     {
-        Items = items ?? System.Array.Empty<TEntity>();
+        _items = items;
         TotalCount = totalCount;
     }
 
-    /// <summary>Gets the page items, in sort order, sized to the requested limit or fewer.</summary>
-    public IReadOnlyList<TEntity> Items { get; }
+    /// <summary>Gets the page items, in sort order, sized to the requested limit or fewer. A default result exposes an empty collection.</summary>
+    public IReadOnlyList<TEntity> Items => _items ?? System.Array.Empty<TEntity>();
 
     /// <summary>Gets the total number of rows matching the query filters, independent of offset/limit.</summary>
     public long TotalCount { get; }
