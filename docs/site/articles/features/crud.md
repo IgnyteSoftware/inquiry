@@ -28,6 +28,42 @@ For single-entity insert, update, upsert, and key-delete methods, `Task<TEntity?
 returning SQL shape. Non-returning methods use `Task<int>` or `Task<bool>` as shown above. Batch and
 predicate mutations cannot return entities, so their return type remains `Task<int>`.
 
+## Return values and input mutation
+
+An ordinary identity insert reports affected rows, not the generated key:
+
+```csharp
+var input = new Shipper { CompanyName = "Speedy Express" };
+var affectedRows = await store.InsertAsync(input, ct);
+// input.ShipperID is still null; affectedRows is not its identity.
+```
+
+Use the returning form when the caller needs saved database values. This is an alternative insert,
+not a second call to make for the same row:
+
+```csharp
+var input = new Shipper { CompanyName = "Speedy Express" };
+var saved = await store.InsertReturningAsync(input, ct);
+if (saved is null)
+    throw new InvalidOperationException("The insert returned no row.");
+var savedKey = saved.ShipperID;
+```
+
+The result is a newly materialized entity. Database-generated keys, defaults, computed values, and
+tokens exposed by the provider's returning SQL are authoritative on that result. They are not copied
+into the input. Caller-supplied values are not proof of what the database saved. Returning SQL and
+trigger timing differ by provider; this is not a promise to reread all later trigger effects.
+
+A nullable returning result means the operation returned no row, not a universal success indicator.
+For example, an update may match no row, or an upsert may do nothing; provider differences are listed
+below. Concurrency conflicts retain the configured null/false/exception policy.
+
+Configured SequentialGuid generation and audit assignments are exceptions to the no-input-refresh
+rule: they assign client-side values before execution. Created audit values follow their unset checks;
+modified values are stamped on applicable writes. These assignments survive a failed command or
+transaction rollback. See [Concurrency](concurrency.md) before editing the same entity again and
+[Errors and partial outcomes](../error-contracts.md) before implementing retries.
+
 ## You write
 
 ### The entity
@@ -272,7 +308,7 @@ await store.InsertAsync(doc);
 ```
 
 - **Supplied keys win.** A non-empty key is never overwritten.
-- **The entity is mutated** so you see the generated key after the call — same ergonomics as a database-generated identity.
+- **The entity is mutated before execution** so the client-generated key is visible even if the write fails. Ordinary database-generated identity inserts do not copy the identity into the input.
 - **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a UUIDv7. On .NET 9+ it delegates to `Guid.CreateVersion7()`; on .NET 8 it's an RFC 9562-conformant polyfill. For SQL Server-ordered keys, use `InquiryGuid.NewSqlServerSequential()`.
 - `SequentialGuid` requires a plain client-supplied `Guid`/`Guid?` key — combining it with `IsGenerated` or `UseDatabaseDefault`, or putting it on a non-Guid key, is a build-time error (`INQ047`).
 

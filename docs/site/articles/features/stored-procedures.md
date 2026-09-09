@@ -23,11 +23,24 @@ public partial class CustomerStore : InquiryStore<Customer>
 | Return type | Pipeline call |
 |---|---|
 | `IAsyncEnumerable<TEntity>` | Streaming rows |
-| `Task<TEntity?>` | Single row |
-| `Task<int>` | Records affected |
+| `Task<TEntity?>` | Zero or one row; null when empty, exception on multiple rows |
+| `Task<int>` without a read-back option | Provider records-affected result; may be -1 |
 | `Task<TScalar>` + `OutputParameter`/`ReturnsValue` | Read-back scalar (see below) |
 | `Task<TScalar>` + `[InquiryParameter(IsInputOutput = true)]` | INOUT read-back (see below) |
 | `Task<(IReadOnlyList<A>, IReadOnlyList<B>, …)>` | Multiple typed result sets (see below) |
+
+SELECT results, affected rows, RETURN status, and OUTPUT values are different channels. For example,
+SQL Server's NOCOUNT behavior can make the affected-row result -1. Neither a positive count nor a
+RETURN integer has a universal business-success meaning; follow the procedure's contract.
+
+A scalar OUTPUT/INOUT database NULL becomes default(T); use a nullable scalar when NULL must remain
+distinct from zero. Entity-returning calls use single-or-default cardinality, not first-row selection.
+
+Each method invocation executes the procedure. Do not invoke a side-effecting procedure repeatedly
+through different declarations to obtain its rows and outputs. The generated scalar read-back shape
+does not also return SELECT rows. If one execution must expose both channels, use a caller-owned
+ADO.NET command/reader or redesign the procedure to expose a supported single result shape.
+See [Errors and partial outcomes](../error-contracts.md) for streaming and disposal failures.
 
 ## OUTPUT parameters and RETURN values
 
@@ -48,7 +61,7 @@ public partial class OrderStore : InquiryStore<Order>
 
 - The generator binds the named parameter with `ParameterDirection.Output` (stamping its `DbType`, and `Size = -1` for `string`), or a `ParameterDirection.ReturnValue` parameter for `ReturnsValue`, then reads it back after execution.
 - A RETURN value is always an integer, so `ReturnsValue = true` requires `Task<int>`. `OutputParameter` and `ReturnsValue` are mutually exclusive. Misconfiguration is a build error (`INQ051`).
-- This scalar-output form doesn't also map a result set — use a separate method for rows. Use `Task<TScalar?>` when the OUTPUT can be `NULL`.
+- This scalar-output form does not also map a result set. A separate declaration is an alternative invocation, not a way to retrieve rows from the same execution. Use `Task<TScalar?>` when the OUTPUT can be `NULL`.
 
 ## INOUT parameters
 

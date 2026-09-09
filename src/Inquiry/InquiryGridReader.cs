@@ -47,9 +47,11 @@ public sealed class InquiryGridReader : IAsyncDisposable
     }
 
     /// <summary>
-    /// Materializes the first row of the current result set (or <see langword="null"/> when empty), then
-    /// advances to the next result set.
+    /// Materializes the sole row of the current result set (or <see langword="null"/> when empty), then
+    /// advances to the next result set. A second row is an error, not a first-row selection.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The result set contains multiple rows, is exhausted, or has an unfinished stream.</exception>
+    /// <exception cref="ObjectDisposedException">The grid reader has been disposed.</exception>
     public async Task<TEntity?> ReadSingleOrDefaultAsync<TEntity, TMaterializer>(
         TMaterializer materializer,
         CancellationToken cancellationToken = default)
