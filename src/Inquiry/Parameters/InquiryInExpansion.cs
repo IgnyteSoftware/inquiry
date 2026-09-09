@@ -114,6 +114,11 @@ public static class InquiryInExpansion
         // Parameters already on the command before this expansion (SET/predicate params). The cap and the
         // bucket-padding budget are measured against the command's total, not just the IN elements.
         var baseParameterCount = command.Parameters.Count;
+        var usedNames = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        foreach (DbParameter parameter in command.Parameters)
+        {
+            usedNames.Add(parameter.ParameterName);
+        }
 
         var placeholders = new StringBuilder("(");
         var count = 0;
@@ -127,6 +132,13 @@ public static class InquiryInExpansion
             }
 
             var elementName = parameterName + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            // SQL reserves parameters that later binders have not added yet. Check existing bindings
+            // too, so separate expansions cannot reuse a name after its sentinel was replaced.
+            while (command.CommandText.Contains(elementName, System.StringComparison.OrdinalIgnoreCase)
+                || !usedNames.Add(elementName))
+            {
+                elementName += "_";
+            }
             placeholders.Append(elementName);
 
             var parameter = command.CreateParameter();
