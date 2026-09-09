@@ -12,6 +12,7 @@
 *.sh text eol=lf
 *.bash text eol=lf
 
+benchmarks/evidence/issue-396-generator/* text eol=lf
 benchmarks/evidence/issue-180-diagnostic-rows.patch text eol=lf
 benchmarks/evidence/issue-180-diagnostic-matrix/* text eol=lf
 benchmarks/evidence/issue-393-thresholds/* text eol=lf
