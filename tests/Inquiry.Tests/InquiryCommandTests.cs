@@ -6,7 +6,7 @@ namespace Inquiry.Tests;
 public sealed class InquiryCommandTests
 {
     [Fact]
-    public void ConstructorUsesParameterArrayWithoutCopying()
+    public void ConstructorCopiesParameterArrays()
     {
         var parameters = new[]
         {
@@ -15,7 +15,8 @@ public sealed class InquiryCommandTests
 
         var command = new InquiryCommand("SELECT 1 WHERE Id = @Id", parameters);
 
-        Assert.Same(parameters, command.Parameters);
+        parameters[0] = new InquiryParameter("Id", 2);
+        Assert.Equal(1, command.Parameters[0].Value);
     }
 
     [Fact]

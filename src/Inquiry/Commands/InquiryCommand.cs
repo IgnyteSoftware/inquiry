@@ -10,6 +10,7 @@ namespace Inquiry.Commands;
 public sealed class InquiryCommand
 {
     private readonly InquiryParameter[] _parameters;
+    private readonly IReadOnlyList<InquiryParameter> _parameterView;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryCommand"/> class.
@@ -39,12 +40,9 @@ public sealed class InquiryCommand
         }
 
         CommandText = commandText;
-        _parameters = parameters switch
-        {
-            null => throw new ArgumentNullException(nameof(parameters)),
-            InquiryParameter[] array => array,
-            _ => parameters.ToArray(),
-        };
+        ArgumentNullException.ThrowIfNull(parameters);
+        _parameters = parameters.Count == 0 ? Array.Empty<InquiryParameter>() : parameters.ToArray();
+        _parameterView = _parameters.Length == 0 ? Array.Empty<InquiryParameter>() : Array.AsReadOnly(_parameters);
         CommandType = commandType;
         CommandTimeout = commandTimeout;
     }
@@ -74,9 +72,11 @@ public sealed class InquiryCommand
     public string CommandText { get; }
 
     /// <summary>
-    /// Gets the parameters to bind to the command.
+    /// Gets a read-only shallow snapshot of the parameters supplied at construction.
+    /// Replacing items in the caller's collection does not change this command. Parameter values
+    /// are not deep-copied; mutable values and binder-captured state remain the caller's responsibility.
     /// </summary>
-    public IReadOnlyList<InquiryParameter> Parameters => _parameters;
+    public IReadOnlyList<InquiryParameter> Parameters => _parameterView;
 
     /// <summary>
     /// Internal accessor used by the pipeline binder to iterate the parameters as a strongly-typed
