@@ -4,6 +4,12 @@ Return a **column subset** as a DTO instead of materializing the full entity. Us
 
 ## You write
 
+Projections are supported by InquirySelectAll and InquirySelectAllByField, including their ordered
+and offset-paged forms. InquirySelectAllByPredicate, key lookups, keyset pages, and eager methods
+require the store entity. The predicate/projection restriction is intentional for 1.0; use a field
+equality filter or explicit parameterized SQL when returning a DTO. See
+[Choosing a select declaration](select-declarations.md) for the capability table and accepted API decision.
+
 Declare a projection type with `[InquiryProjection(typeof(SourceEntity))]`. Only properties marked `[InquiryColumn]` are included; they map to columns on the source entity by name.
 
 ```csharp

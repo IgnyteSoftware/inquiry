@@ -1,5 +1,7 @@
 - name: CRUD
   href: crud.md
+- name: Choosing a select declaration
+  href: select-declarations.md
 - name: Pagination
   href: pagination.md
 - name: Soft delete
