@@ -46,6 +46,42 @@ public static class CiContractVerifier
         }
 
         VerifyRequiredCommands(jobs);
+        VerifyTestInventory(root, jobs);
+    }
+
+    private static void VerifyTestInventory(string root, IReadOnlyDictionary<string, YamlNode> jobs)
+    {
+        var commands = string.Join('\n', jobs.Values.SelectMany(node => Nodes(Map(node, "job")["steps"], "steps"))
+            .Select(node => Map(node, "step"))
+            .Where(step => step.ContainsKey("run"))
+            .Select(step => Scalar(step["run"], "run")));
+        var executed = IntegrationProviders.SelectMany(provider =>
+                System.Text.RegularExpressions.Regex.Matches(
+                    commands.Replace("${{ matrix.provider }}", provider, StringComparison.Ordinal),
+                    @"dotnet test (tests/\S+\.csproj)"))
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        var nonTestProjects = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["tests/Inquiry.IntegrationTesting/Inquiry.IntegrationTesting.csproj"] = "support library",
+            ["tests/Inquiry.Oracle.UnsupportedFixtures/Inquiry.Oracle.UnsupportedFixtures.csproj"] = "generator fixture library",
+            ["tests/Inquiry.PackageSmoke/Inquiry.PackageSmoke.csproj"] = "package smoke executable"
+        };
+        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+        var projects = Directory.EnumerateFiles(Path.Combine(root, "tests"), "*.csproj", options)
+            .Where(path => !Path.GetRelativePath(root, path).Split(Path.DirectorySeparatorChar)
+                .Any(segment => segment is "bin" or "obj"))
+            .ToDictionary(path => Path.GetRelativePath(root, path).Replace('\\', '/'),
+                System.Xml.Linq.XDocument.Load, StringComparer.Ordinal);
+        Require(projects.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(executed.Concat(nonTestProjects.Keys)),
+            "Test project inventory differs from required CI. Classify each project as a runnable suite, support library, or smoke executable.");
+        foreach (var (path, project) in projects)
+        {
+            var hasTestSdk = project.Descendants("PackageReference")
+                .Any(reference => (string?)reference.Attribute("Include") == "Microsoft.NET.Test.Sdk");
+            Require(hasTestSdk == executed.Contains(path),
+                $"Test SDK classification for {path} disagrees with required CI.");
+        }
     }
 
     private static void VerifyTriggers(IReadOnlyDictionary<string, YamlNode> triggers)
@@ -215,7 +251,7 @@ public static class CiContractVerifier
             "dotnet restore",
             "dotnet build --no-restore -c Release",
             "dotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release --no-build -- verify-manifest . eng/release-manifest.json\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release --no-build -- verify-ci . eng/ci-required-v1.json .github/workflows/ci.yml\ndotnet test tests/Inquiry.ReleaseTools.Tests/Inquiry.ReleaseTools.Tests.csproj --configuration Release --no-build",
-            "dotnet test tests/Inquiry.Benchmarks.Contracts.Tests/Inquiry.Benchmarks.Contracts.Tests.csproj -c Release --no-build --logger \"trx;LogFileName=benchmark-contracts.trx\" --results-directory test-results\ndotnet test tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj -c Release --no-build --logger \"trx;LogFileName=generators.trx\" --results-directory test-results\ndotnet test tests/Inquiry.Tests/Inquiry.Tests.csproj -c Release --no-build --logger \"trx;LogFileName=unit.trx\" --results-directory test-results\ndotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build --logger \"trx;LogFileName=sqlite.trx\" --results-directory test-results");
+            "dotnet test tests/Inquiry.Benchmarks.Contracts.Tests/Inquiry.Benchmarks.Contracts.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=benchmark-contracts\" --results-directory test-results\ndotnet test tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=generators\" --results-directory test-results\ndotnet test tests/Inquiry.Tests/Inquiry.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=unit\" --results-directory test-results\ndotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=sqlite\" --results-directory test-results\ndotnet test tests/Inquiry.Aspire.Tests/Inquiry.Aspire.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=aspire\" --results-directory test-results\ndotnet test tests/Inquiry.Benchmarks.SelectedStrategy.Tests/Inquiry.Benchmarks.SelectedStrategy.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=selected-strategy\" --results-directory test-results");
         RequireRuns(jobs, "aot-smoke",
             "dotnet publish samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj -c Release -r linux-x64 -o aot-out",
             "out=$(./aot-out/Inquiry.AotSmoke)\necho \"$out\"\necho \"$out\" | grep -q \"AOT-SMOKE-OK\"");
