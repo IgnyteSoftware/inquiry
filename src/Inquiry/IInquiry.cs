@@ -64,7 +64,8 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
-    /// <summary>Executes a SQL query and returns the first mapped entity, or <see langword="null"/> when no row is returned.</summary>
+    /// <summary>Returns the sole mapped entity, or <see langword="null"/> when no row is returned.</summary>
+    /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         FormattableString commandText,
         CancellationToken cancellationToken = default)
@@ -74,7 +75,8 @@ public interface IInquiry
         return QuerySingleOrDefaultAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
     }
 
-    /// <summary>Executes a SQL query and returns the first mapped entity, or <see langword="null"/> when no row is returned.</summary>
+    /// <summary>Returns the sole mapped entity, or <see langword="null"/> when no row is returned.</summary>
+    /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         InquiryCommand command,
         CancellationToken cancellationToken = default)
@@ -111,7 +113,8 @@ public interface IInquiry
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
 
-    /// <summary>Single-or-default query with a struct materializer.</summary>
+    /// <summary>Returns the sole mapped entity, or null when empty, using a struct materializer.</summary>
+    /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
@@ -332,7 +335,8 @@ public interface IInquiry
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
         => QueryListAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken, capacityHint);
 
-    /// <summary>Executes a validating single-or-default generated query.</summary>
+    /// <summary>Returns the sole mapped entity, or null when empty, from a generated command.</summary>
+    /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
         InquiryGeneratedCommand<TArgs> command,

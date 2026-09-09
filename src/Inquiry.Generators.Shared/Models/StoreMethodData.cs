@@ -48,6 +48,10 @@ internal sealed record StoreMethodData(
     /// <summary>The defining partial declaration's XML documentation, including its member wrapper.</summary>
     public string? DocumentationXml { get; init; }
 
+    public string? UnsupportedReason { get; init; }
+
+    public bool HasConcurrencyToken { get; init; }
+
     /// <summary>The provider-specific database commands displayed with the generated implementation.</summary>
     public EquatableArray<GeneratedCommandDocumentation> GeneratedCommands { get; init; } = EquatableArray<GeneratedCommandDocumentation>.Empty;
 

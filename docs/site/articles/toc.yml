@@ -2,6 +2,8 @@
   href: getting-started.md
 - name: Registering data libraries
   href: library-registration.md
+- name: Errors and partial outcomes
+  href: error-contracts.md
 - name: How it works
   href: concepts.md
 - name: Architecture

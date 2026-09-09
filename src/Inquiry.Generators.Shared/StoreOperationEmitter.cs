@@ -2851,6 +2851,7 @@ internal static class StoreOperationEmitter
     /// </summary>
     public static void EmitUnsupportedStub(StringBuilder source, StoreMethodData method, string reason)
     {
+        method = method with { UnsupportedReason = reason };
         var parameters = GetParameterDeclaration(method.Parameters);
         AppendHeader(source, method, parameters, isAsync: false);
         var escaped = reason.Replace("\\", "\\\\").Replace("\"", "\\\"");
@@ -2873,7 +2874,7 @@ internal static class StoreOperationEmitter
         try
         {
             member = method.DocumentationXml is null
-                ? new XElement("member", new XElement("summary", "Executes the database operation generated for this method."))
+                ? new XElement("member")
                 : XElement.Parse(method.DocumentationXml, LoadOptions.PreserveWhitespace);
             if (member.Name.LocalName != "member")
             {
@@ -2882,8 +2883,10 @@ internal static class StoreOperationEmitter
         }
         catch
         {
-            member = new XElement("member", new XElement("summary", "Executes the database operation generated for this method."));
+            member = new XElement("member");
         }
+
+        AppendContractDocumentation(member, method);
 
         if (method.GeneratedCommands.Count > 0)
         {
@@ -2917,6 +2920,85 @@ internal static class StoreOperationEmitter
             {
                 source.Append("    /// ").AppendLine(line);
             }
+        }
+    }
+
+    private static void AppendContractDocumentation(XElement member, StoreMethodData method)
+    {
+        if (method.UnsupportedReason is not null)
+        {
+            member.Elements("summary").Remove();
+            member.Elements("returns").Remove();
+            member.Add(new XElement("summary", "This operation is unsupported by the selected provider."));
+            member.Add(new XElement("returns", "No result: invocation throws synchronously before returning a task or stream."));
+            member.Add(new XElement("exception", new XAttribute("cref", "System.NotSupportedException"), method.UnsupportedReason));
+            return;
+        }
+
+        var entityWrite = method.Operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert;
+        var stream = method.ReturnTypeDisplay.Contains("IAsyncEnumerable<");
+        var result = method.Operation switch
+        {
+            StoreOperation.Insert or StoreOperation.Upsert => method.ReturnsEntity
+                ? "A newly materialized result entity, or null when the operation returns no row. Use the returned key and database values; the input is not refreshed."
+                : "The provider's affected-row count, not a generated key. Database-generated values are not copied into the input.",
+            StoreOperation.Update or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey => method.ReturnsEntity
+                ? "The returned row, or null when no row matches. Use the returned entity and token for subsequent writes; the input is not refreshed."
+                : "True when a row is affected; false when no row matches. The input is not refreshed with a new concurrency token.",
+            StoreOperation.InsertAll or StoreOperation.UpdateAll or StoreOperation.DeleteAll or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate
+                => "The total affected-row count, not generated keys or refreshed entities.",
+            StoreOperation.BulkInsert => "The number of rows reported by the bulk operation, not generated keys.",
+            StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.SelectTopByOrder
+                => "The matching entity, or null when no row matches.",
+            StoreOperation.Exists => "Whether a matching row exists.",
+            StoreOperation.Count => "The number of matching rows, converted to the declared scalar type.",
+            StoreOperation.Aggregate => "The aggregate converted to the declared type; SQL NULL becomes default(T).",
+            StoreOperation.StoredProcedure => method.ProcedureReturn switch
+            {
+                ProcedureReturnKind.TaskOfOutputScalar => method.ProcedureReturnsValue
+                    ? "The procedure's integer RETURN status, not affected rows or a SELECT result."
+                    : "The selected OUTPUT or INOUT value, converted to the declared type; SQL NULL becomes default(T).",
+                ProcedureReturnKind.TaskOfInt => "The provider's affected-row count, which may be -1; not RETURN status, OUTPUT, or a SELECT result.",
+                ProcedureReturnKind.TaskOfEntity => "The sole result entity, or null when empty. Multiple rows are rejected.",
+                ProcedureReturnKind.TaskOfMultipleResultSets => "Buffered result sets in tuple order; an empty set becomes an empty list.",
+                _ => "A deferred stream of procedure result rows.",
+            },
+            _ => stream ? "A deferred stream of matching rows." : "Buffered matching results, including page metadata when declared.",
+        };
+        if (!member.Elements("summary").Any())
+            member.Add(new XElement("summary", $"Executes the generated {method.Operation} operation."));
+        if (!member.Elements("returns").Any())
+            member.Add(new XElement("returns", result));
+        foreach (var parameter in method.Parameters.AsImmutableArray())
+        {
+            if (member.Elements("param").Any(element => (string?)element.Attribute("name") == parameter.Name))
+                continue;
+            var help = parameter.IsCancellationToken ? "Requests cancellation; cancellation does not prove that a write was rolled back."
+                : entityWrite ? "The input entity. Configured client-generated keys and audit values may be assigned before execution; database values and tokens are not copied back."
+                : method.Operation == StoreOperation.StoredProcedure ? "The bound procedure input. An INOUT replacement is returned as the task result, not assigned to this argument."
+                : "The declared key, filter, paging, batch, or option input used by this operation.";
+            member.Add(new XElement("param", new XAttribute("name", parameter.Name), help));
+        }
+        var remarks = new XElement("remarks",
+            new XElement("para", result),
+            new XElement("para", stream
+                ? "Database execution and materialization can fail during enumeration after earlier rows have been yielded. Dispose the enumerator within its service scope; disposal can also fail."
+                : "Validation may throw at invocation; database execution, conversion, and cleanup errors can fault the returned task. A write may have executed before a later failure."));
+        if (entityWrite || method.Operation is StoreOperation.InsertAll or StoreOperation.UpdateAll or StoreOperation.BulkInsert)
+            remarks.Add(new XElement("para", "Configured SequentialGuid keys are assigned when unset on insert/upsert paths, and applicable audit assignments mutate inputs before execution. Failures do not undo these in-memory assignments. Database-generated identities and concurrency tokens are not copied into inputs."));
+        member.Add(remarks);
+        AddException("System.OperationCanceledException", "Cancellation is observed; provider timeouts may instead retain their provider exception type.");
+        AddException("System.Data.Common.DbException", "The provider reports a database failure; its specific exception type and error details are preserved.");
+        AddException("System.AggregateException", "Execution and cleanup both fail, or multiple cleanup operations fail. Inspect the inner exceptions.");
+        if (method.Operation == StoreOperation.StoredProcedure && method.ProcedureReturn == ProcedureReturnKind.TaskOfEntity)
+            AddException("System.InvalidOperationException", "The procedure returns more than one row.");
+        if (method.HasConcurrencyToken && method.Operation is (StoreOperation.Update or StoreOperation.DeleteOneByKey))
+            AddException("Inquiry.InquiryConcurrencyException", "A concurrency-token mutation matches no row and ThrowOnConcurrencyConflict is enabled.");
+
+        void AddException(string type, string text)
+        {
+            if (!member.Elements("exception").Any(element => (string?)element.Attribute("cref") == type))
+                member.Add(new XElement("exception", new XAttribute("cref", type), text));
         }
     }
 

@@ -2225,6 +2225,7 @@ internal static class StoreProcessor
             {
                 if (emitUnsupportedOperationStubs)
                 {
+                    documentedMethods[method] = method with { UnsupportedReason = collectionError };
                     StoreOperationEmitter.EmitUnsupportedStub(source, method, collectionError);
                 }
                 continue;
@@ -2237,6 +2238,7 @@ internal static class StoreProcessor
                     method.Name, sqlBuilder.DialectName, unsupportedReason));
                 if (emitUnsupportedOperationStubs)
                 {
+                    documentedMethods[method] = method with { UnsupportedReason = unsupportedReason };
                     StoreOperationEmitter.EmitUnsupportedStub(source, method, unsupportedReason);
                 }
                 continue;
@@ -2260,6 +2262,7 @@ internal static class StoreProcessor
             {
                 var documentedMethod = method with
                 {
+                    HasConcurrencyToken = entity.ConcurrencyToken is not null,
                     GeneratedCommands = BuildGeneratedCommandDocumentation(
                         method, fieldColumns, selectPlan, entity, sqlBuilder, generatedSql,
                         selectPlan is null ? "_sqlProj_" + method.Name : null),
@@ -2275,6 +2278,7 @@ internal static class StoreProcessor
                 baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
                 var documentedMethod = method with
                 {
+                    HasConcurrencyToken = entity.ConcurrencyToken is not null,
                     GeneratedCommands = BuildGeneratedCommandDocumentation(
                         method, fieldColumns, selectPlan, entity, sqlBuilder, generatedSql, baseSelectField),
                 };
@@ -2335,7 +2339,7 @@ internal static class StoreProcessor
         if (store.GenerateInterface)
         {
             interfaceName = store.Namespace is null ? $"global::I{store.Name}" : $"global::{store.Namespace}.I{store.Name}";
-            EmitStoreInterface(source, store, store.Methods.AsImmutableArray());
+            EmitStoreInterface(source, store, store.Methods.AsImmutableArray().Select(method => method with { UnsupportedReason = reason }));
         }
         GeneratorHelpers.AppendNamespaceEnd(source, store.Namespace);
         context.AddSource(store.HintName, SourceText.From(source.ToString(), Encoding.UTF8));

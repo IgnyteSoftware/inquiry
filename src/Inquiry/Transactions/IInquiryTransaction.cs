@@ -116,13 +116,15 @@ public interface IInquiryTransaction : IAsyncDisposable
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
-    /// <summary>Executes a SQL query and returns the first mapped entity, or null when no row is returned, within this transaction.</summary>
+    /// <summary>Returns the sole mapped entity, or null when no row is returned, within this transaction.</summary>
+    /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         FormattableString commandText,
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
-    /// <summary>Executes a SQL query and returns the first mapped entity, or null when no row is returned, within this transaction.</summary>
+    /// <summary>Returns the sole mapped entity, or null when no row is returned, within this transaction.</summary>
+    /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         InquiryCommand command,
         CancellationToken cancellationToken = default)
