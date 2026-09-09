@@ -17,22 +17,24 @@ public readonly struct InquiryPage<TEntity, TCursor>
     where TEntity : class
     where TCursor : struct
 {
+    private readonly IReadOnlyList<TEntity>? _items;
+
     /// <summary>Initializes a new instance of the <see cref="InquiryPage{TEntity, TCursor}"/> struct.</summary>
     /// <param name="items">The page items, in sort order.</param>
     /// <param name="nextCursor">The cursor for the next page, or <see langword="null"/> when the page is empty.</param>
     /// <param name="hasMore">Whether more rows exist beyond this page.</param>
     public InquiryPage(IReadOnlyList<TEntity> items, TCursor? nextCursor, bool hasMore)
     {
-        Items = items ?? System.Array.Empty<TEntity>();
+        _items = items;
         NextCursor = nextCursor;
         HasMore = hasMore;
     }
 
     /// <summary>
     /// Gets the page items, in sort order, trimmed to the requested page size. Never <see langword="null"/>
-    /// for a constructed page; <c>default(InquiryPage&lt;,&gt;)</c> leaves it null, so prefer the constructor.
+    /// even for a default page, which exposes an empty collection.
     /// </summary>
-    public IReadOnlyList<TEntity> Items { get; }
+    public IReadOnlyList<TEntity> Items => _items ?? System.Array.Empty<TEntity>();
 
     /// <summary>
     /// Gets the cursor for the next page (the last item's key value), or <see langword="null"/> when
