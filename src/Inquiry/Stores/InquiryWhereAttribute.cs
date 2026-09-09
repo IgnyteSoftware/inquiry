@@ -57,6 +57,9 @@ public sealed class InquiryWhereAttribute : Attribute
     /// <summary>
     /// Gets or sets a value indicating whether a null parameter disables this criterion. Optional
     /// criteria support one-parameter scalar operators and keep one constant SQL shape.
+    /// With criterion-level <see cref="Not"/>, null still disables the criterion; only the comparison
+    /// is negated. Inside a negated group, null makes this criterion true before group negation.
+    /// It does not disable the enclosing group.
     /// </summary>
     public bool Optional { get; set; }
 
