@@ -35,6 +35,7 @@ public static class SqliteInquiryServiceCollectionExtensions
         }
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite");
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqliteInquiryConnectionFactory(connectionString));
         return services;
     }

@@ -46,6 +46,7 @@ public static class MariaDbInquiryServiceCollectionExtensions
         }
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MariaDb");
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MariaDbInquiryConnectionFactory(connectionString));
         services.AddSingleton<IInquiryBulkCopier, MariaDbBulkCopier>();
         return services;
@@ -73,6 +74,10 @@ public static class MariaDbInquiryServiceCollectionExtensions
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MariaDb");
         var options = new MariaDbInquiryOptions();
         configure(options);
+
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
+        InquiryProviderRegistration.ValidateOptions(options.Compatibility, options.MaxAttempts,
+            options.RetryBaseDelay, options.RetryMaxDelay, options.FailoverConnectionString);
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MariaDbInquiryConnectionFactory(connectionString, options));
         services.AddSingleton<IInquiryBulkCopier, MariaDbBulkCopier>();

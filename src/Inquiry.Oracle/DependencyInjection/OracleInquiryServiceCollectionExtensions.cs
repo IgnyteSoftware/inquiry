@@ -35,6 +35,7 @@ public static class OracleInquiryServiceCollectionExtensions
         }
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Oracle");
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
         services.AddSingleton<IInquiryConnectionFactory>(_ => new OracleInquiryConnectionFactory(connectionString));
         return services;
     }
@@ -61,6 +62,10 @@ public static class OracleInquiryServiceCollectionExtensions
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Oracle");
         var options = new OracleInquiryOptions();
         configure(options);
+
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
+        InquiryProviderRegistration.ValidateOptions(options.Compatibility, options.MaxAttempts,
+            options.RetryBaseDelay, options.RetryMaxDelay, options.FailoverConnectionString);
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new OracleInquiryConnectionFactory(connectionString, options));
         return services;

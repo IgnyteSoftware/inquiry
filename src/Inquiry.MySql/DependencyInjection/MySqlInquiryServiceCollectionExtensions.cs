@@ -46,6 +46,7 @@ public static class MySqlInquiryServiceCollectionExtensions
         }
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MySql");
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MySqlInquiryConnectionFactory(connectionString));
         services.AddSingleton<IInquiryBulkCopier, MySqlBulkCopier>();
         return services;
@@ -73,6 +74,10 @@ public static class MySqlInquiryServiceCollectionExtensions
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MySql");
         var options = new MySqlInquiryOptions();
         configure(options);
+
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
+        InquiryProviderRegistration.ValidateOptions(options.Compatibility, options.MaxAttempts,
+            options.RetryBaseDelay, options.RetryMaxDelay, options.FailoverConnectionString);
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MySqlInquiryConnectionFactory(connectionString, options));
         services.AddSingleton<IInquiryBulkCopier, MySqlBulkCopier>();
