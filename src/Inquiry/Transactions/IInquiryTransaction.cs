@@ -12,6 +12,8 @@ namespace Inquiry.Transactions;
 /// when disposed without committing.
 /// </summary>
 /// <remarks>
+/// <para>Production handles come from DefaultInquiry. Custom implementations are test doubles;
+/// interface conformance alone does not provide the built-in ownership, rollback, or state guarantees.</para>
 /// <para>
 /// This interface exposes the full transactional query / execute surface directly — there is
 /// no separate <c>IInquiry</c> handle property to access. Calls through these methods route

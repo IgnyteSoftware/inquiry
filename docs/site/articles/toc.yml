@@ -8,6 +8,8 @@
   href: concepts.md
 - name: Architecture
   href: architecture.md
+- name: Runtime interface guarantees
+  href: runtime-contract.md
 - name: Security
   href: security.md
 - name: Features
