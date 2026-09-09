@@ -1,31 +1,29 @@
 # Getting started
 
-Inquiry is a Roslyn source generator. You write attributes; it writes the SQL and the C# that runs it. This walkthrough takes you from an empty .NET project to a running query in about five minutes.
+This example creates a SQLite database, inserts a shipper, and reads it back using generated store
+methods. It targets .NET 8; Inquiry also supports .NET 9 and .NET 10.
 
-## 1. Install
-
-Pick a provider package — it transitively brings in the core `Inquiry` runtime and the matching source generator.
+## Create the project
 
 ```bash
-dotnet add package Inquiry.Sqlite        # — or —
-dotnet add package Inquiry.SqlServer
-dotnet add package Inquiry.PostgreSql
-dotnet add package Inquiry.MySql
-dotnet add package Inquiry.MariaDb
-dotnet add package Inquiry.Oracle
+dotnet new console -n InquiryGettingStarted --framework net8.0
+cd InquiryGettingStarted
+dotnet add package Ignyte.Inquiry.Sqlite --prerelease
+dotnet add package Microsoft.Extensions.DependencyInjection --version 10.0.2
 ```
 
-## 2. Pick a dialect (one per assembly)
+Inquiry is currently available as a preview. The provider package includes the source generator and
+references the core `Ignyte.Inquiry` runtime. Package IDs start with `Ignyte.`; C# namespaces start
+with `Inquiry`.
 
-Add an `AssemblyInfo.cs` to your project:
+The SQLite provider supplies the dialect marker automatically. This single-provider example needs
+no `AssemblyInfo.cs`. An explicit `[assembly: Inquiry.InquiryDialect("Sqlite")]` is only needed when
+you deliberately override dialect inference, for example when referenced providers make the choice
+ambiguous. The selected dialect must match the connection used at runtime.
 
-```csharp
-[assembly: Inquiry.InquiryDialect("Sqlite")]
-```
+## Add the entity and store
 
-This tells the generator which dialect to emit. The attribute is `AllowMultiple = false` — exactly one dialect per assembly. (If you need to target multiple databases, split your entities across assemblies.)
-
-## 3. Declare an entity
+Create **Shipper.cs**:
 
 ```csharp
 using Inquiry.Entities;
@@ -44,183 +42,129 @@ public sealed class Shipper
 }
 ```
 
-- `[InquiryTable("...")]` — the database table name. Set `GenerateDdl = false` when migrations or another mapping own that table's schema; queries, stores, and materialization still work normally.
-- `[InquiryKey]` — the primary key. `IsGenerated = true` means the database fills it in (`IDENTITY`, `SERIAL`, `AUTOINCREMENT`, etc.).
-- `[InquiryColumn]` — a mapped column. The column name defaults to the property name.
-- `[InquiryIndex]` — a repeatable class-level composite/unique index; SQL Server and PostgreSQL also support covering `Include` columns.
-- `[InquiryCheck]` — a repeatable class-level raw SQL check constraint.
-- `[InquiryForeignKey]` — a mapped FK column with optional deterministic `ConstraintName` and delete/update actions.
-
-## 4. Declare a store
-
-A store is a `partial class` deriving from `InquiryStore<T>`. Each method is `partial`, decorated with an operation attribute, with no body — you don't write the body, the generator does.
+Create **ShipperStore.cs**:
 
 ```csharp
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Inquiry.Stores;
 
 public partial class ShipperStore : InquiryStore<Shipper>
 {
-    [InquirySelectAll]
-    public partial Task<IReadOnlyList<Shipper>> SelectAllAsync(CancellationToken ct = default);
-
-    [InquirySelectOneByKey]
-    public partial Task<Shipper?> SelectByKeyAsync(int? id, CancellationToken ct = default);
-
     [InquiryInsert]
-    public partial Task<int> InsertAsync(Shipper shipper, CancellationToken ct = default);
+    public partial Task<Shipper?> InsertReturningAsync(
+        Shipper shipper, CancellationToken ct = default);
 
-    [InquiryUpdate]
-    public partial Task<bool> UpdateAsync(Shipper shipper, CancellationToken ct = default);
-
-    [InquiryDelete]
-    public partial Task<bool> DeleteByKeyAsync(int? id, CancellationToken ct = default);
+    [InquirySelectAll]
+    public partial Task<IReadOnlyList<Shipper>> SelectAllAsync(
+        CancellationToken ct = default);
 }
 ```
 
-## 5. Wire up dependency injection
+The database generates `ShipperID`. The insert-returning method reads the saved row into a result
+entity; use that result to obtain the key. An insert returning `Task<int>` instead reports affected
+rows, not the key, and does not copy the database-generated identity into the input object.
+
+`SelectAllAsync` returns a buffered list. Use `IAsyncEnumerable<Shipper>` on a separate
+`[InquirySelectAll]` method when you explicitly want streaming; enumerate and dispose it inside the
+service scope.
+
+## Replace Program.cs
 
 ```csharp
+using System;
+using System.Threading;
+using Inquiry.DependencyInjection;
+using Inquiry.Generated;
+using Inquiry.Sqlite.DependencyInjection;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
+const string connectionString = "Data Source=inquiry-getting-started.db";
+var ct = CancellationToken.None;
+
+// Schema creation is explicit and must finish before the first store operation.
+await using (var connection = new SqliteConnection(connectionString))
+{
+    await connection.OpenAsync(ct);
+    await using var command = connection.CreateCommand();
+    command.CommandText = InquiryGeneratedSchema.Ddl;
+    await command.ExecuteNonQueryAsync(ct);
+}
+
 var services = new ServiceCollection();
-services.AddInquiry();                                // core runtime services
-services.AddInquiryGeneratedStores();                 // generated stores/materializers in this assembly
-services.AddInquirySqlite("Data Source=:memory:");    // or AddInquirySqlServer / AddInquiryPostgreSql / etc.
+services.AddInquiry();
+services.AddInquiryGeneratedStores();
+services.AddInquirySqlite(connectionString);
 
-var provider = services.BuildServiceProvider();
-```
+await using var provider = services.BuildServiceProvider(
+    new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+await using var scope = provider.CreateAsyncScope();
+var store = scope.ServiceProvider.GetRequiredService<ShipperStore>();
 
-`AddInquiryGeneratedStores()` calls the generator's `InquiryGeneratedServiceRegistration` - every store you declared is registered as scoped, matching `IInquiry`'s DI lifetime.
-
-Every provider also has an `IConfiguration` overload that resolves the connection string by name
-(`ConnectionStrings:Inquiry` by default), the standard ASP.NET Core shape:
-
-```csharp
-builder.Services.AddInquirySqlite(builder.Configuration);                  // ConnectionStrings:Inquiry
-builder.Services.AddInquirySqlServer(builder.Configuration, "Northwind"); // ConnectionStrings:Northwind
-```
-
-A missing connection string throws at registration time with the exact configuration key named.
-
-## 6. Run a query
-
-```csharp
-var store = provider.GetRequiredService<ShipperStore>();
-
-await store.InsertAsync(new Shipper { CompanyName = "Speedy Express", Phone = "(503) 555-9831" });
-var all = await store.SelectAllAsync();
-```
-
-For a one-off reporting query whose shape isn't an entity, you don't need a store at all — mark a plain DTO with `[InquiryAdHoc]` and pass hand-written SQL to the `IInquiry` facade (interpolated values become bound parameters):
-
-```csharp
-[InquiryAdHoc]
-public sealed class ShipperOrderCount
+var saved = await store.InsertReturningAsync(
+    new Shipper { CompanyName = "Speedy Express" }, ct);
+if (saved is null)
 {
-    public string CompanyName { get; set; } = "";   // ordinal 0
-    public int Orders { get; set; }                 // ordinal 1
+    throw new InvalidOperationException("The insert did not return a shipper.");
 }
 
-var inquiry = provider.GetRequiredService<IInquiry>();
-var counts = await inquiry.QueryListAsync<ShipperOrderCount>(
-    $"SELECT s.CompanyName, COUNT(o.OrderID) FROM Shippers s LEFT JOIN Orders o ON o.ShipVia = s.ShipperID GROUP BY s.CompanyName");
-```
-
-Properties map to SELECT-list positions in declaration order — see [Ad-hoc DTOs](features/ad-hoc-dtos.md).
-
-## 7. Wrap multiple calls in a transaction
-
-`IInquiry.ExecuteInTransactionAsync()` opens an `IInquiryTransaction` that owns a connection and a `DbTransaction`, runs your delegate, and commits only when the delegate completes successfully. Every operation in the delegate — generated store methods *and* any ad-hoc SQL called directly on the handle — shares that transaction.
-
-```csharp
-var inquiry = provider.GetRequiredService<IInquiry>();
-var shippers = provider.GetRequiredService<ShipperStore>();
-
-await inquiry.ExecuteInTransactionAsync(async tx =>
+Console.WriteLine($"Saved shipper {saved.ShipperID}: {saved.CompanyName}");
+var all = await store.SelectAllAsync(ct);
+foreach (var shipper in all)
 {
-    await shippers.InsertAsync(new Shipper { CompanyName = "Speedy Express" });    // joins the tx
-    await tx.ExecuteAsync(                                                          // ad-hoc, joins the tx
-        $"UPDATE Shippers SET Phone = {"555-1212"} WHERE CompanyName = {"Speedy Express"}");
-});
-```
-
-Key points:
-
-- **The helper owns commit/rollback.** `ExecuteInTransactionAsync` commits on success. If the delegate throws, dispose rolls back.
-- **Stores join automatically.** No `WithTransaction` builder, no per-call parameter. The transaction is *ambient* — once open, every Inquiry call on the same async flow uses it.
-- **Two call styles, same outcome.** `tx.ExecuteAsync(...)` for ad-hoc SQL; `store.X(...)` for typed generated methods. Both run on the same connection in the same transaction.
-- **Use-after-close fails fast.** Calling `tx.X(...)` after `Commit` / `Rollback` / `Dispose` throws `ObjectDisposedException`. Store calls from async work that captured the transaction also throw after close; fresh store calls after the transaction scope use the default non-transactional pipeline.
-- **Nested calls become savepoints.** `await using var sp = await tx.BeginTransactionAsync()` emits `SAVEPOINT`. Inner commit releases it; inner rollback reverts just that scope; the outer transaction continues.
-
-```csharp
-await using var outer = await inquiry.BeginTransactionAsync();
-var startEvent = "start";
-await outer.ExecuteAsync($"INSERT INTO Audit (Event) VALUES ({startEvent})");
-
-await using (var inner = await outer.BeginTransactionAsync())   // SAVEPOINT
-{
-    try { await DoRiskyAsync(inner); await inner.CommitAsync(); }
-    catch { await inner.RollbackAsync(); }   // outer still has the audit row
+    Console.WriteLine($"{shipper.ShipperID}: {shipper.CompanyName}");
 }
-
-await outer.CommitAsync();
 ```
 
-The [transactions feature page](features/transactions.md) covers isolation levels, nested savepoints, the in-flight concurrency guard, and what's not supported (e.g. `TransactionScope`).
+This is a complete program. All Inquiry calls use the same file database even though each operation
+opens its own connection. A private `Data Source=:memory:` database would disappear when its creating
+connection closes; it is not interchangeable with this example.
 
-## 8. (Optional) Get the schema DDL
+The database file is created in the working directory. Run this first-use example with a new file:
+the generated DDL is initial schema creation, not a migration or an idempotent startup routine. To
+run it again from scratch, delete only this example's `inquiry-getting-started.db` file after the
+process exits, or choose a new filename. For an existing database, run migrations separately and omit
+the initial DDL block. DI registration never creates tables.
 
-The generator also emits `InquiryGeneratedSchema.Ddl` — the CREATE TABLE statements for every Inquiry entity in your assembly, ordered so referenced tables precede their dependents. Useful for test bootstrapping and first-run setup.
+## Build and run
 
-```csharp
-await using var connection = new SqliteConnection("Data Source=:memory:");
-await connection.OpenAsync();
-await using var cmd = connection.CreateCommand();
-cmd.CommandText = Inquiry.Generated.InquiryGeneratedSchema.Ddl;
-await cmd.ExecuteNonQueryAsync();
+```bash
+dotnet build
+dotnet run --no-build
 ```
 
-## What just happened
+On a new database, the program prints the saved key and the one shipper in the list:
 
-Behind the scenes, the source generator turned your `partial` declarations into:
+```text
+Saved shipper 1: Speedy Express
+1: Speedy Express
+```
 
-- A **materializer** (`ShipperInquiryEntityStructMaterializer`) — reads each column from a `DbDataReader` by ordinal into a new `Shipper`.
-- A **partial store class** — for each method, a private `const string _sql...` field with the baked SQL, plus a body that calls the request pipeline.
-- A **DI registration class** - `InquiryGeneratedServiceRegistration` - that wires up every store and materializer.
+Stores and `IInquiry` are scoped services. Console applications must create a scope as above;
+ASP.NET Core provides a request scope. For stores in multiple assemblies, expose a uniquely named
+public registration wrapper in each data library, and configure core services and the provider once
+in the host.
 
-Inquiry also appends the provider-specific SQL to each generated method's XML documentation. Hover a
-store method in the IDE to inspect its query without opening the generated file. For operations that
-run more than one command, such as eager loading or paged queries, the documentation labels each
-command separately. Any XML comments on your partial declaration remain in place.
+## Troubleshooting: red squiggles under partial methods
 
-For the **full annotated generator output** of the example above, see the [CRUD feature page](features/crud.md).
+If a partial method reports CS8795, inspect the generator diagnostics first.
 
-## Troubleshooting: red squiggles under `partial` methods
+1. Reference a provider such as `Ignyte.Inquiry.Sqlite`; `Ignyte.Inquiry` alone contains no generator.
+2. Check that dialect inference selects the provider you intend. An `INQ` diagnostic explains
+   unresolved or invalid declarations.
+3. After a package update, restart the IDE if it still uses the old generator.
+4. When building Inquiry itself from source, build once so its locally attached analyzer DLLs exist.
+   NuGet consumers receive those DLLs in the provider package.
 
-Your IDE runs the source generator live, so a valid `partial` store method gets its generated body
-(and IntelliSense) immediately — **no build required**. If a method stays red with *"partial method
-must have an implementation"* (CS8795), the generator didn't run for that declaration. Check, in
-order:
-
-1. **Is a provider package referenced?** The generator ships inside the provider package
-   (`Inquiry.Sqlite`, `Inquiry.SqlServer`, …) — the core `Inquiry` package alone generates nothing.
-2. **Is the dialect resolved?** Generation only fires when the assembly's dialect is known — either
-   a referenced provider's `[assembly: InquiryDialect]` marker or your own. Look for `INQ0xx`
-   diagnostics in the Error List; they explain what was skipped and why.
-3. **Did you just update the Inquiry package?** Visual Studio can keep the previous generator
-   loaded — restart the IDE.
-4. **Building Inquiry itself from source?** In this repository the analyzer is attached via built
-   DLL paths, so run `dotnet build` once after a fresh clone or `git clean` before the IDE can load
-   it. NuGet consumers are unaffected.
-
-A persistent CS8795 alongside an `INQ039` error means the active dialect cannot emit that operation.
-Unsupported operations fail the build by default. If you deliberately prefer runtime failures for every
-unsupported method in the project, configure `INQ039` as a warning or `none` project-wide in `.editorconfig`;
-Inquiry will then generate throwing stubs. Declaration-level pragmas and `SuppressMessage` attributes do
-not change this generator policy.
+An `INQ039` error means the chosen provider does not support the declared operation. Fix the
+declaration or choose a supported provider. Project-wide warning or suppression configuration for
+`INQ039` deliberately changes unsupported operations into generated throwing stubs.
 
 ## Next steps
 
-- **[How it works](concepts.md)** — the compile-time pipeline explained end-to-end.
-- **[Features](features/crud.md)** — pagination, soft delete, batch operations, FTS, projections, and more.
-- **[Providers](providers/sqlite.md)** — per-dialect notes.
+- [CRUD](features/crud.md) covers reads, inserts, updates, and returning forms.
+- [Transactions](features/transactions.md) shows atomic operations across stores and ad-hoc SQL.
+- [SQLite](providers/sqlite.md) describes provider behavior.
+- [How it works](concepts.md) and [Architecture](architecture.md) explain generated SQL and materialization.
