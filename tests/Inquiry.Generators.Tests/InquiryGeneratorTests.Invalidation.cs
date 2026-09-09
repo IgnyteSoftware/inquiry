@@ -31,6 +31,10 @@ public sealed partial class InquiryGeneratorTests
                     [InquiryRelation(nameof(Child.ParentId))]
                     public List<Child> Children { get; set; } = new();
                 }
+                """,
+            ["child.cs"] = """
+                using Inquiry.Entities;
+                namespace Demo;
                 [InquiryTable("Children")]
                 public sealed class Child
                 {
@@ -93,7 +97,8 @@ public sealed partial class InquiryGeneratorTests
         {
             "store removal" => "stores.cs",
             "entity removal" => "removed.cs",
-            "related key" or "filter" => "entities.cs",
+            "related key" => "child.cs",
+            "filter" => "entities.cs",
             "projection" => "projection.cs",
             "dto" or "dto removal" => "dto.cs",
             _ => "dialect.cs"
@@ -133,7 +138,10 @@ public sealed partial class InquiryGeneratorTests
         if (edit == "dto")
             Assert.Contains("Count = reader.GetInt64(0)", outputText, StringComparison.Ordinal);
         if (edit == "related key")
-            Assert.Contains("DatabaseKey", outputText, StringComparison.Ordinal);
+        {
+            var parentStore = Assert.Single(SourceSnapshot(reused), source => source.Contains("ParentStore.InquiryStore.g.cs", StringComparison.Ordinal));
+            Assert.Contains("DatabaseKey", parentStore, StringComparison.Ordinal);
+        }
     }
 
     private static string[] SourceSnapshot(GeneratorDriver driver) => driver.GetRunResult().Results
