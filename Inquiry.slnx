@@ -2,6 +2,7 @@
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/Inquiry.Benchmarks.Contracts/Inquiry.Benchmarks.Contracts.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.FixtureGenerator/Inquiry.Benchmarks.FixtureGenerator.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.Generators/Inquiry.Benchmarks.Generators.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.DLG/Inquiry.Benchmarks.DLG.csproj" Id="d8e858e3-2391-43d3-9471-0bebe45d2326" />
     <Project Path="benchmarks/Inquiry.Benchmarks.MariaDb/Inquiry.Benchmarks.MariaDb.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.MySql/Inquiry.Benchmarks.MySql.csproj" />

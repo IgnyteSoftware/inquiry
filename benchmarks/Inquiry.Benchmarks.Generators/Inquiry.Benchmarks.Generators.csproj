@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <ProjectReference Include="../../src/Inquiry/Inquiry.csproj" />
+    <ProjectReference Include="../../src/Inquiry.Sqlite/Inquiry.Sqlite.csproj" />
+    <ProjectReference Include="../../src/Inquiry.Sqlite.Analyzer/Inquiry.Sqlite.Analyzer.csproj" />
+    <ProjectReference Include="../../src/Inquiry.Generators.Shared/Inquiry.Generators.Shared.csproj" />
+  </ItemGroup>
+</Project>

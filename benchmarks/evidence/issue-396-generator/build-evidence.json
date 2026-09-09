@@ -1,0 +1,346 @@
+{
+  "Disposition": "Diagnostic only; release thresholds and representative consumer scale require approval.",
+  "Runtime": ".NET 10.0.11",
+  "OS": "Microsoft Windows 10.0.26200",
+  "ProcessorCount": 16,
+  "SdkInfo": "--info\r\n.NET SDK:\r\n Version:           10.0.400\r\n Commit:            14fbf8d527\r\n Workload version:  10.0.400-manifests.b0ae88bd\r\n MSBuild version:   18.9.6\u002B14fbf8d52\r\n\r\nRuntime Environment:\r\n OS Name:     Windows\r\n OS Version:  10.0.26200\r\n OS Platform: Windows\r\n RID:         win-x64\r\n Base Path:   C:\\Program Files\\dotnet\\sdk\\10.0.400\\\r\n\r\n.NET workloads installed:\r\n [maui-windows]\r\n   Installation Source: VS 18.9.12120.119\r\n   Manifest Version:    10.0.20/10.0.100\r\n   Manifest Path:       C:\\Program Files\\dotnet\\sdk-manifests\\10.0.100\\microsoft.net.sdk.maui\\10.0.20\\WorkloadManifest.json\r\n   Install Type:              Msi\r\n\r\n [maccatalyst]\r\n   Installation Source: VS 18.9.12120.119\r\n   Manifest Version:    26.5.10301/10.0.100\r\n   Manifest Path:       C:\\Program Files\\dotnet\\sdk-manifests\\10.0.100\\microsoft.net.sdk.maccatalyst\\26.5.10301\\WorkloadManifest.json\r\n   Install Type:              Msi\r\n\r\n [ios]\r\n   Installation Source: VS 18.9.12120.119\r\n   Manifest Version:    26.5.10301/10.0.100\r\n   Manifest Path:       C:\\Program Files\\dotnet\\sdk-manifests\\10.0.100\\microsoft.net.sdk.ios\\26.5.10301\\WorkloadManifest.json\r\n   Install Type:              Msi\r\n\r\n [android]\r\n   Installation Source: VS 18.9.12120.119\r\n   Manifest Version:    36.1.69/10.0.100\r\n   Manifest Path:       C:\\Program Files\\dotnet\\sdk-manifests\\10.0.100\\microsoft.net.sdk.android\\36.1.69\\WorkloadManifest.json\r\n   Install Type:              Msi\r\n\r\nConfigured to use workload sets when installing new manifests.\r\nNo workload sets are installed. Run \u0022dotnet workload restore\u0022 to install a workload set.\r\n\r\nHost:\r\n  Version:      10.0.11\r\n  Architecture: x64\r\n  Commit:       e2f47b0110\r\n\r\n.NET SDKs installed:\r\n  8.0.416 [C:\\Program Files\\dotnet\\sdk]\r\n  9.0.307 [C:\\Program Files\\dotnet\\sdk]\r\n  10.0.400 [C:\\Program Files\\dotnet\\sdk]\r\n\r\n.NET runtimes installed:\r\n  Microsoft.AspNetCore.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 9.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.NETCore.App 8.0.8 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 9.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.WindowsDesktop.App 8.0.8 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 9.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n\r\nOther architectures found:\r\n  x86   [C:\\Program Files (x86)\\dotnet]\r\n    registered at [HKLM\\SOFTWARE\\dotnet\\Setup\\InstalledVersions\\x86\\InstallLocation]\r\n\r\nEnvironment variables:\r\n  DOTNET_ROOT_X64                          [C:\\Program Files\\dotnet]\r\n\r\nglobal.json file:\r\n  Not found\r\n\r\nLearn more:\r\n  https://aka.ms/dotnet/info\r\n\r\nDownload .NET:\r\n  https://aka.ms/dotnet/download\r\n",
+  "Assets": [
+    {
+      "Path": "D:\\repos\\IgnyteSoftware\\inquiry-worktrees\\issue-396\\benchmarks\\Inquiry.Benchmarks.Generators\\bin\\Release\\net10.0\\Inquiry.dll",
+      "Sha256": "75A67EFD3208394844D556A9A4036568C11824184A9A34A779CA4061807C9F27"
+    },
+    {
+      "Path": "D:\\repos\\IgnyteSoftware\\inquiry-worktrees\\issue-396\\benchmarks\\Inquiry.Benchmarks.Generators\\bin\\Release\\net10.0\\Inquiry.Sqlite.dll",
+      "Sha256": "EEC118FF5E1236F9FF3A25A2CC7E1579AEA2B66735324972D304D072946D94A9"
+    },
+    {
+      "Path": "D:\\repos\\IgnyteSoftware\\inquiry-worktrees\\issue-396\\benchmarks\\Inquiry.Benchmarks.Generators\\bin\\Release\\net10.0\\Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+      "Sha256": "43497D8F23B82159295933EFFE92C82447469B60CDBEFCCA4A62232E4EBBCA99"
+    },
+    {
+      "Path": "D:\\repos\\IgnyteSoftware\\inquiry-worktrees\\issue-396\\benchmarks\\Inquiry.Benchmarks.Generators\\bin\\Release\\net10.0\\Inquiry.Sqlite.Analyzer.dll",
+      "Sha256": "23435834D0078CAE306B5073EC913B1699E1B64C3538CE884262B8068D70B740"
+    },
+    {
+      "Path": "D:\\repos\\IgnyteSoftware\\inquiry-worktrees\\issue-396\\benchmarks\\Inquiry.Benchmarks.Generators\\bin\\Release\\net10.0\\Inquiry.Generators.Shared.dll",
+      "Sha256": "9AEDEF762189D828D84489BE4F6227F287E57DE2BE0FDB1B280D6BAC3A8E8D33"
+    }
+  ],
+  "Samples": [
+    {
+      "EntityCount": 25,
+      "Repetition": 1,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 1480.3459,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 1,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 1589.134,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 1,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 1811.9873,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 1,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 1642.3554,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 1,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 1559.8318,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 2,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 1443.7794,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 2,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 1592.0863,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 2,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 1556.7187,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 2,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 1548.9184,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 2,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 1576.8452,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 3,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 1470.8123,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 3,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 1842.372,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 3,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 1550.0896,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 3,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 1574.1683,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 25,
+      "Repetition": 3,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 1588.7633,
+      "OutputCount": 52
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 1,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 1674.9691,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 1,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 2032.9874,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 1,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 1845.4835,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 1,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 1852.7008,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 1,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 1835.0262,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 2,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 1686.8882,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 2,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 1884.2818,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 2,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 1823.7638,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 2,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 1840.115,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 2,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 1830.8341,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 3,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 1659.7075,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 3,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 1836.396,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 3,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 1828.1514,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 3,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 2029.046,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 100,
+      "Repetition": 3,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 1820.6235,
+      "OutputCount": 202
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 1,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 2619.1603,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 1,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 3597.0358,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 1,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 3201.202,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 1,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 3555.6054,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 1,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 3398.1782,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 2,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 3069.1707,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 2,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 5268.9711,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 2,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 5235.1569,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 2,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 4636.8495,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 2,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 3454.5903,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 3,
+      "Scenario": "emitted-source-control",
+      "ElapsedMilliseconds": 2669.7772,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 3,
+      "Scenario": "clean-build",
+      "ElapsedMilliseconds": 3550.5094,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 3,
+      "Scenario": "unrelated-edit",
+      "ElapsedMilliseconds": 3486.4321,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 3,
+      "Scenario": "model-edit",
+      "ElapsedMilliseconds": 3094.1469,
+      "OutputCount": 1002
+    },
+    {
+      "EntityCount": 500,
+      "Repetition": 3,
+      "Scenario": "relation-filter-edit",
+      "ElapsedMilliseconds": 3432.165,
+      "OutputCount": 1002
+    }
+  ]
+}
