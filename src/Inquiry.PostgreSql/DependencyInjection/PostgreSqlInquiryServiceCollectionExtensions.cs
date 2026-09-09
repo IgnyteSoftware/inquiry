@@ -46,6 +46,7 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
         }
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
         services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(connectionString));
         services.AddSingleton<IInquiryBulkCopier, PostgreSqlBulkCopier>();
         return services;
@@ -73,6 +74,10 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
         var options = new PostgreSqlInquiryOptions();
         configure(options);
+
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
+        InquiryProviderRegistration.ValidateOptions(options.Compatibility, options.MaxAttempts,
+            options.RetryBaseDelay, options.RetryMaxDelay, options.FailoverConnectionString);
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(connectionString, options));
         services.AddSingleton<IInquiryBulkCopier, PostgreSqlBulkCopier>();

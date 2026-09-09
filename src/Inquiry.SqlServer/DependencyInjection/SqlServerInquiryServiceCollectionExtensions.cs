@@ -39,6 +39,7 @@ public static class SqlServerInquiryServiceCollectionExtensions
         }
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "SqlServer");
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(connectionString));
         services.AddSingleton<IInquiryBulkCopier, SqlServerBulkCopier>();
         return services;
@@ -66,6 +67,10 @@ public static class SqlServerInquiryServiceCollectionExtensions
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "SqlServer");
         var options = new SqlServerInquiryOptions();
         configure(options);
+
+        InquiryProviderRegistration.ValidateConnectionString(connectionString);
+        InquiryProviderRegistration.ValidateOptions(options.Compatibility, options.MaxAttempts,
+            options.RetryBaseDelay, options.RetryMaxDelay, options.FailoverConnectionString);
 
         services.AddSingleton<IInquiryConnectionFactory>(_ => new SqlServerInquiryConnectionFactory(connectionString, options));
         services.AddSingleton<IInquiryBulkCopier, SqlServerBulkCopier>();

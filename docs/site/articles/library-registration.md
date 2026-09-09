@@ -88,3 +88,23 @@ argument because the host owns the connection and options. If an application wan
 Registration never creates the database or tables. Initialize the schema or run migrations explicitly
 before the first query. Generated stores and `IInquiry` are scoped; resolve them inside an explicit
 scope in console applications or use the request scope in ASP.NET Core.
+
+## Registration validation
+
+Provider registration validates Inquiry-owned settings before adding any provider services.
+Both string and configuration overloads reject blank connection strings. Missing or blank
+configuration entries throw InvalidOperationException; a blank direct argument throws
+ArgumentException. Options overloads reject unknown compatibility values, fewer than one open
+attempt, negative retry delays, and a non-null blank failover string. Retry values must be valid even
+when compatibility is None. Zero delays remain valid.
+
+These checks do not open connections, acquire access tokens, or construct provider data sources.
+Provider-specific connection-string parsing can still fail when the factory is resolved. Authentication,
+network access, database existence, permissions, and server compatibility are checked when connections
+open or commands execute. An externally supplied data source remains caller-owned; registration checks
+that it is non-null, not that it is usable.
+
+A rejected provider registration adds neither a connection factory nor a bulk copier. Services already
+present in the collection remain unchanged. Configure callbacks run before the additions; callback
+side effects outside Inquiry are the caller's responsibility. Do not retain and mutate the options
+object after configuring it.
