@@ -7,6 +7,10 @@ Date: 2026-07-14
 Scope: retained diagnostic strategy evidence. This matrix is intentionally **not** authoritative
 release evidence; issue #87 owns the clean-host, checked-job, multi-run release gate.
 
+Current release tracking is in #393 and #360. See the
+[September SQL Server threshold measurements](batch-insert-threshold-evidence.md) for new
+249/250/251-row and wide-column evidence. The July results below remain historical diagnostics.
+
 ## Outcome
 
 The checked benchmark surfaces now have measured selected and comparison paths for SQLite, SQL

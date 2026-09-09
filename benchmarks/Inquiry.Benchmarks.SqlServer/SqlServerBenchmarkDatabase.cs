@@ -51,6 +51,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public BenchmarkM2MOrderStore ManyToManyOrders => _services!.GetRequiredService<BenchmarkM2MOrderStore>();
     public IInquiry Inquiry => _services!.GetRequiredService<IInquiry>();
     public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
+    public WideBatchEvidenceStore WideBatchMutations => _services!.GetRequiredService<WideBatchEvidenceStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
@@ -89,6 +90,11 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
                             ValueText NVARCHAR(100) NOT NULL);
                         CREATE TYPE InquiryBatchEvidenceIdList AS TABLE (
                             Id INT NOT NULL PRIMARY KEY);
+                        CREATE TABLE InquiryWideBatchEvidence (
+                            Id INT NOT NULL PRIMARY KEY,
+                            C1 INT NOT NULL, C2 INT NOT NULL, C3 INT NOT NULL,
+                            C4 INT NOT NULL, C5 INT NOT NULL, C6 INT NOT NULL,
+                            C7 INT NOT NULL, C8 INT NOT NULL, C9 INT NOT NULL);
                         """;
                     await command.ExecuteNonQueryAsync().ConfigureAwait(false);
                 }
