@@ -6,6 +6,8 @@
   href: batch-mutation-diagnostic-matrix.md
 - name: Batch insert threshold evidence
   href: batch-insert-threshold-evidence.md
+- name: Active telemetry evidence
+  href: active-telemetry-evidence.md
 - name: Contributing
   href: contributing.md
 - name: Issue standard
