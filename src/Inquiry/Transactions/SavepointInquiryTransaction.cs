@@ -45,11 +45,11 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     private Task? _disposeTask;
 
     internal SavepointInquiryTransaction(
-        IInquiry inquiry,
+        DefaultInquiry inquiry,
         TransactedInquiryRequestPipeline outerPipeline,
         string savepointName,
         IsolationLevel isolationLevel)
-        : base(inquiry)
+        : base(inquiry, outerPipeline)
     {
         _outerPipeline = outerPipeline;
         _savepointName = savepointName;

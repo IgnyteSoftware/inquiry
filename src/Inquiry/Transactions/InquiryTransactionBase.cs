@@ -1,29 +1,29 @@
 using Inquiry.Commands;
 using Inquiry.Materialization;
+using Inquiry.Pipeline;
 using System.Data;
 using System.Data.Common;
 
 namespace Inquiry.Transactions;
 
 /// <summary>
-/// Shared implementation of the forwarding query/execute methods on <see cref="IInquiryTransaction"/>.
-/// Holds the root <see cref="IInquiry"/> internally; the abstract Commit/Rollback/Dispose/IsolationLevel
-/// /ThrowIfClosed members are implemented by the concrete <see cref="InquiryTransaction"/> and
-/// <see cref="SavepointInquiryTransaction"/>.
+/// Shared implementation of the query/execute methods on <see cref="IInquiryTransaction"/>.
+/// The abstract Commit/Rollback/Dispose/IsolationLevel/ThrowIfClosed members are implemented by the
+/// concrete <see cref="InquiryTransaction"/> and <see cref="SavepointInquiryTransaction"/>.
 /// </summary>
 /// <remarks>
-/// The root inquiry is held privately and never exposed — every transactional call on this handle
-/// goes through one of the forwarding methods, which check closed-state first. This is what makes
-/// use-after-close calls fail fast instead of silently routing through the non-transactional
-/// pipeline.
+/// Each handle captures its transactional pipeline. Calls do not depend on ambient state, which can
+/// differ when a helper returns the handle to its caller. Every call checks closed state first.
 /// </remarks>
 internal abstract class InquiryTransactionBase : IInquiryTransaction
 {
-    private readonly IInquiry _inner;
+    private readonly DefaultInquiry _inner;
+    private readonly TransactedInquiryRequestPipeline _pipeline;
 
-    protected InquiryTransactionBase(IInquiry inner)
+    protected InquiryTransactionBase(DefaultInquiry inner, TransactedInquiryRequestPipeline pipeline)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
     }
 
     public abstract IsolationLevel IsolationLevel { get; }
@@ -42,7 +42,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         where TEntity : class
     {
         ThrowIfClosed();
-        return QueryChecked<TEntity>(_inner.QueryAsync<TEntity>(commandText, cancellationToken), cancellationToken);
+        return QueryAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
     }
 
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
@@ -51,7 +51,9 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         where TEntity : class
     {
         ThrowIfClosed();
-        return QueryChecked<TEntity>(_inner.QueryAsync<TEntity>(command, cancellationToken), cancellationToken);
+        return QueryChecked<TEntity>(
+            _pipeline.QueryAsync(command, _inner.GetMaterializer<TEntity>(), cancellationToken),
+            cancellationToken);
     }
 
     private async IAsyncEnumerable<TEntity> QueryChecked<TEntity>(
@@ -72,7 +74,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         where TEntity : class
     {
         ThrowIfClosed();
-        return _inner.QueryListAsync<TEntity>(commandText, cancellationToken);
+        return QueryListAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
     }
 
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
@@ -81,7 +83,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         where TEntity : class
     {
         ThrowIfClosed();
-        return _inner.QueryListAsync<TEntity>(command, cancellationToken);
+        return _pipeline.QueryListAsync(command, _inner.GetMaterializer<TEntity>(), cancellationToken);
     }
 
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -90,7 +92,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         where TEntity : class
     {
         ThrowIfClosed();
-        return _inner.QuerySingleOrDefaultAsync<TEntity>(commandText, cancellationToken);
+        return QuerySingleOrDefaultAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
     }
 
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
@@ -99,7 +101,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         where TEntity : class
     {
         ThrowIfClosed();
-        return _inner.QuerySingleOrDefaultAsync<TEntity>(command, cancellationToken);
+        return _pipeline.QuerySingleOrDefaultAsync(command, _inner.GetMaterializer<TEntity>(), cancellationToken);
     }
 
     // ---- Execute / scalar -------------------------------------------------------------
@@ -109,7 +111,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         CancellationToken cancellationToken = default)
     {
         ThrowIfClosed();
-        return _inner.ExecuteAsync(commandText, cancellationToken);
+        return ExecuteAsync(InquirySql.Sql(commandText), cancellationToken);
     }
 
     public Task<int> ExecuteAsync(
@@ -117,7 +119,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         CancellationToken cancellationToken = default)
     {
         ThrowIfClosed();
-        return _inner.ExecuteAsync(command, cancellationToken);
+        return _pipeline.ExecuteAsync(command, cancellationToken);
     }
 
     public Task<T> ExecuteScalarAsync<T>(
@@ -125,7 +127,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         CancellationToken cancellationToken = default)
     {
         ThrowIfClosed();
-        return _inner.ExecuteScalarAsync<T>(commandText, cancellationToken);
+        return ExecuteScalarAsync<T>(InquirySql.Sql(commandText), cancellationToken);
     }
 
     public Task<T> ExecuteScalarAsync<T>(
@@ -133,7 +135,7 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         CancellationToken cancellationToken = default)
     {
         ThrowIfClosed();
-        return _inner.ExecuteScalarAsync<T>(command, cancellationToken);
+        return _pipeline.ExecuteScalarAsync<T>(command, cancellationToken);
     }
 
     // ---- Nested transaction (savepoint) ----------------------------------------------
@@ -141,9 +143,6 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
     public Task<IInquiryTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfClosed();
-        // Inner BeginTransactionAsync detects the ambient slot and creates a savepoint. The
-        // requested isolation level argument matches our own (a savepoint inherits the outer's
-        // isolation; the level can't change mid-transaction).
-        return _inner.BeginTransactionAsync(IsolationLevel, cancellationToken);
+        return _inner.BeginSavepointAsync(_pipeline, IsolationLevel, cancellationToken);
     }
 }

@@ -544,7 +544,7 @@ internal sealed class DefaultInquiry : IInquiry
         }
     }
 
-    private async Task<IInquiryTransaction> BeginSavepointAsync(
+    internal async Task<IInquiryTransaction> BeginSavepointAsync(
         TransactedInquiryRequestPipeline outer,
         IsolationLevel inheritedIsolation,
         CancellationToken cancellationToken)
@@ -570,7 +570,7 @@ internal sealed class DefaultInquiry : IInquiry
         return new SavepointInquiryTransaction(this, outer, name, inheritedIsolation);
     }
 
-    private IInquiryEntityMaterializer<TEntity> GetMaterializer<TEntity>()
+    internal IInquiryEntityMaterializer<TEntity> GetMaterializer<TEntity>()
         where TEntity : class
         => _serviceProvider.GetRequiredService<IInquiryEntityMaterializer<TEntity>>();
 }

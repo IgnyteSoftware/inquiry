@@ -25,10 +25,10 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
         DbConnection connection,
         DbTransaction transaction,
         TransactedInquiryRequestPipeline pipeline,
-        IInquiry inquiry,
+        DefaultInquiry inquiry,
         Action onDetach,
         Action onClose)
-        : base(inquiry)
+        : base(inquiry, pipeline)
     {
         _connection = connection;
         _transaction = transaction;
