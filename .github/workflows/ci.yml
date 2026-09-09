@@ -34,10 +34,12 @@ jobs:
           dotnet test tests/Inquiry.ReleaseTools.Tests/Inquiry.ReleaseTools.Tests.csproj --configuration Release --no-build
       - name: Generator, unit & SQLite tests
         run: |
-          dotnet test tests/Inquiry.Benchmarks.Contracts.Tests/Inquiry.Benchmarks.Contracts.Tests.csproj -c Release --no-build --logger "trx;LogFileName=benchmark-contracts.trx" --results-directory test-results
-          dotnet test tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj -c Release --no-build --logger "trx;LogFileName=generators.trx" --results-directory test-results
-          dotnet test tests/Inquiry.Tests/Inquiry.Tests.csproj -c Release --no-build --logger "trx;LogFileName=unit.trx" --results-directory test-results
-          dotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build --logger "trx;LogFileName=sqlite.trx" --results-directory test-results
+          dotnet test tests/Inquiry.Benchmarks.Contracts.Tests/Inquiry.Benchmarks.Contracts.Tests.csproj -c Release --no-build --logger "trx;LogFilePrefix=benchmark-contracts" --results-directory test-results
+          dotnet test tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj -c Release --no-build --logger "trx;LogFilePrefix=generators" --results-directory test-results
+          dotnet test tests/Inquiry.Tests/Inquiry.Tests.csproj -c Release --no-build --logger "trx;LogFilePrefix=unit" --results-directory test-results
+          dotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build --logger "trx;LogFilePrefix=sqlite" --results-directory test-results
+          dotnet test tests/Inquiry.Aspire.Tests/Inquiry.Aspire.Tests.csproj -c Release --no-build --logger "trx;LogFilePrefix=aspire" --results-directory test-results
+          dotnet test tests/Inquiry.Benchmarks.SelectedStrategy.Tests/Inquiry.Benchmarks.SelectedStrategy.Tests.csproj -c Release --no-build --logger "trx;LogFilePrefix=selected-strategy" --results-directory test-results
       - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
