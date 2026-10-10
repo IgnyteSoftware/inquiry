@@ -179,6 +179,7 @@ NuGet consumers can step into Inquiry source in their debugger without downloadi
 ## Adding a database
 
 See [Adding a provider](adding-a-provider.md) for the append-point checklist.
+
 ## Clean package consumers
 
 After packing a clean commit, verify the same bundle without rebuilding packages:
