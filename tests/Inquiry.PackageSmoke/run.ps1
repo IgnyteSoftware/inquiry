@@ -22,8 +22,6 @@ $workRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('inquiry-package-consum
 New-Item -ItemType Directory -Path $workRoot | Out-Null
 $previousPackages = $env:NUGET_PACKAGES
 $previousHttpCache = $env:NUGET_HTTP_CACHE_PATH
-$env:NUGET_PACKAGES = Join-Path $workRoot 'packages'
-$env:NUGET_HTTP_CACHE_PATH = Join-Path $workRoot 'http-cache'
 $checks = [System.Collections.Generic.List[string]]::new()
 
 function Invoke-Dotnet([string[]] $Arguments) {
@@ -38,7 +36,8 @@ function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [stri
     $references = foreach ($id in $Packages) {
         '<PackageReference Include="' + $id + '" Version="' + $PackageVersion + '" />'
     }
-    $diVersion = $manifest.packages[0].dependencies.'Microsoft.Extensions.DependencyInjection.Abstractions'
+    $core = $manifest.packages | Where-Object id -CEQ 'Ignyte.Inquiry'
+    $diVersion = $core.dependencies.'Microsoft.Extensions.DependencyInjection.Abstractions'
     if (-not $AspNetCore) {
         $references += '<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="' + $diVersion + '" />'
     }
@@ -62,6 +61,8 @@ function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [stri
 try {
     Invoke-Dotnet @('run', '--project', (Join-Path $repoRoot 'eng/Inquiry.ReleaseTools'), '-c', 'Release', '--',
         'verify-bundle', $repoRoot, (Join-Path $repoRoot 'eng/release-manifest.json'), $bundle, $Commit, '--version', $PackageVersion, '--branch', $RepositoryBranch)
+    $env:NUGET_PACKAGES = Join-Path $workRoot 'packages'
+    $env:NUGET_HTTP_CACHE_PATH = Join-Path $workRoot 'http-cache'
     $hashes = @(Get-ChildItem -LiteralPath $bundle -File | Sort-Object Name | ForEach-Object {
         @{ file = $_.Name; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })
@@ -100,6 +101,9 @@ try {
     & $binary 2>&1 | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'The actual-package NativeAOT consumer failed.' }
     $checks.Add("net10.0/$RuntimeIdentifier/nativeaot-crud")
+    if (@(Compare-Object ($hashes.file | Sort-Object) ((Get-ChildItem -LiteralPath $bundle -File).Name | Sort-Object)).Count -ne 0) {
+        throw 'Bundle inventory changed during verification.'
+    }
     foreach ($file in $hashes) {
         if ((Get-FileHash -LiteralPath (Join-Path $bundle $file.file) -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256) {
             throw "Bundle changed during verification: $($file.file)"

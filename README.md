@@ -99,9 +99,10 @@ The SQL Server, PostgreSQL, MySQL, MariaDB, and Oracle integration suites provis
 Packages ship on nuget.org under the `Ignyte.` prefix (assemblies and namespaces remain `Inquiry.*`). Install the provider you need — it pulls in the core `Ignyte.Inquiry` package:
 
 ```powershell
-dotnet add package Ignyte.Inquiry.Sqlite      # or .SqlServer / .PostgreSql / .MySql / .MariaDb / .Oracle
-dotnet add package Ignyte.Inquiry.Aspire      # optional Aspire client integration
-dotnet add package Ignyte.Inquiry.Testing     # optional test helpers
+dotnet add package Ignyte.Inquiry.Sqlite --prerelease      # or .SqlServer / .PostgreSql / .MySql / .MariaDb / .Oracle
+dotnet add package Ignyte.Inquiry.Aspire --prerelease      # optional Aspire client integration
+dotnet add package Ignyte.Inquiry.Testing --prerelease     # optional test helpers
+dotnet add package Ignyte.Inquiry.Sqlite.Testing --prerelease # optional SQLite fixture
 ```
 
 ## Contributing and releasing

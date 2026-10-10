@@ -10,8 +10,8 @@ but excludes their analyzers from transitive flow. Do not directly reference mul
 packages in the same application because each contains a dialect-specific source generator.
 
 ```powershell
-dotnet add package Ignyte.Inquiry.Aspire
-dotnet add package Ignyte.Inquiry.PostgreSql
+dotnet add package Ignyte.Inquiry.Aspire --prerelease
+dotnet add package Ignyte.Inquiry.PostgreSql --prerelease
 ```
 
 Define the database and pass its connection to the application in the AppHost:
