@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filter and audit scopes reject out-of-order disposal without changing ambient values. Repeated or copied disposal no longer restores stale values.
 - Caller-side transaction disposal now clears its ambient slot even when an async helper already committed, rolled back, or disposed the handle. Captured closed flows still reject operations.
 - The Blazor sample now rejects non-SQLite configuration before opening a database; its stores generate SQLite SQL.
+- Ordinary entity updates skip the soft-delete marker and affect only active rows. Repeated archive returns false/null; restore returns false when the row is already active.
+
 - Managed concurrency rejects unsupported token shapes (including decimal, enum, and DateTime) with `INQ101`; string/Guid stamps require explicit rotation.
 
 - `[InquiryInsert]` and `[InquiryUpdate]` now infer batch operations from entity collection parameters. The separate `[InquiryInsertAll]` and `[InquiryUpdateAll]` attributes were removed.

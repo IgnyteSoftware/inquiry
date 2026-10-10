@@ -458,7 +458,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"                ({entityParameter}, _newStamp),");
         AppendBinderLambda(source, sqlBuilder, "_state", columns,
             i => i == columns.Count - 1 ? "_state.Stamp" : $"_state.Entity.{columns[i].PropertyName}",
-            "                ", emitSizePrecision: softDelete, trailingComma: false, filterBinder: filterBinder);
+            "                ", trailingComma: false, filterBinder: filterBinder, predicateColumnCount: softDelete ? columns.Count - 1 : 0);
         source.AppendLine("            ),");
         if (method.ReturnsEntity) source.AppendLine("            default,");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
@@ -905,7 +905,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{stateType}>(");
             source.AppendLine($"{indent}        {sqlField},");
             source.AppendLine($"{indent}        ({string.Join(", ", arguments)}),");
-            AppendBinderLambda(source, sqlBuilder, "_state", columns, i => $"_state.Item{i + 1}", indent + "        ", trailingComma: false, filterBinder: filterBinder);
+            AppendBinderLambda(source, sqlBuilder, "_state", columns, i => $"_state.Item{i + 1}", indent + "        ", trailingComma: false, filterBinder: filterBinder, predicateColumnCount: keyColumns.Count);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false) > 0;");
             return;
@@ -955,6 +955,7 @@ internal static class StoreOperationEmitter
     /// values (insert/update/upsert) — because <c>Size</c> on a write parameter silently truncates an
     /// over-length value (see <see cref="AppendSizePrecision"/>). It defaults to <see langword="false"/>
     /// so a new caller that forgets to classify itself fails safe (no truncation, just no optimization).
+    /// Mixed binders use <paramref name="predicateColumnCount"/> for leading keys and keep write values unsized.
     /// </summary>
     private static void AppendBinderLambda(
         StringBuilder source,
@@ -965,7 +966,8 @@ internal static class StoreOperationEmitter
         string indent,
         bool emitSizePrecision = false,
         bool trailingComma = true,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        int predicateColumnCount = 0)
     {
         source.AppendLine($"{indent}static (_cmd, {lambdaParam}) =>");
         source.AppendLine($"{indent}{{");
@@ -974,7 +976,7 @@ internal static class StoreOperationEmitter
             var column = columns[i];
             source.AppendLine($"{indent}    var _p{i} = _cmd.CreateParameter();");
             source.AppendLine($"{indent}    _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
-            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent + "    ", emitSizePrecision);
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", indent + "    ", emitSizePrecision || i < predicateColumnCount);
             source.AppendLine($"{indent}    _p{i}.Value = {BuildParameterValueExpression(column, accessor(i), sqlBuilder)};");
             source.AppendLine($"{indent}    _cmd.Parameters.Add(_p{i});");
         }

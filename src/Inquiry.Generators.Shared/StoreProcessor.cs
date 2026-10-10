@@ -2665,7 +2665,7 @@ internal static class StoreProcessor
                 string.IsNullOrEmpty(c.ComputedExpression)))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid,
-                method.Location?.ToLocation(), method.Name, "no writable columns remain after excluding the soft-delete marker"));
+                method.Location?.ToLocation(), method.Name, "No writable columns remain after excluding the soft-delete marker. Add a writable column or remove the update method."));
             return false;
         }
 
