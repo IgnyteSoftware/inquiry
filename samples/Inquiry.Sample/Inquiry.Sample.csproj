@@ -8,9 +8,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
-    <ProjectReference Include="..\..\src\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
-    <ProjectReference Include="..\..\src\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
     <ProjectReference Include="..\Inquiry.Northwind\Inquiry.Northwind.csproj" />
+    <ProjectReference Include="..\Inquiry.Sample.Data\Inquiry.Sample.Data.csproj" />
   </ItemGroup>
 </Project>

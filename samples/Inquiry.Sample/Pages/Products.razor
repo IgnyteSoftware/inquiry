@@ -1,0 +1,251 @@
+@page "/"
+@page "/products"
+@implements IDisposable
+@using Inquiry.Sample.Data
+@using Inquiry.Paging
+@using System.Globalization
+@inject ProductWorkspace Workspace
+@inject ILogger<Products> Logger
+
+<PageTitle>Products · Inquiry</PageTitle>
+
+<div class="workspace">
+    <header class="workspace-header">
+        <div><p class="eyebrow">@(_workspaceId == 1 ? "NORTHWIND" : "MARKET HOUSE") / INVENTORY</p><h1>Products</h1><p class="muted">Find your next bestseller. Keep the everyday essentials in order.</p></div>
+        <label class="workspace-switch">Workspace
+            <select aria-label="Workspace" @bind="_workspaceId" @bind:after="ChangeWorkspaceAsync" disabled="@_busy">
+                <option value="1">Northwind</option><option value="2">Market House</option>
+            </select>
+        </label>
+    </header>
+
+    <div class="inventory-stats" aria-label="Workspace totals">
+        <div><span>Active products</span><strong>@_totals.Products</strong></div>
+        <div><span>Units on hand</span><strong>@_totals.Units.ToString("N0")</strong></div>
+        <div><span>Inventory value</span><strong>@Money(_totals.Value)</strong></div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="workspace-alert error" role="alert">@_error <button class="btn" @onclick="RefreshAsync" disabled="@_busy">Retry</button></div>
+    }
+    @if (_notice is not null)
+    {
+        <div class="workspace-alert" role="status">@_notice</div>
+    }
+
+    <section class="product-panel" aria-labelledby="browse-heading">
+        <div class="panel-heading"><div><h2 id="browse-heading">Your catalog</h2><p class="muted">Search, organize, and make room for what sells.</p></div>
+            <button class="btn primary" @onclick="Create" disabled="@_busy">+ Add product</button>
+        </div>
+        <EditForm Model="_filters" OnValidSubmit="ApplyAsync" FormName="product-search">
+            <DataAnnotationsValidator />
+            <fieldset class="search-fields" disabled="@_busy">
+                <label class="search-name">Product name<InputText @bind-Value="_filters.Name" placeholder="Search the catalog…" /></label>
+                <label>Category<InputSelect @bind-Value="_filters.Category"><option value="">All categories</option><option value="none">Unassigned</option>
+                    @foreach (var category in _categories) { <option value="@category.Id">@category.Name</option> }
+                </InputSelect></label>
+                <label>Min price<InputNumber @bind-Value="_filters.Minimum" placeholder="$0" /></label>
+                <label>Max price<InputNumber @bind-Value="_filters.Maximum" placeholder="No maximum" /></label>
+                <label>Sort by<InputSelect @bind-Value="_filters.Sort"><option value="@ProductSort.Name">Name: A–Z</option><option value="@ProductSort.NameDescending">Name: Z–A</option><option value="@ProductSort.Price">Price: low to high</option><option value="@ProductSort.PriceDescending">Price: high to low</option></InputSelect></label>
+                <label class="checkbox-label"><InputCheckbox @bind-Value="_filters.InStock" /> In stock only</label>
+                <div class="search-actions"><button class="btn primary" type="submit">Search</button><button class="btn" type="button" @onclick="ResetAsync">Reset</button></div>
+            </fieldset>
+            <ValidationSummary />
+        </EditForm>
+
+        <div class="result-heading"><span>@_page.TotalCount matching @(_page.TotalCount == 1 ? "product" : "products")</span><span class="muted">Prices in USD</span></div>
+        @if (_busy && !_loaded)
+        {
+            <div class="empty-state" role="status">Loading your catalog…</div>
+        }
+        else if (_page.Items.Count == 0)
+        {
+            <div class="empty-state"><h3>No products found</h3><p>Try another name or category, or widen your price range.</p><button class="btn" @onclick="ResetAsync" disabled="@_busy">Clear filters</button></div>
+        }
+        else
+        {
+            <div class="product-table-wrap" aria-busy="@_busy">
+                <table class="product-table"><caption class="visually-hidden">Products matching your search</caption><thead><tr><th scope="col">Product</th><th scope="col">Category</th><th scope="col">Price</th><th scope="col">Stock</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                    @foreach (var product in _page.Items)
+                    {
+                        <tr @key="product.Id">
+                            <td><div class="product-identity"><span class="product-monogram" aria-hidden="true">@Initials(product.Name)</span><div><button class="product-name" @onclick="() => EditAsync(product.Id)" disabled="@_busy">@product.Name</button><small>NW-@product.Id.ToString("D4")</small></div></div></td>
+                            <td><span class="category-pill">@CategoryName(product.CategoryId)</span></td>
+                            <td class="numeric">@Money(product.Price)</td>
+                            <td><span class="stock-status @(product.Stock == 0 ? "empty" : "")">@(product.Stock == 0 ? "Out of stock" : product.Stock + " available")</span></td>
+                            <td><button class="btn edit-product" aria-label="@("Edit " + product.Name)" @onclick="() => EditAsync(product.Id)" disabled="@_busy">Edit</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <footer class="pagination-bar">
+            <span>@(_page.TotalCount == 0 ? "No results" : $"Showing {_search.Offset + 1}–{_search.Offset + _page.Items.Count} of {_page.TotalCount}")</span>
+            <div><button class="btn" @onclick="PreviousAsync" disabled="@(_busy || _search.Offset == 0)">← Previous</button><span class="page-number">Page @(_search.Offset / _search.Limit + 1)</span><button class="btn" @onclick="NextAsync" disabled="@(_busy || _search.Offset + _page.Items.Count >= _page.TotalCount)">Next →</button></div>
+        </footer>
+    </section>
+
+    @if (_editor is not null)
+    {
+        <section class="product-panel editor-panel" aria-labelledby="editor-heading">
+            <div class="panel-heading"><div><p class="eyebrow">@(_editor.Id == 0 ? "NEW PRODUCT" : $"NW-{_editor.Id:D4}")</p><h2 id="editor-heading" tabindex="-1" @ref="_editorHeading">@(_editor.Id == 0 ? "Add a product" : "Edit product")</h2></div><button class="btn" @onclick="CloseEditor" disabled="@_busy">Cancel</button></div>
+            @if (_conflict)
+            {
+                <div class="workspace-alert error" role="alert">This product changed or was archived in another session. Your changes have not been saved. Reload the latest version before editing again.
+                    <button class="btn" @onclick="() => EditAsync(_editor.Id)" disabled="@_busy">Reload product</button>
+                </div>
+            }
+            <EditForm Model="_editor" OnValidSubmit="SaveAsync" FormName="product-editor" @key="_editor">
+                <DataAnnotationsValidator /><ValidationSummary />
+                <fieldset class="editor-fields" disabled="@(_busy || _conflict)">
+                    <label class="wide">Name<InputText @bind-Value="_editor.Name" /></label>
+                    <label>Price (USD)<InputNumber @bind-Value="_editor.Price" /></label>
+                    <label>Units in stock<InputNumber @bind-Value="_editor.Stock" /></label>
+                    <label class="wide">Category<InputSelect @bind-Value="_editor.CategoryId"><option value="">Unassigned</option>@foreach (var category in _categories) { <option value="@category.Id">@category.Name</option> }</InputSelect></label>
+                    <label class="wide">Description<InputTextArea @bind-Value="_editor.Description" rows="3" /><span class="muted">Leave blank to clear the description.</span></label>
+                    <div class="editor-actions wide"><button class="btn primary" type="submit">@(_busy ? "Saving…" : "Save product")</button>
+                        @if (_editor.Id != 0) { <button class="btn danger" type="button" @onclick="() => _confirmArchive = true">Archive product</button> }
+                    </div>
+                </fieldset>
+            </EditForm>
+            @if (_confirmArchive && !_conflict)
+            {
+                <div class="workspace-alert archive-confirm" role="alert">Archive @_editor.Name? It will leave the active catalog. Its record will be retained.
+                    <button class="btn danger" @onclick="ArchiveAsync" disabled="@_busy">Confirm archive</button><button class="btn" @onclick="() => _confirmArchive = false" disabled="@_busy">Keep product</button>
+                </div>
+            }
+        </section>
+    }
+
+    <footer class="workspace-footnote"><span>Inquiry sample · SQLite</span><a href="showcase">Explore how this application works →</a></footer>
+</div>
+
+@code {
+    private readonly CancellationTokenSource _lifetime = new();
+    private int _workspaceId = 1;
+    private bool _busy, _loaded, _conflict, _confirmArchive;
+    private string? _error, _notice;
+    private SearchFields _filters = new();
+    private ProductSearch _search = new();
+    private IReadOnlyList<WorkspaceCategory> _categories = Array.Empty<WorkspaceCategory>();
+    private InquiryPagedResult<WorkspaceProduct> _page = new(Array.Empty<WorkspaceProduct>(), 0);
+    private InventoryTotals _totals = new();
+    private WorkspaceProduct? _editor;
+    private ElementReference _editorHeading;
+    private bool _focusEditor;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusEditor && _editor is not null)
+        {
+            _focusEditor = false;
+            await _editorHeading.FocusAsync();
+        }
+    }
+
+    protected override Task OnInitializedAsync() => RunAsync(async () =>
+    {
+        _categories = await Workspace.CategoriesAsync(_lifetime.Token);
+        await LoadAsync();
+    });
+
+    private async Task LoadAsync()
+    {
+        var page = await Workspace.SearchAsync(_workspaceId, _search, _lifetime.Token);
+        if (_search.Offset > 0 && _search.Offset >= page.TotalCount)
+        {
+            _search = _search with { Offset = page.TotalCount == 0 ? 0 : (int)((page.TotalCount - 1) / _search.Limit * _search.Limit) };
+            page = await Workspace.SearchAsync(_workspaceId, _search, _lifetime.Token);
+        }
+        _page = page;
+        _totals = await Workspace.TotalsAsync(_workspaceId, _lifetime.Token);
+        _loaded = true;
+    }
+
+    private Task RefreshAsync() => RunAsync(LoadAsync);
+    private Task ApplyAsync() => RunAsync(async () =>
+    {
+        var next = new ProductSearch(_filters.Name,
+            int.TryParse(_filters.Category, out var id) ? id : null, _filters.Category == "none",
+            _filters.Minimum, _filters.Maximum, _filters.InStock, _filters.Sort);
+        if (next.Minimum > next.Maximum)
+            throw new ValidationException("Minimum price must not exceed maximum price.");
+        _search = next;
+        CloseEditor();
+        await LoadAsync();
+    });
+
+    private Task ResetAsync() { _filters = new(); return ApplyAsync(); }
+    private Task ChangeWorkspaceAsync()
+    {
+        CloseEditor();
+        _notice = null;
+        _page = new(Array.Empty<WorkspaceProduct>(), 0);
+        _totals = new();
+        _loaded = false;
+        return ResetAsync();
+    }
+
+    private Task PreviousAsync() => RunAsync(async () => { _search = _search with { Offset = Math.Max(0, _search.Offset - _search.Limit) }; await LoadAsync(); });
+    private Task NextAsync() => RunAsync(async () => { _search = _search with { Offset = _search.Offset + _search.Limit }; await LoadAsync(); });
+    private void Create() { CloseEditor(); _notice = null; _editor = new() { WorkspaceId = _workspaceId }; _focusEditor = true; }
+    private void CloseEditor() { _editor = null; _conflict = false; _confirmArchive = false; _focusEditor = false; }
+
+    private Task EditAsync(int id) => RunAsync(async () =>
+    {
+        CloseEditor();
+        _notice = null;
+        _editor = await Workspace.FindAsync(_workspaceId, id, _lifetime.Token);
+        _focusEditor = _editor is not null;
+        if (_editor is null) { _notice = "This product is no longer available. The catalog has been refreshed."; await LoadAsync(); }
+    });
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        var saved = await Workspace.SaveAsync(_workspaceId, _editor!, _lifetime.Token);
+        if (saved is null) { _conflict = true; return; }
+        _editor = saved;
+        _confirmArchive = false;
+        _notice = $"Saved {saved.Name}.";
+        await LoadAsync();
+    });
+
+    private Task ArchiveAsync() => RunAsync(async () =>
+    {
+        if (!await Workspace.ArchiveAsync(_workspaceId, _editor!, _lifetime.Token)) { _conflict = true; _confirmArchive = false; return; }
+        var name = _editor!.Name;
+        CloseEditor();
+        _notice = $"Archived {name}.";
+        await LoadAsync();
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+        try { await action(); }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (ValidationException ex) { _error = ex.Message; }
+        catch (Exception ex) { Logger.LogError(ex, "Product workspace operation failed"); _error = "The operation could not be completed. Retry, or reload the product before saving again."; }
+        finally { _busy = false; }
+    }
+
+    private string CategoryName(int? id) => _categories.FirstOrDefault(c => c.Id == id)?.Name ?? "Unassigned";
+    private static string Money(decimal value) => value.ToString("C", CultureInfo.GetCultureInfo("en-US"));
+    private static string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(word => word[0])).ToUpperInvariant();
+    public void Dispose() { _lifetime.Cancel(); _lifetime.Dispose(); }
+
+    private sealed class SearchFields
+    {
+        public string? Name { get; set; }
+        public string Category { get; set; } = "";
+        [Range(typeof(decimal), "0", "999999.99")] public decimal? Minimum { get; set; }
+        [Range(typeof(decimal), "0", "999999.99")] public decimal? Maximum { get; set; }
+        public bool InStock { get; set; }
+        public ProductSort Sort { get; set; }
+    }
+}

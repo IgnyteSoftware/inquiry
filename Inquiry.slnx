@@ -18,6 +18,7 @@
     <Project Path="samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj" />
     <Project Path="samples/Inquiry.Northwind/Inquiry.Northwind.csproj" />
     <Project Path="samples/Inquiry.Sample/Inquiry.Sample.csproj" />
+    <Project Path="samples/Inquiry.Sample.Data/Inquiry.Sample.Data.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Inquiry.Generators.Shared/Inquiry.Generators.Shared.csproj" />
