@@ -2666,7 +2666,7 @@ internal static class StoreProcessor
                 string.IsNullOrEmpty(c.ComputedExpression)))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid,
-                method.Location?.ToLocation(), method.Name, "No writable columns remain after filter-column protection. Add a mutable column or remove this update method."));
+                method.Location?.ToLocation(), method.Name, "No writable columns remain after excluding protected columns. Add a mutable column or remove this update method."));
             return false;
         }
 
