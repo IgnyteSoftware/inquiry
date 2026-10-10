@@ -104,7 +104,11 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     {
         lock (_lifecycleLock)
         {
-            if (_disposeTask is not null) return new ValueTask(_disposeTask);
+            if (_disposeTask is not null)
+            {
+                _onDetach();
+                return new ValueTask(_disposeTask);
+            }
 
             if (_terminalTask is null)
             {
@@ -119,6 +123,8 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
             // A successful terminal operation defines the database outcome; only DisposeAsync owns
             // ordinary resource cleanup. A failed terminal operation already performed its bounded
             // rollback/cleanup and owns that aggregate failure, so disposal only observes it.
+            // A helper can close the shared transaction without clearing its caller's async context.
+            _onDetach();
             _disposeTask = DisposeAfterTerminalAsync(_terminalTask);
             return new ValueTask(_disposeTask);
         }
