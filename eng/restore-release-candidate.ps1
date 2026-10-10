@@ -31,4 +31,6 @@ if ('sha256:' + (Get-FileHash $archivePath -Algorithm SHA256).Hash.ToLowerInvari
 }
 Expand-Archive -LiteralPath $archivePath -DestinationPath $OutputPath
 'restored=true' >> $env:GITHUB_OUTPUT
+"artifact-id=$($artifact.id)" >> $env:GITHUB_OUTPUT
+"artifact-digest=$($artifact.digest.Substring(7))" >> $env:GITHUB_OUTPUT
 Write-Host "Restored original candidate artifact $($artifact.id) ($($artifact.digest))."

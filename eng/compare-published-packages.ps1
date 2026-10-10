@@ -16,7 +16,7 @@ function Get-Payload([string] $Path) {
     $archive = [System.IO.Compression.ZipFile]::OpenRead($Path)
     try {
         $entries = [System.Collections.Generic.Dictionary[string,string]]::new([System.StringComparer]::Ordinal)
-        $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($entry in $archive.Entries) {
             if (-not $names.Add($entry.FullName) -or $entry.FullName.Contains('\') -or
                 $entry.FullName.StartsWith('/') -or @($entry.FullName.Split('/') | Where-Object { $_ -in @('.', '..') }).Count -gt 0) {

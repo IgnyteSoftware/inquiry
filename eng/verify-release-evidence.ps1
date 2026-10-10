@@ -5,11 +5,16 @@ param(
     [Parameter(Mandatory)] [string] $Commit,
     [Parameter(Mandatory)] [string] $Version,
     [Parameter(Mandatory)] [string] $RunId,
-    [Parameter(Mandatory)] [string] $RunAttempt
+    [Parameter(Mandatory)] [string] $RunAttempt,
+    [Parameter(Mandatory)] [string] $ArtifactId,
+    [Parameter(Mandatory)] [string] $ArtifactDigest
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($ArtifactId -cnotmatch '^[0-9]+$' -or $ArtifactDigest -cnotmatch '^[0-9a-f]{64}$') {
+    throw 'Release evidence requires the immutable candidate artifact identity.'
+}
 $root = Split-Path -Parent $PSScriptRoot
 $manifest = Get-Content -Raw (Join-Path $root 'eng/release-manifest.json') | ConvertFrom-Json
 $stable = $Version -ceq $manifest.packageVersion
@@ -60,8 +65,13 @@ if ($env:RELEASE_CORRECTNESS_RESULT -cne 'success' -or $env:RELEASE_SECURITY_RES
     version = $Version
     runId = $RunId
     runAttempt = $RunAttempt
+    candidateArtifactId = $ArtifactId
+    candidateArtifactDigest = $ArtifactDigest
     correctness = $env:RELEASE_CORRECTNESS_RESULT
-    security = $env:RELEASE_SECURITY_RESULT
+    securityWorkflowResult = $env:RELEASE_SECURITY_RESULT
+    codeql = 'analysis-completed'
+    dependencyAudit = 'passed'
+    codeqlAlertDisposition = 'requires-release-review'
     apiPolicy = $(if ($stable) { 'shipped-api-freeze' } else { 'preview-unshipped-allowed' })
     consumerEvidenceSha256 = (Get-FileHash -LiteralPath $evidenceFile -Algorithm SHA256).Hash.ToLowerInvariant()
     files = $evidence.packages
