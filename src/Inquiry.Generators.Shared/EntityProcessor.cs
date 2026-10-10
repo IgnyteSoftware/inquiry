@@ -587,8 +587,9 @@ internal static class EntityProcessor
             if (concurrencyTokenAttribute is not null && (rotateConcurrencyToken || !GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute, "DatabaseGenerated")) &&
                 (GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute, "DatabaseGenerated") || typeData.IsNullable || converter is not null || isGenerated ||
                  useDatabaseDefault || hasComputedMetadata ||
+                 (rotateConcurrencyToken && !IsRotationSqlTypeCompatible(sqlType, typeData.IsGuid)) ||
                  (rotateConcurrencyToken
-                     ? !(typeData.IsGuid || typeData.SpecialType == SpecialType.System_String) || (length > 0 && length < 36)
+                     ? !(typeData.IsGuid || typeData.SpecialType == SpecialType.System_String) || (!typeData.IsGuid && length > 0 && length < 36)
                      : !numericToken)))
             {
                 diagnostics.Add(DiagnosticData.Create(
@@ -596,6 +597,7 @@ internal static class EntityProcessor
                     property.Locations.FirstOrDefault(), entitySymbol.Name, property.Name));
                 isConcurrencyToken = false;
                 rotateConcurrencyToken = false;
+                isDatabaseGeneratedToken = false;
             }
 
             columns.Add(new ColumnData
@@ -839,6 +841,18 @@ internal static class EntityProcessor
         // String, Char, and anything else fall back to a text column.
         _ => DbTypeClass.String,
     };
+
+    private static bool IsRotationSqlTypeCompatible(string? sqlType, bool isGuid)
+    {
+        if (string.IsNullOrWhiteSpace(sqlType)) return true;
+        if (isGuid) return false;
+        var type = sqlType!.Trim().ToUpperInvariant();
+        if (type is "TEXT" or "NTEXT" or "CLOB" or "NCLOB" or "LONGTEXT" or "MEDIUMTEXT" or "TINYTEXT") return true;
+        var match = global::System.Text.RegularExpressions.Regex.Match(type,
+            @"^(?:N?VARCHAR2?|N?CHAR)\s*\(\s*(MAX|[0-9]+)(?:\s+(?:CHAR|BYTE))?\s*\)$");
+        return match.Success && (match.Groups[1].Value == "MAX" ||
+            int.TryParse(match.Groups[1].Value, out var size) && size >= 36);
+    }
 
     private static bool HasNamedArgument(AttributeData? attribute, string name)
         => attribute?.NamedArguments.Any(pair => pair.Key == name) == true;
