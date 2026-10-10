@@ -586,7 +586,7 @@ internal static class EntityProcessor
                 or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64;
             if (concurrencyTokenAttribute is not null && (rotateConcurrencyToken || !GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute, "DatabaseGenerated")) &&
                 (GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute, "DatabaseGenerated") || typeData.IsNullable || converter is not null || isGenerated ||
-                 useDatabaseDefault || hasComputedMetadata ||
+                 (rotateConcurrencyToken && useDatabaseDefault) || hasComputedMetadata ||
                  (rotateConcurrencyToken && !IsRotationSqlTypeCompatible(sqlType, typeData.IsGuid)) ||
                  (rotateConcurrencyToken
                      ? !(typeData.IsGuid || typeData.SpecialType == SpecialType.System_String) || (!typeData.IsGuid && length > 0 && length < 36)
