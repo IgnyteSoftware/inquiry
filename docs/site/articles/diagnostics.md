@@ -1202,11 +1202,11 @@ Smallest correction: Use supported separate insert/update operations and preserv
 
 Mutation target is invalid. Default: error, enabled.
 
-Trigger: A mutation target is missing, conflicting, or has an unsupported return mode.
+Trigger: A mutation target is missing, conflicting, has an unsupported return mode, or an entity update has no writable columns after excluding the soft-delete marker.
 
 Failing shape: A parameterless InquiryDelete without InquiryWhere.
 
-Smallest correction: For all rows use InquiryDeleteAll explicitly; otherwise provide key or predicate targeting with a supported result.
+Smallest correction: For all rows use InquiryDeleteAll explicitly; otherwise provide key or predicate targeting with a supported result. For an empty update, add a writable column or remove the update method.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L255).
 
