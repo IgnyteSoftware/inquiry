@@ -33,7 +33,7 @@ public static class CiContractVerifier
         var document = LoadYaml(Path.GetFullPath(workflowPath, root));
         var workflow = Map(document, "workflow", "name", "on", "permissions", "concurrency", "jobs");
         Require(Scalar(workflow["name"], "workflow.name") == "CI", "Workflow name must be CI.");
-        VerifyTriggers(Map(workflow["on"], "workflow.on", "pull_request", "merge_group"));
+        VerifyTriggers(Map(workflow["on"], "workflow.on", "pull_request", "merge_group", "workflow_call"));
         VerifyConcurrency(Map(workflow["concurrency"], "workflow.concurrency", "group", "cancel-in-progress"));
         var permissions = Map(workflow["permissions"], "workflow.permissions", "contents");
         Require(Scalar(permissions["contents"], "workflow.permissions.contents") == "read", "Workflow contents permission must be read.");
@@ -91,6 +91,7 @@ public static class CiContractVerifier
         var pullRequest = Map(triggers["pull_request"], "pull_request", "branches");
         RequireSequence(Sequence(pullRequest["branches"], "pull_request.branches"), ["main"], "pull_request branches");
         Require(IsNull(triggers["merge_group"]), "merge_group must not be narrowed by filters.");
+        Require(IsNull(triggers["workflow_call"]), "Release CI must use the same unconditional contract.");
     }
 
     private static void VerifyConcurrency(IReadOnlyDictionary<string, YamlNode> concurrency)
