@@ -6,10 +6,11 @@ namespace Inquiry.Transactions;
 
 /// <summary>
 /// Represents an active database transaction. All operations performed via this transaction —
-/// the query / execute methods on this interface or a generated store resolved from DI in the
-/// same async flow — share the same connection and the same <see cref="System.Data.Common.DbTransaction"/>.
+/// the query / execute methods on this interface or a generated store using the same scoped facade
+/// in its active async flow — share the same connection and the same <see cref="System.Data.Common.DbTransaction"/>.
 /// Call <see cref="CommitAsync"/> to persist changes, or let the transaction roll back automatically
-/// when disposed without committing.
+/// when disposed without committing. Dispose in the caller's scope even when a helper already
+/// closed the transaction; disposal clears that caller's ambient slot.
 /// </summary>
 /// <remarks>
 /// <para>Production handles come from DefaultInquiry. Custom implementations are test doubles;

@@ -1,15 +1,16 @@
 # Transactions
 
-Open a transaction on the `IInquiry` facade. Every operation inside the transaction — a query / execute method called directly on the transaction handle, or a method on a generated store resolved from DI — shares the same connection and the same `DbTransaction`. Let `ExecuteInTransactionAsync` own the common commit/rollback flow, or use `BeginTransactionAsync` when you need manual rollback or savepoints.
+Open a transaction on the `IInquiry` facade. Direct calls on its transaction handle share one connection and `DbTransaction`. Generated stores enlist when they use the same scoped `IInquiry` and inherit its active async context. Stores from another DI scope do not enlist. Let `ExecuteInTransactionAsync` own the common commit/rollback flow, or use `BeginTransactionAsync` when you need manual rollback or savepoints.
 
 ## Usage
 
 For most application code, use the owned helper:
 
 ```csharp
-var inquiry = sp.GetRequiredService<IInquiry>();
-var customers = sp.GetRequiredService<CustomerStore>();
-var orders = sp.GetRequiredService<OrderStore>();
+await using var scope = services.CreateAsyncScope();
+var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
+var customers = scope.ServiceProvider.GetRequiredService<CustomerStore>();
+var orders = scope.ServiceProvider.GetRequiredService<OrderStore>();
 
 await inquiry.ExecuteInTransactionAsync(async tx =>
 {
@@ -57,7 +58,7 @@ var loaded = await tx.QuerySingleOrDefaultAsync<Customer>($"SELECT * FROM Custom
 await customerStore.UpdateAsync(customer);   // routes through the ambient pipeline
 ```
 
-Both produce identical SQL on the identical connection in the identical transaction. Style A is ergonomic for ad-hoc SQL; Style B is what you'll use most.
+Both use the same connection and transaction while the store shares the active scoped async context. Handle calls remain bound to their transaction even when a helper returns the handle to a caller that has no ambient slot.
 
 ### Use-after-close behavior
 
@@ -68,17 +69,21 @@ What happens if you call them *after* `CommitAsync` / `RollbackAsync` / `Dispose
 | **A. `tx.X(...)`** | ✅ Throws `ObjectDisposedException`. The transaction handle tracks its closed state and every query / execute method on it fails fast. |
 | **B. `store.X(...)`** (generated store from DI) | Fresh calls after the transaction closes route to the non-transactional default pipeline. Async work that captured the transaction before it closed throws `ObjectDisposedException` if it resumes afterward. |
 
-A store resolved from DI doesn't know about any individual transaction. It ambient-routes through whatever is in the `AsyncLocal` slot when called. When the transaction closes, Inquiry detaches the current async flow so normal post-transaction code can keep using stores:
+A store resolved from DI doesn't know about any individual transaction. It ambient-routes through whatever is in the `AsyncLocal` slot when called. Closing or disposing the handle detaches the current async flow. If a helper closes it, dispose the handle in the caller too; the caller's `await using` boundary performs that cleanup:
 
 ```csharp
 await using (var tx = await inquiry.BeginTransactionAsync())
 {
     await customers.InsertAsync(c1);    // in tx
-    await tx.CommitAsync();
+    await CommitHelper(tx);
 }
-// after the using-block exits, the slot is cleared
+// Caller-side disposal clears its captured slot even though the helper already committed.
 await customers.InsertAsync(c2);         // non-transactional, as expected
+
+static async Task CommitHelper(IInquiryTransaction tx) => await tx.CommitAsync();
 ```
+
+Before that caller-side disposal, a root or store call still sees the closed slot and throws. Repeated disposal detaches only that transaction's slot; it does not detach a newer transaction.
 
 Async descendants that started inside the transaction keep their captured slot. If they resume after `CommitAsync`, `RollbackAsync`, or `DisposeAsync`, Inquiry fails fast instead of silently auto-committing outside the transaction. Await child work before closing the transaction, or start that work after the transaction scope exits.
 
@@ -88,12 +93,28 @@ Async descendants that started inside the transaction keep their captured slot. 
 
 1. **Installs the slot synchronously**, before any await. (`AsyncLocal` values set inside an async callee don't flow back up to the caller — a documented .NET behavior — so the holder must exist before we await on opening the connection.)
 2. Opens a fresh connection, calls `connection.BeginTransactionAsync(isolationLevel, ct)`, and fills in the holder's `Pipeline` field with a `TransactedInquiryRequestPipeline` wrapping the (connection, transaction) pair. The caller's async context already references the same holder → the post-await mutation is visible.
-3. Every `IInquiry` method on the root singleton checks the ambient slot. Active slot → transacted pipeline reusing one connection. No slot → default pipeline opening a fresh connection per call. Closed captured slot → `ObjectDisposedException`.
-4. On the first of **Commit / Rollback / Dispose**, Inquiry detaches the current async flow from the slot and then marks the captured holder closed. Fresh work falls through to the default pipeline; straggler async work that captured the old holder fails fast.
+3. Every `IInquiry` method on the scoped facade checks the ambient slot. Active slot → transacted pipeline reusing one connection. No slot → default pipeline opening a fresh connection per call. Closed captured slot → `ObjectDisposedException`.
+4. On the first of **Commit / Rollback / Dispose**, Inquiry detaches the current async flow from the slot and then marks the captured holder closed. Disposal also detaches the calling flow when a helper already closed the handle. Fresh work after that boundary uses the default pipeline; async work still holding the closed slot fails fast.
 
 This is what lets generated stores (which were resolved from DI before any transaction existed) participate in transactions without a per-call parameter, a `WithTransaction` builder, or a re-resolution step.
 
-The `IInquiryTransaction` handle itself holds a private reference to the root `IInquiry` and checks its own closed-state on every direct method call — that's what gives Style A its fail-fast safety. The underlying root is never re-exposed through the handle, so there's no way for a caller to accidentally bypass the closed-state check by holding onto a reference.
+The `IInquiryTransaction` handle captures its transaction pipeline and checks its closed state on each direct call. Its routing does not depend on the caller's ambient slot.
+
+## Cancellation and write outcomes
+
+Cancellation does not prove that a write was undone. The database may have applied a command
+before cancellation was observed. Do not retry a cancelled write blindly: first establish the
+outcome, or use an application operation key that prevents duplicate effects.
+
+With a caller-owned transaction, the caller owns the commit or rollback decision. Catching
+`OperationCanceledException` does not mark the transaction rollback-only. If the intended unit
+of work is incomplete, roll it back with a separate, usable cancellation token, or dispose it
+without committing. A rollback failure leaves the outcome uncertain; retain that failure.
+
+Let cancellation escape `ExecuteInTransactionAsync` to trigger disposal and rollback. If the
+callback catches cancellation and returns normally, the helper attempts to commit. Outside an
+explicit transaction there is no Inquiry transaction to roll back. Provider cancellation and
+transaction usability differ; confirm the outcome before deciding to commit or retry.
 
 ## Isolation levels
 

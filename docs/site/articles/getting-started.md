@@ -143,7 +143,8 @@ Saved shipper 1: Speedy Express
 ```
 
 Stores and `IInquiry` are scoped services. Console applications must create a scope as above;
-ASP.NET Core provides a request scope. For stores in multiple assemblies, expose a uniquely named
+ASP.NET Core provides a request scope. For a transaction, resolve the facade and stores from
+the same scope and keep store calls in its active async flow. Another DI scope does not enlist. For stores in multiple assemblies, expose a uniquely named
 public registration wrapper in each data library, and configure core services and the provider once
 in the host.
 

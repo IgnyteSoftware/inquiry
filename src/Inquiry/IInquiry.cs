@@ -399,8 +399,10 @@ public interface IInquiry
     /// <summary>
     /// Opens a new database connection and begins a transaction. All operations performed via the
     /// returned <see cref="IInquiryTransaction"/>'s query / execute methods, or via generated
-    /// stores resolved from DI on the same async flow, share that connection and transaction. The
-    /// transaction rolls back automatically if disposed without committing.
+    /// stores using this same scoped facade on the active async flow, share that connection and transaction. The
+    /// transaction rolls back automatically if disposed without committing. Dispose the handle in
+    /// the caller (normally with await using) even when a helper commits, rolls back, or disposes it.
+    /// This clears the caller's ambient slot; other flows with a captured closed slot still reject calls.
     /// </summary>
     Task<IInquiryTransaction> BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,

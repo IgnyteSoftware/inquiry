@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Filter and audit scopes reject out-of-order disposal without changing ambient values. Repeated or copied disposal no longer restores stale values.
+- Caller-side transaction disposal now clears its ambient slot even when an async helper already committed, rolled back, or disposed the handle. Captured closed flows still reject operations.
 
 - `[InquiryInsert]` and `[InquiryUpdate]` now infer batch operations from entity collection parameters. The separate `[InquiryInsertAll]` and `[InquiryUpdateAll]` attributes were removed.
 - Insert, update, upsert, and key-delete methods now infer returning behavior from `Task<TEntity?>`; the `ReturnEntity` attribute property was removed. `[InquiryHardDelete]` and `[InquiryHardDeleteAll]` replace `HardDelete = true`.
