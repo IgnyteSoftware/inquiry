@@ -64,8 +64,7 @@ public static class CiContractVerifier
         var nonTestProjects = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["tests/Inquiry.IntegrationTesting/Inquiry.IntegrationTesting.csproj"] = "support library",
-            ["tests/Inquiry.Oracle.UnsupportedFixtures/Inquiry.Oracle.UnsupportedFixtures.csproj"] = "generator fixture library",
-            ["tests/Inquiry.PackageSmoke/Inquiry.PackageSmoke.csproj"] = "package smoke executable"
+            ["tests/Inquiry.Oracle.UnsupportedFixtures/Inquiry.Oracle.UnsupportedFixtures.csproj"] = "generator fixture library"
         };
         var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
         var projects = Directory.EnumerateFiles(Path.Combine(root, "tests"), "*.csproj", options)

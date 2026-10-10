@@ -3,12 +3,12 @@
 PostgreSQL schema DDL supports composite and unique `[InquiryIndex]` declarations, covering `Include`
 columns, `[InquiryCheck]`, and every `InquiryReferentialAction` value.
 
-Package: `Inquiry.PostgreSql`. Built on `Npgsql`.
+Package: `Ignyte.Inquiry.PostgreSql`. Built on `Npgsql`.
 
 ## Install
 
 ```bash
-dotnet add package Ignyte.Inquiry.PostgreSql
+dotnet add package Ignyte.Inquiry.PostgreSql --prerelease
 ```
 
 ```csharp

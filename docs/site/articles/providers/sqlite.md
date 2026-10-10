@@ -4,12 +4,12 @@ SQLite schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck
 `InquiryReferentialAction` value. Covering `Include` columns are rejected because SQLite has no
 equivalent non-key include syntax.
 
-Package: `Inquiry.Sqlite`. Built on `Microsoft.Data.Sqlite`.
+Package: `Ignyte.Inquiry.Sqlite`. Built on `Microsoft.Data.Sqlite`.
 
 ## Install
 
 ```bash
-dotnet add package Ignyte.Inquiry.Sqlite
+dotnet add package Ignyte.Inquiry.Sqlite --prerelease
 ```
 
 ```csharp

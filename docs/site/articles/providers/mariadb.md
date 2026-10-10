@@ -3,9 +3,9 @@
 MariaDB schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck]`, and named foreign-key
 actions except `SetDefault`. Covering `Include` columns are rejected instead of being appended to the key.
 
-Package: `Inquiry.MariaDb`. Built on `MySqlConnector` (wire-compatible with MariaDB). Targets MariaDB 10.6+.
+Package: `Ignyte.Inquiry.MariaDb`. Built on `MySqlConnector` (wire-compatible with MariaDB). Targets MariaDB 10.6+.
 
-> MariaDB users previously running on `Inquiry.MySql` should migrate to this package: swap the
+> MariaDB users previously running on `Ignyte.Inquiry.MySql` should migrate to this package: swap the
 > package reference, change `[assembly: InquiryDialect("MySql")]` to `"MariaDb"`, and replace
 > `AddInquiryMySql(...)` with `AddInquiryMariaDb(...)`. The MariaDB builder uses native
 > `INSERT…RETURNING` (halving round trips for insert-returning and upsert-returning operations)
@@ -14,7 +14,7 @@ Package: `Inquiry.MariaDb`. Built on `MySqlConnector` (wire-compatible with Mari
 ## Install
 
 ```bash
-dotnet add package Ignyte.Inquiry.MariaDb
+dotnet add package Ignyte.Inquiry.MariaDb --prerelease
 ```
 
 ```csharp

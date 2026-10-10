@@ -3,16 +3,16 @@
 MySQL schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck]`, and named foreign-key
 actions except `SetDefault`. Covering `Include` columns are rejected instead of being appended to the key.
 
-Package: `Inquiry.MySql`. Built on `MySqlConnector`.
+Package: `Ignyte.Inquiry.MySql`. Built on `MySqlConnector`.
 
-> **MariaDB users:** use the dedicated [`Inquiry.MariaDb` package](mariadb.md) instead. The MariaDB
+> **MariaDB users:** use the dedicated [`Ignyte.Inquiry.MariaDb` package](mariadb.md) instead. The MariaDB
 > provider uses native `INSERT…RETURNING` (halving round trips) and does not require
 > `AllowUserVariables` on the connection string.
 
 ## Install
 
 ```bash
-dotnet add package Ignyte.Inquiry.MySql
+dotnet add package Ignyte.Inquiry.MySql --prerelease
 ```
 
 ```csharp

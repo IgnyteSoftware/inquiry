@@ -4,12 +4,12 @@ SQL Server schema DDL supports composite and unique `[InquiryIndex]` declaration
 columns, `[InquiryCheck]`, and named foreign keys with `Cascade`, `SetNull`, and `SetDefault` actions.
 `Restrict` is rejected rather than rewritten to `NoAction`.
 
-Package: `Inquiry.SqlServer`. Built on `Microsoft.Data.SqlClient`.
+Package: `Ignyte.Inquiry.SqlServer`. Built on `Microsoft.Data.SqlClient`.
 
 ## Install
 
 ```bash
-dotnet add package Ignyte.Inquiry.SqlServer
+dotnet add package Ignyte.Inquiry.SqlServer --prerelease
 ```
 
 ```csharp

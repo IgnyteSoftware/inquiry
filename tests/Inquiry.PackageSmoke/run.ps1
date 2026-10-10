@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)] [string] $ResultsPath,
     [Parameter(Mandatory)] [string] $Commit,
     [string] $PackageVersion,
+    [string] $RepositoryBranch,
     [string] $RuntimeIdentifier = 'linux-x64'
 )
 
@@ -13,6 +14,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $bundle = (Resolve-Path -LiteralPath $BundlePath).Path
 $manifest = Get-Content -Raw (Join-Path $repoRoot 'eng/release-manifest.json') | ConvertFrom-Json
 if (-not $PackageVersion) { $PackageVersion = $manifest.packageVersion }
+if (-not $RepositoryBranch) { $RepositoryBranch = $manifest.assets.repositoryBranch }
 $results = [System.IO.Path]::GetFullPath($ResultsPath)
 if (Test-Path $results) { throw 'ResultsPath must not exist; each run needs fresh evidence.' }
 New-Item -ItemType Directory -Path $results | Out-Null
@@ -59,7 +61,7 @@ function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [stri
 
 try {
     Invoke-Dotnet @('run', '--project', (Join-Path $repoRoot 'eng/Inquiry.ReleaseTools'), '-c', 'Release', '--',
-        'verify-bundle', $repoRoot, (Join-Path $repoRoot 'eng/release-manifest.json'), $bundle, $Commit, '--version', $PackageVersion)
+        'verify-bundle', $repoRoot, (Join-Path $repoRoot 'eng/release-manifest.json'), $bundle, $Commit, '--version', $PackageVersion, '--branch', $RepositoryBranch)
     $hashes = @(Get-ChildItem -LiteralPath $bundle -File | Sort-Object Name | ForEach-Object {
         @{ file = $_.Name; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     })
@@ -103,7 +105,7 @@ try {
             throw "Bundle changed during verification: $($file.file)"
         }
     }
-    @{ schemaVersion = 'inquiry-package-consumers-v1'; commit = $Commit; packageVersion = $PackageVersion; packages = $hashes; checks = $checks.ToArray(); status = 'passed' } |
+    @{ schemaVersion = 'inquiry-package-consumers-v1'; commit = $Commit; packageVersion = $PackageVersion; repositoryBranch = $RepositoryBranch; packages = $hashes; checks = $checks.ToArray(); status = 'passed' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $results 'package-consumers.json') -Encoding utf8
 }
 finally {
