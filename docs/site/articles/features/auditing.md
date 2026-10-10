@@ -75,3 +75,15 @@ In ASP.NET Core apps, the `Ignyte.Inquiry.AspNetCore` package wraps this in read
 - [CRUD](crud.md) — the generated method shapes these stamps plug into.
 - [Soft delete](soft-delete.md) — the deletion timestamp variant.
 - [Optimistic concurrency](concurrency.md) — version columns, a different kind of "modified" tracking.
+
+## Scope disposal
+
+Dispose nested scopes before their parent. Out-of-order disposal throws
+`InvalidOperationException` and leaves the current value unchanged; close the inner scope,
+then retry the outer one. Repeated disposal, copied scope values, and a default scope do
+nothing when that scope is no longer active in the current async flow.
+
+Disposal changes only the current async flow. A child inherits its parent's values, but
+closing an inherited scope in the child does not close it in the parent. Prefer lexical
+`using` blocks and await child work before leaving them. Filter and audit scopes use the
+same rules.
