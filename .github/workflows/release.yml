@@ -222,7 +222,8 @@ jobs:
           $tagReleases = @()
           $page = 1
           do {
-            $releases = @(Invoke-RestMethod -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/releases?per_page=100&page=$page" -Headers $headers)
+            $response = Invoke-RestMethod -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/releases?per_page=100&page=$page" -Headers $headers
+            $releases = @($response)
             $tagReleases += @($releases | Where-Object tag_name -CEQ $env:TAG)
             $page++
           } while ($releases.Count -eq 100)
