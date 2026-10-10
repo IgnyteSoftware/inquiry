@@ -130,6 +130,7 @@ jobs:
           ./eng/pack-release.ps1 @arguments
 
       - name: Retain the original release candidate
+        id: retain
         if: steps.candidate.outputs.restored != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -155,7 +156,9 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           RELEASE_CORRECTNESS_RESULT: ${{ needs.correctness.result }}
           RELEASE_SECURITY_RESULT: ${{ needs.security.result }}
-        run: ./eng/verify-release-evidence.ps1 -BundlePath "$env:RUNNER_TEMP/release" -EvidencePath "$env:RUNNER_TEMP/release-evidence" -Commit $env:COMMIT -Version $env:VERSION -RunId $env:GITHUB_RUN_ID -RunAttempt $env:GITHUB_RUN_ATTEMPT
+          ARTIFACT_ID: ${{ steps.candidate.outputs.artifact-id || steps.retain.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.candidate.outputs.artifact-digest || steps.retain.outputs.artifact-digest }}
+        run: ./eng/verify-release-evidence.ps1 -BundlePath "$env:RUNNER_TEMP/release" -EvidencePath "$env:RUNNER_TEMP/release-evidence" -Commit $env:COMMIT -Version $env:VERSION -RunId $env:GITHUB_RUN_ID -RunAttempt $env:GITHUB_RUN_ATTEMPT -ArtifactId $env:ARTIFACT_ID -ArtifactDigest $env:ARTIFACT_DIGEST
 
       - name: Compare existing registry packages before any push
         shell: pwsh
@@ -208,7 +211,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Symbol publication stopped; rerun with the retained candidate.' }
           }
 
-      - name: Publish GitHub release notes
+      - name: Prepare GitHub release draft
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.version }}
@@ -222,10 +225,8 @@ jobs:
           if [ "$PRERELEASE" = "true" ]; then
             flags+=(--prerelease)
           fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --notes-file "$notes_file"
-          else
-            gh release create "$TAG" "${flags[@]}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft "${flags[@]}"
           fi
 
       - name: Recover GitHub release assets without replacing bytes

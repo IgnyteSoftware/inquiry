@@ -205,22 +205,27 @@ but never writes passing evidence. The isolated consumer directory is printed fo
 The release workflow runs the required CI and security workflows against the tagged commit before
 publication. It extracts exact-version notes, restores or retains the original candidate artifact,
 runs the clean package consumers against that release version, and binds their hashes to the completed
-workflow results. Stable releases also require nonempty Shipped API baselines and empty Unshipped
+workflow results. Security evidence means CodeQL analysis completed and the dependency audit passed;
+CodeQL workflow success does not certify zero alerts. Alert review remains part of release sign-off.
+Stable releases also require nonempty Shipped API baselines and empty Unshipped
 baselines in every manifest package. Previews allow Unshipped APIs. These controls do not close the
 remaining performance, documentation, or final release decisions in #360.
 
 Before uploading any package, preflight inspects all twelve package versions in both registries.
 Existing GitHub packages must have identical archive bytes. NuGet adds a repository signature, so its
-existing packages must pass signature verification and have identical payload entries; duplicate or
+existing packages must pass trusted-signature verification and have identical payload entries; duplicate or
 unsafe entry paths are rejected. Evidence records both archive hashes. Any lookup error or mismatch
-stops publication. A newly built candidate cannot replace a missing original when that version already
+stops publication. The check does not pin a specific signing certificate. A newly built candidate cannot replace a missing original when that version already
 exists in either registry.
 
-For an interrupted release, rerun the same Actions run. It downloads the original candidate by artifact
+For an interrupted release, wait until uploaded versions are visible in NuGet’s flat container, then rerun
+the same Actions run. A package still undergoing NuGet validation can return 404 and cause a safe
+duplicate-push failure. It downloads the original candidate by artifact
 ID, checks the archive digest, reruns verification, and uploads only missing packages. Candidate artifacts
 and evidence are retained for 90 days. An expired or deleted candidate after partial publication requires
 manual recovery of the original bytes; do not rebuild and bypass the check. GitHub release assets follow
-the same compare-existing/upload-missing rule.
+the same compare-existing/upload-missing rule. Assets attach to a draft before it is published and
+locked. A published release with a missing asset fails explicitly; retries do not overwrite its notes.
 
 Symbols are uploaded separately from packages so a failed symbol upload can be retried. NuGet does not
 expose original `.snupkg` archives for comparison: retries use the retained, locally verified symbols and
