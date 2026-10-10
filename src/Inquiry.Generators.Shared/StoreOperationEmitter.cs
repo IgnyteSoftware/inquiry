@@ -458,7 +458,7 @@ internal static class StoreOperationEmitter
         source.AppendLine($"                ({entityParameter}, _newStamp),");
         AppendBinderLambda(source, sqlBuilder, "_state", columns,
             i => i == columns.Count - 1 ? "_state.Stamp" : $"_state.Entity.{columns[i].PropertyName}",
-            "                ", trailingComma: false, filterBinder: filterBinder);
+            "                ", emitSizePrecision: softDelete, trailingComma: false, filterBinder: filterBinder);
         source.AppendLine("            ),");
         if (method.ReturnsEntity) source.AppendLine("            default,");
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");

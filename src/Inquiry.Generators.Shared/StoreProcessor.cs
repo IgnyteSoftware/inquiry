@@ -1809,7 +1809,9 @@ internal static class StoreProcessor
             }
             else if (method.Operation == StoreOperation.UpdateAll)
             {
-                StoreOperationEmitter.EmitUpdateAllDescriptor(source, method, entity, sqlBuilder, ctx.WriteEnforcedPredicateTerms);
+                StoreOperationEmitter.EmitUpdateAllDescriptor(source, method, entity, sqlBuilder,
+                    ctx.SoftDeletePredicate.Length == 0 ? ctx.WriteEnforcedPredicateTerms :
+                    ctx.WriteEnforcedPredicateTerms.Concat(new[] { ctx.SoftDeletePredicate }).ToArray());
             }
         }
 
@@ -2655,6 +2657,16 @@ internal static class StoreProcessor
                     return false;
                 }
             }
+        }
+
+        if (method.Operation is StoreOperation.Update or StoreOperation.UpdateAll && entity.SoftDeleteColumn is not null &&
+            !entity.Columns.AsImmutableArray().Any(static c => !c.IsKey && !c.IsGenerated &&
+                !c.IsDatabaseGeneratedToken && !c.IsCreatedAudit && c.SoftDelete == SoftDeleteKind.None &&
+                string.IsNullOrEmpty(c.ComputedExpression)))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid,
+                method.Location?.ToLocation(), method.Name, "no writable columns remain after excluding the soft-delete marker"));
+            return false;
         }
 
         // restore only makes sense on a soft-delete entity. Without the indicator column the restore
