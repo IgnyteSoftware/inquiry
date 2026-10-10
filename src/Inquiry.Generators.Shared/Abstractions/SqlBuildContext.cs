@@ -96,7 +96,7 @@ public sealed class SqlBuildContext
         // branch unchanged.
         // A server-computed column is never SET — the database recomputes it from its expression.
         SetClauses = string.Join(", ", columns
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && c.SoftDelete == SoftDeleteKind.None && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.PreventReassignment && c.SoftDelete == SoftDeleteKind.None && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
             .Select(c => builder.QuoteIdentifier(c.ColumnName) + " = " + builder.ParameterName(c.PropertyName)));
         QuotedKeyColumns = KeyColumns.Select(k => builder.QuoteIdentifier(k.ColumnName)).ToArray();
         KeyParameters = KeyColumns.Select(k => builder.ParameterName(k.PropertyName)).ToArray();

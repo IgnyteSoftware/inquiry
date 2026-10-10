@@ -1,19 +1,29 @@
 # Global query filters
 
-Mark a boolean column with `[InquiryGlobalFilter]` and **every generated `SELECT` auto-composes a keep condition** on it — `WHERE IsActive = 1` (or the dialect's equivalent) — so rows that don't match are invisible to reads without any method restating the predicate. This is the [EF Core `HasQueryFilter`](https://learn.microsoft.com/ef/core/querying/filters) parity for a static column predicate, and the generalization of the [soft-delete](soft-delete.md) active-row filter to columns *you* define.
+Use a boolean filter such as `IsPublished` or `IsActive` for shared visibility rules. A shared
+boolean does not identify the requesting tenant. Use a parameterized filter for request-specific
+scoping, and application authorization or database row-level security for access control.
 
-It's the common shape behind:
-
-- **Multi-tenant isolation** — a `TenantActive` / `IsCurrentTenant` flag that hides other tenants' rows.
-- **Active-record filtering** — an `IsActive` flag that hides deactivated rows by default.
-- **Publish gates** — an `IsPublished` flag that hides drafts from public reads.
-
-The condition is baked into the generated `const` SQL at compile time, so it costs nothing at runtime — exactly the same query you'd hand-write, minus the chance of forgetting it on one method.
-
-## You write
+## Static visibility
 
 ```csharp
+[InquiryColumn, InquiryGlobalFilter]
+public bool IsPublished { get; set; }
+```
+
+Generated reads add `IsPublished = 1` (or the provider's boolean literal). Set `KeepWhen = false`
+to keep false rows instead. Several filters combine with AND. Static filters require a non-nullable
+boolean column that is not a key, generated/default column, soft-delete marker, or concurrency
+token (`INQ059`). The property still needs `[InquiryColumn]`.
+
+## Runtime-parameterized filters
+
+Use the same tenant key in the model and request scope:
+
+```csharp
+using Inquiry;
 using Inquiry.Entities;
+using Inquiry.Stores;
 
 [InquiryTable("Documents")]
 public sealed class Document
@@ -21,130 +31,46 @@ public sealed class Document
     [InquiryKey] public long Id { get; set; }
     [InquiryColumn] public string Title { get; set; } = "";
 
-    // Keep rows where IsPublished is true (the default).
-    [InquiryGlobalFilter]
     [InquiryColumn]
-    public bool IsPublished { get; set; }
+    [InquiryGlobalFilter(ContextKey = "TenantId", EnforceOnWrites = true)]
+    public long TenantId { get; set; }
 }
 
 public partial class DocumentStore : InquiryStore<Document>
 {
-    // Auto-composes WHERE IsPublished = 1
     [InquirySelectAll]
-    public partial Task<IReadOnlyList<Document>> SelectAllAsync(CancellationToken ct = default);
+    public partial Task<IReadOnlyList<Document>> AllAsync(CancellationToken ct = default);
 
-    // Same — the filter AND-composes with the field predicate
-    [InquirySelectAllByField("Title")]
-    public partial Task<IReadOnlyList<Document>> SelectByTitleAsync(string title, CancellationToken ct = default);
-
-    // Aggregates filter too: SELECT COUNT(*) … WHERE IsPublished = 1
-    [InquiryCount]
-    public partial Task<long> CountPublishedAsync(CancellationToken ct = default);
+    [InquiryUpdate]
+    public partial Task<bool> UpdateAsync(Document document, CancellationToken ct = default);
 }
-```
 
-### Keeping the *false* rows
-
-Some flags are negative — you want to keep rows where the flag is **off**. Set `KeepWhen = false`:
-
-```csharp
-// Keep rows where IsArchived is false (the unarchived ones).
-[InquiryGlobalFilter(KeepWhen = false)]
-[InquiryColumn]
-public bool IsArchived { get; set; }
-```
-
-This emits `WHERE IsArchived = 0` on every select.
-
-### Multiple filters
-
-An entity can declare several `[InquiryGlobalFilter]` columns. They are **AND-composed**, so all conditions must hold for a row to be visible:
-
-```csharp
-[InquiryGlobalFilter] [InquiryColumn] public bool IsActive { get; set; }
-[InquiryGlobalFilter] [InquiryColumn] public bool IsPublished { get; set; }
-// → WHERE IsActive = 1 AND IsPublished = 1
-```
-
-## The generator emits
-
-The keep literal is per-dialect — SQL Server / SQLite / MySQL / Oracle use `1`/`0`, PostgreSQL uses `TRUE`/`FALSE`.
-
-```csharp
-private const string _sqlSelectAll =
-    "SELECT \"Id\", \"Title\", \"IsPublished\" FROM \"Documents\" WHERE \"IsPublished\" = 1";
-
-private const string _sqlSelectByTitle =
-    "SELECT \"Id\", \"Title\", \"IsPublished\" FROM \"Documents\" " +
-    "WHERE \"Title\" = @Title AND \"IsPublished\" = 1";
-
-private const string _sqlCount =
-    "SELECT COUNT(*) FROM \"Documents\" WHERE \"IsPublished\" = 1";
-```
-
-## No silent bypass
-
-Unlike soft delete — which has a per-method `IncludeDeleted = true` opt-out — an **unnamed** global filter has **no per-method bypass**. That's deliberate: a tenant-isolation filter is a safety boundary you don't want a stray flag to drop. When you genuinely need an unfiltered read (an admin "all tenants" view, a back-office report), reach for an [ad-hoc query](ad-hoc-dtos.md) or a hand-written [`InquiryCommand`](crud.md), where the absence of the filter is explicit and reviewable.
-
-## Named filters and per-method bypass
-
-For filters that are conveniences rather than security boundaries — a `PublishGate` an admin view legitimately lists drafts past — give the filter a `Name` and bypass it per method with `[InquiryIgnoreFilter]` (the EF 10 `IgnoreQueryFilters(string[])` analog, fully compile-time):
-
-```csharp
-[InquiryColumn("IsPublished"), InquiryGlobalFilter(Name = "PublishGate")]
-public bool IsPublished { get; set; }
-
-[InquiryColumn("IsActive"), InquiryGlobalFilter]   // unnamed — never bypassable
-public bool IsActive { get; set; }
-
-// In the store:
-[InquirySelectAll]                                  // WHERE IsPublished = 1 AND IsActive = 1
-[InquirySelectAll, InquiryIgnoreFilter("PublishGate")] // WHERE IsActive = 1
-```
-
-The rules keep the bypass exactly as safe as the rest of the mechanism:
-
-- Only a filter with a **declared `Name`** can be bypassed; the ignore attribute names the filter, never the column. Unnamed filters always stay composed.
-- The name is resolved **entirely at generation time** — the method still gets a const SQL string with the term simply absent. On any generated operation, an unknown or unnamed filter name is a **build error** (`INQ091`) that drops the method, never a silently ignored attribute; a blank or duplicated `Name` on the entity is one too (`INQ092`, with duplicated names additionally rendered non-bypassable so a suppressed diagnostic cannot widen the bypass). The generator cannot see hand-written methods — an ignore attribute on a method with no Inquiry operation attribute is outside its reach and does nothing.
-- One attribute per filter; apply it multiple times to bypass several named filters.
-- Valid on the read operations that compose the filter — selects, paged/keyset reads, `Count`, `Exists`, aggregates, group counts, full-text search. Eager-loading methods reject it (`INQ091`) in v1, and it never applies to writes — including a filter that sets [`EnforceOnWrites`](#enforcing-a-filter-on-writes), which has no bypass mechanism at all.
-- `IncludeDeleted` and a named bypass compose independently: each drops exactly its own term.
-
-## Runtime-parameterized filters
-
-For a filter whose value is per-request rather than a constant — the multi-tenant shape — set `ContextKey` instead of relying on the bool column form:
-
-```csharp
-[InquiryColumn("TenantId"), InquiryGlobalFilter(ContextKey = "TenantId")]
-public long TenantId { get; set; }
-```
-
-Every generated read now composes `"TenantId" = @__gf_TenantId`, and the value is bound **at execute time** from the ambient `InquiryFilterContext` — set once per request, typically in middleware, exactly like `InquiryAuditContext`:
-
-```csharp
+// In the request handler, after authenticating and authorizing the tenant:
 using (InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["TenantId"] = tenantId }))
 {
-    var docs = await store.AllAsync();   // WHERE "TenantId" = @__gf_TenantId AND …
+    var documents = await store.AllAsync(ct);
 }
 ```
 
-The rules:
+Generated reads bind `TenantId = @__gf_TenantId` at execution. The value flows across `await`
+within the current async flow. An absent scope, missing key, null, or wrong value type throws
+`InquiryFilterValueMissingException` before a filtered command runs.
 
-- The SQL is still a compile-time const; only the parameter's value is runtime. The value flows across `await` via `AsyncLocal` and is isolated per async flow.
-- **A missing ambient value throws `InquiryFilterValueMissingException` before the command executes.** No scope, an absent key, or a wrong-typed value never binds `NULL` or returns an empty result — an empty result would be indistinguishable from working tenant isolation, which is the failure this mode exists to prevent. Exception messages name the key, never the value.
-- The column may be any **non-nullable mapped scalar** — `Guid`, `long`, `string`, an enum, a converter column — and, unlike the constant-bool form, it **may be a key component** (a tenant id inside a composite key is the norm). Explicitly setting `KeepWhen` alongside `ContextKey` is a build error (`INQ093`), as is a blank key, a nullable column, or a column whose role other machinery owns.
-- `ContextKey` is the value's identity; `Name` remains the bypass identity. A tenant boundary should set `ContextKey` and leave `Name` unset — then nothing can bypass it. A filter with both is bypassable like any named filter, and the bypassing method's SQL loses the term *and* its binder loses the parameter together.
-- **Key-based writes** (insert, update, delete, restore, upsert) do not compose the filter unless it sets [`EnforceOnWrites = true`](#enforcing-a-filter-on-writes). **Set-based predicate writes** (`[InquiryUpdate]` and the soft form of `[InquiryDelete]`) compose it exactly as they always have, so those statements ARE tenant-scoped and throw `InquiryFilterValueMissingException` without an ambient scope. Eager-loading methods reject entities with parameterized filters anywhere in their relation tree (`INQ093`) — their shared relation consts cannot bind per-method parameters yet; use non-eager reads with these filters for now.
-- For a `string` tenant key, remember the equality inherits the column's **collation**: on a case-insensitive default (SQL Server, MySQL) `'acme'`, `'ACME'`, and — with SQL Server's trailing-blank semantics — `'acme '` all match. Prefer a `Guid` or integral tenant key, or a binary/case-sensitive collation, when tenant identifiers are user-influenced.
+These limits apply to the example:
 
-This also means the filter and soft delete compose cleanly: on an entity with **both**, `IncludeDeleted = true` drops only the soft-delete term — the global filter still applies, so an "include deleted" read still respects tenant isolation.
+- Inserts and bulk inserts do not stamp or validate `TenantId`. A missing scope does not reject
+  those operations, and a conflicting supplied tenant value is still inserted.
+- `EnforceOnWrites` checks the row's existing tenant. By default, an update can reassign the
+  tenant column. Opt into [column protection](#protecting-an-enforced-column) to exclude that assignment.
+- Upsert with write enforcement is rejected (`INQ095`). Use separate insert and update operations.
+- Raw SQL and stored procedures do not inherit these predicates or require this ambient scope.
+- Eager loading rejects parameterized filters anywhere in its relation tree (`INQ093`). Use
+  non-eager reads with explicit application composition.
 
-```csharp
-// Entity has both [InquirySoftDelete] IsDeleted and [InquiryGlobalFilter] IsPublished.
-
-[InquirySelectAll]                       // WHERE IsDeleted = 0 AND IsPublished = 1
-[InquirySelectAll(IncludeDeleted = true)] // WHERE IsPublished = 1  (soft-delete term dropped, filter kept)
-```
+Parameterized filters accept non-nullable mapped scalar types, including a composite-key component.
+Do not also set `KeepWhen`. A blank `ContextKey`, nullable column, or conflicting owned column role
+produces `INQ093`. String equality follows the database collation, including its case and padding
+rules. Prefer integral or Guid tenant identifiers when that distinction matters.
 
 ## Scope disposal
 
@@ -159,82 +85,89 @@ closing an inherited scope in the child does not close it in the parent. Prefer 
 `using` blocks and await child work before leaving them. Filter and audit scopes use the
 same rules.
 
-## Composition with other features
-
-A global filter composes correctly with everything else the generator emits, using the same active-row machinery as soft delete:
-
-- **Pagination.** AND-composed *before* `ORDER BY` / `LIMIT`.
-- **Keyset paging.** Appended after the keyset cursor predicate.
-- **Aggregates.** `SELECT COUNT(*) / SUM(…) FROM … WHERE <filter>`.
-- **Projections.** A [projection](projections.md) over a filtered entity composes the filter even though the projected column subset doesn't include the filter column.
-- **Optimistic concurrency.** A [concurrency token](concurrency.md) on a filtered entity is unaffected — key-based updates/deletes still match/advance the row-version column.
-
-## Where the filter is composed
-
-A global filter is composed into **exactly the same statements as the [soft-delete](soft-delete.md) active filter** — that invariant is the whole point of sharing the machinery:
-
-- **Composed** (the filter participates): every read (SELECT / COUNT / aggregate, including paged, keyset, and projection reads), set-based `[InquiryUpdate]`, and set-based predicate soft-deletes. A set-based update therefore can't touch a row the filter hides.
-- **Not composed** (the statement targets rows by key, or deletes literally): key-based `UPDATE` / `DELETE`, key-based soft-delete / restore, and hard `[InquiryDelete]` — unless the filter sets [`EnforceOnWrites`](#enforcing-a-filter-on-writes), which moves every one of these into the composed column.
-
-By default this mirrors [soft delete](soft-delete.md) and EF Core's `HasQueryFilter`: it's a **query** filter. So if you know a row's primary key you can still update or delete it by key even when the filter would hide it from reads. `EnforceOnWrites = true` closes that gap for one filter — see the next section.
-
 ## Enforcing a filter on writes
 
-A read filter alone is not a tenant boundary: a caller who learns another tenant's primary key can update or delete that row even though no query will ever show it to them. Setting `EnforceOnWrites = true` extends the filter's predicate to key-based writes:
+`EnforceOnWrites = true` adds the filter to generated key-based update, delete, and restore
+predicates, batch updates, hard predicate deletion, and table-wide deletion. An out-of-scope
+mutation affects zero rows. Zero does not distinguish a hidden row from a missing row or stale
+concurrency token. Returning mutations return null in those cases.
+
+The flag defaults to false. Generated predicate updates and soft predicate deletes already use
+read filters, even without write enforcement. Hard deletion and restore still reach soft-deleted
+rows while preserving enforced tenant predicates.
+
+## Protecting an enforced column
 
 ```csharp
-[InquiryColumn("TenantId"), InquiryGlobalFilter(ContextKey = "TenantId", EnforceOnWrites = true)]
+[InquiryColumn]
+[InquiryGlobalFilter(ContextKey = "TenantId", EnforceOnWrites = true, PreventReassignment = true)]
 public long TenantId { get; set; }
 ```
 
-Every affected statement gains the same term it already carries on reads — so an update aimed at a hidden row affects zero rows instead of succeeding:
+`PreventReassignment` omits this column from single-entity and batch-update SET clauses.
+For example, under tenant 7, updating an existing tenant-7 document whose input contains
+`TenantId = 8` updates its other fields but keeps the stored tenant at 7. The input object is not
+rewritten. A returning update reports the stored tenant. Protected composite-key columns remain
+key predicates; they are never SET.
 
-| Statement | Without `EnforceOnWrites` | With `EnforceOnWrites` |
+Explicit partial-update or `InquirySet` assignments to the protected column fail with `INQ044`.
+The policy requires a valid filter and `EnforceOnWrites = true` (`INQ102`). An entity update with
+no writable columns left fails with `INQ096`. The policy defaults to false.
+
+This policy protects reassignment only. Insert, batch-insert, and bulk-insert values remain
+caller-supplied; there is no automatic stamping, ambient-value check, or conflict validation.
+Validate and assign tenant values in the application's create path. Database RLS `WITH CHECK`
+can enforce new values for callers outside generated stores too.
+
+## Operation and bypass matrix
+
+| Operation | Filter behavior | Column protection |
 |---|---|---|
-| `[InquiryUpdate]` (including `Task<TEntity?>`) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
-| `[InquiryDelete]` (soft or hard) | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
-| `[InquiryRestoreOneByKey]` | `WHERE "Id" = @Id` | `… AND "TenantId" = @__gf_TenantId` |
-| `[InquiryDeleteAll]` | `DELETE FROM "Docs"` | `WHERE "TenantId" = @__gf_TenantId` |
-| `[InquiryUpdate]` with a collection | key join only | key join `AND` the term |
-| hard `[InquiryDelete]` | criteria only | criteria `AND` the term |
-| `[InquiryInsert]` / `[InquiryBulkInsert]` | *(never filtered)* | *(never filtered)* |
-| `[InquiryUpsert]` | supported | **build error `INQ095`** |
+| Generated selects, paging, counts, aggregates, projections | Read filters apply; a valid named ignore can remove its named term | Not applicable |
+| Entity update, including returning | Enforced filters plus key/token/active-row predicates | Protected fields excluded from SET |
+| Batch entity update | Enforced filters apply across row, array, and set-based strategies | Protected fields excluded from SET |
+| Predicate update | Read filters apply | Explicit protected target rejected |
+| Key soft/hard delete and restore | Enforced filters apply; operation owns soft-delete state | No tenant reassignment |
+| Soft predicate delete | Read filters apply | No tenant reassignment |
+| Hard predicate or table-wide delete | Enforced filters apply | No tenant reassignment |
+| Insert, batch insert, bulk insert | No filter validation or stamping | Supplied values retained |
+| Upsert with an enforced filter | Rejected with INQ095 | No generated write |
+| Eager loading | Parameterized filters rejected; static filters supported, named ignore rejected | Not applicable |
+| Raw SQL, ad-hoc queries, stored procedures | No generated filter injection | No protection |
 
-The details that bite:
+Batch/set-based mutation on a concurrency-token entity has separate restrictions (`INQ022`).
+A named ignore is read-only and cannot remove write enforcement. The filter policy applies to
+generated operations in this matrix; it does not restrict every `IInquiry` command or database user.
 
-- **Inserts are not filtered and the column is not stamped.** `EnforceOnWrites` never writes the tenant value for you — the entity must carry the correct value, exactly as before. An insert with the wrong tenant id is still an insert with the wrong tenant id.
-- **Upsert is rejected on every dialect (`INQ095`).** Its insert branch cannot be filtered; MySQL's `ON DUPLICATE KEY UPDATE` has no conditional form; and SQL Server's UPDATE-first emulation fires its INSERT branch precisely when the filter blocked the UPDATE — a phantom cross-tenant insert or a duplicate-key error. Blanket rejection beats "enforced on some dialects". Split the method into an explicit insert and update. The diagnostic is fail-closed: suppressing it never generates an unenforced upsert. The method is simply not emitted, so a store with other methods fails to compile on the missing partial implementation (`CS8795`); only if the upsert is the store's *sole* method does the whole store degrade to throwing stubs.
-- **Rows-affected `0` now has three meanings** — not found, stale [concurrency token](concurrency.md), or hidden by the filter. They are indistinguishable to the caller, and there is no new exception type for the third. If you need to tell them apart, read the row first (the read is filtered, so a `null` there means "not yours or not there").
-- **The soft-delete indicator is never part of the enforced predicate.** A hard delete must still be able to remove an already-soft-deleted row, and restore must be able to clear the indicator, so those statements carry the tenant term but not the activeness term.
-- **`[InquiryIgnoreFilter]` cannot bypass it.** That attribute is read-only by design (`INQ091`); there is no write-side bypass in this release.
-- **A returning mutation still returns the row when the write changes the filter column.** An update that moves a row out of your own scope (reassigning its tenant, clearing its active flag) succeeds and returns the updated row, even though a subsequent read would no longer see it. The dialects that emulate `RETURNING` with a follow-up `SELECT` guard that read-back on the affected-row count rather than re-testing the predicate, precisely so a legitimate write is not reported as a miss.
-- **A store with only reads shows no difference.** `EnforceOnWrites` is a property of the *entity*, but its effect is visible only in generated write statements — if a store declares none, turning it on changes nothing. Check the store that actually writes.
-- Under `ContextKey` mode the write, like a read, throws `InquiryFilterValueMissingException` **before executing** when no ambient scope is set. A write with no scope is never silently a no-op.
+## Named filters and per-method bypass
 
-Enforcement is a defence-in-depth layer, not a replacement for authorization: it stops a write from *reaching* another tenant's row, but a caller still needs to be authorized for the row inside their own tenant.
+Give a visibility filter a `Name` when selected generated reads should bypass it:
 
-On PostgreSQL you can put the same predicate one layer lower, in the database itself, so it also covers ad-hoc SQL and anything that never went through a generated store — see [PostgreSQL row-level security](postgres-rls.md).
+```csharp
+[InquiryColumn, InquiryGlobalFilter(Name = "PublishGate")]
+public bool IsPublished { get; set; }
 
-## Per-dialect literal
+// Add this property to Document, then declare this method in DocumentStore:
+[InquirySelectAll, InquiryIgnoreFilter("PublishGate")]
+public partial Task<IReadOnlyList<Document>> IncludingDraftsAsync(CancellationToken ct = default);
+```
 
-| Dialect | Keep-true literal | Column type |
-|---|---|---|
-| Sqlite | `IsActive = 1` | `INTEGER NOT NULL` |
-| SQL Server | `[IsActive] = 1` | `BIT NOT NULL` |
-| PostgreSQL | `"IsActive" = TRUE` | `BOOLEAN NOT NULL` |
-| MySQL | `` `IsActive` = 1 `` | `TINYINT(1) NOT NULL` |
-| Oracle | `IsActive = 1` (unquoted) | `NUMBER(1) NOT NULL` |
+An unnamed filter has no generated per-method ignore. Raw SQL and procedures remain outside
+this mechanism. Unknown names, unsupported operations, and write-side ignores fail with `INQ091`;
+blank or duplicate declared names fail with `INQ092`. Several ignore attributes can remove several
+named filters. `IncludeDeleted` removes only the soft-delete term, leaving global filters intact.
 
-## Rules
+## Authorization and database enforcement
 
-A `[InquiryGlobalFilter]` column must be a **non-nullable `bool`**, and it cannot double as the key, a generated / database-default column, the [soft-delete](soft-delete.md) indicator, or a [concurrency token](concurrency.md) — those machineries own the column's value. Violations are a compile error (**`INQ059`**).
+Visibility filters choose which rows generated queries see. Write enforcement limits which
+existing rows supported mutations reach. Column protection preserves selected update values.
+None authenticates a request or grants permission to edit a row inside the current tenant.
 
-## When to reach for it
-
-A global filter is right when a subset of rows should be invisible to *normal* reads by default and the distinction is a stable boolean — tenancy, activation, publish state, archival. When the gate is a soft *deletion* (with delete/restore semantics and an admin "see deleted" view), use [soft delete](soft-delete.md) instead; it adds the delete→update routing and the `IncludeDeleted` opt-out a filter intentionally omits.
+Authorize the request before establishing its tenant scope. Use database policies when enforcement
+must also cover raw SQL, procedures, inserts, or other clients. See [PostgreSQL row-level security](postgres-rls.md).
 
 ## See also
 
-- [Soft delete](soft-delete.md) — the same active-row machinery, specialized for deletion with a per-method opt-out.
-- [CRUD](crud.md) — the baseline operations the filter extends.
-- [Ad-hoc DTOs](ad-hoc-dtos.md) — the escape hatch for a deliberately unfiltered read.
+- [Soft delete](soft-delete.md)
+- [Optimistic concurrency](concurrency.md)
+- [Ad-hoc DTOs](ad-hoc-dtos.md)

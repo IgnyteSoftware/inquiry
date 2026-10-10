@@ -580,7 +580,7 @@ InquiryUpdate SET field is not an updatable column. Default: error, enabled.
 
 Trigger: A set-based update targets a protected column.
 
-Failing shape: A partial update assigns ProductID or a concurrency token.
+Failing shape: A partial update assigns ProductID, a concurrency token, or a filter column with `PreventReassignment = true`.
 
 Smallest correction: Update a mutable column; use token-aware single-entity updates and delete/restore APIs for their owned columns.
 
@@ -1269,3 +1269,11 @@ Failing shape: A string token without `RotateOnUpdate = true`, or a rotating str
 Smallest correction: Use a non-nullable integral token, or opt into rotation for a non-nullable string/Guid. Remove converters and conflicting generation settings. See [concurrency](features/concurrency.md).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ102
+
+Filter column protection requires write enforcement. Default: error, enabled.
+
+Trigger: `PreventReassignment = true` appears without a valid global filter and `EnforceOnWrites = true`.
+
+Smallest correction: Enable write enforcement on a valid filter, or remove column protection. Inserts still retain caller-supplied values. See [global filters](features/global-filters.md).

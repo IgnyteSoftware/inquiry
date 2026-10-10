@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The SQLite product workspace combines search, paging, validation, concurrency conflicts, and archiving across two demo workspaces. Existing Northwind relationship and transaction pages remain available.
+- Enforced global filters can opt into `PreventReassignment` to preserve their columns during entity updates and reject explicit assignments. Insert values remain caller-supplied.
 
 - String and Guid concurrency stamps can opt into client-generated rotation with `RotateOnUpdate`; unsupported managed representations fail at build time.
 
