@@ -290,6 +290,8 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
         var collectionArtifacts = ImmutableArray.CreateBuilder<CollectionParameterArtifact>();
 
+        SchemaEmitter.ReportRotatingTokenStorageDiagnostics(context, entities.Where(static e => e.IsMapped).ToArray(), sqlBuilder);
+
         foreach (var store in stores)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
