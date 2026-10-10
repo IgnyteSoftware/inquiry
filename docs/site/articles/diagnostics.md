@@ -1202,7 +1202,7 @@ Smallest correction: Use supported separate insert/update operations and preserv
 
 Mutation target is invalid. Default: error, enabled.
 
-Trigger: A mutation target is missing, conflicting, has an unsupported return mode, or an entity update has no writable columns after excluding the soft-delete marker.
+Trigger: A mutation target is missing, conflicting, has an unsupported return mode, or an entity update has no writable columns after excluding the soft-delete marker and protected filter columns.
 
 Failing shape: A parameterless InquiryDelete without InquiryWhere.
 
