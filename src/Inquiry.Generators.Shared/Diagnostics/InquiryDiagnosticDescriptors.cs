@@ -1016,7 +1016,7 @@ internal static class InquiryDiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor ManagedConcurrencyTokenInvalid = new(
         "INQ101", "Managed concurrency token representation is unsupported",
-        "Concurrency token '{0}.{1}' requires a non-nullable integral type, or a non-nullable string/Guid with RotateOnUpdate = true. Remove converters and conflicting generation metadata; string stamps require at least 36 characters.",
+        "Concurrency token '{0}.{1}' requires a non-nullable integral type, or a non-nullable string/Guid with RotateOnUpdate = true. Remove incompatible SqlType overrides, converters, and conflicting generation metadata; rotating strings require at least 36 characters and rotating Guid uses the default provider type.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq101");
 

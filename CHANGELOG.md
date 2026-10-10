@@ -10,11 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The SQLite product workspace combines search, paging, validation, concurrency conflicts, and archiving across two demo workspaces. Existing Northwind relationship and transaction pages remain available.
 
+- String and Guid concurrency stamps can opt into client-generated rotation with `RotateOnUpdate`; unsupported managed representations fail at build time.
+
 ### Changed
 
 - Filter and audit scopes reject out-of-order disposal without changing ambient values. Repeated or copied disposal no longer restores stale values.
 - Caller-side transaction disposal now clears its ambient slot even when an async helper already committed, rolled back, or disposed the handle. Captured closed flows still reject operations.
 - The Blazor sample now rejects non-SQLite configuration before opening a database; its stores generate SQLite SQL.
+- Managed concurrency rejects unsupported token shapes (including decimal, enum, and DateTime) with `INQ101`; string/Guid stamps require explicit rotation.
+
 - `[InquiryInsert]` and `[InquiryUpdate]` now infer batch operations from entity collection parameters. The separate `[InquiryInsertAll]` and `[InquiryUpdateAll]` attributes were removed.
 - Insert, update, upsert, and key-delete methods now infer returning behavior from `Task<TEntity?>`; the `ReturnEntity` attribute property was removed. `[InquiryHardDelete]` and `[InquiryHardDeleteAll]` replace `HardDelete = true`.
 - Generated batch and bulk-copy descriptors now expose one constructor per supported shape. Runtime-only generated-command and batch-command state is internal.

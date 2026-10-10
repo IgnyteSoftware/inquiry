@@ -84,7 +84,9 @@ public string ConcurrencyStamp { get; init; } = Guid.NewGuid().ToString("D");
 A non-nullable `Guid` property also works. Each single-row update generates a fresh GUID,
 compares the original stamp and key, and assigns the replacement only to the matching row.
 Strings use the 36-character GUID `D` format. Existing string values need not be GUIDs.
-Initialize the stamp before insertion; inserts preserve the supplied value.
+Initialize the stamp before insertion; inserts preserve the supplied value. Existing nullable database
+columns work when stored stamps are populated. Backfill NULL stamps (and empty strings on Oracle)
+before using managed concurrency; equality predicates cannot match SQL NULL.
 
 Like numeric tokens, the input remains unchanged. Use the entity returned by update-returning,
 or reload after a bool-returning update. A stale update returns false/null or throws when configured.
@@ -92,9 +94,10 @@ Hard deletes compare the original stamp and do not generate a replacement. Soft 
 compares the stamp without rotating it; its archive/restore contract is documented separately.
 
 The numeric default accepts non-nullable integral types. Other types require a supported strategy;
-`DatabaseGenerated` and `RotateOnUpdate` cannot be combined. Nullable tokens, converters, computed
+`DatabaseGenerated` and `RotateOnUpdate` cannot be combined. Nullable tokens, incompatible SqlType overrides, converters, computed
 columns, and conflicting generation settings produce `INQ101`. String length, when specified,
-must hold all 36 characters. For unsupported representations, use an explicit guarded update that
+must hold all 36 characters. Explicit string SqlType supports text/CLOB families and character types
+with capacity of at least 36; Guid rotation uses the default provider mapping. For unsupported representations, use an explicit guarded update that
 matches the original value and checks the affected-row count.
 
 ## Provider-specific notes

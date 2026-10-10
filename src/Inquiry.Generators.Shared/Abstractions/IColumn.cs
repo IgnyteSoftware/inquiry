@@ -87,6 +87,7 @@ public interface IColumn
     /// <summary>True when this column is the entity's optimistic-concurrency token.</summary>
     bool IsConcurrencyToken { get; }
 
+    /// <summary>Whether updates replace the token with a client-generated GUID.</summary>
     bool RotateConcurrencyToken { get; }
 
     /// <summary>
