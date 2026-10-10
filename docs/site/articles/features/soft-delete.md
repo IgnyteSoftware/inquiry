@@ -86,7 +86,9 @@ return false/null, including an attempt with the archived row's current token. W
 
 `[InquiryDelete]` returning `Task<TEntity?>` returns the archived row, including its new token and
 delete marker. It returns null when no row was archived. For example, after archiving Version 0,
-the returned entity has Version 1; updating the old Version 0 entity returns false and leaves the row deleted.
+the returned entity has Version 1; updating the old Version 0 entity returns false and leaves the row deleted
+(or throws InquiryConcurrencyException when configured). Entity updates with no writable columns
+after excluding the marker fail at build time with INQ096.
 
 Restore keeps its key-only administrative contract: it does not compare an expected token.
 It matches only deleted rows in the enforced filter scope, clears the marker, and advances or
@@ -95,7 +97,10 @@ Authorize this operation separately when users must not restore arbitrary record
 
 Table-wide and predicate deletion retain their existing set-based contract; this single-row token
 contract does not add optimistic checks to those operations. Hard delete can still remove an
-archived row and checks its supplied token when configured.
+archived row and checks its supplied token when configured. Tokenless upserts keep their existing
+conflict-update behavior for other columns, including on archived rows, but preserve the stored
+soft-delete marker. Their insert branch uses the supplied marker. Use explicit restore to reactivate
+an existing row; upsert is not a substitute for active-row update.
 
 ## Returning capability
 

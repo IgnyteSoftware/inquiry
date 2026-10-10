@@ -341,7 +341,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     private string OnDuplicateKeyAssignments(SqlBuildContext context, string? requiredKeyAssignment = null)
     {
         var assignments = string.Join(", ", context.Columns
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && c.SoftDelete == SoftDeleteKind.None && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
             .Select(c =>
             {
                 var quoted = QuoteIdentifier(c.ColumnName);
