@@ -101,3 +101,4 @@ INQ098 | Inquiry | Error | Optional InquiryWhere criterion is invalid
 INQ099 | Inquiry | Error | InquirySet expression is invalid
 INQ100 | Inquiry | Error | Keyset ordering field must be non-nullable
 INQ101 | Inquiry | Error | Managed concurrency token representation is unsupported
+INQ102 | Inquiry | Error | Filter column protection requires write enforcement

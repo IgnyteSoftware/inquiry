@@ -84,6 +84,9 @@ public interface IColumn
     /// </summary>
     bool GlobalFilterEnforceOnWrites { get; }
 
+    /// <summary>Whether generated updates must preserve this enforced filter column.</summary>
+    bool PreventReassignment { get; }
+
     /// <summary>True when this column is the entity's optimistic-concurrency token.</summary>
     bool IsConcurrencyToken { get; }
 

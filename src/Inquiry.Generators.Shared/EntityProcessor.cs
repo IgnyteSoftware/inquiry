@@ -600,6 +600,16 @@ internal static class EntityProcessor
                 isDatabaseGeneratedToken = false;
             }
 
+            var preventReassignment = globalFilterAttribute is not null &&
+                GeneratorHelpers.GetNamedBool(globalFilterAttribute, "PreventReassignment");
+            if (preventReassignment && (!isGlobalFilter || !globalFilterEnforceOnWrites))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.FilterColumnProtectionInvalid,
+                    property.Locations.FirstOrDefault(), entitySymbol.Name, property.Name));
+                preventReassignment = false;
+            }
+
             columns.Add(new ColumnData
             {
                 Location = LocationData.From(property.Locations.FirstOrDefault()),
@@ -616,6 +626,7 @@ internal static class EntityProcessor
                 GlobalFilterName = globalFilterName,
                 GlobalFilterContextKey = globalFilterContextKey,
                 GlobalFilterEnforceOnWrites = isGlobalFilter && globalFilterEnforceOnWrites,
+                PreventReassignment = preventReassignment,
                 IsConcurrencyToken = isConcurrencyToken,
                 RotateConcurrencyToken = rotateConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
@@ -801,7 +812,8 @@ internal static class EntityProcessor
         {
             var expression = attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value as string ?? string.Empty : string.Empty;
             result.Add(new CheckConstraintData(null, string.Empty, expression, GeneratorHelpers.GetNamedString(attribute, "Name"),
-                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation())) { Ordinal = ordinal++ });
+                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()))
+            { Ordinal = ordinal++ });
         }
         return result;
     }

@@ -2659,13 +2659,14 @@ internal static class StoreProcessor
             }
         }
 
-        if (method.Operation is StoreOperation.Update or StoreOperation.UpdateAll && entity.SoftDeleteColumn is not null &&
+        if (method.Operation is StoreOperation.Update or StoreOperation.UpdateAll &&
+            (entity.SoftDeleteColumn is not null || entity.Columns.AsImmutableArray().Any(static c => c.PreventReassignment)) &&
             !entity.Columns.AsImmutableArray().Any(static c => !c.IsKey && !c.IsGenerated &&
-                !c.IsDatabaseGeneratedToken && !c.IsCreatedAudit && c.SoftDelete == SoftDeleteKind.None &&
+                !c.PreventReassignment && !c.IsDatabaseGeneratedToken && !c.IsCreatedAudit && c.SoftDelete == SoftDeleteKind.None &&
                 string.IsNullOrEmpty(c.ComputedExpression)))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid,
-                method.Location?.ToLocation(), method.Name, "No writable columns remain after excluding the soft-delete marker. Add a writable column or remove the update method."));
+                method.Location?.ToLocation(), method.Name, "no writable columns remain after filter-column protection"));
             return false;
         }
 
@@ -3361,7 +3362,7 @@ internal static class StoreProcessor
     }
 
     private static bool IsSettableColumn(ColumnData column)
-        => !column.IsKey && !column.IsGenerated && column.SoftDelete == SoftDeleteKind.None &&
+        => !column.IsKey && !column.IsGenerated && !column.PreventReassignment && column.SoftDelete == SoftDeleteKind.None &&
             !column.IsConcurrencyToken && string.IsNullOrEmpty(column.ComputedExpression);
 
     private static bool TryResolvePredicates(

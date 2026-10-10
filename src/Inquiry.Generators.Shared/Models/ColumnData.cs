@@ -67,6 +67,8 @@ internal sealed record ColumnData : IColumn
     /// </summary>
     public bool GlobalFilterEnforceOnWrites { get; init; }
 
+    public bool PreventReassignment { get; init; }
+
     public bool IsConcurrencyToken { get; init; }
 
     public bool RotateConcurrencyToken { get; init; }

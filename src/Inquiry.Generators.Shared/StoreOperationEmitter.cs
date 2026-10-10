@@ -3343,7 +3343,7 @@ internal static class StoreOperationEmitter
             // insert branch references the parameter.
             // A server-computed column is never bound for INSERT or UPDATE (the database computes it).
             .Where(c => (includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken)
-                && !(forUpdate && (c.IsCreatedAudit || c.SoftDelete != SoftDeleteKind.None))
+                && !(forUpdate && (c.IsCreatedAudit || c.SoftDelete != SoftDeleteKind.None || (!c.IsKey && c.PreventReassignment)))
                 && string.IsNullOrEmpty(c.ComputedExpression))
             .ToArray();
 

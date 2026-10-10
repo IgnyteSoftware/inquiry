@@ -884,7 +884,7 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor SetFieldNotUpdatable = new(
         "INQ044",
         "InquiryUpdate SET field is not an updatable column",
-        "Store method '{0}' assigns field '{1}', which cannot be SET by a set-based update. SET fields must map to a mutable column — not a key, a database-generated column, the soft-delete indicator, or a concurrency token.",
+        "Store method '{0}' assigns field '{1}', which cannot be SET by a set-based update. SET fields must map to a mutable column — not a key, a database-generated column, the soft-delete indicator, a concurrency token, or a protected filter column.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -1013,6 +1013,12 @@ internal static class InquiryDiagnosticDescriptors
         "Store method '{0}' has an invalid InquirySet assignment for field '{1}': {2}",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq099");
+
+    public static readonly DiagnosticDescriptor FilterColumnProtectionInvalid = new(
+        "INQ102", "Filter column protection requires write enforcement",
+        "Filter column '{0}.{1}' sets PreventReassignment without a valid global filter and EnforceOnWrites = true.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq102");
 
     public static readonly DiagnosticDescriptor ManagedConcurrencyTokenInvalid = new(
         "INQ101", "Managed concurrency token representation is unsupported",
