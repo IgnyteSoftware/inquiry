@@ -51,6 +51,7 @@ internal static class SchemaEmitter
         var declaredLengths = BuildColumnLengthIndex(entities);
 
         ReportDatabaseGeneratedTokenDiagnostics(context, entities, builder);
+        ReportRotatingTokenStorageDiagnostics(context, entities, builder);
 
         ReportKeyDiagnostics(context, entities, builder, declaredLengths);
 
@@ -312,6 +313,26 @@ internal static class SchemaEmitter
 
     private static string EscapeCSharpString(string value)
         => value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n");
+
+    private static void ReportRotatingTokenStorageDiagnostics(
+        SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
+    {
+        foreach (var entity in entities)
+        {
+            foreach (var column in entity.Columns.AsImmutableArray())
+            {
+                if (!column.RotateConcurrencyToken || column.Type.IsGuid) continue;
+                var storeType = builder.GetSchemaManifestStoreType(column)?.Trim().ToUpperInvariant();
+                if ((builder.DialectName == "SqlServer" && storeType is "TEXT" or "NTEXT") ||
+                    (builder.DialectName == "Oracle" && storeType is "CLOB" or "NCLOB"))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.ManagedConcurrencyTokenInvalid,
+                        column.Location?.ToLocation(), entity.Name, column.PropertyName));
+                }
+            }
+        }
+    }
 
     private static void ReportDatabaseGeneratedTokenDiagnostics(
         SourceProductionContext context,

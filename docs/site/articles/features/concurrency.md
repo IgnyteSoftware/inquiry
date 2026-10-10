@@ -77,7 +77,7 @@ on the null branches. See [Errors and partial outcomes](../error-contracts.md) f
 Existing stamp schemas can opt into client-generated replacement values:
 
 ```csharp
-[InquiryConcurrencyToken(RotateOnUpdate = true)]
+[InquiryConcurrencyToken(RotateOnUpdate = true, Length = 36)]
 public string ConcurrencyStamp { get; init; } = Guid.NewGuid().ToString("D");
 ```
 
@@ -97,7 +97,9 @@ The numeric default accepts non-nullable integral types. Other types require a s
 `DatabaseGenerated` and `RotateOnUpdate` cannot be combined. Nullable tokens, incompatible SqlType overrides, converters, computed
 columns, and conflicting generation settings produce `INQ101`. String length, when specified,
 must hold all 36 characters. Explicit string SqlType supports text/CLOB families and character types
-with capacity of at least 36; Guid rotation uses the default provider mapping. For unsupported representations, use an explicit guarded update that
+with capacity of at least 36; Guid rotation uses the default provider mapping. SQL Server TEXT/NTEXT
+and Oracle CLOB/NCLOB cannot compare stamps with equality and produce INQ101. On Oracle, specify
+a supported bounded Length (for example 36) to avoid the default LOB mapping. For unsupported representations, use an explicit guarded update that
 matches the original value and checks the affected-row count.
 
 ## Provider-specific notes
