@@ -215,19 +215,23 @@ Before uploading any package, preflight inspects all twelve package versions in 
 Existing GitHub packages must have identical archive bytes. NuGet adds a repository signature, so its
 existing packages must pass trusted-signature verification and have identical payload entries; duplicate or
 unsafe entry paths are rejected. Evidence records both archive hashes. Any lookup error or mismatch
-stops publication. The check does not pin a specific signing certificate. A newly built candidate cannot replace a missing original when that version already
-exists in either registry.
+stops publication. The check does not pin a specific signing certificate. A newly built candidate cannot
+replace a missing original when that version already exists in either registry.
 
 For an interrupted release, wait until uploaded versions are visible in NuGet’s flat container, then rerun
-the same Actions run. A package still undergoing NuGet validation can return 404 and cause a safe
-duplicate-push failure. It downloads the original candidate by artifact
-ID, checks the archive digest, reruns verification, and uploads only missing packages. Candidate artifacts
+the same Actions run. It downloads the original candidate by artifact ID, checks the archive digest,
+reruns verification, and uploads only missing packages. A package still undergoing NuGet validation can
+return 404 and cause a safe duplicate-push failure. Candidate artifacts
 and evidence are retained for 90 days. An expired or deleted candidate after partial publication requires
 manual recovery of the original bytes; do not rebuild and bypass the check. GitHub release assets follow
 the same compare-existing/upload-missing rule. Assets attach to a draft before it is published and
 locked. The workflow re-fetches each asset and checks its bytes before publishing. Draft creation
 requires a successful lookup; authentication and service errors stop the run. A published release
 with a missing asset fails explicitly; retries do not overwrite its notes.
+
+An interrupted asset upload can leave a draft asset whose state is not `uploaded`. The retry stops on
+that asset. A maintainer must delete only that incomplete asset from the draft, then rerun the same
+Actions run to upload the retained original. Do not delete completed assets or assets on a published release.
 
 Symbols are uploaded separately from packages so a failed symbol upload can be retried. NuGet does not
 expose original `.snupkg` archives for comparison: retries use the retained, locally verified symbols and
