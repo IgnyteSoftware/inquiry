@@ -1,113 +1,103 @@
-# Inquiry.Sample
+﻿# Inquiry product workspace
 
-A Blazor Server application that exercises Inquiry against a Northwind-shaped database on
-SQLite, SQL Server, or PostgreSQL — picked at runtime from configuration. Schema, entities,
-and stores all come from the shared [Inquiry.Northwind](../Inquiry.Northwind) project; the
-sample only owns the UI, the service layer, and a small first-run seed.
+A runnable Blazor Server application backed by SQLite and generated Inquiry stores. The main
+screen combines product search, filtering, sorting, paging, creation, editing, concurrency
+conflicts, soft deletion, and two separate workspaces. The original Northwind pages remain
+available for relationships, composite keys, and order transactions.
 
-## Running it
+## Run
 
-```powershell
-dotnet run --project samples\Inquiry.Sample\Inquiry.Sample.csproj
-```
-
-On startup `InquiryProviderSetup` reads `Inquiry:Provider` from `appsettings.json`, picks
-the matching connection string under `ConnectionStrings`, ensures the target database
-exists, runs the provider's Northwind DDL, then registers the matching Inquiry services.
-`DataSeeder` then drops in a small fixture (no-ops if customers already exist) and the
-Blazor UI starts at the URL printed in the console.
-
-## Choosing a provider
-
-Set `Inquiry:Provider` to one of `Sqlite` (default), `SqlServer`, or `PostgreSql`. Each
-provider reads its own connection string under `ConnectionStrings`:
-
-| Provider | Config value | Connection string key | Default in `appsettings.json` |
-| --- | --- | --- | --- |
-| SQLite     | `Sqlite`     | `InquirySample.Sqlite`     | `Data Source=northwind.db` (file alongside the process) |
-| SQL Server | `SqlServer`  | `InquirySample.SqlServer`  | LocalDB pointing at `InquirySample` |
-| PostgreSQL | `PostgreSql` | `InquirySample.PostgreSql` | `localhost` / `inquirysample` / `postgres` superuser |
-
-The connection strings in `appsettings.json` are **local-development defaults only** — they
-are not real credentials. To point the sample at a real database, set the **`INQUIRY_SAMPLE_DB`**
-environment variable: it overrides the active provider's connection string (taking precedence
-over `appsettings.json`), so you never have to commit credentials. Pick the provider with
-`Inquiry__Provider`:
+Install the .NET 10 SDK, then run from the repository root:
 
 ```powershell
-$env:Inquiry__Provider = "PostgreSql"
-$env:INQUIRY_SAMPLE_DB  = 'Host=db.internal;Database=inquirysample;Username=app;Password=<your-password>'
-dotnet run --project samples\Inquiry.Sample\Inquiry.Sample.csproj
+dotnet run --project samples/Inquiry.Sample/Inquiry.Sample.csproj --no-launch-profile --urls http://localhost:5188
 ```
 
-For SQL Server and PostgreSQL, the sample creates the target database if it doesn't
-already exist (using a `master` / `postgres` bootstrap connection with the same
-credentials), so a default install just works.
+Open http://localhost:5188. Startup creates the SQLite schema and seeds 24 products in each
+workspace. No database server or credentials are required. The default database is
+`northwind.db` in the application's working directory. Data persists between runs.
 
-## What it demonstrates
+For a separate dataset, provide a new SQLite file path (its parent directory must exist):
 
-The sample exercises every classic Northwind table — including the three composite-key
-ones (`Order Details`, `EmployeeTerritories`, `CustomerCustomerDemo`) — through Inquiry's
-generated stores. Specifically:
-
-- Entity mapping with `[InquiryTable]`, `[InquiryKey]` (single and composite),
-  `[InquiryColumn]`, `[InquiryForeignKey]`, `[InquiryRelation]`
-  (Northwind entities live in `Inquiry.Northwind/Models`)
-- Store generation with `[InquirySelectAll]`, `[InquirySelectOneByKey]`,
-  `[InquirySelectAllByField]` (single- and multi-column),
-  `[InquirySelectAllEager]`, `[InquirySelectOneByKeyEager]`,
-  `[InquiryInsert]`, `[InquiryUpdate]`, and `[InquiryUpsert]` with return-type-selected returning
-  variants, and `[InquiryDelete]`
-- Eager loading on both Region↔Territory (non-nullable key) and Category↔Product
-  (nullable IDENTITY key)
-- DI registration through `AddInquiry()` + `AddInquiryGeneratedStores()` +
-  `AddInquirySqlite(...)` / `AddInquirySqlServer(...)` / `AddInquiryPostgreSql(...)`
-- Ambient transactions through `IInquiry.BeginTransactionAsync()`, combining an
-  IDENTITY-keyed parent insert (`Orders` via `InsertReturning`) with composite-key child
-  inserts (`Order Details`) inside one commit
-
-## Project layout
-
-```
-samples/Inquiry.Sample/
-├── Program.cs                       schema init, DI wiring, Blazor pipeline
-├── App.razor                        Blazor router root
-├── _Imports.razor                   shared @using directives
-├── Services/                        one service per domain – the public API for pages
-│   ├── CustomerService.cs           CRUD + country lookup for customers
-│   ├── EmployeeService.cs           CRUD for employees, uses InsertReturning for IDENTITY
-│   ├── CatalogService.cs            categories + products via eager loading
-│   ├── SupplierService.cs           CRUD for suppliers
-│   ├── ShipperService.cs            CRUD for shippers
-│   ├── RegionService.cs             regions + territories via eager loading
-│   ├── OrderService.cs              orders + composite-key order details
-│   ├── DemographicsService.cs       customer demographics + composite-key bridge
-│   ├── EmployeeTerritoryService.cs  int+string composite bridge
-│   ├── OrderTransactionService.cs   atomic Order + Order Details insert
-│   └── DataSeeder.cs                idempotent first-run seed (all 13 tables)
-├── Pages/
-│   ├── _Host.cshtml                 host page for Blazor Server
-│   ├── Index.razor                  dashboard (`/`)
-│   ├── Customers.razor              `/customers`
-│   ├── Employees.razor              `/employees`
-│   ├── Catalog.razor                `/catalog`
-│   ├── Suppliers.razor              `/suppliers`
-│   ├── Shippers.razor               `/shippers`
-│   ├── Regions.razor                `/regions`
-│   ├── Orders.razor                 `/orders`
-│   ├── Demographics.razor           `/demographics`
-│   └── TransactionDemo.razor        `/transaction-demo`
-├── Shared/
-│   ├── MainLayout.razor             sidebar + content shell
-│   └── NavMenu.razor                navigation links
-└── wwwroot/
-    └── css/site.css                 page styling
+```powershell
+$env:INQUIRY_SAMPLE_DB = 'Data Source=D:/scratch/inquiry-demo.db'
+dotnet run --project samples/Inquiry.Sample/Inquiry.Sample.csproj --no-launch-profile --urls http://localhost:5188
 ```
 
-## Why services, not stores, in the pages
+The sample is for local exploration. The workspace selector demonstrates data scoping;
+it does not authenticate users or authorize access. SQLite is the supported sample provider:
+the data libraries compile SQLite SQL, so swapping a runtime connection provider cannot make
+them target another dialect. Non-SQLite configuration fails at startup with an explanation.
 
-Generated stores expose the raw CRUD surface — `SelectAllAsync`, `InsertAsync`, etc. — and
-return `IAsyncEnumerable<T>`. The page layer wants list-shaped data and combined view
-models (e.g., a catalog entry that bundles a category with its products). Each service in
-`Services/` hides that ergonomics gap: pages stay terse, and the generated stores stay
-focused on raw data access.
+## Walk through it
+
+1. Search for `tea`: the initial Northwind dataset returns Matcha tea and Tea strainer.
+2. Reset, select Unassigned, and search: four initial products have no category.
+3. Combine a price range and In stock only; try all four sorts and move through pages.
+4. Add a product. Try saving without a name, then supply valid values and save.
+5. Change its stock and save again. Each save uses the returned entity and refreshed token.
+6. Open that product in another tab. Save an edit in the first tab, then save the stale second
+   copy. The second save reports a conflict; Reload product retrieves the current version.
+7. Archive a product and confirm the action. Search results and totals exclude it, while
+   its row remains in SQLite. Saving an older copy cannot restore it through this service.
+8. Switch to Market House. Its search results, counts, and editable products are separate.
+9. Visit Developer guide, Catalog, Orders, and Transaction Demo for more examples.
+
+A search with no matches shows an empty state and Clear filters. Invalid price ranges produce
+validation messages. Reset clears filters, and applying filters returns to the first page.
+An archive on the final page moves back to the last remaining page when necessary.
+
+## Follow the source
+
+| File | Purpose |
+| --- | --- |
+| [Products.razor](Pages/Products.razor) | Search form, paged results, editor, conflicts, archive confirmation |
+| [ProductWorkspace.cs](../Inquiry.Sample.Data/ProductWorkspace.cs) | Application operations, validation, scoped filters, reports, transactional seed |
+| [WorkspaceStores.cs](../Inquiry.Sample.Data/WorkspaceStores.cs) | Generated paged searches, inserts, updates, and soft deletes |
+| [WorkspaceProduct.cs](../Inquiry.Sample.Data/WorkspaceProduct.cs) | Mappings, nullable category, tenant field, concurrency token, report DTO |
+| [WorkspaceRegistration.cs](../Inquiry.Sample.Data/WorkspaceRegistration.cs) | Library-owned store registration and generated schema |
+| [Program.cs](Program.cs) | Startup, registration, seeding, Blazor/static assets |
+| [Showcase.razor](Pages/Showcase.razor) | In-app developer guide |
+| [Northwind models and stores](../Inquiry.Northwind) | Shared Northwind entities, relationships, composite keys |
+| [Services](Services) | Existing Northwind workflows, including order transactions |
+
+The UI calls one application service. It handles workspace scope, validation, and composed
+operations; stores remain the generated database boundary. Example:
+
+```csharp
+var page = await workspace.SearchAsync(1, new ProductSearch(
+    Name: "tea", Minimum: 10m, InStock: true,
+    Sort: ProductSort.Price, Offset: 0, Limit: 10), cancellationToken);
+
+var product = await workspace.FindAsync(1, productId, cancellationToken);
+if (product is not null)
+{
+    product.Stock += 5;
+    var saved = await workspace.SaveAsync(1, product, cancellationToken);
+    // A null result means the row changed or is no longer active.
+}
+```
+
+## What this application tells us about the API
+
+- Four sorts plus a distinct Unassigned filter require eight generated search declarations.
+  This is deliberately visible in the sample and motivates issues #425 and #426.
+- Parameterized predicate queries return whole mapped entities. Categories are buffered
+  separately because ordinary eager loading does not accept these search predicates (#401, #415).
+- Raw SQL reports explicitly include workspace and soft-delete predicates; generated filters
+  do not apply to handwritten SQL. The ad-hoc DTO follows SELECT ordinal order (#420, #427).
+- Each data library owns a registration wrapper to avoid identical generated extension method
+  names when an application references multiple libraries (#382).
+- Soft deletion currently leaves the concurrency token unchanged. The service checks active
+  state and token inside the same SQLite transaction before updating, preventing stale editors
+  from restoring archived rows. This is a sample safeguard, not a fix to the generator.
+- Name search uses SQL LIKE: `%` matches any sequence and `_` matches one character. Ordinary
+  text becomes a contains pattern. Values are passed as parameters.
+- Stored procedures need server-provider examples and integration verification. SQLite has
+  none, and this sample does not pretend to demonstrate them (#423).
+
+Schema creation here is initial setup, not a migration system. Existing databases are not
+upgraded when mappings change. Choose a new database file when exploring schema changes.
+Set `Logging:LogLevel:Inquiry.Command` to `Debug` to inspect generated SQL locally.
+
+Track the sample and verification evidence in [#428](https://github.com/IgnyteSoftware/inquiry/issues/428).

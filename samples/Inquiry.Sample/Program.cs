@@ -2,12 +2,14 @@ using Inquiry.DependencyInjection;
 using Inquiry.Sample;
 using Inquiry.Sample.Services;
 using Inquiry.Seeding;
+using Inquiry.Sample.Data;
 
 var builder = WebApplication.CreateBuilder(args);
+// Source builds also need framework assets when launched without a development profile.
+builder.WebHost.UseStaticWebAssets();
 
-// Pick the Inquiry provider (Sqlite/SqlServer/PostgreSql), ensure the target database
-// and Northwind schema exist, and register the matching DI services.
 await InquiryProviderSetup.ConfigureAsync(builder);
+builder.Services.AddProductWorkspace();
 
 // Observability: spans on the "Inquiry" ActivitySource, a db.client.operation.duration histogram
 // on the "Inquiry" Meter, and per-command logs on the "Inquiry.Command" category (set it to Debug
@@ -39,9 +41,14 @@ var app = builder.Build();
 
 // Seed sample data on first run (runs every registered IInquiryDataSeeder in one scope).
 await app.Services.SeedInquiryAsync();
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    await scope.ServiceProvider.GetRequiredService<ProductWorkspace>().SeedAsync();
+}
 
 app.UseStaticFiles();
 app.UseRouting();
+app.MapStaticAssets();
 app.MapHealthChecks("/health");
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");

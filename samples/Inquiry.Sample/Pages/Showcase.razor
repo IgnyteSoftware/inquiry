@@ -1,0 +1,22 @@
+@page "/showcase"
+
+<PageTitle>Developer guide · Inquiry</PageTitle>
+<div class="workspace">
+    <p class="eyebrow">BUILT WITH INQUIRY</p>
+    <h1>A real workflow, ordinary C# methods.</h1>
+    <p class="guide-intro">The product workspace runs on a seeded SQLite database. Every search, page, and save goes through Inquiry. Use it to explore the interface, then follow the implementation in the sample source.</p>
+    <a class="btn primary" href="products">Open the product workspace</a>
+    <div class="guide-grid">
+        <section class="product-panel"><h2>Search and paging</h2><p>Combine optional name, price, stock, and category conditions. Name and price sorts have stable ID tie-breakers. Page totals come from generated count queries.</p><p><code>WorkspaceStores.cs</code> shows the current declaration cost: eight methods cover four sorts and an explicit unassigned-category path.</p></section>
+        <section class="product-panel"><h2>Safe editing</h2><p>New products return their database-generated IDs. Every save returns the refreshed concurrency token. Open one product in two tabs, save in one, then save the other to see a conflict without overwriting the first edit.</p><p>Archive retains the row and removes it from generated active-product queries.</p></section>
+        <section class="product-panel"><h2>Scoped workspaces</h2><p>Northwind and Market House have separate product data. Generated queries and updates use a parameterized workspace filter. The sample validates and supplies the workspace on new products.</p><p>This selector demonstrates data scoping. It is not a login or an authorization system.</p></section>
+        <section class="product-panel"><h2>Reports and transactions</h2><p>The inventory cards use an ad-hoc DTO with explicit workspace and soft-delete conditions. The initial product dataset is seeded in a transaction.</p><p>Visit the <a href="transaction-demo">order transaction demo</a> for a parent-and-lines write and <a href="catalog">category catalog</a> for Northwind eager loading.</p></section>
+    </div>
+    <section class="product-panel guide-notes"><h2>Try the complete workflow</h2>
+        <ol><li>Search for “tea”, then reset and choose Unassigned.</li><li>Sort by price and move between pages. Switch workspaces to see separate results.</li><li>Add a product, save it, change its stock and save it again.</li><li>Open the same product in a second tab. Save different edits in each to exercise conflict handling.</li><li>Archive the product and confirm that search results and workspace totals change.</li></ol>
+        <h2>What this sample does not claim</h2>
+        <p>The data libraries generate SQLite SQL. Switching a runtime connection provider does not regenerate it. SQL Server and PostgreSQL require separately compiled stores and live verification. SQLite has no stored procedures; the procedure examples live in the provider documentation and integration suites.</p>
+        <p>Predicate searches currently return full product entities. Parameterized filters cannot be combined with ordinary eager loading, so categories are loaded separately. Ad-hoc materialization uses SELECT order. These are documented API constraints, not hidden workarounds.</p>
+        <p>The sample README contains startup instructions, the source map, and a verification checklist. <a href="https://github.com/IgnyteSoftware/inquiry/issues/428">Follow the sample work on GitHub.</a></p>
+    </section>
+</div>
