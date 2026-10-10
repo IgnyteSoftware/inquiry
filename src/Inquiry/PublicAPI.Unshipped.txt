@@ -639,3 +639,5 @@ Inquiry.InquiryFilterValueMissingException
 Inquiry.InquiryFilterValueMissingException.InquiryFilterValueMissingException(string! message) -> void
 static Inquiry.InquiryFilterContext.BeginScope(System.Collections.Generic.IReadOnlyDictionary<string!, object!>! values) -> Inquiry.InquiryFilterContext.Scope
 static Inquiry.InquiryFilterContext.GetRequired<T>(string! contextKey) -> T
+Inquiry.Entities.InquiryConcurrencyTokenAttribute.RotateOnUpdate.get -> bool
+Inquiry.Entities.InquiryConcurrencyTokenAttribute.RotateOnUpdate.set -> void

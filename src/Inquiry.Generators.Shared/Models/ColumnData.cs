@@ -68,6 +68,8 @@ internal sealed record ColumnData : IColumn
     public bool GlobalFilterEnforceOnWrites { get; init; }
 
     public bool IsConcurrencyToken { get; init; }
+
+    public bool RotateConcurrencyToken { get; init; }
     public bool IsDatabaseGeneratedToken { get; init; }
     public bool EnumAsString { get; init; }
 
