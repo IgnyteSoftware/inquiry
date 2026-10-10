@@ -62,7 +62,7 @@ private const string _sqlSelectByCompany =
 
 // Soft delete (default)
 private const string _sqlDelete =
-    "UPDATE \"Customers\" SET \"IsDeleted\" = 1 WHERE \"CustomerID\" = @CustomerID";
+    "UPDATE \"Customers\" SET \"IsDeleted\" = 1 WHERE \"CustomerID\" = @CustomerID AND \"IsDeleted\" = 0";
 
 // IncludeDeleted opt-out: filter is omitted
 private const string _sqlSelectAllIncludingDeleted =
@@ -72,6 +72,44 @@ private const string _sqlSelectAllIncludingDeleted =
 private const string _sqlHardDelete =
     "DELETE FROM \"Customers\" WHERE \"CustomerID\" = @CustomerID";
 ```
+
+## Archive, edit, and restore
+
+Ordinary updates match active rows and never assign the soft-delete marker. To restore a row,
+use `[InquiryRestoreOneByKey]`; changing `IsDeleted` on an entity cannot restore it.
+
+A single-row archive matches the key, original concurrency token (when configured), active-row
+predicate, and write-enforced filters. Success advances an integral token or rotates an opted-in
+string/Guid stamp. SQL Server advances database-generated rowversion itself. Repeated archives
+return false/null, including an attempt with the archived row's current token. With a token and
+`ThrowOnConcurrencyConflict`, a zero-row archive throws instead. The input entity remains unchanged.
+
+`[InquiryDelete]` returning `Task<TEntity?>` returns the archived row, including its new token and
+delete marker. It returns null when no row was archived. For example, after archiving Version 0,
+the returned entity has Version 1; updating the old Version 0 entity returns false and leaves the row deleted.
+
+Restore keeps its key-only administrative contract: it does not compare an expected token.
+It matches only deleted rows in the enforced filter scope, clears the marker, and advances or
+rotates the token. Repeated restore returns false. Reload before editing the restored row.
+Authorize this operation separately when users must not restore arbitrary records.
+
+Table-wide and predicate deletion retain their existing set-based contract; this single-row token
+contract does not add optimistic checks to those operations. Hard delete can still remove an
+archived row and checks its supplied token when configured.
+
+## Returning capability
+
+| Provider | Single-row soft-delete returning | Zero-row protection |
+|---|---|---|
+| SQLite | Supported | Native UPDATE RETURNING |
+| PostgreSQL | Supported | Native UPDATE RETURNING |
+| SQL Server | Supported | OUTPUT INTO captures only affected rows |
+| MySQL / MariaDB | Supported | Read-back requires ROW_COUNT() > 0 |
+| Oracle | Supported | SQL%ROWCOUNT selects an empty cursor on failure |
+
+All paths enforce the write filters on the mutation. MySQL-family and Oracle read-back use the
+key only after proving the mutation affected a row. Unsupported operations outside this matrix
+still report `INQ039` unless the project explicitly enables runtime stubs.
 
 ## Composition with other features
 

@@ -723,8 +723,8 @@ public abstract class SqlBuilder
     /// <see cref="BuildDeleteByKeySql"/> for a non-hard delete.
     /// </summary>
     internal virtual string BuildSoftDeleteByKeySql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetClause
-            + " WHERE " + context.KeyWriteWhereClause;
+        => "UPDATE " + context.Table + " SET " + context.SoftDeleteSetWithVersion
+            + " WHERE " + context.KeyUpdateWhereClause;
 
     /// <summary>
     /// Builds a soft-delete update that returns the affected entity. Dialects must opt in because
@@ -740,7 +740,7 @@ public abstract class SqlBuilder
     /// write clause rather than <see cref="SqlBuildContext.KeyWriteWhereClause"/>.
     /// </summary>
     internal virtual string BuildRestoreByKeySql(SqlBuildContext context)
-        => "UPDATE " + context.Table + " SET " + context.SoftDeleteRestoreSetClause + " WHERE " + context.KeyEnforcedWhereClause;
+        => "UPDATE " + context.Table + " SET " + context.RestoreSetWithVersion + " WHERE " + context.RestoreWhereClause;
 
     // ---- Explicit table-wide delete ---------------------------------------------------
 

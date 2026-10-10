@@ -80,8 +80,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sqlSelectBy_Name = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"IsDeleted\\\" FROM \\\"TWidget\\\" WHERE \\\"Name\\\" = @Name AND \\\"IsDeleted\\\" = 0\";", text);
 
         // Delete becomes a soft UPDATE; restore clears the flag.
-        Assert.Contains("_sqlDeleteByKey = \"UPDATE \\\"TWidget\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"Id\\\" = @Id\";", text);
-        Assert.Contains("_sqlRestoreByKey = \"UPDATE \\\"TWidget\\\" SET \\\"IsDeleted\\\" = 0 WHERE \\\"Id\\\" = @Id\";", text);
+        Assert.Contains("_sqlDeleteByKey = \"UPDATE \\\"TWidget\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"Id\\\" = @Id AND \\\"IsDeleted\\\" = 0\";", text);
+        Assert.Contains("_sqlRestoreByKey = \"UPDATE \\\"TWidget\\\" SET \\\"IsDeleted\\\" = 0 WHERE \\\"Id\\\" = @Id AND NOT (\\\"IsDeleted\\\" = 0)\";", text);
         Assert.DoesNotContain("DELETE FROM", text);
     }
 

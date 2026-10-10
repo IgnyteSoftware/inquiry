@@ -123,7 +123,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " WHERE " + context.KeyWriteWhereClause;
+            + " WHERE " + context.KeyUpdateWhereClause;
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
     {
@@ -158,8 +158,13 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
                 context.KeyWhereClause, "(ROW_COUNT() > 0 OR " + context.WriteEnforcedPredicate + ")");
         }
 
+        returningPredicate = AppendWhere(returningPredicate, context.SoftDeletePredicate);
         return BuildUpdateSql(context) + "; SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + returningPredicate;
     }
+
+    internal override string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
+        => BuildSoftDeleteByKeySql(context) + "; SELECT " + context.SelectColumns + " FROM " + context.Table
+            + " WHERE " + context.KeyWhereClause + " AND ROW_COUNT() > 0";
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;

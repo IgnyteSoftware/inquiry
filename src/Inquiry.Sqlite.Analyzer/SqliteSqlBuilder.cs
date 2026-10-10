@@ -45,10 +45,13 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " WHERE " + context.KeyWriteWhereClause;
+            + " WHERE " + context.KeyUpdateWhereClause;
 
     public override string BuildUpdateReturningSql(SqlBuildContext context)
         => BuildUpdateSql(context) + " RETURNING " + context.SelectColumns;
+
+    internal override string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
+        => BuildSoftDeleteByKeySql(context) + " RETURNING " + context.SelectColumns;
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;

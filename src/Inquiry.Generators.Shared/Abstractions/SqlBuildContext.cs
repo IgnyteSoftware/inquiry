@@ -96,7 +96,7 @@ public sealed class SqlBuildContext
         // branch unchanged.
         // A server-computed column is never SET — the database recomputes it from its expression.
         SetClauses = string.Join(", ", columns
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
+            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && c.SoftDelete == SoftDeleteKind.None && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
             .Select(c => builder.QuoteIdentifier(c.ColumnName) + " = " + builder.ParameterName(c.PropertyName)));
         QuotedKeyColumns = KeyColumns.Select(k => builder.QuoteIdentifier(k.ColumnName)).ToArray();
         KeyParameters = KeyColumns.Select(k => builder.ParameterName(k.PropertyName)).ToArray();
@@ -233,6 +233,10 @@ public sealed class SqlBuildContext
         // enforcement, which is what keeps every non-opted-in store's SQL byte-identical.
         KeyWriteWhereClause = JoinAnd(JoinAnd(KeyWhereClause, ConcurrencyWhereClause), WriteEnforcedPredicate);
         KeyEnforcedWhereClause = JoinAnd(KeyWhereClause, WriteEnforcedPredicate);
+        KeyUpdateWhereClause = JoinAnd(KeyWriteWhereClause, SoftDeletePredicate);
+        SoftDeleteSetWithVersion = SoftDeleteSetClause + (ConcurrencyVersionSet.Length == 0 ? "" : ", " + ConcurrencyVersionSet);
+        RestoreSetWithVersion = SoftDeleteRestoreSetClause + (ConcurrencyVersionSet.Length == 0 ? "" : ", " + ConcurrencyVersionSet);
+        RestoreWhereClause = JoinAnd(KeyEnforcedWhereClause, SoftDeletePredicate.Length == 0 ? "" : "NOT (" + SoftDeletePredicate + ")");
     }
 
     /// <summary>
@@ -287,6 +291,11 @@ public sealed class SqlBuildContext
     /// therefore conflates not-found, stale-token, and filtered-out — documented, not distinguished.
     /// </summary>
     public string KeyWriteWhereClause { get; }
+
+    internal string KeyUpdateWhereClause { get; }
+    internal string SoftDeleteSetWithVersion { get; }
+    internal string RestoreSetWithVersion { get; }
+    internal string RestoreWhereClause { get; }
 
     /// <summary>
     /// <see cref="KeyWhereClause"/> AND <see cref="WriteEnforcedPredicate"/>, with NO concurrency term —

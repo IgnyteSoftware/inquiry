@@ -90,8 +90,8 @@ before using managed concurrency; equality predicates cannot match SQL NULL.
 
 Like numeric tokens, the input remains unchanged. Use the entity returned by update-returning,
 or reload after a bool-returning update. A stale update returns false/null or throws when configured.
-Hard deletes compare the original stamp and do not generate a replacement. Soft deletion currently
-compares the stamp without rotating it; its archive/restore contract is documented separately.
+Hard deletes compare the original stamp and do not generate a replacement. Single-row soft deletion
+and restore rotate the stamp; see the [archive/restore contract](soft-delete.md#archive-edit-and-restore).
 
 The numeric default accepts non-nullable integral types. Other types require a supported strategy;
 `DatabaseGenerated` and `RotateOnUpdate` cannot be combined. Nullable tokens, incompatible SqlType overrides, converters, computed

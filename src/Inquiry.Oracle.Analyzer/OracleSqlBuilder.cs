@@ -295,7 +295,13 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " WHERE " + context.KeyWriteWhereClause;
+            + " WHERE " + context.KeyUpdateWhereClause;
+
+    internal override string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
+        => "BEGIN " + BuildSoftDeleteByKeySql(context) + "; IF SQL%ROWCOUNT = 0 THEN OPEN " + RefCursorBind +
+            " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE 1 = 0; ELSE OPEN " +
+            RefCursorBind + " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " +
+            context.KeyWhereClause + "; END IF; END;";
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
