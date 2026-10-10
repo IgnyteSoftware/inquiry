@@ -1,4 +1,4 @@
-﻿# Inquiry product workspace
+# Inquiry product workspace
 
 A runnable Blazor Server application backed by SQLite and generated Inquiry stores. The main
 screen combines product search, filtering, sorting, paging, creation, editing, concurrency
@@ -89,8 +89,8 @@ if (product is not null)
 - Each data library owns a registration wrapper to avoid identical generated extension method
   names when an application references multiple libraries (#382).
 - Soft deletion currently leaves the concurrency token unchanged. The service checks active
-  state and token inside the same SQLite transaction before updating, preventing stale editors
-  from restoring archived rows. This is a sample safeguard, not a fix to the generator.
+  state and token inside the same SQLite transaction before updating or archiving. Stale editors
+  cannot restore archived rows or report a repeated archive as successful. This is a sample safeguard, not a fix to the generator.
 - Name search uses SQL LIKE: `%` matches any sequence and `_` matches one character. Ordinary
   text becomes a contains pattern. Values are passed as parameters.
 - Stored procedures need server-provider examples and integration verification. SQLite has
