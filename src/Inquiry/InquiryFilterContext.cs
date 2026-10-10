@@ -14,7 +14,7 @@ namespace Inquiry;
 /// </summary>
 public static class InquiryFilterContext
 {
-    private static readonly AsyncLocal<IReadOnlyDictionary<string, object>?> Current = new();
+    private static readonly AsyncLocal<ScopeFrame?> Current = new();
 
     /// <summary>
     /// Sets the ambient filter values for the current async flow and returns a scope that restores
@@ -36,9 +36,9 @@ public static class InquiryFilterContext
             snapshot[pair.Key] = pair.Value;
         }
 
-        var previous = Current.Value;
-        Current.Value = snapshot;
-        return new Scope(previous);
+        var frame = new ScopeFrame(snapshot, Current.Value);
+        Current.Value = frame;
+        return new Scope(frame);
     }
 
     /// <summary>
@@ -51,7 +51,7 @@ public static class InquiryFilterContext
     /// </summary>
     public static T GetRequired<T>(string contextKey)
     {
-        var values = Current.Value;
+        var values = Current.Value?.Value;
         if (values is null)
         {
             throw new InquiryFilterValueMissingException(
@@ -73,14 +73,46 @@ public static class InquiryFilterContext
         return typed;
     }
 
-    /// <summary>Restores the previous ambient values when disposed.</summary>
+    internal sealed class ScopeFrame
+    {
+        internal readonly IReadOnlyDictionary<string, object> Value;
+        internal readonly ScopeFrame? Previous;
+
+        internal ScopeFrame(IReadOnlyDictionary<string, object> value, ScopeFrame? previous)
+        {
+            Value = value;
+            Previous = previous;
+        }
+    }
+
+    /// <summary>Restores the previous ambient value in the current async flow.</summary>
     public readonly struct Scope : System.IDisposable
     {
-        private readonly IReadOnlyDictionary<string, object>? _previous;
+        private readonly ScopeFrame? _frame;
 
-        internal Scope(IReadOnlyDictionary<string, object>? previous) => _previous = previous;
+        internal Scope(ScopeFrame frame) => _frame = frame;
 
-        /// <summary>Restores the values captured when the scope was opened.</summary>
-        public void Dispose() => Current.Value = _previous;
+        /// <summary>
+        /// Closes this scope. Repeated or copied disposal is a no-op in a flow where it is absent.
+        /// </summary>
+        /// <exception cref="System.InvalidOperationException">
+        /// A nested scope is still active. Dispose nested scopes first, then retry.
+        /// </exception>
+        public void Dispose()
+        {
+            if (_frame is null) return;
+            var current = Current.Value;
+            if (ReferenceEquals(current, _frame))
+            {
+                Current.Value = _frame.Previous;
+                return;
+            }
+
+            for (var frame = current; frame is not null; frame = frame.Previous)
+            {
+                if (ReferenceEquals(frame, _frame))
+                    throw new System.InvalidOperationException("Dispose nested ambient scopes before their parent scope.");
+            }
+        }
     }
 }
