@@ -579,6 +579,25 @@ internal static class EntityProcessor
                 isConcurrencyToken = false;
             }
 
+            var rotateConcurrencyToken = concurrencyTokenAttribute is not null &&
+                GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute, "RotateOnUpdate");
+            var numericToken = typeData.SpecialType is SpecialType.System_Byte or SpecialType.System_SByte
+                or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32
+                or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64;
+            if (concurrencyTokenAttribute is not null && (rotateConcurrencyToken || !GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute, "DatabaseGenerated")) &&
+                (GeneratorHelpers.GetNamedBool(concurrencyTokenAttribute, "DatabaseGenerated") || typeData.IsNullable || converter is not null || isGenerated ||
+                 useDatabaseDefault || hasComputedMetadata ||
+                 (rotateConcurrencyToken
+                     ? !(typeData.IsGuid || typeData.SpecialType == SpecialType.System_String) || (length > 0 && length < 36)
+                     : !numericToken)))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.ManagedConcurrencyTokenInvalid,
+                    property.Locations.FirstOrDefault(), entitySymbol.Name, property.Name));
+                isConcurrencyToken = false;
+                rotateConcurrencyToken = false;
+            }
+
             columns.Add(new ColumnData
             {
                 Location = LocationData.From(property.Locations.FirstOrDefault()),
@@ -596,6 +615,7 @@ internal static class EntityProcessor
                 GlobalFilterContextKey = globalFilterContextKey,
                 GlobalFilterEnforceOnWrites = isGlobalFilter && globalFilterEnforceOnWrites,
                 IsConcurrencyToken = isConcurrencyToken,
+                RotateConcurrencyToken = rotateConcurrencyToken,
                 IsDatabaseGeneratedToken = isDatabaseGeneratedToken,
                 IsCreatedAt = isCreatedAt,
                 IsModifiedAt = isModifiedAt,
@@ -779,7 +799,8 @@ internal static class EntityProcessor
         {
             var expression = attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value as string ?? string.Empty : string.Empty;
             result.Add(new CheckConstraintData(null, string.Empty, expression, GeneratorHelpers.GetNamedString(attribute, "Name"),
-                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation())) { Ordinal = ordinal++ });
+                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()))
+            { Ordinal = ordinal++ });
         }
         return result;
     }

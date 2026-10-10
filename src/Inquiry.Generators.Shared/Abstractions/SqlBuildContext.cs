@@ -16,6 +16,14 @@ namespace Inquiry.Generators.Abstractions;
 /// </remarks>
 public sealed class SqlBuildContext
 {
+    internal static string RotatedTokenParameterName(IEnumerable<IColumn> columns, IColumn token)
+    {
+        var name = "__new_" + token.PropertyName;
+        while (columns.Any(c => string.Equals(c.PropertyName, name, StringComparison.OrdinalIgnoreCase)))
+            name = "_" + name;
+        return name;
+    }
+
     private readonly IReadOnlyList<string> _activeRowPredicateTerms;
 
     internal ISet<string>? SuppressedForeignKeyColumns { get; init; }
@@ -208,7 +216,9 @@ public sealed class SqlBuildContext
             }
             else
             {
-                ConcurrencyVersionSet = quoted + " = " + quoted + " + 1";
+                ConcurrencyVersionSet = ConcurrencyToken.RotateConcurrencyToken
+                    ? quoted + " = " + builder.ParameterName(RotatedTokenParameterName(columns, ConcurrencyToken))
+                    : quoted + " = " + quoted + " + 1";
                 SetClausesWithVersion = SetClauses.Length == 0
                     ? ConcurrencyVersionSet
                     : SetClauses + ", " + ConcurrencyVersionSet;

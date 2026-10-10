@@ -87,6 +87,8 @@ public interface IColumn
     /// <summary>True when this column is the entity's optimistic-concurrency token.</summary>
     bool IsConcurrencyToken { get; }
 
+    bool RotateConcurrencyToken { get; }
+
     /// <summary>
     /// True when the concurrency token is database-managed (e.g. SQL Server <c>rowversion</c>) — the
     /// database supplies its value, so it is excluded from INSERT and never SET by the ORM.

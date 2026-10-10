@@ -1257,3 +1257,13 @@ Failing shape: InquiryKeysetPage includes a nullable non-key date column.
 Smallest correction: Choose non-nullable ordering fields or use offset paging. Null cursor remains the first-page sentinel.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L1017).
+
+## INQ101
+
+Managed concurrency token representation is unsupported. Default: error, enabled.
+
+Trigger: A managed token has an unsupported type, strategy combination, or generation setting.
+
+Failing shape: A string token without `RotateOnUpdate = true`, or a rotating string limited to fewer than 36 characters.
+
+Smallest correction: Use a non-nullable integral token, or opt into rotation for a non-nullable string/Guid. Remove converters and conflicting generation settings. See [concurrency](features/concurrency.md).

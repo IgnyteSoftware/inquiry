@@ -1014,6 +1014,12 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq099");
 
+    public static readonly DiagnosticDescriptor ManagedConcurrencyTokenInvalid = new(
+        "INQ101", "Managed concurrency token representation is unsupported",
+        "Concurrency token '{0}.{1}' requires a non-nullable integral type, or a non-nullable string/Guid with RotateOnUpdate = true. Remove converters and conflicting generation metadata; string stamps require at least 36 characters.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq101");
+
     public static readonly DiagnosticDescriptor NullableKeysetField = new(
         "INQ100", "Keyset ordering field must be non-nullable",
         "Keyset method '{0}' uses nullable field '{1}'. Choose non-nullable ordering fields or use offset pagination; a null keyset cursor is reserved for the first page.",

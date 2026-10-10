@@ -43,4 +43,10 @@ public sealed class InquiryConcurrencyTokenAttribute : InquiryColumnAttribute
     /// <c>rowversion</c>). When <see langword="false"/> (default), the ORM manages a numeric token.
     /// </summary>
     public bool DatabaseGenerated { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether updates replace a string or Guid token with a client-generated GUID.
+    /// The input keeps its original token. Use update-returning or reload before the next write.
+    /// </summary>
+    public bool RotateOnUpdate { get; set; }
 }
