@@ -1276,4 +1276,8 @@ Filter column protection requires write enforcement. Default: error, enabled.
 
 Trigger: `PreventReassignment = true` appears without a valid global filter and `EnforceOnWrites = true`.
 
+Failing shape: `[InquiryGlobalFilter(PreventReassignment = true)]` omits write enforcement.
+
 Smallest correction: Enable write enforcement on a valid filter, or remove column protection. Inserts still retain caller-supplied values. See [global filters](features/global-filters.md).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

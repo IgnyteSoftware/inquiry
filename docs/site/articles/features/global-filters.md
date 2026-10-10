@@ -112,7 +112,9 @@ key predicates; they are never SET.
 
 Explicit partial-update or `InquirySet` assignments to the protected column fail with `INQ044`.
 The policy requires a valid filter and `EnforceOnWrites = true` (`INQ102`). An entity update with
-no writable columns left fails with `INQ096`. The policy defaults to false.
+no writable columns left fails with `INQ096`. A managed concurrency token still permits a
+token-only update: its value advances even when protection excludes every ordinary SET column.
+A database-generated token does not supply a SET column. The policy defaults to false.
 
 This policy protects reassignment only. Insert, batch-insert, and bulk-insert values remain
 caller-supplied; there is no automatic stamping, ambient-value check, or conflict validation.

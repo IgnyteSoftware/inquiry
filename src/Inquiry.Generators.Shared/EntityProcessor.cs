@@ -812,8 +812,7 @@ internal static class EntityProcessor
         {
             var expression = attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value as string ?? string.Empty : string.Empty;
             result.Add(new CheckConstraintData(null, string.Empty, expression, GeneratorHelpers.GetNamedString(attribute, "Name"),
-                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()))
-            { Ordinal = ordinal++ });
+                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation())) { Ordinal = ordinal++ });
         }
         return result;
     }
