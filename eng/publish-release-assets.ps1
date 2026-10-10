@@ -8,7 +8,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $headers = @{ Authorization = "Bearer $($env:GH_TOKEN)"; 'X-GitHub-Api-Version' = '2022-11-28' }
 $api = "$($env:GITHUB_API_URL)/repos/$($env:GITHUB_REPOSITORY)"
-$release = Invoke-RestMethod -Uri "$api/releases/tags/$([uri]::EscapeDataString($Tag))" -Headers $headers
+$releaseId = (& gh release view $Tag --json databaseId --jq .databaseId)
+if ($LASTEXITCODE -ne 0 -or $releaseId -cnotmatch '^[0-9]+$') { throw 'Could not resolve the release or draft ID.' }
+$release = Invoke-RestMethod -Uri "$api/releases/$releaseId" -Headers $headers
 $files = @(Get-ChildItem -LiteralPath $BundlePath -File | Where-Object { $_.Extension -eq '.nupkg' -or $_.Name -eq 'sbom.cdx.json' })
 $pending = @()
 foreach ($file in $files) {

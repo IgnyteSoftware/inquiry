@@ -157,7 +157,7 @@ jobs:
             10.0.x
       - name: Pack and verify the exact manifest inventory
         shell: pwsh
-        run: ./eng/pack-release.ps1 -OutputPath "$env:RUNNER_TEMP/package-contract" -Commit $env:GITHUB_SHA
+        run: ./eng/pack-release.ps1 -OutputPath "$env:RUNNER_TEMP/package-contract" -Commit ((git rev-parse HEAD).Trim())
       - name: Attest build provenance
         # Attestation persistence is unavailable for private repos on this org's plan; enable the
         # repo variable (or make the repo public) to turn it back on.
@@ -225,13 +225,13 @@ jobs:
           ARTIFACT_DIGEST: ${{ needs.package-producer.outputs.artifact-digest }}
         run: |
           echo "$ARTIFACT_DIGEST" | grep -Eq '^[0-9a-f]{64}$'
-          dotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded "$GITHUB_SHA"
+          dotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded "$(git rev-parse HEAD)"
 
       - name: Provision NativeAOT toolchain
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
       - name: Run clean consumers of the verified bundle
         shell: pwsh
-        run: ./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath .artifacts/downloaded -ResultsPath "$env:RUNNER_TEMP/package-consumers" -Commit $env:GITHUB_SHA
+        run: ./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath .artifacts/downloaded -ResultsPath "$env:RUNNER_TEMP/package-consumers" -Commit ((git rev-parse HEAD).Trim())
       - name: Upload package consumer evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

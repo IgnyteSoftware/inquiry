@@ -245,7 +245,7 @@ public static class CiContractVerifier
         }
     }
 
-    private const string PackageConsumerCommand = "./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath .artifacts/downloaded -ResultsPath \"$env:RUNNER_TEMP/package-consumers\" -Commit $env:GITHUB_SHA";
+    private const string PackageConsumerCommand = "./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath .artifacts/downloaded -ResultsPath \"$env:RUNNER_TEMP/package-consumers\" -Commit ((git rev-parse HEAD).Trim())";
 
     private static void VerifyRequiredCommands(IReadOnlyDictionary<string, YamlNode> jobs)
     {
@@ -265,11 +265,11 @@ public static class CiContractVerifier
             "dotnet build benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release\ndotnet build benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj -c Release",
             "dotnet run --project benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release -f net8.0 -- \\\n  --filter \"*ShipperCrudBenchmarks.SelectAll_AdoNet*\" \\\n  --job Dry \\\n  --exporters json");
         RequireRuns(jobs, "package-producer",
-            "./eng/pack-release.ps1 -OutputPath \"$env:RUNNER_TEMP/package-contract\" -Commit $env:GITHUB_SHA",
+            "./eng/pack-release.ps1 -OutputPath \"$env:RUNNER_TEMP/package-contract\" -Commit ((git rev-parse HEAD).Trim())",
             "test -n \"$ARTIFACT_ID\"\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'");
         RequireRuns(jobs, "package-verifier",
             "echo \"$ARTIFACT_ID\" | grep -Eq '^[0-9]+$'\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ncurl --fail --silent --show-error --retry 3 --max-redirs 0 \\\n  --header \"Authorization: Bearer $GH_TOKEN\" \\\n  --header \"X-GitHub-Api-Version: 2022-11-28\" \\\n  \"$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip\" \\\n  --dump-header artifact.headers --output /dev/null\nartifact_url=\"$(sed -n 's/^location: //Ip' artifact.headers | tr -d '\\r')\"\ncase \"$artifact_url\" in https://*) ;; *) exit 1 ;; esac\ncurl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \\\n  \"$artifact_url\" --output artifact.zip\necho \"$ARTIFACT_DIGEST  artifact.zip\" | sha256sum --check --strict",
-            "echo \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded \"$GITHUB_SHA\"",
+            "echo \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded \"$(git rev-parse HEAD)\"",
             "sudo apt-get update && sudo apt-get install -y clang zlib1g-dev",
             PackageConsumerCommand);
         RequireRuns(jobs, "ci-required-v1",
@@ -378,7 +378,7 @@ public static class CiContractVerifier
         Require(!step.ContainsKey("with"), $"Run step {jobId}[{stepIndex}] must not declare action inputs.");
         var run = NormalizeRun(Scalar(step["run"], $"{jobId}[{stepIndex}].run"));
         if ((jobId == "package-producer"
-            && run == "./eng/pack-release.ps1 -OutputPath \"$env:RUNNER_TEMP/package-contract\" -Commit $env:GITHUB_SHA")
+            && run == "./eng/pack-release.ps1 -OutputPath \"$env:RUNNER_TEMP/package-contract\" -Commit ((git rev-parse HEAD).Trim())")
             || (jobId == "package-verifier" && run == PackageConsumerCommand))
         {
             Require(step.TryGetValue("shell", out var shellNode)
