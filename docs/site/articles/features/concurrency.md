@@ -99,8 +99,9 @@ columns, and conflicting generation settings produce `INQ101`. String length, wh
 must hold all 36 characters. Explicit string SqlType supports text/CLOB families and character types
 with capacity of at least 36; Guid rotation uses the default provider mapping. SQL Server TEXT/NTEXT
 and Oracle CLOB/NCLOB cannot compare stamps with equality and produce INQ101. On Oracle, specify
-a supported bounded Length (for example 36) to avoid the default LOB mapping. Oracle fixed CHAR/NCHAR
-stamps are rejected because padding can change equality against string parameters; use VARCHAR2/NVARCHAR2. For unsupported representations, use an explicit guarded update that
+a supported bounded Length (for example 36) to avoid the default LOB mapping. Oracle and PostgreSQL fixed CHAR/NCHAR
+stamps are rejected because padding can change equality against string parameters; use varying-length
+character types (VARCHAR2/NVARCHAR2 on Oracle, VARCHAR/TEXT on PostgreSQL). For unsupported representations, use an explicit guarded update that
 matches the original value and checks the affected-row count.
 
 ## Provider-specific notes
