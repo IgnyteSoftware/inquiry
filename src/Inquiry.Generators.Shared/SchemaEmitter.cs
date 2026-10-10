@@ -323,10 +323,10 @@ internal static class SchemaEmitter
             {
                 if (!column.RotateConcurrencyToken || column.Type.IsGuid) continue;
                 var storeType = builder.GetSchemaManifestStoreType(column)?.Trim().ToUpperInvariant();
+                var typeName = storeType?.Split('(')[0].Trim();
                 if ((builder.DialectName == "SqlServer" && storeType is "TEXT" or "NTEXT") ||
                     (builder.DialectName == "Oracle" && (storeType is "CLOB" or "NCLOB" ||
-                        storeType?.StartsWith("CHAR(", StringComparison.Ordinal) == true ||
-                        storeType?.StartsWith("NCHAR(", StringComparison.Ordinal) == true)))
+                        typeName is "CHAR" or "NCHAR")))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         InquiryDiagnosticDescriptors.ManagedConcurrencyTokenInvalid,
