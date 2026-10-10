@@ -298,31 +298,16 @@ internal static class SchemaEmitter
 
     private static string TypeClassToken(DbTypeClass type) => type switch
     {
-        DbTypeClass.String => "string",
-        DbTypeClass.Boolean => "boolean",
-        DbTypeClass.Byte => "byte",
-        DbTypeClass.Int16 => "int16",
-        DbTypeClass.Int32 => "int32",
-        DbTypeClass.Int64 => "int64",
-        DbTypeClass.Single => "single",
-        DbTypeClass.Double => "double",
-        DbTypeClass.Decimal => "decimal",
-        DbTypeClass.DateTime => "datetime",
-        DbTypeClass.DateTimeOffset => "datetimeoffset",
-        DbTypeClass.DateOnly => "dateonly",
-        DbTypeClass.TimeOnly => "timeonly",
-        DbTypeClass.Guid => "guid",
-        DbTypeClass.ByteArray => "bytearray",
-        _ => "unknown",
+        DbTypeClass.String => "string", DbTypeClass.Boolean => "boolean", DbTypeClass.Byte => "byte",
+        DbTypeClass.Int16 => "int16", DbTypeClass.Int32 => "int32", DbTypeClass.Int64 => "int64",
+        DbTypeClass.Single => "single", DbTypeClass.Double => "double", DbTypeClass.Decimal => "decimal",
+        DbTypeClass.DateTime => "datetime", DbTypeClass.DateTimeOffset => "datetimeoffset", DbTypeClass.DateOnly => "dateonly",
+        DbTypeClass.TimeOnly => "timeonly", DbTypeClass.Guid => "guid", DbTypeClass.ByteArray => "bytearray", _ => "unknown",
     };
 
     private static string ActionToken(int action) => action switch
     {
-        1 => "restrict",
-        2 => "cascade",
-        3 => "set-null",
-        4 => "set-default",
-        _ => "no-action",
+        1 => "restrict", 2 => "cascade", 3 => "set-null", 4 => "set-default", _ => "no-action",
     };
 
     private static string EscapeCSharpString(string value)
