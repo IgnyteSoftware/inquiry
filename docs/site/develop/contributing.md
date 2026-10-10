@@ -225,7 +225,9 @@ ID, checks the archive digest, reruns verification, and uploads only missing pac
 and evidence are retained for 90 days. An expired or deleted candidate after partial publication requires
 manual recovery of the original bytes; do not rebuild and bypass the check. GitHub release assets follow
 the same compare-existing/upload-missing rule. Assets attach to a draft before it is published and
-locked. A published release with a missing asset fails explicitly; retries do not overwrite its notes.
+locked. The workflow re-fetches each asset and checks its bytes before publishing. Draft creation
+requires a successful lookup; authentication and service errors stop the run. A published release
+with a missing asset fails explicitly; retries do not overwrite its notes.
 
 Symbols are uploaded separately from packages so a failed symbol upload can be retried. NuGet does not
 expose original `.snupkg` archives for comparison: retries use the retained, locally verified symbols and

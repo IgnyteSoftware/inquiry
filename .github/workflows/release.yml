@@ -212,22 +212,29 @@ jobs:
           }
 
       - name: Prepare GitHub release draft
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.version }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
-          # Body = the extracted curated CHANGELOG section; gh appends the auto-generated
-          # commit list after it.
-          notes_file="$RUNNER_TEMP/release-notes.md"
-          test -s "$notes_file"
-          flags=(--title "$TAG" --generate-notes --notes-file "$notes_file")
-          if [ "$PRERELEASE" = "true" ]; then
-            flags+=(--prerelease)
-          fi
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --draft "${flags[@]}"
-          fi
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $tagReleases = @()
+          $page = 1
+          do {
+            $releases = @(Invoke-RestMethod -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/releases?per_page=100&page=$page" -Headers $headers)
+            $tagReleases += @($releases | Where-Object tag_name -CEQ $env:TAG)
+            $page++
+          } while ($releases.Count -eq 100)
+          if ($tagReleases.Count -gt 1) { throw 'Multiple releases or drafts use this tag.' }
+          if ($tagReleases.Count -eq 0) {
+            $notes = "$env:RUNNER_TEMP/release-notes.md"
+            if (-not (Get-Content -Raw $notes).Trim()) { throw 'Release notes are empty.' }
+            $flags = @('--title', $env:TAG, '--generate-notes', '--notes-file', $notes, '--draft')
+            if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' }
+            gh release create $env:TAG @flags
+            if ($LASTEXITCODE -ne 0) { throw 'Draft creation failed.' }
+          }
 
       - name: Recover GitHub release assets without replacing bytes
         shell: pwsh
