@@ -182,6 +182,15 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.DeleteOneByKey:
             {
+                if (entity.SoftDeleteColumn is not null && !method.HardDelete &&
+                    entity.ConcurrencyToken is { RotateConcurrencyToken: true })
+                {
+                    AppendHeader(source, method, parameters, isAsync: true);
+                    EmitRotatingUpdate(source, sqlBuilder, method, entity, firstParameter, entityType, structMat, cancellation, writeFilterBinder, softDelete: true);
+                    source.AppendLine("    }");
+                    break;
+                }
+
                 if (method.ReturnsEntity)
                 {
                     var returningField = entity.SoftDeleteColumn is not null && !method.HardDelete
@@ -243,7 +252,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.RestoreOneByKey:
                 AppendHeader(source, method, parameters, isAsync: true);
-                EmitFastExecuteFromKeys(source, sqlBuilder, "_sqlRestoreByKey", entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
+                EmitFastExecuteFromKeys(source, sqlBuilder, "_sqlRestoreByKey", entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder, rotatedToken: entity.ConcurrencyToken is { RotateConcurrencyToken: true } rt ? rt with { PropertyName = SqlBuildContext.RotatedTokenParameterName(entity.Columns.AsImmutableArray(), rt) } : null);
                 source.AppendLine("    }");
                 break;
 
@@ -428,10 +437,12 @@ internal static class StoreOperationEmitter
 
     private static void EmitRotatingUpdate(
         StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, EntityData entity,
-        string entityParameter, string entityType, string structMat, string cancellation, string? filterBinder)
+        string entityParameter, string entityType, string structMat, string cancellation, string? filterBinder, bool softDelete = false)
     {
         var token = entity.ConcurrencyToken!;
-        var columns = SelectMutationColumns(entity, includeKey: true, forUpdate: true).ToList();
+        var columns = softDelete
+            ? entity.Keys.AsImmutableArray().Concat(new[] { token }).ToList()
+            : SelectMutationColumns(entity, includeKey: true, forUpdate: true).ToList();
         columns.Add(token with { PropertyName = SqlBuildContext.RotatedTokenParameterName(entity.Columns.AsImmutableArray(), token) });
         var stateType = $"({entityType} Entity, {token.Type.DisplayName} Stamp)";
         var newStamp = token.Type.IsGuid ? "global::System.Guid.NewGuid()" : "global::System.Guid.NewGuid().ToString(\"D\")";
@@ -440,7 +451,10 @@ internal static class StoreOperationEmitter
             ? $"        var _result = await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {stateType}, {structMat}>("
             : "        var _rows = await Inquiry.ExecuteAsync(");
         source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{stateType}>(");
-        source.AppendLine(method.ReturnsEntity ? "                _sqlUpdateReturning," : "                _sqlUpdate,");
+        var sqlField = softDelete
+            ? method.ReturnsEntity ? "_sqlSoftDeleteReturning" : "_sqlDeleteByKey"
+            : method.ReturnsEntity ? "_sqlUpdateReturning" : "_sqlUpdate";
+        source.AppendLine($"                {sqlField},");
         source.AppendLine($"                ({entityParameter}, _newStamp),");
         AppendBinderLambda(source, sqlBuilder, "_state", columns,
             i => i == columns.Count - 1 ? "_state.Stamp" : $"_state.Entity.{columns[i].PropertyName}",
@@ -877,8 +891,26 @@ internal static class StoreOperationEmitter
         string cancellation,
         string indent,
         bool emitConcurrencyGuard = false,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        ColumnData? rotatedToken = null)
     {
+        if (rotatedToken is not null)
+        {
+            var columns = keyColumns.AsImmutableArray().Concat(new[] { rotatedToken }).ToArray();
+            var newStamp = rotatedToken.Type.IsGuid ? "global::System.Guid.NewGuid()" : "global::System.Guid.NewGuid().ToString(\"D\")";
+            var arguments = Take(methodParameters, keyColumns.Count).Select(p => p.Name).Concat(new[] { newStamp });
+            var types = Take(methodParameters, keyColumns.Count).Select(p => p.TypeDisplay).Concat(new[] { rotatedToken.Type.DisplayName });
+            var stateType = "(" + string.Join(", ", types) + ")";
+            source.AppendLine($"{indent}return await Inquiry.ExecuteAsync(");
+            source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{stateType}>(");
+            source.AppendLine($"{indent}        {sqlField},");
+            source.AppendLine($"{indent}        ({string.Join(", ", arguments)}),");
+            AppendBinderLambda(source, sqlBuilder, "_state", columns, i => $"_state.Item{i + 1}", indent + "        ", trailingComma: false, filterBinder: filterBinder);
+            source.AppendLine($"{indent}    ),");
+            source.AppendLine($"{indent}    {cancellation}).ConfigureAwait(false) > 0;");
+            return;
+        }
+
         // when the entity has a concurrency token, capture the row count and gate a conflict throw on
         // the runtime option; otherwise emit the original inline `… > 0` tail (byte-identical to before).
         var capture = emitConcurrencyGuard ? "var _rows = await Inquiry.ExecuteAsync(" : "return await Inquiry.ExecuteAsync(";
@@ -3309,7 +3341,7 @@ internal static class StoreOperationEmitter
             // insert branch references the parameter.
             // A server-computed column is never bound for INSERT or UPDATE (the database computes it).
             .Where(c => (includeKey ? c.IsKey || !c.IsGenerated : !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken)
-                && !(forUpdate && c.IsCreatedAudit)
+                && !(forUpdate && (c.IsCreatedAudit || c.SoftDelete != SoftDeleteKind.None))
                 && string.IsNullOrEmpty(c.ComputedExpression))
             .ToArray();
 

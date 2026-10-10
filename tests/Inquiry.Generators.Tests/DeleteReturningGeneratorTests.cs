@@ -64,7 +64,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void MariaDbSoftDeleteReturningReportsINQ039InsteadOfPhysicallyDeleting()
+    public void MariaDbSoftDeleteReturningUpdatesInsteadOfPhysicallyDeleting()
     {
         var source = WidgetStore("""
             [InquiryDelete]
@@ -72,10 +72,10 @@ public sealed partial class InquiryGeneratorTests
             """);
         var result = RunGenerator(source, dialect: "MariaDb");
 
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ039");
+        AssertNoErrors(result);
         var text = GetWidgetStore(result);
         Assert.DoesNotContain("DELETE FROM", text);
-        Assert.DoesNotContain("_sqlSoftDeleteReturning", text);
+        Assert.Contains("_sqlSoftDeleteReturning", text);
     }
 
     [Fact]

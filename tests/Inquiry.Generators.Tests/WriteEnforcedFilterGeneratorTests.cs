@@ -197,10 +197,10 @@ public sealed partial class InquiryGeneratorTests
         var text = GetTenantDocStore(result);
 
         Assert.Equal(
-            "UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"Id\\\" = @Id AND \\\"TenantId\\\" = @__gf_TenantId",
+            "UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 1 WHERE \\\"Id\\\" = @Id AND \\\"TenantId\\\" = @__gf_TenantId AND \\\"IsDeleted\\\" = 0",
             GeneratedConst(text, "_sqlDeleteByKey"));
         Assert.Equal(
-            "UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 0 WHERE \\\"Id\\\" = @Id AND \\\"TenantId\\\" = @__gf_TenantId",
+            "UPDATE \\\"TDoc\\\" SET \\\"IsDeleted\\\" = 0 WHERE \\\"Id\\\" = @Id AND \\\"TenantId\\\" = @__gf_TenantId AND NOT (\\\"IsDeleted\\\" = 0)",
             GeneratedConst(text, "_sqlRestoreByKey"));
 
         // A hard delete carries the tenant term but NOT the soft-delete activeness term: it must still

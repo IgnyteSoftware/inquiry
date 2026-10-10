@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - String and Guid concurrency stamps can opt into client-generated rotation with `RotateOnUpdate`; unsupported managed representations fail at build time.
 
+### Fixed
+
+- Stale updates cannot restore soft-deleted rows. Single-row archive/restore advances concurrency tokens, and archive-returning reports only affected rows on all six providers.
+
 ### Changed
 
 - Filter and audit scopes reject out-of-order disposal without changing ambient values. Repeated or copied disposal no longer restores stale values.

@@ -142,7 +142,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string BuildUpdateSql(SqlBuildContext context)
         => "UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
-            + " WHERE " + context.KeyWriteWhereClause;
+            + " WHERE " + context.KeyUpdateWhereClause;
 
     // OUTPUT emits only the rows the UPDATE actually touched, so composing the enforced predicate onto
     // the WHERE is sufficient — the trailing SELECT reads @_out, not the table.
@@ -150,7 +150,14 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         => DeclareOutputTable(context)
             + " UPDATE " + context.Table + " SET " + context.SetClausesWithVersion
             + " OUTPUT " + InsertedColumns(context) + " INTO @_out"
-            + " WHERE " + context.KeyWriteWhereClause
+            + " WHERE " + context.KeyUpdateWhereClause
+            + "; " + SelectFromOutput(context);
+
+    internal override string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
+        => DeclareOutputTable(context)
+            + " UPDATE " + context.Table + " SET " + context.SoftDeleteSetWithVersion
+            + " OUTPUT " + InsertedColumns(context) + " INTO @_out"
+            + " WHERE " + context.KeyUpdateWhereClause
             + "; " + SelectFromOutput(context);
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
