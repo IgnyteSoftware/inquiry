@@ -20,14 +20,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  correctness:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
+
+  security:
+    uses: ./.github/workflows/security.yml
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
   publish:
+    needs: [correctness, security]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     # The nuget-release environment restricts deployments to v* tags and is the binding
     # point for the nuget.org Trusted Publishing policy.
     environment: nuget-release
     permissions:
+      actions: read # recover the original candidate on retries
       attestations: write # persist build provenance
       contents: write # create the GitHub release
       id-token: write # NuGet Trusted Publishing (OIDC)
@@ -74,45 +90,6 @@ jobs:
           "commit=$commit" >> $env:GITHUB_OUTPUT
           "prerelease=$(if ($isPreview) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
 
-      - name: Pack and verify the release bundle
-        shell: pwsh
-        run: |
-          $arguments = @{
-            OutputPath     = "$env:RUNNER_TEMP/release"
-            Commit         = '${{ steps.version.outputs.commit }}'
-            PackageVersion = '${{ steps.version.outputs.version }}'
-          }
-          if ('${{ steps.version.outputs.prerelease }}' -eq 'false') {
-            $arguments.Tag = 'v${{ steps.version.outputs.version }}'
-          }
-          ./eng/pack-release.ps1 @arguments
-
-      - name: Attest build provenance
-        # Unconditional and fail-closed: a public release must not ship without provenance.
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-path: ${{ runner.temp }}/release/*.nupkg
-
-      - name: NuGet login (Trusted Publishing)
-        id: nuget-login
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
-        with:
-          user: ${{ vars.NUGET_USER }}
-
-      - name: Push packages to nuget.org
-        run: |
-          dotnet nuget push "$RUNNER_TEMP/release/*.nupkg" \
-            --source https://api.nuget.org/v3/index.json \
-            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
-            --skip-duplicate
-
-      - name: Mirror packages to GitHub Packages
-        run: |
-          dotnet nuget push "$RUNNER_TEMP/release/*.nupkg" \
-            --source "https://nuget.pkg.github.com/IgnyteSoftware/index.json" \
-            --api-key "${{ secrets.GITHUB_TOKEN }}" \
-            --skip-duplicate
-
       - name: Extract release notes from the changelog
         # Token-free on purpose: this step restores and builds the tool, and a build must
         # never run with the release-creating GH_TOKEN in its environment.
@@ -129,6 +106,107 @@ jobs:
             extract-notes CHANGELOG.md "$VERSION" "$RUNNER_TEMP/release-notes.md"
           test -s "$RUNNER_TEMP/release-notes.md"
 
+      - name: Restore the original candidate on retries
+        id: candidate
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_NAME: release-candidate-${{ steps.version.outputs.commit }}-${{ steps.version.outputs.version }}
+        run: ./eng/restore-release-candidate.ps1 -Name $env:CANDIDATE_NAME -OutputPath "$env:RUNNER_TEMP/release"
+
+      - name: Pack and verify the release bundle
+        if: steps.candidate.outputs.restored != 'true'
+        shell: pwsh
+        run: |
+          $arguments = @{
+            OutputPath     = "$env:RUNNER_TEMP/release"
+            Commit         = '${{ steps.version.outputs.commit }}'
+            PackageVersion = '${{ steps.version.outputs.version }}'
+          }
+          if ('${{ steps.version.outputs.prerelease }}' -eq 'false') {
+            $arguments.Tag = 'v${{ steps.version.outputs.version }}'
+          }
+          ./eng/pack-release.ps1 @arguments
+
+      - name: Retain the original release candidate
+        if: steps.candidate.outputs.restored != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-candidate-${{ steps.version.outputs.commit }}-${{ steps.version.outputs.version }}
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Provision NativeAOT toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Verify exact release package consumers
+        shell: pwsh
+        env:
+          COMMIT: ${{ steps.version.outputs.commit }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath "$env:RUNNER_TEMP/release" -ResultsPath "$env:RUNNER_TEMP/release-evidence" -Commit $env:COMMIT -PackageVersion $env:VERSION
+
+      - name: Enforce API policy and bind completed verification
+        shell: pwsh
+        env:
+          COMMIT: ${{ steps.version.outputs.commit }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_CORRECTNESS_RESULT: ${{ needs.correctness.result }}
+          RELEASE_SECURITY_RESULT: ${{ needs.security.result }}
+        run: ./eng/verify-release-evidence.ps1 -BundlePath "$env:RUNNER_TEMP/release" -EvidencePath "$env:RUNNER_TEMP/release-evidence" -Commit $env:COMMIT -Version $env:VERSION -RunId $env:GITHUB_RUN_ID -RunAttempt $env:GITHUB_RUN_ATTEMPT
+
+      - name: Compare existing registry packages before any push
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          CANDIDATE_RESTORED: ${{ steps.candidate.outputs.restored }}
+        run: ./eng/compare-published-packages.ps1 -BundlePath "$env:RUNNER_TEMP/release" -Version $env:VERSION -OutputPath "$env:RUNNER_TEMP/release-evidence/publication-plan.json" -RequireEmptyRegistries:($env:CANDIDATE_RESTORED -ne 'true')
+
+      - name: Upload release verification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-evidence-${{ steps.version.outputs.commit }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attest build provenance
+        # Unconditional and fail-closed: a public release must not ship without provenance.
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: ${{ runner.temp }}/release/*.nupkg
+
+      - name: NuGet login (Trusted Publishing)
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish only packages absent from the verified plan
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $plan = Get-Content -Raw "$env:RUNNER_TEMP/release-evidence/publication-plan.json" | ConvertFrom-Json
+          foreach ($entry in $plan.entries) {
+            if ($entry.action -ne 'push') { continue }
+            $package = "$env:RUNNER_TEMP/release/$($entry.package).$env:VERSION.nupkg"
+            if ((Get-FileHash $package -Algorithm SHA256).Hash -cne $entry.candidateSha256) { throw 'Candidate bytes changed after preflight.' }
+            $source = if ($entry.registry -eq 'nuget') { 'https://api.nuget.org/v3/index.json' } else { 'https://nuget.pkg.github.com/IgnyteSoftware/index.json' }
+            $key = if ($entry.registry -eq 'nuget') { $env:NUGET_API_KEY } else { $env:GITHUB_TOKEN }
+            dotnet nuget push $package --source $source --api-key $key --no-symbols
+            if ($LASTEXITCODE -ne 0) { throw 'Publication stopped; rerun this workflow to recover the original candidate.' }
+          }
+          # Symbol servers do not expose original archives for download. Retry only the retained, verified symbols.
+          foreach ($symbol in Get-ChildItem "$env:RUNNER_TEMP/release/*.snupkg") {
+            dotnet nuget push $symbol.FullName --source https://api.nuget.org/v3/index.json --api-key $env:NUGET_API_KEY --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw 'Symbol publication stopped; rerun with the retained candidate.' }
+          }
+
       - name: Publish GitHub release notes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -143,4 +221,15 @@ jobs:
           if [ "$PRERELEASE" = "true" ]; then
             flags+=(--prerelease)
           fi
-          gh release create "$TAG" "$RUNNER_TEMP"/release/*.nupkg "$RUNNER_TEMP"/release/sbom.cdx.json "${flags[@]}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file "$notes_file"
+          else
+            gh release create "$TAG" "${flags[@]}"
+          fi
+
+      - name: Recover GitHub release assets without replacing bytes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}
+        run: ./eng/publish-release-assets.ps1 -BundlePath "$env:RUNNER_TEMP/release" -Tag $env:TAG

@@ -199,3 +199,34 @@ remains covered by the required integration matrix.
 CI runs this in the required `package-verifier` job. Its retained `package-consumers.json` identifies
 the commit, version, completed checks, and SHA-256 of every bundle file. A failed run retains its log
 but never writes passing evidence. The isolated consumer directory is printed for local diagnosis.
+
+### Publication preflight and recovery
+
+The release workflow runs the required CI and security workflows against the tagged commit before
+publication. It extracts exact-version notes, restores or retains the original candidate artifact,
+runs the clean package consumers against that release version, and binds their hashes to the completed
+workflow results. Stable releases also require nonempty Shipped API baselines and empty Unshipped
+baselines in every manifest package. Previews allow Unshipped APIs. These controls do not close the
+remaining performance, documentation, or final release decisions in #360.
+
+Before uploading any package, preflight inspects all twelve package versions in both registries.
+Existing GitHub packages must have identical archive bytes. NuGet adds a repository signature, so its
+existing packages must pass signature verification and have identical payload entries; duplicate or
+unsafe entry paths are rejected. Evidence records both archive hashes. Any lookup error or mismatch
+stops publication. A newly built candidate cannot replace a missing original when that version already
+exists in either registry.
+
+For an interrupted release, rerun the same Actions run. It downloads the original candidate by artifact
+ID, checks the archive digest, reruns verification, and uploads only missing packages. Candidate artifacts
+and evidence are retained for 90 days. An expired or deleted candidate after partial publication requires
+manual recovery of the original bytes; do not rebuild and bypass the check. GitHub release assets follow
+the same compare-existing/upload-missing rule.
+
+Symbols are uploaded separately from packages so a failed symbol upload can be retried. NuGet does not
+expose original `.snupkg` archives for comparison: retries use the retained, locally verified symbols and
+allow duplicate symbol uploads to be skipped. This does **not** verify remote symbol archive bytes.
+
+A local recovery rehearsal can replace only the registry transport with a disposable directory: seed
+five packages in each registry, compute the plan (10 existing, 14 missing), copy the missing files, and
+rerun (24 existing). Changing one existing archive must fail preflight. Such a rehearsal does not publish
+packages or establish real security results; the release workflow must supply those results.
