@@ -1,4 +1,4 @@
-﻿using Inquiry.DependencyInjection;
+using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
 using Inquiry.Sample.Data;
 using Inquiry.Sqlite.DependencyInjection;

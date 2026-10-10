@@ -5,7 +5,7 @@
     <p class="eyebrow">BUILT WITH INQUIRY</p>
     <h1>A real workflow, ordinary C# methods.</h1>
     <p class="guide-intro">The product workspace runs on a seeded SQLite database. Every search, page, and save goes through Inquiry. Use it to explore the interface, then follow the implementation in the sample source.</p>
-    <a class="btn primary" href="products">Open the product workspace</a>
+    <a class="btn primary" href="/">Open the product workspace</a>
     <div class="guide-grid">
         <section class="product-panel"><h2>Search and paging</h2><p>Combine optional name, price, stock, and category conditions. Name and price sorts have stable ID tie-breakers. Page totals come from generated count queries.</p><p><code>WorkspaceStores.cs</code> shows the current declaration cost: eight methods cover four sorts and an explicit unassigned-category path.</p></section>
         <section class="product-panel"><h2>Safe editing</h2><p>New products return their database-generated IDs. Every save returns the refreshed concurrency token. Open one product in two tabs, save in one, then save the other to see a conflict without overwriting the first edit.</p><p>Archive retains the row and removes it from generated active-product queries.</p></section>

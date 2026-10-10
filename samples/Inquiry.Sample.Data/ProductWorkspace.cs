@@ -83,7 +83,13 @@ public sealed class ProductWorkspace(
         using var scope = Enter(workspaceId);
         if (product.WorkspaceId != workspaceId || product.Id == 0)
             throw new ValidationException("Choose a saved product in this workspace.");
-        return await products.ArchiveAsync(product, ct);
+        return await inquiry.ExecuteInTransactionAsync(async (_, token) =>
+        {
+            var current = await products.FindAsync(product.Id, token);
+            if (current is null || current.Version != product.Version)
+                return false;
+            return await products.ArchiveAsync(product, token);
+        }, cancellationToken: ct);
     }
 
     public async Task SeedAsync(CancellationToken ct = default)

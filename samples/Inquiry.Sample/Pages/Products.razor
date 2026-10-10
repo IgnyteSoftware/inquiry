@@ -1,5 +1,4 @@
 @page "/"
-@page "/products"
 @implements IDisposable
 @using Inquiry.Sample.Data
 @using Inquiry.Paging
@@ -71,7 +70,7 @@
                     @foreach (var product in _page.Items)
                     {
                         <tr @key="product.Id">
-                            <td><div class="product-identity"><span class="product-monogram" aria-hidden="true">@Initials(product.Name)</span><div><button class="product-name" @onclick="() => EditAsync(product.Id)" disabled="@_busy">@product.Name</button><small>NW-@product.Id.ToString("D4")</small></div></div></td>
+                            <td><div class="product-identity"><span class="product-monogram" aria-hidden="true">@Initials(product.Name)</span><div><button class="product-name" @onclick="() => EditAsync(product.Id)" disabled="@_busy">@product.Name</button><small>ID @product.Id.ToString("D4")</small></div></div></td>
                             <td><span class="category-pill">@CategoryName(product.CategoryId)</span></td>
                             <td class="numeric">@Money(product.Price)</td>
                             <td><span class="stock-status @(product.Stock == 0 ? "empty" : "")">@(product.Stock == 0 ? "Out of stock" : product.Stock + " available")</span></td>
@@ -91,7 +90,7 @@
     @if (_editor is not null)
     {
         <section class="product-panel editor-panel" aria-labelledby="editor-heading">
-            <div class="panel-heading"><div><p class="eyebrow">@(_editor.Id == 0 ? "NEW PRODUCT" : $"NW-{_editor.Id:D4}")</p><h2 id="editor-heading" tabindex="-1" @ref="_editorHeading">@(_editor.Id == 0 ? "Add a product" : "Edit product")</h2></div><button class="btn" @onclick="CloseEditor" disabled="@_busy">Cancel</button></div>
+            <div class="panel-heading"><div><p class="eyebrow">@(_editor.Id == 0 ? "NEW PRODUCT" : $"ID {_editor.Id:D4}")</p><h2 id="editor-heading" tabindex="-1" @ref="_editorHeading">@(_editor.Id == 0 ? "Add a product" : "Edit product")</h2></div><button class="btn" @onclick="CloseEditor" disabled="@_busy">Cancel</button></div>
             @if (_conflict)
             {
                 <div class="workspace-alert error" role="alert">This product changed or was archived in another session. Your changes have not been saved. Reload the latest version before editing again.

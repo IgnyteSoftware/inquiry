@@ -81,7 +81,7 @@ The method bodies, the SQL `const string`s, the materializers, and the DI wiring
 dotnet run --project samples\Inquiry.Sample\Inquiry.Sample.csproj
 ```
 
-The sample seeds a database (SQLite by default; configurable to SQL Server or PostgreSQL via `Inquiry:Provider`), serves a Blazor Server dashboard at `/`, and exercises CRUD, upsert, eager loading, and a transactional insert.
+The [sample](samples/Inquiry.Sample/README.md) uses SQLite only. Its product workspace at `/` combines search, paging, validated editing, conflicts, and archiving. The Northwind overview at `/overview` links to the existing CRUD, eager-loading, and transaction examples.
 
 ## Running the tests
 
