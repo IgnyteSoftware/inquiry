@@ -203,7 +203,7 @@ public static class CiContractVerifier
             "integration" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
             "benchmark-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
             "package-producer" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/attest-build-provenance", "actions/upload-artifact" },
-            "package-verifier" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/download-artifact" },
+            "package-verifier" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/download-artifact", "actions/upload-artifact" },
             _ => []
         };
         var actualActions = steps.Select(step => Map(step, "step"))
@@ -245,6 +245,8 @@ public static class CiContractVerifier
         }
     }
 
+    private const string PackageConsumerCommand = "./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath .artifacts/downloaded -ResultsPath \"$env:RUNNER_TEMP/package-consumers\" -Commit $env:GITHUB_SHA";
+
     private static void VerifyRequiredCommands(IReadOnlyDictionary<string, YamlNode> jobs)
     {
         RequireRuns(jobs, "build-and-unit",
@@ -267,7 +269,9 @@ public static class CiContractVerifier
             "test -n \"$ARTIFACT_ID\"\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'");
         RequireRuns(jobs, "package-verifier",
             "echo \"$ARTIFACT_ID\" | grep -Eq '^[0-9]+$'\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ncurl --fail --silent --show-error --retry 3 --max-redirs 0 \\\n  --header \"Authorization: Bearer $GH_TOKEN\" \\\n  --header \"X-GitHub-Api-Version: 2022-11-28\" \\\n  \"$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip\" \\\n  --dump-header artifact.headers --output /dev/null\nartifact_url=\"$(sed -n 's/^location: //Ip' artifact.headers | tr -d '\\r')\"\ncase \"$artifact_url\" in https://*) ;; *) exit 1 ;; esac\ncurl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \\\n  \"$artifact_url\" --output artifact.zip\necho \"$ARTIFACT_DIGEST  artifact.zip\" | sha256sum --check --strict",
-            "echo \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded \"$GITHUB_SHA\"");
+            "echo \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded \"$GITHUB_SHA\"",
+            "sudo apt-get update && sudo apt-get install -y clang zlib1g-dev",
+            PackageConsumerCommand);
         RequireRuns(jobs, "ci-required-v1",
             "test \"$BUILD_AND_UNIT_RESULT\" = success\ntest \"$AOT_SMOKE_RESULT\" = success\ntest \"$INTEGRATION_RESULT\" = success\ntest \"$BENCHMARK_SMOKE_RESULT\" = success\ntest \"$PACKAGE_PRODUCER_RESULT\" = success\ntest \"$PACKAGE_VERIFIER_RESULT\" = success");
 
@@ -314,7 +318,6 @@ public static class CiContractVerifier
             Require(step.TryGetValue("with", out var withNode), "setup-dotnet must declare its exact SDK input.");
             var with = Map(withNode!, "setup-dotnet.with", "dotnet-version");
             var expectedVersions = jobId is "aot-smoke" ? "10.0.x"
-                : jobId is "package-verifier" ? "8.0.x"
                 : jobId is "benchmark-smoke" ? "8.0.x\n10.0.x"
                 : "8.0.x\n9.0.x\n10.0.x";
             Require(NormalizeRun(Scalar(with["dotnet-version"], "setup-dotnet.dotnet-version")) == expectedVersions,
@@ -325,15 +328,21 @@ public static class CiContractVerifier
             Require(step.TryGetValue("with", out var withNode), "Artifact upload must declare its exact contract.");
             var with = Map(withNode!, "upload-artifact.with", "name", "path", "if-no-files-found", "retention-days");
             Require(Scalar(with["if-no-files-found"], "upload.if-no-files-found") == "error", "Artifact upload must fail when files are absent.");
-            var expectedRetention = jobId == "package-producer" ? "30" : "7";
+            var expectedRetention = jobId is "package-producer" or "package-verifier" ? "30" : "7";
             Require(Scalar(with["retention-days"], "upload.retention-days") == expectedRetention, "Artifact retention contract drifted.");
             var expectedName = jobId switch
             {
                 "build-and-unit" => "unit-test-results",
                 "integration" => "integration-test-results-${{ matrix.provider }}-${{ matrix.tfm }}",
+                "package-verifier" => "package-consumers-${{ github.sha }}-${{ github.run_attempt }}",
                 _ => "package-contract-${{ github.sha }}-${{ github.run_attempt }}"
             };
-            var expectedPath = jobId == "package-producer" ? "${{ runner.temp }}/package-contract/" : "test-results/";
+            var expectedPath = jobId switch
+            {
+                "package-producer" => "${{ runner.temp }}/package-contract/",
+                "package-verifier" => "${{ runner.temp }}/package-consumers/",
+                _ => "test-results/"
+            };
             Require(Scalar(with["name"], "upload.name") == expectedName && Scalar(with["path"], "upload.path") == expectedPath,
                 "Artifact upload name/path contract drifted.");
         }
@@ -368,12 +377,13 @@ public static class CiContractVerifier
 
         Require(!step.ContainsKey("with"), $"Run step {jobId}[{stepIndex}] must not declare action inputs.");
         var run = NormalizeRun(Scalar(step["run"], $"{jobId}[{stepIndex}].run"));
-        if (jobId == "package-producer"
+        if ((jobId == "package-producer"
             && run == "./eng/pack-release.ps1 -OutputPath \"$env:RUNNER_TEMP/package-contract\" -Commit $env:GITHUB_SHA")
+            || (jobId == "package-verifier" && run == PackageConsumerCommand))
         {
             Require(step.TryGetValue("shell", out var shellNode)
                 && Scalar(shellNode!, $"{jobId}[{stepIndex}].shell") == "pwsh",
-                "The package producer must use the exact pwsh shell.");
+                "Package scripts must use the exact pwsh shell.");
         }
         else
         {

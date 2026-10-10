@@ -48,7 +48,7 @@ For 1.0, "feature complete" means:
 3. **Performance:** corrected baselines and current competitors cover CRUD, streaming, eager/M:N,
    collections, paging, batch/bulk, transactions, cold/warm startup, and concurrency; stable regression
    budgets guard latency and allocations.
-4. **Packaging:** clean projects consume the actual eleven `.nupkg` files on .NET 8/9/10 and NativeAOT;
+4. **Packaging:** clean projects consume the actual twelve `.nupkg` files on .NET 8/9/10 and NativeAOT;
    SourceLink, symbols, metadata, icon, provenance, and dependency/security evidence are verified.
 5. **Documentation and governance:** hosted versioned docs match generated behavior, the tracker and roadmap
    agree, release/support/security policies are published, and required review/status checks protect releases.

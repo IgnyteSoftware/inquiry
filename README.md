@@ -25,7 +25,8 @@ Inquiry is an experimental **.NET 8+** source-generated micro-ORM. You write att
 | `src/Inquiry.AspNetCore` | ASP.NET Core audit-context middleware that stamps `CreatedBy`/`ModifiedBy` from the current user identity. |
 | `src/Inquiry.Aspire` | Aspire resource-name registration with automatic Inquiry telemetry and health checks. |
 | `src/Inquiry.Interceptors` | Opt-in companion: slow-query warning logging, sqlcommenter trace-context tagging, and N+1 query detection. |
-| `src/Inquiry.Testing` | Test helpers: SQLite fixture, recording command interceptor, entity factory, transaction sandbox, and Respawn reset wrapper. |
+| `src/Inquiry.Testing` | Provider-neutral recording, entity factories, transaction sandboxes, and Respawn reset helpers. |
+| `src/Inquiry.Sqlite.Testing` | In-memory SQLite fixture. |
 | `tests/…` | Core runtime tests, source-generator tests, the shared `Inquiry.IntegrationTesting` and `Inquiry.FeatureCatalog` support libraries, and per-dialect end-to-end suites (SQLite in-process; the rest via Testcontainers). |
 | `samples/Inquiry.Northwind` | Shared classic-Northwind entities, stores, and per-provider DDL consumed by the samples and integration tests. |
 | `samples/Inquiry.Sample` | Runnable ASP.NET Core sample exercising CRUD, upsert, transactions, and eager loading on SQLite. |

@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Companions.cs" />
     <PackageReference Include="$(InquirySmokeProviderPackage)" Version="$(InquirySmokeVersion)" />
   </ItemGroup>
 

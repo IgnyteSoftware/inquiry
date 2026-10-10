@@ -8,7 +8,7 @@ Package: `Inquiry.PostgreSql`. Built on `Npgsql`.
 ## Install
 
 ```bash
-dotnet add package Inquiry.PostgreSql
+dotnet add package Ignyte.Inquiry.PostgreSql
 ```
 
 ```csharp
