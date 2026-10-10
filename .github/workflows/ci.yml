@@ -183,7 +183,7 @@ jobs:
   package-verifier:
     needs: [package-producer]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: read
@@ -191,7 +191,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
       - name: Verify the stored artifact archive digest
         env:
           ARTIFACT_ID: ${{ needs.package-producer.outputs.artifact-id }}
@@ -222,6 +225,20 @@ jobs:
         run: |
           echo "$ARTIFACT_DIGEST" | grep -Eq '^[0-9a-f]{64}$'
           dotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded "$GITHUB_SHA"
+
+      - name: Provision NativeAOT toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+      - name: Run clean consumers of the verified bundle
+        shell: pwsh
+        run: ./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath .artifacts/downloaded -ResultsPath "$env:RUNNER_TEMP/package-consumers" -Commit $env:GITHUB_SHA
+      - name: Upload package consumer evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: package-consumers-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/package-consumers/
+          if-no-files-found: error
+          retention-days: 30
 
   ci-required-v1:
     name: ci-required-v1

@@ -50,6 +50,8 @@ Behavioral bug fixes that correct documented-but-wrong behavior are not consider
 
 | Package                       | Purpose                                                        |
 |-------------------------------|----------------------------------------------------------------|
+| `Ignyte.Inquiry.Aspire` | Resource-name registration, telemetry, and health checks |
 | `Ignyte.Inquiry.AspNetCore`   | ASP.NET Core audit-context middleware (`UseInquiryAuditContext`) |
 | `Ignyte.Inquiry.Interceptors` | Slow-query logging, sqlcommenter trace-context tagging, N+1 detection |
-| `Ignyte.Inquiry.Testing`      | SQLite fixture, recording interceptor, entity factory, transaction sandbox, Respawn reset |
+| `Ignyte.Inquiry.Testing`      | Provider-neutral recording, entity factories, transaction sandboxes, and reset helpers |
+| `Ignyte.Inquiry.Sqlite.Testing` | In-memory SQLite fixture |

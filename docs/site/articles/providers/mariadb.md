@@ -14,7 +14,7 @@ Package: `Inquiry.MariaDb`. Built on `MySqlConnector` (wire-compatible with Mari
 ## Install
 
 ```bash
-dotnet add package Inquiry.MariaDb
+dotnet add package Ignyte.Inquiry.MariaDb
 ```
 
 ```csharp

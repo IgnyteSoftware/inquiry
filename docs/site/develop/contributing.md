@@ -127,7 +127,7 @@ NuGet **Trusted Publishing** (OIDC via `NuGet/login`) bound to the `nuget-releas
 long-lived API key is stored in the repository.
 
 Every release run packs from an immutable detached snapshot of the exact merge commit and re-verifies
-the full package contract before pushing. For local package-contract verification, pack the ten
+the full package contract before pushing. For local package-contract verification, pack the twelve
 manifest entries at an exact commit:
 
 ```powershell
@@ -179,3 +179,22 @@ NuGet consumers can step into Inquiry source in their debugger without downloadi
 ## Adding a database
 
 See [Adding a provider](adding-a-provider.md) for the append-point checklist.
+## Clean package consumers
+
+After packing a clean commit, verify the same bundle without rebuilding packages:
+
+```powershell
+./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath $output -ResultsPath "$output-consumers" -Commit (git rev-parse HEAD)
+```
+
+This requires .NET 8/9/10 runtimes and a native compiler (CI provisions clang and zlib on Linux).
+Use `-RuntimeIdentifier win-x64` on Windows with the NativeAOT C++ toolchain installed.
+For a preview bundle, also pass its exact `-PackageVersion`.
+The runner uses fresh NuGet caches and maps every manifest package ID exclusively to the candidate feed.
+It compiles all six provider generators, runs SQLite CRUD and companion APIs on each framework,
+and publishes and executes SQLite CRUD as a .NET 10 native binary. Server-provider SQL execution
+remains covered by the required integration matrix.
+
+CI runs this in the required `package-verifier` job. Its retained `package-consumers.json` identifies
+the commit, version, completed checks, and SHA-256 of every bundle file. A failed run retains its log
+but never writes passing evidence. The isolated consumer directory is printed for local diagnosis.

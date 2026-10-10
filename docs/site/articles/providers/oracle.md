@@ -9,7 +9,7 @@ Package: `Inquiry.Oracle`. Built on `Oracle.ManagedDataAccess.Core`.
 ## Install
 
 ```bash
-dotnet add package Inquiry.Oracle
+dotnet add package Ignyte.Inquiry.Oracle
 ```
 
 ```csharp

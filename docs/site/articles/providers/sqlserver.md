@@ -9,7 +9,7 @@ Package: `Inquiry.SqlServer`. Built on `Microsoft.Data.SqlClient`.
 ## Install
 
 ```bash
-dotnet add package Inquiry.SqlServer
+dotnet add package Ignyte.Inquiry.SqlServer
 ```
 
 ```csharp

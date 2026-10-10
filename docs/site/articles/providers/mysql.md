@@ -12,7 +12,7 @@ Package: `Inquiry.MySql`. Built on `MySqlConnector`.
 ## Install
 
 ```bash
-dotnet add package Inquiry.MySql
+dotnet add package Ignyte.Inquiry.MySql
 ```
 
 ```csharp

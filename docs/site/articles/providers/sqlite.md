@@ -9,7 +9,7 @@ Package: `Inquiry.Sqlite`. Built on `Microsoft.Data.Sqlite`.
 ## Install
 
 ```bash
-dotnet add package Inquiry.Sqlite
+dotnet add package Ignyte.Inquiry.Sqlite
 ```
 
 ```csharp
