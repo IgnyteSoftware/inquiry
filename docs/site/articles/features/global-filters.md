@@ -146,6 +146,19 @@ This also means the filter and soft delete compose cleanly: on an entity with **
 [InquirySelectAll(IncludeDeleted = true)] // WHERE IsPublished = 1  (soft-delete term dropped, filter kept)
 ```
 
+## Scope disposal
+
+Dispose nested scopes before their parent. Out-of-order disposal throws
+`InvalidOperationException` and leaves the current value unchanged; close the inner scope,
+then retry the outer one. If a body exception leaves an inner scope open, the
+outer disposal exception can replace it; use nested `using` blocks. Repeated disposal, copied scope values, and a default scope do
+nothing when that scope is no longer active in the current async flow.
+
+Disposal changes only the current async flow. A child inherits its parent's values, but
+closing an inherited scope in the child does not close it in the parent. Prefer lexical
+`using` blocks and await child work before leaving them. Filter and audit scopes use the
+same rules.
+
 ## Composition with other features
 
 A global filter composes correctly with everything else the generator emits, using the same active-row machinery as soft delete:
@@ -225,15 +238,3 @@ A global filter is right when a subset of rows should be invisible to *normal* r
 - [Soft delete](soft-delete.md) — the same active-row machinery, specialized for deletion with a per-method opt-out.
 - [CRUD](crud.md) — the baseline operations the filter extends.
 - [Ad-hoc DTOs](ad-hoc-dtos.md) — the escape hatch for a deliberately unfiltered read.
-
-## Scope disposal
-
-Dispose nested scopes before their parent. Out-of-order disposal throws
-`InvalidOperationException` and leaves the current value unchanged; close the inner scope,
-then retry the outer one. Repeated disposal, copied scope values, and a default scope do
-nothing when that scope is no longer active in the current async flow.
-
-Disposal changes only the current async flow. A child inherits its parent's values, but
-closing an inherited scope in the child does not close it in the parent. Prefer lexical
-`using` blocks and await child work before leaving them. Filter and audit scopes use the
-same rules.
