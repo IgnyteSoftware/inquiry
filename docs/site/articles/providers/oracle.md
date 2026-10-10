@@ -4,12 +4,12 @@ Oracle schema DDL supports composite and unique `[InquiryIndex]`, `[InquiryCheck
 with delete `Cascade` or `SetNull`. Covering `Include`, update actions, `Restrict`, and `SetDefault` are
 rejected because Oracle cannot represent them faithfully.
 
-Package: `Inquiry.Oracle`. Built on `Oracle.ManagedDataAccess.Core`.
+Package: `Ignyte.Inquiry.Oracle`. Built on `Oracle.ManagedDataAccess.Core`.
 
 ## Install
 
 ```bash
-dotnet add package Ignyte.Inquiry.Oracle
+dotnet add package Ignyte.Inquiry.Oracle --prerelease
 ```
 
 ```csharp
