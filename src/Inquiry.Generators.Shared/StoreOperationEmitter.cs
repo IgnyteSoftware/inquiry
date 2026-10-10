@@ -181,65 +181,65 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.DeleteOneByKey:
+            {
+                if (method.ReturnsEntity)
                 {
-                    if (method.ReturnsEntity)
-                    {
-                        var returningField = entity.SoftDeleteColumn is not null && !method.HardDelete
-                            ? "_sqlSoftDeleteReturning"
-                            : "_sqlDeleteReturning";
-                        AppendHeader(source, method, parameters, isAsync: true);
-                        if (entity.ConcurrencyToken is not null)
-                        {
-                            var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
-                            source.AppendLine($"        var _result = await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
-                            source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
-                            source.AppendLine($"                {returningField},");
-                            source.AppendLine($"                {firstParameter},");
-                            AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: writeFilterBinder);
-                            source.AppendLine("            ),");
-                            source.AppendLine("            default,");
-                            source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
-                            source.AppendLine("        if (_result is null && Inquiry.ThrowOnConcurrencyConflict) throw new global::Inquiry.InquiryConcurrencyException();");
-                            source.AppendLine("        return _result;");
-                        }
-                        else
-                        {
-                            EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, returningField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
-                        }
-                        source.AppendLine("    }");
-                        break;
-                    }
-
-                    // the shared _sqlDeleteByKey is the soft UPDATE for a soft-delete entity (or the literal
-                    // DELETE otherwise). A HardDelete method on a soft-delete entity uses the separate literal
-                    // const. Either way it is a rows-affected ExecuteAsync, so binder/return are unchanged.
-                    var deleteField = method.HardDelete && entity.SoftDeleteColumn is not null
-                        ? "_sqlHardDeleteByKey"
-                        : "_sqlDeleteByKey";
+                    var returningField = entity.SoftDeleteColumn is not null && !method.HardDelete
+                        ? "_sqlSoftDeleteReturning"
+                        : "_sqlDeleteReturning";
                     AppendHeader(source, method, parameters, isAsync: true);
                     if (entity.ConcurrencyToken is not null)
                     {
-                        // a concurrency-checked DELETE takes the entity and binds the key + token (the
-                        // DELETE WHERE references both); a 0-row result is a conflict and throws when the
-                        // runtime option is set.
                         var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
-                        source.AppendLine("        var _rows = await Inquiry.ExecuteAsync(");
+                        source.AppendLine($"        var _result = await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
                         source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
-                        source.AppendLine($"                {deleteField},");
+                        source.AppendLine($"                {returningField},");
                         source.AppendLine($"                {firstParameter},");
                         AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: writeFilterBinder);
                         source.AppendLine("            ),");
+                        source.AppendLine("            default,");
                         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
-                        AppendConcurrencyConflictGuard(source, "        ");
-                        source.AppendLine("        return _rows > 0;");
+                        source.AppendLine("        if (_result is null && Inquiry.ThrowOnConcurrencyConflict) throw new global::Inquiry.InquiryConcurrencyException();");
+                        source.AppendLine("        return _result;");
                     }
                     else
                     {
-                        EmitFastExecuteFromKeys(source, sqlBuilder, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
+                        EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, returningField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
                     }
                     source.AppendLine("    }");
                     break;
                 }
+
+                // the shared _sqlDeleteByKey is the soft UPDATE for a soft-delete entity (or the literal
+                // DELETE otherwise). A HardDelete method on a soft-delete entity uses the separate literal
+                // const. Either way it is a rows-affected ExecuteAsync, so binder/return are unchanged.
+                var deleteField = method.HardDelete && entity.SoftDeleteColumn is not null
+                    ? "_sqlHardDeleteByKey"
+                    : "_sqlDeleteByKey";
+                AppendHeader(source, method, parameters, isAsync: true);
+                if (entity.ConcurrencyToken is not null)
+                {
+                    // a concurrency-checked DELETE takes the entity and binds the key + token (the
+                    // DELETE WHERE references both); a 0-row result is a conflict and throws when the
+                    // runtime option is set.
+                    var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
+                    source.AppendLine("        var _rows = await Inquiry.ExecuteAsync(");
+                    source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
+                    source.AppendLine($"                {deleteField},");
+                    source.AppendLine($"                {firstParameter},");
+                    AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: writeFilterBinder);
+                    source.AppendLine("            ),");
+                    source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                    AppendConcurrencyConflictGuard(source, "        ");
+                    source.AppendLine("        return _rows > 0;");
+                }
+                else
+                {
+                    EmitFastExecuteFromKeys(source, sqlBuilder, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
+                }
+                source.AppendLine("    }");
+                break;
+            }
 
             case StoreOperation.RestoreOneByKey:
                 AppendHeader(source, method, parameters, isAsync: true);
@@ -248,25 +248,25 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.DeleteAll:
-                {
-                    AppendHeader(source, method, parameters, isAsync: false);
-                    source.AppendLine($"        return Inquiry.ExecuteAsync({EmptyGeneratedCommand("_sqlDeleteAll_" + method.Name, writeFilterBinder)}, {cancellation});");
-                    source.AppendLine("    }");
-                    break;
-                }
+            {
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine($"        return Inquiry.ExecuteAsync({EmptyGeneratedCommand("_sqlDeleteAll_" + method.Name, writeFilterBinder)}, {cancellation});");
+                source.AppendLine("    }");
+                break;
+            }
 
             case StoreOperation.Count:
-                {
-                    // COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
-                    // so the Task is returned directly (no async state machine). A named-filter bypass is
-                    // the one per-method Count shape; the matching const is emitted by StoreProcessor
-                    // under the same IgnoredFilterNames condition.
-                    var countField = method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.Name : "_sqlCount";
-                    AppendHeader(source, method, parameters, isAsync: false);
-                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField, filterBinder)}, {cancellation});");
-                    source.AppendLine("    }");
-                    break;
-                }
+            {
+                // COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
+                // so the Task is returned directly (no async state machine). A named-filter bypass is
+                // the one per-method Count shape; the matching const is emitted by StoreProcessor
+                // under the same IgnoredFilterNames condition.
+                var countField = method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.Name : "_sqlCount";
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField, filterBinder)}, {cancellation});");
+                source.AppendLine("    }");
+                break;
+            }
 
             case StoreOperation.Exists:
                 // EXISTS returns a 1/0 scalar the runtime coerces to bool; criteria (if any) bind through
@@ -303,60 +303,60 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.GroupCount:
-                {
-                    var groupColumn = entity.Columns.AsImmutableArray().First(column =>
-                        string.Equals(column.PropertyName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(column.ColumnName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase));
-                    var keyType = method.GroupCountKeyTypeFqn!;
-                    var gcType = $"global::Inquiry.GroupCount<{keyType}>";
-                    var matName = "_GroupCountMat_" + method.Name;
-                    AppendHeader(source, method, parameters, isAsync: false);
-                    source.AppendLine($"        return Inquiry.QueryListAsync<{gcType}, byte, {matName}>(");
-                    source.AppendLine($"            {EmptyGeneratedCommand("_sqlGroupCount_" + method.Name, filterBinder)},");
-                    source.AppendLine("            default,");
-                    source.AppendLine($"            {cancellation});");
-                    source.AppendLine("    }");
-                    // Emit the inline struct materializer for this GroupCount method.
-                    source.AppendLine();
-                    source.AppendLine($"    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
-                    source.AppendLine($"    internal readonly struct {matName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{gcType}>");
-                    source.AppendLine("    {");
-                    source.AppendLine($"        public {gcType} Materialize(global::System.Data.Common.DbDataReader reader)");
-                    var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter);
-                    var countType = new TypeData(
-                        "global::System.Int64", "global::System.Int64", SpecialType.System_Int64,
-                        SpecialType.None, false, true, false, false);
-                    var countRead = MaterializerEmitter.ReadExpression(countType, 1, sqlBuilder, role: ReaderResultRole.Count);
-                    source.AppendLine($"            => new {gcType}({keyRead}, {countRead});");
-                    source.AppendLine("    }");
-                    break;
-                }
+            {
+                var groupColumn = entity.Columns.AsImmutableArray().First(column =>
+                    string.Equals(column.PropertyName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(column.ColumnName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase));
+                var keyType = method.GroupCountKeyTypeFqn!;
+                var gcType = $"global::Inquiry.GroupCount<{keyType}>";
+                var matName = "_GroupCountMat_" + method.Name;
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine($"        return Inquiry.QueryListAsync<{gcType}, byte, {matName}>(");
+                source.AppendLine($"            {EmptyGeneratedCommand("_sqlGroupCount_" + method.Name, filterBinder)},");
+                source.AppendLine("            default,");
+                source.AppendLine($"            {cancellation});");
+                source.AppendLine("    }");
+                // Emit the inline struct materializer for this GroupCount method.
+                source.AppendLine();
+                source.AppendLine($"    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
+                source.AppendLine($"    internal readonly struct {matName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{gcType}>");
+                source.AppendLine("    {");
+                source.AppendLine($"        public {gcType} Materialize(global::System.Data.Common.DbDataReader reader)");
+                var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter);
+                var countType = new TypeData(
+                    "global::System.Int64", "global::System.Int64", SpecialType.System_Int64,
+                    SpecialType.None, false, true, false, false);
+                var countRead = MaterializerEmitter.ReadExpression(countType, 1, sqlBuilder, role: ReaderResultRole.Count);
+                source.AppendLine($"            => new {gcType}({keyRead}, {countRead});");
+                source.AppendLine("    }");
+                break;
+            }
 
             case StoreOperation.FullTextSearch:
-                {
-                    // one string search-term parameter bound to @searchTerm; the SQL is the dialect's
-                    // full-text predicate over the searched columns.
-                    var searchArg = method.Parameters[0].Name;
-                    AppendHeader(source, method, parameters, isAsync: false);
-                    var ftsQueryMethod = method.ReturnsList ? "QueryListAsync" : "QueryAsync";
-                    source.AppendLine($"        return Inquiry.{ftsQueryMethod}<{entityType}, string, {structMat}>(");
-                    source.AppendLine("            new global::Inquiry.Commands.InquiryGeneratedCommand<string>(");
-                    source.AppendLine($"                _sqlFts_{method.Name},");
-                    source.AppendLine($"                {searchArg},");
-                    source.AppendLine("                static (_cmd, _arg) =>");
-                    source.AppendLine("                {");
-                    source.AppendLine("                    var _p = _cmd.CreateParameter();");
-                    source.AppendLine($"                    _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("searchTerm"))}\";");
-                    source.AppendLine("                    _p.DbType = global::System.Data.DbType.String;");
-                    source.AppendLine("                    _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
-                    source.AppendLine("                    _cmd.Parameters.Add(_p);");
-                    if (filterBinder is not null) source.AppendLine($"                    {filterBinder}(_cmd);");
-                    source.AppendLine("                }),");
-                    source.AppendLine("            default,");
-                    source.AppendLine($"            {cancellation});");
-                    source.AppendLine("    }");
-                    break;
-                }
+            {
+                // one string search-term parameter bound to @searchTerm; the SQL is the dialect's
+                // full-text predicate over the searched columns.
+                var searchArg = method.Parameters[0].Name;
+                AppendHeader(source, method, parameters, isAsync: false);
+                var ftsQueryMethod = method.ReturnsList ? "QueryListAsync" : "QueryAsync";
+                source.AppendLine($"        return Inquiry.{ftsQueryMethod}<{entityType}, string, {structMat}>(");
+                source.AppendLine("            new global::Inquiry.Commands.InquiryGeneratedCommand<string>(");
+                source.AppendLine($"                _sqlFts_{method.Name},");
+                source.AppendLine($"                {searchArg},");
+                source.AppendLine("                static (_cmd, _arg) =>");
+                source.AppendLine("                {");
+                source.AppendLine("                    var _p = _cmd.CreateParameter();");
+                source.AppendLine($"                    _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("searchTerm"))}\";");
+                source.AppendLine("                    _p.DbType = global::System.Data.DbType.String;");
+                source.AppendLine("                    _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
+                source.AppendLine("                    _cmd.Parameters.Add(_p);");
+                if (filterBinder is not null) source.AppendLine($"                    {filterBinder}(_cmd);");
+                source.AppendLine("                }),");
+                source.AppendLine("            default,");
+                source.AppendLine($"            {cancellation});");
+                source.AppendLine("    }");
+                break;
+            }
 
             case StoreOperation.BulkInsert when sqlBuilder.SupportsBulkCopy:
                 EmitBulkInsert(source, method, parameters, entity, entityType, cancellation, sqlBuilder);
@@ -368,39 +368,39 @@ internal static class StoreOperationEmitter
                 goto case StoreOperation.InsertAll;
 
             case StoreOperation.InsertAll:
+            {
+                // The cached descriptor owns provider SQL and binding while the runtime streams bounded,
+                // atomic chunks from the original enumerable.
+                var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
+                var batchDescriptor = BuildBatchDescriptorFieldName(method);
+                if (method.Operation == StoreOperation.BulkInsert)
                 {
-                    // The cached descriptor owns provider SQL and binding while the runtime streams bounded,
-                    // atomic chunks from the original enumerable.
-                    var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
-                    var batchDescriptor = BuildBatchDescriptorFieldName(method);
-                    if (method.Operation == StoreOperation.BulkInsert)
+                    AppendHeader(source, method, parameters, isAsync: true);
+                    if (method.Parameters.Count == 3)
                     {
-                        AppendHeader(source, method, parameters, isAsync: true);
-                        if (method.Parameters.Count == 3)
-                        {
-                            source.AppendLine($"        if ({method.Parameters[1].Name} is not null) throw new global::System.InvalidOperationException(\"Native bulk-insert options are not supported by this provider's batch-SQL fallback.\");");
-                        }
-                        source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation}).ConfigureAwait(false);");
+                        source.AppendLine($"        if ({method.Parameters[1].Name} is not null) throw new global::System.InvalidOperationException(\"Native bulk-insert options are not supported by this provider's batch-SQL fallback.\");");
                     }
-                    else
-                    {
-                        AppendHeader(source, method, parameters, isAsync: false);
-                        source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
-                    }
-                    source.AppendLine("    }");
-                    break;
+                    source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation}).ConfigureAwait(false);");
                 }
-
-            case StoreOperation.UpdateAll:
+                else
                 {
-                    // The runtime selects the descriptor's fixed-row, array-bound, or eligible set-based path.
-                    var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
-                    var batchDescriptor = BuildBatchDescriptorFieldName(method);
                     AppendHeader(source, method, parameters, isAsync: false);
                     source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
-                    source.AppendLine("    }");
-                    break;
                 }
+                source.AppendLine("    }");
+                break;
+            }
+
+            case StoreOperation.UpdateAll:
+            {
+                // The runtime selects the descriptor's fixed-row, array-bound, or eligible set-based path.
+                var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
+                var batchDescriptor = BuildBatchDescriptorFieldName(method);
+                AppendHeader(source, method, parameters, isAsync: false);
+                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
+                source.AppendLine("    }");
+                break;
+            }
 
             case StoreOperation.UpdateByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
@@ -690,7 +690,7 @@ internal static class StoreOperationEmitter
             // partner is lossless (same bit pattern) and the materializer reverses the cast on read.
             var reinterpretedValue = column.Type.SpecialType switch
             {
-                SpecialType.System_SByte => isNullable
+                SpecialType.System_SByte  => isNullable
                     ? $"{accessor}.HasValue ? (object)unchecked((byte){accessor}.Value) : global::System.DBNull.Value"
                     : $"(object)unchecked((byte){accessor})",
                 SpecialType.System_UInt16 => isNullable
@@ -719,18 +719,18 @@ internal static class StoreOperationEmitter
         // values (e.g. SampleEnumUInt32.AboveIntMax) are preserved as bit patterns rather than throwing.
         var underlying = column.Type.EnumUnderlyingSpecialType switch
         {
-            SpecialType.System_Byte => ("byte", false),
-            SpecialType.System_SByte => ("byte", true),   // reinterpret: sbyte ↔ byte
-            SpecialType.System_Int16 => ("short", false),
+            SpecialType.System_Byte   => ("byte",  false),
+            SpecialType.System_SByte  => ("byte",  true),   // reinterpret: sbyte ↔ byte
+            SpecialType.System_Int16  => ("short", false),
             SpecialType.System_UInt16 => ("short", true),   // reinterpret: ushort ↔ short
-            SpecialType.System_Int32 => ("int", false),
-            SpecialType.System_UInt32 => ("int", true),   // reinterpret: uint ↔ int
-            SpecialType.System_Int64 => ("long", false),
-            SpecialType.System_UInt64 => ("long", true),   // reinterpret: ulong ↔ long
-            _ => ("int", false),
+            SpecialType.System_Int32  => ("int",   false),
+            SpecialType.System_UInt32 => ("int",   true),   // reinterpret: uint ↔ int
+            SpecialType.System_Int64  => ("long",  false),
+            SpecialType.System_UInt64 => ("long",  true),   // reinterpret: ulong ↔ long
+            _                         => ("int",   false),
         };
         var (typeName, needsUnchecked) = underlying;
-        var castExpr = needsUnchecked ? $"unchecked(({typeName}){accessor})" : $"({typeName}){accessor}";
+        var castExpr      = needsUnchecked ? $"unchecked(({typeName}){accessor})"       : $"({typeName}){accessor}";
         var castExprValue = needsUnchecked ? $"unchecked(({typeName}){accessor}.Value)" : $"({typeName}){accessor}.Value";
         return isNullable
             ? $"{accessor}.HasValue ? (object){castExprValue} : global::System.DBNull.Value"
@@ -861,7 +861,7 @@ internal static class StoreOperationEmitter
     private static string ReinterpretUnsignedProviderValue(SpecialType providerSpecialType, string valueExpression)
         => providerSpecialType switch
         {
-            SpecialType.System_SByte => $"unchecked((byte)({valueExpression}))",
+            SpecialType.System_SByte  => $"unchecked((byte)({valueExpression}))",
             SpecialType.System_UInt16 => $"unchecked((short)({valueExpression}))",
             SpecialType.System_UInt32 => $"unchecked((int)({valueExpression}))",
             SpecialType.System_UInt64 => $"unchecked((long)({valueExpression}))",
