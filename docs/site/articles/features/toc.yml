@@ -26,6 +26,10 @@
   href: batch-operations.md
 - name: Bulk insert
   href: bulk-insert.md
+- name: Query composition
+  href: query-composition.md
+- name: Partial updates and JSON presence
+  href: partial-updates.md
 - name: Set-based mutations
   href: set-based-mutations.md
 - name: Full-text search

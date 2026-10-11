@@ -40,6 +40,10 @@ This emits the equivalent of `UPDATE Member SET Email = @Email WHERE Key = @Key`
 parameters to update more columns. Each update parameter must have a unique name that resolves to its
 target property or mapped column.
 
+These methods choose columns at compile time; null is a supplied value, not an omission marker.
+For variable JSON fields, use the [presence-aware SQL recipe](partial-updates.md), which distinguishes
+omitted fields, SQL NULL, and supplied values without loading the row first.
+
 `[InquiryWhere]` works exactly as on
 [predicate selects](crud.md): repeat it per criterion, criteria combine in declaration order
 (AND by default, `Or = true` to join with OR), and parameters bind positionally —
@@ -98,3 +102,8 @@ public partial Task<int> DeleteAllAsync(CancellationToken ct = default);
 Like every generated method, set-based mutations participate in ambient Inquiry transactions and
 honor `InquiryOptions.DefaultCommandTimeout`. A predicate mutation is a single statement, so it is
 atomic on its own.
+
+## Advanced composition
+
+See [Query composition](query-composition.md) for reusable criteria, grouped and optional predicates,
+expression assignments, positional parameter order, and a safely bound handwritten report.
