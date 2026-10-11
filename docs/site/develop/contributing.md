@@ -86,7 +86,8 @@ approach is the convention.)
 ## CI
 
 [`.github/workflows/ci.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/ci.yml)
-runs for pull requests into `main`, and for merge-queue `merge_group` events:
+runs for pull requests into `main`, merge-queue `merge_group` events, release workflow calls,
+and manual dispatches that verify the combined `main` commit before tagging:
 
 - a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker);
 - an **aot-smoke** job — publishes the `Inquiry.AotSmoke` sample as a native binary and executes it,

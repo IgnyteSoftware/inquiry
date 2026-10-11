@@ -88,9 +88,10 @@ if (product is not null)
   do not apply to handwritten SQL. The ad-hoc DTO follows SELECT ordinal order (#420, #427).
 - Each data library owns a registration wrapper to avoid identical generated extension method
   names when an application references multiple libraries (#382).
-- Soft deletion currently leaves the concurrency token unchanged. The service checks active
-  state and token inside the same SQLite transaction before updating or archiving. Stale editors
-  cannot restore archived rows or report a repeated archive as successful. This is a sample safeguard, not a fix to the generator.
+- Generated updates and archives atomically check active state and the expected version.
+  Archiving advances the concurrency token. The service also illustrates an active-state and
+  version pre-check inside the same SQLite transaction. Stale editors cannot restore archived
+  rows or report a repeated archive as successful.
 - Name search uses SQL LIKE: `%` matches any sequence and `_` matches one character. Ordinary
   text becomes a contains pattern. Values are passed as parameters.
 - Stored procedures need server-provider examples and integration verification. SQLite has

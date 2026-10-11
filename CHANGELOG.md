@@ -6,33 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-preview.11] - 2026-10-12
+
 ### Added
 
-- The SQLite product workspace combines search, paging, validation, concurrency conflicts, and archiving across two demo workspaces. Existing Northwind relationship and transaction pages remain available.
-- Enforced global filters can opt into `PreventReassignment` to preserve their columns during entity updates and reject explicit assignments. Insert values remain caller-supplied.
-
-- String and Guid concurrency stamps can opt into client-generated rotation with `RotateOnUpdate`; unsupported managed representations fail at build time.
+- String and GUID concurrency stamps can opt into `RotateOnUpdate`. Successful updates replace the stamp; stale stamps reject writes.
+- Enforced global filters can use `PreventReassignment` to preserve their columns during entity updates and reject explicit assignments. Insert values remain caller-supplied.
+- The SQLite sample supports product search, filtering, paging, validation, editing, conflict handling and archiving across two demo workspaces. Existing Northwind relationship and transaction pages remain available.
 
 ### Fixed
 
-- Stale updates cannot restore soft-deleted rows. Single-row archive/restore advances concurrency tokens, and archive-returning reports only affected rows on all six providers.
+- Ordinary updates preserve soft-delete markers and affect only active rows. Archive and restore advance concurrency tokens; repeated transitions affect no rows. Archive-returning reports only affected rows on all six providers. Key-only restore remains an administrative operation without an expected-token check.
+- Filter and audit scopes reject out-of-order disposal without losing the active scope. Repeated or copied disposal is harmless within each async flow.
+- Caller-side transaction disposal clears ambient state after a helper completes the transaction. Unfinished child work retains protection against using the closed transaction.
+- Transaction handles use their own execution pipeline. Command parameter collections are snapshotted consistently, and expanded collection parameters avoid name collisions.
+- Optional null guards stay outside negated predicates. Nullable keyset columns fail at build time, provider settings are validated before registration, and default paging results expose empty items.
 
 ### Changed
 
-- Filter and audit scopes reject out-of-order disposal without changing ambient values. Repeated or copied disposal no longer restores stale values.
-- Caller-side transaction disposal now clears its ambient slot even when an async helper already committed, rolled back, or disposed the handle. Captured closed flows still reject operations.
-- The Blazor sample now rejects non-SQLite configuration before opening a database; its stores generate SQLite SQL.
-- Ordinary entity updates skip the soft-delete marker and affect only active rows. Repeated archive returns false/null; restore returns false when the row is already active.
-
-- Managed concurrency rejects unsupported token shapes (including decimal, enum, and DateTime) with `INQ101`; string/Guid stamps require explicit rotation.
-
+- The Blazor sample rejects non-SQLite configuration before opening a database; its stores generate SQLite SQL.
+- Managed concurrency rejects unsupported token shapes, including decimal, enum and DateTime, with `INQ101`; string/GUID stamps require explicit rotation.
 - `[InquiryInsert]` and `[InquiryUpdate]` now infer batch operations from entity collection parameters. The separate `[InquiryInsertAll]` and `[InquiryUpdateAll]` attributes were removed.
 - Insert, update, upsert, and key-delete methods now infer returning behavior from `Task<TEntity?>`; the `ReturnEntity` attribute property was removed. `[InquiryHardDelete]` and `[InquiryHardDeleteAll]` replace `HardDelete = true`.
 - Generated batch and bulk-copy descriptors now expose one constructor per supported shape. Runtime-only generated-command and batch-command state is internal.
+- Release candidates run isolated package consumers on .NET 8/9/10 and Linux NativeAOT. Publication verifies evidence before uploads and recovers interrupted releases using retained original packages.
+- Runtime command execution, Oracle finalization and JSON array parameter formatting avoid unnecessary work. Benchmark coverage records tracing, metrics, generator builds and SQL Server insert strategies.
 
 ### Documentation
 
-- Added executable SQLite recipes for JSON field presence and guarded partial updates, plus query composition, positional binding, and explicit SQL reports.
+- Executable SQLite recipes distinguish omitted fields, explicit nulls and supplied values for partial updates, with atomic concurrency, tenant and active-row checks. Applications own the parameterized SQL; no generated PATCH API is added.
+- Query composition examples cover positional binding, predicates, expression updates and explicit SQL reports. Setup, diagnostics, store registration, projection boundaries and runtime guarantees now have explicit guidance.
 
 ## [1.0.0-preview.10] - 2026-09-04
 
@@ -137,7 +140,8 @@ changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
 - [GraphQL DataLoader recipe](docs/site/articles/features/graphql-dataloader.md) — batching Hot Chocolate resolver fan-out onto a single `Compare.In` predicate method.
 - [Migrations recipe](docs/site/articles/features/migrations.md) — using `InquiryGeneratedSchema.Ddl` as the baseline script for DbUp or FluentMigrator, plus `ProviderArtifactsDdl` and `ProviderArtifactsValidationSql` for deploying and checking the SQL Server TVP types.
 
-[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.10...HEAD
+[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.11...HEAD
+[1.0.0-preview.11]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.10...v1.0.0-preview.11
 [1.0.0-preview.10]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.9...v1.0.0-preview.10
 [1.0.0-preview.9]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.8...v1.0.0-preview.9
 [1.0.0-preview.8]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.7...v1.0.0-preview.8
