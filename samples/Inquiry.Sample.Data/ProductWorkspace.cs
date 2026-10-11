@@ -68,7 +68,6 @@ public sealed class ProductWorkspace(
             throw new ValidationException("Choose an existing category.");
         if (product.Id == 0)
             return await products.CreateAsync(product, ct);
-        // Soft delete currently leaves the token unchanged. Check active state in the same SQLite transaction.
         return await inquiry.ExecuteInTransactionAsync<WorkspaceProduct?>(async (_, token) =>
         {
             var current = await products.FindAsync(product.Id, token);
