@@ -2671,7 +2671,8 @@ public sealed partial class InquiryGeneratorTests
         bool includeFallbackGenerator = false,
         ReportDiagnostic? unsupportedOperationSeverity = null,
         SyntaxTreeOptionsProvider? syntaxTreeOptionsProvider = null,
-        IReadOnlyDictionary<string, ReportDiagnostic>? additionalDiagnosticOptions = null)
+        IReadOnlyDictionary<string, ReportDiagnostic>? additionalDiagnosticOptions = null,
+        bool includeNoGridGenerator = false)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
         var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
@@ -2741,6 +2742,10 @@ public sealed partial class InquiryGeneratorTests
         if (includeFallbackGenerator)
         {
             generators.Add(new FallbackInquiryGenerator().AsSourceGenerator());
+        }
+        if (includeNoGridGenerator)
+        {
+            generators.Add(new NoGridInquiryGenerator().AsSourceGenerator());
         }
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);

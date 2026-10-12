@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Eager loading matches `byte[]` relationship keys by value. Separately read rows with equal keys previously returned no related rows.
+- Relationship and junction foreign keys resolve by exact C# property name in validation, SQL and parameter binding. A column name or another casing reports `INQ040` or `INQ088`, which now names the property to use, and the eager method is not generated even when the error is suppressed. A junction whose column names collide with other property names now joins the named properties.
+- Relationships whose key columns store values differently report `INQ104` instead of compiling a join that matches no rows. This covers enum text against enum numbers, different value converters, and a converter on one side that changes the stored type.
+- Junction foreign keys whose `[InquiryForeignKey]` target contradicts their position report `INQ105`. Junction keys without that metadata keep positional pairing.
+
+### Added
+
+- `INQ103` warns when `JunctionTable`, `JunctionSchema`, `ParentColumn` or `ChildColumn` is set on an explicit-junction `[InquiryManyToMany]`, where it has no effect.
+
 ## [1.0.0-preview.11] - 2026-10-12
 
 ### Added

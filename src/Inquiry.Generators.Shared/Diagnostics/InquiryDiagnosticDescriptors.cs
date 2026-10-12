@@ -57,6 +57,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ094         Index property resolution       ([InquiryIndex] key or Include naming something that is not a mapped column) [IN USE]
     //   INQ095         Write-enforced filter           (an operation that cannot honour [InquiryGlobalFilter(EnforceOnWrites = true)] — upsert) [IN USE]
     //   INQ096         Mutation target                 (targetless delete, conflicting all/predicate, or unsupported returning mode) [IN USE]
+    //   INQ103–INQ105  Relationship keys               (INQ103 auto-junction option on an explicit junction, INQ104 key storage mismatch, INQ105 junction FK target contradicts its position) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -479,7 +480,7 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor ManyToManyForeignKeyNotMapped = new(
         "INQ088",
         "InquiryManyToMany names a junction property that is not a mapped column",
-        "Entity '{0}' relation '{1}' names '{2}' as a foreign-key property of junction '{3}', but '{3}' has no mapped column for it. Name a property that carries [InquiryColumn] or [InquiryKey]; use nameof to keep the name checked by the compiler.",
+        "Entity '{0}' relation '{1}' names '{2}' as a foreign-key property of junction '{3}', but '{3}' has no mapped column for it. Name a property that carries [InquiryColumn] or [InquiryKey]; use nameof to keep the name checked by the compiler. {4}",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -679,7 +680,7 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor UnknownRelationForeignKey = new(
         "INQ040",
         "InquiryRelation references an unmapped foreign-key property",
-        "Entity '{0}': relation '{1}' references foreign-key property '{2}', which is not a mapped column on '{3}'. Check the InquiryRelation attribute's foreign-key argument for typos.",
+        "Entity '{0}': relation '{1}' references foreign-key property '{2}', which is not a mapped property on '{3}'. Check the InquiryRelation attribute's foreign-key argument for typos. {4}",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -1032,4 +1033,23 @@ internal static class InquiryDiagnosticDescriptors
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq100");
 
+    // INQ103 is a warning, not an error: the attribute contract already says these options are ignored on
+    // an explicit junction, so the generated code is correct. The warning only shows the contradiction.
+    public static readonly DiagnosticDescriptor ManyToManyAutoJunctionOptionIgnored = new(
+        "INQ103", "InquiryManyToMany auto-junction option has no effect on an explicit junction",
+        "Entity '{0}' relation '{1}' sets {2}, which applies only to an auto-managed junction. An explicit junction type uses its own mapping, so Inquiry ignores {2}. Remove it, or use the parameterless [InquiryManyToMany] to let Inquiry create the junction table.",
+        "Inquiry", DiagnosticSeverity.Warning, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq103");
+
+    public static readonly DiagnosticDescriptor RelationKeyStorageMismatch = new(
+        "INQ104", "Relationship key columns store values differently",
+        "Entity '{0}' relation '{1}' joins '{2}' ({3}) to '{4}' ({5}). The two columns store values differently, so the join cannot match rows. Give both columns the same value converter and enum storage.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq104");
+
+    public static readonly DiagnosticDescriptor ManyToManyForeignKeyTargetConflict = new(
+        "INQ105", "InquiryManyToMany junction foreign key contradicts its declared target",
+        "Entity '{0}' relation '{1}': {2} Junction foreign keys pair by position. List the child foreign-key properties in the related entity's key-declaration order, or correct the [InquiryForeignKey] target.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq105");
 }

@@ -2478,7 +2478,8 @@ internal static class StoreOperationEmitter
         {
             if (relation.IsCollection && !relation.IsManyToMany)
             {
-                var paramName = relation.ForeignKeyProperty;
+                // The child SELECT names its parameter after this column's property, so bind the same name.
+                var paramName = FindColumn(relationChildEntities[relation.PropertyName], relation.ForeignKeyProperty)!.PropertyName;
                 if (!paramNames.Contains(paramName))
                     paramNames.Add(paramName);
             }
@@ -2556,7 +2557,7 @@ internal static class StoreOperationEmitter
             {
                 source.AppendLine($"            var _{relation.PropertyName}_list = new global::System.Collections.Generic.List<{childType}>();");
                 source.AppendLine($"            await foreach (var _child in {ConfigureAwaitEnumerable}(Inquiry.QueryAsync<{childType}, {method.Parameters[0].TypeDisplay}, {childStructMat}>(");
-                AppendSingleParameterGeneratedCommand(source, sqlBuilder, fieldName, method.Parameters[0].TypeDisplay, "_entity." + entity.Keys[0].PropertyName, relation.ForeignKeyProperty, entity.Keys[0], "                ");
+                AppendSingleParameterGeneratedCommand(source, sqlBuilder, fieldName, method.Parameters[0].TypeDisplay, "_entity." + entity.Keys[0].PropertyName, FindColumn(childEntity, relation.ForeignKeyProperty)!.PropertyName, entity.Keys[0], "                ");
                 source.AppendLine("                default,");
                 source.AppendLine($"                {cancellation}), false))");
                 source.AppendLine($"                _{relation.PropertyName}_list.Add(_child);");
@@ -2660,15 +2661,15 @@ internal static class StoreOperationEmitter
                         jChildFks[i] = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[i])!;
                     }
 
-                    var parentKeyType = entity.Keys[0].Type.NonNullableDisplayName;
+                    var parentKeyType = DictionaryKeyType(entity.Keys[0].Type);
 
                     // A composite child key indexes by a C# value tuple, which brings structural equality
                     // and hashing with it — no IEqualityComparer needed. Arity 1 stays scalar: ValueTuple<T>
                     // is not a tuple type in C#, so "(T)" would just be T anyway, and keeping the scalar
                     // shape leaves every existing generated store unchanged.
                     var childKeyType = childKeys.Count == 1
-                        ? childKeys[0].Type.NonNullableDisplayName
-                        : "(" + string.Join(", ", childKeys.AsImmutableArray().Select(static k => k.Type.NonNullableDisplayName)) + ")";
+                        ? DictionaryKeyType(childKeys[0].Type)
+                        : "(" + string.Join(", ", childKeys.AsImmutableArray().Select(static k => DictionaryKeyType(k.Type))) + ")";
 
                     source.AppendLine($"        var _childByKey_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{childKeyType}, {childType}>({dictCapacity});");
                     AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
@@ -2684,7 +2685,7 @@ internal static class StoreOperationEmitter
                             source.AppendLine($"            if (_c.{key.PropertyName} is null) {skipRow};");
                         }
 
-                        childKeyParts[i] = NonNullableValueExpression(key.Type, $"_c.{key.PropertyName}");
+                        childKeyParts[i] = DictionaryKeyValue(key.Type, NonNullableValueExpression(key.Type, $"_c.{key.PropertyName}"));
                     }
 
                     var childKeyExpression = childKeys.Count == 1
@@ -2742,7 +2743,7 @@ internal static class StoreOperationEmitter
                             source.AppendLine($"            if ({jChildAccess[i]} is null) {skipRow};");
                         }
 
-                        jChildKeyParts[i] = NonNullableValueExpression(jChildFks[i].Type, jChildAccess[i]);
+                        jChildKeyParts[i] = DictionaryKeyValue(jChildFks[i].Type, NonNullableValueExpression(jChildFks[i].Type, jChildAccess[i]));
                     }
 
                     if (jParentFk.Type.IsNullable)
@@ -2753,11 +2754,12 @@ internal static class StoreOperationEmitter
                     var jChildKeyExpression = jChildKeyParts.Length == 1
                         ? jChildKeyParts[0]
                         : "(" + string.Join(", ", jChildKeyParts) + ")";
+                    var jParentKeyExpression = DictionaryKeyValue(jParentFk.Type, NonNullableValueExpression(jParentFk.Type, jParentAccess));
                     source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({jChildKeyExpression}, out var _child)) {skipRow};");
-                    source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(jParentFk.Type, jParentAccess)}, out var _grp))");
+                    source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({jParentKeyExpression}, out var _grp))");
                     source.AppendLine("            {");
                     source.AppendLine($"                _grp = new global::System.Collections.Generic.List<{childType}>();");
-                    source.AppendLine($"                _grouped_{relation.PropertyName}[{NonNullableValueExpression(jParentFk.Type, jParentAccess)}] = _grp;");
+                    source.AppendLine($"                _grouped_{relation.PropertyName}[{jParentKeyExpression}] = _grp;");
                     source.AppendLine("            }");
                     source.AppendLine("            _grp.Add(_child);");
                     AppendChildLoopClose();
@@ -2768,18 +2770,19 @@ internal static class StoreOperationEmitter
                 {
                     var childFkColumn = FindColumn(childEntity, relation.ForeignKeyProperty);
                     var childFkNullable = childFkColumn?.Type.IsNullable ?? false;
-                    var fkKeyType = childFkColumn?.Type.NonNullableDisplayName ?? "object";
+                    var fkKeyType = childFkColumn is null ? "object" : DictionaryKeyType(childFkColumn.Type);
 
                     source.AppendLine($"        var _grouped_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{fkKeyType}, global::System.Collections.Generic.List<{childType}>>({dictCapacity});");
                     AppendChildLoopOpen("_c", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
                     if (childFkNullable)
                     {
                         source.AppendLine($"            if (_c.{relation.ForeignKeyProperty} is null) {skipRow};");
-                        source.AppendLine($"            var _fkVal = {NonNullableValueExpression(childFkColumn!.Type, $"_c.{relation.ForeignKeyProperty}")};");
+                        source.AppendLine($"            var _fkVal = {DictionaryKeyValue(childFkColumn!.Type, NonNullableValueExpression(childFkColumn.Type, $"_c.{relation.ForeignKeyProperty}"))};");
                     }
                     else
                     {
-                        source.AppendLine($"            var _fkVal = _c.{relation.ForeignKeyProperty};");
+                        var fkValue = $"_c.{relation.ForeignKeyProperty}";
+                        source.AppendLine($"            var _fkVal = {(childFkColumn is null ? fkValue : DictionaryKeyValue(childFkColumn.Type, fkValue))};");
                     }
                     source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue(_fkVal, out var _grp))");
                     source.AppendLine("            {");
@@ -2793,7 +2796,7 @@ internal static class StoreOperationEmitter
                 {
                     var relatedKeyProperty = childEntity.Keys[0].PropertyName;
                     var childKeyNullable = childEntity.Keys[0].Type.IsNullable;
-                    var parentKeyType = childEntity.Keys[0].Type.NonNullableDisplayName;
+                    var parentKeyType = DictionaryKeyType(childEntity.Keys[0].Type);
 
                     source.AppendLine($"        var _parents_{relation.PropertyName} = new global::System.Collections.Generic.Dictionary<{parentKeyType}, {childType}>({dictCapacity});");
                     AppendChildLoopOpen("_p", childType, childStructMat, $"{fieldName}_All{relationSqlSuffix}");
@@ -2801,7 +2804,7 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"            if (_p.{relatedKeyProperty} is null) {skipRow};");
                     }
-                    source.AppendLine($"            _parents_{relation.PropertyName}[{(childKeyNullable ? NonNullableValueExpression(childEntity.Keys[0].Type, $"_p.{relatedKeyProperty}") : $"_p.{relatedKeyProperty}")}] = _p;");
+                    source.AppendLine($"            _parents_{relation.PropertyName}[{DictionaryKeyValue(childEntity.Keys[0].Type, childKeyNullable ? NonNullableValueExpression(childEntity.Keys[0].Type, $"_p.{relatedKeyProperty}") : $"_p.{relatedKeyProperty}")}] = _p;");
                     AppendChildLoopClose();
                 }
             }
@@ -2822,11 +2825,11 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{entity.Keys[0].PropertyName} is null");
                         source.AppendLine($"                ? new global::System.Collections.Generic.List<{childType}>()");
-                        source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(entity.Keys[0].Type, $"_entity.{entity.Keys[0].PropertyName}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
+                        source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(entity.Keys[0].Type, NonNullableValueExpression(entity.Keys[0].Type, $"_entity.{entity.Keys[0].PropertyName}"))}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
                     }
                     else
                     {
-                        source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue(_entity.{entity.Keys[0].PropertyName}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+                        source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(entity.Keys[0].Type, $"_entity.{entity.Keys[0].PropertyName}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
                     }
                 }
                 else
@@ -2837,11 +2840,12 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{relation.ForeignKeyProperty} is null");
                         source.AppendLine($"                ? null");
-                        source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue({NonNullableValueExpression(parentFkColumn!.Type, $"_entity.{relation.ForeignKeyProperty}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
+                        source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(parentFkColumn!.Type, NonNullableValueExpression(parentFkColumn.Type, $"_entity.{relation.ForeignKeyProperty}"))}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
                     }
                     else
                     {
-                        source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue(_entity.{relation.ForeignKeyProperty}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
+                        var fkValue = $"_entity.{relation.ForeignKeyProperty}";
+                        source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue({(parentFkColumn is null ? fkValue : DictionaryKeyValue(parentFkColumn.Type, fkValue))}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
                     }
                 }
             }
@@ -3348,17 +3352,22 @@ internal static class StoreOperationEmitter
             .ToArray();
 
     private static ColumnData? FindColumn(EntityData entity, string propertyName)
-    {
-        foreach (var column in entity.Columns.AsImmutableArray())
-        {
-            if (column.PropertyName == propertyName)
-            {
-                return column;
-            }
-        }
+        => StoreProcessor.FindRelationColumn(entity, propertyName);
 
-        return null;
-    }
+    /// <summary>
+    /// The dictionary key type an eager loader uses for a key component. A <c>byte[]</c> key becomes its
+    /// Base64 text.
+    /// </summary>
+    /// <remarks>
+    /// Arrays compare by reference, so two equal keys read from different rows never matched, and links
+    /// the database returned were dropped. Base64 text compares by value and is unique per byte sequence.
+    /// </remarks>
+    private static string DictionaryKeyType(TypeData type)
+        => type.IsByteArray ? "string" : type.NonNullableDisplayName;
+
+    /// <summary>Converts a non-null key value to the type <see cref="DictionaryKeyType"/> returns.</summary>
+    private static string DictionaryKeyValue(TypeData type, string nonNullableValue)
+        => type.IsByteArray ? $"global::System.Convert.ToBase64String({nonNullableValue})" : nonNullableValue;
 
     private static IEnumerable<ParameterData> Take(EquatableArray<ParameterData> parameters, int count)
     {

@@ -2045,7 +2045,7 @@ internal static class StoreProcessor
                     // M:N consts: the single-parent JOIN through the junction, plus the two filtered batch
                     // selects the all-eager loader assembles in memory.
                     var junctionEntity = relationJunctionEntities[relation.PropertyName];
-                    var junctionParentFk = FindColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
+                    var junctionParentFk = FindRelationColumn(junctionEntity, relation.JunctionParentForeignKeyProperty!)!;
                     var junctionParentFkColumn = junctionParentFk.ColumnName;
                     var junctionCtx = new SqlBuildContext(sqlBuilder, junctionEntity.Schema, junctionEntity.TableName, ToColumnList(junctionEntity.Columns));
 
@@ -2056,7 +2056,7 @@ internal static class StoreProcessor
                     var junctionChildFkColumns = new string[junctionChildFks.Length];
                     for (var i = 0; i < junctionChildFks.Length; i++)
                     {
-                        junctionChildFks[i] = FindColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[i])!;
+                        junctionChildFks[i] = FindRelationColumn(junctionEntity, relation.JunctionChildForeignKeyProperties[i])!;
                         junctionChildFkColumns[i] = junctionChildFks[i].ColumnName;
                     }
 
@@ -2103,12 +2103,12 @@ internal static class StoreProcessor
                 }
 
                 var filterColumn = relation.IsCollection
-                    ? FindColumn(childEntity, relation.ForeignKeyProperty)!
+                    ? FindRelationColumn(childEntity, relation.ForeignKeyProperty)!
                     : childEntity.Keys[0];
 
                 var parentKeyColumn = relation.IsCollection
                     ? entity.Keys[0].ColumnName
-                    : FindColumn(entity, relation.ForeignKeyProperty)!.ColumnName;
+                    : FindRelationColumn(entity, relation.ForeignKeyProperty)!.ColumnName;
 
                 AppendSql("_sql_" + relation.PropertyName, sqlBuilder.BuildSelectByFieldSql(childCtx, new List<IColumn> { filterColumn }));
                 AppendSql("_sql_" + relation.PropertyName + "_All",
@@ -2903,7 +2903,8 @@ internal static class StoreProcessor
         }
 
         // For each relation the eager-loading method will traverse, an invalid shape (typo'd
-        // ForeignKey or composite-key child) would null-forgive into an NRE / invalid C# at emit.
+        // ForeignKey, composite-key child, or key columns that store values differently) would
+        // null-forgive into an NRE / invalid C# or a join that matches nothing at emit.
         // Those are reported once at declaration time (ValidateRelations); here we only DROP the
         // eager method so the emitter never processes the bad relation.
         if (method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager)
@@ -2920,15 +2921,16 @@ internal static class StoreProcessor
                 {
                     // M:N emit needs a resolvable junction naming one foreign-key column per child key
                     // column — one for a single-column key, one per column for a composite key —
-                    // otherwise drop the eager method (INQ063/INQ087-INQ089 already reported at
+                    // otherwise drop the eager method (INQ063/INQ087-INQ089/INQ104/INQ105 already reported at
                     // declaration time by ValidateRelations). This gate is deliberately independent of
                     // those diagnostics: suppressing one with NoWarn still drops the method rather than
                     // emitting a mis-paired join, so the failure stays a compile error.
                     var junctionOk = relation.IsCollection &&
                         relationJunctionEntities.TryGetValue(relation.PropertyName, out var junction) &&
-                        FindColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&
-                        JunctionForeignKeysPairWithChildKeys(
-                            junction, childEntity, relation.JunctionChildForeignKeyProperties, FindColumn);
+                        FindRelationColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is not null &&
+                        JunctionForeignKeysPairWithChildKeys(junction, childEntity, relation.JunctionChildForeignKeyProperties) &&
+                        DescribeJunctionTargetConflict(entity, relation, junction, childEntity) is null &&
+                        FindKeyStorageMismatch(entity, relation, childEntity, junction) is null;
                     if (!junctionOk)
                     {
                         return false;
@@ -2938,10 +2940,11 @@ internal static class StoreProcessor
                 }
 
                 var ownerHasFk = relation.IsCollection
-                    ? FindColumn(childEntity, relation.ForeignKeyProperty) is not null
-                    : FindColumn(entity, relation.ForeignKeyProperty) is not null;
+                    ? FindRelationColumn(childEntity, relation.ForeignKeyProperty) is not null
+                    : FindRelationColumn(entity, relation.ForeignKeyProperty) is not null;
 
-                if (!ownerHasFk || childEntity.Keys.Count > 1)
+                if (!ownerHasFk || childEntity.Keys.Count > 1 ||
+                    FindKeyStorageMismatch(entity, relation, childEntity, junction: null) is not null)
                 {
                     return false;
                 }
@@ -3781,8 +3784,7 @@ internal static class StoreProcessor
     internal static bool JunctionForeignKeysPairWithChildKeys(
         EntityData junction,
         EntityData child,
-        EquatableArray<string> foreignKeyNames,
-        Func<EntityData, string, ColumnData?> findColumn)
+        EquatableArray<string> foreignKeyNames)
     {
         if (foreignKeyNames.Count == 0 || foreignKeyNames.Count != child.Keys.Count)
         {
@@ -3801,14 +3803,14 @@ internal static class StoreProcessor
             {
                 for (var j = i + 1; j < foreignKeyNames.Count; j++)
                 {
-                    if (string.Equals(foreignKeyNames[i], foreignKeyNames[j], StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(foreignKeyNames[i], foreignKeyNames[j], StringComparison.Ordinal))
                     {
                         return false;
                     }
                 }
             }
 
-            var foreignKey = findColumn(junction, foreignKeyNames[i]);
+            var foreignKey = FindRelationColumn(junction, foreignKeyNames[i]);
             if (foreignKey is null)
             {
                 return false;
@@ -3826,6 +3828,162 @@ internal static class StoreProcessor
 
         return true;
     }
+
+    /// <summary>
+    /// Resolves a foreign-key name from <c>[InquiryRelation]</c> or <c>[InquiryManyToMany]</c> to a mapped
+    /// column. The name must equal the C# property name exactly.
+    /// </summary>
+    /// <remarks>
+    /// Validation, the generated SQL, and parameter binding all use this one rule. A looser match here let
+    /// the SQL use a column that validation had rejected, with a parameter the binder named differently.
+    /// </remarks>
+    internal static ColumnData? FindRelationColumn(EntityData entity, string propertyName)
+    {
+        foreach (var column in entity.Columns.AsImmutableArray())
+        {
+            if (string.Equals(column.PropertyName, propertyName, StringComparison.Ordinal))
+            {
+                return column;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A foreign-key column and the key column it is joined to.</summary>
+    internal sealed record RelationKeyPair(EntityData ForeignKeyOwner, ColumnData ForeignKey, EntityData KeyOwner, ColumnData Key);
+
+    /// <summary>
+    /// Returns the first foreign-key/key pair of a relation whose stored values cannot match, or
+    /// <see langword="null"/>. Pairs that do not resolve are skipped; other diagnostics report them.
+    /// </summary>
+    /// <remarks>
+    /// The join compares stored values, so the same CLR type is not enough. An enum stored as text never
+    /// equals the same enum stored as a number, and two converters can store one model value in two ways.
+    /// Both shapes compiled and then matched no rows. Joining across different converters is not
+    /// supported, so any difference is rejected rather than reconciled.
+    /// </remarks>
+    internal static RelationKeyPair? FindKeyStorageMismatch(
+        EntityData entity, RelationData relation, EntityData child, EntityData? junction)
+    {
+        if (relation.IsManyToMany)
+        {
+            if (junction is null)
+            {
+                return null;
+            }
+
+            if (entity.Keys.Count == 1 &&
+                FindRelationColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is { } parentForeignKey &&
+                !KeyStorageMatches(parentForeignKey, entity.Keys[0]))
+            {
+                return new RelationKeyPair(junction, parentForeignKey, entity, entity.Keys[0]);
+            }
+
+            var names = relation.JunctionChildForeignKeyProperties;
+            for (var i = 0; i < names.Count && i < child.Keys.Count; i++)
+            {
+                if (FindRelationColumn(junction, names[i]) is { } childForeignKey &&
+                    !KeyStorageMatches(childForeignKey, child.Keys[i]))
+                {
+                    return new RelationKeyPair(junction, childForeignKey, child, child.Keys[i]);
+                }
+            }
+
+            return null;
+        }
+
+        var foreignKeyOwner = relation.IsCollection ? child : entity;
+        var keyOwner = relation.IsCollection ? entity : child;
+        if (keyOwner.Keys.Count == 1 &&
+            FindRelationColumn(foreignKeyOwner, relation.ForeignKeyProperty) is { } foreignKey &&
+            !KeyStorageMatches(foreignKey, keyOwner.Keys[0]))
+        {
+            return new RelationKeyPair(foreignKeyOwner, foreignKey, keyOwner, keyOwner.Keys[0]);
+        }
+
+        return null;
+    }
+
+    private static bool KeyStorageMatches(ColumnData foreignKey, ColumnData key)
+    {
+        if (foreignKey.Converter is { } foreignKeyConverter && key.Converter is { } keyConverter)
+        {
+            return string.Equals(foreignKeyConverter.ConverterTypeDisplay, keyConverter.ConverterTypeDisplay, StringComparison.Ordinal);
+        }
+
+        // A converter on one side only is accepted when it keeps the type, such as an observing long-to-long
+        // converter. One that changes the type stores a representation the other column does not have.
+        if ((foreignKey.Converter ?? key.Converter) is { } converter)
+        {
+            return string.Equals(
+                converter.ModelTypeDisplay.TrimEnd('?'), converter.ProviderTypeDisplay.TrimEnd('?'), StringComparison.Ordinal);
+        }
+
+        return foreignKey.EnumAsString == key.EnumAsString;
+    }
+
+    /// <summary>
+    /// Describes the first junction foreign key whose declared <c>[InquiryForeignKey]</c> target
+    /// contradicts the key it is paired with, or returns <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// Junction keys pair by position, and two key columns of one type cannot be told apart by type. A
+    /// declared target can tell them apart. Only that explicit metadata is used: a foreign key without it
+    /// keeps the documented positional meaning, and names are never compared, because matching property
+    /// or column names would reject valid legacy schemas.
+    /// </remarks>
+    internal static string? DescribeJunctionTargetConflict(
+        EntityData entity, RelationData relation, EntityData junction, EntityData child)
+    {
+        if (entity.Keys.Count == 1 &&
+            FindRelationColumn(junction, relation.JunctionParentForeignKeyProperty ?? string.Empty) is { } parentForeignKey &&
+            DescribeTargetConflict(parentForeignKey, entity, entity.Keys[0], child) is { } parentConflict)
+        {
+            return parentConflict;
+        }
+
+        var names = relation.JunctionChildForeignKeyProperties;
+        for (var i = 0; i < names.Count && i < child.Keys.Count; i++)
+        {
+            if (FindRelationColumn(junction, names[i]) is { } childForeignKey &&
+                DescribeTargetConflict(childForeignKey, child, child.Keys[i], entity) is { } childConflict)
+            {
+                return childConflict;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? DescribeTargetConflict(
+        ColumnData foreignKey, EntityData pairedEntity, ColumnData pairedKey, EntityData otherEntity)
+    {
+        if (foreignKey.ForeignKeyTable is not { } table)
+        {
+            return null;
+        }
+
+        // Checked first so that a self-referencing association, where both sides are one table, is
+        // judged by the referenced column alone.
+        var conflict = DeclaresTargetTable(foreignKey, pairedEntity)
+            ? foreignKey.ForeignKeyColumn is { } column &&
+                !string.Equals(column, pairedKey.ColumnName, StringComparison.OrdinalIgnoreCase)
+            : DeclaresTargetTable(foreignKey, otherEntity);
+        if (!conflict)
+        {
+            return null;
+        }
+
+        var target = foreignKey.ForeignKeyColumn is { } targetColumn ? table + "." + targetColumn : table;
+        return $"'{foreignKey.PropertyName}' declares a foreign key to '{target}', but the relation pairs it with "
+            + $"'{pairedEntity.TableName}.{pairedKey.ColumnName}'.";
+    }
+
+    private static bool DeclaresTargetTable(ColumnData foreignKey, EntityData entity)
+        => string.Equals(foreignKey.ForeignKeyTable, entity.TableName, StringComparison.OrdinalIgnoreCase) &&
+            (foreignKey.ForeignKeySchema is null || entity.Schema is null ||
+                string.Equals(foreignKey.ForeignKeySchema, entity.Schema, StringComparison.OrdinalIgnoreCase));
 
     private static ColumnData? FindColumn(EntityData entity, string nameOrColumn)
     {
