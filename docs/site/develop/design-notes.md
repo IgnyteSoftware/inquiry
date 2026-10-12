@@ -108,16 +108,22 @@ error. It is an inconsistency in the unsupported-operation contract, and that co
 1. **Document the current behavior.** No code change. Suppressing any error on an all-rejected or
    invalid-entity store keeps producing a registered stub store. The rules stay path-dependent, and
    the documented claim that INQ039 is the only stub opt-in stays false.
-2. **INQ039 is the only stub switch (recommended).** Every rejection path emits a throwing stub only
-   when INQ039 is lowered project-wide. Without that opt-in, a rejected method gets no body, so the
-   build fails with CS8795 even when its own error is suppressed. A non-INQ039 rejection therefore
-   needs two deliberate choices before it can run: suppress that error and lower INQ039. The provider
-   facet path already works this way.
-3. **Make rejecting errors non-configurable.** Tag every rejecting error except INQ039 as
+2. **Stubs only for INQ039 (recommended).** The INQ039 opt-in stubs only methods that report INQ039.
+   Every other rejection leaves the method without a generated body, with or without the opt-in.
+   The build then fails with CS8795 even when the rejecting error is suppressed. This removes the
+   all-rejected, invalid-entity and provider facet stubs. It never turns a failing build into a
+   compiling one.
+3. **INQ039 opt-in covers every rejection.** Any rejected method gets a stub when INQ039 is lowered
+   project-wide, so a non-INQ039 rejection runs only after two choices: suppress its error and lower
+   INQ039. The provider facet path works this way today. The cost is a widened opt-in. A project
+   that already lowers INQ039 and suppresses, for example, INQ095 on a mixed store fails today with
+   CS8795 (`WriteEnforcedFilterGeneratorTests.SuppressedUpsertRejectionOnAMultiMethodStoreOmitsTheMethodEntirely`).
+   Under this option it compiles, and the method throws at run time.
+4. **Make rejecting errors non-configurable.** Tag every rejecting error except INQ039 as
    `NotConfigurable`, and keep emitting stubs for noise reduction. Stubs can never run without the
    INQ039 opt-in. Projects can no longer lower any Inquiry error, including in fixture assemblies,
    and bulk severity settings are ignored for those IDs.
-4. **Severity-aware stubs.** Emit a noise-reducing stub only while the generator can prove the
+5. **Severity-aware stubs.** Emit a noise-reducing stub only while the generator can prove the
    rejecting error is still an error. Otherwise omit the body. This keeps default output clean, but
    the generator must reproduce every way a severity can change, for every ID. A missed mechanism
    fails open.
@@ -127,45 +133,54 @@ error. It is an inconsistency in the unsupported-operation contract, and that co
 Choose option 2:
 
 - An Inquiry error that rejects a declaration stays configurable. Suppressing or lowering it never
-  produces runnable generated code by itself.
-- The project-wide INQ039 opt-in is the only switch that emits `NotSupportedException` stubs. It
-  applies to every rejection path, including all-rejected and invalid-entity stores.
-- Without the opt-in, the generator still emits the store constructor, so CS7036 does not appear.
-  It omits rejected method bodies, so each one reports CS8795.
-- A store is registered in dependency injection whenever its generated source exists. Without the
-  opt-in, that source does not compile, so only an opted-in build can register a store with stubs.
+  produces runnable generated code.
+- INQ039 means the declaration is valid but the active dialect cannot run it. Lowering INQ039 below
+  error project-wide is the only way to get a `NotSupportedException` stub, and only for those
+  methods.
+- Any other rejected method has no generated body. The generator still emits the store constructor,
+  so CS7036 does not appear, and each rejected method reports CS8795.
+- A store is registered in dependency injection whenever its generated source exists. A store with
+  a rejected method does not compile, so no build registers it.
 - A stub must match its declaration exactly. If the generator cannot reproduce the signature, it
   reports a declaration error and emits no stub for that method.
 
-Option 2 matches the existing documentation, the provider facet precedent, and the mixed-store
-behavior. It costs one CS8795 per rejected method in default builds for all-rejected and
-invalid-entity stores, which those stores avoid today. The repair index already tells readers to
-start with the first INQ diagnostic and to treat CS8795 as secondary.
+Option 2 matches the existing documentation and the mixed-store behavior. It changes behavior only
+in the fail-closed direction. It costs one CS8795 per rejected method in default builds for
+all-rejected and invalid-entity stores, which those stores avoid today. The repair index already
+tells readers to start with the first INQ diagnostic and to treat CS8795 as secondary.
+
+Option 3 is the strongest alternative. Choose it if suppressed provider facet errors, such as INQ076,
+must keep compiling as stubs. If chosen, the migration notes and #271 must cover projects where
+INQ039 is already lowered.
 
 ### Consequences for the 1.0 contract
 
-- From 1.0, a generated store method is a throwing stub only when the project opted in to INQ039
-  stubs. No other severity change produces one.
-- Projects that suppress a rejecting error on an all-rejected or invalid-entity store, without also
-  lowering INQ039, stop building. That needs a changelog entry.
+- From 1.0, a generated store method is a throwing stub only when it reports INQ039 and the project
+  opted in to INQ039 stubs. No other severity change produces one.
+- Two configurations that build today stop building. Both need a changelog entry:
+  - A rejecting error is suppressed on an all-rejected or invalid-entity store.
+  - A provider facet error, such as INQ076, is suppressed and INQ039 is lowered.
+- No configuration that fails today starts to build.
 - Diagnostic IDs and default severities do not change, so the `AnalyzerReleases.*.md` files need no
   update.
 - Pragmas do not affect generator diagnostics. The repair index should say so, so readers do not
   expect a local opt-out.
-- Existing tests that assert no CS8795 for all-rejected or invalid-entity stores in default builds
-  change to assert the primary error plus CS8795, with a separate opt-in case.
+- Tests that pin the removed stubs change. These include
+  `UpsertRejectionFailsClosedWhenTheDiagnosticIsSuppressed`,
+  `SqlServerInvalidCollectionFacetEmitsCompileSafeStubOnlyWithProjectWideOptIn`, and the
+  all-rejected and invalid-entity tests that assert no CS8795.
 
 ### Follow-up work
 
-- **#266** applies the policy to all-rejected, invalid-entity and extraction-rejected stores. Gate
-  `EmitStubOnlyStore` on the INQ039 opt-in, and emit the constructor for a store whose methods all
-  failed extraction.
-- **#267** makes stub signatures match generic, constrained, static and `ref`/`in`/`out`
+- **#266** applies the policy to all-rejected, invalid-entity and extraction-rejected stores. Emit
+  the store constructor with no method stubs for each of them, and remove the provider facet stub at
+  `StoreProcessor.cs:2226-2234`.
+- **#267** makes INQ039 stub signatures match generic, constrained, static and `ref`/`in`/`out`
   declarations. Otherwise it reports a declaration error and emits no stub.
-- **#270** emits a store shell for unsupported token and token-upsert stores instead of returning
-  no source, and applies the same opt-in gate.
-- **#271** covers each path in the table above in two cases: default severity, and the rejecting
-  error suppressed with and without the INQ039 opt-in.
+- **#270** emits the store constructor for unsupported token and token-upsert stores instead of
+  returning no source. These methods get no stubs.
+- **#271** covers each path in the table above in three cases: default severity, the rejecting error
+  suppressed, and the rejecting error suppressed with INQ039 lowered.
 - **#273** needs no separate stub rule. Its version-guidance error is an ordinary rejecting error. Any
   store method or store it rejects follows the rules above.
 - The repair index (`diagnostics.md`) and [Errors and partial outcomes](../articles/error-contracts.md)
