@@ -36,6 +36,8 @@ if ($evidence.schemaVersion -cne 'inquiry-package-consumers-v1' -or $evidence.st
     throw 'Package consumer evidence does not match this release.'
 }
 $expectedChecks = @(
+    'net8.0/sqlite/docs-recipe-getting-started'
+    'net8.0/sqlite/docs-recipe-partial-updates'
     foreach ($tfm in @('net8.0', 'net9.0', 'net10.0')) {
         foreach ($provider in @('MariaDb', 'MySql', 'Oracle', 'PostgreSql', 'Sqlite', 'SqlServer')) { "$tfm/$provider/analyzer-and-generated-crud-build" }
         "$tfm/sqlite/crud"

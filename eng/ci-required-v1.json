@@ -12,6 +12,7 @@
     },
     { "job": "benchmark-smoke" },
     { "job": "package-producer" },
-    { "job": "package-verifier" }
+    { "job": "package-verifier" },
+    { "job": "docs" }
   ]
 }
