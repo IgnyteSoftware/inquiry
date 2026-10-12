@@ -69,16 +69,6 @@ static int RunCompare(string[] args)
         return evidenceFailure;
     }
 
-    // Timing from another runner or runtime is not comparable, so it cannot prove or clear a regression.
-    if (!string.Equals(baseline.RuntimeTfm, tfm, StringComparison.Ordinal) ||
-        !string.Equals(baseline.Environment, env, StringComparison.Ordinal))
-    {
-        Console.Error.WriteLine(
-            $"No accepted baseline for this runner: baseline is '{baseline.RuntimeTfm}' on '{baseline.Environment}', " +
-            $"current run is '{tfm}' on '{env}'.");
-        return evidenceFailure;
-    }
-
     // A filtered run measures only the selected cases. This matches BenchmarkDotNet's --filter glob,
     // which tests both the full case name and the name without parameters.
     var filterRegex = new Regex(
@@ -91,6 +81,16 @@ static int RunCompare(string[] args)
     {
         Console.Error.WriteLine($"Filter '{filter}' selects no baseline cases.");
         return notSelected;
+    }
+
+    // Timing from another runner or runtime is not comparable, so it cannot prove or clear a regression.
+    if (!string.Equals(baseline.RuntimeTfm, tfm, StringComparison.Ordinal) ||
+        !string.Equals(baseline.Environment, env, StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine(
+            $"No accepted baseline for this runner: baseline is '{baseline.RuntimeTfm}' on '{baseline.Environment}', " +
+            $"current run is '{tfm}' on '{env}'.");
+        return evidenceFailure;
     }
 
     // Selection is resolved first so a class the filter selects still fails when its report is absent.
