@@ -119,7 +119,9 @@ The normal CI workflow runs on pull requests targeting `main`, and on merge-queu
 **build-and-unit** (generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and
 runs the NativeAOT smoke app), an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server,
 Oracle × net8.0/net9.0/net10.0 via Testcontainers — exactly 15 required legs), **package-producer**,
-and the independent **package-verifier**. The `ci-required-v1` aggregator runs even after failures and
+the independent **package-verifier**, and **docs** (strict DocFX build and local-link check). The
+optional **package-provenance** job attests the package bundle only in trusted contexts, never for fork
+pull requests. The `ci-required-v1` aggregator runs even after failures and
 fails unless all required jobs and matrix legs succeed. Direct merging has been retired; repository
 rulesets protect `main` with this context and the review requirements documented under
 [#89](https://github.com/IgnyteSoftware/inquiry/issues/89). A separate **scheduled weekly workflow**

@@ -28,6 +28,16 @@ docfx docs/site/docfx.json
 
 Output lands in `docs/site/_site/`. Open `docs/site/_site/index.html` directly in a browser, or serve the directory with any static-file server.
 
+The required CI `docs` job runs `docfx docs/site/docfx.json --warningsAsErrors` and an offline link
+check on every pull request, so any DocFX warning or broken local link blocks the merge.
+
+## Executable recipes
+
+A `<!-- recipe: name/File.cs -->` comment directly above a code fence marks that fence as a file of an
+executable recipe. The package consumer runner extracts these files, builds them against the
+candidate packages, and runs them; see [Contributing](develop/contributing.md#clean-package-consumers).
+Keep each comment on the line immediately above its fence.
+
 ## What's in here
 
 - **`docfx.json`** — the build config. Lists the public packages whose XML doc comments become the API reference.

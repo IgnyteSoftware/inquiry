@@ -30,7 +30,8 @@
       "allowCompilationErrors": false,
       "outputFormat": "mref",
       "properties": {
-        "TargetFramework": "net8.0"
+        "TargetFramework": "net8.0",
+        "InquiryApiMetadata": "true"
       }
     }
   ],

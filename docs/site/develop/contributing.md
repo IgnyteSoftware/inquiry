@@ -91,14 +91,24 @@ and manual dispatches that verify the combined `main` commit before tagging:
 
 - a **build-and-unit** job — the generator, runtime, and SQLite suites (no Docker);
 - an **aot-smoke** job — publishes the `Inquiry.AotSmoke` sample as a native binary and executes it,
-  verifying the NativeAOT story end-to-end; and
+  verifying the NativeAOT story end-to-end;
 - an **integration** job — a matrix of **PostgreSQL, MySQL, MariaDB, SQL Server, and Oracle** live suites, each on
-  **net8.0**, **net9.0**, and **net10.0** (exactly 15 required legs), provisioned with Testcontainers.
+  **net8.0**, **net9.0**, and **net10.0** (exactly 15 required legs), provisioned with Testcontainers; and
+- a **docs** job — builds the DocFX site with `--warningsAsErrors` and checks every local link. It runs on
+  every pull request, so changes to shared MSBuild props and targets are covered too.
 
 The always-running **ci-required-v1** job fails unless every required job and every matrix leg succeeds.
 Its versioned source of truth is `eng/ci-required-v1.json`; contract tests prevent the workflow matrix or
 aggregator from drifting away from it. CI uploads TRX result artifacts even after failures, fails if the
 evidence is absent, and retains the artifacts for 7 days.
+
+Pull requests from forks run the same required jobs, with a read-only token and no secrets. Only the
+optional **package-provenance** job needs an OIDC token and attestation write access. It runs only for
+same-repository pull requests, merge groups, manual dispatches, and release calls, and only when the
+`ENABLE_ATTESTATIONS` repository variable is `true`. It downloads the producer's stored bundle and
+attests it without checking out or running repository code. The package jobs that run pull request
+code get read-only permissions in every context. A skipped provenance job does not affect
+`ci-required-v1`; the release workflow attests the published packages separately and fails closed.
 
 A separate **scheduled weekly workflow**
 ([`scheduled.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/scheduled.yml))
@@ -142,7 +152,10 @@ gated by `eng/release-manifest.json`, whose `packageVersion` is the single sourc
 | Tag version doesn't match the manifest, or the commit isn't on `main` | Release fails closed — nothing publishes |
 
 To cut a release: open a PR bumping `packageVersion` (and the matching `tag` and inter-package
-dependency versions) in `eng/release-manifest.json`, merge it, then push the tag. Authentication uses
+dependency versions) in `eng/release-manifest.json`, merge it, then push the tag. Before you push the
+tag, run the Docs workflow manually on `main` and wait for it to deploy
+<https://ignytesoftware.github.io/inquiry/>. On the deployed site, check the navigation, the API
+pages for every package, and the getting-started and feature examples. Authentication uses
 NuGet **Trusted Publishing** (OIDC via `NuGet/login`) bound to the `nuget-release` environment; no
 long-lived API key is stored in the repository.
 
@@ -215,6 +228,13 @@ The runner uses fresh NuGet caches and maps every manifest package ID exclusivel
 It compiles all six provider generators, runs SQLite CRUD and companion APIs on each framework,
 and publishes and executes SQLite CRUD as a .NET 10 native binary. Server-provider SQL execution
 remains covered by the required integration matrix.
+
+It also runs the complete documentation recipes on .NET 8 against the candidate packages. It
+extracts the files marked with `<!-- recipe: name/File -->` comments from the published pages. The
+[getting-started](../articles/getting-started.md) program must print exactly its documented output.
+The [partial-updates](../articles/features/partial-updates.md) recipe runs under
+`tests/Inquiry.PackageSmoke/PartialUpdatesRecipe.cs`, which checks every result that page documents.
+The run fails if a marked file is missing or extra.
 
 CI runs this in the required `package-verifier` job. Its retained `package-consumers.json` identifies
 the commit, version, completed checks, and SHA-256 of every bundle file. A failed run retains its log

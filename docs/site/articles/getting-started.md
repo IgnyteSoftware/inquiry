@@ -25,6 +25,7 @@ ambiguous. The selected dialect must match the connection used at runtime.
 
 Create **Shipper.cs**:
 
+<!-- recipe: getting-started/Shipper.cs -->
 ```csharp
 using Inquiry.Entities;
 
@@ -44,6 +45,7 @@ public sealed class Shipper
 
 Create **ShipperStore.cs**:
 
+<!-- recipe: getting-started/ShipperStore.cs -->
 ```csharp
 using System.Collections.Generic;
 using System.Threading;
@@ -72,6 +74,7 @@ service scope.
 
 ## Replace Program.cs
 
+<!-- recipe: getting-started/Program.cs -->
 ```csharp
 using System;
 using System.Threading;
@@ -137,6 +140,7 @@ dotnet run --no-build
 
 On a new database, the program prints the saved key and the one shipper in the list:
 
+<!-- recipe: getting-started/output.txt -->
 ```text
 Saved shipper 1: Speedy Express
 1: Speedy Express

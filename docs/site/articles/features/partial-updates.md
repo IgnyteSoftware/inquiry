@@ -26,6 +26,7 @@ even when the string is empty. Do not infer omission from null, an empty string,
 
 The example table and starting row are:
 
+<!-- recipe: partial-updates/schema.sql -->
 ```sql
 CREATE TABLE Contacts (
     Id INTEGER PRIMARY KEY,
@@ -43,6 +44,7 @@ Configure SQLite with `AddInquirySqlite(connectionString)` and register Inquiry 
 the target key, and the version the caller last read. The request body may contain only `phone` and
 `email`; it cannot set the key, tenant, deletion marker, or version.
 
+<!-- recipe: partial-updates/ContactPatches.cs -->
 ```csharp
 using Inquiry;
 using System.Text.Json;
