@@ -170,7 +170,7 @@ public sealed class CiContractTests
     [InlineData("tfm: [net8.0, net9.0, net10.0]", "tfm: [net8.0, net9.0]")]
     [InlineData("fail-fast: false", "fail-fast: \"false\"")]
     [InlineData("name: CI", "name: &workflow-name CI")]
-    [InlineData("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", "actions/upload-artifact@v7")]
+    [InlineData("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", "actions/upload-artifact@v7")]
     [InlineData("if-no-files-found: error", "if-no-files-found: warn")]
     [InlineData("name: CI", "name: CI\nname: CI")]
     [InlineData("tfm: [net8.0, net9.0, net10.0]", "tfm: [net8.0, net9.0, net10.0]\n        exclude: []")]
