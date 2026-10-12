@@ -12,11 +12,17 @@ public static class CiContractVerifier
         ["actions/setup-dotnet"] = "a98b56852c35b8e3190ac28c8c2271da59106c68",
         ["actions/upload-artifact"] = "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
         ["actions/download-artifact"] = "9000827ccba6bdab643e8b6fd33ac0654aef8333",
-        ["actions/attest-build-provenance"] = "4d101475d8b20a2381f78447822ac1eab6504dd8"
+        ["actions/attest-build-provenance"] = "4d101475d8b20a2381f78447822ac1eab6504dd8",
+        ["lycheeverse/lychee-action"] = "e7477775783ea5526144ba13e8db5eec57747ce8"
     };
 
+    private static readonly string[] RequiredJobIds =
+        ["build-and-unit", "aot-smoke", "integration", "benchmark-smoke", "package-producer", "package-verifier", "docs"];
+    // package-provenance is not required: fork pull requests cannot attest, so it is skipped there.
     private static readonly string[] JobIds =
-        ["build-and-unit", "aot-smoke", "integration", "benchmark-smoke", "package-producer", "package-verifier", "ci-required-v1"];
+        ["build-and-unit", "aot-smoke", "integration", "benchmark-smoke", "package-producer", "package-provenance", "package-verifier", "docs", "ci-required-v1"];
+    private const string TrustedProvenanceCondition =
+        "vars.ENABLE_ATTESTATIONS == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)";
     private static readonly string[] IntegrationProviders =
         ["PostgreSql", "MySql", "MariaDb", "SqlServer", "Oracle"];
     private static readonly string[] IntegrationTfms = ["net8.0", "net9.0", "net10.0"];
@@ -27,8 +33,8 @@ public static class CiContractVerifier
         var contract = ReadContract(Path.GetFullPath(contractPath, root));
         var required = contract.RequiredJobs ?? throw new ReleaseVerificationException("CI contract requiredJobs must be an array.");
         Require(contract.SchemaVersion == "ci-required-v1", "CI contract schemaVersion must be ci-required-v1.");
-        Require(required.Count == 6 && required.Select(job => job.Job).SequenceEqual(JobIds[..6]),
-            "CI contract must declare the exact six required jobs in canonical order.");
+        Require(required.Count == RequiredJobIds.Length && required.Select(job => job.Job).SequenceEqual(RequiredJobIds),
+            "CI contract must declare the exact seven required jobs in canonical order.");
 
         var document = LoadYaml(Path.GetFullPath(workflowPath, root));
         var workflow = Map(document, "workflow", "name", "on", "permissions", "concurrency", "jobs");
@@ -112,9 +118,10 @@ public static class CiContractVerifier
             "integration" => new[] { "runs-on", "timeout-minutes", "env", "strategy", "steps" },
             "benchmark-smoke" => new[] { "runs-on", "timeout-minutes", "steps" },
             "package-producer" => new[] { "runs-on", "timeout-minutes", "permissions", "outputs", "steps" },
+            "package-provenance" => new[] { "if", "needs", "runs-on", "timeout-minutes", "permissions", "steps" },
             "package-verifier" => new[] { "needs", "runs-on", "timeout-minutes", "permissions", "steps" },
             "ci-required-v1" => new[] { "name", "if", "needs", "runs-on", "steps" },
-            "aot-smoke" => new[] { "runs-on", "timeout-minutes", "steps" },
+            "aot-smoke" or "docs" => new[] { "runs-on", "timeout-minutes", "steps" },
             _ => new[] { "runs-on", "steps" }
         };
         RequireNoUnknown(job, $"job {jobId}", allowed);
@@ -156,11 +163,17 @@ public static class CiContractVerifier
         {
             RequireSequence(Sequence(job["needs"], "package-verifier.needs"), ["package-producer"], "package-verifier needs");
         }
+        else if (jobId == "package-provenance")
+        {
+            RequireSequence(Sequence(job["needs"], "package-provenance.needs"), ["package-producer"], "package-provenance needs");
+            Require(Scalar(job["if"], "package-provenance.if") == TrustedProvenanceCondition,
+                "Provenance must run only in trusted contexts: never for fork pull requests.");
+        }
         else if (jobId == "ci-required-v1")
         {
             Require(Scalar(job["name"], "ci-required-v1.name") == "ci-required-v1", "Aggregator name must be ci-required-v1.");
             Require(Scalar(job["if"], "ci-required-v1.if") == "always()", "Aggregator must use if: always().");
-            RequireSequence(Sequence(job["needs"], "ci-required-v1.needs"), JobIds[..6], "aggregator needs");
+            RequireSequence(Sequence(job["needs"], "ci-required-v1.needs"), RequiredJobIds, "aggregator needs");
         }
         else
         {
@@ -186,11 +199,7 @@ public static class CiContractVerifier
                 var name = step.TryGetValue("name", out var nameNode) ? Scalar(nameNode, "step.name") : string.Empty;
                 var approved = (name.StartsWith("Upload ", StringComparison.Ordinal) && condition == "always()")
                     || (jobId == "integration" && name is "Build pinned SQL Server full-text image" or "Preflight SQL Server image runtime user"
-                        && condition == "matrix.provider == 'SqlServer'")
-                    // Attestation persistence is a paid org feature for private repos; the step is
-                    // opt-in via repository variable rather than failing every run.
-                    || (jobId == "package-producer" && name == "Attest build provenance"
-                        && condition == "vars.ENABLE_ATTESTATIONS == 'true'");
+                        && condition == "matrix.provider == 'SqlServer'");
                 Require(approved, $"Unapproved conditional step in {jobId}: {name}.");
             }
 
@@ -203,8 +212,11 @@ public static class CiContractVerifier
             "aot-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
             "integration" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
             "benchmark-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
-            "package-producer" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/attest-build-provenance", "actions/upload-artifact" },
+            "package-producer" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
+            // No checkout or SDK: the job holding the OIDC token must not run repository code.
+            "package-provenance" => new[] { "actions/download-artifact", "actions/attest-build-provenance" },
             "package-verifier" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/download-artifact", "actions/upload-artifact" },
+            "docs" => new[] { "actions/checkout", "actions/setup-dotnet", "lycheeverse/lychee-action" },
             _ => []
         };
         var actualActions = steps.Select(step => Map(step, "step"))
@@ -215,15 +227,21 @@ public static class CiContractVerifier
 
         if (jobId == "package-producer")
         {
-            var producerPermissions = Map(job["permissions"], "package-producer.permissions", "attestations", "contents", "id-token");
-            Require(Scalar(producerPermissions["attestations"], "permissions.attestations") == "write"
-                && Scalar(producerPermissions["contents"], "permissions.contents") == "read"
-                && Scalar(producerPermissions["id-token"], "permissions.id-token") == "write",
-                "Package producer permissions must be attestations:write, contents:read, and id-token:write.");
+            var producerPermissions = Map(job["permissions"], "package-producer.permissions", "contents");
+            Require(Scalar(producerPermissions["contents"], "permissions.contents") == "read",
+                "Package producer permissions must be exactly contents:read.");
             var outputs = Map(job["outputs"], "package-producer.outputs", "artifact-id", "artifact-digest");
             Require(Scalar(outputs["artifact-id"], "artifact-id") == "${{ steps.upload.outputs.artifact-id }}"
                 && Scalar(outputs["artifact-digest"], "artifact-digest") == "${{ steps.upload.outputs.artifact-digest }}",
                 "Package producer outputs must be bound to the immutable upload identity.");
+        }
+        if (jobId == "package-provenance")
+        {
+            var provenancePermissions = Map(job["permissions"], "package-provenance.permissions", "attestations", "contents", "id-token");
+            Require(Scalar(provenancePermissions["attestations"], "permissions.attestations") == "write"
+                && Scalar(provenancePermissions["contents"], "permissions.contents") == "read"
+                && Scalar(provenancePermissions["id-token"], "permissions.id-token") == "write",
+                "Package provenance permissions must be attestations:write, contents:read, and id-token:write.");
         }
         if (jobId == "package-verifier")
         {
@@ -236,8 +254,8 @@ public static class CiContractVerifier
         {
             var aggregatorStep = Map(steps.Single(), "ci-required-v1 step", "name", "env", "run");
             var env = Map(aggregatorStep["env"], "ci-required-v1.env",
-                "BUILD_AND_UNIT_RESULT", "AOT_SMOKE_RESULT", "INTEGRATION_RESULT", "BENCHMARK_SMOKE_RESULT", "PACKAGE_PRODUCER_RESULT", "PACKAGE_VERIFIER_RESULT");
-            var expected = JobIds[..6].ToDictionary(
+                "BUILD_AND_UNIT_RESULT", "AOT_SMOKE_RESULT", "INTEGRATION_RESULT", "BENCHMARK_SMOKE_RESULT", "PACKAGE_PRODUCER_RESULT", "PACKAGE_VERIFIER_RESULT", "DOCS_RESULT");
+            var expected = RequiredJobIds.ToDictionary(
                 item => item.Replace('-', '_').ToUpperInvariant() + "_RESULT",
                 item => $"${{{{ needs.{item}.result }}}}",
                 StringComparer.Ordinal);
@@ -268,13 +286,17 @@ public static class CiContractVerifier
         RequireRuns(jobs, "package-producer",
             "./eng/pack-release.ps1 -OutputPath \"$env:RUNNER_TEMP/package-contract\" -Commit ((git rev-parse HEAD).Trim())",
             "test -n \"$ARTIFACT_ID\"\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'");
+        RequireRuns(jobs, "package-provenance");
         RequireRuns(jobs, "package-verifier",
             "echo \"$ARTIFACT_ID\" | grep -Eq '^[0-9]+$'\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ncurl --fail --silent --show-error --retry 3 --max-redirs 0 \\\n  --header \"Authorization: Bearer $GH_TOKEN\" \\\n  --header \"X-GitHub-Api-Version: 2022-11-28\" \\\n  \"$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip\" \\\n  --dump-header artifact.headers --output /dev/null\nartifact_url=\"$(sed -n 's/^location: //Ip' artifact.headers | tr -d '\\r')\"\ncase \"$artifact_url\" in https://*) ;; *) exit 1 ;; esac\ncurl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \\\n  \"$artifact_url\" --output artifact.zip\necho \"$ARTIFACT_DIGEST  artifact.zip\" | sha256sum --check --strict",
             "echo \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release -- verify-bundle . eng/release-manifest.json .artifacts/downloaded \"$(git rev-parse HEAD)\"",
             "sudo apt-get update && sudo apt-get install -y clang zlib1g-dev",
             PackageConsumerCommand);
+        RequireRuns(jobs, "docs",
+            "dotnet tool install --global docfx --version 2.78.5",
+            "docfx docs/site/docfx.json --warningsAsErrors");
         RequireRuns(jobs, "ci-required-v1",
-            "test \"$BUILD_AND_UNIT_RESULT\" = success\ntest \"$AOT_SMOKE_RESULT\" = success\ntest \"$INTEGRATION_RESULT\" = success\ntest \"$BENCHMARK_SMOKE_RESULT\" = success\ntest \"$PACKAGE_PRODUCER_RESULT\" = success\ntest \"$PACKAGE_VERIFIER_RESULT\" = success");
+            "test \"$BUILD_AND_UNIT_RESULT\" = success\ntest \"$AOT_SMOKE_RESULT\" = success\ntest \"$INTEGRATION_RESULT\" = success\ntest \"$BENCHMARK_SMOKE_RESULT\" = success\ntest \"$PACKAGE_PRODUCER_RESULT\" = success\ntest \"$PACKAGE_VERIFIER_RESULT\" = success\ntest \"$DOCS_RESULT\" = success");
 
         var workflowText = string.Join('\n', jobs.Values.Select(node => node.ToString()));
         Require(!workflowText.Contains("dotnet nuget push", StringComparison.OrdinalIgnoreCase), "Normal CI must not publish packages.");
@@ -319,6 +341,7 @@ public static class CiContractVerifier
             Require(step.TryGetValue("with", out var withNode), "setup-dotnet must declare its exact SDK input.");
             var with = Map(withNode!, "setup-dotnet.with", "dotnet-version");
             var expectedVersions = jobId is "aot-smoke" ? "10.0.x"
+                : jobId is "docs" ? "8.0.x"
                 : jobId is "benchmark-smoke" ? "8.0.x\n10.0.x"
                 : "8.0.x\n9.0.x\n10.0.x";
             Require(NormalizeRun(Scalar(with["dotnet-version"], "setup-dotnet.dotnet-version")) == expectedVersions,
@@ -351,8 +374,16 @@ public static class CiContractVerifier
         {
             Require(step.TryGetValue("with", out var withNode), "Provenance attestation must declare its exact contract.");
             var with = Map(withNode!, "attest-build-provenance.with", "subject-path");
-            Require(Scalar(with["subject-path"], "attest.subject-path") == "${{ runner.temp }}/package-contract/*.nupkg",
-                "Provenance attestation subject-path must target the exact package output glob.");
+            Require(Scalar(with["subject-path"], "attest.subject-path") == ".artifacts/downloaded/*.nupkg",
+                "Provenance attestation subject-path must target the exact downloaded package glob.");
+        }
+        else if (repository == "lycheeverse/lychee-action")
+        {
+            Require(step.TryGetValue("with", out var withNode), "Link validation must declare its exact contract.");
+            var with = Map(withNode!, "lychee-action.with", "args", "fail");
+            Require(Scalar(with["args"], "lychee.args") == "--offline --no-progress --exclude 'Inquiry\\.Sqlite\\.html$' docs/site/_site"
+                && Scalar(with["fail"], "lychee.fail") == "true",
+                "Link validation must check every local link and keep only the exact empty-namespace exclusion.");
         }
         else if (repository == "actions/download-artifact")
         {
@@ -417,7 +448,7 @@ public static class CiContractVerifier
                 {
                     ["ARTIFACT_DIGEST"] = "${{ needs.package-producer.outputs.artifact-digest }}"
                 },
-            ("ci-required-v1", "Enforce every required job and matrix leg") => JobIds[..6].ToDictionary(
+            ("ci-required-v1", "Enforce every required job and matrix leg") => RequiredJobIds.ToDictionary(
                 item => item.Replace('-', '_').ToUpperInvariant() + "_RESULT",
                 item => $"${{{{ needs.{item}.result }}}}", StringComparer.Ordinal),
             _ => null

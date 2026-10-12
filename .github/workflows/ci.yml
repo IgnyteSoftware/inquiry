@@ -139,10 +139,9 @@ jobs:
   package-producer:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Packing runs pull request code, so this job gets no write or OIDC token.
     permissions:
-      attestations: write
       contents: read
-      id-token: write
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
       artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
@@ -159,13 +158,6 @@ jobs:
       - name: Pack and verify the exact manifest inventory
         shell: pwsh
         run: ./eng/pack-release.ps1 -OutputPath "$env:RUNNER_TEMP/package-contract" -Commit ((git rev-parse HEAD).Trim())
-      - name: Attest build provenance
-        # Attestation persistence is unavailable for private repos on this org's plan; enable the
-        # repo variable (or make the repo public) to turn it back on.
-        if: vars.ENABLE_ATTESTATIONS == 'true'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-path: ${{ runner.temp }}/package-contract/*.nupkg
       - name: Upload package bundle
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -181,6 +173,31 @@ jobs:
         run: |
           test -n "$ARTIFACT_ID"
           echo "$ARTIFACT_DIGEST" | grep -Eq '^[0-9a-f]{64}$'
+
+  package-provenance:
+    # Fork pull requests cannot get an OIDC token or attestation write access, so only trusted runs
+    # attest. This job runs no repository code; it signs the bytes the producer stored.
+    # Attestation persistence is unavailable for private repos on this org's plan; enable the
+    # repo variable (or make the repo public) to turn it back on.
+    if: vars.ENABLE_ATTESTATIONS == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    needs: [package-producer]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download the producer artifact by immutable ID
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          artifact-ids: ${{ needs.package-producer.outputs.artifact-id }}
+          path: .artifacts/downloaded
+          merge-multiple: true
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: .artifacts/downloaded/*.nupkg
 
   package-verifier:
     needs: [package-producer]
@@ -242,10 +259,32 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+      - name: Install DocFX
+        run: dotnet tool install --global docfx --version 2.78.5
+      - name: Build site with warnings as errors
+        run: docfx docs/site/docfx.json --warningsAsErrors
+      - name: Validate links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # Inquiry.Sqlite.html is excluded because DocFX renders the namespace breadcrumb as one
+          # xref per segment, and Inquiry.Sqlite holds no public type (SQLite is the only provider
+          # with no *InquiryOptions/*Compatibility pair), so DocFX emits no page for that segment.
+          # Remove this exclusion if a public type is ever added to the Inquiry.Sqlite namespace.
+          args: --offline --no-progress --exclude 'Inquiry\.Sqlite\.html$' docs/site/_site
+          fail: true
+
   ci-required-v1:
     name: ci-required-v1
     if: always()
-    needs: [build-and-unit, aot-smoke, integration, benchmark-smoke, package-producer, package-verifier]
+    needs: [build-and-unit, aot-smoke, integration, benchmark-smoke, package-producer, package-verifier, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Enforce every required job and matrix leg
@@ -256,6 +295,7 @@ jobs:
           BENCHMARK_SMOKE_RESULT: ${{ needs.benchmark-smoke.result }}
           PACKAGE_PRODUCER_RESULT: ${{ needs.package-producer.result }}
           PACKAGE_VERIFIER_RESULT: ${{ needs.package-verifier.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
         run: |
           test "$BUILD_AND_UNIT_RESULT" = success
           test "$AOT_SMOKE_RESULT" = success
@@ -263,3 +303,4 @@ jobs:
           test "$BENCHMARK_SMOKE_RESULT" = success
           test "$PACKAGE_PRODUCER_RESULT" = success
           test "$PACKAGE_VERIFIER_RESULT" = success
+          test "$DOCS_RESULT" = success

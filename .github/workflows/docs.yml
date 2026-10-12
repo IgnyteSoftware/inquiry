@@ -7,6 +7,11 @@ on:
       - docs/site/**
       - src/**/*.cs
       - src/**/*.csproj
+      - src/**/*.props
+      - src/**/*.targets
+      - Directory.Build.props
+      - Directory.Build.targets
+      - Directory.Packages.props
       - .github/workflows/docs.yml
   workflow_dispatch:
 
@@ -28,8 +33,8 @@ jobs:
           dotnet-version: 8.0.x
       - name: Install DocFX
         run: dotnet tool install --global docfx --version 2.78.5
-      - name: Build site
-        run: docfx docs/site/docfx.json
+      - name: Build site with warnings as errors
+        run: docfx docs/site/docfx.json --warningsAsErrors
       - name: Validate links
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
