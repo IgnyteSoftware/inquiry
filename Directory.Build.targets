@@ -25,6 +25,14 @@
     <_InquiryOracleSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryOracleSharedPath>
   </PropertyGroup>
 
+  <!-- DocFX forces TargetFramework=net8.0 on every project it loads, including the netstandard2.0
+       analyzer projects that providers reference only to build them first. Those references add no
+       public API, and loading them under the forced TFM makes DocFX warn about the shared generator
+       reference, so API metadata generation drops them. -->
+  <ItemGroup Condition="'$(InquiryApiMetadata)' == 'true'">
+    <ProjectReference Remove="@(ProjectReference->WithMetadataValue('ReferenceOutputAssembly', 'false'))" />
+  </ItemGroup>
+
   <!-- Roslyn analyzer auto-flow only attaches IsRoslynComponent project references one level deep,
        so we manually attach each provider's analyzer (and the shared framework DLL it depends on)
        for any project that references that provider's runtime package. Inside each provider's

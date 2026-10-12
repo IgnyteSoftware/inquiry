@@ -58,6 +58,41 @@ function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [stri
     return (Join-Path $directory 'Consumer.csproj')
 }
 
+# Recipe files come from marked fences in the published pages, so the docs cannot drift from what runs here.
+function Copy-Recipe([string] $Recipe, [string] $Directory) {
+    $pattern = '(?ms)^<!-- recipe: ' + [regex]::Escape($Recipe) + '/(?<file>[A-Za-z.]+) -->\r?\n```[a-z]*\r?\n(?<code>.*?)^```'
+    $files = foreach ($page in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs/site/articles') -Recurse -Filter '*.md') {
+        foreach ($match in [regex]::Matches((Get-Content -Raw -LiteralPath $page.FullName), $pattern)) {
+            Set-Content -LiteralPath (Join-Path $Directory $match.Groups['file'].Value) -Value $match.Groups['code'].Value -NoNewline -Encoding utf8
+            $match.Groups['file'].Value
+        }
+    }
+    return @($files)
+}
+
+function Invoke-Recipe([string] $Recipe, [string[]] $ExpectedFiles, [string[]] $Sources) {
+    $project = New-Consumer "recipe-$Recipe" 'net8.0' @('Ignyte.Inquiry.Sqlite') $Sources
+    $directory = Split-Path -Parent $project
+    $files = Copy-Recipe $Recipe $directory
+    if (@(Compare-Object ($files | Sort-Object) ($ExpectedFiles | Sort-Object)).Count -ne 0) {
+        throw "Documentation recipe '$Recipe' extracted [$($files -join ', ')], expected [$($ExpectedFiles -join ', ')]."
+    }
+    Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
+    Invoke-Dotnet @('build', $project, '-c', 'Release', '--no-restore')
+    # Recipes create their database file in the working directory, which must be new.
+    Push-Location -LiteralPath $directory
+    try {
+        $output = @(& dotnet run --project $project -c Release --no-build 2>&1 | ForEach-Object { "$_" })
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+    $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
+    if ($exitCode -ne 0) { throw "Documentation recipe '$Recipe' failed ($exitCode)." }
+    return $output
+}
+
 try {
     Invoke-Dotnet @('run', '--project', (Join-Path $repoRoot 'eng/Inquiry.ReleaseTools'), '-c', 'Release', '--',
         'verify-bundle', $repoRoot, (Join-Path $repoRoot 'eng/release-manifest.json'), $bundle, $Commit, '--version', $PackageVersion, '--branch', $RepositoryBranch)
@@ -76,6 +111,13 @@ try {
   <packageSourceMapping><clear /><packageSource key="candidate">$mapping</packageSource><packageSource key="nuget.org"><package pattern="*" /></packageSource></packageSourceMapping>
 </configuration>
 "@ | Set-Content -LiteralPath $config -Encoding utf8
+    $output = @(Invoke-Recipe 'getting-started' @('Shipper.cs', 'ShipperStore.cs', 'Program.cs', 'output.txt') @())
+    $expected = @(Get-Content -LiteralPath (Join-Path $workRoot 'recipe-getting-started/output.txt'))
+    if (($output -join "`n") -cne ($expected -join "`n")) { throw 'The getting-started output differs from its documented output.' }
+    $checks.Add('net8.0/sqlite/docs-recipe-getting-started')
+    $output = @(Invoke-Recipe 'partial-updates' @('schema.sql', 'ContactPatches.cs') @((Join-Path $PSScriptRoot 'PartialUpdatesRecipe.cs')))
+    if ($output[-1] -cne 'PARTIAL-UPDATES-RECIPE-OK') { throw 'The partial-updates recipe did not complete.' }
+    $checks.Add('net8.0/sqlite/docs-recipe-partial-updates')
     $sample = Join-Path $repoRoot 'samples/Inquiry.AotSmoke'
     $providers = @{ Sqlite = 'sqlite'; SqlServer = 'sqlserver'; PostgreSql = 'postgresql'; MySql = 'mysql'; MariaDb = 'mariadb'; Oracle = 'oracle' }
     foreach ($tfm in @('net8.0', 'net9.0', 'net10.0')) {
