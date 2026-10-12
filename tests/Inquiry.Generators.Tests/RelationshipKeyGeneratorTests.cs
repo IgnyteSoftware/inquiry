@@ -419,6 +419,72 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void TypedIdKeyReferencedByAPlainForeignKeyOfTheSameStoredKindReportsNoINQ104()
+    {
+        // A converter on one side only is fine when both columns store the same kind of value. Typed-ID
+        // schemas convert the key to int and keep the foreign key a plain int.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public readonly record struct CustomerId(int Value);
+
+            public sealed class CustomerIdConverter : IInquiryValueConverter<CustomerId, int>
+            {
+                public int ToProvider(CustomerId model) => model.Value;
+                public CustomerId FromProvider(int provider) => new(provider);
+            }
+
+            [InquiryTable("Customers")]
+            public sealed class Customer
+            {
+                [InquiryKey(Converter = typeof(CustomerIdConverter))] public CustomerId Id { get; set; }
+
+                [InquiryRelation(nameof(Order.CustomerId))]
+                public List<Order> Orders { get; set; } = new();
+            }
+
+            [InquiryTable("Orders")]
+            public sealed class Order
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn] public long CustomerId { get; set; }
+            }
+
+            public partial class CustomerStore : InquiryStore<Customer>
+            {
+                [InquirySelectOneByKeyEager]
+                public partial Task<Customer?> GetWithOrdersAsync(CustomerId id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ104");
+        Assert.Contains("_sql_Orders", StoreText(result, "CustomerStore"));
+    }
+
+    [Fact]
+    public void SingleKeyManyToManyWithAnIntForeignKeyToADecimalKeyReportsNoINQ104()
+    {
+        // Numbers of different types compare in SQL, and the generated lookup converts int to decimal.
+        var source = EnumStorageSource
+            .Replace("[InquiryKey] public Grade Code { get; set; }", "[InquiryKey(Precision = 9, Scale = 2)] public decimal Code { get; set; }")
+            .Replace("[InquiryKey(Length = 16), JUNCTION_STORAGE] public Grade Grade { get; set; }", "[InquiryKey] public int Grade { get; set; }");
+
+        var result = RunGenerator(source);
+
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ104");
+        Assert.Empty(CompileErrors(result));
+        Assert.Contains("_sql_Grades_All", StoreText(result, "PostStore"));
+    }
+
+    [Fact]
     public void CollectionRelationJoiningDifferentEnumStorageReportsINQ104()
     {
         const string source = """

@@ -65,7 +65,7 @@ The foreign key is named by its **C# property name, matched exactly**. The colum
 - **`INQ040`** — the foreign-key property isn't a mapped property on the side that should own it (a typo, or a column name). When a column name or another casing would have matched, the message names the property to use.
 - **`INQ058`** — the foreign-key property exists, but on the *opposite* side: a collection (to-many) relation's FK belongs to the child, a reference (to-one) relation's FK to the parent. This usually means the relation is declared backwards.
 - **`INQ041`** — the related child entity has a composite primary key (eager loading supports single-key children in v1).
-- **`INQ104`** — the foreign key and the key it references store values differently, so the join could never match: an enum stored as text against the same enum stored as a number, two different value converters, or a converter on one side that changes the stored type. Joining across different converters is not supported in 1.0; map both columns the same way.
+- **`INQ104`** — the foreign key and the key it references store values differently, so the join could never match: an enum stored as text against the same enum stored as a number, two different value converters, or a converter on one side that stores a different kind of value (text against a number). Joining across different converters is not supported in 1.0; map both columns the same way. A typed ID converted to `int` with a plain integer foreign key stays valid.
 
 `byte[]` keys compare by value when related rows are matched in memory.
 

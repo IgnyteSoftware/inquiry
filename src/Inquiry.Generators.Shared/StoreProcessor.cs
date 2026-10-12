@@ -3912,15 +3912,42 @@ internal static class StoreProcessor
             return string.Equals(foreignKeyConverter.ConverterTypeDisplay, keyConverter.ConverterTypeDisplay, StringComparison.Ordinal);
         }
 
-        // A converter on one side only is accepted when it keeps the type, such as an observing long-to-long
-        // converter. One that changes the type stores a representation the other column does not have.
-        if ((foreignKey.Converter ?? key.Converter) is { } converter)
+        return string.Equals(StoredKind(foreignKey), StoredKind(key), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The kind of value a column stores: text, a number, or otherwise its provider type.
+    /// </summary>
+    /// <remarks>
+    /// Numbers of different types stay compatible, as an int foreign key to a long or decimal key always
+    /// was: SQL compares them and the generated lookup converts implicitly. A converter on one side only is
+    /// compatible when it stores the same kind, such as a typed ID converted to int against a plain int
+    /// foreign key.
+    /// </remarks>
+    private static string StoredKind(ColumnData column)
+    {
+        if (column.Converter is { } converter)
         {
-            return string.Equals(
-                converter.ModelTypeDisplay.TrimEnd('?'), converter.ProviderTypeDisplay.TrimEnd('?'), StringComparison.Ordinal);
+            return StoredKind(converter.ProviderType?.SpecialType ?? converter.ProviderSpecialType, converter.ProviderTypeDisplay);
         }
 
-        return foreignKey.EnumAsString == key.EnumAsString;
+        if (column.EnumAsString)
+        {
+            return "text";
+        }
+
+        return column.Type.IsEnum
+            ? StoredKind(column.Type.EnumUnderlyingSpecialType, column.Type.NonNullableDisplayName)
+            : StoredKind(column.Type.SpecialType, column.Type.NonNullableDisplayName);
+
+        static string StoredKind(SpecialType specialType, string typeDisplay) => specialType switch
+        {
+            SpecialType.System_String => "text",
+            SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16 or SpecialType.System_UInt16
+                or SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64
+                or SpecialType.System_Decimal or SpecialType.System_Single or SpecialType.System_Double => "number",
+            _ => typeDisplay.TrimEnd('?'),
+        };
     }
 
     /// <summary>
