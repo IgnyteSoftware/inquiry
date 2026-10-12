@@ -13,8 +13,8 @@ namespace Inquiry.Tests.Shared;
 /// </summary>
 /// <remarks>
 /// The earlier assertion was <c>Assert.Empty(recorder.Commands)</c> alone, which proves nothing about the
-/// round-trip count: <c>QueryMultipleAsync</c> never invokes <see cref="IInquiryCommandInterceptor"/>, so an
-/// empty recorder is satisfied by one grid command, by N grid commands, and by no query at all.
+/// round-trip count: <c>QueryMultipleAsync</c> then skipped <see cref="IInquiryCommandInterceptor"/>, so an
+/// empty recorder was satisfied by one grid command, by N grid commands, and by no query at all.
 /// </remarks>
 internal static class EagerGridCommandAssertions
 {
@@ -194,9 +194,9 @@ internal static class EagerGridCommandAssertions
     ///     to the command count; asserting the batch count closes that blind spot.
     ///   </item>
     ///   <item>
-    ///     An empty recorder proves it was <c>QueryMultipleAsync</c>, the only path that bypasses
-    ///     <see cref="IInquiryCommandInterceptor"/>. Without this, a single-command non-grid
-    ///     implementation would pass unnoticed.
+    ///     The recorder saw that same command, without a failure. Grids raise the
+    ///     <see cref="IInquiryCommandInterceptor"/> callbacks like every other path (#244), so a
+    ///     generated eager load that skipped them fails here.
     ///   </item>
     /// </list>
     /// </remarks>
@@ -208,7 +208,9 @@ internal static class EagerGridCommandAssertions
     {
         var command = Assert.Single(probe.FinalizedCommands);
         Assert.Equal(0, probe.CreateBatchCount);
-        Assert.Empty(recorder.Commands);
+        var recorded = Assert.Single(recorder.Commands);
+        Assert.Equal(command.CommandText, recorded.CommandText);
+        Assert.Null(recorded.Exception);
         AssertResultSetCount(command.CommandText, expectedResultSets);
         foreach (var table in expectedTables)
         {
