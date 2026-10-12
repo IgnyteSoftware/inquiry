@@ -2743,7 +2743,7 @@ internal static class StoreOperationEmitter
                             source.AppendLine($"            if ({jChildAccess[i]} is null) {skipRow};");
                         }
 
-                        jChildKeyParts[i] = DictionaryKeyValue(jChildFks[i].Type, NonNullableValueExpression(jChildFks[i].Type, jChildAccess[i]));
+                        jChildKeyParts[i] = DictionaryKeyValue(childKeys[i].Type, NonNullableValueExpression(jChildFks[i].Type, jChildAccess[i]));
                     }
 
                     if (jParentFk.Type.IsNullable)
@@ -2754,7 +2754,7 @@ internal static class StoreOperationEmitter
                     var jChildKeyExpression = jChildKeyParts.Length == 1
                         ? jChildKeyParts[0]
                         : "(" + string.Join(", ", jChildKeyParts) + ")";
-                    var jParentKeyExpression = DictionaryKeyValue(jParentFk.Type, NonNullableValueExpression(jParentFk.Type, jParentAccess));
+                    var jParentKeyExpression = DictionaryKeyValue(entity.Keys[0].Type, NonNullableValueExpression(jParentFk.Type, jParentAccess));
                     source.AppendLine($"            if (!_childByKey_{relation.PropertyName}.TryGetValue({jChildKeyExpression}, out var _child)) {skipRow};");
                     source.AppendLine($"            if (!_grouped_{relation.PropertyName}.TryGetValue({jParentKeyExpression}, out var _grp))");
                     source.AppendLine("            {");
@@ -2821,15 +2821,19 @@ internal static class StoreOperationEmitter
                 var childType = childEntity.FullyQualifiedName;
                 if (relation.IsCollection)
                 {
+                    // A many-to-many group is keyed by this entity's key; a collection group by the child's
+                    // foreign key, which the lookup value may convert to implicitly.
+                    var groupKeyType = (relation.IsManyToMany ? null : FindColumn(childEntity, relation.ForeignKeyProperty)?.Type)
+                        ?? entity.Keys[0].Type;
                     if (entity.Keys[0].Type.IsNullable)
                     {
                         source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{entity.Keys[0].PropertyName} is null");
                         source.AppendLine($"                ? new global::System.Collections.Generic.List<{childType}>()");
-                        source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(entity.Keys[0].Type, NonNullableValueExpression(entity.Keys[0].Type, $"_entity.{entity.Keys[0].PropertyName}"))}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
+                        source.AppendLine($"                : (_grouped_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(groupKeyType, NonNullableValueExpression(entity.Keys[0].Type, $"_entity.{entity.Keys[0].PropertyName}"))}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>());");
                     }
                     else
                     {
-                        source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(entity.Keys[0].Type, $"_entity.{entity.Keys[0].PropertyName}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
+                        source.AppendLine($"            _entity.{relation.PropertyName} = _grouped_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(groupKeyType, $"_entity.{entity.Keys[0].PropertyName}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : new global::System.Collections.Generic.List<{childType}>();");
                     }
                 }
                 else
@@ -2840,12 +2844,11 @@ internal static class StoreOperationEmitter
                     {
                         source.AppendLine($"            _entity.{relation.PropertyName} = _entity.{relation.ForeignKeyProperty} is null");
                         source.AppendLine($"                ? null");
-                        source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(parentFkColumn!.Type, NonNullableValueExpression(parentFkColumn.Type, $"_entity.{relation.ForeignKeyProperty}"))}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
+                        source.AppendLine($"                : (_parents_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(childEntity.Keys[0].Type, NonNullableValueExpression(parentFkColumn!.Type, $"_entity.{relation.ForeignKeyProperty}"))}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null);");
                     }
                     else
                     {
-                        var fkValue = $"_entity.{relation.ForeignKeyProperty}";
-                        source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue({(parentFkColumn is null ? fkValue : DictionaryKeyValue(parentFkColumn.Type, fkValue))}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
+                        source.AppendLine($"            _entity.{relation.PropertyName} = _parents_{relation.PropertyName}.TryGetValue({DictionaryKeyValue(childEntity.Keys[0].Type, $"_entity.{relation.ForeignKeyProperty}")}, out var _rel_{relation.PropertyName}) ? _rel_{relation.PropertyName} : null;");
                     }
                 }
             }
@@ -3365,9 +3368,15 @@ internal static class StoreOperationEmitter
     private static string DictionaryKeyType(TypeData type)
         => type.IsByteArray ? "string" : type.NonNullableDisplayName;
 
-    /// <summary>Converts a non-null key value to the type <see cref="DictionaryKeyType"/> returns.</summary>
-    private static string DictionaryKeyValue(TypeData type, string nonNullableValue)
-        => type.IsByteArray ? $"global::System.Convert.ToBase64String({nonNullableValue})" : nonNullableValue;
+    /// <summary>
+    /// Converts a non-null value for a dictionary whose key column has <paramref name="dictionaryKeyType"/>.
+    /// </summary>
+    /// <remarks>
+    /// The dictionary's key type decides, not the value's own column, so a value that converts implicitly
+    /// to the key type still does.
+    /// </remarks>
+    private static string DictionaryKeyValue(TypeData dictionaryKeyType, string nonNullableValue)
+        => dictionaryKeyType.IsByteArray ? $"global::System.Convert.ToBase64String({nonNullableValue})" : nonNullableValue;
 
     private static IEnumerable<ParameterData> Take(EquatableArray<ParameterData> parameters, int count)
     {

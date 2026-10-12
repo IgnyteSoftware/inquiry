@@ -732,6 +732,60 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void ByteArrayForeignKeyToATypedBinaryKeyKeepsItsImplicitConversion()
+    {
+        // The dictionary is keyed by the typed key, so the byte[] foreign key must reach TryGetValue as is
+        // and convert implicitly. Normalizing it to Base64 text produced CS1503.
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public readonly record struct BinaryId(byte[] Value)
+            {
+                public static implicit operator BinaryId(byte[] value) => new(value);
+            }
+
+            public sealed class BinaryIdConverter : IInquiryValueConverter<BinaryId, byte[]>
+            {
+                public byte[] ToProvider(BinaryId model) => model.Value;
+                public BinaryId FromProvider(byte[] provider) => new(provider);
+            }
+
+            [InquiryTable("Docs")]
+            public sealed class Doc
+            {
+                [InquiryKey(Length = 16, Converter = typeof(BinaryIdConverter))] public BinaryId Id { get; set; }
+            }
+
+            [InquiryTable("Notes")]
+            public sealed class Note
+            {
+                [InquiryKey] public int Id { get; set; }
+                [InquiryColumn(Length = 16)] public byte[] DocId { get; set; } = new byte[0];
+
+                [InquiryRelation(nameof(DocId))]
+                public Doc? Doc { get; set; }
+            }
+
+            public partial class NoteStore : InquiryStore<Note>
+            {
+                [InquirySelectAllEager]
+                public partial IAsyncEnumerable<Note> AllWithDocAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        Assert.Empty(result.RunResult.Diagnostics);
+        Assert.Empty(CompileErrors(result));
+        Assert.Contains("_parents_Doc.TryGetValue(_entity.DocId, out var _rel_Doc)", StoreText(result, "NoteStore"));
+    }
+
+    [Fact]
     public void AutoJunctionColumnOverridesRouteEachNavigationThroughItsOwnColumns()
     {
         // Asymmetric overrides from both sides. Each navigation must filter on the column that references
