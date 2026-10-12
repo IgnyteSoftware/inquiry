@@ -376,6 +376,22 @@ public sealed class InquiryGridReader : IAsyncDisposable
         _disposed = true;
 
         List<Exception>? exceptions = null;
+        if (_interception is { HasFailed: false })
+        {
+            // Disposal ends the grid command, early or not. The reader stays open for these callbacks,
+            // as it does on single-result paths, so interceptors still see a live command. They run
+            // before the span ends, so a throwing callback is recorded as a grid failure.
+            try { await _interception.ExecutedAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch (Exception exception)
+            {
+                exceptions = InquiryCleanup.Add(exceptions, exception);
+                try { RecordFailure(exception); }
+                catch (Exception telemetryException) { exceptions = InquiryCleanup.Add(exceptions, telemetryException); }
+                try { await _interception.FailedAsync(exception, CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception failedException) { exceptions = InquiryCleanup.Add(exceptions, failedException); }
+            }
+        }
+
         try
         {
             if (_startTimestamp != 0)
@@ -393,18 +409,6 @@ public sealed class InquiryGridReader : IAsyncDisposable
             }
         }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
-        if (_interception is { HasFailed: false })
-        {
-            // Disposal ends the grid command, early or not. The reader stays open for these callbacks,
-            // as it does on single-result paths, so interceptors still see a live command.
-            try { await _interception.ExecutedAsync(CancellationToken.None).ConfigureAwait(false); }
-            catch (Exception exception)
-            {
-                exceptions = InquiryCleanup.Add(exceptions, exception);
-                try { await _interception.FailedAsync(exception, CancellationToken.None).ConfigureAwait(false); }
-                catch (Exception failedException) { exceptions = InquiryCleanup.Add(exceptions, failedException); }
-            }
-        }
 
         try
         {

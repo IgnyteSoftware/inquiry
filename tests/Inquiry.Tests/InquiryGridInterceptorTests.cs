@@ -185,6 +185,37 @@ public sealed class InquiryGridInterceptorTests
 
     // Every caller passes a constant literal, so the INQ048 dynamic-text warning does not apply.
 #pragma warning disable INQ048
+    [Fact]
+    public async Task GridSpanRecordsFailureWhenExecutedCallbackThrows()
+    {
+        var stopped = new List<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == InquiryTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                lock (stopped) stopped.Add(activity);
+            },
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        using var root = new Activity("grid-interceptor-test").Start();
+        var recorder = new EventInterceptor { OnExecuted = () => throw new InvalidOperationException("executed") };
+
+        await RunAsync(false, [recorder], async inquiry =>
+        {
+            var grid = await QueryMultipleAsync(inquiry, "SELECT 1", generated: false);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => grid.DisposeAsync().AsTask());
+        });
+
+        List<Activity> ours;
+        lock (stopped) ours = stopped.Where(a => a.TraceId == root.TraceId).ToList();
+        var span = Assert.Single(ours);
+        Assert.Equal(ActivityStatusCode.Error, span.Status);
+        Assert.Equal(["initialized", "executing", "executed", "failed"], recorder.Events);
+    }
+
     private static Task<InquiryGridReader> QueryMultipleAsync(
         IInquiry inquiry, string sql, bool generated, CancellationToken cancellationToken = default)
         => generated
@@ -217,6 +248,7 @@ public sealed class InquiryGridInterceptorTests
         public string? ExecutingActivity { get; private set; }
         public Action? OnExecuting { get; init; }
         public Action? OnFailed { get; init; }
+        public Action? OnExecuted { get; init; }
 
         public ValueTask CommandInitializedAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
             => Record("initialized", context.Command);
@@ -229,7 +261,11 @@ public sealed class InquiryGridInterceptorTests
         }
 
         public ValueTask CommandExecutedAsync(InquiryCommandExecutedContext context, CancellationToken cancellationToken = default)
-            => Record("executed", context.Command);
+        {
+            var recorded = Record("executed", context.Command);
+            OnExecuted?.Invoke();
+            return recorded;
+        }
 
         public ValueTask CommandFailedAsync(InquiryCommandFailedContext context, CancellationToken cancellationToken = default)
         {
