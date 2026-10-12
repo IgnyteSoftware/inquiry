@@ -132,7 +132,7 @@ jobs:
       - name: Retain the original release candidate
         id: retain
         if: steps.candidate.outputs.restored != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-candidate-${{ steps.version.outputs.commit }}-${{ steps.version.outputs.version }}
           path: ${{ runner.temp }}/release/
@@ -169,7 +169,7 @@ jobs:
         run: ./eng/compare-published-packages.ps1 -BundlePath "$env:RUNNER_TEMP/release" -Version $env:VERSION -OutputPath "$env:RUNNER_TEMP/release-evidence/publication-plan.json" -RequireEmptyRegistries:($env:CANDIDATE_RESTORED -ne 'true')
 
       - name: Upload release verification evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-evidence-${{ steps.version.outputs.commit }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/release-evidence/
