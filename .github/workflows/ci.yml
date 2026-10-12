@@ -44,7 +44,7 @@ jobs:
           dotnet test tests/Inquiry.Benchmarks.SelectedStrategy.Tests/Inquiry.Benchmarks.SelectedStrategy.Tests.csproj -c Release --no-build --logger "trx;LogFilePrefix=selected-strategy" --results-directory test-results
       - name: Upload unit test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: unit-test-results
           path: test-results/
@@ -108,7 +108,7 @@ jobs:
           fi
       - name: Upload integration test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: integration-test-results-${{ matrix.provider }}-${{ matrix.tfm }}
           path: test-results/
@@ -168,7 +168,7 @@ jobs:
           subject-path: ${{ runner.temp }}/package-contract/*.nupkg
       - name: Upload package bundle
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: package-contract-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/package-contract/
@@ -216,7 +216,7 @@ jobs:
             "$artifact_url" --output artifact.zip
           echo "$ARTIFACT_DIGEST  artifact.zip" | sha256sum --check --strict
       - name: Download the producer artifact by immutable ID
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           artifact-ids: ${{ needs.package-producer.outputs.artifact-id }}
           path: .artifacts/downloaded
@@ -235,7 +235,7 @@ jobs:
         run: ./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath .artifacts/downloaded -ResultsPath "$env:RUNNER_TEMP/package-consumers" -Commit ((git rev-parse HEAD).Trim())
       - name: Upload package consumer evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: package-consumers-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/package-consumers/
