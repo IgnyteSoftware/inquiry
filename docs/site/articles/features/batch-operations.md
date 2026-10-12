@@ -63,6 +63,34 @@ that one item exceeds the configured command limit.
 Lower the configured bounds for stricter deployments or memory budgets. Raise them only after checking
 the database, driver, packet, and statement limits that apply to your schema.
 
+An `IReadOnlyList<T>` input is sliced in place, so Inquiry does not copy it. Any other `IEnumerable<T>`
+is read lazily, and Inquiry buffers only the current chunk.
+
+### MaxBatchSize is not an input limit
+
+`MaxBatchSize` sizes the physical commands of an entity-collection insert or update. It does not
+validate the application's input: a larger collection becomes more chunks, not an error.
+
+Collection parameters that bind as one provider parameter are not chunked at all. On SQL Server this
+is every table-valued parameter (TVP) route:
+
+| Generated signature | Example |
+|---|---|
+| A `Compare.In` collection parameter on a query, `[InquiryDelete]`, or other predicate method | `Task<int> DeleteByKeysAsync(IEnumerable<int> ids, CancellationToken ct = default)` |
+| A stored-procedure collection parameter with `[InquiryParameter(TvpTypeName = "...")]` | `Task<int> BulkLookupAsync([InquiryParameter(TvpTypeName = "[dbo].[IntList]")] IEnumerable<int> ids, CancellationToken ct = default)` |
+
+These methods accept any `IEnumerable<T>`, including `IReadOnlyList<T>` and arrays. The generated
+method passes the declared source to the TVP binder unchanged. It does not copy the source to a list,
+and it does not route it through the batch pipeline. Inquiry sends the whole collection as one TVP in
+one command and ignores `MaxBatchSize` and `MaxParametersPerCommand`. The binder enumerates the source
+once while SQL Server reads the rows, so Inquiry does not buffer the collection. Inquiry disposes the
+enumerator exactly once on success, failure, or cancellation. See
+[SQL Server notes](../providers/sqlserver.md#notes).
+
+The size of a TVP is limited only by the server and the network, so Inquiry does not reject a large
+collection on this route. If your application needs an input-size limit, check the count before you call
+the method.
+
 ## Provider strategies
 
 For entities with at least one bound insert column, the normal generated paths are:

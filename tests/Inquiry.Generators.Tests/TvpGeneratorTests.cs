@@ -76,6 +76,48 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("InquiryArrayParameter", text);
     }
 
+    [Theory]
+    [InlineData("IEnumerable<long>", "global::System.Collections.Generic.IEnumerable<long>")]
+    [InlineData("IReadOnlyList<long>", "global::System.Collections.Generic.IReadOnlyList<long>")]
+    public void SqlServerTvpKeySourceIsBoundDirectlyWithoutMaxBatchSizeChunking(string declaredType, string generatedType)
+    {
+        var source = $$"""
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Item")]
+            public sealed class TvpItem
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+            }
+
+            public partial class TvpItemStore : Inquiry.Stores.InquiryStore<Demo.TvpItem>
+            {
+                [InquiryDelete, InquiryWhere("Id", Compare.In)]
+                public partial Task<int> DeleteAllAsync({{declaredType}} ids, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var text = Assert.Single(result.RunResult.GeneratedTrees,
+            static t => t.FilePath.EndsWith("TvpItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        Assert.Contains($"DeleteAllAsync({generatedType} ids,", text);
+        Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Id\", _args.Arg0, \"{BigIntTvpTypeName}\",", text);
+        Assert.DoesNotContain("InquiryBatchCommand", text);
+        Assert.DoesNotContain("ExecuteBatchAsync", text);
+        Assert.DoesNotContain("ToList()", text);
+        Assert.DoesNotContain("ToArray()", text);
+    }
+
     [Fact]
     public void SqlServerNotInPredicateStillUsesSentinelExpansion()
     {
