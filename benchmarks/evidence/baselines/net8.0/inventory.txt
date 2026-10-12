@@ -1,0 +1,17 @@
+Inquiry.Benchmarks.BatchMutationStrategyBenchmarks
+Inquiry.Benchmarks.ColdStartBenchmarks
+Inquiry.Benchmarks.ConcurrencyBenchmarks
+Inquiry.Benchmarks.CustomerCrudBenchmarks
+Inquiry.Benchmarks.EagerGridBenchmarks
+Inquiry.Benchmarks.EagerGridMixedRelationBenchmarks
+Inquiry.Benchmarks.EagerLoadingBenchmarks
+Inquiry.Benchmarks.GeneratedCommandPipelineBenchmarks
+Inquiry.Benchmarks.InCardinalityBenchmarks
+Inquiry.Benchmarks.PaginationBenchmarks
+Inquiry.Benchmarks.ParameterBindingBenchmarks
+Inquiry.Benchmarks.PredicateBenchmarks
+Inquiry.Benchmarks.ProductCrudBenchmarks
+Inquiry.Benchmarks.ProjectionAggregateBenchmarks
+Inquiry.Benchmarks.ShipperCrudBenchmarks
+Inquiry.Benchmarks.StreamingBenchmarks
+Inquiry.Benchmarks.TransactionBenchmarks
