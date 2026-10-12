@@ -36,7 +36,7 @@ public sealed record RegressionResult(
     long? CurrentAllocatedBytes,
     double? AllocationDeltaPercent);
 
-public enum RegressionVerdict { Pass, Fail, Skip }
+public enum RegressionVerdict { Pass, Fail, Skip, Missing }
 
 public static class RegressionComparator
 {
@@ -55,12 +55,12 @@ public static class RegressionComparator
         foreach (var expected in baseline.Cases)
         {
             if (!currentByName.TryGetValue(expected.FullName, out var current) ||
-                current.Statistics is null)
+                current.Statistics is not { N: > 0 })
             {
                 results.Add(new RegressionResult(
                     expected.FullName,
-                    RegressionVerdict.Skip,
-                    RegressionVerdict.Skip,
+                    RegressionVerdict.Missing,
+                    expected.AllocatedBytes is null ? RegressionVerdict.Skip : RegressionVerdict.Missing,
                     expected.MedianNs, 0, 0, 0,
                     expected.AllocatedBytes, null, null));
                 continue;
@@ -82,12 +82,18 @@ public static class RegressionComparator
             var allocVerdict = RegressionVerdict.Skip;
             double? allocDeltaPercent = null;
             if (expected.AllocatedBytes is not null &&
-                current.Memory?.BytesAllocatedPerOperation is not null)
+                current.Memory?.BytesAllocatedPerOperation is null)
             {
-                var allocDelta = current.Memory.BytesAllocatedPerOperation.Value - expected.AllocatedBytes.Value;
+                allocVerdict = RegressionVerdict.Missing;
+            }
+            else if (expected.AllocatedBytes is not null &&
+                current.Memory?.BytesAllocatedPerOperation is { } currentAllocatedBytes)
+            {
+                var allocDelta = currentAllocatedBytes - expected.AllocatedBytes.Value;
+                // A relative budget cannot scale a zero baseline, so any new allocation exceeds it.
                 allocDeltaPercent = expected.AllocatedBytes.Value > 0
                     ? ((double)allocDelta / expected.AllocatedBytes.Value) * 100.0
-                    : 0.0;
+                    : allocDelta > 0 ? double.PositiveInfinity : 0.0;
 
                 var allocBudget = expected.AllocationRelativeBudget ?? 0.05;
                 allocVerdict = allocDeltaPercent > allocBudget * 100.0

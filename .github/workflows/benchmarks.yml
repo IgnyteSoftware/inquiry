@@ -33,6 +33,11 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
+      - name: Record runner environment
+        # Timing baselines only match runs from the same OS image and architecture.
+        run: echo "BENCH_ENV=$(uname -s) / $(uname -m) / ${ImageOS:-unknown}" >> "$GITHUB_ENV"
+      - name: Build regression gate
+        run: dotnet build benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj -c Release
       - name: Run SQLite benchmarks (${{ matrix.tfm }})
         env:
           # Pass dispatch input via the environment so shell interpolation cannot execute it.
@@ -45,43 +50,117 @@ jobs:
             --exporters json \
             --artifacts artifacts/benchmarks/${{ matrix.tfm }}
       - name: Regression check against committed baselines
+        env:
+          BENCH_FILTER: ${{ inputs.filter || '*' }}
         run: |
           baseline_dir="benchmarks/evidence/baselines/${{ matrix.tfm }}"
+          inventory="$baseline_dir/inventory.txt"
           results_dir="artifacts/benchmarks/${{ matrix.tfm }}/results"
-          if [ ! -d "$baseline_dir" ]; then
-            echo "No baselines committed at $baseline_dir — skipping regression check."
-            exit 0
+          comparison_dir="artifacts/benchmarks/${{ matrix.tfm }}/regression"
+          mkdir -p "$comparison_dir"
+          echo "### Regression gate (${{ matrix.tfm }}, $BENCH_ENV)" >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -f "$inventory" ]; then
+            echo "::error::No workload inventory at $inventory."
+            exit 1
           fi
-          exit_code=0
+          # The checkout uses CRLF line endings, so strip carriage returns before matching names.
+          expected="$(tr -d '\r' < "$inventory" | grep -v '^[[:space:]]*$' || true)"
           for bdn_json in "$results_dir"/*-report-full-compressed.json; do
             [ -f "$bdn_json" ] || continue
             class_name="$(basename "$bdn_json" -report-full-compressed.json)"
+            if ! printf '%s\n' "$expected" | grep -qxF "$class_name"; then
+              echo "::notice::$class_name is not in $inventory and is not gated."
+            fi
+          done
+          checked=0
+          regressions=0
+          evidence_failures=0
+          while IFS= read -r class_name; do
+            [ -n "$class_name" ] || continue
+            bdn_json="$results_dir/$class_name-report-full-compressed.json"
             baseline_file="$baseline_dir/$class_name.json"
+            # A filtered dispatch run produces only some reports, so it gates only the classes it ran.
+            if [ "$BENCH_FILTER" != '*' ] && [ ! -f "$bdn_json" ]; then
+              continue
+            fi
+            checked=$((checked + 1))
             if [ ! -f "$baseline_file" ]; then
-              echo "No baseline for $class_name — skipping."
+              echo "::error::No accepted baseline at $baseline_file."
+              echo "- $class_name: evidence failure (no accepted baseline)" >> "$GITHUB_STEP_SUMMARY"
+              evidence_failures=$((evidence_failures + 1))
+              continue
+            fi
+            if [ ! -f "$bdn_json" ]; then
+              echo "::error::No benchmark report for $class_name."
+              echo "- $class_name: evidence failure (no benchmark report)" >> "$GITHUB_STEP_SUMMARY"
+              evidence_failures=$((evidence_failures + 1))
               continue
             fi
             echo "Checking $class_name against baseline..."
-            dotnet run --project benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj \
-              -c Release -- compare "$bdn_json" "$baseline_file" || exit_code=1
-          done
-          exit $exit_code
+            comparison="$comparison_dir/$class_name.txt"
+            rc=0
+            dotnet run --no-build --project benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj \
+              -c Release -- compare "$bdn_json" "$baseline_file" --tfm "${{ matrix.tfm }}" --env "$BENCH_ENV" \
+              > "$comparison" 2>&1 || rc=$?
+            cat "$comparison"
+            # Only the gate's own budget verdict proves a regression; any other failure is a harness problem.
+            if [ "$rc" -eq 0 ]; then
+              echo "- $class_name: pass" >> "$GITHUB_STEP_SUMMARY"
+            elif [ "$rc" -eq 1 ] && grep -q '^REGRESSION DETECTED' "$comparison"; then
+              echo "::error::Library regression in $class_name."
+              echo "- $class_name: **library regression**" >> "$GITHUB_STEP_SUMMARY"
+              regressions=$((regressions + 1))
+            else
+              echo "::error::Incomplete or unmatched evidence for $class_name (exit $rc)."
+              echo "- $class_name: evidence failure (exit $rc)" >> "$GITHUB_STEP_SUMMARY"
+              evidence_failures=$((evidence_failures + 1))
+            fi
+          done <<< "$expected"
+          if [ "$checked" -eq 0 ]; then
+            echo "::error::No inventoried benchmark class was checked."
+            exit 1
+          fi
+          echo "Regression gate: $checked checked, $regressions library regression(s), $evidence_failures evidence failure(s)." | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$regressions" -gt 0 ] || [ "$evidence_failures" -gt 0 ]; then
+            exit 1
+          fi
       - name: Generate baseline candidates
         if: always()
         run: |
           results_dir="artifacts/benchmarks/${{ matrix.tfm }}/results"
           out_dir="artifacts/benchmarks/${{ matrix.tfm }}/baseline-candidates"
-          mkdir -p "$out_dir"
+          diag_dir="artifacts/benchmarks/${{ matrix.tfm }}/baseline-candidate-diagnostics"
+          mkdir -p "$out_dir" "$diag_dir"
+          generated=0
+          failed=0
           for bdn_json in "$results_dir"/*-report-full-compressed.json; do
             [ -f "$bdn_json" ] || continue
             class_name="$(basename "$bdn_json" -report-full-compressed.json)"
-            dotnet run --project benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj \
+            # Write outside the uploaded tree so a failed run cannot leave a partial candidate behind.
+            candidate="$RUNNER_TEMP/$class_name.json"
+            rc=0
+            dotnet run --no-build --project benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj \
               -c Release -- generate "$bdn_json" \
               --provider sqlite --tfm "${{ matrix.tfm }}" \
               --commit "$GITHUB_SHA" \
-              --env "$(uname -s) / $(uname -m) / ubuntu-latest" \
-              > "$out_dir/$class_name.json" 2>&1 || true
+              --env "$BENCH_ENV" \
+              > "$candidate" 2> "$diag_dir/$class_name.log" || rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "::error::Baseline candidate generation failed for $class_name (exit $rc)."
+              failed=$((failed + 1))
+            elif ! jq -e '.schemaVersion == "regression-baseline-v1" and (.cases | length > 0)' "$candidate" > /dev/null 2>> "$diag_dir/$class_name.log"; then
+              echo "::error::Baseline candidate for $class_name is not valid baseline JSON."
+              failed=$((failed + 1))
+            else
+              mv "$candidate" "$out_dir/$class_name.json"
+              generated=$((generated + 1))
+            fi
+            rm -f "$candidate"
           done
+          echo "Generated $generated baseline candidate(s); $failed failed."
+          if [ "$generated" -eq 0 ] || [ "$failed" -gt 0 ]; then
+            exit 1
+          fi
       - name: Upload benchmark results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

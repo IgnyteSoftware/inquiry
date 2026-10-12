@@ -5,8 +5,9 @@ using Inquiry.Benchmarks.Contracts.Evidence;
 if (args.Length < 1)
 {
     Console.Error.WriteLine("Usage:");
-    Console.Error.WriteLine("  Compare:  regression-gate compare <bdn-json> <baseline-json>");
-    Console.Error.WriteLine("  Generate: regression-gate generate <bdn-json> --provider <p> --tfm <tfm> --commit <sha> [--env <env>] [--budget <pct>] [--abs <ns>]");
+    Console.Error.WriteLine("  Compare:  regression-gate compare <bdn-json> <baseline-json> --tfm <tfm> --env <env>");
+    Console.Error.WriteLine("  Generate: regression-gate generate <bdn-json> --provider <p> --tfm <tfm> --commit <sha> --env <env> [--budget <pct>] [--abs <ns>]");
+    Console.Error.WriteLine("Compare exits 0 when every case passes, 1 on a budget violation, and 2 when evidence is missing or invalid.");
     return 1;
 }
 
@@ -21,31 +22,51 @@ return command switch
 
 static int RunCompare(string[] args)
 {
+    // Exit code 1 means a proven budget violation. Every evidence problem uses 2 so the
+    // workflow can report it as a harness failure instead of a library regression.
+    const int evidenceFailure = 2;
+
     if (args.Length < 2)
     {
         Console.Error.WriteLine("compare requires <bdn-json-path> <baseline-json-path>");
-        return 1;
+        return evidenceFailure;
     }
 
     var bdnPath = args[0];
     var baselinePath = args[1];
+    string? tfm = null, env = null;
+
+    for (var i = 2; i < args.Length - 1; i++)
+    {
+        switch (args[i])
+        {
+            case "--tfm": tfm = args[++i]; break;
+            case "--env": env = args[++i]; break;
+        }
+    }
+
+    if (tfm is null || env is null)
+    {
+        Console.Error.WriteLine("compare requires --tfm and --env.");
+        return evidenceFailure;
+    }
 
     if (!File.Exists(bdnPath))
     {
         Console.Error.WriteLine($"BDN report not found: {bdnPath}");
-        return 1;
+        return evidenceFailure;
     }
     if (!File.Exists(baselinePath))
     {
         Console.Error.WriteLine($"Baseline not found: {baselinePath}");
-        return 1;
+        return evidenceFailure;
     }
 
     var report = JsonSerializer.Deserialize<BdnReport>(File.ReadAllText(bdnPath));
     if (report?.Benchmarks is null || report.Benchmarks.Count == 0)
     {
         Console.Error.WriteLine("BDN report contains no benchmarks.");
-        return 1;
+        return evidenceFailure;
     }
 
     var baseline = JsonSerializer.Deserialize<RegressionBaseline>(
@@ -53,7 +74,17 @@ static int RunCompare(string[] args)
     if (baseline?.Cases is null || baseline.Cases.Count == 0)
     {
         Console.Error.WriteLine("Baseline contains no cases.");
-        return 1;
+        return evidenceFailure;
+    }
+
+    // Timing from another runner or runtime is not comparable, so it cannot prove or clear a regression.
+    if (!string.Equals(baseline.RuntimeTfm, tfm, StringComparison.Ordinal) ||
+        !string.Equals(baseline.Environment, env, StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine(
+            $"No accepted baseline for this runner: baseline is '{baseline.RuntimeTfm}' on '{baseline.Environment}', " +
+            $"current run is '{tfm}' on '{env}'.");
+        return evidenceFailure;
     }
 
     var results = RegressionComparator.Compare(baseline, report.Benchmarks);
@@ -61,6 +92,7 @@ static int RunCompare(string[] args)
     var failures = 0;
     var passes = 0;
     var skips = 0;
+    var missing = 0;
 
     Console.WriteLine();
     Console.WriteLine($"Regression gate: {baseline.Provider} / {baseline.RuntimeTfm}");
@@ -76,18 +108,20 @@ static int RunCompare(string[] args)
         {
             RegressionVerdict.Pass => "PASS",
             RegressionVerdict.Fail => "FAIL",
+            RegressionVerdict.Missing => "MISSING",
             _ => "SKIP"
         };
         var allocLabel = r.AllocationVerdict switch
         {
             RegressionVerdict.Pass => "PASS",
             RegressionVerdict.Fail => "FAIL",
+            RegressionVerdict.Missing => "MISSING",
             _ => "SKIP"
         };
-        var deltaPercentStr = r.LatencyVerdict == RegressionVerdict.Skip
+        var deltaPercentStr = r.LatencyVerdict == RegressionVerdict.Missing
             ? "-"
             : $"{r.LatencyDeltaPercent:+0.00;-0.00}%";
-        var deltaNsStr = r.LatencyVerdict == RegressionVerdict.Skip
+        var deltaNsStr = r.LatencyVerdict == RegressionVerdict.Missing
             ? "-"
             : FormatNs(r.LatencyDeltaNs);
         var allocDeltaStr = r.AllocationDeltaPercent is not null
@@ -96,23 +130,33 @@ static int RunCompare(string[] args)
 
         Console.WriteLine($"{shortName,-60} {latLabel,-8} {deltaPercentStr,-9} {deltaNsStr,-14} {allocLabel,-8} {allocDeltaStr,-9}");
 
-        if (r.LatencyVerdict == RegressionVerdict.Fail) failures++;
-        else if (r.LatencyVerdict == RegressionVerdict.Pass) passes++;
-        else skips++;
-
-        if (r.AllocationVerdict == RegressionVerdict.Fail) failures++;
-        else if (r.AllocationVerdict == RegressionVerdict.Pass) passes++;
+        foreach (var verdict in new[] { r.LatencyVerdict, r.AllocationVerdict })
+        {
+            switch (verdict)
+            {
+                case RegressionVerdict.Fail: failures++; break;
+                case RegressionVerdict.Pass: passes++; break;
+                case RegressionVerdict.Missing: missing++; break;
+                default: skips++; break;
+            }
+        }
     }
 
     Console.WriteLine(new string('-', 120));
-    Console.WriteLine($"Total: {passes} pass, {failures} fail, {skips} skip");
+    Console.WriteLine($"Total: {passes} pass, {failures} fail, {missing} missing, {skips} skip");
     Console.WriteLine();
+
+    if (missing > 0)
+        Console.Error.WriteLine($"INCOMPLETE EVIDENCE: {missing} expected measurement(s) missing from the report.");
 
     if (failures > 0)
     {
         Console.Error.WriteLine($"REGRESSION DETECTED: {failures} budget violation(s).");
         return 1;
     }
+
+    if (missing > 0)
+        return evidenceFailure;
 
     Console.WriteLine("All checks passed.");
     return 0;
@@ -144,9 +188,9 @@ static int RunGenerate(string[] args)
         }
     }
 
-    if (provider is null || tfm is null || commit is null)
+    if (provider is null || tfm is null || commit is null || env is null)
     {
-        Console.Error.WriteLine("generate requires --provider, --tfm, and --commit.");
+        Console.Error.WriteLine("generate requires --provider, --tfm, --commit, and --env.");
         return 1;
     }
 
@@ -163,8 +207,19 @@ static int RunGenerate(string[] args)
         return 1;
     }
 
+    // The generator drops cases without statistics, so a failed benchmark would vanish from the candidate.
+    var incomplete = report.Benchmarks
+        .Where(b => b.FullName is null || b.Statistics is not { N: > 0 })
+        .ToList();
+    if (incomplete.Count > 0)
+    {
+        foreach (var b in incomplete)
+            Console.Error.WriteLine($"Benchmark has no statistics: {b.FullName ?? "(unnamed)"}");
+        return 1;
+    }
+
     var baseline = RegressionBaselineGenerator.Generate(
-        report, provider, tfm, commit, env ?? "unknown", budget, abs);
+        report, provider, tfm, commit, env, budget, abs);
 
     var json = JsonSerializer.Serialize(baseline, new JsonSerializerOptions
     {

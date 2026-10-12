@@ -105,6 +105,25 @@ A separate **scheduled weekly workflow**
 runs every Monday and repeats the full three-TFM integration matrix, re-verifying every provider against
 current container images.
 
+The weekly **benchmark workflow**
+([`benchmarks.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/benchmarks.yml))
+runs the in-process SQLite suite on **net8.0** and **net10.0** and checks every class listed in
+`benchmarks/evidence/baselines/<tfm>/inventory.txt` against its committed baseline. Timing is compared only
+against a baseline recorded for the same TFM and runner environment (OS, architecture, and runner image).
+A missing inventory, baseline, report, case, or statistic, or a baseline from another environment, fails the
+job as an **evidence failure**. A budget violation fails it as a **library regression**. The job summary
+names which one happened. Allocation budgets also apply to zero-allocation baselines: any new allocation
+fails. Each run keeps the per-class comparison output and the baseline candidates for 90 days. Candidates
+contain only validated baseline JSON; generator diagnostics are kept in a separate folder. To accept a
+baseline, review the candidate from a run on the matching runner and commit it under the TFM directory.
+
+Benchmark evidence for a release candidate:
+
+| Provider | Required evidence at the candidate commit |
+|---|---|
+| SQLite | A `benchmarks.yml` run with no filter in which both TFM jobs pass the regression gate for every inventoried class. Keep the run link with the release. |
+| PostgreSQL, MySQL, MariaDB, SQL Server, Oracle | No scheduled job or accepted baseline. Run `dotnet run -c Release -f <tfm> --project benchmarks/Inquiry.Benchmarks.<Provider> -- --filter '*' --exporters json` with Docker for net8.0 and net10.0. Each JSON report must pass `regression-gate generate`, which rejects cases without statistics. Keep the reports with the release. This timing is informational: it cannot prove or clear a regression. |
+
 **Warnings are errors everywhere.** Production projects set `TreatWarningsAsErrors`, and
 `tests/Directory.Build.props` extends the same gate to every test project, so a new compiler/analyzer
 warning in test code fails the build instead of slipping through. The only intentionally-warning
