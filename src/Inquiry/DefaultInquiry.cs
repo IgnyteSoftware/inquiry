@@ -280,7 +280,7 @@ internal sealed class DefaultInquiry : IInquiry
             pipeline?.Connection,
             pipeline?.Transaction,
             options,
-            duration => RecordBulkConnectionOpen(activity, dbSystem, enlisted, duration),
+            (duration, openError) => RecordBulkConnectionOpen(activity, dbSystem, enlisted, duration, openError),
             (duration, rowCount) => RecordBulkCopy(activity, dbSystem, enlisted, duration, rowCount));
         IDisposable? operationLease = null;
         try
@@ -374,17 +374,38 @@ internal sealed class DefaultInquiry : IInquiry
         if (activity is not null)
         {
             activity.SetTag("error.type", errorType);
+            if (exception is Inquiry.BulkCopy.InquiryBulkInsertWarningException warning)
+                activity.SetTag("db.response.affected_rows", warning.RowsWritten);
             activity.SetStatus(ActivityStatusCode.Error, exception.Message);
             activity.Dispose();
         }
     }
 
-    private static void RecordBulkConnectionOpen(Activity? activity, string dbSystem, bool enlisted, TimeSpan duration)
+    private static void RecordBulkConnectionOpen(Activity? activity, string dbSystem, bool enlisted, TimeSpan duration, Exception? openError)
     {
+        var connectionMode = new KeyValuePair<string, object?>("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated");
+        if (openError is not null)
+        {
+            var errorType = openError.GetType().FullName ?? openError.GetType().Name;
+            Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Record(
+                duration.TotalSeconds,
+                new KeyValuePair<string, object?>("db.system.name", dbSystem),
+                connectionMode,
+                new KeyValuePair<string, object?>("error.type", errorType));
+            activity?.AddEvent(new ActivityEvent(
+                "connection.open_failed",
+                tags: new ActivityTagsCollection
+                {
+                    { "inquiry.bulk_insert.connection_open.duration", duration.TotalSeconds },
+                    { "error.type", errorType },
+                }));
+            return;
+        }
+
         Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Record(
             duration.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
-            new KeyValuePair<string, object?>("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated"));
+            connectionMode);
         activity?.AddEvent(new ActivityEvent(
             enlisted ? "connection.reused" : "connection.opened",
             tags: new ActivityTagsCollection

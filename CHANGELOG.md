@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Native bulk insert disposes its dedicated connection when a telemetry listener throws after the connection opens. A failed open now records `connection.open_failed` with `error.type` instead of `connection.opened`, and keeps the open error.
+
+### Changed
+
+- MySQL and MariaDB bulk inserts that complete with server warnings throw `InquiryBulkInsertWarningException`, still an `InvalidOperationException`. It reports the rows written, whether they are in the caller's Inquiry transaction, and the warnings. Telemetry records the written row count.
+
+### Documentation
+
+- The bulk insert guide describes per-provider transaction ownership, SQL Server per-batch commits, partial outcomes and safe retries. The testing guide no longer says that native bulk insert is always rejected in a sandbox.
+
 ## [1.0.0-preview.11] - 2026-10-12
 
 ### Added

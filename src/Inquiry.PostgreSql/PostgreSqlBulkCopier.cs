@@ -45,16 +45,8 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
         var rawConnection = context.Connection;
         if (rawConnection is null)
         {
-            var openTimestamp = Stopwatch.GetTimestamp();
-            try
-            {
-                rawConnection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-                dedicatedConnection = rawConnection;
-            }
-            finally
-            {
-                context.RecordConnectionOpened(Stopwatch.GetElapsedTime(openTimestamp));
-            }
+            rawConnection = await context.OpenDedicatedConnectionAsync(_connectionFactory.OpenConnectionAsync, cancellationToken).ConfigureAwait(false);
+            dedicatedConnection = rawConnection;
         }
         if (rawConnection is not NpgsqlConnection connection)
         {

@@ -1,7 +1,13 @@
+using System.Data.Common;
+using System.Diagnostics;
 using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.BulkCopy;
+using Inquiry.Connections;
+using Inquiry.Diagnostics;
 using Inquiry.MariaDb.Tests.Fixtures;
+using Microsoft.Extensions.DependencyInjection;
+using MySqlConnector;
 
 namespace Inquiry.MariaDb.Tests;
 
@@ -117,6 +123,93 @@ public sealed class BulkInsertIntegrationTests
         Assert.Contains(10, progress);
         Assert.Contains(20, progress);
         Assert.Equal(25, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task DedicatedWarningReportsCommittedRows()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var activities = new List<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = static source => source.Name == InquiryTelemetry.ActivitySourceName,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity => { lock (activities) activities.Add(activity); },
+        };
+        ActivitySource.AddActivityListener(listener);
+        await using var harness = await CreatePermissiveHarnessAsync("bulkwarn");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        var exception = await Assert.ThrowsAsync<InquiryBulkInsertWarningException>(() => store.BulkInsertAsync(RowsWithOverlongCategory()));
+
+        Assert.Equal(3, exception.RowsWritten);
+        Assert.False(exception.IsEnlisted);
+        Assert.NotEmpty(exception.Warnings);
+        Assert.Equal(3, await store.CountAsync());
+        Assert.Single(await store.ByCategoryAsync(new string('x', 100)));
+
+        Activity span;
+        lock (activities)
+            span = Assert.Single(activities, a => a.DisplayName == "BULK_INSERT"
+                && (string?)a.GetTagItem("error.type") == typeof(InquiryBulkInsertWarningException).FullName);
+        Assert.Equal(3L, span.GetTagItem("db.response.affected_rows"));
+        var copy = Assert.Single(span.Events, e => e.Name == "copy.completed");
+        Assert.Contains(copy.Tags, tag => tag.Key == "db.response.affected_rows" && Equals(tag.Value, 3L));
+    }
+
+    [SkippableFact]
+    public async Task EnlistedWarningRowsRollBackWithCallerTransaction()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await CreatePermissiveHarnessAsync("bulkwarntx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        await using (var transaction = await inquiry.BeginTransactionAsync())
+        {
+            var exception = await Assert.ThrowsAsync<InquiryBulkInsertWarningException>(() => store.BulkInsertAsync(RowsWithOverlongCategory()));
+
+            Assert.Equal(3, exception.RowsWritten);
+            Assert.True(exception.IsEnlisted);
+            await transaction.RollbackAsync();
+        }
+
+        Assert.Equal(0, await store.CountAsync());
+    }
+
+    // A caller-supplied factory that enables LOAD DATA LOCAL INFILE on every connection, so bulk insert
+    // can enlist, and selects a permissive sql_mode, so overlong values truncate with a warning.
+    private async Task<MariaDbTestHarness> CreatePermissiveHarnessAsync(string prefix)
+    {
+        string? connectionString = null;
+        var harness = await MariaDbTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString,
+            FeatureSchema.MySqlDdl,
+            prefix,
+            configureServices: services => services.AddSingleton<IInquiryConnectionFactory>(
+                _ => new PermissiveConnectionFactory(connectionString!)));
+        connectionString = new MySqlConnectionStringBuilder(harness.ConnectionString) { AllowLoadLocalInfile = true }.ToString();
+        return harness;
+    }
+
+    private static IEnumerable<BulkItem> RowsWithOverlongCategory()
+        => new[] { Item("short", 1), Item(new string('x', 150), 2), Item("short", 3) };
+
+    private sealed class PermissiveConnectionFactory : IInquiryConnectionFactory
+    {
+        private readonly string _connectionString;
+
+        public PermissiveConnectionFactory(string connectionString) => _connectionString = connectionString;
+
+        public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SET SESSION sql_mode = ''";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return connection;
+        }
     }
 
     private static BulkItem Item(string category, int value) => new() { Category = category, Amount = value };

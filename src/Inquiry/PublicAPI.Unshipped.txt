@@ -50,6 +50,10 @@ Inquiry.BulkCopy.InquiryBulkInsertOptions.TableLock.get -> bool
 Inquiry.BulkCopy.InquiryBulkInsertOptions.TableLock.set -> void
 Inquiry.BulkCopy.InquiryBulkInsertOptions.Timeout.get -> System.TimeSpan?
 Inquiry.BulkCopy.InquiryBulkInsertOptions.Timeout.set -> void
+Inquiry.BulkCopy.InquiryBulkInsertWarningException
+Inquiry.BulkCopy.InquiryBulkInsertWarningException.IsEnlisted.get -> bool
+Inquiry.BulkCopy.InquiryBulkInsertWarningException.RowsWritten.get -> long
+Inquiry.BulkCopy.InquiryBulkInsertWarningException.Warnings.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>
 override Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.GetFieldValue<T>(int ordinal) -> T
 Inquiry.BulkCopy.InquiryBulkRowReader<TEntity>.InquiryBulkRowReader(Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity!>! definition, System.Collections.Generic.IEnumerable<TEntity!>! rows) -> void
