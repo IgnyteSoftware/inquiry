@@ -8,7 +8,7 @@ if (args.Length < 1)
     Console.Error.WriteLine("Usage:");
     Console.Error.WriteLine("  Compare:  regression-gate compare <bdn-json> <baseline-json> --tfm <tfm> --env <env> [--filter <glob>]");
     Console.Error.WriteLine("  Generate: regression-gate generate <bdn-json> --provider <p> --tfm <tfm> --commit <sha> --env <env> [--budget <pct>] [--abs <ns>]");
-    Console.Error.WriteLine("Compare exits 0 when every case passes, 1 on a budget violation, and 2 when evidence is missing or invalid.");
+    Console.Error.WriteLine("Compare exits 0 when every case passes, 1 on a budget violation, 2 when evidence is missing or invalid, and 3 when --filter selects no baseline case.");
     return 1;
 }
 
@@ -26,6 +26,7 @@ static int RunCompare(string[] args)
     // Exit code 1 means a proven budget violation. Every evidence problem uses 2 so the
     // workflow can report it as a harness failure instead of a library regression.
     const int evidenceFailure = 2;
+    const int notSelected = 3;
 
     if (args.Length < 2)
     {
@@ -54,21 +55,9 @@ static int RunCompare(string[] args)
         return evidenceFailure;
     }
 
-    if (!File.Exists(bdnPath))
-    {
-        Console.Error.WriteLine($"BDN report not found: {bdnPath}");
-        return evidenceFailure;
-    }
     if (!File.Exists(baselinePath))
     {
         Console.Error.WriteLine($"Baseline not found: {baselinePath}");
-        return evidenceFailure;
-    }
-
-    var report = JsonSerializer.Deserialize<BdnReport>(File.ReadAllText(bdnPath));
-    if (report?.Benchmarks is null || report.Benchmarks.Count == 0)
-    {
-        Console.Error.WriteLine("BDN report contains no benchmarks.");
         return evidenceFailure;
     }
 
@@ -101,6 +90,20 @@ static int RunCompare(string[] args)
     if (selectedCases.Count == 0)
     {
         Console.Error.WriteLine($"Filter '{filter}' selects no baseline cases.");
+        return notSelected;
+    }
+
+    // Selection is resolved first so a class the filter selects still fails when its report is absent.
+    if (!File.Exists(bdnPath))
+    {
+        Console.Error.WriteLine($"BDN report not found: {bdnPath}");
+        return evidenceFailure;
+    }
+
+    var report = JsonSerializer.Deserialize<BdnReport>(File.ReadAllText(bdnPath));
+    if (report?.Benchmarks is null || report.Benchmarks.Count == 0)
+    {
+        Console.Error.WriteLine("BDN report contains no benchmarks.");
         return evidenceFailure;
     }
 

@@ -82,31 +82,27 @@ jobs:
             [ -n "$class_name" ] || continue
             bdn_json="$results_dir/$class_name-report-full-compressed.json"
             baseline_file="$baseline_dir/$class_name.json"
-            # A filtered dispatch run produces only some reports, so it gates only the classes it ran.
-            # The gate applies the same filter to the cases within each class.
-            if [ "$BENCH_FILTER" != '*' ] && [ ! -f "$bdn_json" ]; then
-              continue
-            fi
-            checked=$((checked + 1))
             if [ ! -f "$baseline_file" ]; then
+              checked=$((checked + 1))
               echo "::error::No accepted baseline at $baseline_file."
               echo "- $class_name: evidence failure (no accepted baseline)" >> "$GITHUB_STEP_SUMMARY"
-              evidence_failures=$((evidence_failures + 1))
-              continue
-            fi
-            if [ ! -f "$bdn_json" ]; then
-              echo "::error::No benchmark report for $class_name."
-              echo "- $class_name: evidence failure (no benchmark report)" >> "$GITHUB_STEP_SUMMARY"
               evidence_failures=$((evidence_failures + 1))
               continue
             fi
             echo "Checking $class_name against baseline..."
             comparison="$comparison_dir/$class_name.txt"
             rc=0
+            # The gate applies the dispatch filter to the baseline cases. It exits 3 when the filter
+            # selects none of them, and fails when a selected class has no report.
             dotnet run --no-build --project benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj \
               -c Release -- compare "$bdn_json" "$baseline_file" --tfm "${{ matrix.tfm }}" --env "$BENCH_ENV" --filter "$BENCH_FILTER" \
               > "$comparison" 2>&1 || rc=$?
             cat "$comparison"
+            if [ "$rc" -eq 3 ]; then
+              rm -f "$comparison"
+              continue
+            fi
+            checked=$((checked + 1))
             # Only the gate's own budget verdict proves a regression; any other failure is a harness problem.
             if [ "$rc" -eq 0 ]; then
               echo "- $class_name: pass" >> "$GITHUB_STEP_SUMMARY"
