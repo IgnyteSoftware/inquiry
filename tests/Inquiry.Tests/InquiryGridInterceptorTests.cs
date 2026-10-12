@@ -97,6 +97,24 @@ public sealed class InquiryGridInterceptorTests
 
     [Theory]
     [MemberData(nameof(Routes))]
+    public async Task GridReadFailureKeepsOriginalErrorWhenFailedCallbackThrows(bool generated, bool transacted)
+    {
+        var callbackError = new InvalidOperationException("callback");
+        var recorder = new EventInterceptor { OnFailed = () => throw callbackError };
+
+        await RunAsync(transacted, [recorder], async inquiry =>
+        {
+            await using var grid = await QueryMultipleAsync(inquiry, "SELECT 1", generated);
+            var thrown = await Assert.ThrowsAsync<AggregateException>(
+                () => grid.ReadRowsAsync(_ => throw new InvalidOperationException("read")));
+            Assert.Equal(["read", "callback"], thrown.InnerExceptions.Select(e => e.Message));
+        });
+
+        Assert.Equal(["initialized", "executing", "failed"], recorder.Events);
+    }
+
+    [Theory]
+    [MemberData(nameof(Routes))]
     public async Task GridReadCancellationRaisesFailed(bool generated, bool transacted)
     {
         var recorder = new EventInterceptor();
@@ -198,6 +216,7 @@ public sealed class InquiryGridInterceptorTests
         public Exception? Failure { get; private set; }
         public string? ExecutingActivity { get; private set; }
         public Action? OnExecuting { get; init; }
+        public Action? OnFailed { get; init; }
 
         public ValueTask CommandInitializedAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
             => Record("initialized", context.Command);
@@ -215,7 +234,9 @@ public sealed class InquiryGridInterceptorTests
         public ValueTask CommandFailedAsync(InquiryCommandFailedContext context, CancellationToken cancellationToken = default)
         {
             Failure = context.Exception;
-            return Record("failed", context.Command);
+            var recorded = Record("failed", context.Command);
+            OnFailed?.Invoke();
+            return recorded;
         }
 
         private ValueTask Record(string name, DbCommand command)

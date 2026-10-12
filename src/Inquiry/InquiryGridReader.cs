@@ -431,7 +431,17 @@ public sealed class InquiryGridReader : IAsyncDisposable
     private async ValueTask FailAsync(Exception exception, CancellationToken cancellationToken)
     {
         RecordFailure(exception);
-        if (_interception is not null) await _interception.FailedAsync(exception, cancellationToken).ConfigureAwait(false);
+        if (_interception is null) return;
+        try
+        {
+            await _interception.FailedAsync(exception, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception callbackException)
+        {
+            // Keep the read failure visible when a failure callback also throws.
+            throw new AggregateException(
+                "An Inquiry grid read failed and a command interceptor also failed.", exception, callbackException);
+        }
     }
 
     internal void RecordFailure(Exception exception)
