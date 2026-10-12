@@ -37,6 +37,7 @@ jobs:
         # Timing baselines only match runs from the same OS image and architecture.
         run: echo "BENCH_ENV=$(uname -s) / $(uname -m) / ${ImageOS:-unknown}" >> "$GITHUB_ENV"
       - name: Build regression gate
+        id: build-gate
         run: dotnet build benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj -c Release
       - name: Run SQLite benchmarks (${{ matrix.tfm }})
         env:
@@ -50,6 +51,8 @@ jobs:
             --exporters json \
             --artifacts artifacts/benchmarks/${{ matrix.tfm }}
       - name: Regression check against committed baselines
+        # Still compare after a benchmark failure so completed classes are checked and the summary names the gap.
+        if: ${{ !cancelled() && steps.build-gate.outcome == 'success' }}
         env:
           BENCH_FILTER: ${{ inputs.filter || '*' }}
         run: |
@@ -80,6 +83,7 @@ jobs:
             bdn_json="$results_dir/$class_name-report-full-compressed.json"
             baseline_file="$baseline_dir/$class_name.json"
             # A filtered dispatch run produces only some reports, so it gates only the classes it ran.
+            # The gate applies the same filter to the cases within each class.
             if [ "$BENCH_FILTER" != '*' ] && [ ! -f "$bdn_json" ]; then
               continue
             fi
@@ -100,7 +104,7 @@ jobs:
             comparison="$comparison_dir/$class_name.txt"
             rc=0
             dotnet run --no-build --project benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj \
-              -c Release -- compare "$bdn_json" "$baseline_file" --tfm "${{ matrix.tfm }}" --env "$BENCH_ENV" \
+              -c Release -- compare "$bdn_json" "$baseline_file" --tfm "${{ matrix.tfm }}" --env "$BENCH_ENV" --filter "$BENCH_FILTER" \
               > "$comparison" 2>&1 || rc=$?
             cat "$comparison"
             # Only the gate's own budget verdict proves a regression; any other failure is a harness problem.

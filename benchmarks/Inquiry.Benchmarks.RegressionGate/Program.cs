@@ -1,11 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Inquiry.Benchmarks.Contracts.Evidence;
 
 if (args.Length < 1)
 {
     Console.Error.WriteLine("Usage:");
-    Console.Error.WriteLine("  Compare:  regression-gate compare <bdn-json> <baseline-json> --tfm <tfm> --env <env>");
+    Console.Error.WriteLine("  Compare:  regression-gate compare <bdn-json> <baseline-json> --tfm <tfm> --env <env> [--filter <glob>]");
     Console.Error.WriteLine("  Generate: regression-gate generate <bdn-json> --provider <p> --tfm <tfm> --commit <sha> --env <env> [--budget <pct>] [--abs <ns>]");
     Console.Error.WriteLine("Compare exits 0 when every case passes, 1 on a budget violation, and 2 when evidence is missing or invalid.");
     return 1;
@@ -35,6 +36,7 @@ static int RunCompare(string[] args)
     var bdnPath = args[0];
     var baselinePath = args[1];
     string? tfm = null, env = null;
+    var filter = "*";
 
     for (var i = 2; i < args.Length - 1; i++)
     {
@@ -42,6 +44,7 @@ static int RunCompare(string[] args)
         {
             case "--tfm": tfm = args[++i]; break;
             case "--env": env = args[++i]; break;
+            case "--filter": filter = args[++i]; break;
         }
     }
 
@@ -87,7 +90,21 @@ static int RunCompare(string[] args)
         return evidenceFailure;
     }
 
-    var results = RegressionComparator.Compare(baseline, report.Benchmarks);
+    // A filtered run measures only the selected cases. This matches BenchmarkDotNet's --filter glob,
+    // which tests both the full case name and the name without parameters.
+    var filterRegex = new Regex(
+        "^" + Regex.Escape(filter).Replace(@"\*", ".*").Replace(@"\?", ".") + "$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    var selectedCases = baseline.Cases
+        .Where(c => filterRegex.IsMatch(c.FullName) || filterRegex.IsMatch(c.FullName.Split('(')[0]))
+        .ToList();
+    if (selectedCases.Count == 0)
+    {
+        Console.Error.WriteLine($"Filter '{filter}' selects no baseline cases.");
+        return evidenceFailure;
+    }
+
+    var results = RegressionComparator.Compare(baseline with { Cases = selectedCases }, report.Benchmarks);
 
     var failures = 0;
     var passes = 0;
