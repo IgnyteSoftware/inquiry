@@ -133,8 +133,9 @@ public static class ProductSearch
 }
 ```
 
-Only null disables an optional criterion. An empty string, `false`, and `0` are values and filter
-for that value. Each method keeps one constant SQL shape. Add other criteria, ordering, and paging
+Only null disables an optional criterion. `false` and `0` are values and filter for that value. An
+empty string is a value on every provider except Oracle. Oracle treats an empty string as NULL, so
+`""` disables an optional string criterion there. Each method keeps one constant SQL shape. Add other criteria, ordering, and paging
 to both declarations in the same way. Each extra choice multiplies the declarations, so keep the
 set of choices small. Inquiry has no built-in filter type for this; the
 [decision record](../../develop/api-contract-decisions.md#425-absent-null-and-value-states-for-optional-filters)

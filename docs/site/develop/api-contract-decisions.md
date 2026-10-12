@@ -338,8 +338,11 @@ Choose option 2 for all results of handwritten SQL. Keep fixed ordinals for SQL 
 - **Scope.** Name mapping applies to `[InquiryAdHoc]` DTOs and entity types read through the
   `IInquiry` handwritten-SQL overloads. It also applies to procedure result rows. Generated store
   queries keep their fixed column lists and fixed ordinals.
-- **Matching.** Match a property name to a column name or alias without regard to case, using
-  ordinal invariant comparison.
+- **Matching.** For an entity, match each mapped property by its mapped column name, from
+  `InquiryColumn` or `InquiryKey`, not by its property name. For an ad-hoc DTO, which has no column
+  mapping, match by property name. Compare names without regard to case, using ordinal invariant
+  comparison. A property whose mapped name is absent is a missing column even if a column with its
+  property name is present.
 - **Missing column.** Throw `InvalidOperationException` before the first row is returned. Name the
   DTO, the property, and the available columns.
 - **Duplicate names.** If two result columns match one property, throw. Do not pick the first.
@@ -365,7 +368,8 @@ option 3. It gives the same protection against silent misassignment without reor
 ### 1.0 contract consequences
 
 - This changes behavior. A preview DTO whose aliases do not match its property names will fail at
-  run time after the change. It must land before the freeze, or 1.0 must accept ordinal mapping
+  run time after the change. So will handwritten entity SQL and procedures whose result columns do
+  not use the entity's mapped column names. The migration note must cover all three callers. It must land before the freeze, or 1.0 must accept ordinal mapping
   permanently.
 - The `SequentialAccess` guarantee from #181 stays for generated SQL. For handwritten SQL, it holds
   where the ascending-read rule above is met.
@@ -501,7 +505,8 @@ The deferrals follow the issue's own recommendation.
   (`StoreProcessor.cs:3438-3443`).
 - `Compare.IsNull` consumes no parameter (`StoreProcessor.cs:3467-3470`). An unassigned search
   therefore needs its own declaration.
-- An empty string, `false`, and `0` are values. Only null disables an optional criterion.
+- `false` and `0` are values. Only null disables an optional criterion. An empty string is a value
+  except on Oracle, which treats `""` as NULL, so it disables an optional string criterion there.
 - The #428 sample needs a second declaration for the unassigned state of each sort
   (`samples/Inquiry.Sample.Data/WorkspaceStores.cs:17-71`). Its service selects one with a switch
   (`samples/Inquiry.Sample.Data/ProductWorkspace.cs:28-38`).
