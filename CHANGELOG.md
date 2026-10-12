@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `QueryMultipleAsync` and generated eager loads now raise registered command interceptor callbacks, with or without an ambient transaction. `CommandExecutedAsync` runs when the grid reader is disposed; `CommandFailedAsync` runs once when execution or a read fails or is cancelled. Grids still record one `QUERY_MULTIPLE` telemetry span and metric.
+
 ## [1.0.0-preview.11] - 2026-10-12
 
 ### Added
