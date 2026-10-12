@@ -345,7 +345,9 @@ Choose option 2 for all results of handwritten SQL. Keep fixed ordinals for SQL 
   property name is present.
 - **Missing column.** Throw `InvalidOperationException` before the first row is returned. Name the
   DTO, the property, and the available columns.
-- **Duplicate names.** If two result columns match one property, throw. Do not pick the first.
+- **Duplicate names.** If two result columns match one property, throw. Do not pick the first. If
+  two properties share a name under the matching comparer, such as `Id` and `ID`, report a build
+  error. No two properties may resolve to the same result column.
 - **Extra columns.** Ignore them. Reports often return helper columns.
 - **Database NULL.** A nullable property receives null. For a non-nullable property, throw an error
   that names the property.
