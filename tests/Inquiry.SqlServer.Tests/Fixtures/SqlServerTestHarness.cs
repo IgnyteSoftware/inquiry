@@ -5,6 +5,7 @@ using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.DependencyInjection;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
+using System.Runtime.ExceptionServices;
 
 namespace Inquiry.SqlServer.Tests.Fixtures;
 
@@ -112,7 +113,15 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await Services.DisposeAsync();
+        Exception? serviceFailure = null;
+        try
+        {
+            await Services.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            serviceFailure = ex;
+        }
 
         // Force-close pooled connections so DROP DATABASE doesn't fail with "database in use".
         SqlConnection.ClearAllPools();
@@ -121,10 +130,20 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
         {
             await DropDatabaseAsync(_adminConnectionString, _databaseName);
         }
+        catch (Exception cleanupException) when (serviceFailure is not null)
+        {
+            throw new AggregateException(
+                $"SQL Server test database '{_databaseName}' service disposal and cleanup both failed.",
+                serviceFailure,
+                cleanupException);
+        }
         catch
         {
             // Best-effort cleanup. Don't fail the test on teardown.
         }
+
+        if (serviceFailure is not null)
+            ExceptionDispatchInfo.Throw(serviceFailure);
     }
 
     private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)

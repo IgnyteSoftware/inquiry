@@ -3,6 +3,7 @@ using Inquiry.Sqlite.DependencyInjection;
 using Inquiry.Northwind.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using System.Runtime.ExceptionServices;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
 
@@ -67,29 +68,70 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
         }.ToString();
 
         var keeper = new SqliteConnection(connectionString);
-        await keeper.OpenAsync();
-
-        await using (var cmd = keeper.CreateCommand())
+        try
         {
-            cmd.CommandText = schemaDdl;
-            await cmd.ExecuteNonQueryAsync();
+            await keeper.OpenAsync();
+
+            await using (var cmd = keeper.CreateCommand())
+            {
+                cmd.CommandText = schemaDdl;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            var serviceCollection = new ServiceCollection();
+            if (configureOptions is null)
+                serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
+            else
+                serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
+            serviceCollection.AddInquirySqlite(connectionString);
+            configureServices?.Invoke(serviceCollection);
+            var services = serviceCollection.BuildServiceProvider();
+
+            return new SqliteTestHarness(connectionString, keeper, services);
         }
+        catch (Exception setupException)
+        {
+            try
+            {
+                await keeper.DisposeAsync();
+            }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    "SQLite test harness setup and keeper cleanup both failed.",
+                    setupException,
+                    cleanupException);
+            }
 
-        var serviceCollection = new ServiceCollection();
-        if (configureOptions is null)
-            serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
-        else
-            serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
-        serviceCollection.AddInquirySqlite(connectionString);
-        configureServices?.Invoke(serviceCollection);
-        var services = serviceCollection.BuildServiceProvider();
-
-        return new SqliteTestHarness(connectionString, keeper, services);
+            throw;
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        await Services.DisposeAsync();
-        await _keeper.DisposeAsync();
+        Exception? serviceFailure = null;
+        try
+        {
+            await Services.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            serviceFailure = ex;
+        }
+
+        try
+        {
+            await _keeper.DisposeAsync();
+        }
+        catch (Exception cleanupException) when (serviceFailure is not null)
+        {
+            throw new AggregateException(
+                "SQLite test harness service disposal and keeper cleanup both failed.",
+                serviceFailure,
+                cleanupException);
+        }
+
+        if (serviceFailure is not null)
+            ExceptionDispatchInfo.Throw(serviceFailure);
     }
 }
