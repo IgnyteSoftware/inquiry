@@ -29,13 +29,14 @@ public sealed class InquiryGridReader : IAsyncDisposable
     private readonly IDisposable? _lease;
     private readonly Activity? _activity;
     private readonly long _startTimestamp;
+    private readonly bool _recordTelemetryDetails;
     private bool _hasResultSet;
     private bool _disposed;
     private bool _faulted;
     private bool _streaming;
 
     internal InquiryGridReader(DbDataReader reader, DbCommand command, DbConnection? ownedConnection, IDisposable? lease,
-        Activity? activity = null, long startTimestamp = 0)
+        Activity? activity = null, long startTimestamp = 0, bool recordTelemetryDetails = true)
     {
         _reader = reader;
         _command = command;
@@ -43,6 +44,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         _lease = lease;
         _activity = activity;
         _startTimestamp = startTimestamp;
+        _recordTelemetryDetails = recordTelemetryDetails;
         _hasResultSet = true;
     }
 
@@ -415,7 +417,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
     {
         if (_startTimestamp == 0 || _faulted) return;
         _faulted = true;
-        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+        var errorType = InquiryTelemetry.ErrorType(exception);
         var dbSystem = InquiryTelemetry.MapDbSystem(_command);
         InquiryTelemetry.CommandDuration.Record(
             Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
@@ -424,8 +426,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
             new KeyValuePair<string, object?>("error.type", errorType));
         if (_activity is { } activity)
         {
-            activity.SetTag("error.type", errorType);
-            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            InquiryTelemetry.SetError(activity, exception, _recordTelemetryDetails);
         }
     }
 }

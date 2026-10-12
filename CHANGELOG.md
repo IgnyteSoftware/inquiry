@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `RecordCommandText = false` now also redacts provider error messages from span status descriptions and `Error` logs, and drops `db.collection.name`, on command, grid, batch, bulk-insert, and transaction routes. Exception types stay recorded.
+- `db.collection.name` reports the table for bracketed, double-quoted, backtick-quoted, escaped, and two- or three-part names. It handles newlines, tabs, and comments around keywords, uses the outer `SELECT`'s `FROM`, and recognizes `INSERT OR …`, `INSERT IGNORE`, `UPDATE OR …`, and `UPDATE TOP (n)`. Derived tables, table-valued functions, and unsupported shapes get no tag instead of a wrong one.
+- When cancellation wraps a driver error, spans add `inquiry.error.cause.type` with the driver exception type. `error.type` stays `System.OperationCanceledException`.
+
 ## [1.0.0-preview.11] - 2026-10-12
 
 ### Added
