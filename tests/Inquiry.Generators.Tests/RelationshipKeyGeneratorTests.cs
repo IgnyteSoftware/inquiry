@@ -205,15 +205,17 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Theory]
-    [InlineData("\"postId\"", "nameof(PostTag.TagId)", "postId", "PostId", false)]
-    [InlineData("nameof(PostTag.PostId)", "\"tagid\"", "tagid", "TagId", false)]
-    [InlineData("\"postId\"", "nameof(PostTag.TagId)", "postId", "PostId", true)]
-    [InlineData("nameof(PostTag.PostId)", "\"tagid\"", "tagid", "TagId", true)]
+    [InlineData("\"postId\"", "nameof(PostTag.TagId)", "postId", "PostId", false, false)]
+    [InlineData("nameof(PostTag.PostId)", "\"tagid\"", "tagid", "TagId", false, false)]
+    [InlineData("\"postId\"", "nameof(PostTag.TagId)", "postId", "PostId", true, false)]
+    [InlineData("nameof(PostTag.PostId)", "\"tagid\"", "tagid", "TagId", true, false)]
+    [InlineData("\"postId\"", "nameof(PostTag.TagId)", "postId", "PostId", false, true)]
+    [InlineData("nameof(PostTag.PostId)", "\"tagid\"", "tagid", "TagId", false, true)]
     public void JunctionForeignKeyNamedByOtherCasingReportsINQ088AndEmitsNoLoader(
-        string parent, string child, string named, string property, bool suppressed)
+        string parent, string child, string named, string property, bool suppressed, bool tagIdFirst)
     {
         var result = RunGenerator(
-            CollidingJunction(parent, child, tagIdFirst: false),
+            CollidingJunction(parent, child, tagIdFirst),
             additionalDiagnosticOptions: suppressed
                 ? new Dictionary<string, ReportDiagnostic> { ["INQ088"] = ReportDiagnostic.Suppress }
                 : null);
