@@ -510,8 +510,10 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-            RecordGridFailure(activity, dbCommand, startTimestamp, normalized);
             var exceptions = new List<Exception> { normalized };
+            // A throwing telemetry listener must not skip the failed callbacks or resource cleanup.
+            try { RecordGridFailure(activity, dbCommand, startTimestamp, normalized); }
+            catch (Exception ex) { exceptions.Add(ex); }
             try { if (interception is not null) await interception.FailedAsync(normalized, cancellationToken).ConfigureAwait(false); }
             catch (Exception ex) { exceptions.Add(ex); }
             try
@@ -533,8 +535,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch (Exception primaryException)
         {
-            RecordGridFailure(activity, dbCommand, startTimestamp, primaryException);
             var exceptions = new List<Exception> { primaryException };
+            try { RecordGridFailure(activity, dbCommand, startTimestamp, primaryException); }
+            catch (Exception exception) { exceptions.Add(exception); }
             try { if (interception is not null) await interception.FailedAsync(primaryException, cancellationToken).ConfigureAwait(false); }
             catch (Exception exception) { exceptions.Add(exception); }
             try
@@ -589,8 +592,10 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-            RecordGridFailure(activity, dbCommand, startTimestamp, normalized);
             var exceptions = new List<Exception> { normalized };
+            // A throwing telemetry listener must not skip the failed callbacks or resource cleanup.
+            try { RecordGridFailure(activity, dbCommand, startTimestamp, normalized); }
+            catch (Exception ex) { exceptions.Add(ex); }
             try { if (interception is not null) await interception.FailedAsync(normalized, cancellationToken).ConfigureAwait(false); }
             catch (Exception ex) { exceptions.Add(ex); }
             try { if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false); }
@@ -609,8 +614,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch (Exception primaryException)
         {
-            RecordGridFailure(activity, dbCommand, startTimestamp, primaryException);
             var exceptions = new List<Exception> { primaryException };
+            try { RecordGridFailure(activity, dbCommand, startTimestamp, primaryException); }
+            catch (Exception exception) { exceptions.Add(exception); }
             try { if (interception is not null) await interception.FailedAsync(primaryException, cancellationToken).ConfigureAwait(false); }
             catch (Exception exception) { exceptions.Add(exception); }
             try { if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false); }
