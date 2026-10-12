@@ -112,7 +112,7 @@ A `[InquiryManyToMany]` navigation must be a **collection** (`List<T>` / `IReadO
 
 Junction foreign keys are named by their **C# property names, matched exactly** — not by column name and not in another casing. Validation and the generated SQL use the same rule, so a property mapped to a column that shares another property's name still resolves to the property you named. When a column name or another casing would have matched, `INQ088` names the property to use.
 
-Suppressing one of these errors does not produce a working join: the eager method is not generated.
+Suppressing one of these errors does not produce a working join: no eager loader is generated for the relation.
 
 ### Composite-key related entities
 

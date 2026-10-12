@@ -1298,7 +1298,7 @@ Smallest correction: Remove the option and map the table and columns on the junc
 
 Relationship key columns store values differently. Default: error, enabled.
 
-Trigger: A relation joins a foreign key to a key whose stored representation differs: enum stored as text against enum stored as a number, two different value converters, or a converter on one side that stores a different kind of value (text against a number).
+Trigger: A relation joins a foreign key to a key whose stored representation differs: an enum stored as text against a numeric column, or two different value converters. A converter on one side only is not checked.
 
 Failing shape: A junction property with `[InquiryEnumAsString]` paired with a numeric enum key.
 

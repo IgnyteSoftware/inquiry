@@ -126,7 +126,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Equal(suppressed ? 0 : 2, diagnostics.Length);
         Assert.All(diagnostics, static d => Assert.Contains("use 'RegionRef'", d.GetMessage(), StringComparison.Ordinal));
 
-        // Every eager method is dropped, so the only follow-on errors are the missing partial bodies.
+        // No eager loader is emitted, so any follow-on error is a missing partial body.
         Assert.DoesNotContain("_sql_Territories", StoreText(result, "RegionStore"));
         Assert.DoesNotContain("_sql_Region", StoreText(result, "TerritoryStore"));
         Assert.All(CompileErrors(result), static d => Assert.Equal("CS8795", d.Id));
@@ -467,6 +467,31 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ104");
         Assert.Contains("_sql_Orders", StoreText(result, "CustomerStore"));
+    }
+
+    [Fact]
+    public void ConverterOnOneSideOnlyIsNotJudged()
+    {
+        // On SQLite a native Guid key and a Guid foreign key converted to text store the same text, so a
+        // one-sided converter cannot be judged without knowing the provider. It is accepted.
+        var source = EnumStorageSource
+            .Replace("public enum Grade { Low = 1, High = 2 }", """
+                public sealed class GuidAsText : IInquiryValueConverter<global::System.Guid, string>
+                {
+                    public string ToProvider(global::System.Guid model) => model.ToString("D").ToUpperInvariant();
+                    public global::System.Guid FromProvider(string provider) => global::System.Guid.Parse(provider);
+                }
+                """)
+            .Replace("[InquiryKey] public Grade Code { get; set; }", "[InquiryKey] public global::System.Guid Code { get; set; }")
+            .Replace(
+                "[InquiryKey(Length = 16), JUNCTION_STORAGE] public Grade Grade { get; set; }",
+                "[InquiryKey(Length = 36, Converter = typeof(GuidAsText))] public global::System.Guid Grade { get; set; }");
+
+        var result = RunGenerator(source);
+
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ104");
+        Assert.Empty(CompileErrors(result));
+        Assert.Contains("_sql_Grades_All", StoreText(result, "PostStore"));
     }
 
     [Fact]

@@ -3861,7 +3861,7 @@ internal static class StoreProcessor
     /// The join compares stored values, so the same CLR type is not enough. An enum stored as text never
     /// equals the same enum stored as a number, and two converters can store one model value in two ways.
     /// Both shapes compiled and then matched no rows. Joining across different converters is not
-    /// supported, so any difference is rejected rather than reconciled.
+    /// supported in 1.0, so two different converters are rejected rather than reconciled.
     /// </remarks>
     internal static RelationKeyPair? FindKeyStorageMismatch(
         EntityData entity, RelationData relation, EntityData child, EntityData? junction)
@@ -3905,6 +3905,11 @@ internal static class StoreProcessor
         return null;
     }
 
+    /// <remarks>
+    /// Only certain mismatches are rejected. A converter on one side only is not judged: whether its
+    /// provider value equals the other column's native value depends on the provider (a Guid converted to
+    /// text matches a native Guid on SQLite, for example), and typed IDs rely on it.
+    /// </remarks>
     private static bool KeyStorageMatches(ColumnData foreignKey, ColumnData key)
     {
         if (foreignKey.Converter is { } foreignKeyConverter && key.Converter is { } keyConverter)
@@ -3912,42 +3917,17 @@ internal static class StoreProcessor
             return string.Equals(foreignKeyConverter.ConverterTypeDisplay, keyConverter.ConverterTypeDisplay, StringComparison.Ordinal);
         }
 
-        return string.Equals(StoredKind(foreignKey), StoredKind(key), StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The kind of value a column stores: text, a number, or otherwise its provider type.
-    /// </summary>
-    /// <remarks>
-    /// Numbers of different types stay compatible, as an int foreign key to a long or decimal key always
-    /// was: SQL compares them and the generated lookup converts implicitly. A converter on one side only is
-    /// compatible when it stores the same kind, such as a typed ID converted to int against a plain int
-    /// foreign key.
-    /// </remarks>
-    private static string StoredKind(ColumnData column)
-    {
-        if (column.Converter is { } converter)
+        if (foreignKey.Converter is not null || key.Converter is not null || foreignKey.EnumAsString == key.EnumAsString)
         {
-            return StoredKind(converter.ProviderType?.SpecialType ?? converter.ProviderSpecialType, converter.ProviderTypeDisplay);
+            return true;
         }
 
-        if (column.EnumAsString)
-        {
-            return "text";
-        }
-
-        return column.Type.IsEnum
-            ? StoredKind(column.Type.EnumUnderlyingSpecialType, column.Type.NonNullableDisplayName)
-            : StoredKind(column.Type.SpecialType, column.Type.NonNullableDisplayName);
-
-        static string StoredKind(SpecialType specialType, string typeDisplay) => specialType switch
-        {
-            SpecialType.System_String => "text",
+        // Enum names stored as text never equal a stored number. Against plain text they can match.
+        var other = foreignKey.EnumAsString ? key : foreignKey;
+        return !(other.Type.IsEnum || other.Type.SpecialType is
             SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16 or SpecialType.System_UInt16
-                or SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64
-                or SpecialType.System_Decimal or SpecialType.System_Single or SpecialType.System_Double => "number",
-            _ => typeDisplay.TrimEnd('?'),
-        };
+            or SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64
+            or SpecialType.System_Decimal or SpecialType.System_Single or SpecialType.System_Double);
     }
 
     /// <summary>
