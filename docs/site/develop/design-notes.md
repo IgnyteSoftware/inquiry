@@ -2,7 +2,9 @@
 
 The condensed design and dependency record. For the user-facing architecture write-up see
 [Architecture](../articles/architecture.md). The original per-workstream design specs are no longer
-carried in the tree; they remain in git history.
+carried in the tree; they remain in git history. Decisions about the 1.0 public API for stores,
+predicate binding, result mapping, and stored procedures are in
+[1.0 API contract decisions](api-contract-decisions.md).
 
 ## What Inquiry is
 
