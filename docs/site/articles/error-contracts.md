@@ -57,7 +57,7 @@ cleanup can fail after the write. Do not blindly retry a non-idempotent operatio
 Use explicit transactions for related writes that must commit together. Generated bounded batches on
 the built-in runtime own a transaction when there is no ambient transaction; in an ambient transaction
 the caller owns commit/rollback. Native bulk-copy guarantees depend on the provider and selected
-options. Separate store calls and custom `IInquiry` implementations do not acquire a shared atomic
+options; see [Partial writes and retries](features/bulk-insert.md#partial-writes-and-retries). Separate store calls and custom `IInquiry` implementations do not acquire a shared atomic
 boundary automatically. A commit/rollback failure can leave the final database outcome uncertain.
 
 Client-generated GUID and audit assignments can mutate input objects before SQL executes. Neither an

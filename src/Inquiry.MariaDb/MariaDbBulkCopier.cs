@@ -35,18 +35,12 @@ internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
         var rawConnection = context.Connection;
         if (rawConnection is null)
         {
-            var openTimestamp = Stopwatch.GetTimestamp();
-            try
-            {
-                rawConnection = _connectionFactory is MariaDbInquiryConnectionFactory mariaDbFactory
-                    ? await mariaDbFactory.OpenBulkCopyConnectionAsync(cancellationToken).ConfigureAwait(false)
-                    : await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-                dedicatedConnection = rawConnection;
-            }
-            finally
-            {
-                context.RecordConnectionOpened(Stopwatch.GetElapsedTime(openTimestamp));
-            }
+            rawConnection = await context.OpenDedicatedConnectionAsync(
+                _connectionFactory is MariaDbInquiryConnectionFactory mariaDbFactory
+                    ? mariaDbFactory.OpenBulkCopyConnectionAsync
+                    : _connectionFactory.OpenConnectionAsync,
+                cancellationToken).ConfigureAwait(false);
+            dedicatedConnection = rawConnection;
         }
 
         if (rawConnection is not MySqlConnection mysqlConnection)
@@ -82,17 +76,10 @@ internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
 
             using var reader = new InquiryBulkRowReader<TEntity>(definition, rows);
             var copyTimestamp = Stopwatch.GetTimestamp();
+            MySqlBulkCopyResult result;
             try
             {
-                var result = await bulkCopy.WriteToServerAsync(reader, cancellationToken).ConfigureAwait(false);
-                if (result.Warnings.Count > 0)
-                {
-                    throw new InvalidOperationException(
-                        "MariaDB bulk insert completed with warnings (rows were written but may contain truncated data): " +
-                        string.Join("; ", result.Warnings.Select(w => w.Message)));
-                }
-                context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp), result.RowsInserted);
-                return result.RowsInserted;
+                result = await bulkCopy.WriteToServerAsync(reader, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (IsLocalInfileDisabled(exception))
             {
@@ -109,11 +96,31 @@ internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
                 context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp));
                 throw;
             }
+
+            // The server reports warnings only after it has written the rows, so the copy completed.
+            context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp), result.RowsInserted);
+            if (result.Warnings.Count > 0)
+                throw CreateWarningException(result, context.IsEnlisted);
+            return result.RowsInserted;
         }
         finally
         {
             if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
         }
+    }
+
+    private static InquiryBulkInsertWarningException CreateWarningException(MySqlBulkCopyResult result, bool isEnlisted)
+    {
+        var warnings = result.Warnings.Select(w => w.Message).ToArray();
+        var outcome = isEnlisted
+            ? "They are part of the caller's Inquiry transaction; roll it back to discard them."
+            : "They were written on the dedicated bulk-insert connection and are committed unless that connection enlisted in a TransactionScope; do not retry the same rows without first removing them.";
+        return new InquiryBulkInsertWarningException(
+            $"MariaDB bulk insert wrote {result.RowsInserted} row(s) but the server reported warnings, so values may be truncated or converted. " +
+            outcome + " Warnings: " + string.Join("; ", warnings),
+            result.RowsInserted,
+            isEnlisted,
+            warnings);
     }
 
     private static string QualifyTableName(string? schema, string table)

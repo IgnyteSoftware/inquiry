@@ -81,10 +81,12 @@ sandbox. Cleanup uses a non-cancelled token. When cleanup also fails, `RunAsync`
 `AggregateException` whose first inner exception is the callback's, followed by the rollback and
 disposal failures in the order they occurred.
 
-Generated transactional store methods participate in the sandbox. Native `[InquiryBulkInsert]`
-does not: its dedicated provider connection cannot join the ambient transaction, so Inquiry rejects
-it inside a sandbox or any other Inquiry transaction. Use `[InquiryInsert]` for rollback-safe
-test setup.
+Generated transactional store methods participate in the sandbox. Whether `[InquiryBulkInsert]`
+does depends on the provider. On SQL Server and PostgreSQL it borrows the sandbox connection and
+transaction, so its rows roll back with the sandbox. On SQLite and Oracle it compiles to a batch
+`INSERT` that also runs in the sandbox. On MySQL and MariaDB it fails before writing, unless a custom
+connection factory enables `AllowLoadLocalInfile`; use `[InquiryInsert]` for rollback-safe test setup
+there. See [Transactions and connection ownership](bulk-insert.md#transactions-and-connection-ownership).
 
 Nested `RunAsync` calls in the same async context are rejected. When application code deliberately
 needs nesting, `context.Transaction.BeginTransactionAsync()` creates a provider savepoint; committing

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Native bulk insert disposes its dedicated connection when a telemetry listener throws after the connection opens. A failed open now records `connection.open_failed` with `error.type` instead of `connection.opened`, and keeps the open error.
 - `RecordCommandText = false` now also redacts provider error messages from span status descriptions and `Error` logs, and drops `db.collection.name`, on command, grid, batch, bulk-insert, and transaction routes. Exception types stay recorded.
 - `db.collection.name` reports the table for bracketed, double-quoted, backtick-quoted, escaped, and two- or three-part names. It handles newlines, tabs, and comments around keywords, uses the outer `SELECT`'s `FROM`, and recognizes `INSERT OR …`, `INSERT IGNORE`, `UPDATE OR …`, and `UPDATE TOP (n)`. Derived tables, table-valued functions, and unsupported shapes get no tag instead of a wrong one.
 - When cancellation wraps a driver error, spans add `inquiry.error.cause.type` with the driver exception type. `error.type` stays `System.OperationCanceledException`.
@@ -20,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `INQ103` warns when `JunctionTable`, `JunctionSchema`, `ParentColumn` or `ChildColumn` is set on an explicit-junction `[InquiryManyToMany]`, where it has no effect.
+
+### Changed
+
+- MySQL and MariaDB bulk inserts that complete with server warnings throw `InquiryBulkInsertWarningException`, still an `InvalidOperationException`. It reports the rows written, whether they are in the caller's Inquiry transaction, and the warnings. Telemetry records the written row count.
+
+### Documentation
+
+- The bulk insert guide describes per-provider transaction ownership, SQL Server per-batch commits, partial outcomes and safe retries. The testing guide no longer says that native bulk insert is always rejected in a sandbox.
 
 ## [1.0.0-preview.11] - 2026-10-12
 

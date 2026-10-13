@@ -949,6 +949,44 @@ public sealed class InquiryTelemetryTests
         Assert.Equal(ActivityStatusCode.Error, bulkActivity.Status);
     }
 
+    [Fact]
+    public async Task BulkInsertFailedOpenIsRecordedAsOpenFailure()
+    {
+        var activities = new List<Activity>();
+        using var listener = CreateActivityListener(activities);
+        var measurements = new List<Dictionary<string, object?>>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "inquiry.bulk_insert.connection_open.duration")
+                l.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
+        {
+            var tagMap = new Dictionary<string, object?>();
+            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
+            lock (measurements) measurements.Add(tagMap);
+        });
+        meterListener.Start();
+
+        await using var fixture = await SqliteInquiryFixture.CreateAsync(services =>
+            services.AddSingleton<IInquiryBulkCopier>(new OpenFailingBulkCopier()));
+        using var scope = fixture.CreateScope();
+        var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
+        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", new[] { "Id" }, static (item, _) => item.Id);
+
+        await Assert.ThrowsAsync<TimeoutException>(() => inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }));
+
+        meterListener.Dispose();
+
+        var bulkActivity = Assert.Single(activities, activity => activity.DisplayName == "BULK_INSERT");
+        Assert.DoesNotContain(bulkActivity.Events, static activityEvent => activityEvent.Name == "connection.opened");
+        var openFailed = Assert.Single(bulkActivity.Events, static activityEvent => activityEvent.Name == "connection.open_failed");
+        Assert.Contains(openFailed.Tags, static tag => tag.Key == "error.type" && Equals(tag.Value, typeof(TimeoutException).FullName));
+        var openMeasurement = Assert.Single(measurements);
+        Assert.Equal(typeof(TimeoutException).FullName, openMeasurement["error.type"]);
+    }
+
     private static void BindBatchItem(InquiryParameterTarget target, (int Id, string Name, int IsActive) item)
     {
         var id = target.CreateParameter();
@@ -1042,6 +1080,21 @@ public sealed class InquiryTelemetryTests
         }
 
         public void Dispose() => _listener?.Dispose();
+    }
+
+    private sealed class OpenFailingBulkCopier : IInquiryBulkCopier
+    {
+        public async Task<long> BulkInsertAsync<TEntity>(
+            InquiryBulkInsertDefinition<TEntity> definition,
+            IEnumerable<TEntity> rows,
+            InquiryBulkInsertContext context,
+            CancellationToken cancellationToken = default)
+            where TEntity : class
+        {
+            await using var connection = await context.OpenDedicatedConnectionAsync(
+                _ => throw new TimeoutException("Open failed."), cancellationToken);
+            return 0;
+        }
     }
 
     private sealed class NativeProviderException : DbException

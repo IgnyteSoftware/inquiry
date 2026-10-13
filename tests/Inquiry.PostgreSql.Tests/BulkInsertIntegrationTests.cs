@@ -3,6 +3,9 @@ using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.BulkCopy;
 using Inquiry.PostgreSql.Tests.Fixtures;
+using Inquiry.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -133,6 +136,37 @@ public sealed class BulkInsertIntegrationTests
             store.BulkInsertWithOptionsAsync(new[] { Item("unsupported", 2) }, new InquiryBulkInsertOptions { BatchSize = 10 }));
         Assert.Contains("BatchSize", exception.Message);
         Assert.Equal(1, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task DedicatedFailureLeavesNoRows()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.PostgreSqlDdl, "bulkpartial");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        // Category is NOT NULL, so the last row fails the single COPY statement after the others were sent.
+        await Assert.ThrowsAsync<PostgresException>(() =>
+            store.BulkInsertAsync(Enumerable.Range(0, 25).Select(i => i == 24 ? Item(null!, i) : Item("partial", i))));
+
+        Assert.Equal(0, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task SandboxBulkInsertRollsBack()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.PostgreSqlDdl, "bulksandbox");
+        var sandbox = new InquirySandbox(harness.Services);
+
+        await sandbox.RunAsync(async (context, token) =>
+        {
+            var store = context.Services.GetRequiredService<BulkItemStore>();
+            Assert.Equal(3, await store.BulkInsertAsync(Enumerable.Range(0, 3).Select(i => Item("sandbox", i)), token));
+            Assert.Equal(3, await store.CountAsync(token));
+        });
+
+        Assert.Equal(0, await harness.GetRequiredService<BulkItemStore>().CountAsync());
     }
 
     private static BulkItem Item(string category, int value) => new() { Category = category, Amount = value };

@@ -140,7 +140,55 @@ public sealed class BulkInsertIntegrationTests
         Assert.Contains(20, progress);
     }
 
+    [SkippableFact]
+    public async Task DedicatedLaterBatchFailureKeepsEarlierBatches()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.SqlServerDdl, "bulkpartial");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.BulkInsertWithOptionsAsync(FailAt(25, failAt: 24), new InquiryBulkInsertOptions { BatchSize = 10 }));
+
+        // Each SqlBulkCopy batch commits on its own, so the two full batches before the bad row remain.
+        Assert.Equal(20, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task DedicatedFailureWithoutBatchSizeLeavesNoRows()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.SqlServerDdl, "bulksinglebatch");
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.BulkInsertAsync(FailAt(25, failAt: 24)));
+
+        Assert.Equal(0, await store.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task EnlistedLaterBatchFailureRollsBackEveryBatch()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, FeatureSchema.SqlServerDdl, "bulkpartialtx");
+        var inquiry = harness.GetRequiredService<IInquiry>();
+        var store = harness.GetRequiredService<BulkItemStore>();
+
+        await using (var transaction = await inquiry.BeginTransactionAsync())
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                store.BulkInsertWithOptionsAsync(FailAt(25, failAt: 24), new InquiryBulkInsertOptions { BatchSize = 10 }));
+            await transaction.RollbackAsync();
+        }
+
+        Assert.Equal(0, await store.CountAsync());
+    }
+
     private static BulkItem Item(string category, int value) => new() { Category = category, Amount = value };
+
+    // Category is NOT NULL, so the row at failAt makes SqlBulkCopy fail after the earlier rows were sent.
+    private static IEnumerable<BulkItem> FailAt(int count, int failAt)
+        => Enumerable.Range(0, count).Select(i => i == failAt ? Item(null!, i) : Item("partial", i));
 
     private static IEnumerable<BulkItem> CancelAfter(int count, int cancelAt, CancellationTokenSource cancellation)
     {
