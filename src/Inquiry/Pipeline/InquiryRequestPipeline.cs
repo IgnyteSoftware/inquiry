@@ -57,6 +57,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     private readonly int _defaultCommandTimeoutSeconds;
     private readonly int _maxBatchSize;
     private readonly int _maxParametersPerCommand;
+    private readonly bool _recordTelemetryDetails;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryRequestPipeline"/> class.
@@ -86,6 +87,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             : 0;
         _maxBatchSize = options?.MaxBatchSize ?? InquiryOptions.DefaultMaxBatchSize;
         _maxParametersPerCommand = options?.MaxParametersPerCommand ?? InquiryOptions.DefaultMaxParametersPerCommand;
+        _recordTelemetryDetails = InquiryTelemetry.RecordsCommandDetails(_interceptors);
     }
 
     private bool HasInterceptors => _interceptors.Length > 0;
@@ -169,9 +171,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         return (activity, startTimestamp);
     }
 
-    private static void RecordGridFailure(Activity? activity, DbCommand? dbCommand, long startTimestamp, Exception exception)
+    private void RecordGridFailure(Activity? activity, DbCommand? dbCommand, long startTimestamp, Exception exception)
     {
-        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+        var errorType = InquiryTelemetry.ErrorType(exception);
 
         if (startTimestamp != 0 && dbCommand is not null)
         {
@@ -184,13 +186,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
         if (activity is not null)
         {
-            activity.SetTag("error.type", errorType);
-            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            InquiryTelemetry.SetError(activity, exception, _recordTelemetryDetails);
             activity.Dispose();
         }
     }
 
-    private static (Activity? activity, long startTimestamp, string dbSystem) StartBatchActivity(
+    private (Activity? activity, long startTimestamp, string dbSystem) StartBatchActivity(
         DbConnection connection, string? commandText)
     {
         if (!InquiryTelemetry.ActivitySource.HasListeners() && !InquiryTelemetry.CommandDuration.Enabled)
@@ -206,7 +207,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             {
                 activity.SetTag("db.system.name", dbSystem);
                 activity.SetTag("db.operation.name", "EXECUTE_BATCH");
-                var table = InquiryTelemetry.ExtractTableName(commandText);
+                var table = _recordTelemetryDetails ? InquiryTelemetry.ExtractTableName(commandText) : null;
                 if (table is not null)
                 {
                     activity.SetTag("db.collection.name", table);
@@ -233,9 +234,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
-    private static void RecordBatchFailure(Activity? activity, long startTimestamp, string dbSystem, Exception exception)
+    private void RecordBatchFailure(Activity? activity, long startTimestamp, string dbSystem, Exception exception)
     {
-        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+        var errorType = InquiryTelemetry.ErrorType(exception);
 
         if (startTimestamp != 0)
         {
@@ -248,8 +249,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
         if (activity is not null)
         {
-            activity.SetTag("error.type", errorType);
-            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            InquiryTelemetry.SetError(activity, exception, _recordTelemetryDetails);
             activity.Dispose();
         }
     }
@@ -489,15 +489,20 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         DbDataReader? reader = null;
         Activity? activity = null;
         long startTimestamp = 0;
+        GridCommandInterception? interception = null;
         try
         {
             dbCommand = CreateCommand(connection);
             InitializeCommandSync(dbCommand, command);
-            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+            // Start the span before the interceptors run, so they observe the grid span as the
+            // current activity and the span covers the same window as their callbacks.
             (activity, startTimestamp) = StartGridActivity(dbCommand);
+            interception = GridCommandInterception.Create(_interceptors, dbCommand, command);
+            if (interception is not null) await interception.ExecutingAsync(cancellationToken).ConfigureAwait(false);
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
             var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null,
-                activity, startTimestamp);
+                activity, startTimestamp, _recordTelemetryDetails, interception);
             activity = null;
             return grid;
         }
@@ -505,8 +510,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-            RecordGridFailure(activity, dbCommand, startTimestamp, normalized);
             var exceptions = new List<Exception> { normalized };
+            // A throwing telemetry listener must not skip the failed callbacks or resource cleanup.
+            try { RecordGridFailure(activity, dbCommand, startTimestamp, normalized); }
+            catch (Exception ex) { exceptions.Add(ex); }
+            try { if (interception is not null) await interception.FailedAsync(normalized, cancellationToken).ConfigureAwait(false); }
+            catch (Exception ex) { exceptions.Add(ex); }
             try
             {
                 if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
@@ -526,8 +535,11 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch (Exception primaryException)
         {
-            RecordGridFailure(activity, dbCommand, startTimestamp, primaryException);
             var exceptions = new List<Exception> { primaryException };
+            try { RecordGridFailure(activity, dbCommand, startTimestamp, primaryException); }
+            catch (Exception exception) { exceptions.Add(exception); }
+            try { if (interception is not null) await interception.FailedAsync(primaryException, cancellationToken).ConfigureAwait(false); }
+            catch (Exception exception) { exceptions.Add(exception); }
             try
             {
                 if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false);
@@ -558,6 +570,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         DbDataReader? reader = null;
         Activity? activity = null;
         long startTimestamp = 0;
+        GridCommandInterception? interception = null;
         try
         {
             dbCommand = CreateCommand(connection);
@@ -565,11 +578,13 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             dbCommand.CommandType = command.CommandType;
             command.BindParameters(dbCommand, command.Args);
             _connectionFactory.FinalizeCommand(dbCommand);
-            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             (activity, startTimestamp) = StartGridActivity(dbCommand);
+            interception = GridCommandInterception.Create(_interceptors, dbCommand, command.CommandText, command.CommandType);
+            if (interception is not null) await interception.ExecutingAsync(cancellationToken).ConfigureAwait(false);
+            await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
             var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null,
-                activity, startTimestamp);
+                activity, startTimestamp, _recordTelemetryDetails, interception);
             activity = null;
             return grid;
         }
@@ -577,8 +592,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
         {
             var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-            RecordGridFailure(activity, dbCommand, startTimestamp, normalized);
             var exceptions = new List<Exception> { normalized };
+            // A throwing telemetry listener must not skip the failed callbacks or resource cleanup.
+            try { RecordGridFailure(activity, dbCommand, startTimestamp, normalized); }
+            catch (Exception ex) { exceptions.Add(ex); }
+            try { if (interception is not null) await interception.FailedAsync(normalized, cancellationToken).ConfigureAwait(false); }
+            catch (Exception ex) { exceptions.Add(ex); }
             try { if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false); }
             catch (Exception ex) { exceptions.Add(ex); }
             if (dbCommand is not null)
@@ -595,8 +614,11 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         catch (Exception primaryException)
         {
-            RecordGridFailure(activity, dbCommand, startTimestamp, primaryException);
             var exceptions = new List<Exception> { primaryException };
+            try { RecordGridFailure(activity, dbCommand, startTimestamp, primaryException); }
+            catch (Exception exception) { exceptions.Add(exception); }
+            try { if (interception is not null) await interception.FailedAsync(primaryException, cancellationToken).ConfigureAwait(false); }
+            catch (Exception exception) { exceptions.Add(exception); }
             try { if (reader is not null) await reader.DisposeAsync().ConfigureAwait(false); }
             catch (Exception exception) { exceptions.Add(exception); }
             if (dbCommand is not null)

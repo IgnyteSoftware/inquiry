@@ -60,7 +60,7 @@ Connection strings, and the credentials in them, are the host application's resp
 
 ## Telemetry and data exposure
 
-The opt-in telemetry layer (`AddInquiryTelemetry()`) never records parameter values — Inquiry SQL is compile-time-constant and data flows only through bound parameters. Spans and debug logs carry the SQL text (table/column names) by default; set `RecordCommandText = false` to redact it. See [Observability](features/observability.md).
+The opt-in telemetry layer (`AddInquiryTelemetry()`) never records parameter values — Inquiry SQL is compile-time-constant and data flows only through bound parameters. Spans and logs carry the SQL text, table names, and provider error messages by default; set `RecordCommandText = false` to redact them while keeping exception types. See [Observability](features/observability.md#redaction).
 
 ## Reporting
 

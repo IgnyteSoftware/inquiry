@@ -106,6 +106,13 @@ A `[InquiryManyToMany]` navigation must be a **collection** (`List<T>` / `IReadO
 | `INQ087` | The junction or related type is not a mapped `[InquiryTable]` entity. |
 | `INQ088` | A named junction property is not a mapped column — the message names it. |
 | `INQ089` | The number of child foreign keys does not match the related entity's key column count. For a **composite** key, also: duplicated names, or a foreign key whose type does not match the key column it is paired with. |
+| `INQ105` | A junction property's `[InquiryForeignKey]` target contradicts the key column it is paired with. |
+| `INQ104` | A junction foreign key stores values differently from the key it references (enum storage or value converter). |
+| `INQ103` (warning) | `JunctionTable`, `JunctionSchema`, `ParentColumn`, or `ChildColumn` is set on the explicit-junction form, where it has no effect. |
+
+Junction foreign keys are named by their **C# property names, matched exactly** — not by column name and not in another casing. Validation and the generated SQL use the same rule, so a property mapped to a column that shares another property's name still resolves to the property you named. When a column name or another casing would have matched, `INQ088` names the property to use.
+
+Suppressing one of these errors does not produce a working join: no eager loader is generated for the relation.
 
 ### Composite-key related entities
 
@@ -117,6 +124,18 @@ public List<Tag> Tags { get; set; } = new();
 ```
 
 The pairing is positional, and both the generated SQL and the in-memory grouping follow it, so a transposed list is a silently wrong join rather than a compile error. `INQ089` rejects a composite pair whose types disagree, which catches most transpositions — but two key columns of the *same* type are indistinguishable, so **order still matters**. These pairing checks apply only to composite keys: with a single-column key there is one position and nothing to transpose, so a foreign key of a different (but comparable) type is accepted, as it always has been.
+
+When a junction property declares its target with `[InquiryForeignKey]`, that target is checked against the position: a property that references `Tags.CategoryId` but sits opposite `TenantId` reports `INQ105`, and so does a parent foreign key that references the related table. Without that metadata the positional contract stands, and names are never compared, so legacy schemas with unrelated column names stay valid.
+
+```csharp
+[InquiryTable("PostTag")]
+public sealed class PostTag
+{
+    [InquiryKey] public long PostId { get; set; }
+    [InquiryKey, InquiryForeignKey(typeof(Tag), nameof(Tag.TenantId))] public int TenantId { get; set; }
+    [InquiryKey, InquiryForeignKey(typeof(Tag), nameof(Tag.CategoryId))] public int CategoryId { get; set; }
+}
+```
 
 Composite keys correlate with a `EXISTS` subquery rather than a row-value `IN`: SQL Server has no row-value constructors, and row values would also impose a SQLite 3.15 floor. The shape is identical on all six providers.
 
@@ -160,6 +179,10 @@ public List<Product> Products { get; set; } = new();
 [InquiryManyToMany(JunctionTable = "order_product", ParentColumn = "product_id", ChildColumn = "order_id")]
 public List<Order> Orders { get; set; } = new();
 ```
+
+These four options apply only to the parameterless form. On the explicit-junction form they have no effect, and each one reports warning `INQ103` at its argument.
+
+Each synthesized column copies the referenced key's type: a bounded string keeps its length, a decimal keeps its precision and scale, and a converter-backed key keeps its converter and provider type.
 
 `INQ090` rejects the cases where a synthesized table would be wrong rather than merely unhelpful: a collision with a mapped entity's table, two sides disagreeing on the shape, a self-referential pair whose columns would collide, and a composite key that one column per side cannot express.
 

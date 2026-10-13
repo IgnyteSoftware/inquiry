@@ -45,6 +45,8 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         _logger = loggerFactory?.CreateLogger("Inquiry.Command") ?? NullLogger.Instance;
     }
 
+    internal bool RecordCommandText => _options.RecordCommandText;
+
     public bool IsActive
         => InquiryTelemetry.ActivitySource.HasListeners()
             || InquiryTelemetry.CommandDuration.Enabled
@@ -63,7 +65,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         {
             DbSystem = InquiryTelemetry.MapDbSystem(context.Command),
             Operation = OperationName(commandText),
-            Table = TableName(commandText),
+            Table = _options.RecordCommandText ? TableName(commandText) : null,
             StartTimestamp = Stopwatch.GetTimestamp(),
         };
 
@@ -140,7 +142,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
 
         _inflight.Remove(context.Command);
         var elapsed = Stopwatch.GetElapsedTime(state.StartTimestamp);
-        var errorType = context.Exception.GetType().FullName ?? context.Exception.GetType().Name;
+        var errorType = InquiryTelemetry.ErrorType(context.Exception);
 
         InquiryTelemetry.CommandDuration.Record(
             elapsed.TotalSeconds,
@@ -150,12 +152,26 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
 
         if (state.Activity is { } activity)
         {
-            activity.SetTag("error.type", errorType);
-            activity.SetStatus(ActivityStatusCode.Error, context.Exception.Message);
+            InquiryTelemetry.SetError(activity, context.Exception, _options.RecordCommandText);
             activity.Dispose();
         }
 
-        Log.Failed(_logger, context.Exception, state.Operation, elapsed.TotalMilliseconds);
+        if (_options.RecordCommandText)
+        {
+            Log.Failed(_logger, context.Exception, state.Operation, elapsed.TotalMilliseconds);
+        }
+        else if (_logger.IsEnabled(LogLevel.Error))
+        {
+            // A logged exception prints its provider message, which can quote SQL names.
+            var cause = InquiryTelemetry.CancellationCause(context.Exception);
+            Log.FailedRedacted(
+                _logger,
+                state.Operation,
+                elapsed.TotalMilliseconds,
+                errorType,
+                cause is null ? null : InquiryTelemetry.ErrorType(cause));
+        }
+
         return ValueTask.CompletedTask;
     }
 
@@ -173,106 +189,233 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
     }
 
     /// <summary>
-    /// Best-effort extraction of the first table name from common SQL patterns.
-    /// Handles INSERT INTO table, UPDATE table, DELETE FROM table, and SELECT ... FROM table.
+    /// Best-effort extraction of the target table from common SQL patterns: <c>INSERT [OR x | IGNORE]
+    /// INTO t</c>, <c>UPDATE [OR x | TOP (n) [PERCENT]] t</c>, <c>DELETE FROM t</c>, and the first
+    /// <c>FROM t</c> of the outer <c>SELECT</c>. Returns the last part of a qualified name.
     /// </summary>
+    /// <remarks>
+    /// Returns <see langword="null"/> for other statements and for shapes it cannot read with
+    /// certainty, such as derived tables, table-valued functions, or unterminated quotes. A missing
+    /// tag is better than a wrong one.
+    /// </remarks>
     internal static string? TableName(string commandText)
     {
-        var sql = commandText.AsSpan().TrimStart();
-        if (sql.Length == 0) return null;
-
-        // Skip leading keyword
+        var sql = commandText.AsSpan();
         var pos = 0;
-        while (pos < sql.Length && char.IsAsciiLetter(sql[pos])) pos++;
-        var keyword = sql[..pos];
+        var keyword = ReadWord(sql, ref pos);
 
         if (keyword.Equals("INSERT", StringComparison.OrdinalIgnoreCase))
         {
-            // INSERT INTO <table>
-            pos = SkipWhitespace(sql, pos);
-            if (pos < sql.Length && sql[pos..].StartsWith("INTO", StringComparison.OrdinalIgnoreCase))
+            if (TryKeyword(sql, ref pos, "OR"))
             {
-                pos += 4;
-                pos = SkipWhitespace(sql, pos);
-                return ExtractIdentifier(sql, pos);
+                if (ReadWord(sql, ref pos).IsEmpty) return null;
             }
-        }
-        else if (keyword.Equals("UPDATE", StringComparison.OrdinalIgnoreCase))
-        {
-            // UPDATE <table>
-            pos = SkipWhitespace(sql, pos);
-            return ExtractIdentifier(sql, pos);
-        }
-        else if (keyword.Equals("DELETE", StringComparison.OrdinalIgnoreCase))
-        {
-            // DELETE FROM <table>
-            pos = SkipWhitespace(sql, pos);
-            if (pos < sql.Length && sql[pos..].StartsWith("FROM", StringComparison.OrdinalIgnoreCase))
+            else
             {
-                pos += 4;
-                pos = SkipWhitespace(sql, pos);
-                return ExtractIdentifier(sql, pos);
+                TryKeyword(sql, ref pos, "IGNORE");
             }
+
+            return TryKeyword(sql, ref pos, "INTO") ? ReadTableName(sql, ref pos) : null;
         }
-        else if (keyword.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
+
+        if (keyword.Equals("UPDATE", StringComparison.OrdinalIgnoreCase))
         {
-            // SELECT ... FROM <table>
-            var fromIndex = sql.IndexOf(" FROM ", StringComparison.OrdinalIgnoreCase);
-            if (fromIndex >= 0)
+            if (TryKeyword(sql, ref pos, "OR"))
             {
-                pos = fromIndex + 6;
-                pos = SkipWhitespace(sql, pos);
-                return ExtractIdentifier(sql, pos);
+                if (ReadWord(sql, ref pos).IsEmpty) return null;
             }
+            else if (TryKeyword(sql, ref pos, "TOP"))
+            {
+                pos = SkipTrivia(sql, pos);
+                if (pos >= sql.Length || sql[pos] != '(') return null;
+                pos = SkipParenthesized(sql, pos);
+                if (pos < 0) return null;
+                TryKeyword(sql, ref pos, "PERCENT");
+            }
+
+            return ReadTableName(sql, ref pos);
+        }
+
+        if (keyword.Equals("DELETE", StringComparison.OrdinalIgnoreCase))
+        {
+            return TryKeyword(sql, ref pos, "FROM") ? ReadTableName(sql, ref pos) : null;
+        }
+
+        if (keyword.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            pos = FindOuterFrom(sql, pos);
+            if (pos < 0) return null;
+            var table = ReadTableName(sql, ref pos);
+
+            // "FROM name(" is a table-valued function, not a table.
+            pos = SkipTrivia(sql, pos);
+            return pos < sql.Length && sql[pos] == '(' ? null : table;
         }
 
         return null;
     }
 
-    private static int SkipWhitespace(ReadOnlySpan<char> sql, int pos)
+    // Returns the position after the first FROM keyword outside parentheses, quotes, and comments,
+    // or -1 when the first statement has none.
+    private static int FindOuterFrom(ReadOnlySpan<char> sql, int pos)
     {
-        while (pos < sql.Length && char.IsWhiteSpace(sql[pos])) pos++;
-        return pos;
+        var depth = 0;
+        while (pos < sql.Length)
+        {
+            var next = SkipTrivia(sql, pos);
+            if (next != pos)
+            {
+                pos = next;
+                continue;
+            }
+
+            var c = sql[pos];
+            if (c is '\'' or '"' or '[' or '`')
+            {
+                pos = SkipDelimited(sql, pos);
+                if (pos < 0) return -1;
+            }
+            else if (IsWordChar(c))
+            {
+                var word = ReadWord(sql, ref pos);
+                if (depth == 0 && word.Equals("FROM", StringComparison.OrdinalIgnoreCase)) return pos;
+            }
+            else
+            {
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+                else if (c == ';' && depth == 0) return -1;
+                pos++;
+            }
+        }
+
+        return -1;
     }
 
-    private static string? ExtractIdentifier(ReadOnlySpan<char> sql, int pos)
+    // Reads a one- or multi-part name and returns its last part, or null when the name is malformed.
+    private static string? ReadTableName(ReadOnlySpan<char> sql, ref int pos)
+    {
+        while (true)
+        {
+            pos = SkipTrivia(sql, pos);
+            var part = ReadNamePart(sql, ref pos);
+            if (part is null) return null;
+
+            var next = SkipTrivia(sql, pos);
+            if (next >= sql.Length || sql[next] != '.') return part;
+            pos = next + 1;
+        }
+    }
+
+    private static string? ReadNamePart(ReadOnlySpan<char> sql, ref int pos)
     {
         if (pos >= sql.Length) return null;
 
-        // Handle quoted identifiers: [table], "table", `table`
-        if (sql[pos] == '[')
+        var open = sql[pos];
+        if (open is '[' or '"' or '`')
         {
-            var end = sql[pos..].IndexOf(']');
-            return end > 1 ? sql.Slice(pos + 1, end - 1).ToString() : null;
+            var end = SkipDelimited(sql, pos);
+            if (end < 0 || end - pos <= 2) return null;
+
+            var close = open == '[' ? ']' : open;
+            var raw = sql[(pos + 1)..(end - 1)].ToString();
+            pos = end;
+            return raw.Replace(new string(close, 2), close.ToString(), StringComparison.Ordinal);
         }
 
-        if (sql[pos] == '"')
-        {
-            var end = sql[(pos + 1)..].IndexOf('"');
-            return end > 0 ? sql.Slice(pos + 1, end).ToString() : null;
-        }
+        var word = ReadWord(sql, ref pos);
+        return word.IsEmpty ? null : word.ToString();
+    }
 
-        if (sql[pos] == '`')
+    // Returns the position after the closing delimiter, or -1 when the quote is not closed.
+    // A doubled closing delimiter is an escape, as in [a]]b], "a""b", and 'it''s'.
+    private static int SkipDelimited(ReadOnlySpan<char> sql, int pos)
+    {
+        var close = sql[pos] == '[' ? ']' : sql[pos];
+        pos++;
+        while (true)
         {
-            var end = sql[(pos + 1)..].IndexOf('`');
-            return end > 0 ? sql.Slice(pos + 1, end).ToString() : null;
-        }
-
-        // Handle schema.table — skip to the table part
-        var start = pos;
-        while (pos < sql.Length && (char.IsAsciiLetterOrDigit(sql[pos]) || sql[pos] == '_'))
-            pos++;
-
-        if (pos < sql.Length && sql[pos] == '.')
-        {
-            // Schema prefix — advance past the dot to the table name
-            pos++;
-            start = pos;
-            while (pos < sql.Length && (char.IsAsciiLetterOrDigit(sql[pos]) || sql[pos] == '_'))
+            var offset = sql[pos..].IndexOf(close);
+            if (offset < 0) return -1;
+            pos += offset + 1;
+            if (pos < sql.Length && sql[pos] == close)
+            {
                 pos++;
+                continue;
+            }
+
+            return pos;
+        }
+    }
+
+    // Returns the position after the parenthesis that closes the one at pos, or -1.
+    private static int SkipParenthesized(ReadOnlySpan<char> sql, int pos)
+    {
+        var depth = 0;
+        while (pos < sql.Length)
+        {
+            var c = sql[pos];
+            if (c is '\'' or '"' or '[' or '`')
+            {
+                pos = SkipDelimited(sql, pos);
+                if (pos < 0) return -1;
+                continue;
+            }
+
+            pos++;
+            if (c == '(') depth++;
+            else if (c == ')' && --depth == 0) return pos;
         }
 
-        return pos > start ? sql[start..pos].ToString() : null;
+        return -1;
+    }
+
+    private static bool TryKeyword(ReadOnlySpan<char> sql, ref int pos, string keyword)
+    {
+        var end = pos;
+        if (!ReadWord(sql, ref end).Equals(keyword, StringComparison.OrdinalIgnoreCase)) return false;
+        pos = end;
+        return true;
+    }
+
+    // Skips whitespace and comments, then reads a whole word. pos moves only when a word is read.
+    private static ReadOnlySpan<char> ReadWord(ReadOnlySpan<char> sql, ref int pos)
+    {
+        var start = SkipTrivia(sql, pos);
+        var end = start;
+        while (end < sql.Length && IsWordChar(sql[end])) end++;
+        if (end == start) return default;
+        pos = end;
+        return sql[start..end];
+    }
+
+    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '$' or '#' or '@';
+
+    private static int SkipTrivia(ReadOnlySpan<char> sql, int pos)
+    {
+        while (pos < sql.Length)
+        {
+            if (char.IsWhiteSpace(sql[pos]))
+            {
+                pos++;
+            }
+            else if (sql[pos..].StartsWith("--", StringComparison.Ordinal))
+            {
+                var end = sql[pos..].IndexOf('\n');
+                pos = end < 0 ? sql.Length : pos + end + 1;
+            }
+            else if (sql[pos..].StartsWith("/*", StringComparison.Ordinal))
+            {
+                var end = sql[(pos + 2)..].IndexOf("*/", StringComparison.Ordinal);
+                pos = end < 0 ? sql.Length : pos + 2 + end + 2;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return pos;
     }
 
     private static class Log
@@ -295,6 +438,18 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
                 new EventId(3, "InquiryCommandFailed"),
                 "Failed {Operation} after {ElapsedMs:0.###} ms");
 
+        private static readonly Action<ILogger, string, double, string, Exception?> FailedRedactedMessage =
+            LoggerMessage.Define<string, double, string>(
+                LogLevel.Error,
+                new EventId(3, "InquiryCommandFailed"),
+                "Failed {Operation} after {ElapsedMs:0.###} ms with {ErrorType}");
+
+        private static readonly Action<ILogger, string, double, string, string, Exception?> FailedRedactedWithCauseMessage =
+            LoggerMessage.Define<string, double, string, string>(
+                LogLevel.Error,
+                new EventId(3, "InquiryCommandFailed"),
+                "Failed {Operation} after {ElapsedMs:0.###} ms with {ErrorType} caused by {CauseType}");
+
         public static void Executing(ILogger logger, string operation, string commandText)
             => ExecutingMessage(logger, operation, commandText, null);
 
@@ -303,5 +458,17 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
 
         public static void Failed(ILogger logger, Exception exception, string operation, double elapsedMs)
             => FailedMessage(logger, operation, elapsedMs, exception);
+
+        public static void FailedRedacted(ILogger logger, string operation, double elapsedMs, string errorType, string? causeType)
+        {
+            if (causeType is null)
+            {
+                FailedRedactedMessage(logger, operation, elapsedMs, errorType, null);
+            }
+            else
+            {
+                FailedRedactedWithCauseMessage(logger, operation, elapsedMs, errorType, causeType, null);
+            }
+        }
     }
 }

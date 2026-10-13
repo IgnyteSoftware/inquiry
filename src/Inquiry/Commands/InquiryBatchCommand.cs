@@ -122,7 +122,12 @@ public readonly struct InquiryBatchCommand<TItem>
     /// <summary>Gets the optional per-chunk set-based eligibility selector.</summary>
     internal Func<IReadOnlyList<TItem>, bool>? UseChunk { get; }
 
-    /// <summary>Gets whether the binding streams the entire source natively, bypassing MaxBatchSize chunking.</summary>
+    /// <summary>Gets whether the whole input forms one chunk, bypassing MaxBatchSize chunking.</summary>
+    /// <remarks>
+    /// An <see cref="IReadOnlyList{T}"/> input reaches the chunk binder as the same instance, without a
+    /// copy. Any other sequence is buffered in full before binding. The current generators do not set
+    /// this flag.
+    /// </remarks>
     internal bool IgnoresMaxBatchSize { get; }
 
     /// <summary>Gets whether <see cref="PreparedStatementMode.Auto"/> may prepare the reused command once for this batch.</summary>

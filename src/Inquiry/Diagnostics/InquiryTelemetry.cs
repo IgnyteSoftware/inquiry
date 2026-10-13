@@ -92,4 +92,55 @@ public static class InquiryTelemetry
         if (commandText is null) return null;
         return InquiryTelemetryInterceptor.TableName(commandText);
     }
+
+    /// <summary>
+    /// Reads <see cref="InquiryTelemetryOptions.RecordCommandText"/> from the registered telemetry
+    /// interceptor. Grid, batch, and bulk spans start outside the interceptor, so they use this to
+    /// apply the same redaction. Without <c>AddInquiryTelemetry()</c> the option default applies.
+    /// </summary>
+    internal static bool RecordsCommandDetails(IEnumerable<Interceptors.IInquiryCommandInterceptor> interceptors)
+    {
+        foreach (var interceptor in interceptors)
+        {
+            if (interceptor is InquiryTelemetryInterceptor telemetry)
+            {
+                return telemetry.RecordCommandText;
+            }
+        }
+
+        return new InquiryTelemetryOptions().RecordCommandText;
+    }
+
+    internal static string ErrorType(Exception exception) => exception.GetType().FullName ?? exception.GetType().Name;
+
+    /// <summary>
+    /// Returns the provider failure that cancellation normalization kept as the inner exception,
+    /// or <see langword="null"/> when the failure is not a wrapped provider error.
+    /// </summary>
+    internal static Exception? CancellationCause(Exception exception)
+        => exception is OperationCanceledException { InnerException: { } cause } && cause is not OperationCanceledException
+            ? cause
+            : null;
+
+    /// <summary>Marks <paramref name="activity"/> failed, applying the command-detail redaction.</summary>
+    internal static void SetError(Activity activity, Exception exception, bool recordDetails)
+    {
+        activity.SetTag("error.type", ErrorType(exception));
+        var cause = CancellationCause(exception);
+        if (cause is not null)
+        {
+            // The outer type stays cancellation so error rates keep their meaning. The cause type
+            // carries no SQL, so it is recorded even when command details are redacted.
+            activity.SetTag("inquiry.error.cause.type", ErrorType(cause));
+        }
+
+        // Provider messages can quote table, column, and constraint names, which is SQL shape.
+        string? description = null;
+        if (recordDetails)
+        {
+            description = cause is null ? exception.Message : exception.Message + " ---> " + cause.Message;
+        }
+
+        activity.SetStatus(ActivityStatusCode.Error, description);
+    }
 }

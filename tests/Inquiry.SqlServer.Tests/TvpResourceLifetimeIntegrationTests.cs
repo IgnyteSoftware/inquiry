@@ -137,6 +137,40 @@ public sealed class TvpResourceLifetimeIntegrationTests
     }
 
     [SkippableFact]
+    public async Task LazyTvpSourceIgnoresMaxBatchSizeAndStreamsInOneCommand()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var interceptor = new CountingExecutingInterceptor();
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(
+            _fixture.AdminConnectionString,
+            Ddl,
+            "tvpmaxbatch",
+            configureServices: services => services.AddSingleton<IInquiryCommandInterceptor>(interceptor),
+            configureOptions: options => options.MaxBatchSize = 1);
+        var started = 0;
+        var disposed = 0;
+
+        Assert.Equal(2, await harness.GetRequiredService<TvpLifetimeStore>().DeleteAllAsync(Ids()));
+
+        Assert.Equal(1, interceptor.ExecutingCount);
+        Assert.Equal(1, started);
+        Assert.Equal(1, disposed);
+
+        IEnumerable<int> Ids()
+        {
+            started++;
+            try
+            {
+                for (var id = 1; id <= 5; id++) yield return id;
+            }
+            finally
+            {
+                disposed++;
+            }
+        }
+    }
+
+    [SkippableFact]
     public async Task AmbientTransactionRollbackReleasesSourceAndRestoresRows()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
@@ -194,6 +228,17 @@ public sealed class TvpResourceLifetimeIntegrationTests
     {
         public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("interceptor failure after TVP binding");
+    }
+
+    private sealed class CountingExecutingInterceptor : IInquiryCommandInterceptor
+    {
+        public int ExecutingCount { get; private set; }
+
+        public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
+        {
+            ExecutingCount++;
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class CancelingExecutingInterceptor : IInquiryCommandInterceptor

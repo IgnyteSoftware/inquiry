@@ -34,6 +34,7 @@ internal sealed class DefaultInquiry : IInquiry
     private readonly IInquiryCommandInterceptor[] _interceptors;
     private readonly IServiceProvider _serviceProvider;
     private readonly InquiryOptions? _options;
+    private readonly bool _recordTelemetryDetails;
 
     // The slot stores a *holder* rather than the pipeline directly. Setting an AsyncLocal
     // value from inside an async callee does not propagate back to the caller (see
@@ -79,6 +80,7 @@ internal sealed class DefaultInquiry : IInquiry
         _interceptors = interceptors?.ToArray() ?? throw new ArgumentNullException(nameof(interceptors));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _options = options;
+        _recordTelemetryDetails = Diagnostics.InquiryTelemetry.RecordsCommandDetails(_interceptors);
     }
 
     private IInquiryRequestPipeline ActivePipeline
@@ -332,7 +334,11 @@ internal sealed class DefaultInquiry : IInquiry
             {
                 activity.SetTag("db.system.name", dbSystem);
                 activity.SetTag("db.operation.name", "BULK_INSERT");
-                activity.SetTag("db.collection.name", table);
+                if (_recordTelemetryDetails)
+                {
+                    activity.SetTag("db.collection.name", table);
+                }
+
                 activity.SetTag("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated");
             }
         }
@@ -357,9 +363,9 @@ internal sealed class DefaultInquiry : IInquiry
         }
     }
 
-    private static void RecordBulkInsertFailure(Activity? activity, long startTimestamp, string dbSystem, bool enlisted, Exception exception)
+    private void RecordBulkInsertFailure(Activity? activity, long startTimestamp, string dbSystem, bool enlisted, Exception exception)
     {
-        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+        var errorType = Diagnostics.InquiryTelemetry.ErrorType(exception);
 
         if (startTimestamp != 0)
         {
@@ -373,10 +379,9 @@ internal sealed class DefaultInquiry : IInquiry
 
         if (activity is not null)
         {
-            activity.SetTag("error.type", errorType);
+            Diagnostics.InquiryTelemetry.SetError(activity, exception, _recordTelemetryDetails);
             if (exception is Inquiry.BulkCopy.InquiryBulkInsertWarningException warning)
                 activity.SetTag("db.response.affected_rows", warning.RowsWritten);
-            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
             activity.Dispose();
         }
     }
