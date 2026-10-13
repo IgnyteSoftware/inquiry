@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `QueryMultipleAsync` and generated eager loads now raise registered command interceptor callbacks, with or without an ambient transaction. `CommandExecutedAsync` runs when the grid reader is disposed; `CommandFailedAsync` runs once when execution or a read fails or is cancelled. Grids still record one `QUERY_MULTIPLE` telemetry span and metric.
 - Eager loading matches `byte[]` relationship keys by value. Separately read rows with equal keys previously returned no related rows.
 - Relationship and junction foreign keys resolve by exact C# property name in validation, SQL and parameter binding. A column name or another casing reports `INQ040` or `INQ088`, which now names the property to use, and no eager loader is generated for the relation even when the error is suppressed. A junction whose column names collide with other property names now joins the named properties.
 - Relationships whose key columns store values differently report `INQ104` instead of compiling a join that matches no rows. This covers an enum stored as text against a numeric column and two different value converters. A converter on one side only, such as a typed ID, is not checked.

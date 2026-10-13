@@ -20,6 +20,8 @@ namespace Inquiry;
 /// Reads use <see cref="System.Data.CommandBehavior.SequentialAccess"/> (generated materializers read each
 /// column once in ascending ordinal order), so a forward-only read of each set is safe. When telemetry is
 /// enabled, the grid span covers the entire reader lifetime — from command execution to disposal.
+/// Registered command interceptors observe the same lifetime: <c>CommandExecutedAsync</c> runs when the
+/// grid is disposed, and <c>CommandFailedAsync</c> runs instead when a read fails.
 /// </remarks>
 public sealed class InquiryGridReader : IAsyncDisposable
 {
@@ -29,13 +31,14 @@ public sealed class InquiryGridReader : IAsyncDisposable
     private readonly IDisposable? _lease;
     private readonly Activity? _activity;
     private readonly long _startTimestamp;
+    private readonly GridCommandInterception? _interception;
     private bool _hasResultSet;
     private bool _disposed;
     private bool _faulted;
     private bool _streaming;
 
     internal InquiryGridReader(DbDataReader reader, DbCommand command, DbConnection? ownedConnection, IDisposable? lease,
-        Activity? activity = null, long startTimestamp = 0)
+        Activity? activity = null, long startTimestamp = 0, GridCommandInterception? interception = null)
     {
         _reader = reader;
         _command = command;
@@ -43,6 +46,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         _lease = lease;
         _activity = activity;
         _startTimestamp = startTimestamp;
+        _interception = interception;
         _hasResultSet = true;
     }
 
@@ -80,7 +84,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            RecordFailure(exception);
+            await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -110,7 +114,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            RecordFailure(exception);
+            await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -140,7 +144,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            RecordFailure(exception);
+            await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -172,7 +176,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            RecordFailure(exception);
+            await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -234,7 +238,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
             }
             catch (Exception exception)
             {
-                RecordFailure(exception);
+                await FailAsync(exception, cancellationToken).ConfigureAwait(false);
                 throw;
             }
 
@@ -247,7 +251,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
             }
             catch (Exception exception)
             {
-                RecordFailure(exception);
+                await FailAsync(exception, cancellationToken).ConfigureAwait(false);
                 throw;
             }
 
@@ -261,7 +265,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            RecordFailure(exception);
+            await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -289,7 +293,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            RecordFailure(exception);
+            await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -314,7 +318,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            RecordFailure(exception);
+            await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -372,6 +376,22 @@ public sealed class InquiryGridReader : IAsyncDisposable
         _disposed = true;
 
         List<Exception>? exceptions = null;
+        if (_interception is { HasFailed: false })
+        {
+            // Disposal ends the grid command, early or not. The reader stays open for these callbacks,
+            // as it does on single-result paths, so interceptors still see a live command. They run
+            // before the span ends, so a throwing callback is recorded as a grid failure.
+            try { await _interception.ExecutedAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch (Exception exception)
+            {
+                exceptions = InquiryCleanup.Add(exceptions, exception);
+                try { RecordFailure(exception); }
+                catch (Exception telemetryException) { exceptions = InquiryCleanup.Add(exceptions, telemetryException); }
+                try { await _interception.FailedAsync(exception, CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception failedException) { exceptions = InquiryCleanup.Add(exceptions, failedException); }
+            }
+        }
+
         try
         {
             if (_startTimestamp != 0)
@@ -389,6 +409,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
             }
         }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+
         try
         {
             await _reader.DisposeAsync().ConfigureAwait(false);
@@ -409,6 +430,26 @@ public sealed class InquiryGridReader : IAsyncDisposable
         try { _lease?.Dispose(); }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
         InquiryCleanup.ThrowIfAny(exceptions);
+    }
+
+    private async ValueTask FailAsync(Exception exception, CancellationToken cancellationToken)
+    {
+        // Telemetry and callback failures must not hide the read failure or skip the failed callbacks.
+        List<Exception>? secondary = null;
+        try { RecordFailure(exception); }
+        catch (Exception telemetryException) { secondary = InquiryCleanup.Add(secondary, telemetryException); }
+        if (_interception is not null)
+        {
+            try { await _interception.FailedAsync(exception, cancellationToken).ConfigureAwait(false); }
+            catch (Exception callbackException) { secondary = InquiryCleanup.Add(secondary, callbackException); }
+        }
+
+        if (secondary is not null)
+        {
+            secondary.Insert(0, exception);
+            throw new AggregateException(
+                "An Inquiry grid read failed and its failure telemetry or command interceptor also failed.", secondary);
+        }
     }
 
     internal void RecordFailure(Exception exception)
