@@ -18,6 +18,9 @@ namespace Inquiry.Entities;
 /// non-collection property is rejected (INQ063). An unmapped junction or related type is INQ087, a
 /// junction property that is not a mapped column is INQ088, foreign keys that do not pair with the
 /// related entity's key are INQ089, and an auto-managed junction that cannot be synthesized is INQ090.
+/// A junction foreign key whose stored representation differs from its key is INQ104, and one whose
+/// <c>[InquiryForeignKey]</c> target contradicts its position is INQ105. Junction property names must
+/// match the C# property names exactly.
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
@@ -36,7 +39,8 @@ public sealed class InquiryManyToManyAttribute : Attribute
     /// same object from either side, so state them identically; <see cref="ParentColumn"/> and
     /// <see cref="ChildColumn"/> are relative to the declaring side, so the reverse navigation states the
     /// two swapped. Each side may declare one navigation — two separate associations between the same
-    /// pair of entities need an explicitly mapped junction.
+    /// pair of entities need an explicitly mapped junction. On the explicit-junction constructor these
+    /// four options have no effect and report warning INQ103.
     /// <para>
     /// Auto-managed junctions are <strong>read-only</strong>: Inquiry emits their DDL and eager-loads
     /// through them, but writing an association still needs a junction row, which only an explicitly
@@ -62,7 +66,9 @@ public sealed class InquiryManyToManyAttribute : Attribute
     /// The pairing is positional, and both the generated SQL and the in-memory grouping follow it, so a
     /// transposed list is a silently wrong join rather than a compile error. Naming a property whose type
     /// does not match the key column opposite it is rejected (INQ089), which catches most transpositions —
-    /// but two key columns of the same type are indistinguishable, so order still matters.
+    /// but two key columns of the same type are indistinguishable, so order still matters. A junction
+    /// property that declares its target with <c>[InquiryForeignKey]</c> is also checked against its
+    /// position (INQ105).
     /// </para>
     /// </param>
     public InquiryManyToManyAttribute(Type junctionEntity, string parentForeignKeyProperty, params string[] childForeignKeyProperties)

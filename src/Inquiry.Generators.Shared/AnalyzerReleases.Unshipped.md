@@ -102,3 +102,6 @@ INQ099 | Inquiry | Error | InquirySet expression is invalid
 INQ100 | Inquiry | Error | Keyset ordering field must be non-nullable
 INQ101 | Inquiry | Error | Managed concurrency token representation is unsupported
 INQ102 | Inquiry | Error | Filter column protection requires write enforcement
+INQ103 | Inquiry | Warning | InquiryManyToMany auto-junction option has no effect on an explicit junction
+INQ104 | Inquiry | Error | Relationship key columns store values differently
+INQ105 | Inquiry | Error | InquiryManyToMany junction foreign key contradicts its declared target
