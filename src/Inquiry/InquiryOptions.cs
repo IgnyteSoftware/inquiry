@@ -77,6 +77,14 @@ public sealed class InquiryOptions
     /// Gets or sets the maximum number of items Inquiry retains and executes in one batch chunk.
     /// Defaults to <see cref="DefaultMaxBatchSize"/>.
     /// </summary>
+    /// <remarks>
+    /// This is a transport sizing bound for entity-collection insert and update batches. It is not an
+    /// application input-size limit: Inquiry splits a larger collection into more chunks and never
+    /// rejects it. Collection parameters that bind as one provider parameter, such as SQL Server
+    /// table-valued parameters for <c>Compare.In</c> and stored-procedure <c>TvpTypeName</c>
+    /// parameters, send the whole collection in one command and ignore this value. Validate input
+    /// size in application code when a limit is required.
+    /// </remarks>
     public int MaxBatchSize
     {
         get => _maxBatchSize;
