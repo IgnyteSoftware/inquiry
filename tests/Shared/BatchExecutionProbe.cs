@@ -12,6 +12,35 @@ internal sealed record FinalizedBatchCommand(string CommandText, object? Metadat
 internal sealed record ExecutedBatchCommand(string CommandText, object? Metadata);
 internal sealed record ExecutedBatch(IReadOnlyList<ExecutedBatchCommand> Commands);
 
+/// <summary>
+/// Records batch, chunk and transaction activity by wrapping the registered
+/// <see cref="IInquiryConnectionFactory"/>, its connections and its batches.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The wrappers hide the concrete provider types. Do not use <see cref="Decorate"/> in tests that
+/// rely on these types:
+/// </para>
+/// <list type="bullet">
+/// <item><description>
+/// Native bulk insert. The SQL Server, PostgreSQL, MySQL and MariaDB bulk copiers require the
+/// concrete provider connection and throw <see cref="InvalidOperationException"/> when they receive
+/// a <see cref="ProbingDbConnection"/>. SQLite and Oracle use the batch-insert fallback, so the
+/// probe does not block them.
+/// </description></item>
+/// <item><description>
+/// Telemetry <c>db.system.name</c> values that come from the connection or the connection factory.
+/// The batch execution activity and the bulk insert activity report <c>other_sql</c> because the
+/// type names do not match a known provider. Command-level telemetry is not affected, because the
+/// inner provider connection creates the commands.
+/// </description></item>
+/// </list>
+/// <para>
+/// Assert native bulk behaviour with the undecorated provider harness, as the provider
+/// <c>BulkInsertIntegrationTests</c> do. Assert telemetry with unwrapped provider connections, as
+/// <c>InquiryTelemetryTests</c> does. Do not add production connection unwrapping for this probe.
+/// </para>
+/// </remarks>
 internal sealed class BatchExecutionProbe
 {
     private readonly object _gate = new();

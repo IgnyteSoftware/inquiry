@@ -1,6 +1,6 @@
 # Stored procedures
 
-Call a stored procedure from an abstract store method by attaching `[InquiryStoredProcedure("usp_Name")]`. The method's parameters become the procedure's IN parameters (with `@`-prefix naming, rewritten to `:name` on Oracle by the connection factory).
+Call a stored procedure from a partial store method by attaching `[InquiryStoredProcedure("usp_Name")]`. The method's parameters, except the trailing `CancellationToken`, become the procedure's IN parameters. Their database names come from the C# parameter names.
 
 ## You write
 
@@ -8,7 +8,7 @@ Call a stored procedure from an abstract store method by attaching `[InquiryStor
 public partial class CustomerStore : InquiryStore<Customer>
 {
     [InquiryStoredProcedure("usp_GetCustomersByCountry")]
-    public partial Task<IReadOnlyList<Customer>> GetByCountryAsync(string country, CancellationToken ct = default);
+    public partial IAsyncEnumerable<Customer> GetByCountryAsync(string country, CancellationToken ct = default);
 
     [InquiryStoredProcedure("usp_GetCustomerByID")]
     public partial Task<Customer?> GetByIDAsync(string id, CancellationToken ct = default);
@@ -28,6 +28,10 @@ public partial class CustomerStore : InquiryStore<Customer>
 | `Task<TScalar>` + `OutputParameter`/`ReturnsValue` | Read-back scalar (see below) |
 | `Task<TScalar>` + `[InquiryParameter(IsInputOutput = true)]` | INOUT read-back (see below) |
 | `Task<(IReadOnlyList<A>, IReadOnlyList<B>, …)>` | Multiple typed result sets (see below) |
+
+A single buffered `Task<IReadOnlyList<TEntity>>` is not a supported procedure shape today. It reports
+`INQ005`. Stream the rows with `IAsyncEnumerable<TEntity>`, or use the tuple form for two or more
+result sets.
 
 SELECT results, affected rows, RETURN status, and OUTPUT values are different channels. For example,
 SQL Server's NOCOUNT behavior can make the affected-row result -1. Neither a positive count nor a
@@ -132,7 +136,7 @@ SQL Server stored procedures can accept `IEnumerable<T>` parameters as TVPs. Ann
 
 ```csharp
 [InquiryStoredProcedure("usp_BulkLookup")]
-partial Task<int> BulkLookupAsync(
+public partial Task<int> BulkLookupAsync(
     [InquiryParameter(TvpTypeName = "[dbo].[IntList]")] IEnumerable<int> ids,
     CancellationToken cancellationToken = default);
 ```
@@ -142,3 +146,27 @@ The generator resolves the element type's physical SQL Server mapping at compile
 Omitting `TvpTypeName` on a collection parameter reports `INQ086`. Non-SQL Server providers do not currently support TVP parameters on stored procedures.
 
 ## Limitations (today)
+
+- **Row types.** A single result set maps to the store's entity type. Each tuple element must be a
+  mapped entity; otherwise the method reports `INQ051`. `[InquiryAdHoc]` DTOs are not accepted as
+  procedure rows. To read a procedure into a DTO today, call it through `IInquiry` with an
+  `InquiryCommand` that uses `CommandType.StoredProcedure`.
+- **Column order.** Rows map by ordinal, in the entity's property order. Column names in the
+  procedure's SELECT are not checked, so the procedure must return its columns in that order.
+- **One channel per method.** A method returns rows, an affected-row count, or one scalar read-back
+  (OUTPUT, RETURN, or INOUT). Rows cannot combine with a read-back (`INQ051`).
+- **No buffered single list.** `Task<IReadOnlyList<TEntity>>` reports `INQ005`. A tuple needs at
+  least two result sets.
+- **Parameter names.** Database parameter names come from the C# names. No attribute overrides
+  them. The Oracle result-set wrapper passes arguments by position.
+- **TVPs.** Table-valued parameters work on SQL Server only (`INQ086` elsewhere).
+- **No provider check.** The generator does not check that the database supports stored
+  procedures. A SQLite store accepts the declaration even though SQLite has no procedures.
+- **Live coverage.** This repository runs live procedure tests on SQL Server and Oracle. Other
+  providers have no live procedure tests.
+- **Deployment.** Inquiry does not create or validate procedures. Deploy them with your migrations.
+  A changed result schema shows up when rows are read.
+
+The [1.0 decision record](../../develop/api-contract-decisions.md#423-typed-procedure-results-and-parameters)
+describes the planned additions: buffered lists, DTO rows, combined results, and parameter-name
+overrides.

@@ -5,6 +5,7 @@ using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using System.Runtime.ExceptionServices;
 
 namespace Inquiry.PostgreSql.Tests.Fixtures;
 
@@ -44,60 +45,105 @@ internal sealed class PostgreSqlTestHarness : IAsyncDisposable
     {
         var prefix = (namePrefix ?? "inquiry").ToLowerInvariant();
         var databaseName = prefix + "_" + Guid.NewGuid().ToString("N");
+        var wasCreated = false;
 
-        await using (var admin = new NpgsqlConnection(adminConnectionString))
+        try
         {
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            // Identifier quoted so PostgreSQL preserves casing exactly; PostgreSQL identifiers
-            // are otherwise folded to lowercase.
-            cmd.CommandText = $"CREATE DATABASE \"{databaseName}\";";
-            await cmd.ExecuteNonQueryAsync();
+            await using (var admin = new NpgsqlConnection(adminConnectionString))
+            {
+                await admin.OpenAsync();
+                await using var cmd = admin.CreateCommand();
+                // Identifier quoted so PostgreSQL preserves casing exactly; PostgreSQL identifiers
+                // are otherwise folded to lowercase.
+                cmd.CommandText = $"CREATE DATABASE \"{databaseName}\";";
+                await cmd.ExecuteNonQueryAsync();
+                wasCreated = true;
+            }
+
+            var connectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
+            {
+                Database = databaseName,
+            }.ToString();
+
+            await using (var db = new NpgsqlConnection(connectionString))
+            {
+                await db.OpenAsync();
+                await using var cmd = db.CreateCommand();
+                cmd.CommandText = ddl;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            var serviceCollection = new ServiceCollection();
+            if (configureOptions is null)
+                serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+            else
+                serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+            serviceCollection.AddInquiryPostgreSql(connectionString);
+            configureServices?.Invoke(serviceCollection);
+            var services = serviceCollection.BuildServiceProvider();
+
+            return new PostgreSqlTestHarness(adminConnectionString, databaseName, connectionString, services);
         }
-
-        var connectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
+        catch (Exception setupException) when (wasCreated)
         {
-            Database = databaseName,
-        }.ToString();
+            NpgsqlConnection.ClearAllPools();
+            try
+            {
+                await DropDatabaseAsync(adminConnectionString, databaseName);
+            }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    $"PostgreSQL test database '{databaseName}' setup and cleanup both failed.",
+                    setupException,
+                    cleanupException);
+            }
 
-        await using (var db = new NpgsqlConnection(connectionString))
-        {
-            await db.OpenAsync();
-            await using var cmd = db.CreateCommand();
-            cmd.CommandText = ddl;
-            await cmd.ExecuteNonQueryAsync();
+            throw;
         }
-
-        var serviceCollection = new ServiceCollection();
-        if (configureOptions is null)
-            serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
-        else
-            serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
-        serviceCollection.AddInquiryPostgreSql(connectionString);
-        configureServices?.Invoke(serviceCollection);
-        var services = serviceCollection.BuildServiceProvider();
-
-        return new PostgreSqlTestHarness(adminConnectionString, databaseName, connectionString, services);
     }
 
     public async ValueTask DisposeAsync()
     {
-        await Services.DisposeAsync();
+        Exception? serviceFailure = null;
+        try
+        {
+            await Services.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            serviceFailure = ex;
+        }
 
         // Force-close pooled connections so DROP DATABASE doesn't fail with "database in use".
         NpgsqlConnection.ClearAllPools();
 
         try
         {
-            await using var admin = new NpgsqlConnection(_adminConnectionString);
-            await admin.OpenAsync();
-            await using var cmd = admin.CreateCommand();
-            cmd.CommandText = $"DROP DATABASE IF EXISTS \"{_databaseName}\" WITH (FORCE);";
-            await cmd.ExecuteNonQueryAsync();
+            await DropDatabaseAsync(_adminConnectionString, _databaseName);
+        }
+        catch (Exception cleanupException) when (serviceFailure is not null)
+        {
+            throw new AggregateException(
+                $"PostgreSQL test database '{_databaseName}' service disposal and cleanup both failed.",
+                serviceFailure,
+                cleanupException);
         }
         catch
         {
             // Best-effort cleanup. Don't fail the test on teardown.
         }
+
+        if (serviceFailure is not null)
+            ExceptionDispatchInfo.Throw(serviceFailure);
+    }
+
+    private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)
+    {
+        await using var admin = new NpgsqlConnection(adminConnectionString);
+        await admin.OpenAsync();
+        await using var cmd = admin.CreateCommand();
+        cmd.CommandText = $"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE);";
+        await cmd.ExecuteNonQueryAsync();
     }
 }

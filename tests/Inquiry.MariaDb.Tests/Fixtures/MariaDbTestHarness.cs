@@ -5,6 +5,7 @@ using Inquiry.Northwind;
 using Inquiry.Northwind.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using MySqlConnector;
+using System.Runtime.ExceptionServices;
 
 namespace Inquiry.MariaDb.Tests.Fixtures;
 
@@ -110,7 +111,15 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await Services.DisposeAsync();
+        Exception? serviceFailure = null;
+        try
+        {
+            await Services.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            serviceFailure = ex;
+        }
 
         // Force-close pooled connections so DROP DATABASE doesn't fail with "database in use".
         MySqlConnection.ClearAllPools();
@@ -119,10 +128,20 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
         {
             await DropDatabaseAsync(_adminConnectionString, _databaseName);
         }
+        catch (Exception cleanupException) when (serviceFailure is not null)
+        {
+            throw new AggregateException(
+                $"MariaDB test database '{_databaseName}' service disposal and cleanup both failed.",
+                serviceFailure,
+                cleanupException);
+        }
         catch
         {
             // Best-effort cleanup. Don't fail the test on teardown.
         }
+
+        if (serviceFailure is not null)
+            ExceptionDispatchInfo.Throw(serviceFailure);
     }
 
     private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)
