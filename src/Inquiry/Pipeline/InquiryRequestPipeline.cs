@@ -57,6 +57,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     private readonly int _defaultCommandTimeoutSeconds;
     private readonly int _maxBatchSize;
     private readonly int _maxParametersPerCommand;
+    private readonly bool _recordTelemetryDetails;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryRequestPipeline"/> class.
@@ -86,6 +87,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             : 0;
         _maxBatchSize = options?.MaxBatchSize ?? InquiryOptions.DefaultMaxBatchSize;
         _maxParametersPerCommand = options?.MaxParametersPerCommand ?? InquiryOptions.DefaultMaxParametersPerCommand;
+        _recordTelemetryDetails = InquiryTelemetry.RecordsCommandDetails(_interceptors);
     }
 
     private bool HasInterceptors => _interceptors.Length > 0;
@@ -169,9 +171,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         return (activity, startTimestamp);
     }
 
-    private static void RecordGridFailure(Activity? activity, DbCommand? dbCommand, long startTimestamp, Exception exception)
+    private void RecordGridFailure(Activity? activity, DbCommand? dbCommand, long startTimestamp, Exception exception)
     {
-        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+        var errorType = InquiryTelemetry.ErrorType(exception);
 
         if (startTimestamp != 0 && dbCommand is not null)
         {
@@ -184,13 +186,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
         if (activity is not null)
         {
-            activity.SetTag("error.type", errorType);
-            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            InquiryTelemetry.SetError(activity, exception, _recordTelemetryDetails);
             activity.Dispose();
         }
     }
 
-    private static (Activity? activity, long startTimestamp, string dbSystem) StartBatchActivity(
+    private (Activity? activity, long startTimestamp, string dbSystem) StartBatchActivity(
         DbConnection connection, string? commandText)
     {
         if (!InquiryTelemetry.ActivitySource.HasListeners() && !InquiryTelemetry.CommandDuration.Enabled)
@@ -206,7 +207,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             {
                 activity.SetTag("db.system.name", dbSystem);
                 activity.SetTag("db.operation.name", "EXECUTE_BATCH");
-                var table = InquiryTelemetry.ExtractTableName(commandText);
+                var table = _recordTelemetryDetails ? InquiryTelemetry.ExtractTableName(commandText) : null;
                 if (table is not null)
                 {
                     activity.SetTag("db.collection.name", table);
@@ -233,9 +234,9 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
-    private static void RecordBatchFailure(Activity? activity, long startTimestamp, string dbSystem, Exception exception)
+    private void RecordBatchFailure(Activity? activity, long startTimestamp, string dbSystem, Exception exception)
     {
-        var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+        var errorType = InquiryTelemetry.ErrorType(exception);
 
         if (startTimestamp != 0)
         {
@@ -248,8 +249,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
         if (activity is not null)
         {
-            activity.SetTag("error.type", errorType);
-            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            InquiryTelemetry.SetError(activity, exception, _recordTelemetryDetails);
             activity.Dispose();
         }
     }
@@ -502,7 +502,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
             var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null,
-                activity, startTimestamp, interception);
+                activity, startTimestamp, _recordTelemetryDetails, interception);
             activity = null;
             return grid;
         }
@@ -584,7 +584,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             reader = await dbCommand.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false);
             var grid = new InquiryGridReader(reader, dbCommand, ownedConnection: connection, lease: null,
-                activity, startTimestamp, interception);
+                activity, startTimestamp, _recordTelemetryDetails, interception);
             activity = null;
             return grid;
         }
