@@ -46,7 +46,7 @@ internal static class EntityProcessor
 
         var columns = DiscoverColumns(entitySymbol, compilation, diagnostics);
         RemoveDuplicateColumns(columns, entitySymbol.Name, location, diagnostics);
-        var relations = DiscoverRelations(entitySymbol, cancellationToken);
+        var relations = DiscoverRelations(entitySymbol, diagnostics, cancellationToken);
         var indexes = DiscoverIndexes(entitySymbol, columns, diagnostics);
         var checks = DiscoverChecks(entitySymbol);
 
@@ -1213,7 +1213,8 @@ internal static class EntityProcessor
         return property.Name;
     }
 
-    private static List<RelationData> DiscoverRelations(INamedTypeSymbol entitySymbol, CancellationToken cancellationToken)
+    private static List<RelationData> DiscoverRelations(
+        INamedTypeSymbol entitySymbol, ImmutableArray<DiagnosticData>.Builder diagnostics, CancellationToken cancellationToken)
     {
         var relations = new List<RelationData>();
 
@@ -1248,6 +1249,20 @@ internal static class EntityProcessor
                         AutoChildColumn = GeneratorHelpers.GetNamedString(manyToManyAttribute, "ChildColumn"),
                     });
                     continue;
+                }
+
+                // The explicit form ignores the auto-junction options, as their contract states. Report
+                // each one at its own argument, so a user who expected it to rename something sees why not.
+                foreach (var argument in manyToManyAttribute.NamedArguments)
+                {
+                    if (argument.Key is "JunctionTable" or "JunctionSchema" or "ParentColumn" or "ChildColumn")
+                    {
+                        diagnostics.Add(new DiagnosticData(
+                            InquiryDiagnosticDescriptors.ManyToManyAutoJunctionOptionIgnored,
+                            GetNamedArgumentLocation(manyToManyAttribute, argument.Key)
+                                ?? LocationData.From(property.Locations.FirstOrDefault()),
+                            new EquatableArray<string>(ImmutableArray.Create(entitySymbol.Name, property.Name, argument.Key))));
+                    }
                 }
 
                 var childFks = GetJunctionChildForeignKeys(manyToManyAttribute);

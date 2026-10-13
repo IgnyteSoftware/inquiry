@@ -2,6 +2,8 @@
 
 `IInquiryCommandInterceptor` is the pipeline's cross-cutting seam: implementations see every command at four points — `CommandInitializedAsync` (text + parameters applied), `CommandExecutingAsync` (immediately before execution; the `DbCommand` is still mutable), `CommandExecutedAsync`, and `CommandFailedAsync`. Register any number as singleton `IInquiryCommandInterceptor` services; they run in registration order.
 
+Multi-result commands (`QueryMultipleAsync` and generated eager loads) raise the same callbacks, inside or outside a transaction. `CommandExecutedAsync` runs when the `InquiryGridReader` is disposed, even if some result sets were not read. `CommandFailedAsync` runs instead, once, when execution or any grid read fails or is cancelled. The built-in telemetry interceptor is not called for grids, because the grid records its own `QUERY_MULTIPLE` span and duration metric.
+
 The core ships the seam only. **`Inquiry.Interceptors`** is the opt-in companion package with ready-made implementations:
 
 ## Slow-query warning logging

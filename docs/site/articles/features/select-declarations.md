@@ -86,6 +86,120 @@ last namePattern. nameof protects mapped field names, not parameter binding. Bet
 parameters, IN consumes a collection, and IS NULL consumes none. Do not reorder criteria independently
 of their parameters. Explicit parameter binding is separate work, not a feature of this convention.
 
+## All, unassigned, or one category
+
+A search form often offers three category choices: all categories, products with no category, and
+one category. One nullable argument cannot carry all three. With `Optional = true`, null disables
+the criterion. Null does not mean `CategoryID IS NULL`.
+
+Declare two methods. The first covers "all" and "one category". The second covers "unassigned":
+
+```csharp
+[InquirySelectAllByPredicate(
+    OrderBy = nameof(Product.ProductName) + " ASC, " + nameof(Product.ProductID) + " ASC")]
+[InquiryWhere(nameof(Product.CategoryID), Optional = true)]
+public partial Task<IReadOnlyList<Product>> ByCategoryAsync(
+    int? categoryId, CancellationToken ct = default);
+
+[InquirySelectAllByPredicate(
+    OrderBy = nameof(Product.ProductName) + " ASC, " + nameof(Product.ProductID) + " ASC")]
+[InquiryWhere(nameof(Product.CategoryID), Compare.IsNull)]
+public partial Task<IReadOnlyList<Product>> UnassignedAsync(CancellationToken ct = default);
+```
+
+Let the application own the three-state choice and select the method:
+
+```csharp
+public enum CategoryMode { Any, Unassigned, Specific }
+
+public readonly record struct CategoryFilter(CategoryMode Mode, int CategoryId = 0)
+{
+    public static CategoryFilter Any => new(CategoryMode.Any);
+    public static CategoryFilter Unassigned => new(CategoryMode.Unassigned);
+    public static CategoryFilter EqualTo(int categoryId) => new(CategoryMode.Specific, categoryId);
+}
+
+public static class ProductSearch
+{
+    public static Task<IReadOnlyList<Product>> SearchAsync(
+        ProductStore store, CategoryFilter filter, CancellationToken ct = default)
+        => filter.Mode switch
+        {
+            CategoryMode.Any => store.ByCategoryAsync(null, ct),
+            CategoryMode.Specific => store.ByCategoryAsync(filter.CategoryId, ct),
+            CategoryMode.Unassigned => store.UnassignedAsync(ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(filter)),
+        };
+}
+```
+
+Only null disables an optional criterion. `false` and `0` are values and filter for that value. An
+empty string is a value on every provider except Oracle. Oracle treats an empty string as NULL, so
+`""` disables an optional string criterion there. Each method keeps one constant SQL shape. Add other criteria, ordering, and paging
+to both declarations in the same way. Each extra choice multiplies the declarations, so keep the
+set of choices small. Inquiry has no built-in filter type for this; the
+[decision record](../../develop/api-contract-decisions.md#425-absent-null-and-value-states-for-optional-filters)
+explains why.
+
+## User-selected sorting
+
+`OrderBy` is fixed when the store compiles. To let users sort a grid, declare one method per allowed
+order and select one in application code. Never place user input in SQL as an identifier.
+
+```csharp
+public enum ProductSort { Name, NameDescending, Price, PriceDescending }
+
+public partial class ProductStore
+{
+    [InquirySelectAll(OrderBy = "ProductName ASC, ProductID ASC", Paged = true)]
+    public partial Task<IReadOnlyList<Product>> PageByNameAsync(
+        int offset, int limit, CancellationToken ct = default);
+
+    [InquirySelectAll(OrderBy = "ProductName DESC, ProductID DESC", Paged = true)]
+    public partial Task<IReadOnlyList<Product>> PageByNameDescendingAsync(
+        int offset, int limit, CancellationToken ct = default);
+
+    [InquirySelectAll(OrderBy = "UnitPrice ASC, ProductID ASC", Paged = true)]
+    public partial Task<IReadOnlyList<Product>> PageByPriceAsync(
+        int offset, int limit, CancellationToken ct = default);
+
+    [InquirySelectAll(OrderBy = "UnitPrice DESC, ProductID DESC", Paged = true)]
+    public partial Task<IReadOnlyList<Product>> PageByPriceDescendingAsync(
+        int offset, int limit, CancellationToken ct = default);
+}
+
+public static class ProductGrid
+{
+    public static Task<IReadOnlyList<Product>> PageAsync(
+        ProductStore store, ProductSort sort, int offset, int limit, CancellationToken ct = default)
+        => sort switch
+        {
+            ProductSort.Name => store.PageByNameAsync(offset, limit, ct),
+            ProductSort.NameDescending => store.PageByNameDescendingAsync(offset, limit, ct),
+            ProductSort.Price => store.PageByPriceAsync(offset, limit, ct),
+            ProductSort.PriceDescending => store.PageByPriceDescendingAsync(offset, limit, ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(sort), sort, "Unsupported sort order."),
+        };
+}
+```
+
+Parse the request value into `ProductSort` at the application boundary. `Enum.TryParse` also
+accepts undefined numbers, such as `"42"`; the switch rejects them before any database call.
+
+- **Tie-breaker.** End each order with a unique column, here `ProductID`. Without it, rows with equal
+  names or prices can move between pages.
+- **Null values.** `OrderBy` accepts only `ASC` and `DESC` (`INQ042` for `NULLS FIRST`). Where nulls
+  sort depends on the provider. Sort on a non-nullable column, or write SQL, when null placement
+  must be the same on every provider.
+- **Filters.** Put the same criteria on every sort method. Sorting and the category choice above
+  multiply: four orders and two category methods need eight declarations.
+- **Offset paging.** When the user changes the order or a filter, start again at offset 0. An old
+  offset points into a different row sequence.
+- **Keyset paging.** Declare one `InquiryKeysetPage` method per order. Keyset columns must be
+  non-nullable and share one direction. Keyset methods take no `InquiryWhere` criteria, so a grid
+  with user filters uses offset paging. A cursor belongs to one order. When the order changes,
+  start again with a null cursor.
+
 ## Comparison with a proposed unified attribute
 
 The following is a proposal only. InquirySelect does not exist in the current packages:

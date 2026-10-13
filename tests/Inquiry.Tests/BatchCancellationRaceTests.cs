@@ -2,6 +2,7 @@ using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
+using Inquiry.Tests.Shared;
 using Microsoft.Data.Sqlite;
 using System.Data;
 using System.Data.Common;
@@ -206,6 +207,223 @@ public sealed class BatchCancellationRaceTests
         Assert.Equal(0, await CountItemsAsync(keeper));
     }
 
+    [Fact]
+    public async Task DbBatchLyingSuccessOnFinalBatchSurfacesCallerTokenAndRollsBack()
+    {
+        // The lie lands on the last DbBatch, so only the chunk reader's final MoveNext stands between
+        // it and the commit. The first batch would stay visible if the rollback failed.
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        using var cts = new CancellationTokenSource();
+        var factory = new LyingSuccessConnectionFactory(connectionString, cts, lieOnExecute: 2,
+            executionMode: InquiryBatchExecutionMode.DbBatch);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = 2 });
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline.ExecuteBatchAsync(
+            InsertSql, Items(4), static (target, item) => BindItem(target, item), cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Equal(2, factory.BatchExecuteCount);
+        Assert.Empty(factory.ExecutedCommandTexts);
+        AssertCleanedUp(factory);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task DbBatchForeignTokenCancellationIsReassociatedWithCallerToken()
+    {
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        using var cts = new CancellationTokenSource();
+        var factory = new LyingSuccessConnectionFactory(connectionString, cts, lieOnExecute: 2,
+            executionMode: InquiryBatchExecutionMode.DbBatch, throwForeignCancellation: true);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = 2 });
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline.ExecuteBatchAsync(
+            InsertSql, Items(4), static (target, item) => BindItem(target, item), cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        var driverException = Assert.IsType<OperationCanceledException>(exception.InnerException);
+        Assert.NotEqual(cts.Token, driverException.CancellationToken);
+        AssertCleanedUp(factory);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task LazySourceDbBatchLyingSuccessStopsReadingAndDisposesSource()
+    {
+        // A non-IReadOnlyList source is buffered one chunk at a time. After the lie on the first
+        // batch, the reader must throw before it pulls another item from the source.
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        using var cts = new CancellationTokenSource();
+        var factory = new LyingSuccessConnectionFactory(connectionString, cts, lieOnExecute: 1,
+            executionMode: InquiryBatchExecutionMode.DbBatch);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = 2 });
+        var source = new SinglePassCancellingEnumerable<(int Id, string Name)>(Items(6), cts, cancelAtMoveNext: int.MaxValue);
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline.ExecuteBatchAsync(
+            new InquiryBatchCommand<(int Id, string Name)>(InsertSql, static (target, item) => BindItem(target, item)),
+            source, cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Equal(1, factory.BatchExecuteCount);
+        Assert.Equal(2, source.MoveNextCount);
+        Assert.Equal(1, source.DisposeCount);
+        AssertCleanedUp(factory);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Theory]
+    [InlineData(InquiryBatchExecutionMode.DbBatch, false, 1)]
+    [InlineData(InquiryBatchExecutionMode.ReusedCommand, false, 2)]
+    [InlineData(InquiryBatchExecutionMode.DbBatch, true, 1)]
+    public async Task LazySourceCancelledBetweenChunksSurfacesCallerTokenAndRollsBack(
+        InquiryBatchExecutionMode executionMode, bool selectable, int expectedExecutes)
+    {
+        // The source cancels while the reader fills the second chunk, after the first chunk has
+        // executed. No second chunk may execute, and the first chunk must roll back.
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        using var cts = new CancellationTokenSource();
+        var factory = new LyingSuccessConnectionFactory(connectionString, cts, lieOnExecute: int.MaxValue,
+            executionMode: executionMode);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = 2 });
+        var source = new SinglePassCancellingEnumerable<(int Id, string Name)>(Items(6), cts, cancelAtMoveNext: 3);
+        var command = selectable
+            ? SelectableCommand(static _ => true)
+            : new InquiryBatchCommand<(int Id, string Name)>(InsertSql, static (target, item) => BindItem(target, item));
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline.ExecuteBatchAsync(
+            command, source, cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Equal(expectedExecutes, factory.ExecuteCount);
+        Assert.Equal(3, source.MoveNextCount);
+        Assert.Equal(1, source.DisposeCount);
+        AssertCleanedUp(factory);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task SelectableSetBasedChunkLyingSuccessSurfacesCallerTokenAndRollsBack()
+    {
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        using var cts = new CancellationTokenSource();
+        var factory = new LyingSuccessConnectionFactory(connectionString, cts, lieOnExecute: 2);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = 2 });
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline.ExecuteBatchAsync(
+            SelectableCommand(static _ => true), Items(4), cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Equal(new[] { CreateInsertText(2), CreateInsertText(2) }, factory.ExecutedCommandTexts);
+        AssertCleanedUp(factory);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task SelectableRowFallbackDbBatchLyingSuccessSurfacesCallerTokenAndRollsBack()
+    {
+        // UseChunk declines every chunk, so each chunk falls back to a single-chunk DbBatch.
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        using var cts = new CancellationTokenSource();
+        var factory = new LyingSuccessConnectionFactory(connectionString, cts, lieOnExecute: 2,
+            executionMode: InquiryBatchExecutionMode.DbBatch);
+        var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>(),
+            new InquiryOptions { MaxBatchSize = 2 });
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline.ExecuteBatchAsync(
+            SelectableCommand(static _ => false), Items(4), cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Equal(2, factory.BatchExecuteCount);
+        Assert.Empty(factory.ExecutedCommandTexts);
+        AssertCleanedUp(factory);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task SelectableInterceptedChunkLyingSuccessSurfacesCallerTokenAndRollsBack()
+    {
+        // An active interceptor routes set-based chunks through the pipeline's whole-chunk lambda.
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        using var cts = new CancellationTokenSource();
+        var factory = new LyingSuccessConnectionFactory(connectionString, cts, lieOnExecute: 2);
+        var interceptor = new RouteWitnessInterceptor();
+        var pipeline = new InquiryRequestPipeline(factory, new IInquiryCommandInterceptor[] { interceptor },
+            new InquiryOptions { MaxBatchSize = 2 });
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline.ExecuteBatchAsync(
+            SelectableCommand(static _ => true), Items(4), cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Equal(2, interceptor.ExecutingCount);
+        Assert.Equal(new[] { CreateInsertText(2), CreateInsertText(2) }, factory.ExecutedCommandTexts);
+        AssertCleanedUp(factory);
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    [Fact]
+    public async Task TransactedSelectableLyingSuccessLeavesOutcomeToCallerTransaction()
+    {
+        // The first chunk runs set-based and the second runs as a DbBatch that lies. Inside a
+        // caller-owned transaction the batch must throw but must not roll back: the written rows
+        // stay pending until the caller decides.
+        var (connectionString, keeper) = await CreateDatabaseAsync();
+        await using var _ = keeper;
+        using var cts = new CancellationTokenSource();
+        var factory = new LyingSuccessConnectionFactory(connectionString, cts, lieOnExecute: 2,
+            executionMode: InquiryBatchExecutionMode.DbBatch);
+
+        await using var connection = await factory.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        var pipeline = new TransactedInquiryRequestPipeline(
+            connection, transaction, Array.Empty<IInquiryCommandInterceptor>(), factory,
+            new InquiryOptions { MaxBatchSize = 2 });
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pipeline.ExecuteBatchAsync(
+            SelectableCommand(static chunk => chunk[0].Id == 1), Items(4), cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Equal(new[] { CreateInsertText(2) }, factory.ExecutedCommandTexts);
+        Assert.Equal(1, factory.BatchExecuteCount);
+        Assert.Equal(factory.BatchCreateCount, factory.BatchDisposeCount);
+        await using (var count = connection.CreateCommand())
+        {
+            count.Transaction = transaction;
+            count.CommandText = "SELECT COUNT(*) FROM Items";
+            Assert.Equal(4, Convert.ToInt32(await count.ExecuteScalarAsync()));
+        }
+
+        await transaction.RollbackAsync();
+        Assert.Equal(0, await CountItemsAsync(keeper));
+    }
+
+    private const string InsertSql = "INSERT INTO Items (Id, Name) VALUES (@id, @name)";
+
+    private static (int Id, string Name)[] Items(int count)
+        => Enumerable.Range(1, count).Select(static i => (i, "Item" + i)).ToArray();
+
+    private static InquiryBatchCommand<(int Id, string Name)> SelectableCommand(
+        Func<IReadOnlyList<(int Id, string Name)>, bool> useChunk)
+        => new(InsertSql, static (target, item) => BindItem(target, item), CreateInsertText, BindChunk, useChunk,
+            parametersPerItem: 2);
+
+    private static void AssertCleanedUp(LyingSuccessConnectionFactory factory)
+    {
+        Assert.Equal(0, factory.OpenConnectionCount);
+        Assert.Equal(factory.BatchCreateCount, factory.BatchDisposeCount);
+    }
+
     private static string CreateInsertText(int itemCount)
     {
         var values = Enumerable.Range(0, itemCount).Select(i => $"(@id{i}, @name{i})");
@@ -300,7 +518,12 @@ public sealed class BatchCancellationRaceTests
         private readonly bool _throwNativeError;
         private readonly bool _cancelBeforeFailing;
         private readonly bool _lieOnCommit;
+        private readonly bool _throwForeignCancellation;
         private int _executeCount;
+        private int _batchExecuteCount;
+        private int _openConnectionCount;
+        private int _batchCreateCount;
+        private int _batchDisposeCount;
 
         internal LyingSuccessConnectionFactory(
             string connectionString,
@@ -308,7 +531,9 @@ public sealed class BatchCancellationRaceTests
             int lieOnExecute,
             bool throwNativeError = false,
             bool cancelBeforeFailing = true,
-            bool lieOnCommit = false)
+            bool lieOnCommit = false,
+            InquiryBatchExecutionMode executionMode = InquiryBatchExecutionMode.ReusedCommand,
+            bool throwForeignCancellation = false)
         {
             _connectionString = connectionString;
             _cancellation = cancellation;
@@ -316,22 +541,51 @@ public sealed class BatchCancellationRaceTests
             _throwNativeError = throwNativeError;
             _cancelBeforeFailing = cancelBeforeFailing;
             _lieOnCommit = lieOnCommit;
+            BatchExecutionMode = executionMode;
+            _throwForeignCancellation = throwForeignCancellation;
         }
 
         internal bool LieOnCommit => _lieOnCommit;
 
+        // Microsoft.Data.Sqlite has no DbBatch, so the fake supplies one in DbBatch mode.
+        internal bool CanCreateBatch => BatchExecutionMode == InquiryBatchExecutionMode.DbBatch;
+
+        internal int ExecuteCount => Volatile.Read(ref _executeCount);
+        internal int BatchExecuteCount => Volatile.Read(ref _batchExecuteCount);
+        internal int OpenConnectionCount => Volatile.Read(ref _openConnectionCount);
+        internal int BatchCreateCount => Volatile.Read(ref _batchCreateCount);
+        internal int BatchDisposeCount => Volatile.Read(ref _batchDisposeCount);
+        internal List<string> ExecutedCommandTexts { get; } = new();
+
         internal void CancelNow() => _cancellation.Cancel();
 
-        public InquiryBatchExecutionMode BatchExecutionMode => InquiryBatchExecutionMode.ReusedCommand;
+        public InquiryBatchExecutionMode BatchExecutionMode { get; }
 
         public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
         {
             var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync(cancellationToken);
+            Interlocked.Increment(ref _openConnectionCount);
             return new LyingConnection(connection, this);
         }
 
-        internal async Task<int> ExecuteAsync(SqliteCommand inner)
+        internal void RecordConnectionClosed() => Interlocked.Decrement(ref _openConnectionCount);
+        internal void RecordBatchCreated() => Interlocked.Increment(ref _batchCreateCount);
+        internal void RecordBatchDisposed() => Interlocked.Increment(ref _batchDisposeCount);
+
+        internal Task<int> ExecuteAsync(SqliteCommand inner)
+        {
+            ExecutedCommandTexts.Add(inner.CommandText);
+            return ExecuteAsync(() => inner.ExecuteNonQueryAsync(CancellationToken.None));
+        }
+
+        internal Task<int> ExecuteBatchAsync(Func<Task<int>> execute)
+        {
+            Interlocked.Increment(ref _batchExecuteCount);
+            return ExecuteAsync(execute);
+        }
+
+        private async Task<int> ExecuteAsync(Func<Task<int>> execute)
         {
             // The token is deliberately NOT forwarded to SQLite: the faked driver "does the work"
             // regardless, exactly like a KILL-interrupted MySQL SLEEP reporting success.
@@ -341,9 +595,13 @@ public sealed class BatchCancellationRaceTests
                 if (_cancelBeforeFailing) _cancellation.Cancel();
                 if (_throwNativeError)
                     throw new InvalidOperationException("A severe error occurred on the current command.");
+                // A driver that observes cancellation through its own linked or timeout token throws
+                // an OCE that does not carry the caller's token.
+                if (_throwForeignCancellation)
+                    throw new OperationCanceledException("Driver-side cancellation.", new CancellationToken(canceled: true));
             }
 
-            return await inner.ExecuteNonQueryAsync(CancellationToken.None);
+            return await execute();
         }
     }
 
@@ -352,12 +610,15 @@ public sealed class BatchCancellationRaceTests
         private readonly SqliteConnection _inner;
         private readonly LyingSuccessConnectionFactory _factory;
 
+        private int _disposed;
+
         internal LyingConnection(SqliteConnection inner, LyingSuccessConnectionFactory factory)
         {
             _inner = inner;
             _factory = factory;
         }
 
+        public override bool CanCreateBatch => _factory.CanCreateBatch;
         [AllowNull]
         public override string ConnectionString { get => _inner.ConnectionString; set => _inner.ConnectionString = value; }
         public override string Database => _inner.Database;
@@ -378,15 +639,29 @@ public sealed class BatchCancellationRaceTests
 
         protected override DbCommand CreateDbCommand() => new LyingCommand(_inner.CreateCommand(), _factory);
 
+        protected override DbBatch CreateDbBatch()
+        {
+            _factory.RecordBatchCreated();
+            return new LyingBatch(_inner, _factory);
+        }
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing && Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                _inner.Dispose();
+                _factory.RecordConnectionClosed();
+            }
             base.Dispose(disposing);
         }
 
         public override async ValueTask DisposeAsync()
         {
-            await _inner.DisposeAsync();
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                await _inner.DisposeAsync();
+                _factory.RecordConnectionClosed();
+            }
             GC.SuppressFinalize(this);
         }
     }
@@ -491,5 +766,106 @@ public sealed class BatchCancellationRaceTests
             await _inner.DisposeAsync();
             GC.SuppressFinalize(this);
         }
+    }
+
+    /// <summary>
+    /// A DbBatch over real SQLite commands. One batch execute counts as one execute for the lie index,
+    /// so the lying success lands on a whole batch, the way a provider DbBatch reports it.
+    /// </summary>
+    private sealed class LyingBatch : DbBatch
+    {
+        private readonly SqliteConnection _connection;
+        private readonly LyingSuccessConnectionFactory _factory;
+        private readonly LyingBatchCommandCollection _commands = new();
+        private DbTransaction? _transaction;
+        private int _disposed;
+
+        internal LyingBatch(SqliteConnection connection, LyingSuccessConnectionFactory factory)
+        {
+            _connection = connection;
+            _factory = factory;
+        }
+
+        public override int Timeout { get; set; }
+        protected override DbBatchCommandCollection DbBatchCommands => _commands;
+        protected override DbConnection? DbConnection { get => _connection; set => throw new NotSupportedException(); }
+        protected override DbTransaction? DbTransaction { get => _transaction; set => _transaction = value; }
+
+        public override void Cancel() { }
+        public override int ExecuteNonQuery() => throw new NotSupportedException();
+        public override object? ExecuteScalar() => throw new NotSupportedException();
+        public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public override void Prepare() { }
+        public override Task PrepareAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        protected override DbBatchCommand CreateDbBatchCommand() => new LyingBatchCommand(_connection.CreateCommand());
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
+        protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
+            CommandBehavior behavior, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
+            => _factory.ExecuteBatchAsync(async () =>
+            {
+                var transaction = _transaction is LyingTransaction lying ? lying.Inner : (SqliteTransaction?)_transaction;
+                var total = 0;
+                foreach (LyingBatchCommand command in _commands)
+                {
+                    command.Inner.Transaction = transaction;
+                    total += await command.Inner.ExecuteNonQueryAsync(CancellationToken.None);
+                }
+
+                return total;
+            });
+
+        public override void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                foreach (LyingBatchCommand command in _commands) command.Inner.Dispose();
+                _factory.RecordBatchDisposed();
+            }
+            base.Dispose();
+        }
+
+        public override ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class LyingBatchCommand : DbBatchCommand
+    {
+        internal LyingBatchCommand(SqliteCommand inner) => Inner = inner;
+
+        internal SqliteCommand Inner { get; }
+
+        public override bool CanCreateParameter => true;
+        [AllowNull]
+        public override string CommandText { get => Inner.CommandText; set => Inner.CommandText = value; }
+        public override CommandType CommandType { get => Inner.CommandType; set => Inner.CommandType = value; }
+        public override int RecordsAffected => 0;
+        protected override DbParameterCollection DbParameterCollection => Inner.Parameters;
+        public override DbParameter CreateParameter() => Inner.CreateParameter();
+    }
+
+    private sealed class LyingBatchCommandCollection : DbBatchCommandCollection
+    {
+        private readonly List<DbBatchCommand> _items = new();
+
+        public override int Count => _items.Count;
+        public override bool IsReadOnly => false;
+        public override void Add(DbBatchCommand item) => _items.Add(item);
+        public override void Clear() => _items.Clear();
+        public override bool Contains(DbBatchCommand item) => _items.Contains(item);
+        public override void CopyTo(DbBatchCommand[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
+        public override IEnumerator<DbBatchCommand> GetEnumerator() => _items.GetEnumerator();
+        public override int IndexOf(DbBatchCommand item) => _items.IndexOf(item);
+        public override void Insert(int index, DbBatchCommand item) => _items.Insert(index, item);
+        public override bool Remove(DbBatchCommand item) => _items.Remove(item);
+        public override void RemoveAt(int index) => _items.RemoveAt(index);
+        protected override DbBatchCommand GetBatchCommand(int index) => _items[index];
+        protected override void SetBatchCommand(int index, DbBatchCommand batchCommand) => _items[index] = batchCommand;
     }
 }

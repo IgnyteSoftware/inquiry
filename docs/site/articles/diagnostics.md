@@ -534,7 +534,7 @@ Trigger: A relation names an unmapped foreign-key property.
 
 Failing shape: InquiryRelation references "MissingForeignKey".
 
-Smallest correction: Name the actual mapped FK on the correct side, preferably with nameof.
+Smallest correction: Name the actual mapped FK property on the correct side, preferably with nameof. The name must match the C# property exactly; a column name or another casing does not match, and the message names the property to use.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L679).
 
@@ -1110,7 +1110,7 @@ Trigger: A many-to-many child FK name is not a mapped junction column.
 
 Failing shape: ChildForeignKeys names an unannotated junction property.
 
-Smallest correction: Name a junction property carrying InquiryColumn or InquiryKey, using nameof.
+Smallest correction: Name a junction property carrying InquiryColumn or InquiryKey, using nameof. The name must match the C# property exactly; a column name or another casing does not match.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L479).
 
@@ -1279,5 +1279,41 @@ Trigger: `PreventReassignment = true` appears without a valid global filter and 
 Failing shape: `[InquiryGlobalFilter(PreventReassignment = true)]` omits write enforcement.
 
 Smallest correction: Enable write enforcement on a valid filter, or remove column protection. Inserts still retain caller-supplied values. See [global filters](features/global-filters.md).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ103
+
+InquiryManyToMany auto-junction option has no effect on an explicit junction. Default: warning, enabled.
+
+Trigger: `JunctionTable`, `JunctionSchema`, `ParentColumn`, or `ChildColumn` is set on the explicit-junction constructor. The warning points at that argument.
+
+Failing shape: `[InquiryManyToMany(typeof(OrderProduct), "OrderId", "ProductId", JunctionTable = "legacy_links")]`.
+
+Smallest correction: Remove the option and map the table and columns on the junction entity, or use the parameterless form to let Inquiry create the junction. See [many-to-many](features/many-to-many.md#auto-managed-junctions).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ104
+
+Relationship key columns store values differently. Default: error, enabled.
+
+Trigger: A relation joins a foreign key to a key whose stored representation differs: an enum stored as text against a numeric column, or two different value converters. A converter on one side only is not checked.
+
+Failing shape: A junction property with `[InquiryEnumAsString]` paired with a numeric enum key.
+
+Smallest correction: Map both columns with the same value converter and enum storage. Joining across different converters is not supported. See [eager loading](features/eager-loading.md#relation-validation).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ105
+
+InquiryManyToMany junction foreign key contradicts its declared target. Default: error, enabled.
+
+Trigger: A junction property's `[InquiryForeignKey]` target names a different key column than the one its position pairs it with, or names the other side's table.
+
+Failing shape: Child foreign keys listed as `CategoryId, TenantId` when `CategoryId` declares a foreign key to `Tags.CategoryId` and the related key order is `TenantId, CategoryId`.
+
+Smallest correction: List the child foreign-key properties in the related entity's key-declaration order, or correct the `[InquiryForeignKey]` target. See [many-to-many](features/many-to-many.md#composite-key-related-entities).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

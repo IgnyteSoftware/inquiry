@@ -12,6 +12,7 @@ public sealed class InquiryRelationAttribute : Attribute
     /// </summary>
     /// <param name="foreignKeyProperty">
     /// The property name on the child entity that holds the foreign key reference back to this entity's key.
+    /// It must match the C# property name exactly; the column name and other casings do not match (INQ040).
     /// </param>
     public InquiryRelationAttribute(string foreignKeyProperty)
     {

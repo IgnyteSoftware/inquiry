@@ -40,6 +40,50 @@ overload, helper name, or optimization. Let the generator select those calls. Us
 runtime/provider packages and rebuild consumers when upgrading; copying generated source is not a
 substitute for running the matching generator.
 
+## Grid reader callbacks
+
+InquiryGridReader reads the result sets of one command, in order. QueryMultipleAsync returns it.
+Its hidden members ReadRowsAsync, ReadForEachAsync, ReadStreamAsync, and
+ReadGeneratedSingleOrDefaultAsync are public only because generated stores in your assembly call
+them. They are generated support, not application API. For example, a generated many-to-many eager
+load uses ReadRowsAsync to read junction key columns without creating a junction object.
+
+ReadRowsAsync passes the grid's own DbDataReader to its callback, positioned on the current row. The
+grid keeps ownership of that reader. A callback must:
+
+- Read the current row only.
+- Read each column at most once, in ascending ordinal order. The grid opens the reader with
+  SequentialAccess.
+- Finish its work before it returns. The callback is synchronous; do not start work that uses the
+  reader later.
+
+A callback must not:
+
+- Call Read, NextResult, or their async forms.
+- Close or dispose the reader, or dispose the grid.
+- Keep the reader, or a stream or text reader obtained from it, after it returns.
+- Call another member of the same grid.
+- Start another Inquiry operation on the same transaction. While a transacted grid is open, it holds
+  the transaction's single in-flight operation, and the new operation throws
+  InvalidOperationException.
+
+The grid does not detect a callback that breaks these rules. If the callback calls Read, the grid
+skips a row. If it calls NextResult, the grid reads the next result set as if it were the current
+one, then skips the set after it. Neither case reports an error. If the callback closes the reader,
+the grid's next read fails with the provider's exception.
+
+ReadForEachAsync passes a materialized object, not the reader, so its callback may keep that object.
+The same synchronous and no-reentry rules apply.
+
+An exception from a callback, a materializer, or the provider propagates to the caller. The reader
+stays inside the current result set. The grid blocks further reads only after an unfinished
+ReadStreamAsync. After any other failure, the next read would continue from the middle of the set.
+Dispose the grid after an exception instead of reading on. Generated stores do this with await using.
+
+Generated code follows these rules, so the grid adds no per-row guard or wrapper reader. A guard
+would add work to every eager-load row without a supported application caller to protect. A new
+public raw-row API would need its own decision.
+
 ## Default fallbacks are not production guarantees
 
 | Member family | Custom implementation default | Built-in runtime |

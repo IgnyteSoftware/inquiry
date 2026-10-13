@@ -473,7 +473,8 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             InquiryDiagnosticDescriptors.UnknownRelationForeignKey, location,
-                            entity.Name, relation.PropertyName, relation.ForeignKeyProperty, owner.Name));
+                            entity.Name, relation.PropertyName, relation.ForeignKeyProperty, owner.Name,
+                            DescribeNearMiss(owner, relation.ForeignKeyProperty)));
                     }
                 }
 
@@ -483,26 +484,61 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                         InquiryDiagnosticDescriptors.RelationCompositeChildKey, location,
                         entity.Name, relation.PropertyName, child.Name, child.Keys.Count));
                 }
+                else if (StoreProcessor.FindKeyStorageMismatch(entity, relation, child, junction: null) is { } mismatch)
+                {
+                    context.ReportDiagnostic(CreateKeyStorageMismatch(location, entity, relation, mismatch));
+                }
             }
         }
     }
 
     private static ColumnData? FindEntityColumn(EntityData entity, string propertyName)
+        => StoreProcessor.FindRelationColumn(entity, propertyName);
+
+    /// <summary>
+    /// The trailing sentence of INQ040 and INQ088. When a column name or a different casing would have
+    /// matched, the message names the property to use, because the relation needs the exact property name.
+    /// </summary>
+    private static string DescribeNearMiss(EntityData entity, string name)
     {
-        foreach (var column in entity.Columns.AsImmutableArray())
+        // A property match wins over a column match: when one property is mapped to another property's
+        // name, the column match would suggest the wrong property.
+        var columns = entity.Columns.AsImmutableArray();
+        var match = columns.FirstOrDefault(column => string.Equals(column.PropertyName, name, StringComparison.OrdinalIgnoreCase))
+            ?? columns.FirstOrDefault(column => string.Equals(column.ColumnName, name, StringComparison.OrdinalIgnoreCase));
+        return match is null
+            ? string.Empty
+            : $"Foreign keys are matched by exact property name, not by column name or another casing: use '{match.PropertyName}'.";
+    }
+
+    private static Diagnostic CreateKeyStorageMismatch(
+        Location? location, EntityData entity, RelationData relation, StoreProcessor.RelationKeyPair pair)
+        => Diagnostic.Create(
+            InquiryDiagnosticDescriptors.RelationKeyStorageMismatch, location,
+            entity.Name, relation.PropertyName,
+            pair.ForeignKeyOwner.Name + "." + pair.ForeignKey.PropertyName, DescribeKeyStorage(pair.ForeignKey),
+            pair.KeyOwner.Name + "." + pair.Key.PropertyName, DescribeKeyStorage(pair.Key));
+
+    private static string DescribeKeyStorage(ColumnData column)
+    {
+        if (column.Converter is { } converter)
         {
-            if (column.PropertyName == propertyName)
-            {
-                return column;
-            }
+            var name = converter.ConverterTypeDisplay;
+            return "converter " + (name.StartsWith("global::", StringComparison.Ordinal) ? name.Substring("global::".Length) : name);
         }
 
-        return null;
+        if (column.EnumAsString)
+        {
+            return "enum stored as text";
+        }
+
+        return column.Type.IsEnum ? "enum stored as a number" : "no converter";
     }
 
     /// <summary>
     /// Returns the diagnostic describing why a many-to-many relation is unusable, or <see langword="null"/>
-    /// when it is valid. Checks run outermost-first — shape, then resolvability, then pairing — so the
+    /// when it is valid. Checks run outermost-first — shape, then resolvability, then pairing, then declared
+    /// targets and stored representation — so the
     /// reported reason is the one a user has to fix first rather than a downstream consequence of it.
     /// </summary>
     private static Diagnostic? DescribeManyToManyFailure(
@@ -547,7 +583,8 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         {
             return Diagnostic.Create(
                 InquiryDiagnosticDescriptors.ManyToManyForeignKeyNotMapped, location,
-                entity.Name, relation.PropertyName, parentForeignKey, junction.Name);
+                entity.Name, relation.PropertyName, parentForeignKey, junction.Name,
+                DescribeNearMiss(junction, parentForeignKey));
         }
 
         // An unresolvable child foreign-key name is a naming problem, not a pairing one, so it reports
@@ -558,12 +595,13 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             {
                 return Diagnostic.Create(
                     InquiryDiagnosticDescriptors.ManyToManyForeignKeyNotMapped, location,
-                    entity.Name, relation.PropertyName, name, junction.Name);
+                    entity.Name, relation.PropertyName, name, junction.Name,
+                    DescribeNearMiss(junction, name));
             }
         }
 
         if (!StoreProcessor.JunctionForeignKeysPairWithChildKeys(
-                junction, child, relation.JunctionChildForeignKeyProperties, FindEntityColumn))
+                junction, child, relation.JunctionChildForeignKeyProperties))
         {
             var named = relation.JunctionChildForeignKeyProperties.Count;
             return Diagnostic.Create(
@@ -572,6 +610,18 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 named, named == 1 ? "y" : "ies",
                 child.Name, child.Keys.Count, child.Keys.Count == 1 ? string.Empty : "s",
                 DescribePairing(junction, child, relation.JunctionChildForeignKeyProperties));
+        }
+
+        if (StoreProcessor.DescribeJunctionTargetConflict(entity, relation, junction, child) is { } conflict)
+        {
+            return Diagnostic.Create(
+                InquiryDiagnosticDescriptors.ManyToManyForeignKeyTargetConflict, location,
+                entity.Name, relation.PropertyName, conflict);
+        }
+
+        if (StoreProcessor.FindKeyStorageMismatch(entity, relation, child, junction) is { } mismatch)
+        {
+            return CreateKeyStorageMismatch(location, entity, relation, mismatch);
         }
 
         return null;
@@ -613,7 +663,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         {
             for (var j = i + 1; j < foreignKeyNames.Count; j++)
             {
-                if (string.Equals(foreignKeyNames[i], foreignKeyNames[j], StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(foreignKeyNames[i], foreignKeyNames[j], StringComparison.Ordinal))
                 {
                     return $"'{foreignKeyNames[i]}' is named more than once.";
                 }
