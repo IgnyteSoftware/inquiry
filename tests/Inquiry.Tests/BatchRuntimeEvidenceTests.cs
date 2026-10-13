@@ -332,6 +332,90 @@ public sealed class BatchRuntimeEvidenceTests
         Assert.Equal(new[] { 1000, 1 }, state.InitializedChunkSizes);
     }
 
+    [Fact]
+    public async Task WholeSourceDescriptorIgnoresMaxBatchSizeAndBindsListWithoutCopy()
+    {
+        var items = new[] { 1, 2, 3, 4, 5 };
+        var chunkedState = new RecordingState();
+        var wholeSourceState = new RecordingState();
+        IReadOnlyList<int>? boundSource = null;
+
+        Assert.Equal(5, await CreatePipeline(chunkedState, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 2)
+            .ExecuteBatchAsync(WholeSourceCommand(ignoresMaxBatchSize: false, _ => { }), items));
+        Assert.Equal(5, await CreatePipeline(wholeSourceState, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 2)
+            .ExecuteBatchAsync(WholeSourceCommand(ignoresMaxBatchSize: true, chunk => boundSource = chunk), items));
+
+        Assert.Equal(new[] { 2, 2, 1 }, chunkedState.InitializedChunkSizes);
+        Assert.Equal(new[] { 5 }, wholeSourceState.InitializedChunkSizes);
+        Assert.Equal(1, wholeSourceState.CommandExecuteCount);
+        Assert.Same(items, boundSource);
+    }
+
+    [Fact]
+    public async Task WholeSourceDescriptorBuffersLazySourceBeforeBindingAndDisposesItOnce()
+    {
+        var state = new RecordingState();
+        var produced = 0;
+        var disposed = 0;
+        var producedAtBind = -1;
+
+        Assert.Equal(5, await CreatePipeline(state, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 2)
+            .ExecuteBatchAsync(WholeSourceCommand(ignoresMaxBatchSize: true, _ => producedAtBind = produced), Source()));
+
+        Assert.Equal(5, producedAtBind);
+        Assert.Equal(new[] { 5 }, state.InitializedChunkSizes);
+        Assert.Equal(1, disposed);
+
+        IEnumerable<int> Source()
+        {
+            try
+            {
+                for (var i = 1; i <= 5; i++)
+                {
+                    produced++;
+                    yield return i;
+                }
+            }
+            finally
+            {
+                disposed++;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WholeSourceDescriptorCancellationWhileBufferingExecutesNothingAndDisposesSourceOnce()
+    {
+        var state = new RecordingState();
+        using var cancellation = new CancellationTokenSource();
+        var disposed = 0;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CreatePipeline(state, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 2)
+                .ExecuteBatchAsync(WholeSourceCommand(ignoresMaxBatchSize: true, _ => { }), Source(), cancellation.Token));
+
+        Assert.Equal(0, state.CommandCreateCount);
+        Assert.Equal(0, state.CommandExecuteCount);
+        Assert.Equal(0, state.TransactionCommitCount);
+        Assert.Equal(1, disposed);
+
+        IEnumerable<int> Source()
+        {
+            try
+            {
+                for (var i = 1; i <= 5; i++)
+                {
+                    if (i == 4) cancellation.Cancel();
+                    yield return i;
+                }
+            }
+            finally
+            {
+                disposed++;
+            }
+        }
+    }
+
     [Theory]
     [InlineData(200, true)]
     [InlineData(201, false)]
@@ -478,6 +562,17 @@ public sealed class BatchRuntimeEvidenceTests
                 PrepareStatements = prepare ? PreparedStatementMode.Auto : PreparedStatementMode.None,
             });
     }
+
+    private static InquiryBatchCommand<int> WholeSourceCommand(bool ignoresMaxBatchSize, Action<IReadOnlyList<int>> onBind)
+        => new(
+            static count => "native-work-" + count,
+            (command, items) =>
+            {
+                onBind(items);
+                ((RecordingCommand)command).AffectedRows = items.Count;
+            },
+            parametersPerItem: 0,
+            ignoresMaxBatchSize: ignoresMaxBatchSize);
 
     private static InquiryBatchCommand<int> RowCommand()
         => new("work", static (target, item) =>
