@@ -83,11 +83,20 @@ internal static class StoreProcessor
         var overloadedNames = new HashSet<string>(
             methods.GroupBy(static m => m.Name, StringComparer.Ordinal).Where(static g => g.Count() > 1).Select(static g => g.Key),
             StringComparer.Ordinal);
+        var takenNames = new HashSet<string>(methods.Select(static m => m.Name), StringComparer.Ordinal);
         for (var i = 0; i < methods.Count; i++)
         {
             if (overloadedNames.Contains(methods[i].Name))
             {
-                methods[i] = methods[i] with { MemberName = methods[i].Name + "_" + StoreOperationEmitter.SignatureHash(methods[i]) };
+                var memberName = methods[i].Name + "_" + StoreOperationEmitter.SignatureHash(methods[i]);
+                // A declared method may literally carry the hashed form of a sibling's name; probe
+                // until the member name is free of every declared name and every name assigned so far.
+                while (!takenNames.Add(memberName))
+                {
+                    memberName += "_";
+                }
+
+                methods[i] = methods[i] with { MemberName = memberName };
             }
         }
 
