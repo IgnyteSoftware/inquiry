@@ -45,6 +45,13 @@ internal sealed record StoreMethodData(
     ProcedureReturnKind ProcedureReturn,
     LocationData? Location)
 {
+    /// <summary>
+    /// Identifier-safe name for this method's generated members (SQL consts, descriptors, lookup
+    /// keys). Equals <see cref="Name"/> unless the store overloads the name; then a signature hash
+    /// is appended so overloads never share or shadow each other's generated members.
+    /// </summary>
+    public string MemberName { get; init; } = Name;
+
     /// <summary>The defining partial declaration's XML documentation, including its member wrapper.</summary>
     public string? DocumentationXml { get; init; }
 

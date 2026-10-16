@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Store methods that share a name now get generated SQL constants and per-method lookups keyed by their full signature. A key lookup overloaded with an unfiltered, distinct, locked, or filter-bypassing select previously ran that sibling's `SELECT`-all query and returned a row for a missing key.
+
 - Native bulk insert disposes its dedicated connection when a telemetry listener throws after the connection opens. A failed open now records `connection.open_failed` with `error.type` instead of `connection.opened`, and keeps the open error.
 - `RecordCommandText = false` now also redacts provider error messages from span status descriptions and `Error` logs, and drops `db.collection.name`, on command, grid, batch, bulk-insert, and transaction routes. Exception types stay recorded.
 - `db.collection.name` reports the table for bracketed, double-quoted, backtick-quoted, escaped, and two- or three-part names. It handles newlines, tabs, and comments around keywords, uses the outer `SELECT`'s `FROM`, and recognizes `INSERT OR …`, `INSERT IGNORE`, `UPDATE OR …`, and `UPDATE TOP (n)`. Derived tables, table-valued functions, and unsupported shapes get no tag instead of a wrong one.

@@ -78,6 +78,28 @@ internal static class StoreProcessor
             }
         }
 
+        // Overloads share a Name. Generated member names and the per-method lookup maps key off
+        // MemberName so a key lookup can never pick up a sibling overload's SELECT-all const (#287).
+        var overloadedNames = new HashSet<string>(
+            methods.GroupBy(static m => m.Name, StringComparer.Ordinal).Where(static g => g.Count() > 1).Select(static g => g.Key),
+            StringComparer.Ordinal);
+        var takenNames = new HashSet<string>(methods.Select(static m => m.Name), StringComparer.Ordinal);
+        for (var i = 0; i < methods.Count; i++)
+        {
+            if (overloadedNames.Contains(methods[i].Name))
+            {
+                var memberName = methods[i].Name + "_" + StoreOperationEmitter.SignatureHash(methods[i]);
+                // A declared method may literally carry the hashed form of a sibling's name; probe
+                // until the member name is free of every declared name and every name assigned so far.
+                while (!takenNames.Add(memberName))
+                {
+                    memberName += "_";
+                }
+
+                methods[i] = methods[i] with { MemberName = memberName };
+            }
+        }
+
         return new StoreData(
             Name: storeSymbol.Name,
             HintName: GeneratorHelpers.GetHintName(storeSymbol, "InquiryStore"),
@@ -1450,7 +1472,7 @@ internal static class StoreProcessor
                 continue;
             }
 
-            projectionMethods[m.Name] = projection;
+            projectionMethods[m.MemberName] = projection;
         }
 
         if (valid.Count == 0)
@@ -1607,7 +1629,7 @@ internal static class StoreProcessor
                     }
                     continue;
                 }
-                var fieldName = "_sprocTvp_" + item.Method.Name + "_" + p.Name;
+                var fieldName = "_sprocTvp_" + item.Method.MemberName + "_" + p.Name;
                 if (!sprocTvpResolutions.TryGetValue(item.Method, out var dict))
                 {
                     dict = new Dictionary<string, (ProcedureTvpResolution, string)>();
@@ -1769,7 +1791,7 @@ internal static class StoreProcessor
             .Where(static item => item.Method.Operation == StoreOperation.DeleteAll)
             .Select(static item => item.Method))
         {
-            AppendSql("_sqlDeleteAll_" + deleteAllMethod.Name, hasSoftDelete && !deleteAllMethod.HardDelete
+            AppendSql("_sqlDeleteAll_" + deleteAllMethod.MemberName, hasSoftDelete && !deleteAllMethod.HardDelete
                 ? sqlBuilder.BuildSoftDeleteAllSql(ctx)
                 : sqlBuilder.BuildDeleteAllSql(ctx));
         }
@@ -1829,13 +1851,13 @@ internal static class StoreProcessor
                 if (method.LockMode != 0)
                 {
                     var lockError = TryApplyLockClause(ref predSql, sqlBuilder, CtxFor(method), method);
-                    if (lockError is not null) { lockErrors[method.Name] = lockError; continue; }
+                    if (lockError is not null) { lockErrors[method.MemberName] = lockError; continue; }
                 }
-                AppendSql("_sqlPredicate_" + method.Name, predSql);
+                AppendSql("_sqlPredicate_" + method.MemberName, predSql);
             }
             else if (method.Operation == StoreOperation.Exists && predicatePlan is not null)
             {
-                AppendSql("_sqlExists_" + method.Name, sqlBuilder.BuildExistsSql(CtxFor(method), predicatePlan.Predicates));
+                AppendSql("_sqlExists_" + method.MemberName, sqlBuilder.BuildExistsSql(CtxFor(method), predicatePlan.Predicates));
             }
         }
 
@@ -1851,13 +1873,13 @@ internal static class StoreProcessor
 
             if (method.Operation == StoreOperation.UpdateByPredicate)
             {
-                AppendSql("_sqlUpdateWhere_" + method.Name, predicatePlan.SetAssignments.Count > 0
+                AppendSql("_sqlUpdateWhere_" + method.MemberName, predicatePlan.SetAssignments.Count > 0
                     ? sqlBuilder.BuildUpdateByPredicateSql(ctx, predicatePlan.SetAssignments, predicatePlan.Predicates)
                     : sqlBuilder.BuildUpdateByPredicateSql(ctx, ToColumnList(fieldColumns), predicatePlan.Predicates));
             }
             else if (method.Operation == StoreOperation.DeleteByPredicate)
             {
-                AppendSql("_sqlDeleteWhere_" + method.Name, hasSoftDelete && !method.HardDelete
+                AppendSql("_sqlDeleteWhere_" + method.MemberName, hasSoftDelete && !method.HardDelete
                     ? sqlBuilder.BuildSoftDeleteByPredicateSql(ctx, predicatePlan.Predicates)
                     : sqlBuilder.BuildDeleteByPredicateSql(ctx, predicatePlan.Predicates));
             }
@@ -1868,18 +1890,18 @@ internal static class StoreProcessor
             if (method.Operation == StoreOperation.Aggregate)
             {
                 var aggColumn = FindColumn(entity, method.AggregateColumn!)!;
-                AppendSql("_sqlAgg_" + method.Name, sqlBuilder.BuildAggregateSql(
+                AppendSql("_sqlAgg_" + method.MemberName, sqlBuilder.BuildAggregateSql(
                     CtxFor(method), method.AggregateFunction!, sqlBuilder.QuoteIdentifier(aggColumn.ColumnName), aggregatePredicatePlan!.Predicates));
             }
             else if (method.Operation == StoreOperation.SelectTopByOrder)
             {
                 var orderColumn = FindColumn(entity, method.TopByOrderColumn!)!;
-                AppendSql("_sqlTop_" + method.Name, sqlBuilder.BuildSelectTopByOrderSql(CtxFor(method), sqlBuilder.QuoteIdentifier(orderColumn.ColumnName), method.TopByOrderDescending));
+                AppendSql("_sqlTop_" + method.MemberName, sqlBuilder.BuildSelectTopByOrderSql(CtxFor(method), sqlBuilder.QuoteIdentifier(orderColumn.ColumnName), method.TopByOrderDescending));
             }
             else if (method.Operation == StoreOperation.GroupCount)
             {
                 var groupColumn = FindColumn(entity, method.GroupCountColumn!)!;
-                AppendSql("_sqlGroupCount_" + method.Name, sqlBuilder.BuildGroupCountSql(CtxFor(method), sqlBuilder.QuoteIdentifier(groupColumn.ColumnName)));
+                AppendSql("_sqlGroupCount_" + method.MemberName, sqlBuilder.BuildGroupCountSql(CtxFor(method), sqlBuilder.QuoteIdentifier(groupColumn.ColumnName)));
             }
         }
 
@@ -1887,7 +1909,7 @@ internal static class StoreProcessor
         {
             if (method.Operation == StoreOperation.FullTextSearch)
             {
-                AppendSql("_sqlFts_" + method.Name, sqlBuilder.BuildFullTextSearchSql(CtxFor(method), fieldColumns));
+                AppendSql("_sqlFts_" + method.MemberName, sqlBuilder.BuildFullTextSearchSql(CtxFor(method), fieldColumns));
             }
         }
 
@@ -1901,7 +1923,7 @@ internal static class StoreProcessor
                 // composing the entity's active-row filter (soft-delete suppressed for IncludeDeleted)
                 // just like a non-projection select — the projection columns don't carry those
                 // indicator/filter columns, so pass them explicitly.
-                var planCtx = projectionMethods.TryGetValue(method.Name, out var projForPlan)
+                var planCtx = projectionMethods.TryGetValue(method.MemberName, out var projForPlan)
                     ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns),
                         suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
                         softDeletePredicateColumn: entity.SoftDeleteColumn,
@@ -1912,7 +1934,7 @@ internal static class StoreProcessor
                 if (method.LockMode != 0)
                 {
                     var lockError = TryApplyLockClause(ref planSql, sqlBuilder, planCtx, method);
-                    if (lockError is not null) { lockErrors[method.Name] = lockError; continue; }
+                    if (lockError is not null) { lockErrors[method.MemberName] = lockError; continue; }
                 }
                 AppendSql(selectPlan.SqlFieldName, planSql);
 
@@ -1926,7 +1948,7 @@ internal static class StoreProcessor
 
                 if (method.ReturnsPagedResult)
                 {
-                    AppendSql("_sqlCount_" + method.Name, plannedPredicates is not null
+                    AppendSql("_sqlCount_" + method.MemberName, plannedPredicates is not null
                         ? sqlBuilder.BuildCountByPredicateSql(planCtx, plannedPredicates.Predicates)
                         : sqlBuilder.BuildCountByFieldSql(planCtx, ToColumnList(fieldColumns)));
                 }
@@ -1954,44 +1976,44 @@ internal static class StoreProcessor
                 case StoreOperation.SelectAll:
                 case StoreOperation.SelectAllEager:
                 {
-                    var field = "_sqlSelectAll_" + method.Name;
+                    var field = "_sqlSelectAll_" + method.MemberName;
                     var sql = sqlBuilder.BuildSelectAllSql(methodCtx, method.Distinct);
                     if (method.LockMode != 0)
                     {
                         var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
-                        if (lockError is not null) { lockErrors[method.Name] = lockError; break; }
+                        if (lockError is not null) { lockErrors[method.MemberName] = lockError; break; }
                     }
                     AppendSql(field, sql);
-                    baseSelectFields[method.Name] = field;
+                    baseSelectFields[method.MemberName] = field;
                     break;
                 }
 
                 case StoreOperation.SelectOneByKey:
                 case StoreOperation.SelectOneByKeyEager:
                 {
-                    var field = "_sqlSelectByKey_" + method.Name;
+                    var field = "_sqlSelectByKey_" + method.MemberName;
                     var sql = sqlBuilder.BuildSelectByKeySql(methodCtx);
                     if (method.LockMode != 0)
                     {
                         var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
-                        if (lockError is not null) { lockErrors[method.Name] = lockError; break; }
+                        if (lockError is not null) { lockErrors[method.MemberName] = lockError; break; }
                     }
                     AppendSql(field, sql);
-                    baseSelectFields[method.Name] = field;
+                    baseSelectFields[method.MemberName] = field;
                     break;
                 }
 
                 case StoreOperation.SelectAllByField when fieldColumns.Count > 0:
                 {
-                    var field = "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns) + "_" + method.Name;
+                    var field = "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns) + "_" + method.MemberName;
                     var sql = sqlBuilder.BuildSelectByFieldSql(methodCtx, ToColumnList(fieldColumns), method.Distinct);
                     if (method.LockMode != 0)
                     {
                         var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
-                        if (lockError is not null) { lockErrors[method.Name] = lockError; break; }
+                        if (lockError is not null) { lockErrors[method.MemberName] = lockError; break; }
                     }
                     AppendSql(field, sql);
-                    baseSelectFields[method.Name] = field;
+                    baseSelectFields[method.MemberName] = field;
                     break;
                 }
 
@@ -2002,7 +2024,7 @@ internal static class StoreProcessor
                 // emits _sqlCount_<name>, and a paged overload sharing this method's name would
                 // otherwise collide into a CS0102 duplicate const in the generated store.
                 case StoreOperation.Count when method.IgnoredFilterNames.Count > 0:
-                    AppendSql("_sqlCountFor_" + method.Name, sqlBuilder.BuildCountSql(methodCtx));
+                    AppendSql("_sqlCountFor_" + method.MemberName, sqlBuilder.BuildCountSql(methodCtx));
                     break;
             }
         }
@@ -2135,7 +2157,7 @@ internal static class StoreProcessor
         // column is passed in for predicate computation only — it never joins the projection SELECT list.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
-            if (selectPlan is not null || !projectionMethods.TryGetValue(method.Name, out var proj))
+            if (selectPlan is not null || !projectionMethods.TryGetValue(method.MemberName, out var proj))
             {
                 continue;
             }
@@ -2148,7 +2170,7 @@ internal static class StoreProcessor
             var projSql = method.Operation == StoreOperation.SelectAllByField
                 ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct)
                 : sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct);
-            AppendSql("_sqlProj_" + method.Name, projSql);
+            AppendSql("_sqlProj_" + method.MemberName, projSql);
         }
 
         // __BindGlobalFilters* helper bodies for runtime-parameterized filters: one per distinct
@@ -2217,7 +2239,7 @@ internal static class StoreProcessor
                 StoreOperation.Upsert => upsertError,
                 _ => null,
             };
-            if (unsupportedReason is null && lockErrors.TryGetValue(method.Name, out var lockError))
+            if (unsupportedReason is null && lockErrors.TryGetValue(method.MemberName, out var lockError))
             {
                 unsupportedReason = lockError;
             }
@@ -2260,24 +2282,24 @@ internal static class StoreProcessor
                 }
             }
 
-            if (projectionMethods.TryGetValue(method.Name, out var projection))
+            if (projectionMethods.TryGetValue(method.MemberName, out var projection))
             {
                 var documentedMethod = method with
                 {
                     HasConcurrencyToken = entity.ConcurrencyToken is not null,
                     GeneratedCommands = BuildGeneratedCommandDocumentation(
                         method, fieldColumns, selectPlan, entity, sqlBuilder, generatedSql,
-                        selectPlan is null ? "_sqlProj_" + method.Name : null),
+                        selectPlan is null ? "_sqlProj_" + method.MemberName : null),
                 };
                 documentedMethods[method] = documentedMethod;
                 // Project: select the projection's columns and materialize the projection type.
                 StoreOperationEmitter.Emit(source, documentedMethod, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
-                    sqlBuilder, "_sqlProj_" + method.Name, projection.FullyQualifiedName, projection.StructMaterializerFullName, entities: entities,
+                    sqlBuilder, "_sqlProj_" + method.MemberName, projection.FullyQualifiedName, projection.StructMaterializerFullName, entities: entities,
                     procedureTvpBindings: sprocTvpResolutions.TryGetValue(method, out var tvpBindings) ? tvpBindings : null);
             }
             else
             {
-                baseSelectFields.TryGetValue(method.Name, out var baseSelectField);
+                baseSelectFields.TryGetValue(method.MemberName, out var baseSelectField);
                 var documentedMethod = method with
                 {
                     HasConcurrencyToken = entity.ConcurrencyToken is not null,
@@ -2412,7 +2434,7 @@ internal static class StoreProcessor
                 }
                 if (method.ReturnsPagedResult)
                 {
-                    Add("count query", "_sqlCount_" + method.Name);
+                    Add("count query", "_sqlCount_" + method.MemberName);
                 }
                 return;
             }
@@ -2453,28 +2475,28 @@ internal static class StoreProcessor
                 }
                 break;
             case StoreOperation.SelectAllByPredicate:
-                Add("query", "_sqlPredicate_" + method.Name);
+                Add("query", "_sqlPredicate_" + method.MemberName);
                 break;
             case StoreOperation.KeysetPage:
                 AddSelect();
                 break;
             case StoreOperation.Count:
-                Add("query", method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.Name : "_sqlCount");
+                Add("query", method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.MemberName : "_sqlCount");
                 break;
             case StoreOperation.Exists:
-                Add("query", "_sqlExists_" + method.Name);
+                Add("query", "_sqlExists_" + method.MemberName);
                 break;
             case StoreOperation.Aggregate:
-                Add("query", "_sqlAgg_" + method.Name);
+                Add("query", "_sqlAgg_" + method.MemberName);
                 break;
             case StoreOperation.SelectTopByOrder:
-                Add("query", "_sqlTop_" + method.Name);
+                Add("query", "_sqlTop_" + method.MemberName);
                 break;
             case StoreOperation.GroupCount:
-                Add("query", "_sqlGroupCount_" + method.Name);
+                Add("query", "_sqlGroupCount_" + method.MemberName);
                 break;
             case StoreOperation.FullTextSearch:
-                Add("query", "_sqlFts_" + method.Name);
+                Add("query", "_sqlFts_" + method.MemberName);
                 break;
             case StoreOperation.Insert:
                 Add("command", method.ReturnsEntity ? "_sqlInsertReturning" : "_sqlInsert");
@@ -2507,10 +2529,10 @@ internal static class StoreProcessor
                 Add("command", "_sqlRestoreByKey");
                 break;
             case StoreOperation.UpdateByPredicate:
-                Add("command", "_sqlUpdateWhere_" + method.Name);
+                Add("command", "_sqlUpdateWhere_" + method.MemberName);
                 break;
             case StoreOperation.DeleteByPredicate:
-                Add("command", "_sqlDeleteWhere_" + method.Name);
+                Add("command", "_sqlDeleteWhere_" + method.MemberName);
                 break;
             case StoreOperation.InsertAll:
             case StoreOperation.BulkInsert when !sqlBuilder.SupportsBulkCopy:
@@ -2528,7 +2550,7 @@ internal static class StoreProcessor
                 Add("single-row command", "_sqlUpdate");
                 break;
             case StoreOperation.DeleteAll:
-                Add("command", "_sqlDeleteAll_" + method.Name);
+                Add("command", "_sqlDeleteAll_" + method.MemberName);
                 break;
             case StoreOperation.StoredProcedure:
             {
@@ -2784,7 +2806,7 @@ internal static class StoreProcessor
 
                 selectPlan = new ResolvedSelectPlan
                 {
-                    SqlFieldName = "_sql_" + method.Name,
+                    SqlFieldName = "_sql_" + method.MemberName,
                     OrderColumns = orderColumns,
                     Pagination = method.Pagination,
                 };
@@ -2985,7 +3007,7 @@ internal static class StoreProcessor
 
             selectPlan = new ResolvedSelectPlan
             {
-                SqlFieldName = "_sql_" + method.Name,
+                SqlFieldName = "_sql_" + method.MemberName,
                 OrderColumns = orderColumns,
                 Pagination = method.Pagination,
             };
@@ -3138,7 +3160,7 @@ internal static class StoreProcessor
         var orderColumns = keysetColumns.Select(c => (c, method.KeysetDescending)).ToList();
         selectPlan = new ResolvedSelectPlan
         {
-            SqlFieldName = "_sql_" + method.Name,
+            SqlFieldName = "_sql_" + method.MemberName,
             OrderColumns = orderColumns,
             Pagination = Pagination.Keyset,
             KeysetColumns = keysetColumns,
