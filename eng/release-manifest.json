@@ -46,7 +46,8 @@
         "OpenTelemetry.Extensions.Hosting": "1.18.0",
         "Oracle.ManagedDataAccess.Core": "23.26.300",
         "SQLitePCLRaw.lib.e_sqlite3": "3.53.3",
-        "System.Configuration.ConfigurationManager": "10.0.11"
+        "System.Configuration.ConfigurationManager": "10.0.11",
+        "System.Security.Cryptography.Pkcs": "10.0.13"
       },
       "libTfms": [
         "net8.0",
@@ -139,7 +140,8 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.12",
-        "System.Configuration.ConfigurationManager": "10.0.11"
+        "System.Configuration.ConfigurationManager": "10.0.11",
+        "System.Security.Cryptography.Pkcs": "10.0.13"
       },
       "libTfms": [
         "net8.0",
@@ -228,7 +230,8 @@
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.12",
         "Oracle.ManagedDataAccess.Core": "23.26.300",
-        "System.Configuration.ConfigurationManager": "10.0.11"
+        "System.Configuration.ConfigurationManager": "10.0.11",
+        "System.Security.Cryptography.Pkcs": "10.0.13"
       },
       "libTfms": [
         "net8.0",
@@ -272,7 +275,8 @@
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.11",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.12",
         "Respawn": "7.0.0",
-        "System.Configuration.ConfigurationManager": "10.0.11"
+        "System.Configuration.ConfigurationManager": "10.0.11",
+        "System.Security.Cryptography.Pkcs": "10.0.13"
       },
       "libTfms": [
         "net8.0",
