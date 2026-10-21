@@ -14,6 +14,25 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      # CI fails these bumps until eng/release-manifest.json is edited to match by hand.
+      # Group them apart, ahead of patch-and-minor, so they do not block other updates.
+      release-manifest:
+        update-types: ["minor", "patch"]
+        patterns:
+          - "Microsoft.Data.SqlClient"
+          - "Microsoft.Data.Sqlite"
+          - "Microsoft.Extensions.*"
+          - "MySqlConnector"
+          - "Npgsql"
+          - "OpenTelemetry.Extensions.Hosting"
+          - "Oracle.ManagedDataAccess.Core"
+          - "Respawn"
+          - "SQLitePCLRaw.lib.e_sqlite3"
+          - "System.Configuration.ConfigurationManager"
+          - "System.Security.Cryptography.Pkcs"
+      patch-and-minor:
+        update-types: ["minor", "patch"]
     ignore:
       # The source generator's Roslyn reference is a compatibility FLOOR, not a currency
       # target: raising it drops support for consumers on older SDK/IDE Roslyn versions.
