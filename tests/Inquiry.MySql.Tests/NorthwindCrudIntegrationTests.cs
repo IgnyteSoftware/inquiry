@@ -133,7 +133,7 @@ public sealed class NorthwindCrudIntegrationTests
 
         await regions.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
         await territories.InsertAsync(new Territory { TerritoryID = "01581", TerritoryDescription = "Westboro", RegionID = 1 });
-        await territories.InsertAsync(new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford",  RegionID = 1 });
+        await territories.InsertAsync(new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford", RegionID = 1 });
 
         var loaded = await regions.SelectByKeyWithTerritoriesAsync(1);
 

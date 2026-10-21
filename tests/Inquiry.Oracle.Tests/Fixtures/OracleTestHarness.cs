@@ -15,7 +15,7 @@ namespace Inquiry.Oracle.Tests.Fixtures;
 /// collide on table state. The admin connection string (the gvenzl image's SYSTEM user) is supplied by
 /// <see cref="OracleContainerFixture"/>.
 /// </summary>
-internal sealed class OracleTestHarness : IAsyncDisposable
+internal sealed class OracleTestHarness: IAsyncDisposable
 {
     private readonly string _adminConnectionString;
     private readonly string _schemaUser;
@@ -263,7 +263,9 @@ internal sealed class OracleTestHarness : IAsyncDisposable
             query.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
             await using var reader = await query.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
+            {
                 sessions.Add((reader.GetInt32(0), reader.GetInt32(1)));
+            }
         }
 
         foreach (var session in sessions)

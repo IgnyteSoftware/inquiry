@@ -4,7 +4,6 @@ using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Microsoft.Data.SqlClient;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -62,7 +61,10 @@ public sealed class SchemaManifestCatalogIntegrationTests
             var column = expected[ordinal++];
             Assert.Equal(column.GetProperty("name").GetString(), reader.GetString(0));
             if (column.GetProperty("storeType").ValueKind != JsonValueKind.Null)
+            {
                 Assert.Equal(column.GetProperty("storeType").GetString(), reader.GetString(1), ignoreCase: true);
+            }
+
             Assert.Equal(column.GetProperty("nullable").GetBoolean(), reader.GetBoolean(2));
             var pk = column.GetProperty("primaryKeyOrdinal");
             Assert.Equal(pk.ValueKind == JsonValueKind.Null ? (int?)null : pk.GetInt32(), reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3));
@@ -139,8 +141,13 @@ public sealed class SchemaManifestCatalogIntegrationTests
         await using var indexColumns = connection.CreateCommand();
         indexColumns.CommandText = "SELECT c.name, ic.is_included_column FROM sys.tables t JOIN sys.indexes i ON i.object_id=t.object_id JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id WHERE t.name='ManifestWidget' AND i.name='UX_ManifestWidget_Name' ORDER BY CASE WHEN ic.is_included_column=0 THEN ic.key_ordinal ELSE 2147483647 END, ic.index_column_id";
         await using var indexReader = await indexColumns.ExecuteReaderAsync();
-        var catalogKeys = new List<string>(); var catalogIncludes = new List<string>();
-        while (await indexReader.ReadAsync()) (indexReader.GetBoolean(1) ? catalogIncludes : catalogKeys).Add(indexReader.GetString(0));
+        var catalogKeys = new List<string>();
+        var catalogIncludes = new List<string>();
+        while (await indexReader.ReadAsync())
+        {
+            (indexReader.GetBoolean(1) ? catalogIncludes : catalogKeys).Add(indexReader.GetString(0));
+        }
+
         Assert.Equal(index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()), catalogKeys);
         Assert.Equal(index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()), catalogIncludes);
     }

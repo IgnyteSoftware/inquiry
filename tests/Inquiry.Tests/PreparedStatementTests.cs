@@ -1,10 +1,9 @@
-using Inquiry;
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -66,7 +65,7 @@ public sealed class PreparedStatementTests
         Assert.False(command.PrepareCalled);
     }
 
-    private sealed class FakeConnectionFactory : IInquiryConnectionFactory
+    private sealed class FakeConnectionFactory: IInquiryConnectionFactory
     {
         private readonly FakeDbCommand _command;
         private readonly bool _capability;
@@ -85,7 +84,7 @@ public sealed class PreparedStatementTests
             => new(new FakeDbConnection(_command));
     }
 
-    private sealed class FakeDbConnection : DbConnection
+    private sealed class FakeDbConnection: DbConnection
     {
         private readonly FakeDbCommand _command;
         public FakeDbConnection(FakeDbCommand command) => _command = command;
@@ -103,7 +102,7 @@ public sealed class PreparedStatementTests
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
     }
 
-    private sealed class FakeDbCommand : DbCommand
+    private sealed class FakeDbCommand: DbCommand
     {
         public bool PrepareCalled { get; private set; }
         public bool InitializeCommandHookFired { get; set; }
@@ -135,7 +134,7 @@ public sealed class PreparedStatementTests
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
     }
 
-    private sealed class FakeDbParameter : DbParameter
+    private sealed class FakeDbParameter: DbParameter
     {
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
@@ -150,13 +149,19 @@ public sealed class PreparedStatementTests
         public override void ResetDbType() { }
     }
 
-    private sealed class FakeDbParameterCollection : DbParameterCollection
+    private sealed class FakeDbParameterCollection: DbParameterCollection
     {
         private readonly List<object> _items = new();
         public override int Count => _items.Count;
         public override object SyncRoot => _items;
         public override int Add(object value) { _items.Add(value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var v in values) _items.Add(v); }
+        public override void AddRange(Array values)
+        {
+            foreach (var v in values)
+            {
+                _items.Add(v);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains(value);
         public override bool Contains(string value) => false;

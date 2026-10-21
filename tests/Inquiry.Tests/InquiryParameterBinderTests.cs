@@ -1,6 +1,6 @@
-using Inquiry.Parameters;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Parameters;
 
 namespace Inquiry.Tests;
 
@@ -131,7 +131,7 @@ public sealed class InquiryParameterBinderTests
 
     private enum SampleStatus { Inactive = 0, Active = 1 }
 
-    private enum SampleBigStatus : long { A = 1, B = 2 }
+    private enum SampleBigStatus: long { A = 1, B = 2 }
 
     [Fact]
     public void BindReinterpretsUnsignedValueToSignedPartnerWhenDbTypeMatches()
@@ -194,7 +194,7 @@ public sealed class InquiryParameterBinderTests
         Assert.IsType<int>(command.Parameters[0].Value);
     }
 
-    private enum SampleUIntEnum : uint { Zero = 0, AboveIntMax = 3_000_000_000u }
+    private enum SampleUIntEnum: uint { Zero = 0, AboveIntMax = 3_000_000_000u }
 
     private static void AssertMetadataPrecedesValue(FakeDbParameter parameter)
     {
@@ -223,7 +223,7 @@ public sealed class InquiryParameterBinderTests
     // --- Minimal in-memory ADO.NET fake — records every property assignment so tests can
     // distinguish "left default" from "explicitly set to default". This avoids depending on
     // provider quirks (SqliteParameter clamps Precision/Scale to zero, for example).
-    private sealed class FakeDbCommand : DbCommand
+    private sealed class FakeDbCommand: DbCommand
     {
         private readonly FakeParameterCollection _parameters = new();
 
@@ -246,13 +246,19 @@ public sealed class InquiryParameterBinderTests
             => throw new NotSupportedException();
     }
 
-    private sealed class FakeParameterCollection : DbParameterCollection
+    private sealed class FakeParameterCollection: DbParameterCollection
     {
         private readonly List<DbParameter> _items = new();
         public override int Count => _items.Count;
         public override object SyncRoot { get; } = new();
         public override int Add(object value) { _items.Add((DbParameter)value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var v in values) Add(v!); }
+        public override void AddRange(Array values)
+        {
+            foreach (var v in values)
+            {
+                Add(v!);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains((DbParameter)value);
         public override bool Contains(string value) => _items.Any(p => p.ParameterName == value);
@@ -273,7 +279,7 @@ public sealed class InquiryParameterBinderTests
         public new DbParameter this[int index] => _items[index];
     }
 
-    private sealed class FakeDbParameter : DbParameter
+    private sealed class FakeDbParameter: DbParameter
     {
         private DbType _dbType;
         private ParameterDirection _direction = ParameterDirection.Input;

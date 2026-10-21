@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
@@ -7,8 +9,6 @@ using Inquiry.Parameters;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -459,9 +459,18 @@ public sealed class InquiryRequestPipelineTests
             (Id: 7, Name: "Fast", IsActive: 1),
             static (cmd, args) =>
             {
-                var p0 = cmd.CreateParameter(); p0.ParameterName = "@Id"; p0.Value = args.Id; cmd.Parameters.Add(p0);
-                var p1 = cmd.CreateParameter(); p1.ParameterName = "@Name"; p1.Value = args.Name; cmd.Parameters.Add(p1);
-                var p2 = cmd.CreateParameter(); p2.ParameterName = "@IsActive"; p2.Value = args.IsActive; cmd.Parameters.Add(p2);
+                var p0 = cmd.CreateParameter();
+                p0.ParameterName = "@Id";
+                p0.Value = args.Id;
+                cmd.Parameters.Add(p0);
+                var p1 = cmd.CreateParameter();
+                p1.ParameterName = "@Name";
+                p1.Value = args.Name;
+                cmd.Parameters.Add(p1);
+                var p2 = cmd.CreateParameter();
+                p2.ParameterName = "@IsActive";
+                p2.Value = args.IsActive;
+                cmd.Parameters.Add(p2);
             });
 
         var selected = await pipeline.QuerySingleOrDefaultAsync(
@@ -496,9 +505,18 @@ public sealed class InquiryRequestPipelineTests
             (Id: 9, Name: "Forwarded", IsActive: 1),
             static (cmd, args) =>
             {
-                var p0 = cmd.CreateParameter(); p0.ParameterName = "@Id"; p0.Value = args.Id; cmd.Parameters.Add(p0);
-                var p1 = cmd.CreateParameter(); p1.ParameterName = "@Name"; p1.Value = args.Name; cmd.Parameters.Add(p1);
-                var p2 = cmd.CreateParameter(); p2.ParameterName = "@IsActive"; p2.Value = args.IsActive; cmd.Parameters.Add(p2);
+                var p0 = cmd.CreateParameter();
+                p0.ParameterName = "@Id";
+                p0.Value = args.Id;
+                cmd.Parameters.Add(p0);
+                var p1 = cmd.CreateParameter();
+                p1.ParameterName = "@Name";
+                p1.Value = args.Name;
+                cmd.Parameters.Add(p1);
+                var p2 = cmd.CreateParameter();
+                p2.ParameterName = "@IsActive";
+                p2.Value = args.IsActive;
+                cmd.Parameters.Add(p2);
             });
 
         var selected = await inner.QuerySingleOrDefaultAsync(
@@ -532,9 +550,18 @@ public sealed class InquiryRequestPipelineTests
             (Id: 11, Name: "Fast", IsActive: 1),
             static (cmd, args) =>
             {
-                var p0 = cmd.CreateParameter(); p0.ParameterName = "@Id"; p0.Value = args.Id; cmd.Parameters.Add(p0);
-                var p1 = cmd.CreateParameter(); p1.ParameterName = "@Name"; p1.Value = args.Name; cmd.Parameters.Add(p1);
-                var p2 = cmd.CreateParameter(); p2.ParameterName = "@IsActive"; p2.Value = args.IsActive; cmd.Parameters.Add(p2);
+                var p0 = cmd.CreateParameter();
+                p0.ParameterName = "@Id";
+                p0.Value = args.Id;
+                cmd.Parameters.Add(p0);
+                var p1 = cmd.CreateParameter();
+                p1.ParameterName = "@Name";
+                p1.Value = args.Name;
+                cmd.Parameters.Add(p1);
+                var p2 = cmd.CreateParameter();
+                p2.ParameterName = "@IsActive";
+                p2.Value = args.IsActive;
+                cmd.Parameters.Add(p2);
             });
 
         var single = await pipeline.QuerySingleOrDefaultAsync<TestItem, int, TestItemStructMaterializer>(
@@ -574,9 +601,18 @@ public sealed class InquiryRequestPipelineTests
             (Id: 13, Name: "Forwarded", IsActive: 1),
             static (cmd, args) =>
             {
-                var p0 = cmd.CreateParameter(); p0.ParameterName = "@Id"; p0.Value = args.Id; cmd.Parameters.Add(p0);
-                var p1 = cmd.CreateParameter(); p1.ParameterName = "@Name"; p1.Value = args.Name; cmd.Parameters.Add(p1);
-                var p2 = cmd.CreateParameter(); p2.ParameterName = "@IsActive"; p2.Value = args.IsActive; cmd.Parameters.Add(p2);
+                var p0 = cmd.CreateParameter();
+                p0.ParameterName = "@Id";
+                p0.Value = args.Id;
+                cmd.Parameters.Add(p0);
+                var p1 = cmd.CreateParameter();
+                p1.ParameterName = "@Name";
+                p1.Value = args.Name;
+                cmd.Parameters.Add(p1);
+                var p2 = cmd.CreateParameter();
+                p2.ParameterName = "@IsActive";
+                p2.Value = args.IsActive;
+                cmd.Parameters.Add(p2);
             });
 
         var custom = new RecordingForwardingPipeline(inner);
@@ -601,7 +637,7 @@ public sealed class InquiryRequestPipelineTests
     /// Custom pipeline that only implements the existing InquiryCommand-based overloads.
     /// Verifies the default impl of <c>ExecuteAsync&lt;TArgs&gt;</c> bridges to it.
     /// </summary>
-    private sealed class RecordingForwardingPipeline : IInquiryRequestPipeline
+    private sealed class RecordingForwardingPipeline: IInquiryRequestPipeline
     {
         private readonly InquiryRequestPipeline _inner;
         public List<InquiryCommand> SeenInquiryCommands { get; } = new();
@@ -694,7 +730,7 @@ public sealed class InquiryRequestPipelineTests
         Assert.Same(cancellation, reported);
     }
 
-    private sealed class TestConnectionFactory : IInquiryConnectionFactory
+    private sealed class TestConnectionFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
 
@@ -714,7 +750,7 @@ public sealed class InquiryRequestPipelineTests
         }
     }
 
-    private sealed class RecordingInterceptor : IInquiryCommandInterceptor
+    private sealed class RecordingInterceptor: IInquiryCommandInterceptor
     {
         public List<string> InitializedCommandTexts { get; } = new();
 
@@ -756,7 +792,7 @@ public sealed class InquiryRequestPipelineTests
         }
     }
 
-    private sealed class ThrowingExecutingInterceptor : IInquiryCommandInterceptor
+    private sealed class ThrowingExecutingInterceptor: IInquiryCommandInterceptor
     {
         public List<Exception> Failures { get; } = new();
 
@@ -770,7 +806,7 @@ public sealed class InquiryRequestPipelineTests
         }
     }
 
-    private sealed class ProviderCancellationInterceptor : IInquiryCommandInterceptor
+    private sealed class ProviderCancellationInterceptor: IInquiryCommandInterceptor
     {
         private readonly CancellationTokenSource _source;
 
@@ -797,7 +833,7 @@ public sealed class InquiryRequestPipelineTests
 
     private sealed record TestItem(int Id, string Name, bool IsActive);
 
-    private sealed class TestItemMaterializer : IInquiryEntityMaterializer<TestItem>
+    private sealed class TestItemMaterializer: IInquiryEntityMaterializer<TestItem>
     {
         public TestItem Materialize(DbDataReader reader)
         {
@@ -807,12 +843,12 @@ public sealed class InquiryRequestPipelineTests
 
     // Struct materializer for the struct-constrained fast read overloads
     // (QueryListAsync/QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>).
-    private readonly struct TestItemStructMaterializer : IInquiryEntityMaterializer<TestItem>
+    private readonly struct TestItemStructMaterializer: IInquiryEntityMaterializer<TestItem>
     {
         public TestItem Materialize(DbDataReader reader) => MaterializeItem(reader);
     }
 
-    private sealed class ThrowingMaterializer : IInquiryEntityMaterializer<TestItem>
+    private sealed class ThrowingMaterializer: IInquiryEntityMaterializer<TestItem>
     {
         public TestItem Materialize(DbDataReader reader)
             => throw new InvalidOperationException("Bad materializer");

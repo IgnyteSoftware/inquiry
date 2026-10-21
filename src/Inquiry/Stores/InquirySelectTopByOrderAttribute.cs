@@ -7,7 +7,7 @@ namespace Inquiry.Stores;
 /// Respects the soft-delete active filter when the entity declares one.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquirySelectTopByOrderAttribute : Attribute
+public sealed class InquirySelectTopByOrderAttribute: Attribute
 {
     /// <summary>Initializes a new instance with the column to order by.</summary>
     /// <param name="column">The mapped property or column name to ORDER BY.</param>

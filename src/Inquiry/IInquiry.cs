@@ -1,8 +1,8 @@
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Materialization;
 using Inquiry.Transactions;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry;
 
@@ -44,7 +44,8 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        ArgumentNullException.ThrowIfNull(commandText);
+
         return QueryAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
     }
 
@@ -60,7 +61,8 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        ArgumentNullException.ThrowIfNull(commandText);
+
         return QueryListAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
     }
 
@@ -77,7 +79,8 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        ArgumentNullException.ThrowIfNull(commandText);
+
         return QuerySingleOrDefaultAsync<TEntity>(InquirySql.Sql(commandText), cancellationToken);
     }
 
@@ -165,7 +168,10 @@ public interface IInquiry
         where TEntity : class
     {
         if (options is not null)
+        {
             throw new InvalidOperationException("This IInquiry implementation does not support native bulk-insert options.");
+        }
+
         throw new NotSupportedException("Bulk insert requires the built-in DefaultInquiry with a provider-registered IInquiryBulkCopier.");
     }
 
@@ -176,7 +182,8 @@ public interface IInquiry
         FormattableString commandText,
         CancellationToken cancellationToken = default)
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        ArgumentNullException.ThrowIfNull(commandText);
+
         return ExecuteAsync(InquirySql.Sql(commandText), cancellationToken);
     }
 
@@ -208,9 +215,11 @@ public interface IInquiry
         Action<InquiryParameterTarget, TItem> bindParameters,
         CancellationToken cancellationToken = default)
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (items is null) throw new ArgumentNullException(nameof(items));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(items);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
 
         var total = 0;
         for (var i = 0; i < items.Count; i++)
@@ -238,7 +247,8 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
     {
         command.Validate();
-        if (items is null) throw new ArgumentNullException(nameof(items));
+        ArgumentNullException.ThrowIfNull(items);
+
         var chunks = new InquiryBatchChunkReader<TItem>(items,
             command.GetEffectiveChunkSize(MaxBatchSize, MaxParametersPerCommand), cancellationToken);
         var total = 0;
@@ -255,7 +265,9 @@ public interface IInquiry
                 else
                 {
                     for (var i = 0; i < chunk.Count; i++)
+                    {
                         total += await ExecuteAsync(command.ForItem(chunk[i]), cancellationToken).ConfigureAwait(false);
+                    }
                 }
             }
         }
@@ -265,7 +277,8 @@ public interface IInquiry
         }
         finally
         {
-            try { chunks.Dispose(); }
+            try
+            { chunks.Dispose(); }
             catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
         }
 
@@ -289,7 +302,8 @@ public interface IInquiry
         FormattableString commandText,
         CancellationToken cancellationToken = default)
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
+        ArgumentNullException.ThrowIfNull(commandText);
+
         return ExecuteScalarAsync<T>(InquirySql.Sql(commandText), cancellationToken);
     }
 
@@ -418,7 +432,8 @@ public interface IInquiry
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)
     {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        ArgumentNullException.ThrowIfNull(operation);
+
         return ExecuteInTransactionAsync((transaction, _) => operation(transaction), isolationLevel, cancellationToken);
     }
 
@@ -432,7 +447,7 @@ public interface IInquiry
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)
     {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        ArgumentNullException.ThrowIfNull(operation);
 
         await using var transaction = await BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
         await operation(transaction, cancellationToken).ConfigureAwait(false);
@@ -449,7 +464,8 @@ public interface IInquiry
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)
     {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        ArgumentNullException.ThrowIfNull(operation);
+
         return ExecuteInTransactionAsync((transaction, _) => operation(transaction), isolationLevel, cancellationToken);
     }
 
@@ -463,7 +479,7 @@ public interface IInquiry
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)
     {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        ArgumentNullException.ThrowIfNull(operation);
 
         await using var transaction = await BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
         var result = await operation(transaction, cancellationToken).ConfigureAwait(false);

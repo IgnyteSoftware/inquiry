@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.Tests.Fixtures;

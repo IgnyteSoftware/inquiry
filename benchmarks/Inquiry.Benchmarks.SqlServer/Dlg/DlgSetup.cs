@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.Data.SqlClient;
@@ -26,7 +25,10 @@ public static class DlgSetup
         foreach (var batch in batches)
         {
             var trimmed = batch.Trim();
-            if (trimmed.Length == 0) continue;
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
 
             await using var command = connection.CreateCommand();
             command.CommandText = trimmed;

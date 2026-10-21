@@ -1,7 +1,7 @@
-using Inquiry.Commands;
-using Inquiry.Interceptors;
 using System.Data.Common;
 using System.Text;
+using Inquiry.Commands;
+using Inquiry.Interceptors;
 
 namespace Inquiry.Testing;
 
@@ -20,7 +20,7 @@ namespace Inquiry.Testing;
 /// Parameters are snapshotted at executing-time because <see cref="DbParameterCollection"/> is
 /// mutable and may be reused or cleared after execution.
 /// </remarks>
-public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
+public sealed class RecordingCommandInterceptor: IInquiryCommandInterceptor
 {
     private readonly object _lock = new();
     private readonly List<RecordedCommand> _commands = new();
@@ -55,10 +55,7 @@ public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
     /// <inheritdoc />
     public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
     {
-        if (context is null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
+        ArgumentNullException.ThrowIfNull(context);
 
         var parameters = new List<RecordedParameter>(context.Command.Parameters.Count);
         foreach (DbParameter parameter in context.Command.Parameters)
@@ -79,10 +76,7 @@ public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
     /// <inheritdoc />
     public ValueTask CommandExecutedAsync(InquiryCommandExecutedContext context, CancellationToken cancellationToken = default)
     {
-        if (context is null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
+        ArgumentNullException.ThrowIfNull(context);
 
         lock (_lock)
         {
@@ -98,10 +92,7 @@ public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
     /// <inheritdoc />
     public ValueTask CommandFailedAsync(InquiryCommandFailedContext context, CancellationToken cancellationToken = default)
     {
-        if (context is null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
+        ArgumentNullException.ThrowIfNull(context);
 
         lock (_lock)
         {

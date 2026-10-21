@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -8,8 +10,6 @@ using Inquiry.Parameters;
 using Inquiry.Stores;
 using Inquiry.Transactions;
 using Microsoft.Data.Sqlite;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Benchmarks;
 
@@ -194,7 +194,7 @@ internal sealed class ParameterBindingProbe
     public int Filter8 { get; set; }
 }
 
-internal partial class ParameterBindingProbeStore : InquiryStore<ParameterBindingProbe>
+internal partial class ParameterBindingProbeStore: InquiryStore<ParameterBindingProbe>
 {
     [InquiryExists]
     public partial Task<bool> AnyAsync(CancellationToken cancellationToken = default);
@@ -230,7 +230,7 @@ internal partial class ParameterBindingProbeStore : InquiryStore<ParameterBindin
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class ParameterBindingSink : IInquiry, IDisposable
+internal sealed class ParameterBindingSink: IInquiry, IDisposable
 {
     private static readonly Task<bool> FalseTask = Task.FromResult(false);
     private readonly SqliteConnection _connection = new("Data Source=:memory:");

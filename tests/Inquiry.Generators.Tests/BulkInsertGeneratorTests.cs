@@ -1,5 +1,3 @@
-using System;
-
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
@@ -286,8 +284,12 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
         if (native)
+        {
             Assert.Contains("Inquiry.BulkInsertAsync(_bulkDef_BulkAsync", text);
+        }
         else
+        {
             Assert.Contains("Native bulk-insert options are not supported by this provider's batch-SQL fallback", text);
+        }
     }
 }

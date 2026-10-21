@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
@@ -17,7 +14,7 @@ public sealed class SsGenItem
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class SsGenItemStore : InquiryStore<SsGenItem>
+public partial class SsGenItemStore: InquiryStore<SsGenItem>
 {
     [InquiryUpsert]
     public partial Task<SsGenItem?> UpsertReturningAsync(SsGenItem item, CancellationToken cancellationToken = default);

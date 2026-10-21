@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-
 namespace Inquiry;
 
 /// <summary>
@@ -25,7 +22,7 @@ public static class InquiryFilterContext
     /// </summary>
     public static Scope BeginScope(IReadOnlyDictionary<string, object> values)
     {
-        if (values is null) throw new System.ArgumentNullException(nameof(values));
+        ArgumentNullException.ThrowIfNull(values);
         // Snapshot rather than alias: AsyncLocal isolates the REFERENCE per async flow, not the
         // contents. A caller that reused or later mutated its dictionary (a pooled scratch dict, a
         // singleton field) would otherwise hand every concurrent request the same mutable tenant
@@ -86,7 +83,7 @@ public static class InquiryFilterContext
     }
 
     /// <summary>Restores the previous ambient value in the current async flow.</summary>
-    public readonly struct Scope : System.IDisposable
+    public readonly struct Scope: System.IDisposable
     {
         private readonly ScopeFrame? _frame;
 
@@ -100,7 +97,11 @@ public static class InquiryFilterContext
         /// </exception>
         public void Dispose()
         {
-            if (_frame is null) return;
+            if (_frame is null)
+            {
+                return;
+            }
+
             var current = Current.Value;
             if (ReferenceEquals(current, _frame))
             {
@@ -111,7 +112,9 @@ public static class InquiryFilterContext
             for (var frame = current; frame is not null; frame = frame.Previous)
             {
                 if (ReferenceEquals(frame, _frame))
+                {
                     throw new System.InvalidOperationException("Dispose nested ambient scopes before their parent scope.");
+                }
             }
         }
     }

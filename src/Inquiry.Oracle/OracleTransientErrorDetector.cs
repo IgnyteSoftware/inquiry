@@ -8,7 +8,7 @@ namespace Inquiry.Oracle;
 /// transient connection faults (instance unavailable, listener down, connection lost) but
 /// propagates terminal ones (invalid credentials, tablespace full).
 /// </summary>
-internal sealed class OracleTransientErrorDetector : ITransientErrorDetector
+internal sealed class OracleTransientErrorDetector: ITransientErrorDetector
 {
     /// <summary>
     /// Oracle error numbers that represent transient connection-open faults across managed cloud

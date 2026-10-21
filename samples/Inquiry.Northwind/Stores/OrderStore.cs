@@ -3,7 +3,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.Northwind.Stores;
 
-public partial class OrderStore : InquiryStore<Order>
+public partial class OrderStore: InquiryStore<Order>
 {
 
     [InquirySelectAll]

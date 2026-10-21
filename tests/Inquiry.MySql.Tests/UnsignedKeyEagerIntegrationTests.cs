@@ -1,7 +1,5 @@
-using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.MySql.Tests.Fixtures;
-using Xunit;
 
 namespace Inquiry.MySql.Tests;
 

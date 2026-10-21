@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Inquiry.DependencyInjection;
 using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.DependencyInjection;

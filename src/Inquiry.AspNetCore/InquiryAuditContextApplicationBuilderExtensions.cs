@@ -24,7 +24,7 @@ public static class InquiryAuditContextApplicationBuilderExtensions
         this IApplicationBuilder app,
         Func<HttpContext, string?>? userResolver = null)
     {
-        if (app is null) throw new ArgumentNullException(nameof(app));
+        ArgumentNullException.ThrowIfNull(app);
 
         userResolver ??= static ctx => ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         return app.UseMiddleware<InquiryAuditContextMiddleware>(userResolver);

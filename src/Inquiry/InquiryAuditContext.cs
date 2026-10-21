@@ -1,5 +1,3 @@
-using System.Threading;
-
 namespace Inquiry;
 
 /// <summary>
@@ -45,7 +43,7 @@ public static class InquiryAuditContext
     }
 
     /// <summary>Restores the previous ambient value in the current async flow.</summary>
-    public readonly struct Scope : System.IDisposable
+    public readonly struct Scope: System.IDisposable
     {
         private readonly ScopeFrame? _frame;
 
@@ -59,7 +57,11 @@ public static class InquiryAuditContext
         /// </exception>
         public void Dispose()
         {
-            if (_frame is null) return;
+            if (_frame is null)
+            {
+                return;
+            }
+
             var current = Current.Value;
             if (ReferenceEquals(current, _frame))
             {
@@ -70,7 +72,9 @@ public static class InquiryAuditContext
             for (var frame = current; frame is not null; frame = frame.Previous)
             {
                 if (ReferenceEquals(frame, _frame))
+                {
                     throw new System.InvalidOperationException("Dispose nested ambient scopes before their parent scope.");
+                }
             }
         }
     }

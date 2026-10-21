@@ -1,6 +1,6 @@
+using Inquiry.MariaDb.Tests.Fixtures;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
-using Inquiry.MariaDb.Tests.Fixtures;
 
 namespace Inquiry.MariaDb.Tests;
 
@@ -29,10 +29,10 @@ public sealed class PaginationIntegrationTests
         var c2 = (await categories.InsertReturningAsync(new Category { CategoryName = "C2" }))!.CategoryID;
         var c3 = (await categories.InsertReturningAsync(new Category { CategoryName = "C3" }))!.CategoryID;
 
-        await products.InsertAsync(new Product { ProductName = "Echo",    UnitPrice = 1m, CategoryID = c1, Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Alpha",   UnitPrice = 2m, CategoryID = c1, Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Delta",   UnitPrice = 3m, CategoryID = c2, Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Bravo",   UnitPrice = 4m, CategoryID = c2, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Echo", UnitPrice = 1m, CategoryID = c1, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Alpha", UnitPrice = 2m, CategoryID = c1, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Delta", UnitPrice = 3m, CategoryID = c2, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Bravo", UnitPrice = 4m, CategoryID = c2, Discontinued = false });
         await products.InsertAsync(new Product { ProductName = "Charlie", UnitPrice = 5m, CategoryID = c3, Discontinued = false });
     }
 

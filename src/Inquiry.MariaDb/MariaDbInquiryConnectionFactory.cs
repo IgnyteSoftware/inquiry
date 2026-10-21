@@ -1,6 +1,6 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using MySqlConnector;
-using System.Data.Common;
 
 namespace Inquiry.MariaDb;
 
@@ -17,7 +17,7 @@ namespace Inquiry.MariaDb;
 /// The factory is a DI singleton, so the data source lives for the container's lifetime and is
 /// disposed with it (see <see cref="DisposeAsync"/>).
 /// </remarks>
-internal sealed class MariaDbInquiryConnectionFactory : IInquiryConnectionFactory, IAsyncDisposable, IDisposable
+internal sealed class MariaDbInquiryConnectionFactory: IInquiryConnectionFactory, IAsyncDisposable, IDisposable
 {
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;
@@ -47,10 +47,7 @@ internal sealed class MariaDbInquiryConnectionFactory : IInquiryConnectionFactor
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
         }
 
-        if (options is null)
-        {
-            throw new ArgumentNullException(nameof(options));
-        }
+        ArgumentNullException.ThrowIfNull(options);
 
         _connectionString = connectionString;
 

@@ -1,5 +1,5 @@
-using Inquiry.Commands;
 using System.Data;
+using Inquiry.Commands;
 
 namespace Inquiry.Tests;
 

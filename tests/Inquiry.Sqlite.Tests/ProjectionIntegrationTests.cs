@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -34,7 +30,7 @@ public sealed record PersonName
     public string Name { get; init; } = string.Empty;
 }
 
-public partial class PersonStore : InquiryStore<Person>
+public partial class PersonStore: InquiryStore<Person>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Person person, CancellationToken cancellationToken = default);

@@ -118,7 +118,10 @@ public class EagerGridMixedRelationBenchmarks
         foreach (var post in posts)
         {
             count += post.Tags?.Count ?? 0;
-            if (post.Author is not null) count++;
+            if (post.Author is not null)
+            {
+                count++;
+            }
         }
 
         return count;
@@ -166,7 +169,9 @@ public class EagerGridMixedRelationBenchmarks
             {
                 var tag = ReadTag(reader);
                 if (postsById.TryGetValue(tag.PostId, out var post))
+                {
                     post.Tags!.Add(tag);
+                }
             }
         }
 
@@ -194,7 +199,9 @@ public class EagerGridMixedRelationBenchmarks
         foreach (var tag in await connection.QueryAsync<MixedBenchTag>(AllTagsSql))
         {
             if (postsById.TryGetValue(tag.PostId, out var post))
+            {
                 post.Tags!.Add(tag);
+            }
         }
 
         return Score(posts);
@@ -207,7 +214,10 @@ public class EagerGridMixedRelationBenchmarks
         await foreach (var post in _db.MixedPosts.SelectAllWithAuthorAndTagsAsync())
         {
             count += post.Tags?.Count ?? 0;
-            if (post.Author is not null) count++;
+            if (post.Author is not null)
+            {
+                count++;
+            }
         }
 
         return count;

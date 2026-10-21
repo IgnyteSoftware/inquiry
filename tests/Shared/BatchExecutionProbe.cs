@@ -1,9 +1,9 @@
-using Inquiry.Commands;
-using Inquiry.Connections;
 using System.Collections;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using Inquiry.Commands;
+using Inquiry.Connections;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Tests.Shared;
@@ -68,7 +68,10 @@ internal sealed class BatchExecutionProbe
     {
         get
         {
-            lock (_gate) return _initializedChunkSizes.ToArray();
+            lock (_gate)
+            {
+                return _initializedChunkSizes.ToArray();
+            }
         }
     }
 
@@ -76,7 +79,10 @@ internal sealed class BatchExecutionProbe
     {
         get
         {
-            lock (_gate) return _finalizedCommands.ToArray();
+            lock (_gate)
+            {
+                return _finalizedCommands.ToArray();
+            }
         }
     }
 
@@ -84,7 +90,10 @@ internal sealed class BatchExecutionProbe
     {
         get
         {
-            lock (_gate) return _executedBatchSizes.ToArray();
+            lock (_gate)
+            {
+                return _executedBatchSizes.ToArray();
+            }
         }
     }
 
@@ -92,7 +101,10 @@ internal sealed class BatchExecutionProbe
     {
         get
         {
-            lock (_gate) return _executedBatches.ToArray();
+            lock (_gate)
+            {
+                return _executedBatches.ToArray();
+            }
         }
     }
 
@@ -101,7 +113,10 @@ internal sealed class BatchExecutionProbe
 
     internal void RecordBatchExecuted(int itemCount)
     {
-        lock (_gate) _executedBatchSizes.Add(itemCount);
+        lock (_gate)
+        {
+            _executedBatchSizes.Add(itemCount);
+        }
     }
 
     internal void RecordBatchExecuted(DbBatchCommandCollection commands)
@@ -121,13 +136,19 @@ internal sealed class BatchExecutionProbe
 
     internal void RecordChunkInitialized(int itemCount)
     {
-        lock (_gate) _initializedChunkSizes.Add(itemCount);
+        lock (_gate)
+        {
+            _initializedChunkSizes.Add(itemCount);
+        }
     }
 
     internal void RecordFinalized(DbCommand command)
     {
         var metadata = _inspectFinalizedCommand?.Invoke(command);
-        lock (_gate) _finalizedCommands.Add(new FinalizedBatchCommand(command.CommandText, metadata));
+        lock (_gate)
+        {
+            _finalizedCommands.Add(new FinalizedBatchCommand(command.CommandText, metadata));
+        }
     }
 
     internal void Reset()
@@ -149,14 +170,23 @@ internal sealed class BatchExecutionProbe
         var descriptorIndex = -1;
         for (var i = 0; i < services.Count; i++)
         {
-            if (services[i].ServiceType != typeof(IInquiryConnectionFactory)) continue;
+            if (services[i].ServiceType != typeof(IInquiryConnectionFactory))
+            {
+                continue;
+            }
+
             if (descriptorIndex >= 0)
+            {
                 throw new InvalidOperationException("Expected exactly one IInquiryConnectionFactory registration to decorate.");
+            }
+
             descriptorIndex = i;
         }
 
         if (descriptorIndex < 0)
+        {
             throw new InvalidOperationException("No IInquiryConnectionFactory registration was found to decorate.");
+        }
 
         var descriptor = services[descriptorIndex];
         if (descriptor.Lifetime != ServiceLifetime.Singleton || descriptor.ImplementationFactory is null)
@@ -169,13 +199,16 @@ internal sealed class BatchExecutionProbe
         services[descriptorIndex] = ServiceDescriptor.Singleton<IInquiryConnectionFactory>(serviceProvider =>
         {
             if (implementationFactory(serviceProvider) is not IInquiryConnectionFactory inner)
+            {
                 throw new InvalidOperationException("The IInquiryConnectionFactory implementation factory returned an invalid instance.");
+            }
+
             return new ProbingInquiryConnectionFactory(inner, this);
         });
     }
 }
 
-internal sealed class ProbingInquiryConnectionFactory : IInquiryConnectionFactory, IAsyncDisposable, IDisposable
+internal sealed class ProbingInquiryConnectionFactory: IInquiryConnectionFactory, IAsyncDisposable, IDisposable
 {
     private readonly IInquiryConnectionFactory _inner;
     private readonly BatchExecutionProbe _probe;
@@ -214,20 +247,30 @@ internal sealed class ProbingInquiryConnectionFactory : IInquiryConnectionFactor
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0 && _inner is IDisposable disposable)
+        {
             disposable.Dispose();
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         if (_inner is IAsyncDisposable asyncDisposable)
+        {
             await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+        }
         else if (_inner is IDisposable disposable)
+        {
             disposable.Dispose();
+        }
     }
 }
 
-internal sealed class ProbingDbConnection : DbConnection
+internal sealed class ProbingDbConnection: DbConnection
 {
     private readonly DbConnection _inner;
     private readonly BatchExecutionProbe _probe;
@@ -282,19 +325,26 @@ internal sealed class ProbingDbConnection : DbConnection
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing && Interlocked.Exchange(ref _disposed, 1) == 0) _inner.Dispose();
+        if (disposing && Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _inner.Dispose();
+        }
+
         base.Dispose(disposing);
     }
 
     public override async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
             await _inner.DisposeAsync().ConfigureAwait(false);
+        }
+
         GC.SuppressFinalize(this);
     }
 }
 
-internal sealed class ProbingDbBatch : DbBatch
+internal sealed class ProbingDbBatch: DbBatch
 {
     private readonly DbBatch _inner;
     private readonly BatchExecutionProbe _probe;
@@ -343,19 +393,26 @@ internal sealed class ProbingDbBatch : DbBatch
 
     public override void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0) _inner.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _inner.Dispose();
+        }
+
         base.Dispose();
     }
 
     public override async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
             await _inner.DisposeAsync().ConfigureAwait(false);
+        }
+
         GC.SuppressFinalize(this);
     }
 }
 
-internal sealed class ExecutionBoundaryEnumerable<T> : IEnumerable<T>
+internal sealed class ExecutionBoundaryEnumerable<T>: IEnumerable<T>
 {
     private readonly IReadOnlyList<T> _items;
     private readonly Func<int> _readExecutionCount;
@@ -373,13 +430,16 @@ internal sealed class ExecutionBoundaryEnumerable<T> : IEnumerable<T>
     public IEnumerator<T> GetEnumerator()
     {
         if (Interlocked.Increment(ref _enumeratorCreated) != 1)
+        {
             throw new InvalidOperationException("The test source can only be enumerated once.");
+        }
+
         return new Enumerator(this);
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-    private sealed class Enumerator : IEnumerator<T>
+    private sealed class Enumerator: IEnumerator<T>
     {
         private readonly ExecutionBoundaryEnumerable<T> _owner;
         private int _index = -1;
@@ -399,7 +459,7 @@ internal sealed class ExecutionBoundaryEnumerable<T> : IEnumerable<T>
     }
 }
 
-internal sealed class SinglePassCancellingEnumerable<T> : IEnumerable<T>
+internal sealed class SinglePassCancellingEnumerable<T>: IEnumerable<T>
 {
     private readonly IReadOnlyList<T> _items;
     private readonly CancellationTokenSource _cancellation;
@@ -413,7 +473,11 @@ internal sealed class SinglePassCancellingEnumerable<T> : IEnumerable<T>
     {
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-        if (cancelAtMoveNext <= 0) throw new ArgumentOutOfRangeException(nameof(cancelAtMoveNext));
+        if (cancelAtMoveNext <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(cancelAtMoveNext));
+        }
+
         _cancelAtMoveNext = cancelAtMoveNext;
     }
 
@@ -424,13 +488,16 @@ internal sealed class SinglePassCancellingEnumerable<T> : IEnumerable<T>
     public IEnumerator<T> GetEnumerator()
     {
         if (Interlocked.Increment(ref _enumeratorCreated) != 1)
+        {
             throw new InvalidOperationException("The test source can only be enumerated once.");
+        }
+
         return new Enumerator(this);
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-    private sealed class Enumerator : IEnumerator<T>
+    private sealed class Enumerator: IEnumerator<T>
     {
         private readonly SinglePassCancellingEnumerable<T> _owner;
         private int _index = -1;
@@ -442,7 +509,11 @@ internal sealed class SinglePassCancellingEnumerable<T> : IEnumerable<T>
         public bool MoveNext()
         {
             _owner.MoveNextCount++;
-            if (_owner.MoveNextCount == _owner._cancelAtMoveNext) _owner._cancellation.Cancel();
+            if (_owner.MoveNextCount == _owner._cancelAtMoveNext)
+            {
+                _owner._cancellation.Cancel();
+            }
+
             return ++_index < _owner._items.Count;
         }
 

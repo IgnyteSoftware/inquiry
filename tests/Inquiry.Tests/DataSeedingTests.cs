@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Seeding;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
 
 namespace Inquiry.Tests;
 
@@ -20,7 +15,7 @@ public sealed class DataSeedingTests
         public List<string> Entries { get; } = new();
     }
 
-    private sealed class FirstSeeder : IInquiryDataSeeder
+    private sealed class FirstSeeder: IInquiryDataSeeder
     {
         private readonly Journal _journal;
         public FirstSeeder(Journal journal) => _journal = journal;
@@ -32,7 +27,7 @@ public sealed class DataSeedingTests
         }
     }
 
-    private sealed class SecondSeeder : IInquiryDataSeeder
+    private sealed class SecondSeeder: IInquiryDataSeeder
     {
         private readonly Journal _journal;
         public SecondSeeder(Journal journal) => _journal = journal;
@@ -98,7 +93,7 @@ public sealed class DataSeedingTests
     {
     }
 
-    private sealed class ScopedSeeder : IInquiryDataSeeder
+    private sealed class ScopedSeeder: IInquiryDataSeeder
     {
         private readonly Journal _journal;
 

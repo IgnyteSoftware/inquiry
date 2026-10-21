@@ -13,7 +13,7 @@ public sealed class BatchMutationBenchmarkItem
     public string ValueText { get; set; } = string.Empty;
 }
 
-public partial class BatchMutationBenchmarkStore : InquiryStore<BatchMutationBenchmarkItem>
+public partial class BatchMutationBenchmarkStore: InquiryStore<BatchMutationBenchmarkItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<BatchMutationBenchmarkItem> items, CancellationToken cancellationToken = default);

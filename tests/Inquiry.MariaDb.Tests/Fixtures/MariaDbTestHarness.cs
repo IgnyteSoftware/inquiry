@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Inquiry.DependencyInjection;
 using Inquiry.FeatureCatalog;
 using Inquiry.MariaDb.DependencyInjection;
@@ -5,7 +6,6 @@ using Inquiry.Northwind;
 using Inquiry.Northwind.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using MySqlConnector;
-using System.Runtime.ExceptionServices;
 
 namespace Inquiry.MariaDb.Tests.Fixtures;
 
@@ -14,7 +14,7 @@ namespace Inquiry.MariaDb.Tests.Fixtures;
 /// configured <see cref="ServiceProvider"/>. The database is dropped on disposal so parallel test
 /// classes never collide on table state.
 /// </summary>
-internal sealed class MariaDbTestHarness : IAsyncDisposable
+internal sealed class MariaDbTestHarness: IAsyncDisposable
 {
     private readonly string _adminConnectionString;
     private readonly string _databaseName;
@@ -81,9 +81,14 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
                 typeof(VersionedItemStore).Assembly,
             };
             if (configureOptions is null)
+            {
                 serviceCollection.AddInquiry(storeAssemblies);
+            }
             else
+            {
                 serviceCollection.AddInquiry(configureOptions, storeAssemblies);
+            }
+
             serviceCollection.AddInquiryMariaDb(connectionString);
             configureServices?.Invoke(serviceCollection);
             var services = serviceCollection.BuildServiceProvider();
@@ -141,7 +146,9 @@ internal sealed class MariaDbTestHarness : IAsyncDisposable
         }
 
         if (serviceFailure is not null)
+        {
             ExceptionDispatchInfo.Throw(serviceFailure);
+        }
     }
 
     private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)

@@ -1,7 +1,7 @@
 using System.Text.Json;
+using Inquiry.Benchmarks.Contracts;
 using Inquiry.Benchmarks.Contracts.Evidence;
 using Inquiry.Benchmarks.Contracts.Fixtures;
-using Inquiry.Benchmarks.Contracts;
 
 if (args.Length >= 9 && args[0] == "--resolved-dependencies" &&
     Enum.TryParse<BenchmarkSourceLane>(args[2], true, out var sourceLane))
@@ -10,7 +10,10 @@ if (args.Length >= 9 && args[0] == "--resolved-dependencies" &&
     {
         var separator = argument.IndexOf('=');
         if (separator <= 0 || separator == argument.Length - 1)
+        {
             throw new ArgumentException($"Selected-asset root must use <id>=<path>: '{argument}'.");
+        }
+
         return new SelectedAssetRoot(argument[..separator], argument[(separator + 1)..]);
     }).ToArray();
     var dependencyManifest = ResolvedDependencyManifestCollector.Collect(
@@ -81,7 +84,9 @@ foreach (var table in NorthwindFixtureCatalog.Schema.Tables)
     await writer.FlushAsync();
     checksums[table.Name] = checksum.GetHashAndReset();
     if (!StringComparer.Ordinal.Equals(checksums[table.Name], manifest.TableChecksums[table.Name]))
+    {
         throw new InvalidOperationException($"Generated checksum drift for '{table.Name}'.");
+    }
 }
 
 var emittedManifest = manifest with { TableChecksums = checksums };

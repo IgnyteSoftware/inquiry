@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Common;
 using System.Text;
@@ -93,9 +92,14 @@ public static class InquiryInExpansion
 
     private static void ExpandCore<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, string emptyReplacement, System.Data.DbType? dbType = null, int? size = null, byte? precision = null, byte? scale = null)
     {
-        if (command is null) throw new System.ArgumentNullException(nameof(command));
-        if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
-        if (maxParameterCount < 1) throw new System.ArgumentOutOfRangeException(nameof(maxParameterCount));
+        ArgumentNullException.ThrowIfNull(command);
+
+        ArgumentNullException.ThrowIfNull(parameterName);
+
+        if (maxParameterCount < 1)
+        {
+            throw new System.ArgumentOutOfRangeException(nameof(maxParameterCount));
+        }
 
         var sentinel = "(" + parameterName + ")";
 
@@ -193,10 +197,10 @@ public static class InquiryInExpansion
             // partner-type representation is always the correct one.
             boxed = boxed switch
             {
-                sbyte v  => (object)unchecked((byte)v),
+                sbyte v => (object)unchecked((byte)v),
                 ushort v => (object)unchecked((short)v),
-                uint v   => (object)unchecked((int)v),
-                ulong v  => (object)unchecked((long)v),
+                uint v => (object)unchecked((int)v),
+                ulong v => (object)unchecked((long)v),
                 _ => boxed,
             };
 

@@ -1,16 +1,12 @@
+using System.Collections.Immutable;
+using System.Text;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
-using System.Text;
-using System.Threading;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Inquiry.Generators;
 
@@ -332,13 +328,21 @@ internal static class EntityProcessor
                 // owns stay invalid.
                 string? contextKeyError = null;
                 if (string.IsNullOrWhiteSpace(globalFilterContextKeyRaw))
+                {
                     contextKeyError = "the ContextKey is empty or whitespace — give it the ambient key the value is stored under (e.g. \"TenantId\")";
+                }
                 else if (globalFilterAttribute.NamedArguments.Any(static a => a.Key == "KeepWhen"))
+                {
                     contextKeyError = "KeepWhen and ContextKey conflict — a runtime-parameterized filter compares to the ambient value, not a constant bool; remove one of the two";
+                }
                 else if (typeData.IsNullable)
+                {
                     contextKeyError = "the column type is nullable — a parameterized filter needs a non-nullable scalar so a missing ambient value fails loudly instead of matching NULL";
+                }
                 else if (isGenerated || useDatabaseDefault || isConcurrencyToken || softDelete != SoftDeleteKind.None)
+                {
                     contextKeyError = "the column's role is owned by other machinery (generated/database-default value, concurrency token, or soft-delete indicator)";
+                }
 
                 if (contextKeyError is not null)
                 {
@@ -731,18 +735,34 @@ internal static class EntityProcessor
 
     private static LocationData? GetNamedArgumentLocation(AttributeData? attribute, string name)
     {
-        if (attribute?.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax) return null;
+        if (attribute?.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax)
+        {
+            return null;
+        }
+
         var argument = syntax.ArgumentList?.Arguments.FirstOrDefault(value => value.NameEquals?.Name.Identifier.ValueText == name);
         return LocationData.From(argument?.Expression.GetLocation());
     }
 
     private static LocationData? GetConstructorArgumentLocation(AttributeData attribute, string parameterName, int ordinal)
     {
-        if (attribute.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax || syntax.ArgumentList is null) return null;
+        if (attribute.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax || syntax.ArgumentList is null)
+        {
+            return null;
+        }
+
         var named = syntax.ArgumentList.Arguments.FirstOrDefault(argument =>
             argument.NameColon?.Name.Identifier.ValueText == parameterName);
-        if (named is not null) return LocationData.From(named.Expression.GetLocation());
-        if (ordinal < 0 || ordinal >= syntax.ArgumentList.Arguments.Count) return null;
+        if (named is not null)
+        {
+            return LocationData.From(named.Expression.GetLocation());
+        }
+
+        if (ordinal < 0 || ordinal >= syntax.ArgumentList.Arguments.Count)
+        {
+            return null;
+        }
+
         var positional = syntax.ArgumentList.Arguments[ordinal];
         return positional.NameColon is null && positional.NameEquals is null
             ? LocationData.From(positional.Expression.GetLocation())
@@ -753,7 +773,10 @@ internal static class EntityProcessor
     {
         foreach (var argument in attribute.NamedArguments)
         {
-            if (argument.Key == name && argument.Value.Value is int value) return value;
+            if (argument.Key == name && argument.Value.Value is int value)
+            {
+                return value;
+            }
         }
         return 0;
     }
@@ -812,7 +835,8 @@ internal static class EntityProcessor
         {
             var expression = attribute.ConstructorArguments.Length > 0 ? attribute.ConstructorArguments[0].Value as string ?? string.Empty : string.Empty;
             result.Add(new CheckConstraintData(null, string.Empty, expression, GeneratorHelpers.GetNamedString(attribute, "Name"),
-                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation())) { Ordinal = ordinal++ });
+                LocationData.From(attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation()))
+            { Ordinal = ordinal++ });
         }
         return result;
     }
@@ -828,11 +852,30 @@ internal static class EntityProcessor
     /// </summary>
     internal static DbTypeClass MapTypeClass(TypeData type)
     {
-        if (type.IsByteArray) return DbTypeClass.ByteArray;
-        if (type.IsGuid) return DbTypeClass.Guid;
-        if (type.IsDateOnly) return DbTypeClass.DateOnly;
-        if (type.IsTimeOnly) return DbTypeClass.TimeOnly;
-        if (type.NonNullableDisplayName == "global::System.DateTimeOffset") return DbTypeClass.DateTimeOffset;
+        if (type.IsByteArray)
+        {
+            return DbTypeClass.ByteArray;
+        }
+
+        if (type.IsGuid)
+        {
+            return DbTypeClass.Guid;
+        }
+
+        if (type.IsDateOnly)
+        {
+            return DbTypeClass.DateOnly;
+        }
+
+        if (type.IsTimeOnly)
+        {
+            return DbTypeClass.TimeOnly;
+        }
+
+        if (type.NonNullableDisplayName == "global::System.DateTimeOffset")
+        {
+            return DbTypeClass.DateTimeOffset;
+        }
 
         return MapSpecialType(type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType);
     }
@@ -855,10 +898,22 @@ internal static class EntityProcessor
 
     private static bool IsRotationSqlTypeCompatible(string? sqlType, bool isGuid)
     {
-        if (string.IsNullOrWhiteSpace(sqlType)) return true;
-        if (isGuid) return false;
+        if (string.IsNullOrWhiteSpace(sqlType))
+        {
+            return true;
+        }
+
+        if (isGuid)
+        {
+            return false;
+        }
+
         var type = sqlType!.Trim().ToUpperInvariant();
-        if (type is "TEXT" or "NTEXT" or "CLOB" or "NCLOB" or "LONGTEXT" or "MEDIUMTEXT" or "TINYTEXT") return true;
+        if (type is "TEXT" or "NTEXT" or "CLOB" or "NCLOB" or "LONGTEXT" or "MEDIUMTEXT" or "TINYTEXT")
+        {
+            return true;
+        }
+
         var match = global::System.Text.RegularExpressions.Regex.Match(type,
             @"^(?:N?VARCHAR2?|N?CHAR)\s*\(\s*(MAX|[0-9]+)(?:\s+(?:CHAR|BYTE))?\s*\)$");
         return match.Success && (match.Groups[1].Value == "MAX" ||
@@ -1033,14 +1088,19 @@ internal static class EntityProcessor
     {
         if (type is INamedTypeSymbol named &&
             named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
             return named.TypeArguments[0];
+        }
 
         return type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
     }
 
     private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol converterType)
     {
-        if (converterType.TypeKind == TypeKind.Struct) return true;
+        if (converterType.TypeKind == TypeKind.Struct)
+        {
+            return true;
+        }
 
         // InquiryConverterCache<TConverter> carries a new() constraint, which specifically requires
         // a public parameterless constructor even when an internal constructor is otherwise visible.
@@ -1056,7 +1116,11 @@ internal static class EntityProcessor
 
     private static Location? GetNamedArgumentSourceLocation(AttributeData? attribute, string name)
     {
-        if (attribute?.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax) return null;
+        if (attribute?.ApplicationSyntaxReference?.GetSyntax() is not AttributeSyntax syntax)
+        {
+            return null;
+        }
+
         return syntax.ArgumentList?.Arguments
             .FirstOrDefault(value => value.NameEquals?.Name.Identifier.ValueText == name)?
             .Expression.GetLocation();
@@ -1163,7 +1227,9 @@ internal static class EntityProcessor
             {
                 keyCount++;
                 if (firstKey is null)
+                {
                     firstKey = ResolveMappedColumnName(member);
+                }
             }
         }
 
@@ -1176,7 +1242,9 @@ internal static class EntityProcessor
         foreach (var member in targetType.GetMembers().OfType<IPropertySymbol>())
         {
             if (!string.Equals(member.Name, propertyName, StringComparison.Ordinal))
+            {
                 continue;
+            }
 
             return ResolveMappedColumnName(member);
         }
@@ -1189,11 +1257,15 @@ internal static class EntityProcessor
         // Priority matches the canonical coalesce in DiscoverColumns: Key > Column > FK > property name.
         var keyAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryKeyAttribute");
         if (keyAttr is not null)
+        {
             return GeneratorHelpers.GetConstructorString(keyAttr) ?? property.Name;
+        }
 
         var columnAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryColumnAttribute");
         if (columnAttr is not null)
+        {
             return GeneratorHelpers.GetConstructorString(columnAttr) ?? property.Name;
+        }
 
         var fkAttr = GeneratorHelpers.GetEntityAttribute(property, "InquiryForeignKeyAttribute");
         if (fkAttr is not null)

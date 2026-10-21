@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.SqlServer.Tests.Fixtures;
 

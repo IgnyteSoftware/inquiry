@@ -1,15 +1,14 @@
+using Inquiry.Benchmarks.Contracts.Fixtures;
 using Inquiry.Benchmarks.SqlServer.Ef;
 using Inquiry.DependencyInjection;
+using Inquiry.Materialization;
 using Inquiry.Northwind;
-using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.DependencyInjection;
-using Inquiry.Materialization;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.MsSql;
-using Inquiry.Benchmarks.Contracts.Fixtures;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
@@ -23,7 +22,7 @@ namespace Inquiry.Benchmarks.SqlServer;
 /// a non-pooled factory so it pays per-operation context construction — the same lifecycle ADO,
 /// Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
+public sealed class SqlServerBenchmarkDatabase: IAsyncDisposable
 {
     public const int SequentialAdHocRowCount = 32;
     public const int SequentialAdHocPayloadSize = 64 * 1024;
@@ -153,11 +152,11 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
             insert.Transaction = (SqlTransaction)tx;
             insert.CommandText = "INSERT INTO Shippers (CompanyName, Phone) VALUES (@company, @phone);";
             var pCompany = insert.Parameters.Add("@company", System.Data.SqlDbType.NVarChar, 40);
-            var pPhone   = insert.Parameters.Add("@phone",   System.Data.SqlDbType.NVarChar, -1);
+            var pPhone = insert.Parameters.Add("@phone", System.Data.SqlDbType.NVarChar, -1);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
@@ -186,13 +185,13 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
             insert.CommandText =
                 "INSERT INTO Products (ProductName, CategoryID, UnitPrice, Discontinued) " +
                 "VALUES (@name, @cat, @price, 0);";
-            var pName  = insert.Parameters.Add("@name",  System.Data.SqlDbType.NVarChar, 40);
-            var pCat   = insert.Parameters.Add("@cat",   System.Data.SqlDbType.Int);
+            var pName = insert.Parameters.Add("@name", System.Data.SqlDbType.NVarChar, 40);
+            var pCat = insert.Parameters.Add("@cat", System.Data.SqlDbType.Int);
             var pPrice = insert.Parameters.Add("@price", System.Data.SqlDbType.Decimal);
             for (int i = 0; i < rowCount; i++)
             {
-                pName.Value  = $"Product {i}";
-                pCat.Value   = categoryIds[i % categoryIds.Count];
+                pName.Value = $"Product {i}";
+                pCat.Value = categoryIds[i % categoryIds.Count];
                 pPrice.Value = 10m + (i % 100);
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
@@ -227,7 +226,10 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
             {
                 pTitle.Value = i < 8 ? "Participating " + i : "Unrelated " + (i - 8);
                 var id = (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
-                if (i < 8) participatingIds.Add(id);
+                if (i < 8)
+                {
+                    participatingIds.Add(id);
+                }
             }
 
             command.CommandText =

@@ -20,7 +20,7 @@ namespace Inquiry.Entities;
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryConcurrencyTokenAttribute : InquiryColumnAttribute
+public sealed class InquiryConcurrencyTokenAttribute: InquiryColumnAttribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryConcurrencyTokenAttribute"/> class.

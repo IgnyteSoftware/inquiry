@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Inquiry;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -31,7 +27,7 @@ public sealed class TenantScopedDoc
     public bool IsActive { get; set; } = true;
 }
 
-public partial class TenantScopedDocStore : InquiryStore<TenantScopedDoc>
+public partial class TenantScopedDocStore: InquiryStore<TenantScopedDoc>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(TenantScopedDoc doc, CancellationToken cancellationToken = default);

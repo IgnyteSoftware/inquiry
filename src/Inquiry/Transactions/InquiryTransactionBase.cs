@@ -1,8 +1,7 @@
-using Inquiry.Commands;
-using Inquiry.Materialization;
-using Inquiry.Pipeline;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Commands;
+using Inquiry.Pipeline;
 
 namespace Inquiry.Transactions;
 
@@ -15,7 +14,7 @@ namespace Inquiry.Transactions;
 /// Each handle captures its transactional pipeline. Calls do not depend on ambient state, which can
 /// differ when a helper returns the handle to its caller. Every call checks closed state first.
 /// </remarks>
-internal abstract class InquiryTransactionBase : IInquiryTransaction
+internal abstract class InquiryTransactionBase: IInquiryTransaction
 {
     private readonly DefaultInquiry _inner;
     private readonly TransactedInquiryRequestPipeline _pipeline;
@@ -65,7 +64,9 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         // commit/rollback/dispose cannot reach the provider after its handle closes.
         ThrowIfClosed();
         await foreach (var item in source.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
             yield return item;
+        }
     }
 
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(

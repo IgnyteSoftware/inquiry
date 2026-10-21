@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Text;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
@@ -6,12 +8,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
-using System.Text;
-using System.Threading;
 
 namespace Inquiry.Generators;
 
@@ -553,7 +549,11 @@ internal static class StoreProcessor
             while (lineIndex >= 0)
             {
                 var line = text.Lines[lineIndex].ToString().TrimStart();
-                if (!line.StartsWith("///", StringComparison.Ordinal)) break;
+                if (!line.StartsWith("///", StringComparison.Ordinal))
+                {
+                    break;
+                }
+
                 lines.Add(line);
                 lineIndex--;
             }
@@ -734,7 +734,10 @@ internal static class StoreProcessor
     {
         var result = EntityProcessor.MapTypeClass(type);
         if (result == DbTypeClass.String && type.SpecialType is not SpecialType.System_String and not SpecialType.System_Char)
+        {
             return null;
+        }
+
         return result;
     }
 
@@ -744,15 +747,15 @@ internal static class StoreProcessor
         {
             var (castType, unchecked_) = typeData.EnumUnderlyingSpecialType switch
             {
-                SpecialType.System_Byte   => ("byte",  false),
-                SpecialType.System_SByte  => ("byte",  true),
-                SpecialType.System_Int16  => ("short", false),
+                SpecialType.System_Byte => ("byte", false),
+                SpecialType.System_SByte => ("byte", true),
+                SpecialType.System_Int16 => ("short", false),
                 SpecialType.System_UInt16 => ("short", true),
-                SpecialType.System_Int32  => ("int",   false),
-                SpecialType.System_UInt32 => ("int",   true),
-                SpecialType.System_Int64  => ("long",  false),
-                SpecialType.System_UInt64 => ("long",  true),
-                _                         => ("int",   false),
+                SpecialType.System_Int32 => ("int", false),
+                SpecialType.System_UInt32 => ("int", true),
+                SpecialType.System_Int64 => ("long", false),
+                SpecialType.System_UInt64 => ("long", true),
+                _ => ("int", false),
             };
             var cast = unchecked_ ? $"unchecked(({castType}){name})" : $"({castType}){name}";
             var castValue = unchecked_ ? $"unchecked(({castType}){name}.Value)" : $"({castType}){name}.Value";
@@ -763,10 +766,10 @@ internal static class StoreProcessor
 
         var reinterpreted = typeData.SpecialType switch
         {
-            SpecialType.System_SByte  => ("byte",  true),
+            SpecialType.System_SByte => ("byte", true),
             SpecialType.System_UInt16 => ("short", true),
-            SpecialType.System_UInt32 => ("int",   true),
-            SpecialType.System_UInt64 => ("long",  true),
+            SpecialType.System_UInt32 => ("int", true),
+            SpecialType.System_UInt64 => ("long", true),
             _ => (null, false),
         };
         if (reinterpreted is { Item1: not null })
@@ -1045,29 +1048,75 @@ internal static class StoreProcessor
 
             switch (candidate.AttributeClass?.Name)
             {
-                case "InquirySelectAllAttribute": attribute = candidate; return StoreOperation.SelectAll;
-                case "InquirySelectAllEagerAttribute": attribute = candidate; return StoreOperation.SelectAllEager;
-                case "InquirySelectOneByKeyAttribute": attribute = candidate; return StoreOperation.SelectOneByKey;
-                case "InquirySelectOneByKeyEagerAttribute": attribute = candidate; return StoreOperation.SelectOneByKeyEager;
-                case "InquirySelectAllByFieldAttribute": attribute = candidate; return StoreOperation.SelectAllByField;
-                case "InquirySelectAllByPredicateAttribute": attribute = candidate; return StoreOperation.SelectAllByPredicate;
-                case "InquiryKeysetPageAttribute": attribute = candidate; return StoreOperation.KeysetPage;
-                case "InquiryCountAttribute": attribute = candidate; return StoreOperation.Count;
-                case "InquiryExistsAttribute": attribute = candidate; return StoreOperation.Exists;
-                case "InquiryAggregateAttribute": attribute = candidate; return StoreOperation.Aggregate;
-                case "InquiryFullTextSearchAttribute": attribute = candidate; return StoreOperation.FullTextSearch;
-                case "InquiryBulkInsertAttribute": attribute = candidate; return StoreOperation.BulkInsert;
-                case "InquiryDeleteAllAttribute": attribute = candidate; return StoreOperation.DeleteAll;
-                case "InquiryHardDeleteAllAttribute": attribute = candidate; return StoreOperation.DeleteAll;
-                case "InquiryInsertAttribute": attribute = candidate; return StoreOperation.Insert;
-                case "InquiryUpdateAttribute": attribute = candidate; return HasWhereCriteria(method) ? StoreOperation.UpdateByPredicate : StoreOperation.Update;
-                case "InquiryUpsertAttribute": attribute = candidate; return StoreOperation.Upsert;
-                case "InquiryDeleteAttribute": attribute = candidate; return HasWhereCriteria(method) ? StoreOperation.DeleteByPredicate : StoreOperation.DeleteOneByKey;
-                case "InquiryHardDeleteAttribute": attribute = candidate; return HasWhereCriteria(method) ? StoreOperation.DeleteByPredicate : StoreOperation.DeleteOneByKey;
-                case "InquiryRestoreOneByKeyAttribute": attribute = candidate; return StoreOperation.RestoreOneByKey;
-                case "InquiryStoredProcedureAttribute": attribute = candidate; return StoreOperation.StoredProcedure;
-                case "InquirySelectTopByOrderAttribute": attribute = candidate; return StoreOperation.SelectTopByOrder;
-                case "InquiryGroupCountAttribute": attribute = candidate; return StoreOperation.GroupCount;
+                case "InquirySelectAllAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectAll;
+                case "InquirySelectAllEagerAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectAllEager;
+                case "InquirySelectOneByKeyAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectOneByKey;
+                case "InquirySelectOneByKeyEagerAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectOneByKeyEager;
+                case "InquirySelectAllByFieldAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectAllByField;
+                case "InquirySelectAllByPredicateAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectAllByPredicate;
+                case "InquiryKeysetPageAttribute":
+                    attribute = candidate;
+                    return StoreOperation.KeysetPage;
+                case "InquiryCountAttribute":
+                    attribute = candidate;
+                    return StoreOperation.Count;
+                case "InquiryExistsAttribute":
+                    attribute = candidate;
+                    return StoreOperation.Exists;
+                case "InquiryAggregateAttribute":
+                    attribute = candidate;
+                    return StoreOperation.Aggregate;
+                case "InquiryFullTextSearchAttribute":
+                    attribute = candidate;
+                    return StoreOperation.FullTextSearch;
+                case "InquiryBulkInsertAttribute":
+                    attribute = candidate;
+                    return StoreOperation.BulkInsert;
+                case "InquiryDeleteAllAttribute":
+                    attribute = candidate;
+                    return StoreOperation.DeleteAll;
+                case "InquiryHardDeleteAllAttribute":
+                    attribute = candidate;
+                    return StoreOperation.DeleteAll;
+                case "InquiryInsertAttribute":
+                    attribute = candidate;
+                    return StoreOperation.Insert;
+                case "InquiryUpdateAttribute":
+                    attribute = candidate;
+                    return HasWhereCriteria(method) ? StoreOperation.UpdateByPredicate : StoreOperation.Update;
+                case "InquiryUpsertAttribute":
+                    attribute = candidate;
+                    return StoreOperation.Upsert;
+                case "InquiryDeleteAttribute":
+                    attribute = candidate;
+                    return HasWhereCriteria(method) ? StoreOperation.DeleteByPredicate : StoreOperation.DeleteOneByKey;
+                case "InquiryHardDeleteAttribute":
+                    attribute = candidate;
+                    return HasWhereCriteria(method) ? StoreOperation.DeleteByPredicate : StoreOperation.DeleteOneByKey;
+                case "InquiryRestoreOneByKeyAttribute":
+                    attribute = candidate;
+                    return StoreOperation.RestoreOneByKey;
+                case "InquiryStoredProcedureAttribute":
+                    attribute = candidate;
+                    return StoreOperation.StoredProcedure;
+                case "InquirySelectTopByOrderAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectTopByOrder;
+                case "InquiryGroupCountAttribute":
+                    attribute = candidate;
+                    return StoreOperation.GroupCount;
             }
         }
 
@@ -1205,7 +1254,7 @@ internal static class StoreProcessor
 
     /// <summary>
     /// Extracts the element type of a select-list return — the <c>T</c> in
-    /// <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> (<paramref name="isList"/> true) or
+    /// <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> (<c>isList</c> true) or
     /// <c>IAsyncEnumerable&lt;T&gt;</c> (false), where <c>T</c> is a named type. Returns false for any
     /// other shape. The element may be the store's entity or an <c>[InquiryProjection]</c> of it.
     /// </summary>
@@ -1514,7 +1563,11 @@ internal static class StoreProcessor
         var hasSecondaryUniqueConstraint = entity.Columns.AsImmutableArray().Any(static c => c.IsUnique && !c.IsKey) ||
             entity.Indexes.AsImmutableArray().Any(index =>
             {
-                if (!index.IsUnique) return false;
+                if (!index.IsUnique)
+                {
+                    return false;
+                }
+
                 var logicalKeys = index.LogicalKeyProperties.AsImmutableArray();
                 if (logicalKeys.Length == 0 ||
                     logicalKeys.Distinct(System.StringComparer.Ordinal).Count() != logicalKeys.Length ||
@@ -1534,10 +1587,18 @@ internal static class StoreProcessor
         var collectionErrors = new Dictionary<StoreMethodData, string>();
         foreach (var item in valid)
         {
-            if (item.PredicatePlan is null) continue;
+            if (item.PredicatePlan is null)
+            {
+                continue;
+            }
+
             foreach (var binding in item.PredicatePlan.Bindings)
             {
-                if (!binding.IsCollection || binding.IsNegatedCollection) continue;
+                if (!binding.IsCollection || binding.IsNegatedCollection)
+                {
+                    continue;
+                }
+
                 binding.CollectionResolution = ResolveCollection(item.Method, binding.Column, binding.ElementIsNullable);
             }
         }
@@ -1552,7 +1613,10 @@ internal static class StoreProcessor
                 return resolution;
             }
             var diagnostic = resolution.Diagnostic!;
-            if (collectionErrors.ContainsKey(method)) return resolution;
+            if (collectionErrors.ContainsKey(method))
+            {
+                return resolution;
+            }
 
             collectionErrors.Add(method, diagnostic.FailureMessage);
             var location = diagnostic.Facet switch
@@ -1572,13 +1636,25 @@ internal static class StoreProcessor
         var sprocTvpResolutions = new Dictionary<StoreMethodData, Dictionary<string, (ProcedureTvpResolution Resolution, string FieldName)>>();
         foreach (var item in valid)
         {
-            if (item.Method.Operation != StoreOperation.StoredProcedure) continue;
+            if (item.Method.Operation != StoreOperation.StoredProcedure)
+            {
+                continue;
+            }
+
             var paramCount = item.Method.Parameters.Count - 1;
             for (var pi = 0; pi < paramCount; pi++)
             {
                 var p = item.Method.Parameters[pi];
-                if (p.ElementComparisonDisplay is null || p.IsBinaryType) continue;
-                if (collectionErrors.ContainsKey(item.Method)) break;
+                if (p.ElementComparisonDisplay is null || p.IsBinaryType)
+                {
+                    continue;
+                }
+
+                if (collectionErrors.ContainsKey(item.Method))
+                {
+                    break;
+                }
+
                 if (p.TvpTypeName is null)
                 {
                     if (!collectionErrors.ContainsKey(item.Method))
@@ -1659,7 +1735,9 @@ internal static class StoreProcessor
         {
             var suppressSoftDeleteForMethod = hasSoftDelete && m.IncludeDeleted;
             if (m.IgnoredFilterNames.Count == 0)
+            {
                 return suppressSoftDeleteForMethod ? ctxIncludeDeleted : ctx;
+            }
 
             var ignored = new HashSet<string>(m.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal);
             // Length-prefixed serialization: a bare join would let the sets {"a|b"} and {"a","b"}
@@ -1761,10 +1839,25 @@ internal static class StoreProcessor
             : $"partial class {store.Name}");
         source.AppendLine("{");
 
-        if (needsSelectAll) AppendSql("_sqlSelectAll", sqlBuilder.BuildSelectAllSql(ctx));
-        if (needsSelectByKey) AppendSql("_sqlSelectByKey", sqlBuilder.BuildSelectByKeySql(ctx));
-        if (needsInsert) AppendSql("_sqlInsert", sqlBuilder.BuildInsertSql(ctx));
-        if (needsUpdate) AppendSql("_sqlUpdate", sqlBuilder.BuildUpdateSql(ctx));
+        if (needsSelectAll)
+        {
+            AppendSql("_sqlSelectAll", sqlBuilder.BuildSelectAllSql(ctx));
+        }
+
+        if (needsSelectByKey)
+        {
+            AppendSql("_sqlSelectByKey", sqlBuilder.BuildSelectByKeySql(ctx));
+        }
+
+        if (needsInsert)
+        {
+            AppendSql("_sqlInsert", sqlBuilder.BuildInsertSql(ctx));
+        }
+
+        if (needsUpdate)
+        {
+            AppendSql("_sqlUpdate", sqlBuilder.BuildUpdateSql(ctx));
+        }
         // Some operations are not universally supported (e.g. Oracle has no RETURNING result set, and no
         // MERGE upsert on a database-generated key). The builder throws NotSupportedException for those;
         // catch it so a single unsupported operation degrades to a diagnostic + throwing stub (below)
@@ -1775,10 +1868,25 @@ internal static class StoreProcessor
         var upsertReturningError = TryBuildDegradableConst(source, generatedSql, "_sqlUpsertReturning", needsUpsertReturning, () => sqlBuilder.BuildUpsertReturningSql(ctx));
         var deleteReturningError = TryBuildDegradableConst(source, generatedSql, "_sqlDeleteReturning", needsDeleteReturning, () => sqlBuilder.BuildDeleteByKeyReturningSql(ctx));
         var softDeleteReturningError = TryBuildDegradableConst(source, generatedSql, "_sqlSoftDeleteReturning", needsSoftDeleteReturning, () => sqlBuilder.BuildSoftDeleteByKeyReturningSql(ctx));
-        if (needsDeleteByKey) AppendSql("_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
-        if (needsHardDeleteByKey) AppendSql("_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
-        if (needsRestore) AppendSql("_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
-        if (needsCount) AppendSql("_sqlCount", sqlBuilder.BuildCountSql(ctx));
+        if (needsDeleteByKey)
+        {
+            AppendSql("_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
+        }
+
+        if (needsHardDeleteByKey)
+        {
+            AppendSql("_sqlHardDeleteByKey", sqlBuilder.BuildDeleteByKeySql(ctx));
+        }
+
+        if (needsRestore)
+        {
+            AppendSql("_sqlRestoreByKey", sqlBuilder.BuildRestoreByKeySql(ctx));
+        }
+
+        if (needsCount)
+        {
+            AppendSql("_sqlCount", sqlBuilder.BuildCountSql(ctx));
+        }
         // InsertAll is supported on every dialect via the SqlBuilder batch-insert shape hooks (Oracle emits
         // INSERT INTO … SELECT … FROM dual UNION ALL; everyone else uses multi-row VALUES). The header + per-row open are
         // baked consts the emitter assembles at runtime.
@@ -1851,7 +1959,8 @@ internal static class StoreProcessor
                 if (method.LockMode != 0)
                 {
                     var lockError = TryApplyLockClause(ref predSql, sqlBuilder, CtxFor(method), method);
-                    if (lockError is not null) { lockErrors[method.MemberName] = lockError; continue; }
+                    if (lockError is not null)
+                    { lockErrors[method.MemberName] = lockError; continue; }
                 }
                 AppendSql("_sqlPredicate_" + method.MemberName, predSql);
             }
@@ -1934,7 +2043,8 @@ internal static class StoreProcessor
                 if (method.LockMode != 0)
                 {
                     var lockError = TryApplyLockClause(ref planSql, sqlBuilder, planCtx, method);
-                    if (lockError is not null) { lockErrors[method.MemberName] = lockError; continue; }
+                    if (lockError is not null)
+                    { lockErrors[method.MemberName] = lockError; continue; }
                 }
                 AppendSql(selectPlan.SqlFieldName, planSql);
 
@@ -1975,47 +2085,50 @@ internal static class StoreProcessor
             {
                 case StoreOperation.SelectAll:
                 case StoreOperation.SelectAllEager:
-                {
-                    var field = "_sqlSelectAll_" + method.MemberName;
-                    var sql = sqlBuilder.BuildSelectAllSql(methodCtx, method.Distinct);
-                    if (method.LockMode != 0)
                     {
-                        var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
-                        if (lockError is not null) { lockErrors[method.MemberName] = lockError; break; }
+                        var field = "_sqlSelectAll_" + method.MemberName;
+                        var sql = sqlBuilder.BuildSelectAllSql(methodCtx, method.Distinct);
+                        if (method.LockMode != 0)
+                        {
+                            var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
+                            if (lockError is not null)
+                            { lockErrors[method.MemberName] = lockError; break; }
+                        }
+                        AppendSql(field, sql);
+                        baseSelectFields[method.MemberName] = field;
+                        break;
                     }
-                    AppendSql(field, sql);
-                    baseSelectFields[method.MemberName] = field;
-                    break;
-                }
 
                 case StoreOperation.SelectOneByKey:
                 case StoreOperation.SelectOneByKeyEager:
-                {
-                    var field = "_sqlSelectByKey_" + method.MemberName;
-                    var sql = sqlBuilder.BuildSelectByKeySql(methodCtx);
-                    if (method.LockMode != 0)
                     {
-                        var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
-                        if (lockError is not null) { lockErrors[method.MemberName] = lockError; break; }
+                        var field = "_sqlSelectByKey_" + method.MemberName;
+                        var sql = sqlBuilder.BuildSelectByKeySql(methodCtx);
+                        if (method.LockMode != 0)
+                        {
+                            var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
+                            if (lockError is not null)
+                            { lockErrors[method.MemberName] = lockError; break; }
+                        }
+                        AppendSql(field, sql);
+                        baseSelectFields[method.MemberName] = field;
+                        break;
                     }
-                    AppendSql(field, sql);
-                    baseSelectFields[method.MemberName] = field;
-                    break;
-                }
 
                 case StoreOperation.SelectAllByField when fieldColumns.Count > 0:
-                {
-                    var field = "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns) + "_" + method.MemberName;
-                    var sql = sqlBuilder.BuildSelectByFieldSql(methodCtx, ToColumnList(fieldColumns), method.Distinct);
-                    if (method.LockMode != 0)
                     {
-                        var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
-                        if (lockError is not null) { lockErrors[method.MemberName] = lockError; break; }
+                        var field = "_sqlSelectBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns) + "_" + method.MemberName;
+                        var sql = sqlBuilder.BuildSelectByFieldSql(methodCtx, ToColumnList(fieldColumns), method.Distinct);
+                        if (method.LockMode != 0)
+                        {
+                            var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
+                            if (lockError is not null)
+                            { lockErrors[method.MemberName] = lockError; break; }
+                        }
+                        AppendSql(field, sql);
+                        baseSelectFields[method.MemberName] = field;
+                        break;
                     }
-                    AppendSql(field, sql);
-                    baseSelectFields[method.MemberName] = field;
-                    break;
-                }
 
                 // Count shares one _sqlCount const; a named-filter bypass is the only per-method shape
                 // it supports, so the per-method const exists exactly when the emitter picks the
@@ -2357,7 +2470,8 @@ internal static class StoreProcessor
         source.AppendLine("        : base(inquiry)");
         source.AppendLine("    {");
         source.AppendLine("    }");
-        foreach (var method in store.Methods) { source.AppendLine(); StoreOperationEmitter.EmitUnsupportedStub(source, method, reason); }
+        foreach (var method in store.Methods)
+        { source.AppendLine(); StoreOperationEmitter.EmitUnsupportedStub(source, method, reason); }
         source.AppendLine("}");
         string? interfaceName = null;
         if (store.GenerateInterface)
@@ -2553,22 +2667,22 @@ internal static class StoreProcessor
                 Add("command", "_sqlDeleteAll_" + method.MemberName);
                 break;
             case StoreOperation.StoredProcedure:
-            {
-                var returnsRows = method.ProcedureReturn is ProcedureReturnKind.AsyncEnumerableOfEntity
-                    or ProcedureReturnKind.TaskOfEntity or ProcedureReturnKind.TaskOfMultipleResultSets;
-                var resultSetCount = method.ProcedureReturn == ProcedureReturnKind.TaskOfMultipleResultSets
-                    ? method.ProcedureResultSetTypeFqns.Count
-                    : 1;
-                var procedureParameters = method.Parameters.AsImmutableArray()
-                    .Take(method.Parameters.Count - 1)
-                    .Select(static parameter => parameter.Name)
-                    .ToList();
-                var commandText = returnsRows
-                    ? sqlBuilder.BuildProcedureReaderCall(method.ProcedureName!, procedureParameters, resultSetCount)
-                    : null;
-                commands.Add(new GeneratedCommandDocumentation("database command", commandText ?? method.ProcedureName!));
-                break;
-            }
+                {
+                    var returnsRows = method.ProcedureReturn is ProcedureReturnKind.AsyncEnumerableOfEntity
+                        or ProcedureReturnKind.TaskOfEntity or ProcedureReturnKind.TaskOfMultipleResultSets;
+                    var resultSetCount = method.ProcedureReturn == ProcedureReturnKind.TaskOfMultipleResultSets
+                        ? method.ProcedureResultSetTypeFqns.Count
+                        : 1;
+                    var procedureParameters = method.Parameters.AsImmutableArray()
+                        .Take(method.Parameters.Count - 1)
+                        .Select(static parameter => parameter.Name)
+                        .ToList();
+                    var commandText = returnsRows
+                        ? sqlBuilder.BuildProcedureReaderCall(method.ProcedureName!, procedureParameters, resultSetCount)
+                        : null;
+                    commands.Add(new GeneratedCommandDocumentation("database command", commandText ?? method.ProcedureName!));
+                    break;
+                }
         }
 
         return new EquatableArray<GeneratedCommandDocumentation>(commands.ToImmutable());
@@ -2838,62 +2952,62 @@ internal static class StoreProcessor
                     }
                 }
                 else
-            {
-                var predicateParameterCount = 0;
-                foreach (var predicate in method.Predicates)
                 {
-                    predicateParameterCount += SqlPredicate.ParameterArity(predicate.Op);
-                }
-
-                var setCount = method.Parameters.Count - 1 - predicateParameterCount;
-                if (setCount <= 0)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name,
-                        "No update parameters remain after the [InquiryWhere] parameters. Add at least one update value before them."));
-                    return false;
-                }
-
-                var assignedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                for (var i = 0; i < setCount; i++)
-                {
-                    var parameter = method.Parameters[i];
-                    var column = FindUniqueColumn(entity, parameter.Name, out var ambiguous);
-                    if (column is null)
+                    var predicateParameterCount = 0;
+                    foreach (var predicate in method.Predicates)
                     {
-                        if (ambiguous)
-                        {
-                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name,
-                                $"Update parameter '{parameter.Name}' matches more than one mapped column. Rename it to an unambiguous property name."));
-                        }
-                        else
-                        {
-                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnknownField, method.Location?.ToLocation(), method.Name, parameter.Name));
-                        }
-                        return false;
+                        predicateParameterCount += SqlPredicate.ParameterArity(predicate.Op);
                     }
 
-                    if (!assignedColumns.Add(column.PropertyName))
+                    var setCount = method.Parameters.Count - 1 - predicateParameterCount;
+                    if (setCount <= 0)
                     {
                         context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name,
-                            $"More than one update parameter maps to column '{column.PropertyName}'."));
+                            "No update parameters remain after the [InquiryWhere] parameters. Add at least one update value before them."));
                         return false;
                     }
+
+                    var assignedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (var i = 0; i < setCount; i++)
+                    {
+                        var parameter = method.Parameters[i];
+                        var column = FindUniqueColumn(entity, parameter.Name, out var ambiguous);
+                        if (column is null)
+                        {
+                            if (ambiguous)
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name,
+                                    $"Update parameter '{parameter.Name}' matches more than one mapped column. Rename it to an unambiguous property name."));
+                            }
+                            else
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.UnknownField, method.Location?.ToLocation(), method.Name, parameter.Name));
+                            }
+                            return false;
+                        }
+
+                        if (!assignedColumns.Add(column.PropertyName))
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name,
+                                $"More than one update parameter maps to column '{column.PropertyName}'."));
+                            return false;
+                        }
 
                         if (!IsSettableColumn(column))
-                    {
-                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SetFieldNotUpdatable, method.Location?.ToLocation(), method.Name, parameter.Name));
-                        return false;
-                    }
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SetFieldNotUpdatable, method.Location?.ToLocation(), method.Name, parameter.Name));
+                            return false;
+                        }
 
-                    if (!ParameterMatchesColumn(parameter, column))
-                    {
-                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
-                        return false;
-                    }
+                        if (!ParameterMatchesColumn(parameter, column))
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
+                            return false;
+                        }
 
-                    setColumns.Add(column);
+                        setColumns.Add(column);
+                    }
                 }
-            }
             }
 
             fieldColumns = setColumns;
@@ -3496,90 +3610,90 @@ internal static class StoreProcessor
 
                 case SqlCompareOp.Between:
                 case SqlCompareOp.NotBetween:
-                {
-                    if (!ParameterMatchesColumn(method.Parameters[paramIndex], column) ||
-                        !ParameterMatchesColumn(method.Parameters[paramIndex + 1], column))
                     {
-                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
-                        return false;
-                    }
+                        if (!ParameterMatchesColumn(method.Parameters[paramIndex], column) ||
+                            !ParameterMatchesColumn(method.Parameters[paramIndex + 1], column))
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
+                            return false;
+                        }
 
-                    var lo = UniqueName(usedNames, paramBase + "_lo");
-                    var hi = UniqueName(usedNames, paramBase + "_hi");
-                    // SqlPredicate carries the bare logical name; SqlBuilder.RenderPredicate applies the
-                    // dialect sigil (':' on Oracle, '@' elsewhere) when emitting the SQL. The runtime
-                    // PredicateBinding keeps '@' — the binder is dialect-agnostic and FinalizeCommand
-                    // reconciles the sigil on Oracle.
-                    predicates.Add(ToSqlPredicate(predicate, column, lo, hi));
-                    bindings.Add(new PredicateBinding("@" + lo, paramIndex, column, isCollection: false));
-                    bindings.Add(new PredicateBinding("@" + hi, paramIndex + 1, column, isCollection: false));
-                    paramIndex += 2;
-                    break;
-                }
+                        var lo = UniqueName(usedNames, paramBase + "_lo");
+                        var hi = UniqueName(usedNames, paramBase + "_hi");
+                        // SqlPredicate carries the bare logical name; SqlBuilder.RenderPredicate applies the
+                        // dialect sigil (':' on Oracle, '@' elsewhere) when emitting the SQL. The runtime
+                        // PredicateBinding keeps '@' — the binder is dialect-agnostic and FinalizeCommand
+                        // reconciles the sigil on Oracle.
+                        predicates.Add(ToSqlPredicate(predicate, column, lo, hi));
+                        bindings.Add(new PredicateBinding("@" + lo, paramIndex, column, isCollection: false));
+                        bindings.Add(new PredicateBinding("@" + hi, paramIndex + 1, column, isCollection: false));
+                        paramIndex += 2;
+                        break;
+                    }
 
                 case SqlCompareOp.In:
                 case SqlCompareOp.NotIn:
-                {
-                    // IN/NOT IN match the collection element against the column's non-nullable type: a set
-                    // of values to test membership against is never itself nullable.
-                    var parameter = method.Parameters[paramIndex];
-                    var element = parameter.ElementNonNullableComparisonDisplay;
-                    if (element is null || element != column.Type.NonNullableDisplayName)
                     {
-                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateInRequiresCollection, method.Location?.ToLocation(), method.Name, predicate.Field));
-                        return false;
-                    }
+                        // IN/NOT IN match the collection element against the column's non-nullable type: a set
+                        // of values to test membership against is never itself nullable.
+                        var parameter = method.Parameters[paramIndex];
+                        var element = parameter.ElementNonNullableComparisonDisplay;
+                        if (element is null || element != column.Type.NonNullableDisplayName)
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateInRequiresCollection, method.Location?.ToLocation(), method.Name, predicate.Field));
+                            return false;
+                        }
 
-                    var name = UniqueName(usedNames, paramBase);
-                    predicates.Add(ToSqlPredicate(predicate, column, name, null));
-                    // Unlike scalar bindings (which keep the runtime binder's '@' form and let Oracle's
-                    // FinalizeCommand reconcile the sigil), IN/NOT IN route through InquiryInExpansion, which
-                    // rewrites the command TEXT by locating the baked sentinel. That sentinel takes the
-                    // dialect sigil (RenderIn/RenderNotIn → ParameterName), so the Expand name must match it
-                    // exactly — ':name' on Oracle, '@name' elsewhere. FinalizeCommand only renames
-                    // parameters, not the text, so it cannot bridge a mismatch here. NOT IN always uses the
-                    // sentinel path (isNegatedCollection) so its empty-collection rewrite is dialect-uniform.
-                    bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column,
-                        isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn,
-                        elementIsNullable: parameter.ElementIsNullable));
-                    paramIndex += 1;
-                    hasIn = true;
-                    break;
-                }
+                        var name = UniqueName(usedNames, paramBase);
+                        predicates.Add(ToSqlPredicate(predicate, column, name, null));
+                        // Unlike scalar bindings (which keep the runtime binder's '@' form and let Oracle's
+                        // FinalizeCommand reconcile the sigil), IN/NOT IN route through InquiryInExpansion, which
+                        // rewrites the command TEXT by locating the baked sentinel. That sentinel takes the
+                        // dialect sigil (RenderIn/RenderNotIn → ParameterName), so the Expand name must match it
+                        // exactly — ':name' on Oracle, '@name' elsewhere. FinalizeCommand only renames
+                        // parameters, not the text, so it cannot bridge a mismatch here. NOT IN always uses the
+                        // sentinel path (isNegatedCollection) so its empty-collection rewrite is dialect-uniform.
+                        bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column,
+                            isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn,
+                            elementIsNullable: parameter.ElementIsNullable));
+                        paramIndex += 1;
+                        hasIn = true;
+                        break;
+                    }
 
                 case SqlCompareOp.Like:
                 case SqlCompareOp.NotLike:
-                {
-                    if (column.Type.NonNullableDisplayName != "string" ||
-                        !ParameterMatchesColumn(method.Parameters[paramIndex], column))
                     {
-                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
-                        return false;
-                    }
+                        if (column.Type.NonNullableDisplayName != "string" ||
+                            !ParameterMatchesColumn(method.Parameters[paramIndex], column))
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
+                            return false;
+                        }
 
-                    var name = UniqueName(usedNames, paramBase);
-                    predicates.Add(ToSqlPredicate(predicate, column, name, null));
-                    bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
-                    paramIndex += 1;
-                    break;
-                }
+                        var name = UniqueName(usedNames, paramBase);
+                        predicates.Add(ToSqlPredicate(predicate, column, name, null));
+                        bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
+                        paramIndex += 1;
+                        break;
+                    }
 
                 default:
-                {
-                    if (!(predicate.IsOptional
-                        ? ParameterMatchesColumnIgnoringNullability(method.Parameters[paramIndex], column)
-                        : ParameterMatchesColumn(method.Parameters[paramIndex], column)))
                     {
-                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
-                        return false;
-                    }
+                        if (!(predicate.IsOptional
+                            ? ParameterMatchesColumnIgnoringNullability(method.Parameters[paramIndex], column)
+                            : ParameterMatchesColumn(method.Parameters[paramIndex], column)))
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
+                            return false;
+                        }
 
-                    var name = UniqueName(usedNames, paramBase);
-                    predicates.Add(ToSqlPredicate(predicate, column, name, null));
-                    bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
-                    paramIndex += 1;
-                    break;
-                }
+                        var name = UniqueName(usedNames, paramBase);
+                        predicates.Add(ToSqlPredicate(predicate, column, name, null));
+                        bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
+                        paramIndex += 1;
+                        break;
+                    }
             }
 
             groupDepth -= predicate.CloseGroups;

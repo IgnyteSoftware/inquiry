@@ -1,7 +1,7 @@
-using Inquiry.Transactions;
-using Microsoft.Extensions.DependencyInjection;
 using System.Data;
 using System.Runtime.ExceptionServices;
+using Inquiry.Transactions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Testing;
 
@@ -38,7 +38,7 @@ public sealed class InquirySandbox
         Func<InquirySandboxContext, CancellationToken, Task> operation,
         CancellationToken cancellationToken = default)
     {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        ArgumentNullException.ThrowIfNull(operation);
 
         return RunAsync<object?>(async (context, token) =>
         {
@@ -59,7 +59,8 @@ public sealed class InquirySandbox
         Func<InquirySandboxContext, CancellationToken, Task<TResult>> operation,
         CancellationToken cancellationToken = default)
     {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        ArgumentNullException.ThrowIfNull(operation);
+
         if (Active.Value)
         {
             throw new InvalidOperationException(

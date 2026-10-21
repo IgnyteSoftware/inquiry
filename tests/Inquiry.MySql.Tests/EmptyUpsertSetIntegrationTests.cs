@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Stores;
@@ -14,7 +11,7 @@ public sealed class MySqlKeyOnlyItem
     public long? Id { get; set; }
 }
 
-public partial class MySqlKeyOnlyItemStore : InquiryStore<MySqlKeyOnlyItem>
+public partial class MySqlKeyOnlyItemStore: InquiryStore<MySqlKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(MySqlKeyOnlyItem item, CancellationToken ct = default);

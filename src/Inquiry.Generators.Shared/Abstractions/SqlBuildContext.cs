@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Inquiry.Generators.Models;
 
 namespace Inquiry.Generators.Abstractions;
@@ -20,7 +17,10 @@ public sealed class SqlBuildContext
     {
         var name = "__new_" + token.PropertyName;
         while (columns.Any(c => string.Equals(c.PropertyName, name, StringComparison.OrdinalIgnoreCase)))
+        {
             name = "_" + name;
+        }
+
         return name;
     }
 
@@ -30,6 +30,10 @@ public sealed class SqlBuildContext
     internal IReadOnlyList<ForeignKeyConstraintData>? NormalizedForeignKeys { get; init; }
     internal IReadOnlyList<IndexData>? NormalizedIndexes { get; init; }
     internal IReadOnlyList<CheckConstraintData>? NormalizedChecks { get; init; }
+    /// <param name="builder">The dialect SQL builder.</param>
+    /// <param name="schema">The raw (unquoted) schema name, or null.</param>
+    /// <param name="tableName">The raw (unquoted) table name.</param>
+    /// <param name="columns">The columns this context builds SQL for.</param>
     /// <param name="suppressSoftDelete">
     /// When true, the soft-delete term is dropped from <see cref="ActiveRowPredicate"/> so SELECTs built
     /// from this context are not filtered by the soft-delete indicator (any global-filter terms still
@@ -37,6 +41,7 @@ public sealed class SqlBuildContext
     /// true</c> select; the SET clauses are still computed (they are never suppressed — delete/restore
     /// always touch the indicator).
     /// </param>
+    /// <param name="generateForeignKeys">Whether <c>BuildCreateTableSql</c> should emit FOREIGN KEY constraints.</param>
     /// <param name="softDeletePredicateColumn">
     /// The entity's soft-delete column, supplied only when <paramref name="columns"/> does not itself
     /// carry one. This is the projection case: a projection's column list is a subset of the entity's

@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace Inquiry.Generators.Tests;
 
 /// <summary>

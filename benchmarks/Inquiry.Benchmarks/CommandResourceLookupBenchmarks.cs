@@ -1,9 +1,9 @@
+using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Order;
 using Inquiry.Commands;
 using Microsoft.Data.Sqlite;
-using System.Runtime.CompilerServices;
 
 namespace Inquiry.Benchmarks;
 
@@ -68,17 +68,21 @@ public class CommandResourceLookupBenchmarks
 
     private void LegacyDispose(SqliteCommand command)
     {
-        if (!_legacyResources.TryGetValue(command, out var set)) return;
+        if (!_legacyResources.TryGetValue(command, out var set))
+        {
+            return;
+        }
+
         _legacyResources.Remove(command);
         set.Dispose();
     }
 
-    private sealed class NoOpResource : IInquiryExecutionResource
+    private sealed class NoOpResource: IInquiryExecutionResource
     {
         public void Dispose() { }
     }
 
-    private sealed class LegacyResourceSet : IDisposable
+    private sealed class LegacyResourceSet: IDisposable
     {
         private readonly object _gate = new();
         private List<IInquiryExecutionResource>? _items = new();
@@ -87,7 +91,11 @@ public class CommandResourceLookupBenchmarks
         {
             lock (_gate)
             {
-                if (_items is null) throw new ObjectDisposedException(nameof(LegacyResourceSet));
+                if (_items is null)
+                {
+                    throw new ObjectDisposedException(nameof(LegacyResourceSet));
+                }
+
                 _items.Add(resource);
             }
         }
@@ -100,7 +108,11 @@ public class CommandResourceLookupBenchmarks
                 items = _items;
                 _items = null;
             }
-            if (items is null) return;
+            if (items is null)
+            {
+                return;
+            }
+
             List<Exception>? exceptions = null;
             for (var i = items.Count - 1; i >= 0; i--)
             {

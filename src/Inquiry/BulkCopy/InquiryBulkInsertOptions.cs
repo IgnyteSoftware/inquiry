@@ -24,15 +24,29 @@ public sealed class InquiryBulkInsertOptions
     internal void Validate()
     {
         if (Timeout is { } timeout && (timeout <= TimeSpan.Zero || timeout.TotalSeconds > int.MaxValue))
+        {
             throw new ArgumentOutOfRangeException(nameof(Timeout), "Timeout must be positive and no greater than Int32.MaxValue seconds.");
+        }
+
         if (BatchSize is <= 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(BatchSize), "BatchSize must be positive.");
+        }
+
         if (NotifyAfter is <= 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(NotifyAfter), "NotifyAfter must be positive.");
+        }
+
         if (RowsCopied is not null && NotifyAfter is null)
+        {
             throw new InvalidOperationException("RowsCopied requires NotifyAfter to be specified.");
+        }
+
         if (!Enum.IsDefined(ConnectionBehavior))
+        {
             throw new ArgumentOutOfRangeException(nameof(ConnectionBehavior));
+        }
     }
 }
 

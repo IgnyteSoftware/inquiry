@@ -2,7 +2,6 @@ using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
-using Inquiry.Benchmarks.Ef;
 using Inquiry.Benchmarks.LinqToDb;
 using Inquiry.Commands;
 using Inquiry.Northwind.Models;
@@ -48,16 +47,16 @@ public class StreamingBenchmarks
 
     private static Product ReadProduct(System.Data.Common.DbDataReader reader) => new Product
     {
-        ProductID       = reader.GetInt32(0),
-        ProductName     = reader.GetString(1),
-        SupplierID      = reader.IsDBNull(2) ? null : reader.GetInt32(2),
-        CategoryID      = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+        ProductID = reader.GetInt32(0),
+        ProductName = reader.GetString(1),
+        SupplierID = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+        CategoryID = reader.IsDBNull(3) ? null : reader.GetInt32(3),
         QuantityPerUnit = reader.IsDBNull(4) ? null : reader.GetString(4),
-        UnitPrice       = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
-        UnitsInStock    = reader.IsDBNull(6) ? null : reader.GetInt16(6),
-        UnitsOnOrder    = reader.IsDBNull(7) ? null : reader.GetInt16(7),
-        ReorderLevel    = reader.IsDBNull(8) ? null : reader.GetInt16(8),
-        Discontinued    = reader.GetInt32(9) != 0,
+        UnitPrice = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+        UnitsInStock = reader.IsDBNull(6) ? null : reader.GetInt16(6),
+        UnitsOnOrder = reader.IsDBNull(7) ? null : reader.GetInt16(7),
+        ReorderLevel = reader.IsDBNull(8) ? null : reader.GetInt16(8),
+        Discontinued = reader.GetInt32(9) != 0,
     };
 
     // ---- BufferedRead -------------------------------------------------------------------
@@ -71,7 +70,11 @@ public class StreamingBenchmarks
         command.CommandText = SelectAllSql;
         var list = new List<Product>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadProduct(reader));
+        }
+
         return list.Count;
     }
 
@@ -120,7 +123,8 @@ public class StreamingBenchmarks
         command.CommandText = SelectAllSql;
         var count = 0;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) { ReadProduct(reader); count++; }
+        while (await reader.ReadAsync())
+        { ReadProduct(reader); count++; }
         return count;
     }
 
@@ -130,7 +134,10 @@ public class StreamingBenchmarks
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var count = 0;
         await foreach (var _ in ctx.Products.AsNoTracking().AsAsyncEnumerable())
+        {
             count++;
+        }
+
         return count;
     }
 
@@ -140,7 +147,10 @@ public class StreamingBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         var count = 0;
         await foreach (var _ in dc.GetTable<L2Product>().AsAsyncEnumerable())
+        {
             count++;
+        }
+
         return count;
     }
 
@@ -150,8 +160,11 @@ public class StreamingBenchmarks
         var count = 0;
 #pragma warning disable INQ048 // Static SQL constant, no user input
         await foreach (var _ in _db.Inquiry.QueryAsync<Product>(new InquiryCommand(SelectAllSql)))
+        {
 #pragma warning restore INQ048
             count++;
+        }
+
         return count;
     }
 }

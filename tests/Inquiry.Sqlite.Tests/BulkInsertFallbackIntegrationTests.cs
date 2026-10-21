@@ -1,8 +1,5 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Inquiry.FeatureCatalog;
 using Inquiry.BulkCopy;
+using Inquiry.FeatureCatalog;
 using Inquiry.Sqlite.Tests.Fixtures;
 
 namespace Inquiry.Sqlite.Tests;

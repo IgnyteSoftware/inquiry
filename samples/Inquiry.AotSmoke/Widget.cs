@@ -16,7 +16,7 @@ public sealed class Widget
     public bool IsActive { get; set; }
 }
 
-public partial class WidgetStore : InquiryStore<Widget>
+public partial class WidgetStore: InquiryStore<Widget>
 {
     [InquirySelectAll]
     public partial Task<IReadOnlyList<Widget>> SelectAllAsync(CancellationToken cancellationToken = default);

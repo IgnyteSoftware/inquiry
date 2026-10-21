@@ -81,10 +81,10 @@ internal static class InquiryParameterBinder
     /// </summary>
     private static object ReinterpretUnsignedForSignedDbType(object value, System.Data.DbType dbType) => (value, dbType) switch
     {
-        (uint u,   System.Data.DbType.Int32) => unchecked((int)u),
+        (uint u, System.Data.DbType.Int32) => unchecked((int)u),
         (ushort u, System.Data.DbType.Int16) => unchecked((short)u),
-        (ulong u,  System.Data.DbType.Int64) => unchecked((long)u),
-        (sbyte s,  System.Data.DbType.Byte)  => unchecked((byte)s),
+        (ulong u, System.Data.DbType.Int64) => unchecked((long)u),
+        (sbyte s, System.Data.DbType.Byte) => unchecked((byte)s),
         _ => value,
     };
 
@@ -122,7 +122,10 @@ internal static class InquiryParameterBinder
             {
                 candidate = candidate.Substring(1);
             }
-            if (string.Equals(candidate, logical, StringComparison.OrdinalIgnoreCase)) return parameter;
+            if (string.Equals(candidate, logical, StringComparison.OrdinalIgnoreCase))
+            {
+                return parameter;
+            }
         }
 
         throw new IndexOutOfRangeException($"The command does not contain a read-back parameter named '{name}'.");

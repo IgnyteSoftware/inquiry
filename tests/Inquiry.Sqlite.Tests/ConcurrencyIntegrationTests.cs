@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Inquiry;
 using Inquiry.DependencyInjection;
 using Inquiry.Entities;
 using Inquiry.Sqlite.DependencyInjection;
@@ -24,7 +20,7 @@ public sealed class VersionedDoc
     public int Version { get; set; }
 }
 
-public partial class VersionedDocStore : InquiryStore<VersionedDoc>
+public partial class VersionedDocStore: InquiryStore<VersionedDoc>
 {
     [InquiryInsert]
     public partial Task<VersionedDoc?> InsertAsync(VersionedDoc doc, CancellationToken cancellationToken = default);

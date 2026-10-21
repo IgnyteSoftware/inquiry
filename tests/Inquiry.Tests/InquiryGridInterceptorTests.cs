@@ -1,3 +1,5 @@
+using System.Data.Common;
+using System.Diagnostics;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Diagnostics;
@@ -5,8 +7,6 @@ using Inquiry.Interceptors;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data.Common;
-using System.Diagnostics;
 
 namespace Inquiry.Tests;
 
@@ -158,7 +158,10 @@ public sealed class InquiryGridInterceptorTests
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = activity =>
             {
-                lock (stopped) stopped.Add(activity);
+                lock (stopped)
+                {
+                    stopped.Add(activity);
+                }
             },
         };
         ActivitySource.AddActivityListener(listener);
@@ -176,7 +179,11 @@ public sealed class InquiryGridInterceptorTests
         });
 
         List<Activity> ours;
-        lock (stopped) ours = stopped.Where(a => a.TraceId == root.TraceId).ToList();
+        lock (stopped)
+        {
+            ours = stopped.Where(a => a.TraceId == root.TraceId).ToList();
+        }
+
         var span = Assert.Single(ours);
         Assert.Equal("QUERY_MULTIPLE", span.DisplayName);
         Assert.Equal("QUERY_MULTIPLE", recorder.ExecutingActivity);
@@ -195,7 +202,10 @@ public sealed class InquiryGridInterceptorTests
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = activity =>
             {
-                lock (stopped) stopped.Add(activity);
+                lock (stopped)
+                {
+                    stopped.Add(activity);
+                }
             },
         };
         ActivitySource.AddActivityListener(listener);
@@ -210,7 +220,11 @@ public sealed class InquiryGridInterceptorTests
         });
 
         List<Activity> ours;
-        lock (stopped) ours = stopped.Where(a => a.TraceId == root.TraceId).ToList();
+        lock (stopped)
+        {
+            ours = stopped.Where(a => a.TraceId == root.TraceId).ToList();
+        }
+
         var span = Assert.Single(ours);
         Assert.Equal(ActivityStatusCode.Error, span.Status);
         Assert.Equal(["initialized", "executing", "executed", "failed"], recorder.Events);
@@ -240,7 +254,7 @@ public sealed class InquiryGridInterceptorTests
         await transaction.CommitAsync();
     }
 
-    private sealed class EventInterceptor : IInquiryCommandInterceptor
+    private sealed class EventInterceptor: IInquiryCommandInterceptor
     {
         public List<string> Events { get; } = new();
         public List<DbCommand> Commands { get; } = new();
@@ -283,7 +297,7 @@ public sealed class InquiryGridInterceptorTests
         }
     }
 
-    private sealed class MemoryConnectionFactory : IInquiryConnectionFactory
+    private sealed class MemoryConnectionFactory: IInquiryConnectionFactory
     {
         public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
         {

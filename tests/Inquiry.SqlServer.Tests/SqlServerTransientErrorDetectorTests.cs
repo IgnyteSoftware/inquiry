@@ -1,5 +1,4 @@
 using System.Reflection;
-using Inquiry.SqlServer;
 using Microsoft.Data.SqlClient;
 
 namespace Inquiry.SqlServer.Tests;

@@ -2,7 +2,6 @@ using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Microsoft.Data.Sqlite;
-using Xunit;
 
 namespace Inquiry.Sqlite.Tests;
 

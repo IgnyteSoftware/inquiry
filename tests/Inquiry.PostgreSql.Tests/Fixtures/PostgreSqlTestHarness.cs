@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Inquiry.DependencyInjection;
 using Inquiry.FeatureCatalog;
 using Inquiry.Northwind;
@@ -5,7 +6,6 @@ using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using System.Runtime.ExceptionServices;
 
 namespace Inquiry.PostgreSql.Tests.Fixtures;
 
@@ -14,7 +14,7 @@ namespace Inquiry.PostgreSql.Tests.Fixtures;
 /// a configured <see cref="ServiceProvider"/>. The database is dropped on disposal so
 /// parallel test classes never collide on table state.
 /// </summary>
-internal sealed class PostgreSqlTestHarness : IAsyncDisposable
+internal sealed class PostgreSqlTestHarness: IAsyncDisposable
 {
     private readonly string _adminConnectionString;
     private readonly string _databaseName;
@@ -75,9 +75,14 @@ internal sealed class PostgreSqlTestHarness : IAsyncDisposable
 
             var serviceCollection = new ServiceCollection();
             if (configureOptions is null)
+            {
                 serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+            }
             else
+            {
                 serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+            }
+
             serviceCollection.AddInquiryPostgreSql(connectionString);
             configureServices?.Invoke(serviceCollection);
             var services = serviceCollection.BuildServiceProvider();
@@ -135,7 +140,9 @@ internal sealed class PostgreSqlTestHarness : IAsyncDisposable
         }
 
         if (serviceFailure is not null)
+        {
             ExceptionDispatchInfo.Throw(serviceFailure);
+        }
     }
 
     private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)

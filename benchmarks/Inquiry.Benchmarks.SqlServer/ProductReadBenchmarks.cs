@@ -23,7 +23,7 @@ public class ProductReadBenchmarks
     public int Rows;
 
     private const int PageOffset = 20;
-    private const int PageSize   = 20;
+    private const int PageSize = 20;
     private const string NamePattern = "%Product 1%";
 
     [GlobalSetup]
@@ -81,7 +81,11 @@ public class ProductReadBenchmarks
         command.Parameters.AddWithValue("@lim", PageSize);
         var n = 0;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) n++;
+        while (await reader.ReadAsync())
+        {
+            n++;
+        }
+
         return n;
     }
 
@@ -131,7 +135,11 @@ public class ProductReadBenchmarks
         command.Parameters.AddWithValue("@p", NamePattern);
         var n = 0;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) n++;
+        while (await reader.ReadAsync())
+        {
+            n++;
+        }
+
         return n;
     }
 

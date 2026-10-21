@@ -2,7 +2,6 @@ using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.MySql.Tests.Fixtures;
 using MySqlConnector;
-using Xunit;
 
 namespace Inquiry.MySql.Tests;
 

@@ -1,9 +1,8 @@
+using System.Data.Common;
+using System.Diagnostics;
 using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using MySqlConnector;
-using System.Data.Common;
-using System.Diagnostics;
-using System.Linq;
 
 namespace Inquiry.MariaDb;
 
@@ -11,7 +10,7 @@ namespace Inquiry.MariaDb;
 /// Bulk-insert implementation backed by MySqlConnector's <see cref="MySqlBulkCopy"/>, which streams
 /// rows to the server via <c>LOAD DATA LOCAL INFILE</c>.
 /// </summary>
-internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
+internal sealed class MariaDbBulkCopier: IInquiryBulkCopier
 {
     private readonly IInquiryConnectionFactory _connectionFactory;
 
@@ -27,9 +26,14 @@ internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
         where TEntity : class
     {
         if (context.Options.BatchSize is not null)
+        {
             throw new InvalidOperationException("MariaDB bulk insert cannot honor option BatchSize before writing any rows.");
+        }
+
         if (context.Options.TableLock)
+        {
             throw new InvalidOperationException("MariaDB bulk insert cannot honor option TableLock before writing any rows.");
+        }
 
         DbConnection? dedicatedConnection = null;
         var rawConnection = context.Connection;
@@ -45,18 +49,27 @@ internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
 
         if (rawConnection is not MySqlConnection mysqlConnection)
         {
-            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            if (dedicatedConnection is not null)
+            {
+                await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            }
+
             throw new InvalidOperationException(
                 $"MariaDB bulk insert requires a MySqlConnection but received {rawConnection.GetType().Name}. " +
                 "If using a connection wrapper, unwrap the inner connection first.");
         }
         if (context.Transaction is not null and not MySqlTransaction)
+        {
             throw new InvalidOperationException($"MariaDB bulk insert requires a MySqlTransaction but received {context.Transaction.GetType().Name}.");
+        }
+
         if (context.IsEnlisted && !new MySqlConnectionStringBuilder(mysqlConnection.ConnectionString).AllowLoadLocalInfile)
+        {
             throw new InvalidOperationException(
                 "MariaDB bulk insert cannot enlist in this Inquiry transaction because its connection does not enable " +
                 "AllowLoadLocalInfile. Inquiry deliberately enables that security-sensitive setting only on dedicated " +
                 "bulk-copy connections. Use [InquiryInsert] with a collection for transaction-bound inserts.");
+        }
 
         try
         {
@@ -64,10 +77,20 @@ internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
             {
                 DestinationTableName = QualifyTableName(definition.Schema, definition.Table),
             };
-            if (context.Options.Timeout is { } timeout) bulkCopy.BulkCopyTimeout = (int)Math.Ceiling(timeout.TotalSeconds);
-            if (context.Options.NotifyAfter is { } notifyAfter) bulkCopy.NotifyAfter = notifyAfter;
+            if (context.Options.Timeout is { } timeout)
+            {
+                bulkCopy.BulkCopyTimeout = (int)Math.Ceiling(timeout.TotalSeconds);
+            }
+
+            if (context.Options.NotifyAfter is { } notifyAfter)
+            {
+                bulkCopy.NotifyAfter = notifyAfter;
+            }
+
             if (context.Options.RowsCopied is { } rowsCopied)
+            {
                 bulkCopy.MySqlRowsCopied += (_, args) => rowsCopied(args.RowsCopied);
+            }
 
             for (var i = 0; i < definition.Columns.Count; i++)
             {
@@ -100,12 +123,18 @@ internal sealed class MariaDbBulkCopier : IInquiryBulkCopier
             // The server reports warnings only after it has written the rows, so the copy completed.
             context.RecordCopyCompleted(Stopwatch.GetElapsedTime(copyTimestamp), result.RowsInserted);
             if (result.Warnings.Count > 0)
+            {
                 throw CreateWarningException(result, context.IsEnlisted);
+            }
+
             return result.RowsInserted;
         }
         finally
         {
-            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            if (dedicatedConnection is not null)
+            {
+                await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 

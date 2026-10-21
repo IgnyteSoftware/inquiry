@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.PostgreSql.Tests.Fixtures;
 
 namespace Inquiry.PostgreSql.Tests;

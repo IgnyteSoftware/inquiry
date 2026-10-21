@@ -1,5 +1,4 @@
 using Inquiry.BulkCopy;
-using Inquiry.Testing;
 using Inquiry.Sqlite.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -104,7 +103,7 @@ public sealed class BulkInsertTransactionTests
 
     private sealed record Row(int Id);
 
-    private sealed class RecordingBulkCopier : IInquiryBulkCopier
+    private sealed class RecordingBulkCopier: IInquiryBulkCopier
     {
         public bool Called { get; private set; }
         public InquiryBulkInsertContext? Context { get; private set; }

@@ -1,3 +1,6 @@
+using System.Data.Common;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using BenchmarkDotNet.Attributes;
 using Inquiry.Commands;
 using Inquiry.DependencyInjection;
@@ -6,9 +9,6 @@ using Inquiry.Materialization;
 using Inquiry.Sqlite.DependencyInjection;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data.Common;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
 
 namespace Inquiry.Benchmarks;
 
@@ -61,7 +61,9 @@ public class ActiveTelemetryBenchmarks
             if (result != expected
                 || activityCount != (Listeners is ListenerMode.Tracing or ListenerMode.Both ? expectedObservations : 0)
                 || measurementCount != (Listeners is ListenerMode.Metrics or ListenerMode.Both ? expectedObservations : 0))
+            {
                 throw new InvalidOperationException($"Invalid result or telemetry for {operation.Method.Name}: {result}, {activityCount} spans, {measurementCount} measurements.");
+            }
         }
 
         DetachListeners();
@@ -74,7 +76,11 @@ public class ActiveTelemetryBenchmarks
     {
         var rows = await _inquiry.QueryListAsync<Row, RowMaterializer>(Query, default);
         var sum = 0;
-        foreach (var row in rows) sum += row.Id;
+        foreach (var row in rows)
+        {
+            sum += row.Id;
+        }
+
         return sum;
     }
 
@@ -83,7 +89,10 @@ public class ActiveTelemetryBenchmarks
     {
         var sum = 0;
         await foreach (var row in _inquiry.QueryAsync<Row, RowMaterializer>(Query, default))
+        {
             sum += row.Id;
+        }
+
         return sum;
     }
 
@@ -94,8 +103,16 @@ public class ActiveTelemetryBenchmarks
         var first = await grid.ReadListAsync<Row, RowMaterializer>(default);
         var second = await grid.ReadListAsync<Row, RowMaterializer>(default);
         var sum = 0;
-        foreach (var row in first) sum += row.Id;
-        foreach (var row in second) sum += row.Id;
+        foreach (var row in first)
+        {
+            sum += row.Id;
+        }
+
+        foreach (var row in second)
+        {
+            sum += row.Id;
+        }
+
         return sum;
     }
 
@@ -129,7 +146,9 @@ public class ActiveTelemetryBenchmarks
                 InstrumentPublished = static (instrument, listener) =>
                 {
                     if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+                    {
                         listener.EnableMeasurementEvents(instrument);
+                    }
                 }
             };
             _metrics.SetMeasurementEventCallback(measured);
@@ -152,7 +171,7 @@ public class ActiveTelemetryBenchmarks
     }
 
     private sealed class Row { public int Id { get; init; } }
-    private readonly struct RowMaterializer : IInquiryEntityMaterializer<Row>
+    private readonly struct RowMaterializer: IInquiryEntityMaterializer<Row>
     {
         public bool IsInquirySequentialAccessSafe => true;
         public Row Materialize(DbDataReader reader) => new() { Id = reader.GetInt32(0) };

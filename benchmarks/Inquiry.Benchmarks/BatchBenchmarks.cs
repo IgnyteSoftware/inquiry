@@ -59,7 +59,7 @@ public class BatchBenchmarks
         {
             batch.Add(new Region
             {
-                RegionID          = baseId + i,
+                RegionID = baseId + i,
                 RegionDescription = "Region " + (baseId + i),
             });
         }
@@ -78,13 +78,13 @@ public class BatchBenchmarks
         await using var command = connection.CreateCommand();
         command.Transaction = tx;
         command.CommandText = "INSERT INTO Region (RegionID, RegionDescription) VALUES ($id, $desc);";
-        var pId   = command.Parameters.Add("$id",   SqliteType.Integer);
+        var pId = command.Parameters.Add("$id", SqliteType.Integer);
         var pDesc = command.Parameters.Add("$desc", SqliteType.Text);
         await command.PrepareAsync();
         int affected = 0;
         foreach (var region in batch)
         {
-            pId.Value   = region.RegionID;
+            pId.Value = region.RegionID;
             pDesc.Value = region.RegionDescription;
             affected += await command.ExecuteNonQueryAsync();
         }
@@ -118,7 +118,10 @@ public class BatchBenchmarks
         await using var tx = await dc.BeginTransactionAsync();
         int affected = 0;
         foreach (var region in batch)
+        {
             affected += await dc.InsertAsync(new L2Region { RegionID = region.RegionID, RegionDescription = region.RegionDescription });
+        }
+
         await tx.CommitAsync();
         return affected;
     }

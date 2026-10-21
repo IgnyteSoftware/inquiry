@@ -1,6 +1,6 @@
-using Inquiry.Connections;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Connections;
 
 namespace Inquiry.Commands;
 
@@ -25,8 +25,11 @@ internal static class InquiryBatchCommandExecutor
         if (interceptedRows is not null)
         {
             if (command.UseChunk is not null)
+            {
                 return await ExecuteSelectableAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
                     prepareEnabled, preferPrepareOnce, maxParametersPerCommand, executionMode, command, chunks, firstChunk, interceptedRows, interceptedChunk!, cancellationToken).ConfigureAwait(false);
+            }
+
             return await ExecuteInterceptedAsync(chunks, firstChunk,
                 command.BindItem is null ? interceptedChunk! : interceptedRows, cancellationToken).ConfigureAwait(false);
         }
@@ -64,7 +67,10 @@ internal static class InquiryBatchCommandExecutor
                 {
                     var result = await TryExecuteDbBatchAsync(connection, transaction, commandTimeoutSeconds,
                         prepareEnabled, command, chunks, firstChunk, cancellationToken).ConfigureAwait(false);
-                    if (result.Supported) return result.Total;
+                    if (result.Supported)
+                    {
+                        return result.Total;
+                    }
                 }
 
                 return await ExecuteReusedAsync(connection, transaction, connectionFactory, commandTimeoutSeconds,
@@ -188,7 +194,11 @@ internal static class InquiryBatchCommandExecutor
                     total += await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
 
-                if (singleChunk || !chunks.MoveNext(out chunk)) return total;
+                if (singleChunk || !chunks.MoveNext(out chunk))
+                {
+                    return total;
+                }
+
                 index = 0;
             }
         }
@@ -270,12 +280,19 @@ internal static class InquiryBatchCommandExecutor
             {
                 batch = connection.CreateBatch();
                 batch.Transaction = transaction;
-                if (commandTimeoutSeconds > 0) batch.Timeout = commandTimeoutSeconds;
+                if (commandTimeoutSeconds > 0)
+                {
+                    batch.Timeout = commandTimeoutSeconds;
+                }
 
                 for (var i = 0; i < chunk.Count; i++)
                 {
                     var batchCommand = batch.CreateBatchCommand();
-                    if (firstBatch && i == 0 && !batchCommand.CanCreateParameter) return default;
+                    if (firstBatch && i == 0 && !batchCommand.CanCreateParameter)
+                    {
+                        return default;
+                    }
+
                     batchCommand.CommandText = command.CommandText!;
                     batchCommand.CommandType = command.CommandType;
                     command.BindItem!(new InquiryParameterTarget(batchCommand), chunk[i]);
@@ -299,7 +316,8 @@ internal static class InquiryBatchCommandExecutor
             {
                 if (batch is not null)
                 {
-                    try { await batch.DisposeAsync().ConfigureAwait(false); }
+                    try
+                    { await batch.DisposeAsync().ConfigureAwait(false); }
                     catch (Exception cleanupException) when (primaryException is not null)
                     {
                         InquiryCleanup.ThrowIfCleanupFailed(primaryException, new List<Exception> { cleanupException });
@@ -323,7 +341,11 @@ internal static class InquiryBatchCommandExecutor
         var dbCommand = connection.CreateCommand();
         try
         {
-            if (commandTimeoutSeconds > 0) dbCommand.CommandTimeout = commandTimeoutSeconds;
+            if (commandTimeoutSeconds > 0)
+            {
+                dbCommand.CommandTimeout = commandTimeoutSeconds;
+            }
+
             connectionFactory.InitializeCommand(dbCommand);
             dbCommand.Transaction = transaction;
             dbCommand.CommandText = commandText ?? command.CommandText!;
@@ -332,7 +354,8 @@ internal static class InquiryBatchCommandExecutor
         }
         catch (Exception primaryException)
         {
-            try { dbCommand.Dispose(); }
+            try
+            { dbCommand.Dispose(); }
             catch (Exception cleanupException)
             {
                 InquiryCleanup.ThrowIfCleanupFailed(primaryException, new List<Exception> { cleanupException });

@@ -1,5 +1,5 @@
-using Oracle.ManagedDataAccess.Client;
 using Inquiry.Oracle.Shared;
+using Oracle.ManagedDataAccess.Client;
 
 namespace Inquiry.Oracle.Tests;
 

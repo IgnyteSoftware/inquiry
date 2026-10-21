@@ -1,8 +1,8 @@
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using Inquiry.Oracle;
 using Inquiry.Oracle.Shared;
 using Oracle.ManagedDataAccess.Client;
-using System.Text;
 
 namespace Inquiry.Benchmarks.Oracle;
 

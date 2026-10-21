@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Data.Common;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -19,7 +14,7 @@ namespace Inquiry.FeatureCatalog;
 
 public readonly record struct AjSkuCode(string Value);
 
-public sealed class AjSkuCodeConverter : IInquiryValueConverter<AjSkuCode, string>
+public sealed class AjSkuCodeConverter: IInquiryValueConverter<AjSkuCode, string>
 {
     public string ToProvider(AjSkuCode model) => model.Value;
     public AjSkuCode FromProvider(string provider) => new(provider);
@@ -55,7 +50,7 @@ public sealed class AjSku
     public AjSkuCode Id { get; set; }
 }
 
-public partial class AjCodeStore : InquiryStore<AjCode>
+public partial class AjCodeStore: InquiryStore<AjCode>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(AjCode code, CancellationToken cancellationToken = default);
@@ -67,7 +62,7 @@ public partial class AjCodeStore : InquiryStore<AjCode>
     public partial IAsyncEnumerable<AjCode> AllAsync(CancellationToken cancellationToken = default);
 }
 
-public partial class AjPriceStore : InquiryStore<AjPrice>
+public partial class AjPriceStore: InquiryStore<AjPrice>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(AjPrice price, CancellationToken cancellationToken = default);
@@ -79,7 +74,7 @@ public partial class AjPriceStore : InquiryStore<AjPrice>
     public partial IAsyncEnumerable<AjPrice> AllAsync(CancellationToken cancellationToken = default);
 }
 
-public partial class AjSkuStore : InquiryStore<AjSku>
+public partial class AjSkuStore: InquiryStore<AjSku>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(AjSku sku, CancellationToken cancellationToken = default);

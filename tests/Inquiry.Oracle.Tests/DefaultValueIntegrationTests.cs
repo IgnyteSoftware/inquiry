@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Oracle.Tests.Fixtures;
 using Inquiry.Stores;
@@ -20,7 +17,7 @@ public sealed class DefaultedItem
     public string Status { get; set; } = string.Empty;
 }
 
-public partial class DefaultedItemStore : InquiryStore<DefaultedItem>
+public partial class DefaultedItemStore: InquiryStore<DefaultedItem>
 {
     [InquiryInsert]
     public partial Task<DefaultedItem?> InsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);

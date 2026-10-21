@@ -1,10 +1,10 @@
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Pipeline;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -60,18 +60,18 @@ public sealed class TransactedCommandCreationFailureTests
         Assert.Equal(1, command.DisposeCount);
     }
 
-    private sealed class ThrowingMaterializer : IInquiryEntityMaterializer<object>
+    private sealed class ThrowingMaterializer: IInquiryEntityMaterializer<object>
     {
         public object Materialize(DbDataReader reader) => throw new NotSupportedException();
     }
 
-    private sealed class StubConnectionFactory : IInquiryConnectionFactory
+    private sealed class StubConnectionFactory: IInquiryConnectionFactory
     {
         public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 
-    private sealed class StubConnection : DbConnection
+    private sealed class StubConnection: DbConnection
     {
         private readonly DbCommand _command;
 
@@ -90,7 +90,7 @@ public sealed class TransactedCommandCreationFailureTests
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
     }
 
-    private sealed class StubTransaction : DbTransaction
+    private sealed class StubTransaction: DbTransaction
     {
         private readonly DbConnection _connection;
 
@@ -102,7 +102,7 @@ public sealed class TransactedCommandCreationFailureTests
         public override void Rollback() { }
     }
 
-    private sealed class TransactionRejectingCommand : DbCommand
+    private sealed class TransactionRejectingCommand: DbCommand
     {
         internal const string FailureMessage = "this provider rejects transaction enlistment";
 
@@ -136,7 +136,7 @@ public sealed class TransactedCommandCreationFailureTests
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
     }
 
-    private sealed class StubParameter : DbParameter
+    private sealed class StubParameter: DbParameter
     {
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
@@ -151,13 +151,19 @@ public sealed class TransactedCommandCreationFailureTests
         public override void ResetDbType() { }
     }
 
-    private sealed class StubParameterCollection : DbParameterCollection
+    private sealed class StubParameterCollection: DbParameterCollection
     {
         private readonly List<object> _items = new();
         public override int Count => _items.Count;
         public override object SyncRoot => _items;
         public override int Add(object value) { _items.Add(value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var value in values) _items.Add(value); }
+        public override void AddRange(Array values)
+        {
+            foreach (var value in values)
+            {
+                _items.Add(value);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains(value);
         public override bool Contains(string value) => false;

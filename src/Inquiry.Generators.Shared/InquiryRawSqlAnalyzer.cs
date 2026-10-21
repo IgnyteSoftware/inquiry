@@ -1,8 +1,8 @@
+using System.Collections.Immutable;
 using Inquiry.Generators.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
-using System.Collections.Immutable;
 
 namespace Inquiry.Generators;
 
@@ -19,7 +19,7 @@ namespace Inquiry.Generators;
 /// value still binds through parameters there.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class InquiryRawSqlAnalyzer : DiagnosticAnalyzer
+public sealed class InquiryRawSqlAnalyzer: DiagnosticAnalyzer
 {
     private const string InquiryCommandFullName = "Inquiry.Commands.InquiryCommand";
 

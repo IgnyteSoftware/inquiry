@@ -1,6 +1,4 @@
 using Inquiry.Entities;
-using System;
-using System.Linq;
 
 namespace Inquiry.FeatureCatalog;
 

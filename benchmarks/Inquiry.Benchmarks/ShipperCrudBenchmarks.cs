@@ -46,9 +46,9 @@ public class ShipperCrudBenchmarks
 
     private static Shipper ReadShipper(System.Data.Common.DbDataReader reader) => new Shipper
     {
-        ShipperID   = reader.GetInt32(0),
+        ShipperID = reader.GetInt32(0),
         CompanyName = reader.GetString(1),
-        Phone       = reader.IsDBNull(2) ? null : reader.GetString(2),
+        Phone = reader.IsDBNull(2) ? null : reader.GetString(2),
     };
 
     // ---- SelectAll ----------------------------------------------------------------------
@@ -62,7 +62,11 @@ public class ShipperCrudBenchmarks
         command.CommandText = "SELECT ShipperID, CompanyName, Phone FROM Shippers;";
         var list = new List<Shipper>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadShipper(reader));
+        }
+
         return list.Count;
     }
 
@@ -170,7 +174,11 @@ public class ShipperCrudBenchmarks
         command.Parameters.Add("$c", SqliteType.Text).Value = TargetCompanyName;
         var list = new List<Shipper>();
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadShipper(reader));
+        }
+
         return list.Count;
     }
 
@@ -228,7 +236,7 @@ public class ShipperCrudBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = "INSERT INTO Shippers (CompanyName, Phone) VALUES ($company, $phone);";
         command.Parameters.Add("$company", SqliteType.Text).Value = "Bench Shipper";
-        command.Parameters.Add("$phone",   SqliteType.Text).Value = "555-0000";
+        command.Parameters.Add("$phone", SqliteType.Text).Value = "555-0000";
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -278,9 +286,9 @@ public class ShipperCrudBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "UPDATE Shippers SET CompanyName = $company, Phone = $phone WHERE ShipperID = $id;";
-        command.Parameters.Add("$id",      SqliteType.Integer).Value = TargetShipperId;
-        command.Parameters.Add("$company", SqliteType.Text).Value    = "Updated Shipper";
-        command.Parameters.Add("$phone",   SqliteType.Text).Value    = "555-9999";
+        command.Parameters.Add("$id", SqliteType.Integer).Value = TargetShipperId;
+        command.Parameters.Add("$company", SqliteType.Text).Value = "Updated Shipper";
+        command.Parameters.Add("$phone", SqliteType.Text).Value = "555-9999";
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -300,7 +308,7 @@ public class ShipperCrudBenchmarks
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var entity = await ctx.Shippers.FirstAsync(s => s.ShipperID == TargetShipperId);
         entity.CompanyName = "Updated Shipper";
-        entity.Phone       = "555-9999";
+        entity.Phone = "555-9999";
         return await ctx.SaveChangesAsync();
     }
 
@@ -310,9 +318,9 @@ public class ShipperCrudBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         return await dc.UpdateAsync(new L2Shipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Updated Shipper",
-            Phone       = "555-9999",
+            Phone = "555-9999",
         });
     }
 
@@ -323,9 +331,9 @@ public class ShipperCrudBenchmarks
         await connection.OpenAsync();
         return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdShipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Updated Shipper",
-            Phone       = "555-9999",
+            Phone = "555-9999",
         });
     }
 
@@ -333,9 +341,9 @@ public class ShipperCrudBenchmarks
     public async Task<bool> Update_Inquiry()
         => await _db.Shippers.UpdateAsync(new Shipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Updated Shipper",
-            Phone       = "555-9999",
+            Phone = "555-9999",
         });
 
     // ---- Upsert -------------------------------------------------------------------------
@@ -351,9 +359,9 @@ public class ShipperCrudBenchmarks
             "ON CONFLICT(ShipperID) DO UPDATE SET " +
             "    CompanyName = excluded.CompanyName, " +
             "    Phone       = excluded.Phone;";
-        command.Parameters.Add("$id",      SqliteType.Integer).Value = TargetShipperId;
-        command.Parameters.Add("$company", SqliteType.Text).Value    = "Upserted Shipper";
-        command.Parameters.Add("$phone",   SqliteType.Text).Value    = "555-1234";
+        command.Parameters.Add("$id", SqliteType.Integer).Value = TargetShipperId;
+        command.Parameters.Add("$company", SqliteType.Text).Value = "Upserted Shipper";
+        command.Parameters.Add("$phone", SqliteType.Text).Value = "555-1234";
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -388,9 +396,9 @@ public class ShipperCrudBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         return await dc.InsertOrReplaceAsync(new L2Shipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Upserted Shipper",
-            Phone       = "555-1234",
+            Phone = "555-1234",
         });
     }
 
@@ -401,9 +409,9 @@ public class ShipperCrudBenchmarks
         await connection.OpenAsync();
         return await RepoDb.DbConnectionExtension.MergeAsync(connection, new RdShipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Upserted Shipper",
-            Phone       = "555-1234",
+            Phone = "555-1234",
         });
     }
 
@@ -411,8 +419,8 @@ public class ShipperCrudBenchmarks
     public async Task<int> Upsert_Inquiry()
         => await _db.Shippers.UpsertAsync(new Shipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Upserted Shipper",
-            Phone       = "555-1234",
+            Phone = "555-1234",
         });
 }

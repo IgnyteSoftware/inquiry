@@ -1,14 +1,12 @@
+using System.Collections.Immutable;
+using System.Security.Cryptography;
+using System.Text;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Inquiry.Generators;
 
@@ -20,7 +18,7 @@ namespace Inquiry.Generators;
 /// </summary>
 /// <remarks>
 /// DDL generation only. ALTER/diff, versioning, a history table, and an apply runner are out
-/// of scope — feed <see cref="Ddl"/> into a migration runner (e.g. DbUp) as the initial script, or use
+/// of scope — feed <c>Ddl</c> into a migration runner (e.g. DbUp) as the initial script, or use
 /// it for first-run/dev table creation.
 /// </remarks>
 internal static class SchemaEmitter
@@ -175,7 +173,9 @@ internal static class SchemaEmitter
             source.AppendLine($"[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"Inquiry.SchemaManifest.Sha256\", \"{manifestSha256}\")] ");
             source.AppendLine($"[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"Inquiry.SchemaManifest.ChunkCount\", \"{manifestChunks.Count}\")] ");
             for (var i = 0; i < manifestChunks.Count; i++)
+            {
                 source.AppendLine($"[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"Inquiry.SchemaManifest.Chunk.{i:D4}\", \"{EscapeCSharpString(manifestChunks[i])}\")] ");
+            }
         }
         source.AppendLine($"namespace {GeneratedNamespace};");
         source.AppendLine();
@@ -197,7 +197,11 @@ internal static class SchemaEmitter
                 .Select(static group => group.First().SchemaDdl);
             var artifactDdl = string.Join("", schemaDdl)
                 + string.Join("\n\n", providerArtifacts.Select(static artifact => artifact.CreateDdl));
-            if (ddl.Length > 0) artifactDdl += "\n\n";
+            if (ddl.Length > 0)
+            {
+                artifactDdl += "\n\n";
+            }
+
             var validationSql = string.Join("\nUNION ALL\n", providerArtifacts.Select(static artifact => artifact.ValidationSql));
             source.AppendLine("    /// <summary>Additive setup DDL for provider-owned schema artifacts.</summary>");
             source.AppendLine($"    public const string ProviderArtifactsDdl = @\"{artifactDdl.Replace("\"", "\"\"")}\";");
@@ -224,7 +228,11 @@ internal static class SchemaEmitter
             var invalid = false;
             foreach (var key in entity.Keys)
             {
-                if (!key.IsGenerated) continue;
+                if (!key.IsGenerated)
+                {
+                    continue;
+                }
+
                 if (!string.IsNullOrEmpty(key.SqlType))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.GeneratedKeySchemaFacetInvalid,
@@ -244,7 +252,10 @@ internal static class SchemaEmitter
                     invalid = true;
                 }
             }
-            if (!invalid) valid.Add(entity);
+            if (!invalid)
+            {
+                valid.Add(entity);
+            }
         }
         return valid;
     }
@@ -298,16 +309,31 @@ internal static class SchemaEmitter
 
     private static string TypeClassToken(DbTypeClass type) => type switch
     {
-        DbTypeClass.String => "string", DbTypeClass.Boolean => "boolean", DbTypeClass.Byte => "byte",
-        DbTypeClass.Int16 => "int16", DbTypeClass.Int32 => "int32", DbTypeClass.Int64 => "int64",
-        DbTypeClass.Single => "single", DbTypeClass.Double => "double", DbTypeClass.Decimal => "decimal",
-        DbTypeClass.DateTime => "datetime", DbTypeClass.DateTimeOffset => "datetimeoffset", DbTypeClass.DateOnly => "dateonly",
-        DbTypeClass.TimeOnly => "timeonly", DbTypeClass.Guid => "guid", DbTypeClass.ByteArray => "bytearray", _ => "unknown",
+        DbTypeClass.String => "string",
+        DbTypeClass.Boolean => "boolean",
+        DbTypeClass.Byte => "byte",
+        DbTypeClass.Int16 => "int16",
+        DbTypeClass.Int32 => "int32",
+        DbTypeClass.Int64 => "int64",
+        DbTypeClass.Single => "single",
+        DbTypeClass.Double => "double",
+        DbTypeClass.Decimal => "decimal",
+        DbTypeClass.DateTime => "datetime",
+        DbTypeClass.DateTimeOffset => "datetimeoffset",
+        DbTypeClass.DateOnly => "dateonly",
+        DbTypeClass.TimeOnly => "timeonly",
+        DbTypeClass.Guid => "guid",
+        DbTypeClass.ByteArray => "bytearray",
+        _ => "unknown",
     };
 
     private static string ActionToken(int action) => action switch
     {
-        1 => "restrict", 2 => "cascade", 3 => "set-null", 4 => "set-default", _ => "no-action",
+        1 => "restrict",
+        2 => "cascade",
+        3 => "set-null",
+        4 => "set-default",
+        _ => "no-action",
     };
 
     private static string EscapeCSharpString(string value)
@@ -320,7 +346,11 @@ internal static class SchemaEmitter
         {
             foreach (var column in entity.Columns.AsImmutableArray())
             {
-                if (!column.RotateConcurrencyToken || column.Type.IsGuid) continue;
+                if (!column.RotateConcurrencyToken || column.Type.IsGuid)
+                {
+                    continue;
+                }
+
                 var storeType = builder.GetSchemaManifestStoreType(column)?.Trim().ToUpperInvariant();
                 var typeName = storeType?.Split('(')[0].Trim();
                 if ((builder.DialectName == "SqlServer" && storeType is "TEXT" or "NTEXT") ||
@@ -488,7 +518,11 @@ internal static class SchemaEmitter
             var ownerShape = PhysicalSchemaShape(owner);
             foreach (var suppressed in ordered.Skip(1))
             {
-                if (System.StringComparer.Ordinal.Equals(ownerShape, PhysicalSchemaShape(suppressed))) continue;
+                if (System.StringComparer.Ordinal.Equals(ownerShape, PhysicalSchemaShape(suppressed)))
+                {
+                    continue;
+                }
+
                 var mismatch = DescribePhysicalSchemaMismatch(owner, suppressed);
                 var reason = $"it conflicts with canonical mapping '{owner.FullyQualifiedName}' for the same physical table: {mismatch}";
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DuplicateSchemaMapping,
@@ -500,11 +534,23 @@ internal static class SchemaEmitter
 
     private static string DescribePhysicalSchemaMismatch(EntityData owner, EntityData suppressed)
     {
-        if (owner.GenerateForeignKeys != suppressed.GenerateForeignKeys) return "GenerateForeignKeys differs";
+        if (owner.GenerateForeignKeys != suppressed.GenerateForeignKeys)
+        {
+            return "GenerateForeignKeys differs";
+        }
+
         var ownerColumns = PhysicalColumnShape(owner);
         var suppressedColumns = PhysicalColumnShape(suppressed);
-        if (!System.StringComparer.Ordinal.Equals(ownerColumns, suppressedColumns)) return "column, key, default, computed, generation, or foreign-key definitions differ";
-        if (!System.StringComparer.Ordinal.Equals(PhysicalIndexShape(owner), PhysicalIndexShape(suppressed))) return "index definitions differ";
+        if (!System.StringComparer.Ordinal.Equals(ownerColumns, suppressedColumns))
+        {
+            return "column, key, default, computed, generation, or foreign-key definitions differ";
+        }
+
+        if (!System.StringComparer.Ordinal.Equals(PhysicalIndexShape(owner), PhysicalIndexShape(suppressed)))
+        {
+            return "index definitions differ";
+        }
+
         return "check constraint definitions differ";
     }
 
@@ -516,6 +562,7 @@ internal static class SchemaEmitter
         var shape = new StringBuilder().Append(entity.GenerateForeignKeys).Append('|');
         shape.Append("K:").Append(string.Join("\0", entity.Keys.AsImmutableArray().Select(static key => key.ColumnName))).Append('|');
         foreach (var column in entity.Columns.AsImmutableArray().OrderBy(static column => column.ColumnName, System.StringComparer.Ordinal))
+        {
             shape.Append(column.ColumnName).Append('\0').Append(column.IsKey).Append('\0').Append(column.IsGenerated).Append('\0').Append(column.UseDatabaseDefault).Append('\0')
                 .Append((int)column.TypeClass).Append('\0').Append(column.IsNullable).Append('\0').Append(column.SqlType).Append('\0')
                 .Append(column.Length).Append('\0').Append(column.Precision).Append('\0').Append(column.Scale).Append('\0')
@@ -525,6 +572,8 @@ internal static class SchemaEmitter
                 .Append(column.IsIndexed).Append('\0').Append(column.IsUnique).Append('\0').Append(column.IndexName).Append('\0')
                 .Append(column.ForeignKeySchema).Append('\0').Append(column.ForeignKeyTable).Append('\0').Append(column.ForeignKeyColumn).Append('\0')
                 .Append(column.ForeignKeyConstraintName).Append('\0').Append(column.ForeignKeyOnDelete).Append('\0').Append(column.ForeignKeyOnUpdate).Append('|');
+        }
+
         return shape.ToString();
     }
 
@@ -997,8 +1046,16 @@ internal static class SchemaEmitter
         var legacyOrdinal = 0;
         foreach (var column in entity.Columns.AsImmutableArray())
         {
-            if (!column.IsIndexed && !column.IsUnique) continue;
-            if (builder.RequiresBoundedStringKeys && builder.MapsToUnboundedString(DeriveForeignKeyLength(column, declaredLengths))) continue;
+            if (!column.IsIndexed && !column.IsUnique)
+            {
+                continue;
+            }
+
+            if (builder.RequiresBoundedStringKeys && builder.MapsToUnboundedString(DeriveForeignKeyLength(column, declaredLengths)))
+            {
+                continue;
+            }
+
             var legacyName = string.IsNullOrEmpty(column.IndexName)
                 ? (column.IsUnique ? "UX_" : "IX_") + entity.TableName + "_" + column.ColumnName
                 : column.IndexName!;
@@ -1067,9 +1124,11 @@ internal static class SchemaEmitter
                 for (var hashBytes = 9; hashBytes <= 31; hashBytes++)
                 {
                     var name = (candidate.IsUnique ? "UX" : "IX") + BuildForeignKeyName(entity.TableName, candidate.KeyColumns[0], identity, hashBytes).Substring(2);
-                    if (names.Add(name)) { candidate = candidate with { EmittedName = name }; resolved = true; break; }
+                    if (names.Add(name))
+                    { candidate = candidate with { EmittedName = name }; resolved = true; break; }
                 }
-                if (!resolved) { context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaPrimitiveInvalid, index.Location?.ToLocation(), entity.TableName, builder.DialectName, "generated index name collision")); continue; }
+                if (!resolved)
+                { context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaPrimitiveInvalid, index.Location?.ToLocation(), entity.TableName, builder.DialectName, "generated index name collision")); continue; }
             }
             valid.Add(candidate);
         }
@@ -1127,9 +1186,11 @@ internal static class SchemaEmitter
                 for (var hashBytes = 9; hashBytes <= 31; hashBytes++)
                 {
                     var name = "CK" + BuildForeignKeyName(entity.TableName, "Check", candidate.CanonicalIdentity, hashBytes).Substring(2);
-                    if (names.Add(name)) { candidate = candidate with { EmittedName = name }; resolved = true; break; }
+                    if (names.Add(name))
+                    { candidate = candidate with { EmittedName = name }; resolved = true; break; }
                 }
-                if (!resolved) { context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaPrimitiveInvalid, check.Location?.ToLocation(), entity.TableName, builder.DialectName, "generated check name collision")); continue; }
+                if (!resolved)
+                { context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaPrimitiveInvalid, check.Location?.ToLocation(), entity.TableName, builder.DialectName, "generated check name collision")); continue; }
             }
             valid.Add(candidate);
         }

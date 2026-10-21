@@ -1,9 +1,7 @@
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Microsoft.Data.SqlClient;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests;
 

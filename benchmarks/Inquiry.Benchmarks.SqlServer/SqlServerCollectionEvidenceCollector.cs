@@ -60,8 +60,11 @@ public static class SqlServerCollectionEvidenceCollector
         var json = JsonSerializer.SerializeToUtf8Bytes(evidence, EvidenceJson.Options);
         var errors = SqlServerCollectionEvidenceValidator.Validate(json);
         if (errors.Count != 0)
+        {
             throw new InvalidOperationException("Server evidence failed validation: " +
                 string.Join("; ", errors.Select(static error => $"{error.Code}: {error.Message}")));
+        }
+
         var fullPath = Path.GetFullPath(outputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         await File.WriteAllBytesAsync(fullPath, json).ConfigureAwait(false);
@@ -90,9 +93,15 @@ public static class SqlServerCollectionEvidenceCollector
         int cardinality)
     {
         if (transport == SqlServerCollectionTransport.Tvp)
+        {
             return new("inquiry-collection:tvp */", "inquiry-collection:tvp", SqlServerCollectionBenchmarks.TvpSql);
+        }
+
         if (transport == SqlServerCollectionTransport.OpenJson)
+        {
             return new("inquiry-collection:openjson */", "inquiry-collection:openjson", SqlServerCollectionBenchmarks.OpenJsonSql);
+        }
+
         return new($"inquiry-collection:scalar:n{cardinality} */", "inquiry-collection:scalar:n",
             SqlServerCollectionBenchmarks.ScalarSql(cardinality));
     }
@@ -160,18 +169,30 @@ public static class SqlServerCollectionEvidenceCollector
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow)
             .ConfigureAwait(false);
         if (!await reader.ReadAsync().ConfigureAwait(false))
+        {
             throw new InvalidOperationException($"No exact DMV query statistics were captured for '{shape.ExactTag}'.");
+        }
+
         var cachedPlanCount = checked((int)reader.GetInt64(4));
         var cachedBatchSql = reader.GetString(5);
         var exactCount = reader.GetInt64(8);
         if (exactCount != 1 || cachedPlanCount != expectedCachedPlanCount)
+        {
             throw new InvalidOperationException(
                 $"Unexpected cache entry counts for '{shape.ExactTag}': exact={exactCount}, family={cachedPlanCount}, expected={expectedCachedPlanCount}.");
+        }
+
         if (expectedExecutionCount.HasValue && reader.GetInt64(1) != expectedExecutionCount.GetValueOrDefault())
+        {
             throw new InvalidOperationException(
                 $"The cached statement for '{shape.ExactTag}' was not warmed before measurement.");
+        }
+
         if (!cachedBatchSql.EndsWith(shape.Sql, StringComparison.Ordinal))
+        {
             throw new InvalidOperationException($"The cached statement for '{shape.ExactTag}' did not contain the exact executed SQL suffix.");
+        }
+
         return new(reader.GetInt64(0), reader.GetInt64(1), (byte[])reader.GetValue(2),
             (byte[])reader.GetValue(3), cachedPlanCount, cachedBatchSql, reader.GetString(6), reader.GetString(7));
     }
@@ -182,7 +203,10 @@ public static class SqlServerCollectionEvidenceCollector
         if (prefixLength > 0)
         {
             var cachedPrefix = cachedBatchSql[..prefixLength].Trim();
-            if (cachedPrefix.Length != 0) return cachedPrefix;
+            if (cachedPrefix.Length != 0)
+            {
+                return cachedPrefix;
+            }
         }
 
         var parameters = XDocument.Parse(queryPlanXml).Descendants()
@@ -200,7 +224,10 @@ public static class SqlServerCollectionEvidenceCollector
             .Order(StringComparer.Ordinal)
             .ToArray();
         if (parameters.Length == 0)
+        {
             throw new InvalidOperationException("The exact cached plan did not expose parameter metadata.");
+        }
+
         return string.Join(";", parameters);
     }
 

@@ -1,7 +1,3 @@
-using System;
-using System.Threading.Tasks;
-using Xunit;
-
 namespace Inquiry.FeatureCatalog;
 
 /// <summary>Provider-neutral exact-value acceptance contract for issue #134.</summary>

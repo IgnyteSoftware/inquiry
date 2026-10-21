@@ -18,7 +18,7 @@ public sealed class BatchChunkItem
     public string ValueText { get; set; } = string.Empty;
 }
 
-public partial class BatchChunkItemStore : InquiryStore<BatchChunkItem>
+public partial class BatchChunkItemStore: InquiryStore<BatchChunkItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<BatchChunkItem> items, CancellationToken cancellationToken = default);
@@ -266,7 +266,7 @@ public sealed class BatchChunkArrayBindingIntegrationTests
     private sealed record TestContext(
         OracleTestHarness Harness,
         BatchChunkItemStore Store,
-        BatchExecutionProbe Probe) : IAsyncDisposable
+        BatchExecutionProbe Probe): IAsyncDisposable
     {
         public ValueTask DisposeAsync() => Harness.DisposeAsync();
     }

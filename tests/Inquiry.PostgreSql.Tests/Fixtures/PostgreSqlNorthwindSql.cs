@@ -1,5 +1,3 @@
-using System;
-
 namespace Inquiry.PostgreSql.Tests.Fixtures;
 
 internal static class PostgreSqlNorthwindSql

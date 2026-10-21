@@ -1,9 +1,7 @@
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Npgsql;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests;
 

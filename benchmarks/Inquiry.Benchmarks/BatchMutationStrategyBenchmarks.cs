@@ -89,7 +89,10 @@ public class BatchMutationStrategyBenchmarks
     {
         var items = new BatchMutationBenchmarkItem[count];
         for (var i = 0; i < count; i++)
+        {
             items[i] = new BatchMutationBenchmarkItem { Id = firstId + i, ValueText = $"{prefix} {i}" };
+        }
+
         return items;
     }
 
@@ -98,7 +101,11 @@ public class BatchMutationStrategyBenchmarks
         var sql = new StringBuilder("INSERT INTO InquiryBatchEvidence (Id, ValueText) VALUES ");
         for (var i = 0; i < count; i++)
         {
-            if (i > 0) sql.Append(',');
+            if (i > 0)
+            {
+                sql.Append(',');
+            }
+
             sql.Append("($id").Append(i).Append(",$value").Append(i).Append(')');
         }
         return sql.Append(';').ToString();

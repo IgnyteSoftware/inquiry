@@ -1,14 +1,11 @@
-using System;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using Testcontainers.PostgreSql;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests.Fixtures;
 
 /// <summary>Starts one PostgreSQL container for the whole assembly. If Docker is unreachable,
 /// <see cref="IsAvailable"/> stays false and tests skip rather than fail.</summary>
-public sealed class PostgreSqlContainerFixture : IAsyncLifetime
+public sealed class PostgreSqlContainerFixture: IAsyncLifetime
 {
     private PostgreSqlContainer? _container;
 
@@ -36,6 +33,9 @@ public sealed class PostgreSqlContainerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

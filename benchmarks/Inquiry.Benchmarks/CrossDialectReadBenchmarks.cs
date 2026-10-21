@@ -72,43 +72,43 @@ public class CrossDialectReadBenchmarks
         switch (Dialect)
         {
             case "PostgreSql":
-            {
-                var c = new PostgreSqlBuilder("postgres:16-alpine").Build();
-                await c.StartAsync();
-                _container = c;
-                _connectionString = c.GetConnectionString();
-                ddl = "CREATE TABLE shippers (shipperid SERIAL PRIMARY KEY, companyname VARCHAR(40) NOT NULL, phone VARCHAR(40));";
-                _open = () => new NpgsqlConnection(_connectionString);
-                services.AddInquiryPostgreSql(_connectionString);
-                efBuilder.UseNpgsql(_connectionString);
-                break;
-            }
+                {
+                    var c = new PostgreSqlBuilder("postgres:16-alpine").Build();
+                    await c.StartAsync();
+                    _container = c;
+                    _connectionString = c.GetConnectionString();
+                    ddl = "CREATE TABLE shippers (shipperid SERIAL PRIMARY KEY, companyname VARCHAR(40) NOT NULL, phone VARCHAR(40));";
+                    _open = () => new NpgsqlConnection(_connectionString);
+                    services.AddInquiryPostgreSql(_connectionString);
+                    efBuilder.UseNpgsql(_connectionString);
+                    break;
+                }
 
             case "MySql":
-            {
-                var c = new MySqlBuilder("mysql:8.0").Build();
-                await c.StartAsync();
-                _container = c;
-                _connectionString = c.GetConnectionString();
-                ddl = "CREATE TABLE shippers (shipperid INT AUTO_INCREMENT PRIMARY KEY, companyname VARCHAR(40) NOT NULL, phone VARCHAR(40));";
-                _open = () => new MySqlConnection(_connectionString);
-                services.AddInquiryMySql(_connectionString);
-                efBuilder.UseMySql(_connectionString, new MySqlServerVersion(new Version(8, 0, 0)));
-                break;
-            }
+                {
+                    var c = new MySqlBuilder("mysql:8.0").Build();
+                    await c.StartAsync();
+                    _container = c;
+                    _connectionString = c.GetConnectionString();
+                    ddl = "CREATE TABLE shippers (shipperid INT AUTO_INCREMENT PRIMARY KEY, companyname VARCHAR(40) NOT NULL, phone VARCHAR(40));";
+                    _open = () => new MySqlConnection(_connectionString);
+                    services.AddInquiryMySql(_connectionString);
+                    efBuilder.UseMySql(_connectionString, new MySqlServerVersion(new Version(8, 0, 0)));
+                    break;
+                }
 
             case "SqlServer":
-            {
-                var c = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
-                await c.StartAsync();
-                _container = c;
-                _connectionString = c.GetConnectionString();
-                ddl = "CREATE TABLE shippers (shipperid INT IDENTITY PRIMARY KEY, companyname NVARCHAR(40) NOT NULL, phone NVARCHAR(40));";
-                _open = () => new SqlConnection(_connectionString);
-                services.AddInquirySqlServer(_connectionString);
-                efBuilder.UseSqlServer(_connectionString);
-                break;
-            }
+                {
+                    var c = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+                    await c.StartAsync();
+                    _container = c;
+                    _connectionString = c.GetConnectionString();
+                    ddl = "CREATE TABLE shippers (shipperid INT IDENTITY PRIMARY KEY, companyname NVARCHAR(40) NOT NULL, phone NVARCHAR(40));";
+                    _open = () => new SqlConnection(_connectionString);
+                    services.AddInquirySqlServer(_connectionString);
+                    efBuilder.UseSqlServer(_connectionString);
+                    break;
+                }
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(Dialect), Dialect, "Unsupported dialect.");
@@ -120,12 +120,17 @@ public class CrossDialectReadBenchmarks
 
         await using var connection = _open();
         await connection.OpenAsync();
-        await using (var create = connection.CreateCommand()) { create.CommandText = ddl; await create.ExecuteNonQueryAsync(); }
+        await using (var create = connection.CreateCommand())
+        { create.CommandText = ddl; await create.ExecuteNonQueryAsync(); }
         await using (var insert = connection.CreateCommand())
         {
             insert.CommandText = "INSERT INTO shippers (companyname, phone) VALUES (@c, @p)";
-            var pc = insert.CreateParameter(); pc.ParameterName = "@c"; insert.Parameters.Add(pc);
-            var pp = insert.CreateParameter(); pp.ParameterName = "@p"; insert.Parameters.Add(pp);
+            var pc = insert.CreateParameter();
+            pc.ParameterName = "@c";
+            insert.Parameters.Add(pc);
+            var pp = insert.CreateParameter();
+            pp.ParameterName = "@p";
+            insert.Parameters.Add(pp);
             for (var i = 0; i < SeedRows; i++)
             {
                 pc.Value = $"Shipper {i}";
@@ -144,9 +149,9 @@ public class CrossDialectReadBenchmarks
 
     private static Shipper ReadShipper(DbDataReader reader) => new Shipper
     {
-        ShipperID   = reader.GetInt32(0),
+        ShipperID = reader.GetInt32(0),
         CompanyName = reader.GetString(1),
-        Phone       = reader.IsDBNull(2) ? null : reader.GetString(2),
+        Phone = reader.IsDBNull(2) ? null : reader.GetString(2),
     };
 
     // ---- SelectAll ----------------------------------------------------------------------
@@ -160,7 +165,11 @@ public class CrossDialectReadBenchmarks
         command.CommandText = SelectAllSql;
         var list = new List<Shipper>(SeedRows);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadShipper(reader));
+        }
+
         return list.Count;
     }
 
@@ -192,7 +201,10 @@ public class CrossDialectReadBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = SelectByKeySql;
-        var p = command.CreateParameter(); p.ParameterName = "@id"; p.Value = TargetShipperId; command.Parameters.Add(p);
+        var p = command.CreateParameter();
+        p.ParameterName = "@id";
+        p.Value = TargetShipperId;
+        command.Parameters.Add(p);
         // Fair floor: SingleRow|SingleResult — the same CommandBehavior Inquiry's pipeline and Dapper request for a point read.
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess);
         return await reader.ReadAsync() ? ReadShipper(reader) : null;

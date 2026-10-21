@@ -199,7 +199,7 @@ public sealed class InquiryGridReaderStreamTests
         public int Value { get; init; }
     }
 
-    private readonly struct BoxMaterializer : IInquiryEntityMaterializer<Box>
+    private readonly struct BoxMaterializer: IInquiryEntityMaterializer<Box>
     {
         public Box Materialize(DbDataReader reader) => new() { Value = reader.GetInt32(0) };
     }

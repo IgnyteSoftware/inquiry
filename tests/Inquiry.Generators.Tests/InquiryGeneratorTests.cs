@@ -1,7 +1,7 @@
+using System.Collections.Immutable;
 using Inquiry.Entities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using System.Collections.Immutable;
 
 namespace Inquiry.Generators.Tests;
 

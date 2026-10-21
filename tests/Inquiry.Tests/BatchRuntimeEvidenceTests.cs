@@ -1,10 +1,10 @@
+using System.Collections;
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
-using System.Collections;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -237,9 +237,13 @@ public sealed class BatchRuntimeEvidenceTests
         }
 
         if (cancel)
+        {
             await Assert.ThrowsAnyAsync<OperationCanceledException>(execute);
+        }
         else
+        {
             await Assert.ThrowsAsync<InvalidOperationException>(execute);
+        }
 
         Assert.Equal(1, state.CommandCreateCount);
         Assert.Equal(1, state.CommandPrepareCount);
@@ -405,7 +409,11 @@ public sealed class BatchRuntimeEvidenceTests
             {
                 for (var i = 1; i <= 5; i++)
                 {
-                    if (i == 4) cancellation.Cancel();
+                    if (i == 4)
+                    {
+                        cancellation.Cancel();
+                    }
+
                     yield return i;
                 }
             }
@@ -647,7 +655,7 @@ public sealed class BatchRuntimeEvidenceTests
             static _ => false,
             parametersPerItem: 1);
 
-    private sealed class LifecycleRecordingInterceptor : IInquiryCommandInterceptor
+    private sealed class LifecycleRecordingInterceptor: IInquiryCommandInterceptor
     {
         private readonly CancellationTokenSource? _cancellation;
         private readonly int? _cancelAtValue;
@@ -737,7 +745,7 @@ public sealed class BatchRuntimeEvidenceTests
         internal List<DbTransaction?> BatchTransactions { get; } = new();
     }
 
-    private sealed class RecordingFactory : IInquiryConnectionFactory
+    private sealed class RecordingFactory: IInquiryConnectionFactory
     {
         private readonly RecordingState _state;
         private readonly InquiryBatchExecutionMode _mode;
@@ -760,7 +768,7 @@ public sealed class BatchRuntimeEvidenceTests
             => _state.InitializedChunkSizes.Add(itemCount);
     }
 
-    private sealed class RecordingConnection : DbConnection
+    private sealed class RecordingConnection: DbConnection
     {
         private readonly RecordingState _state;
 
@@ -796,14 +804,17 @@ public sealed class BatchRuntimeEvidenceTests
             if (disposing)
             {
                 _state.CleanupEvents.Add("connection-dispose");
-                if (_state.ThrowOnConnectionDispose) throw new InvalidOperationException("connection dispose failed");
+                if (_state.ThrowOnConnectionDispose)
+                {
+                    throw new InvalidOperationException("connection dispose failed");
+                }
             }
 
             base.Dispose(disposing);
         }
     }
 
-    private sealed class RecordingTransaction : DbTransaction
+    private sealed class RecordingTransaction: DbTransaction
     {
         private readonly RecordingConnection _connection;
         private readonly RecordingState _state;
@@ -821,7 +832,10 @@ public sealed class BatchRuntimeEvidenceTests
         {
             _state.TransactionRollbackCount++;
             _state.CleanupEvents.Add("transaction-rollback");
-            if (_state.ThrowOnRollback) throw new InvalidOperationException("transaction rollback failed");
+            if (_state.ThrowOnRollback)
+            {
+                throw new InvalidOperationException("transaction rollback failed");
+            }
         }
         public override Task CommitAsync(CancellationToken cancellationToken = default)
         {
@@ -833,7 +847,11 @@ public sealed class BatchRuntimeEvidenceTests
         {
             _state.TransactionRollbackCount++;
             _state.CleanupEvents.Add("transaction-rollback");
-            if (_state.ThrowOnRollback) throw new InvalidOperationException("transaction rollback failed");
+            if (_state.ThrowOnRollback)
+            {
+                throw new InvalidOperationException("transaction rollback failed");
+            }
+
             return Task.CompletedTask;
         }
 
@@ -863,14 +881,17 @@ public sealed class BatchRuntimeEvidenceTests
             if (disposing)
             {
                 _state.CleanupEvents.Add("transaction-dispose");
-                if (_state.ThrowOnTransactionDispose) throw new InvalidOperationException("transaction dispose failed");
+                if (_state.ThrowOnTransactionDispose)
+                {
+                    throw new InvalidOperationException("transaction dispose failed");
+                }
             }
 
             base.Dispose(disposing);
         }
     }
 
-    private sealed class RecordingCommand : DbCommand
+    private sealed class RecordingCommand: DbCommand
     {
         private readonly RecordingState _state;
         private DbTransaction? _transaction;
@@ -903,16 +924,29 @@ public sealed class BatchRuntimeEvidenceTests
         public override void Prepare()
         {
             _state.CommandPrepareCount++;
-            if (_state.CancelOnCommandPrepare) throw new OperationCanceledException();
-            if (_state.ThrowOnCommandPrepare) throw new InvalidOperationException("command prepare failed");
+            if (_state.CancelOnCommandPrepare)
+            {
+                throw new OperationCanceledException();
+            }
+
+            if (_state.ThrowOnCommandPrepare)
+            {
+                throw new InvalidOperationException("command prepare failed");
+            }
         }
         public override Task PrepareAsync(CancellationToken cancellationToken = default)
         {
             _state.CommandPrepareCount++;
             if (_state.CancelOnCommandPrepare)
+            {
                 return Task.FromException(new OperationCanceledException(cancellationToken));
+            }
+
             if (_state.ThrowOnCommandPrepare)
+            {
                 return Task.FromException(new InvalidOperationException("command prepare failed"));
+            }
+
             return Task.CompletedTask;
         }
 
@@ -928,7 +962,10 @@ public sealed class BatchRuntimeEvidenceTests
             {
                 _state.CommandDisposeCount++;
                 _state.CleanupEvents.Add("command-dispose");
-                if (_state.ThrowOnCommandDispose) throw new InvalidOperationException("command dispose failed");
+                if (_state.ThrowOnCommandDispose)
+                {
+                    throw new InvalidOperationException("command dispose failed");
+                }
             }
             base.Dispose(disposing);
         }
@@ -936,12 +973,16 @@ public sealed class BatchRuntimeEvidenceTests
         private int Execute()
         {
             _state.CommandExecuteCount++;
-            if (_state.ThrowOnCommandExecute) throw new InvalidOperationException("command execute failed");
+            if (_state.ThrowOnCommandExecute)
+            {
+                throw new InvalidOperationException("command execute failed");
+            }
+
             return AffectedRows;
         }
     }
 
-    private sealed class RecordingBatch : DbBatch
+    private sealed class RecordingBatch: DbBatch
     {
         private readonly RecordingState _state;
         private readonly RecordingBatchCommandCollection _commands = new();
@@ -995,13 +1036,17 @@ public sealed class BatchRuntimeEvidenceTests
 
         private int Execute()
         {
-            if (_state.ThrowOnBatchExecute) throw new InvalidOperationException("batch execute failed");
+            if (_state.ThrowOnBatchExecute)
+            {
+                throw new InvalidOperationException("batch execute failed");
+            }
+
             _state.ExecutedBatchSizes.Add(_commands.Count);
             return _commands.Count;
         }
     }
 
-    private sealed class RecordingBatchCommand : DbBatchCommand
+    private sealed class RecordingBatchCommand: DbBatchCommand
     {
         private readonly bool _canCreateParameter;
 
@@ -1015,7 +1060,7 @@ public sealed class BatchRuntimeEvidenceTests
         public override DbParameter CreateParameter() => new RecordingParameter();
     }
 
-    private sealed class RecordingBatchCommandCollection : DbBatchCommandCollection
+    private sealed class RecordingBatchCommandCollection: DbBatchCommandCollection
     {
         private readonly List<DbBatchCommand> _items = new();
 
@@ -1034,7 +1079,7 @@ public sealed class BatchRuntimeEvidenceTests
         protected override void SetBatchCommand(int index, DbBatchCommand batchCommand) => _items[index] = batchCommand;
     }
 
-    private sealed class RecordingParameter : DbParameter
+    private sealed class RecordingParameter: DbParameter
     {
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
@@ -1047,13 +1092,19 @@ public sealed class BatchRuntimeEvidenceTests
         public override void ResetDbType() { }
     }
 
-    private sealed class RecordingParameterCollection : DbParameterCollection
+    private sealed class RecordingParameterCollection: DbParameterCollection
     {
         private readonly List<DbParameter> _items = new();
         public override int Count => _items.Count;
         public override object SyncRoot => _items;
         public override int Add(object value) { _items.Add((DbParameter)value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var value in values) Add(value!); }
+        public override void AddRange(Array values)
+        {
+            foreach (var value in values)
+            {
+                Add(value!);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains((DbParameter)value);
         public override bool Contains(string value) => IndexOf(value) >= 0;
@@ -1073,7 +1124,7 @@ public sealed class BatchRuntimeEvidenceTests
             => _items[IndexOf(parameterName)] = value;
     }
 
-    private sealed class ThrowingDisposeEnumerable : IEnumerable<int>
+    private sealed class ThrowingDisposeEnumerable: IEnumerable<int>
     {
         private readonly IReadOnlyList<int> _items;
 
@@ -1081,7 +1132,7 @@ public sealed class BatchRuntimeEvidenceTests
         public IEnumerator<int> GetEnumerator() => new Enumerator(_items);
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator : IEnumerator<int>
+        private sealed class Enumerator: IEnumerator<int>
         {
             private readonly IReadOnlyList<int> _items;
             private int _index = -1;

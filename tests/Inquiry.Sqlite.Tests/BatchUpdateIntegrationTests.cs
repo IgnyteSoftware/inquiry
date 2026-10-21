@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -20,7 +17,7 @@ public sealed class Sku
     public decimal Price { get; set; }
 }
 
-public partial class SkuStore : InquiryStore<Sku>
+public partial class SkuStore: InquiryStore<Sku>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Sku product, CancellationToken cancellationToken = default);

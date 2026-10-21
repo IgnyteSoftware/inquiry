@@ -24,7 +24,7 @@ public sealed record DistinctCategory
     public string Category { get; init; } = string.Empty;
 }
 
-public partial class DistinctProductStore : InquiryStore<DistinctProduct>
+public partial class DistinctProductStore: InquiryStore<DistinctProduct>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(DistinctProduct product, CancellationToken cancellationToken = default);

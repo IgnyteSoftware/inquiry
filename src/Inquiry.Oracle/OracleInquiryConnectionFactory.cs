@@ -1,16 +1,16 @@
+using System.Data.Common;
+using System.Text;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Oracle.Shared;
 using Oracle.ManagedDataAccess.Client;
-using System.Data.Common;
-using System.Text;
 
 namespace Inquiry.Oracle;
 
 /// <summary>
 /// Opens Oracle connections for the Inquiry request pipeline.
 /// </summary>
-internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
+internal sealed class OracleInquiryConnectionFactory: IInquiryConnectionFactory
 {
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
@@ -48,10 +48,7 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
         }
 
-        if (options is null)
-        {
-            throw new ArgumentNullException(nameof(options));
-        }
+        ArgumentNullException.ThrowIfNull(options);
 
         _connectionString = connectionString;
         _failoverConnectionString = options.FailoverConnectionString is { } configured
@@ -175,7 +172,10 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         {
             var parameter = command.Parameters[index];
             NormalizeBoolean(parameter);
-            if (string.IsNullOrEmpty(parameter.ParameterName)) continue;
+            if (string.IsNullOrEmpty(parameter.ParameterName))
+            {
+                continue;
+            }
 
             var logicalName = GetLogicalName(parameter.ParameterName);
             for (var previous = 0; previous < index; previous++)
@@ -231,7 +231,10 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         {
             var parameter = command.Parameters[index];
             NormalizeBoolean(parameter);
-            if (string.IsNullOrEmpty(parameter.ParameterName)) continue;
+            if (string.IsNullOrEmpty(parameter.ParameterName))
+            {
+                continue;
+            }
 
             var logicalName = GetLogicalName(parameter.ParameterName);
             for (var previous = 0; previous < bindingCount; previous++)
@@ -284,7 +287,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 
     private static void NormalizeBoolean(DbParameter parameter)
     {
-        if (parameter.DbType != System.Data.DbType.Boolean) return;
+        if (parameter.DbType != System.Data.DbType.Boolean)
+        {
+            return;
+        }
+
         if (parameter.Value is bool boolValue)
         {
             parameter.Value = boolValue ? 1 : 0;
@@ -316,7 +323,10 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
     {
         for (var i = 0; i < commandText.Length;)
         {
-            if (TrySkipQuotedOrComment(commandText, ref i)) continue;
+            if (TrySkipQuotedOrComment(commandText, ref i))
+            {
+                continue;
+            }
 
             if ((commandText[i] == ':' || commandText[i] == '@')
                 && !(commandText[i] == '@' && IsDatabaseLinkAtSign(commandText, i)))
@@ -326,7 +336,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                 while (end < commandText.Length)
                 {
                     var width = BindNameCharWidth(commandText, end);
-                    if (width == 0) break;
+                    if (width == 0)
+                    {
+                        break;
+                    }
+
                     end += width;
                 }
                 if (end - start == bindName.Length
@@ -359,7 +373,10 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         var copiedThrough = 0;
         for (var i = 0; i < commandText.Length;)
         {
-            if (TrySkipQuotedOrComment(commandText, ref i)) continue;
+            if (TrySkipQuotedOrComment(commandText, ref i))
+            {
+                continue;
+            }
 
             if ((commandText[i] == ':' || commandText[i] == '@')
                 && !(commandText[i] == '@' && IsDatabaseLinkAtSign(commandText, i)))
@@ -370,7 +387,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                 while (end < commandText.Length)
                 {
                     var width = BindNameCharWidth(commandText, end);
-                    if (width == 0) break;
+                    if (width == 0)
+                    {
+                        break;
+                    }
+
                     end += width;
                 }
 
@@ -395,7 +416,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             i++;
         }
 
-        if (rewritten is null) return commandText;
+        if (rewritten is null)
+        {
+            return commandText;
+        }
+
         rewritten.Append(commandText, copiedThrough, commandText.Length - copiedThrough);
         return rewritten.ToString();
     }
@@ -411,7 +436,10 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         var copiedThrough = 0;
         for (var i = 0; i < commandText.Length;)
         {
-            if (TrySkipQuotedOrComment(commandText, ref i)) continue;
+            if (TrySkipQuotedOrComment(commandText, ref i))
+            {
+                continue;
+            }
 
             if ((commandText[i] == ':' || commandText[i] == '@')
                 && !(commandText[i] == '@' && IsDatabaseLinkAtSign(commandText, i)))
@@ -422,7 +450,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                 while (end < commandText.Length)
                 {
                     var width = BindNameCharWidth(commandText, end);
-                    if (width == 0) break;
+                    if (width == 0)
+                    {
+                        break;
+                    }
+
                     end += width;
                 }
 
@@ -430,7 +462,10 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
                 for (var bindingIndex = 0; bindingIndex < bindings.Length; bindingIndex++)
                 {
                     ref var binding = ref bindings[bindingIndex];
-                    if (!TokenEquals(commandText, nameStart, end, binding.Logical)) continue;
+                    if (!TokenEquals(commandText, nameStart, end, binding.Logical))
+                    {
+                        continue;
+                    }
 
                     binding.Found = true;
                     if (!binding.Encoded)
@@ -456,7 +491,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             i++;
         }
 
-        if (rewritten is null) return commandText;
+        if (rewritten is null)
+        {
+            return commandText;
+        }
+
         rewritten.Append(commandText, copiedThrough, commandText.Length - copiedThrough);
         return rewritten.ToString();
     }
@@ -471,7 +510,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         if (c == '-' && index + 1 < text.Length && text[index + 1] == '-')
         {
             index += 2;
-            while (index < text.Length && text[index] != '\r' && text[index] != '\n') index++;
+            while (index < text.Length && text[index] != '\r' && text[index] != '\n')
+            {
+                index++;
+            }
+
             return true;
         }
 
@@ -488,8 +531,13 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             index++;
             while (index < text.Length)
             {
-                if (text[index++] != quote) continue;
-                if (index < text.Length && text[index] == quote) { index++; continue; }
+                if (text[index++] != quote)
+                {
+                    continue;
+                }
+
+                if (index < text.Length && text[index] == quote)
+                { index++; continue; }
                 break;
             }
             return true;
@@ -508,7 +556,8 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             index += quotePrefixLength + 1;
             while (index + 1 < text.Length)
             {
-                if (text[index] == closer && text[index + 1] == '\'') { index += 2; return true; }
+                if (text[index] == closer && text[index + 1] == '\'')
+                { index += 2; return true; }
                 index++;
             }
             index = text.Length;
@@ -520,7 +569,11 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 
     private static bool IsDatabaseLinkAtSign(string text, int index)
     {
-        if (index == 0) return false;
+        if (index == 0)
+        {
+            return false;
+        }
+
         var previous = text[index - 1];
         if (previous == '"' || previous is '_' or '$' or '#' || char.IsLetterOrDigit(previous)
             || char.IsLowSurrogate(previous))
@@ -534,9 +587,21 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 
     private static int BindNameCharWidth(string text, int index)
     {
-        if (!Rune.TryGetRuneAt(text, index, out var rune)) return 0;
-        if (rune.Value is '_' or '$' or '#') return rune.Utf16SequenceLength;
-        if (Rune.IsLetterOrDigit(rune)) return rune.Utf16SequenceLength;
+        if (!Rune.TryGetRuneAt(text, index, out var rune))
+        {
+            return 0;
+        }
+
+        if (rune.Value is '_' or '$' or '#')
+        {
+            return rune.Utf16SequenceLength;
+        }
+
+        if (Rune.IsLetterOrDigit(rune))
+        {
+            return rune.Utf16SequenceLength;
+        }
+
         var category = Rune.GetUnicodeCategory(rune);
         return category is System.Globalization.UnicodeCategory.NonSpacingMark
             or System.Globalization.UnicodeCategory.SpacingCombiningMark

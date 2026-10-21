@@ -1,5 +1,5 @@
-using Inquiry.Parameters;
 using System.Data;
+using Inquiry.Parameters;
 
 namespace Inquiry.Tests;
 

@@ -1,12 +1,8 @@
 using Inquiry.Generators.Abstractions;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Inquiry.SqlServer.Analyzer;
 
-internal sealed class SqlServerSqlBuilder : SqlBuilder
+internal sealed class SqlServerSqlBuilder: SqlBuilder
 {
     public override BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.Adaptive;
     public override int BatchInsertAdaptiveThreshold => 250;
@@ -441,7 +437,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string ApplyLockClause(string selectSql, SqlBuildContext context, int lockMode)
     {
-        if (lockMode == 0) return selectSql;
+        if (lockMode == 0)
+        {
+            return selectSql;
+        }
+
         var hint = lockMode switch
         {
             1 => " WITH (UPDLOCK, ROWLOCK)",

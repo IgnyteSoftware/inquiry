@@ -32,7 +32,11 @@ public sealed class InquirySandboxIntegrationTests
                 {
                     var store = context.Services.GetRequiredService<CustomerStore>();
                     await store.InsertAsync(new Customer { CustomerID = ownId, CompanyName = ownId }, token);
-                    if (Interlocked.Increment(ref ready) == 2) bothInserted.TrySetResult();
+                    if (Interlocked.Increment(ref ready) == 2)
+                    {
+                        bothInserted.TrySetResult();
+                    }
+
                     await bothInserted.Task.WaitAsync(TimeSpan.FromSeconds(15), token);
 
                     Assert.NotNull(await store.SelectByKeyAsync(ownId, token));

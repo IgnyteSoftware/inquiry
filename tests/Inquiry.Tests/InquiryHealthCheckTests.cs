@@ -1,10 +1,10 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Inquiry.Diagnostics;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -59,7 +59,7 @@ public sealed class InquiryHealthCheckTests
             tags: null),
     };
 
-    private sealed class HealthTestConnectionFactory : IInquiryConnectionFactory
+    private sealed class HealthTestConnectionFactory: IInquiryConnectionFactory
     {
         private readonly bool _failOpen;
 

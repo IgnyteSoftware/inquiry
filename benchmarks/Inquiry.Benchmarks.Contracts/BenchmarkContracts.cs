@@ -46,11 +46,14 @@ public sealed record ResolvedDependencyManifest(
 
     public byte[] ToCanonicalJsonBytes()
     {
-        var canonical = this with { Assets = Assets
+        var canonical = this with
+        {
+            Assets = Assets
             .OrderBy(static asset => asset.Kind)
             .ThenBy(static asset => asset.LogicalAssetId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(static asset => asset.Provenance, StringComparer.Ordinal)
-            .ToArray() };
+            .ToArray()
+        };
         var options = new System.Text.Json.JsonSerializerOptions
         {
             PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
@@ -110,8 +113,10 @@ public static class SourceArtifactManifestCatalog
         string runtimeIdentifier = ReleaseRuntimeIdentifier)
     {
         if (mode != BenchmarkSourceMode.ProjectReference)
+        {
             throw new ArgumentOutOfRangeException(nameof(mode), mode,
                 "Package-consumer source artifact manifests require a trusted RC package producer and are not wired.");
+        }
 
         var lane = LaneFor(mode);
         return Manifests.SingleOrDefault(manifest =>
@@ -133,7 +138,10 @@ public static class SourceArtifactManifestCatalog
     {
         const BenchmarkSourceLane lane = BenchmarkSourceLane.DeveloperProject;
         if (!Providers.Contains(provider, StringComparer.Ordinal))
+        {
             throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown provider.");
+        }
+
         var target = $"{runtimeTfm}/{runtimeIdentifier}";
         SourceArtifactExpectation[] artifacts =
         [
@@ -369,27 +377,48 @@ public static class ScenarioValidator
     {
         var errors = new List<ContractError>();
         if (!scenario.ComparisonEligible && resultHasCompetitor)
+        {
             errors.Add(new("comparison-ineligible", "Competitor results are forbidden for a comparison-ineligible scenario."));
+        }
+
         if (!scenario.LoadEligible && isLoadResult)
+        {
             errors.Add(new("load-ineligible", "Load results are forbidden for a load-ineligible scenario."));
+        }
+
         if (scenario.LoadEligible &&
             (!scenario.TimedPath.IncludesCommandConstruction ||
              !scenario.TimedPath.IncludesParameterBinding ||
              !scenario.TimedPath.IncludesMaterializationOrEnumeration))
+        {
             errors.Add(new("incomplete-load-boundary", "Load-eligible scenarios must time the complete request-shaped command boundary."));
+        }
+
         if (scenario.Key.Cardinality <= 0)
+        {
             errors.Add(new("scenario-cardinality", "Scenario cardinality must be positive."));
+        }
+
         if (string.IsNullOrWhiteSpace(scenario.Key.OperationSemantics) ||
             string.IsNullOrWhiteSpace(scenario.Key.Provider) ||
             string.IsNullOrWhiteSpace(scenario.Key.Competitor) || scenario.Key.CompetitorMajor <= 0)
+        {
             errors.Add(new("scenario-dimensions", "Scenario semantic/provider/competitor dimensions must be explicit."));
+        }
+
         if (scenario.Key.ContractVersion != "1" ||
             scenario.Key.JobKind != BenchmarkJobKind.Live ||
             scenario.Key.RuntimeTfm is not ("net8.0" or "net10.0"))
+        {
             errors.Add(new("scenario-dimensions", "Scenario contract version, runtime, and job kind must match the checked release contract."));
+        }
+
         var template = CanonicalScenarioCatalog.Templates.SingleOrDefault(candidate => candidate.WorkloadId == scenario.Key.WorkloadId);
         if (template is null || !template.Dimensions.Matches(scenario.Key))
+        {
             errors.Add(new("scenario-dimensions", "Case key does not match the checked semantic dimensions for its workload template."));
+        }
+
         var expectedOutcome = scenario.Key.Transaction switch
         {
             TransactionMode.None => TransactionOutcome.None,
@@ -399,26 +428,50 @@ public static class ScenarioValidator
         };
         if (scenario.Expected.TransactionOutcome != expectedOutcome ||
             scenario.ApprovedCommandGraph.Commands.Any(command => command.TransactionOutcome != expectedOutcome))
+        {
             errors.Add(new("transaction-mode", "Case, expected result, and every command node must declare the same transaction outcome."));
+        }
+
         var mutatesData = scenario.ApprovedCommandGraph.Commands.Any(static command =>
             command.Mutation is MutationEffect.Insert or MutationEffect.Update or MutationEffect.Delete or MutationEffect.BulkWrite);
         if (scenario.MutationReset.MutatesData != mutatesData)
+        {
             errors.Add(new("mutation-contract", "Mutation reset metadata must match the approved command effects."));
+        }
+
         if (mutatesData && expectedOutcome == TransactionOutcome.Committed && !scenario.MutationReset.ResetOutsideTimedPath)
+        {
             errors.Add(new("mutation-leakage", "Committed mutations require an out-of-band reset contract."));
+        }
+
         var includesOwnedTransaction = scenario.TimedPath.IncludesTransactionBegin && scenario.TimedPath.IncludesTransactionCommit;
         if ((scenario.Key.Transaction == TransactionMode.Committed) != includesOwnedTransaction ||
             (scenario.Key.Transaction != TransactionMode.Committed &&
              (scenario.TimedPath.IncludesTransactionBegin || scenario.TimedPath.IncludesTransactionCommit)))
+        {
             errors.Add(new("transaction-boundary", "Timed transaction begin/commit flags must match the case transaction mode."));
+        }
+
         if (scenario.Key.Buffering == BufferingMode.Streaming && !scenario.TimedPath.IncludesMaterializationOrEnumeration)
+        {
             errors.Add(new("stream-not-consumed", "Streaming scenarios must consume and checksum the stream inside the timed path."));
+        }
+
         if (scenario.Expected.CommandCount != scenario.ApprovedCommandGraph.Commands.Count)
+        {
             errors.Add(new("command-count-contract", "Expected command count does not match the approved command graph."));
+        }
+
         if (scenario.ApprovedCommandGraph.Commands.Count != scenario.ApprovedCommandGraph.SqlStatements.Count)
+        {
             errors.Add(new("command-sql-count", "Every semantic command node requires exactly one ordered SQL statement."));
+        }
+
         if (scenario.Key.TimedBoundaryHash != scenario.TimedPath.IdentityHash)
+        {
             errors.Add(new("timed-boundary-key", "Case key does not identify the scenario's exact timed boundary."));
+        }
+
         return errors;
     }
 }
@@ -459,11 +512,19 @@ public sealed record ScenarioTemplate(
     public BenchmarkScenario Materialize(BenchmarkCaseKey key)
     {
         if (!StringComparer.Ordinal.Equals(key.WorkloadId, WorkloadId))
+        {
             throw new ArgumentException("Case key workload does not match the scenario template.", nameof(key));
+        }
+
         if (!Dimensions.Matches(key))
+        {
             throw new ArgumentException("Case key semantic dimensions do not match the checked scenario template.", nameof(key));
+        }
+
         if (!Enum.TryParse<Fixtures.FixtureTier>(key.DataTier, true, out _))
+        {
             throw new ArgumentException("Case key data tier is not in the canonical fixture catalog.", nameof(key));
+        }
 
         var graph = ApprovedCommandGraph;
         if (graph.Commands.Count != 0)

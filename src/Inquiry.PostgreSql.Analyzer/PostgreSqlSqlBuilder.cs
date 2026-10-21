@@ -1,10 +1,8 @@
 using Inquiry.Generators.Abstractions;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Inquiry.PostgreSql.Analyzer;
 
-internal sealed class PostgreSqlSqlBuilder : SqlBuilder
+internal sealed class PostgreSqlSqlBuilder: SqlBuilder
 {
     public override bool ComputedColumnDeclaresStoreType => true;
 

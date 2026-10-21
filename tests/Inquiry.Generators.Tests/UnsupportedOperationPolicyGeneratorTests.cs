@@ -163,7 +163,7 @@ public sealed partial class InquiryGeneratorTests
             static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
-    private sealed class TestSyntaxTreeOptionsProvider : SyntaxTreeOptionsProvider
+    private sealed class TestSyntaxTreeOptionsProvider: SyntaxTreeOptionsProvider
     {
         private readonly Func<SyntaxTree, ReportDiagnostic?> _getAction;
         private readonly ReportDiagnostic? _globalAction;

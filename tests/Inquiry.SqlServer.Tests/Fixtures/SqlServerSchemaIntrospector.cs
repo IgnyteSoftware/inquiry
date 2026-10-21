@@ -1,14 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.Data.Common;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 
 namespace Inquiry.SqlServer.Tests.Fixtures;
 
-public sealed class SqlServerSchemaIntrospector : ISchemaIntrospector
+public sealed class SqlServerSchemaIntrospector: ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {
@@ -21,7 +16,11 @@ public sealed class SqlServerSchemaIntrospector : ISchemaIntrospector
             r =>
             {
                 var t = r.GetString(0);
-                if (!cols.TryGetValue(t, out var list)) cols[t] = list = new();
+                if (!cols.TryGetValue(t, out var list))
+                {
+                    cols[t] = list = new();
+                }
+
                 list.Add(new ColumnSnapshot(r.GetString(1), r.GetBoolean(2)));
             });
 
@@ -65,13 +64,19 @@ public sealed class SqlServerSchemaIntrospector : ISchemaIntrospector
             r =>
             {
                 var key = (r.GetString(0), r.GetInt32(1));
-                if (!idxAcc.TryGetValue(key, out var l)) idxAcc[key] = l = new();
+                if (!idxAcc.TryGetValue(key, out var l))
+                {
+                    idxAcc[key] = l = new();
+                }
+
                 l.Add(r.GetString(2));
             });
 
         var idx = new Dictionary<string, List<IndexSnapshot>>();
         foreach (var ((table, _), columns) in idxAcc)
+        {
             (idx.TryGetValue(table, out var l) ? l : idx[table] = new()).Add(new IndexSnapshot(columns));
+        }
 
         var tables = cols.Keys.Select(t => new TableSnapshot(
             t, cols[t],
@@ -87,6 +92,9 @@ public sealed class SqlServerSchemaIntrospector : ISchemaIntrospector
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct)) onRow(r);
+        while (await r.ReadAsync(ct))
+        {
+            onRow(r);
+        }
     }
 }

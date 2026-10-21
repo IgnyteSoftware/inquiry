@@ -13,8 +13,6 @@ using Microsoft.Extensions.DependencyInjection;
 using MySqlConnector;
 using Npgsql;
 using Oracle.ManagedDataAccess.Client;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
 
 namespace Microsoft.Extensions.Hosting;
 

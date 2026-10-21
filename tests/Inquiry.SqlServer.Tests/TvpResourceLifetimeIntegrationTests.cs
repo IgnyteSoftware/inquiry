@@ -1,3 +1,4 @@
+using System.Collections;
 using Inquiry.Commands;
 using Inquiry.Entities;
 using Inquiry.Interceptors;
@@ -6,8 +7,6 @@ using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
-using System.Collections;
-using System.Data.Common;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -18,7 +17,7 @@ public sealed class TvpLifetimeItem
     [InquiryColumn(Length = 32)] public string Name { get; set; } = string.Empty;
 }
 
-public partial class TvpLifetimeStore : InquiryStore<TvpLifetimeItem>
+public partial class TvpLifetimeStore: InquiryStore<TvpLifetimeItem>
 {
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
@@ -161,7 +160,10 @@ public sealed class TvpResourceLifetimeIntegrationTests
             started++;
             try
             {
-                for (var id = 1; id <= 5; id++) yield return id;
+                for (var id = 1; id <= 5; id++)
+                {
+                    yield return id;
+                }
             }
             finally
             {
@@ -224,13 +226,13 @@ public sealed class TvpResourceLifetimeIntegrationTests
             prefix,
             configureServices: configure);
 
-    private sealed class ThrowingExecutingInterceptor : IInquiryCommandInterceptor
+    private sealed class ThrowingExecutingInterceptor: IInquiryCommandInterceptor
     {
         public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("interceptor failure after TVP binding");
     }
 
-    private sealed class CountingExecutingInterceptor : IInquiryCommandInterceptor
+    private sealed class CountingExecutingInterceptor: IInquiryCommandInterceptor
     {
         public int ExecutingCount { get; private set; }
 
@@ -241,7 +243,7 @@ public sealed class TvpResourceLifetimeIntegrationTests
         }
     }
 
-    private sealed class CancelingExecutingInterceptor : IInquiryCommandInterceptor
+    private sealed class CancelingExecutingInterceptor: IInquiryCommandInterceptor
     {
         private readonly CancellationTokenSource _source;
         public CancelingExecutingInterceptor(CancellationTokenSource source) => _source = source;
@@ -253,7 +255,7 @@ public sealed class TvpResourceLifetimeIntegrationTests
         }
     }
 
-    private sealed class ClosingExecutingInterceptor : IInquiryCommandInterceptor
+    private sealed class ClosingExecutingInterceptor: IInquiryCommandInterceptor
     {
         public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
         {
@@ -262,7 +264,7 @@ public sealed class TvpResourceLifetimeIntegrationTests
         }
     }
 
-    private sealed class ProbeReadOnlyList<T> : IReadOnlyList<T>
+    private sealed class ProbeReadOnlyList<T>: IReadOnlyList<T>
     {
         private readonly IReadOnlyList<T> _items;
         public ProbeReadOnlyList(IReadOnlyList<T> items) => _items = items;
@@ -280,7 +282,7 @@ public sealed class TvpResourceLifetimeIntegrationTests
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator : IEnumerator<T>
+        private sealed class Enumerator: IEnumerator<T>
         {
             private readonly ProbeReadOnlyList<T> _owner;
             private int _index = -1;
@@ -293,7 +295,11 @@ public sealed class TvpResourceLifetimeIntegrationTests
             public void Reset() => throw new NotSupportedException();
             public void Dispose()
             {
-                if (_disposed) return;
+                if (_disposed)
+                {
+                    return;
+                }
+
                 _disposed = true;
                 _owner.DisposeCount++;
             }

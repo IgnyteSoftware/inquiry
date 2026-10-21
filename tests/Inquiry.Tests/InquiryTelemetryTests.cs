@@ -1,3 +1,6 @@
+using System.Data.Common;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Inquiry.BulkCopy;
 using Inquiry.Commands;
 using Inquiry.Connections;
@@ -7,14 +10,10 @@ using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Parameters;
 using Inquiry.Pipeline;
-using Inquiry.Testing;
 using Inquiry.Sqlite.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Data.Common;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
 
 namespace Inquiry.Tests;
 
@@ -597,13 +596,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -633,13 +641,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -667,13 +684,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -730,13 +756,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -766,13 +801,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -856,13 +900,22 @@ public sealed class InquiryTelemetryTests
                 "db.client.operation.duration" or
                 "inquiry.bulk_insert.connection_open.duration" or
                 "inquiry.bulk_insert.copy.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -897,13 +950,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -959,13 +1021,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "inquiry.bulk_insert.connection_open.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add(tagMap);
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add(tagMap);
+            }
         });
         meterListener.Start();
 
@@ -1007,13 +1078,13 @@ public sealed class InquiryTelemetryTests
 
     private sealed record SimpleItem(int Id, string Name, bool IsActive);
 
-    private struct SimpleItemMaterializer : IInquiryEntityMaterializer<SimpleItem>
+    private struct SimpleItemMaterializer: IInquiryEntityMaterializer<SimpleItem>
     {
         public SimpleItem Materialize(DbDataReader reader)
             => new(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2));
     }
 
-    private sealed class TelemetryTestConnectionFactory : IInquiryConnectionFactory
+    private sealed class TelemetryTestConnectionFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
 
@@ -1027,7 +1098,7 @@ public sealed class InquiryTelemetryTests
         }
     }
 
-    private sealed class RecordingLoggerFactory : ILoggerFactory
+    private sealed class RecordingLoggerFactory: ILoggerFactory
     {
         public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = new();
 
@@ -1041,7 +1112,7 @@ public sealed class InquiryTelemetryTests
         {
         }
 
-        private sealed class RecordingLogger : ILogger
+        private sealed class RecordingLogger: ILogger
         {
             private readonly RecordingLoggerFactory _owner;
 
@@ -1061,7 +1132,7 @@ public sealed class InquiryTelemetryTests
         }
     }
 
-    private sealed class ListenerAttachingInterceptor : IInquiryCommandInterceptor, IDisposable
+    private sealed class ListenerAttachingInterceptor: IInquiryCommandInterceptor, IDisposable
     {
         private ActivityListener? _listener;
 
@@ -1082,7 +1153,7 @@ public sealed class InquiryTelemetryTests
         public void Dispose() => _listener?.Dispose();
     }
 
-    private sealed class OpenFailingBulkCopier : IInquiryBulkCopier
+    private sealed class OpenFailingBulkCopier: IInquiryBulkCopier
     {
         public async Task<long> BulkInsertAsync<TEntity>(
             InquiryBulkInsertDefinition<TEntity> definition,
@@ -1097,7 +1168,7 @@ public sealed class InquiryTelemetryTests
         }
     }
 
-    private sealed class NativeProviderException : DbException
+    private sealed class NativeProviderException: DbException
     {
         public NativeProviderException(string message) : base(message)
         {
@@ -1108,7 +1179,7 @@ public sealed class InquiryTelemetryTests
     /// Models a driver that reports its own error when the caller cancels mid-flight, as SqlClient
     /// does for an attention-cancelled command. The message names a table, like real driver errors.
     /// </summary>
-    private sealed class NativeErrorOnCancelConnectionFactory : IInquiryConnectionFactory
+    private sealed class NativeErrorOnCancelConnectionFactory: IInquiryConnectionFactory
     {
         private readonly CancellationTokenSource _cancellation;
         private int _executeCount;
@@ -1140,7 +1211,7 @@ public sealed class InquiryTelemetryTests
         }
     }
 
-    private sealed class NativeErrorConnection : DbConnection
+    private sealed class NativeErrorConnection: DbConnection
     {
         private readonly SqliteConnection _inner;
         private readonly NativeErrorOnCancelConnectionFactory _factory;
@@ -1166,12 +1237,16 @@ public sealed class InquiryTelemetryTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }
 
-    private sealed class NativeErrorCommand : DbCommand
+    private sealed class NativeErrorCommand: DbCommand
     {
         private readonly SqliteCommand _inner;
         private readonly NativeErrorOnCancelConnectionFactory _factory;
@@ -1202,12 +1277,16 @@ public sealed class InquiryTelemetryTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }
 
-    private sealed class FakeBulkCopier : IInquiryBulkCopier
+    private sealed class FakeBulkCopier: IInquiryBulkCopier
     {
         private readonly long _rowCount;
         private readonly bool _throws;

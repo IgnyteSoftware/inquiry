@@ -1,5 +1,4 @@
 using Inquiry.Connections;
-using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;

@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -16,7 +14,7 @@ public sealed class Sale
     public decimal Amount { get; set; }
 }
 
-public partial class SaleStore : InquiryStore<Sale>
+public partial class SaleStore: InquiryStore<Sale>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Sale sale, CancellationToken cancellationToken = default);

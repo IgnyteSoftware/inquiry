@@ -1,8 +1,6 @@
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using Inquiry.Oracle.Tests.Fixtures;
 using Oracle.ManagedDataAccess.Client;
-using Xunit;
 
 namespace Inquiry.Oracle.Tests;
 

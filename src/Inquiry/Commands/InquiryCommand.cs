@@ -1,6 +1,6 @@
-using Inquiry.Parameters;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Parameters;
 
 namespace Inquiry.Commands;
 

@@ -10,7 +10,7 @@ namespace Inquiry.Stores;
 /// operation attribute's <c>IncludeDeleted</c> instead. Valid on select-shaped operations only.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
-public sealed class InquiryIgnoreFilterAttribute : Attribute
+public sealed class InquiryIgnoreFilterAttribute: Attribute
 {
     /// <summary>The <see cref="Inquiry.Entities.InquiryGlobalFilterAttribute.Name"/> of the filter to bypass.</summary>
     public string FilterName { get; }

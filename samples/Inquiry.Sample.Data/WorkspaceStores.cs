@@ -9,10 +9,10 @@ namespace Inquiry.Sample.Data;
 [InquiryWhere(nameof(WorkspaceProduct.Price), Compare.LessThanOrEqual, Optional = true)]
 [InquiryWhere(nameof(WorkspaceProduct.Stock), Compare.GreaterThanOrEqual, Optional = true)]
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class ProductSearchAttribute : Attribute;
+public sealed class ProductSearchAttribute: Attribute;
 
 [InquiryGenerateInterface]
-public partial class WorkspaceProductStore : InquiryStore<WorkspaceProduct>
+public partial class WorkspaceProductStore: InquiryStore<WorkspaceProduct>
 {
     [InquirySelectAllByPredicate(OrderBy = "Name ASC, Id ASC", Paged = true)]
     [ProductSearch]
@@ -86,7 +86,7 @@ public partial class WorkspaceProductStore : InquiryStore<WorkspaceProduct>
     public partial Task<bool> ArchiveAsync(WorkspaceProduct product, CancellationToken ct = default);
 }
 
-public partial class WorkspaceCategoryStore : InquiryStore<WorkspaceCategory>
+public partial class WorkspaceCategoryStore: InquiryStore<WorkspaceCategory>
 {
     [InquirySelectAll(OrderBy = "Name ASC")]
     public partial Task<IReadOnlyList<WorkspaceCategory>> ListAsync(CancellationToken ct = default);

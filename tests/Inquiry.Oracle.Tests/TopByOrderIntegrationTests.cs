@@ -17,7 +17,7 @@ public sealed class TopSale
     public string Region { get; set; } = string.Empty;
 }
 
-public partial class TopSaleStore : InquiryStore<TopSale>
+public partial class TopSaleStore: InquiryStore<TopSale>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(TopSale sale, CancellationToken cancellationToken = default);

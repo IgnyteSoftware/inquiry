@@ -1,15 +1,12 @@
-using System;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using MySqlConnector;
 using Testcontainers.MariaDb;
-using Xunit;
 
 namespace Inquiry.MariaDb.Tests.Fixtures;
 
 /// <summary>Starts one MariaDB container for the whole assembly. If Docker is unreachable,
 /// <see cref="IsAvailable"/> stays false and tests skip rather than fail.</summary>
-public sealed class MariaDbContainerFixture : IAsyncLifetime
+public sealed class MariaDbContainerFixture: IAsyncLifetime
 {
     private MariaDbContainer? _container;
 
@@ -47,6 +44,9 @@ public sealed class MariaDbContainerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

@@ -15,7 +15,7 @@ public sealed class RefCursorItem
     public string ItemName { get; set; } = string.Empty;
 }
 
-public sealed partial class OracleRefCursorStore : InquiryStore<RefCursorItem>
+public sealed partial class OracleRefCursorStore: InquiryStore<RefCursorItem>
 {
     [InquiryStoredProcedure("GET_ITEMS_BY_CATEGORY")]
     public partial IAsyncEnumerable<RefCursorItem> GetByCategoryAsync(int categoryId, CancellationToken cancellationToken = default);

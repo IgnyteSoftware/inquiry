@@ -1,7 +1,7 @@
-using Inquiry.Commands;
-using Inquiry.Parameters;
 using System.Data;
 using System.Globalization;
+using Inquiry.Commands;
+using Inquiry.Parameters;
 
 namespace Inquiry;
 
@@ -27,10 +27,7 @@ public static class InquirySql
         CommandType? commandType = null,
         int? commandTimeout = null)
     {
-        if (commandText is null)
-        {
-            throw new ArgumentNullException(nameof(commandText));
-        }
+        ArgumentNullException.ThrowIfNull(commandText);
 
         var args = commandText.GetArguments();
         if (args.Length == 0)
@@ -67,10 +64,10 @@ public static class InquirySql
 
         return value switch
         {
-            sbyte v  => unchecked((byte)v),
+            sbyte v => unchecked((byte)v),
             ushort v => unchecked((short)v),
-            uint v   => unchecked((int)v),
-            ulong v  => unchecked((long)v),
+            uint v => unchecked((int)v),
+            ulong v => unchecked((long)v),
             _ => value,
         };
     }

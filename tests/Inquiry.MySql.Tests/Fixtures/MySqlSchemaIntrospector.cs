@@ -1,14 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.Data.Common;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 
 namespace Inquiry.MySql.Tests.Fixtures;
 
-public sealed class MySqlSchemaIntrospector : ISchemaIntrospector
+public sealed class MySqlSchemaIntrospector: ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {
@@ -21,7 +16,11 @@ public sealed class MySqlSchemaIntrospector : ISchemaIntrospector
             r =>
             {
                 var t = r.GetString(0);
-                if (!cols.TryGetValue(t, out var list)) cols[t] = list = new();
+                if (!cols.TryGetValue(t, out var list))
+                {
+                    cols[t] = list = new();
+                }
+
                 list.Add(new ColumnSnapshot(r.GetString(1), r.GetString(2) == "YES"));
             });
 
@@ -54,7 +53,11 @@ public sealed class MySqlSchemaIntrospector : ISchemaIntrospector
             r =>
             {
                 var key = (r.GetString(0), r.GetString(1));
-                if (!idxCols.TryGetValue(key, out var list)) idxCols[key] = list = new();
+                if (!idxCols.TryGetValue(key, out var list))
+                {
+                    idxCols[key] = list = new();
+                }
+
                 list.Add((Convert.ToInt32(r.GetValue(3)), r.GetString(2)));
             });
 
@@ -80,6 +83,9 @@ public sealed class MySqlSchemaIntrospector : ISchemaIntrospector
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct)) onRow(r);
+        while (await r.ReadAsync(ct))
+        {
+            onRow(r);
+        }
     }
 }

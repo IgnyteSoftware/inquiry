@@ -111,7 +111,11 @@ public class BatchMutationStrategyBenchmarks
     private static OracleBatchMutationItem[] CreateItems(int count, int firstId, string valuePrefix)
     {
         var items = new OracleBatchMutationItem[count];
-        for (var i = 0; i < count; i++) items[i] = new(firstId + i, $"{valuePrefix} {i}");
+        for (var i = 0; i < count; i++)
+        {
+            items[i] = new(firstId + i, $"{valuePrefix} {i}");
+        }
+
         return items;
     }
 
@@ -133,7 +137,11 @@ public class BatchMutationStrategyBenchmarks
     private static int[] CreateIds(int count, int firstId)
     {
         var ids = new int[count];
-        for (var i = 0; i < count; i++) ids[i] = firstId + i;
+        for (var i = 0; i < count; i++)
+        {
+            ids[i] = firstId + i;
+        }
+
         return ids;
     }
 
@@ -165,7 +173,11 @@ public class BatchMutationStrategyBenchmarks
     {
         foreach (var method in typeof(BatchMutationStrategyBenchmarks).GetMethods(BindingFlags.Instance | BindingFlags.Public))
         {
-            if (method.GetCustomAttribute<DirectDriverFloorAttribute>() is null) continue;
+            if (method.GetCustomAttribute<DirectDriverFloorAttribute>() is null)
+            {
+                continue;
+            }
+
             if (!method.Name.Contains("DirectDriver", StringComparison.Ordinal) ||
                 !method.Name.Contains("Floor", StringComparison.Ordinal) ||
                 method.Name.Contains("Production", StringComparison.Ordinal) ||
@@ -179,4 +191,4 @@ public class BatchMutationStrategyBenchmarks
 }
 
 [AttributeUsage(AttributeTargets.Method)]
-internal sealed class DirectDriverFloorAttribute : Attribute;
+internal sealed class DirectDriverFloorAttribute: Attribute;

@@ -21,7 +21,7 @@ namespace Inquiry.Stores;
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryParameterAttribute : Attribute
+public sealed class InquiryParameterAttribute: Attribute
 {
     /// <summary>
     /// Gets or sets the declared length for string and binary parameters. When set on a

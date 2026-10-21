@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -20,7 +17,7 @@ public sealed class ExistsWidget
     public bool IsDeleted { get; set; }
 }
 
-public partial class ExistsWidgetStore : InquiryStore<ExistsWidget>
+public partial class ExistsWidgetStore: InquiryStore<ExistsWidget>
 {
     [InquiryInsert]
     public partial Task<ExistsWidget?> InsertAsync(ExistsWidget widget, CancellationToken cancellationToken = default);

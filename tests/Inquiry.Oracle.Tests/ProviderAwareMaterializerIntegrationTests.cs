@@ -7,7 +7,7 @@ namespace Inquiry.Oracle.Tests;
 
 public readonly record struct OracleBusinessDate(DateOnly Value);
 
-public sealed class OracleBusinessDateConverter : IInquiryValueConverter<OracleBusinessDate, DateOnly>
+public sealed class OracleBusinessDateConverter: IInquiryValueConverter<OracleBusinessDate, DateOnly>
 {
     public DateOnly ToProvider(OracleBusinessDate model) => model.Value;
     public OracleBusinessDate FromProvider(DateOnly provider) => new(provider);
@@ -15,7 +15,7 @@ public sealed class OracleBusinessDateConverter : IInquiryValueConverter<OracleB
 
 public readonly record struct OracleExternalId(Guid Value);
 
-public sealed class OracleExternalIdConverter : IInquiryValueConverter<OracleExternalId, Guid>
+public sealed class OracleExternalIdConverter: IInquiryValueConverter<OracleExternalId, Guid>
 {
     public Guid ToProvider(OracleExternalId model) => model.Value;
     public OracleExternalId FromProvider(Guid provider) => new(provider);
@@ -23,7 +23,7 @@ public sealed class OracleExternalIdConverter : IInquiryValueConverter<OracleExt
 
 public readonly record struct OracleToggle(bool Value);
 
-public sealed class OracleToggleConverter : IInquiryValueConverter<OracleToggle, bool>
+public sealed class OracleToggleConverter: IInquiryValueConverter<OracleToggle, bool>
 {
     public bool ToProvider(OracleToggle model) => model.Value;
     public OracleToggle FromProvider(bool provider) => new(provider);
@@ -43,7 +43,7 @@ public sealed class ProviderReadItem
     [InquiryColumn] public DateTimeOffset? OptionalOffset { get; set; }
 }
 
-public partial class ProviderReadItemStore : InquiryStore<ProviderReadItem>
+public partial class ProviderReadItemStore: InquiryStore<ProviderReadItem>
 {
     [InquiryInsert]
     public partial Task<ProviderReadItem?> InsertReturningAsync(ProviderReadItem item, CancellationToken ct = default);
@@ -88,7 +88,7 @@ public sealed class ProviderReadAllTypes
     [InquiryColumn] public DateTime OccurredAt { get; set; }
 }
 
-public partial class ProviderReadAllTypesStore : InquiryStore<ProviderReadAllTypes>
+public partial class ProviderReadAllTypesStore: InquiryStore<ProviderReadAllTypes>
 {
     [InquiryInsert]
     public partial Task<ProviderReadAllTypes?> InsertReturningAsync(ProviderReadAllTypes item, CancellationToken ct = default);
@@ -165,7 +165,7 @@ public sealed class TemporalBatchItem
     [InquiryColumn(Converter = typeof(OracleBusinessDateConverter))] public OracleBusinessDate ConvertedDate { get; set; }
 }
 
-public partial class TemporalBatchItemStore : InquiryStore<TemporalBatchItem>
+public partial class TemporalBatchItemStore: InquiryStore<TemporalBatchItem>
 {
     [InquiryInsert] public partial Task<int> InsertAllAsync(IEnumerable<TemporalBatchItem> items, CancellationToken ct = default);
     [InquiryUpdate] public partial Task<int> UpdateAllAsync(IEnumerable<TemporalBatchItem> items, CancellationToken ct = default);
@@ -248,7 +248,11 @@ public sealed class ProviderAwareMaterializerIntegrationTests
             await store.InsertReturningAsync(NewTemporal(date.AddDays(5), new TimeOnly(10, 11, 12), TimeSpan.FromMinutes(-270))),
         };
         Assert.All(returnedBatch, Assert.NotNull);
-        foreach (var value in returnedBatch) value!.EventDate = value.EventDate.AddDays(1);
+        foreach (var value in returnedBatch)
+        {
+            value!.EventDate = value.EventDate.AddDays(1);
+        }
+
         Assert.Equal(2, await store.UpdateAllAsync(returnedBatch.Select(static value => value!).ToArray()));
 
         var batchStore = harness.GetRequiredService<TemporalBatchItemStore>();

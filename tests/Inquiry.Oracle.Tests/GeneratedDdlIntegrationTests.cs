@@ -1,12 +1,10 @@
-using System.Threading.Tasks;
-using Inquiry.Generated;
 using Inquiry.FeatureCatalog;
+using Inquiry.Generated;
 using Inquiry.IntegrationTesting;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.Tests.Fixtures;
 using Oracle.ManagedDataAccess.Client;
-using Xunit;
 
 namespace Inquiry.Oracle.Tests;
 

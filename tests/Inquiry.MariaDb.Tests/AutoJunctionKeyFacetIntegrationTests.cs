@@ -1,9 +1,7 @@
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.MariaDb.Tests.Fixtures;
 using MySqlConnector;
-using Xunit;
 
 namespace Inquiry.MariaDb.Tests;
 

@@ -1,6 +1,6 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Microsoft.Data.Sqlite;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -112,7 +112,7 @@ public sealed class FailoverConnectionOpenerTests
         Assert.Equal(new[] { Primary, Primary, Failover }, opened);
     }
 
-    private sealed class AlwaysTransientDetector : ITransientErrorDetector
+    private sealed class AlwaysTransientDetector: ITransientErrorDetector
     {
         public bool IsTransient(Exception exception) => true;
     }

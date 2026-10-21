@@ -7,7 +7,7 @@ namespace Inquiry.BulkCopy;
 /// written on a dedicated connection and are committed, unless the provider enlisted that connection
 /// in an ambient <c>System.Transactions</c> scope.
 /// </summary>
-public sealed class InquiryBulkInsertWarningException : InvalidOperationException
+public sealed class InquiryBulkInsertWarningException: InvalidOperationException
 {
     internal InquiryBulkInsertWarningException(string message, long rowsWritten, bool isEnlisted, IReadOnlyList<string> warnings)
         : base(message)

@@ -54,9 +54,14 @@ public readonly struct InquiryBatchCommand<TItem>
         }
 
         if (parametersPerItem < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(parametersPerItem), parametersPerItem, "Parameters per item cannot be negative.");
+        }
+
         if (maxItemsPerCommand <= 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(maxItemsPerCommand), maxItemsPerCommand, "Maximum items per command must be positive.");
+        }
 
         CommandTextFactory = commandTextFactory ?? throw new ArgumentNullException(nameof(commandTextFactory));
         BindChunk = bindChunk ?? throw new ArgumentNullException(nameof(bindChunk));
@@ -85,10 +90,16 @@ public readonly struct InquiryBatchCommand<TItem>
         : this(chunkCommandTextFactory, bindChunk, parametersPerItem, maxItemsPerCommand, commandType)
     {
         if (string.IsNullOrWhiteSpace(commandText))
+        {
             throw new ArgumentException("Command text cannot be empty.", nameof(commandText));
+        }
+
         if (setBasedMaxItemsPerCommand <= 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(setBasedMaxItemsPerCommand), setBasedMaxItemsPerCommand,
                 "Maximum set-based items per command must be positive.");
+        }
+
         CommandText = commandText;
         BindItem = bindItem ?? throw new ArgumentNullException(nameof(bindItem));
         UseChunk = useChunk ?? throw new ArgumentNullException(nameof(useChunk));
@@ -136,14 +147,39 @@ public readonly struct InquiryBatchCommand<TItem>
     internal void Validate()
     {
         if (CommandTextFactory is null && string.IsNullOrWhiteSpace(CommandText))
+        {
             throw new ArgumentException("Command text cannot be empty.", "commandText");
-        if (CommandTextFactory is null && BindItem is null) throw new ArgumentNullException("bindItem");
-        if (CommandTextFactory is not null && BindChunk is null) throw new ArgumentNullException("bindChunk");
-        if (ParametersPerItem < 0) throw new ArgumentOutOfRangeException("parametersPerItem");
-        if (MaxItemsPerCommand <= 0 && CommandTextFactory is not null) throw new ArgumentOutOfRangeException("maxItemsPerCommand");
+        }
+
+        if (CommandTextFactory is null && BindItem is null)
+        {
+            throw new ArgumentNullException("bindItem");
+        }
+
+        if (CommandTextFactory is not null && BindChunk is null)
+        {
+            throw new ArgumentNullException("bindChunk");
+        }
+
+        if (ParametersPerItem < 0)
+        {
+            throw new ArgumentOutOfRangeException("parametersPerItem");
+        }
+
+        if (MaxItemsPerCommand <= 0 && CommandTextFactory is not null)
+        {
+            throw new ArgumentOutOfRangeException("maxItemsPerCommand");
+        }
+
         if (SetBasedMaxItemsPerCommand <= 0 && CommandTextFactory is not null)
+        {
             throw new ArgumentOutOfRangeException("setBasedMaxItemsPerCommand");
-        if (!Enum.IsDefined(CommandType)) throw new ArgumentOutOfRangeException("commandType", CommandType, "Command type is not valid.");
+        }
+
+        if (!Enum.IsDefined(CommandType))
+        {
+            throw new ArgumentOutOfRangeException("commandType", CommandType, "Command type is not valid.");
+        }
     }
 
     internal InquiryGeneratedCommand<InquiryBatchItem<TItem>> ForItem(TItem item)
@@ -158,28 +194,43 @@ public readonly struct InquiryBatchCommand<TItem>
     {
         var commandText = CommandTextFactory is null ? CommandText : CommandTextFactory(chunkCount);
         if (string.IsNullOrWhiteSpace(commandText))
+        {
             throw new ArgumentException("The batch command text factory returned empty command text.", "commandTextFactory");
+        }
+
         return commandText;
     }
 
     internal int GetEffectiveChunkSize(int maxBatchSize, int maxParametersPerCommand)
     {
         if (ParametersPerItem > maxParametersPerCommand)
+        {
             throw new InvalidOperationException("The configured command parameter limit cannot fit one batch item.");
+        }
 
         var size = IgnoresMaxBatchSize
             ? MaxItemsPerCommand
             : Math.Min(maxBatchSize, MaxItemsPerCommand);
         if (CommandTextFactory is not null && UseChunk is null && ParametersPerItem > 0)
+        {
             size = Math.Min(size, maxParametersPerCommand / ParametersPerItem);
+        }
+
         if (size < 1)
+        {
             throw new InvalidOperationException("The configured command parameter limit cannot fit one batch item.");
+        }
+
         return size;
     }
 
     internal bool ShouldUseChunk(IReadOnlyList<TItem> chunk, int maxParametersPerCommand)
     {
-        if (UseChunk?.Invoke(chunk) != true) return false;
+        if (UseChunk?.Invoke(chunk) != true)
+        {
+            return false;
+        }
+
         var parameterLimit = ParametersPerItem > 0
             ? maxParametersPerCommand / ParametersPerItem
             : int.MaxValue;

@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Inquiry.Stores;
@@ -17,7 +14,7 @@ public sealed class PgGenItem
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class PgGenItemStore : InquiryStore<PgGenItem>
+public partial class PgGenItemStore: InquiryStore<PgGenItem>
 {
     [InquiryUpsert]
     public partial Task<PgGenItem?> UpsertReturningAsync(PgGenItem item, CancellationToken cancellationToken = default);

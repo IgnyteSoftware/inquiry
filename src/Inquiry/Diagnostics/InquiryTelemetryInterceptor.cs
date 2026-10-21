@@ -1,10 +1,10 @@
+using System.Data.Common;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Inquiry.Commands;
 using Inquiry.Interceptors;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Data.Common;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
 
 namespace Inquiry.Diagnostics;
 
@@ -20,7 +20,7 @@ namespace Inquiry.Diagnostics;
 /// streaming query whose enumeration is abandoned early no completion notification fires, so that
 /// span is dropped rather than recorded with a fabricated duration.
 /// </remarks>
-internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, IInquiryInterceptorActivation
+internal sealed class InquiryTelemetryInterceptor: IInquiryCommandInterceptor, IInquiryInterceptorActivation
 {
     private readonly InquiryTelemetryOptions _options;
     private readonly ILogger _logger;
@@ -208,7 +208,10 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         {
             if (TryKeyword(sql, ref pos, "OR"))
             {
-                if (ReadWord(sql, ref pos).IsEmpty) return null;
+                if (ReadWord(sql, ref pos).IsEmpty)
+                {
+                    return null;
+                }
             }
             else
             {
@@ -222,14 +225,25 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         {
             if (TryKeyword(sql, ref pos, "OR"))
             {
-                if (ReadWord(sql, ref pos).IsEmpty) return null;
+                if (ReadWord(sql, ref pos).IsEmpty)
+                {
+                    return null;
+                }
             }
             else if (TryKeyword(sql, ref pos, "TOP"))
             {
                 pos = SkipTrivia(sql, pos);
-                if (pos >= sql.Length || sql[pos] != '(') return null;
+                if (pos >= sql.Length || sql[pos] != '(')
+                {
+                    return null;
+                }
+
                 pos = SkipParenthesized(sql, pos);
-                if (pos < 0) return null;
+                if (pos < 0)
+                {
+                    return null;
+                }
+
                 TryKeyword(sql, ref pos, "PERCENT");
             }
 
@@ -244,7 +258,11 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         if (keyword.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
         {
             pos = FindOuterFrom(sql, pos);
-            if (pos < 0) return null;
+            if (pos < 0)
+            {
+                return null;
+            }
+
             var table = ReadTableName(sql, ref pos);
 
             // "FROM name(" is a table-valued function, not a table.
@@ -273,18 +291,34 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
             if (c is '\'' or '"' or '[' or '`')
             {
                 pos = SkipDelimited(sql, pos);
-                if (pos < 0) return -1;
+                if (pos < 0)
+                {
+                    return -1;
+                }
             }
             else if (IsWordChar(c))
             {
                 var word = ReadWord(sql, ref pos);
-                if (depth == 0 && word.Equals("FROM", StringComparison.OrdinalIgnoreCase)) return pos;
+                if (depth == 0 && word.Equals("FROM", StringComparison.OrdinalIgnoreCase))
+                {
+                    return pos;
+                }
             }
             else
             {
-                if (c == '(') depth++;
-                else if (c == ')') depth--;
-                else if (c == ';' && depth == 0) return -1;
+                if (c == '(')
+                {
+                    depth++;
+                }
+                else if (c == ')')
+                {
+                    depth--;
+                }
+                else if (c == ';' && depth == 0)
+                {
+                    return -1;
+                }
+
                 pos++;
             }
         }
@@ -299,23 +333,36 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         {
             pos = SkipTrivia(sql, pos);
             var part = ReadNamePart(sql, ref pos);
-            if (part is null) return null;
+            if (part is null)
+            {
+                return null;
+            }
 
             var next = SkipTrivia(sql, pos);
-            if (next >= sql.Length || sql[next] != '.') return part;
+            if (next >= sql.Length || sql[next] != '.')
+            {
+                return part;
+            }
+
             pos = next + 1;
         }
     }
 
     private static string? ReadNamePart(ReadOnlySpan<char> sql, ref int pos)
     {
-        if (pos >= sql.Length) return null;
+        if (pos >= sql.Length)
+        {
+            return null;
+        }
 
         var open = sql[pos];
         if (open is '[' or '"' or '`')
         {
             var end = SkipDelimited(sql, pos);
-            if (end < 0 || end - pos <= 2) return null;
+            if (end < 0 || end - pos <= 2)
+            {
+                return null;
+            }
 
             var close = open == '[' ? ']' : open;
             var raw = sql[(pos + 1)..(end - 1)].ToString();
@@ -336,7 +383,11 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         while (true)
         {
             var offset = sql[pos..].IndexOf(close);
-            if (offset < 0) return -1;
+            if (offset < 0)
+            {
+                return -1;
+            }
+
             pos += offset + 1;
             if (pos < sql.Length && sql[pos] == close)
             {
@@ -358,13 +409,23 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
             if (c is '\'' or '"' or '[' or '`')
             {
                 pos = SkipDelimited(sql, pos);
-                if (pos < 0) return -1;
+                if (pos < 0)
+                {
+                    return -1;
+                }
+
                 continue;
             }
 
             pos++;
-            if (c == '(') depth++;
-            else if (c == ')' && --depth == 0) return pos;
+            if (c == '(')
+            {
+                depth++;
+            }
+            else if (c == ')' && --depth == 0)
+            {
+                return pos;
+            }
         }
 
         return -1;
@@ -373,7 +434,11 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
     private static bool TryKeyword(ReadOnlySpan<char> sql, ref int pos, string keyword)
     {
         var end = pos;
-        if (!ReadWord(sql, ref end).Equals(keyword, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!ReadWord(sql, ref end).Equals(keyword, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         pos = end;
         return true;
     }
@@ -383,8 +448,16 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
     {
         var start = SkipTrivia(sql, pos);
         var end = start;
-        while (end < sql.Length && IsWordChar(sql[end])) end++;
-        if (end == start) return default;
+        while (end < sql.Length && IsWordChar(sql[end]))
+        {
+            end++;
+        }
+
+        if (end == start)
+        {
+            return default;
+        }
+
         pos = end;
         return sql[start..end];
     }

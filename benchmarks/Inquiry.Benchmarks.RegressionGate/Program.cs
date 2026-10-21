@@ -43,9 +43,15 @@ static int RunCompare(string[] args)
     {
         switch (args[i])
         {
-            case "--tfm": tfm = args[++i]; break;
-            case "--env": env = args[++i]; break;
-            case "--filter": filter = args[++i]; break;
+            case "--tfm":
+                tfm = args[++i];
+                break;
+            case "--env":
+                env = args[++i];
+                break;
+            case "--filter":
+                filter = args[++i];
+                break;
         }
     }
 
@@ -154,10 +160,18 @@ static int RunCompare(string[] args)
         {
             switch (verdict)
             {
-                case RegressionVerdict.Fail: failures++; break;
-                case RegressionVerdict.Pass: passes++; break;
-                case RegressionVerdict.Missing: missing++; break;
-                default: skips++; break;
+                case RegressionVerdict.Fail:
+                    failures++;
+                    break;
+                case RegressionVerdict.Pass:
+                    passes++;
+                    break;
+                case RegressionVerdict.Missing:
+                    missing++;
+                    break;
+                default:
+                    skips++;
+                    break;
             }
         }
     }
@@ -167,7 +181,9 @@ static int RunCompare(string[] args)
     Console.WriteLine();
 
     if (missing > 0)
+    {
         Console.Error.WriteLine($"INCOMPLETE EVIDENCE: {missing} expected measurement(s) missing from the report.");
+    }
 
     if (failures > 0)
     {
@@ -176,7 +192,9 @@ static int RunCompare(string[] args)
     }
 
     if (missing > 0)
+    {
         return evidenceFailure;
+    }
 
     Console.WriteLine("All checks passed.");
     return 0;
@@ -199,12 +217,24 @@ static int RunGenerate(string[] args)
     {
         switch (args[i])
         {
-            case "--provider": provider = args[++i]; break;
-            case "--tfm": tfm = args[++i]; break;
-            case "--commit": commit = args[++i]; break;
-            case "--env": env = args[++i]; break;
-            case "--budget": budget = double.Parse(args[++i]); break;
-            case "--abs": abs = double.Parse(args[++i]); break;
+            case "--provider":
+                provider = args[++i];
+                break;
+            case "--tfm":
+                tfm = args[++i];
+                break;
+            case "--commit":
+                commit = args[++i];
+                break;
+            case "--env":
+                env = args[++i];
+                break;
+            case "--budget":
+                budget = double.Parse(args[++i]);
+                break;
+            case "--abs":
+                abs = double.Parse(args[++i]);
+                break;
         }
     }
 
@@ -234,7 +264,10 @@ static int RunGenerate(string[] args)
     if (incomplete.Count > 0)
     {
         foreach (var b in incomplete)
+        {
             Console.Error.WriteLine($"Benchmark has no statistics: {b.FullName ?? "(unnamed)"}");
+        }
+
         return 1;
     }
 
@@ -259,7 +292,9 @@ static string ShortenName(string fullName)
     {
         var paren = fullName.IndexOf('(', dot);
         if (paren > 0)
+        {
             return fullName[(dot + 1)..];
+        }
     }
     return fullName.Length > 58 ? fullName[..58] + ".." : fullName;
 }

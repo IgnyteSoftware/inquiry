@@ -1,12 +1,10 @@
-using System.Threading.Tasks;
-using Inquiry.Generated;
 using Inquiry.FeatureCatalog;
+using Inquiry.Generated;
 using Inquiry.IntegrationTesting;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Npgsql;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests;
 

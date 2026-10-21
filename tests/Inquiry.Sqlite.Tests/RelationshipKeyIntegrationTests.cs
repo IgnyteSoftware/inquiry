@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
@@ -34,7 +30,7 @@ public sealed class RkTerritory
     public RkRegion? Region { get; set; }
 }
 
-public partial class RkRegionStore : InquiryStore<RkRegion>
+public partial class RkRegionStore: InquiryStore<RkRegion>
 {
     [InquirySelectOneByKeyEager]
     public partial Task<RkRegion?> GetWithTerritoriesAsync(int regionId, CancellationToken cancellationToken = default);
@@ -43,7 +39,7 @@ public partial class RkRegionStore : InquiryStore<RkRegion>
     public partial IAsyncEnumerable<RkRegion> AllWithTerritoriesAsync(CancellationToken cancellationToken = default);
 }
 
-public partial class RkTerritoryStore : InquiryStore<RkTerritory>
+public partial class RkTerritoryStore: InquiryStore<RkTerritory>
 {
     [InquirySelectOneByKeyEager]
     public partial Task<RkTerritory?> GetWithRegionAsync(int territoryId, CancellationToken cancellationToken = default);
@@ -91,13 +87,13 @@ public sealed class BkDocTag
     [InquiryKey(Length = 4)] public byte[] TagHash { get; set; } = new byte[0];
 }
 
-public partial class BkDocStore : InquiryStore<BkDoc>
+public partial class BkDocStore: InquiryStore<BkDoc>
 {
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<BkDoc> AllAsync(CancellationToken cancellationToken = default);
 }
 
-public partial class BkNoteStore : InquiryStore<BkNote>
+public partial class BkNoteStore: InquiryStore<BkNote>
 {
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<BkNote> AllAsync(CancellationToken cancellationToken = default);

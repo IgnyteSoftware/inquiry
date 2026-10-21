@@ -1,5 +1,5 @@
-using Inquiry.Generators.Infrastructure;
 using System.Collections.Immutable;
+using Inquiry.Generators.Infrastructure;
 
 namespace Inquiry.Generators.Tests;
 

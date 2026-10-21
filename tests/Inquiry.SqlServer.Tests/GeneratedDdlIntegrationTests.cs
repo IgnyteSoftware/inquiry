@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
@@ -11,7 +7,6 @@ using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
 using Microsoft.Data.SqlClient;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -28,7 +23,7 @@ public sealed class GeneratedRowversionDocument
     public byte[] Version { get; set; } = [];
 }
 
-public partial class GeneratedRowversionDocumentStore : InquiryStore<GeneratedRowversionDocument>
+public partial class GeneratedRowversionDocumentStore: InquiryStore<GeneratedRowversionDocument>
 {
     [InquiryInsert]
     public partial Task<GeneratedRowversionDocument?> InsertAsync(GeneratedRowversionDocument document, CancellationToken cancellationToken = default);

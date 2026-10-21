@@ -7,6 +7,6 @@ namespace Inquiry.Stores;
 /// filter (soft-deleted rows are excluded).
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryCountAttribute : Attribute
+public sealed class InquiryCountAttribute: Attribute
 {
 }

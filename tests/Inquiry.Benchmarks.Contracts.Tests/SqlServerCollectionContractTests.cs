@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Inquiry.Benchmarks.Contracts;
 using Inquiry.Benchmarks.Contracts.Evidence;
 using Inquiry.Benchmarks.Contracts.Fixtures;
 
@@ -62,9 +61,13 @@ public sealed class SqlServerCollectionContractTests
         var fields = document.RootElement.EnumerateObject().ToDictionary(static item => item.Name, static item => item.Value.Clone());
         var mutated = JsonSerializer.SerializeToUtf8Bytes(new
         {
-            schemaVersion = fields["schemaVersion"], collectedAtUtc = fields["collectedAtUtc"],
-            imageDigest = fields["imageDigest"], fixtureIdentityHash = fields["fixtureIdentityHash"],
-            logicalReads = fields["logicalReads"], planStability = fields["planStability"], rawSql = "SELECT secret",
+            schemaVersion = fields["schemaVersion"],
+            collectedAtUtc = fields["collectedAtUtc"],
+            imageDigest = fields["imageDigest"],
+            fixtureIdentityHash = fields["fixtureIdentityHash"],
+            logicalReads = fields["logicalReads"],
+            planStability = fields["planStability"],
+            rawSql = "SELECT secret",
         });
         Assert.Contains(SqlServerCollectionEvidenceValidator.Validate(mutated), static error => error.Code == "json-schema");
     }

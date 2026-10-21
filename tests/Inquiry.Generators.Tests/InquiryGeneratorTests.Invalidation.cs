@@ -134,9 +134,15 @@ public sealed partial class InquiryGeneratorTests
             _ => null
         };
         if (removedName is not null)
+        {
             Assert.DoesNotContain(removedName, outputText, StringComparison.Ordinal);
+        }
+
         if (edit == "dto")
+        {
             Assert.Contains("Count = reader.GetInt64(0)", outputText, StringComparison.Ordinal);
+        }
+
         if (edit == "related key")
         {
             var parentStore = Assert.Single(SourceSnapshot(reused), source => source.Contains("ParentStore.InquiryStore.g.cs", StringComparison.Ordinal));

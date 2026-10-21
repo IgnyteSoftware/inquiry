@@ -4,9 +4,9 @@ using Inquiry.Stores;
 
 namespace Inquiry.SqlServer.Tests;
 
-public enum TvpFacetState : uint { Maximum = uint.MaxValue }
+public enum TvpFacetState: uint { Maximum = uint.MaxValue }
 public readonly record struct TvpFacetToken(uint Value);
-public sealed class TvpFacetTokenConverter : IInquiryValueConverter<TvpFacetToken, uint>
+public sealed class TvpFacetTokenConverter: IInquiryValueConverter<TvpFacetToken, uint>
 {
     public uint ToProvider(TvpFacetToken value) => value.Value;
     public TvpFacetToken FromProvider(uint value) => new(value);
@@ -41,7 +41,7 @@ public sealed class TvpFacetItem
     [InquiryColumn(Converter = typeof(TvpFacetTokenConverter))] public TvpFacetToken? OptionalToken { get; set; }
 }
 
-public partial class TvpFacetStore : InquiryStore<TvpFacetItem>
+public partial class TvpFacetStore: InquiryStore<TvpFacetItem>
 {
     [InquiryExists, InquiryWhere("AnsiCode", Compare.In)]
     public partial Task<bool> HasAnsiCodeAsync(IReadOnlyList<string> values, CancellationToken cancellationToken = default);

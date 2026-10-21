@@ -1,10 +1,7 @@
-using System;
-using System.Threading.Tasks;
 using DotNet.Testcontainers.Configurations;
 using Inquiry.IntegrationTesting;
 using Oracle.ManagedDataAccess.Client;
 using Testcontainers.Oracle;
-using Xunit;
 
 namespace Inquiry.Oracle.Tests.Fixtures;
 
@@ -17,7 +14,7 @@ namespace Inquiry.Oracle.Tests.Fixtures;
 /// gvenzl image the SYSTEM password equals the configured <c>ORACLE_PASSWORD</c> (the same password
 /// Testcontainers sets for the app user), so only the user id needs swapping.
 /// </remarks>
-public sealed class OracleContainerFixture : IAsyncLifetime
+public sealed class OracleContainerFixture: IAsyncLifetime
 {
     public const string ImageEnvironmentVariable = "INQUIRY_ORACLE_IMAGE";
     public const string DefaultImage =
@@ -127,6 +124,9 @@ public sealed class OracleContainerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

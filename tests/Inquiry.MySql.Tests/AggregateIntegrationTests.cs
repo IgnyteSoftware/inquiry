@@ -1,6 +1,6 @@
+using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
-using Inquiry.MySql.Tests.Fixtures;
 
 namespace Inquiry.MySql.Tests;
 

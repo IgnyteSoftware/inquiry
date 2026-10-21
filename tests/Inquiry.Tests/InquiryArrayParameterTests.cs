@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using Inquiry.Parameters;
-using Xunit;
 
 namespace Inquiry.Tests;
 
@@ -12,7 +9,7 @@ namespace Inquiry.Tests;
 /// </summary>
 public sealed class InquiryArrayParameterTests
 {
-    private enum UnsignedColor : uint { High = 3_000_000_000u, Max = uint.MaxValue }
+    private enum UnsignedColor: uint { High = 3_000_000_000u, Max = uint.MaxValue }
 
     [Fact]
     public void UnsignedInputsBecomeTypedSignedPartnerArrays()
@@ -48,7 +45,7 @@ public sealed class InquiryArrayParameterTests
 
     private enum Color { Red = 1, Green = 2 }
 
-    private enum BigFlag : long { A = 5, B = 6 }
+    private enum BigFlag: long { A = 5, B = 6 }
 
     [Fact]
     public void TypedArrayPassesThroughUnchanged()

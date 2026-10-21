@@ -1,12 +1,13 @@
-using System;
-
 namespace Inquiry.SqlServer.Tests.Fixtures;
 
 internal static class SqlServerFullTextPolicy
 {
     public static bool ShouldSkip(bool isRequired, bool isInstalled)
     {
-        if (isInstalled) return false;
+        if (isInstalled)
+        {
+            return false;
+        }
 
         if (isRequired)
         {

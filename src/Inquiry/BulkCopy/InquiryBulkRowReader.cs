@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Common;
 
@@ -12,7 +11,7 @@ namespace Inquiry.BulkCopy;
 /// <see cref="FieldCount"/>, name/ordinal lookup — and throws for everything else.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
+public sealed class InquiryBulkRowReader<TEntity>: DbDataReader
     where TEntity : class
 {
     private readonly InquiryBulkInsertDefinition<TEntity> _definition;
@@ -196,7 +195,8 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     public override int GetValues(object[] values)
     {
         ThrowIfClosed();
-        if (values is null) throw new ArgumentNullException(nameof(values));
+        ArgumentNullException.ThrowIfNull(values);
+
         var count = Math.Min(values.Length, FieldCount);
         for (var i = 0; i < count; i++)
         {
@@ -331,9 +331,21 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
 
     private static void ValidateCopyArguments<T>(long dataOffset, T[]? buffer, int bufferOffset, int length)
     {
-        if (dataOffset < 0) throw new ArgumentOutOfRangeException(nameof(dataOffset));
-        if (bufferOffset < 0) throw new ArgumentOutOfRangeException(nameof(bufferOffset));
-        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length));
+        if (dataOffset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(dataOffset));
+        }
+
+        if (bufferOffset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(bufferOffset));
+        }
+
+        if (length < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length));
+        }
+
         if (buffer is not null && (bufferOffset > buffer.Length || length > buffer.Length - bufferOffset))
         {
             throw new ArgumentException("The destination range exceeds the supplied buffer.", nameof(buffer));

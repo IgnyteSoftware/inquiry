@@ -1,13 +1,13 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Microsoft.Data.Sqlite;
-using System.Data.Common;
 
 namespace Inquiry.Sqlite;
 
 /// <summary>
 /// Opens SQLite connections for generated Inquiry stores.
 /// </summary>
-internal sealed class SqliteInquiryConnectionFactory : IInquiryConnectionFactory
+internal sealed class SqliteInquiryConnectionFactory: IInquiryConnectionFactory
 {
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;

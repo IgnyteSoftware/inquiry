@@ -1,5 +1,4 @@
 using Inquiry.Benchmarks.DLG;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests.Dlg;
 

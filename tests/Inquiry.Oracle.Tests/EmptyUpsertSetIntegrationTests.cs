@@ -11,7 +11,7 @@ public sealed class OraKeyOnlyItem
     public int Id { get; set; }
 }
 
-public partial class OraKeyOnlyItemStore : InquiryStore<OraKeyOnlyItem>
+public partial class OraKeyOnlyItemStore: InquiryStore<OraKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(OraKeyOnlyItem item, CancellationToken cancellationToken = default);

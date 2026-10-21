@@ -1,8 +1,8 @@
+using System.Data.Common;
+using System.Diagnostics;
 using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using Microsoft.Data.SqlClient;
-using System.Data.Common;
-using System.Diagnostics;
 
 namespace Inquiry.SqlServer;
 
@@ -11,7 +11,7 @@ namespace Inquiry.SqlServer;
 /// <see cref="SqlBulkCopy"/> on the ambient transaction connection when present, or on a dedicated
 /// connection opened from the registered <see cref="IInquiryConnectionFactory"/>.
 /// </summary>
-internal sealed class SqlServerBulkCopier : IInquiryBulkCopier
+internal sealed class SqlServerBulkCopier: IInquiryBulkCopier
 {
     private readonly IInquiryConnectionFactory _connectionFactory;
 
@@ -39,13 +39,19 @@ internal sealed class SqlServerBulkCopier : IInquiryBulkCopier
 
         if (rawConnection is not SqlConnection sqlConnection)
         {
-            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            if (dedicatedConnection is not null)
+            {
+                await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            }
+
             throw new InvalidOperationException(
                 $"SQL Server bulk insert requires a SqlConnection but received {rawConnection.GetType().Name}. " +
                 "If using a connection wrapper, unwrap the inner connection first.");
         }
         if (context.Transaction is not null and not SqlTransaction)
+        {
             throw new InvalidOperationException($"SQL Server bulk insert requires a SqlTransaction but received {context.Transaction.GetType().Name}.");
+        }
 
         try
         {
@@ -56,11 +62,25 @@ internal sealed class SqlServerBulkCopier : IInquiryBulkCopier
                 DestinationTableName = QualifiedTableName(definition.Schema, definition.Table),
                 EnableStreaming = true,
             };
-            if (options.Timeout is { } timeout) bulk.BulkCopyTimeout = (int)Math.Ceiling(timeout.TotalSeconds);
-            if (options.BatchSize is { } batchSize) bulk.BatchSize = batchSize;
-            if (options.NotifyAfter is { } notifyAfter) bulk.NotifyAfter = notifyAfter;
+            if (options.Timeout is { } timeout)
+            {
+                bulk.BulkCopyTimeout = (int)Math.Ceiling(timeout.TotalSeconds);
+            }
+
+            if (options.BatchSize is { } batchSize)
+            {
+                bulk.BatchSize = batchSize;
+            }
+
+            if (options.NotifyAfter is { } notifyAfter)
+            {
+                bulk.NotifyAfter = notifyAfter;
+            }
+
             if (options.RowsCopied is { } rowsCopied)
+            {
                 bulk.SqlRowsCopied += (_, args) => rowsCopied(args.RowsCopied);
+            }
 
             // Map each source ordinal to the destination column NAME, never positionally: the
             // destination table may carry columns the definition omits (e.g. an IDENTITY key), so
@@ -86,7 +106,10 @@ internal sealed class SqlServerBulkCopier : IInquiryBulkCopier
         }
         finally
         {
-            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            if (dedicatedConnection is not null)
+            {
+                await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 

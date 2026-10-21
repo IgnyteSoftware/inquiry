@@ -17,7 +17,7 @@ public sealed class NegatedProduct
     public int Qty { get; set; }
 }
 
-public partial class NegatedProductStore : InquiryStore<NegatedProduct>
+public partial class NegatedProductStore: InquiryStore<NegatedProduct>
 {
     [InquiryInsert]
     public partial Task<NegatedProduct?> InsertAsync(NegatedProduct product, CancellationToken cancellationToken = default);

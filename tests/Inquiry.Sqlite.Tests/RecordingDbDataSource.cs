@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Inquiry.Sqlite.Tests;
 
-internal sealed class RecordingDbDataSource : DbDataSource
+internal sealed class RecordingDbDataSource: DbDataSource
 {
     public bool Opened { get; private set; }
 
@@ -18,7 +18,7 @@ internal sealed class RecordingDbDataSource : DbDataSource
         return ValueTask.FromResult<DbConnection>(new RecordingDbConnection());
     }
 
-    private sealed class RecordingDbConnection : DbConnection
+    private sealed class RecordingDbConnection: DbConnection
     {
         [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;

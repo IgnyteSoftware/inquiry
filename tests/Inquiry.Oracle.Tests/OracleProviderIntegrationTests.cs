@@ -1,10 +1,10 @@
+using System.Reflection;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Oracle.DependencyInjection;
 using Inquiry.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Oracle.ManagedDataAccess.Client;
-using System.Reflection;
 
 namespace Inquiry.Oracle.Tests;
 

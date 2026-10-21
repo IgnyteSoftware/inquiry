@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Inquiry.IntegrationTesting;
 
 /// <summary>The single source of truth for what a faithful Northwind schema must contain.

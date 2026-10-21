@@ -1,8 +1,5 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Inquiry.Entities;
 using Inquiry.BulkCopy;
+using Inquiry.Entities;
 using Inquiry.Stores;
 
 namespace Inquiry.FeatureCatalog;
@@ -28,7 +25,7 @@ public sealed class BulkItem
     public string? Note { get; set; }
 }
 
-public partial class BulkItemStore : InquiryStore<BulkItem>
+public partial class BulkItemStore: InquiryStore<BulkItem>
 {
     [InquiryBulkInsert]
     public partial Task<long> BulkInsertAsync(IEnumerable<BulkItem> items, CancellationToken cancellationToken = default);

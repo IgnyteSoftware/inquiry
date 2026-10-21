@@ -1,8 +1,8 @@
-using Inquiry.Commands;
-using Microsoft.Extensions.Logging;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Inquiry.Commands;
+using Microsoft.Extensions.Logging;
 
 namespace Inquiry.Interceptors;
 
@@ -15,7 +15,7 @@ namespace Inquiry.Interceptors;
 /// carries the duration and the command text; parameter values are never logged (same posture
 /// as Inquiry's telemetry).
 /// </summary>
-public sealed class SlowQueryLoggingInterceptor : IInquiryCommandInterceptor
+public sealed class SlowQueryLoggingInterceptor: IInquiryCommandInterceptor
 {
     private readonly ILogger<SlowQueryLoggingInterceptor> _logger;
     private readonly TimeSpan _threshold;
@@ -27,7 +27,11 @@ public sealed class SlowQueryLoggingInterceptor : IInquiryCommandInterceptor
     /// <summary>Initializes the interceptor with the slow threshold.</summary>
     public SlowQueryLoggingInterceptor(ILogger<SlowQueryLoggingInterceptor> logger, TimeSpan threshold)
     {
-        if (threshold <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(threshold), "Threshold must be positive.");
+        if (threshold <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(threshold), "Threshold must be positive.");
+        }
+
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _threshold = threshold;
     }
@@ -35,7 +39,7 @@ public sealed class SlowQueryLoggingInterceptor : IInquiryCommandInterceptor
     /// <inheritdoc />
     public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
     {
-        if (context is null) throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(context);
         // Reuse an existing box (same DbCommand re-executing, e.g. a retry) instead of allocating.
         if (_startTimestamps.TryGetValue(context.Command, out var existing))
         {
@@ -52,7 +56,8 @@ public sealed class SlowQueryLoggingInterceptor : IInquiryCommandInterceptor
     /// <inheritdoc />
     public ValueTask CommandExecutedAsync(InquiryCommandExecutedContext context, CancellationToken cancellationToken = default)
     {
-        if (context is null) throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(context);
+
         if (_startTimestamps.TryGetValue(context.Command, out var start))
         {
             _startTimestamps.Remove(context.Command);
@@ -73,7 +78,7 @@ public sealed class SlowQueryLoggingInterceptor : IInquiryCommandInterceptor
     /// <inheritdoc />
     public ValueTask CommandFailedAsync(InquiryCommandFailedContext context, CancellationToken cancellationToken = default)
     {
-        if (context is null) throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(context);
         // Failures surface through the exception (and telemetry); just drop the correlation entry.
         _startTimestamps.Remove(context.Command);
         return ValueTask.CompletedTask;

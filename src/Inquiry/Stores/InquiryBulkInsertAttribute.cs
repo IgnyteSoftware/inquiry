@@ -26,6 +26,6 @@ namespace Inquiry.Stores;
 /// connection only (never on regular pipeline connections).
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryBulkInsertAttribute : Attribute
+public sealed class InquiryBulkInsertAttribute: Attribute
 {
 }

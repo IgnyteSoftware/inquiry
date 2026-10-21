@@ -11,7 +11,7 @@ namespace Inquiry.Sqlite.Analyzer;
 /// emission, calling back into <see cref="CreateSqlBuilder"/> for the dialect-specific SQL.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class InquirySqliteGenerator : InquiryGeneratorBase
+public sealed class InquirySqliteGenerator: InquiryGeneratorBase
 {
     protected override string Dialect => "Sqlite";
 

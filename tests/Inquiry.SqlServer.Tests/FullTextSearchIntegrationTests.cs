@@ -1,7 +1,4 @@
-using System;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog.FullText;
 using Inquiry.IntegrationTesting;
 using Inquiry.SqlServer.Tests.Fixtures;
@@ -46,7 +43,10 @@ public sealed class FullTextSearchIntegrationTests
             check.CommandText = "SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled')";
             var value = await check.ExecuteScalarAsync();
             var isInstalled = value is not null && value != DBNull.Value && Convert.ToInt32(value) == 1;
-            if (SqlServerFullTextPolicy.ShouldSkip(DockerRequirement.IsRequired(), isInstalled)) return false;
+            if (SqlServerFullTextPolicy.ShouldSkip(DockerRequirement.IsRequired(), isInstalled))
+            {
+                return false;
+            }
         }
 
         await using (var catalog = connection.CreateCommand())
@@ -91,7 +91,10 @@ public sealed class FullTextSearchIntegrationTests
             }
 
             lastSentinelCount = (await articles.SearchAsync("inquiryreadinesssentinel")).Count;
-            if (lastSentinelCount == 3) return;
+            if (lastSentinelCount == 3)
+            {
+                return;
+            }
 
             await Task.Delay(250);
         }

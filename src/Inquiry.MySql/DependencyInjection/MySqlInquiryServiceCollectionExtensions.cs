@@ -19,15 +19,9 @@ public static class MySqlInquiryServiceCollectionExtensions
         this IServiceCollection services,
         MySqlDataSource dataSource)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
-        if (dataSource is null)
-        {
-            throw new ArgumentNullException(nameof(dataSource));
-        }
+        ArgumentNullException.ThrowIfNull(dataSource);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MySql");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MySqlInquiryConnectionFactory(dataSource));
@@ -40,10 +34,7 @@ public static class MySqlInquiryServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquiryMySql(this IServiceCollection services, string connectionString)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MySql");
         InquiryProviderRegistration.ValidateConnectionString(connectionString);
@@ -61,15 +52,9 @@ public static class MySqlInquiryServiceCollectionExtensions
         string connectionString,
         Action<MySqlInquiryOptions> configure)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
-        if (configure is null)
-        {
-            throw new ArgumentNullException(nameof(configure));
-        }
+        ArgumentNullException.ThrowIfNull(configure);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MySql");
         var options = new MySqlInquiryOptions();
@@ -112,10 +97,7 @@ public static class MySqlInquiryServiceCollectionExtensions
 
     private static string GetRequiredConnectionString(IConfiguration configuration, string connectionStringName)
     {
-        if (configuration is null)
-        {
-            throw new ArgumentNullException(nameof(configuration));
-        }
+        ArgumentNullException.ThrowIfNull(configuration);
 
         var connectionString = configuration.GetConnectionString(connectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString))

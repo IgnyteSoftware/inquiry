@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -22,7 +19,7 @@ public sealed class GlobalFilterDoc
     public bool IsDeleted { get; set; }
 }
 
-public partial class GlobalFilterDocStore : InquiryStore<GlobalFilterDoc>
+public partial class GlobalFilterDocStore: InquiryStore<GlobalFilterDoc>
 {
     [InquiryInsert]
     public partial Task<GlobalFilterDoc?> InsertAsync(GlobalFilterDoc doc, CancellationToken cancellationToken = default);
@@ -60,7 +57,7 @@ public sealed class GlobalFilterTicket
     public bool IsArchived { get; set; }
 }
 
-public partial class GlobalFilterTicketStore : InquiryStore<GlobalFilterTicket>
+public partial class GlobalFilterTicketStore: InquiryStore<GlobalFilterTicket>
 {
     [InquiryInsert]
     public partial Task<GlobalFilterTicket?> InsertAsync(GlobalFilterTicket ticket, CancellationToken cancellationToken = default);

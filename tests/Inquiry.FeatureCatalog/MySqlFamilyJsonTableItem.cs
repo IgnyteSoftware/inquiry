@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -20,7 +16,7 @@ public sealed class MySqlFamilyJsonTableItem
     [InquiryColumn(Precision = 18, Scale = 4)] public decimal Amount { get; set; }
 }
 
-public partial class MySqlFamilyJsonTableItemStore : InquiryStore<MySqlFamilyJsonTableItem>
+public partial class MySqlFamilyJsonTableItemStore: InquiryStore<MySqlFamilyJsonTableItem>
 {
     [InquiryInsert]
     public partial Task<MySqlFamilyJsonTableItem?> InsertAsync(MySqlFamilyJsonTableItem item, CancellationToken cancellationToken = default);

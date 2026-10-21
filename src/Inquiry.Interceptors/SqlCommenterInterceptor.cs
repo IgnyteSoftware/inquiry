@@ -1,7 +1,7 @@
-using Inquiry.Commands;
 using System.Data;
 using System.Diagnostics;
 using System.Text;
+using Inquiry.Commands;
 
 namespace Inquiry.Interceptors;
 
@@ -19,7 +19,7 @@ namespace Inquiry.Interceptors;
 /// correlation matters more than prepared reuse, or scope it to diagnosis sessions; see the
 /// Interceptors article for the trade-off.
 /// </remarks>
-public sealed class SqlCommenterInterceptor : IInquiryCommandInterceptor
+public sealed class SqlCommenterInterceptor: IInquiryCommandInterceptor
 {
     private readonly string? _staticFragment;
 
@@ -37,7 +37,7 @@ public sealed class SqlCommenterInterceptor : IInquiryCommandInterceptor
     /// <inheritdoc />
     public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
     {
-        if (context is null) throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(context);
 
         var text = context.Command.CommandText;
         if (text.Length == 0

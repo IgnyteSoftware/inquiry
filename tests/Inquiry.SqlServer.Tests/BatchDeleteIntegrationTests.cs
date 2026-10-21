@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
@@ -17,7 +14,7 @@ public sealed class Gadget
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class GadgetStore : InquiryStore<Gadget>
+public partial class GadgetStore: InquiryStore<Gadget>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Gadget gadget, CancellationToken cancellationToken = default);

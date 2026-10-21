@@ -103,7 +103,10 @@ public static class ParityValidator
 
         void AddIf(bool condition, string code, string message)
         {
-            if (condition) errors.Add(new(code, message));
+            if (condition)
+            {
+                errors.Add(new(code, message));
+            }
         }
     }
 }

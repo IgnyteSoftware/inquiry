@@ -1,12 +1,12 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
 using Inquiry.Tests.Shared;
 using Microsoft.Data.Sqlite;
-using System.Data;
-using System.Data.Common;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Inquiry.Tests;
 
@@ -492,7 +492,7 @@ public sealed class BatchCancellationRaceTests
     /// PROVE they took it — a change to interceptor-activation semantics that silently rerouted them
     /// to the executor would otherwise leave them green while testing a different site.
     /// </summary>
-    private sealed class RouteWitnessInterceptor : IInquiryCommandInterceptor
+    private sealed class RouteWitnessInterceptor: IInquiryCommandInterceptor
     {
         private int _executingCount;
 
@@ -510,7 +510,7 @@ public sealed class BatchCancellationRaceTests
     /// Nth ExecuteNonQueryAsync across the factory's lifetime, the command cancels the caller's token
     /// while "in flight", still executes the real statement, and reports its success.
     /// </summary>
-    private sealed class LyingSuccessConnectionFactory : IInquiryConnectionFactory
+    private sealed class LyingSuccessConnectionFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         private readonly CancellationTokenSource _cancellation;
@@ -592,20 +592,28 @@ public sealed class BatchCancellationRaceTests
             if (Interlocked.Increment(ref _executeCount) == _lieOnExecute)
             {
                 await Task.Yield();
-                if (_cancelBeforeFailing) _cancellation.Cancel();
+                if (_cancelBeforeFailing)
+                {
+                    _cancellation.Cancel();
+                }
+
                 if (_throwNativeError)
+                {
                     throw new InvalidOperationException("A severe error occurred on the current command.");
+                }
                 // A driver that observes cancellation through its own linked or timeout token throws
                 // an OCE that does not carry the caller's token.
                 if (_throwForeignCancellation)
+                {
                     throw new OperationCanceledException("Driver-side cancellation.", new CancellationToken(canceled: true));
+                }
             }
 
             return await execute();
         }
     }
 
-    private sealed class LyingConnection : DbConnection
+    private sealed class LyingConnection: DbConnection
     {
         private readonly SqliteConnection _inner;
         private readonly LyingSuccessConnectionFactory _factory;
@@ -671,7 +679,7 @@ public sealed class BatchCancellationRaceTests
     /// completion — the commit-time face of the lying-success driver. The inner SQLite transaction
     /// genuinely commits; what is faked is only that the "driver" swallowed the interruption.
     /// </summary>
-    private sealed class LyingTransaction : DbTransaction
+    private sealed class LyingTransaction: DbTransaction
     {
         private readonly SqliteTransaction _inner;
         private readonly LyingSuccessConnectionFactory _factory;
@@ -695,7 +703,8 @@ public sealed class BatchCancellationRaceTests
             // transaction (the realistic aftermath of an interrupted commit) — the fake's inner
             // SQLite transaction HAS committed, and a throwing rollback here would only test the
             // pipeline's cleanup aggregation, not the commit guard this fixture exists for.
-            try { _inner.Rollback(); }
+            try
+            { _inner.Rollback(); }
             catch (InvalidOperationException) { }
         }
 
@@ -708,7 +717,11 @@ public sealed class BatchCancellationRaceTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
@@ -719,7 +732,7 @@ public sealed class BatchCancellationRaceTests
         }
     }
 
-    private sealed class LyingCommand : DbCommand
+    private sealed class LyingCommand: DbCommand
     {
         private readonly SqliteCommand _inner;
         private readonly LyingSuccessConnectionFactory _factory;
@@ -757,7 +770,11 @@ public sealed class BatchCancellationRaceTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
@@ -772,7 +789,7 @@ public sealed class BatchCancellationRaceTests
     /// A DbBatch over real SQLite commands. One batch execute counts as one execute for the lie index,
     /// so the lying success lands on a whole batch, the way a provider DbBatch reports it.
     /// </summary>
-    private sealed class LyingBatch : DbBatch
+    private sealed class LyingBatch: DbBatch
     {
         private readonly SqliteConnection _connection;
         private readonly LyingSuccessConnectionFactory _factory;
@@ -822,7 +839,11 @@ public sealed class BatchCancellationRaceTests
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
-                foreach (LyingBatchCommand command in _commands) command.Inner.Dispose();
+                foreach (LyingBatchCommand command in _commands)
+                {
+                    command.Inner.Dispose();
+                }
+
                 _factory.RecordBatchDisposed();
             }
             base.Dispose();
@@ -835,7 +856,7 @@ public sealed class BatchCancellationRaceTests
         }
     }
 
-    private sealed class LyingBatchCommand : DbBatchCommand
+    private sealed class LyingBatchCommand: DbBatchCommand
     {
         internal LyingBatchCommand(SqliteCommand inner) => Inner = inner;
 
@@ -850,7 +871,7 @@ public sealed class BatchCancellationRaceTests
         public override DbParameter CreateParameter() => Inner.CreateParameter();
     }
 
-    private sealed class LyingBatchCommandCollection : DbBatchCommandCollection
+    private sealed class LyingBatchCommandCollection: DbBatchCommandCollection
     {
         private readonly List<DbBatchCommand> _items = new();
 

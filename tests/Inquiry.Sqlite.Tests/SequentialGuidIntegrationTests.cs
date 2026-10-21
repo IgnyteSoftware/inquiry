@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -19,7 +14,7 @@ public sealed class SeqDoc
     public string Title { get; set; } = string.Empty;
 }
 
-public partial class SeqDocStore : InquiryStore<SeqDoc>
+public partial class SeqDocStore: InquiryStore<SeqDoc>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(SeqDoc doc, CancellationToken cancellationToken = default);

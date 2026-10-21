@@ -24,7 +24,7 @@ namespace Inquiry.Entities;
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryManyToManyAttribute : Attribute
+public sealed class InquiryManyToManyAttribute: Attribute
 {
     /// <summary>
     /// Initializes an <strong>auto-managed</strong> many-to-many association: Inquiry synthesizes the

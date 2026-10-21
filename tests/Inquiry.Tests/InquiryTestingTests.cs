@@ -1,11 +1,11 @@
+using System.Reflection;
 using Inquiry.Commands;
 using Inquiry.Interceptors;
 using Inquiry.Parameters;
-using Inquiry.Testing;
 using Inquiry.Sqlite.Testing;
+using Inquiry.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Reflection;
 
 namespace Inquiry.Tests;
 
@@ -200,7 +200,11 @@ public sealed class InquiryTestingTests
             {
                 await sandbox.RunAsync(async (_, token) =>
                 {
-                    if (Interlocked.Increment(ref entered) == 2) bothEntered.TrySetResult();
+                    if (Interlocked.Increment(ref entered) == 2)
+                    {
+                        bothEntered.TrySetResult();
+                    }
+
                     await bothEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
                 });
             }
@@ -374,7 +378,7 @@ public sealed class InquiryTestingTests
         public bool Disposed { get; set; }
     }
 
-    private sealed class DisposalProbe : IDisposable
+    private sealed class DisposalProbe: IDisposable
     {
         private readonly DisposalState _state;
 
@@ -397,7 +401,7 @@ public sealed class InquiryTestingTests
             => new() { Name = "generated-" + Interlocked.Increment(ref _sequence) };
     }
 
-    public class FailingSandboxProxy : DispatchProxy
+    public class FailingSandboxProxy: DispatchProxy
     {
         public FailingSandboxProxyMode Mode { get; set; }
         public Transactions.IInquiryTransaction? Transaction { get; set; }
@@ -434,7 +438,7 @@ public sealed class InquiryTestingTests
         SuccessfulTransaction,
     }
 
-    private sealed class FailingScopeDisposable : IDisposable
+    private sealed class FailingScopeDisposable: IDisposable
     {
         public void Dispose() => throw new InvalidOperationException("scope disposal failure");
     }

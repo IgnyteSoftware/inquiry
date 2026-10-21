@@ -1,8 +1,8 @@
+using System.Text;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
-using System.Text;
 
 namespace Inquiry.Generators;
 
@@ -32,7 +32,11 @@ internal static class MaterializerEmitter
                     ? EnumReadExpression(type.EnumUnderlyingSpecialType, nonNullable, index, sqlBuilder, role)
                     : PlainReadExpression(type, type.SpecialType, index, nonNullable, nonNullable, sqlBuilder, role);
 
-        if (!type.IsNullable) return read;
+        if (!type.IsNullable)
+        {
+            return read;
+        }
+
         return type.IsValueType
             ? $"reader.IsDBNull({index}) ? ({type.DisplayName})null : {read}"
             : $"reader.IsDBNull({index}) ? null : {read}";

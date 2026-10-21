@@ -1,6 +1,4 @@
 using System.Net.Sockets;
-using Inquiry.Connections;
-using Inquiry.PostgreSql;
 using Npgsql;
 
 namespace Inquiry.PostgreSql.Tests;

@@ -11,7 +11,7 @@ public sealed class DeleteReturningItem
     [InquiryConcurrencyToken] public int Version { get; set; }
 }
 
-public partial class DeleteReturningItemStore : InquiryStore<DeleteReturningItem>
+public partial class DeleteReturningItemStore: InquiryStore<DeleteReturningItem>
 {
     [InquiryInsert]
     public partial Task<DeleteReturningItem?> InsertAsync(DeleteReturningItem item, CancellationToken cancellationToken = default);

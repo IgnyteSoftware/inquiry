@@ -1,5 +1,3 @@
-using System;
-
 namespace Inquiry.Entities;
 
 /// <summary>
@@ -16,7 +14,7 @@ namespace Inquiry.Entities;
 /// <c>[InquiryColumn(DefaultExpression = …)]</c> instead.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryCreatedAtAttribute : InquiryColumnAttribute
+public sealed class InquiryCreatedAtAttribute: InquiryColumnAttribute
 {
     /// <summary>Initializes the attribute mapping the property to a column of the same name.</summary>
     public InquiryCreatedAtAttribute()

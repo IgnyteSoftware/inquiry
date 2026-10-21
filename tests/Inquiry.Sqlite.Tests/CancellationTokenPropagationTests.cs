@@ -207,7 +207,9 @@ public sealed class CancellationTokenPropagationTests
             {
                 count++;
                 if (count == 1)
+                {
                     cts.Cancel();
+                }
             }
         });
 
@@ -233,7 +235,9 @@ public sealed class CancellationTokenPropagationTests
             {
                 count++;
                 if (count == 1)
+                {
                     cts.Cancel();
+                }
             }
         });
 

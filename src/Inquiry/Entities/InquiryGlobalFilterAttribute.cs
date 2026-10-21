@@ -10,7 +10,7 @@ namespace Inquiry.Entities;
 /// Filters do not authenticate callers or replace application authorization or database policies.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryGlobalFilterAttribute : Attribute
+public sealed class InquiryGlobalFilterAttribute: Attribute
 {
     /// <summary>
     /// The boolean value a static filter keeps. Defaults to true. Do not set with ContextKey.

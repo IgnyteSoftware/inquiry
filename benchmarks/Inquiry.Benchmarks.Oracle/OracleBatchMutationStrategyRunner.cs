@@ -23,7 +23,10 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         await using var exists = connection.CreateCommand();
         exists.CommandText = "SELECT COUNT(*) FROM USER_TABLES WHERE TABLE_NAME = 'INQUIRYBATCHEVIDENCE'";
         var count = Convert.ToInt32(await exists.ExecuteScalarAsync().ConfigureAwait(false));
-        if (count != 0) return;
+        if (count != 0)
+        {
+            return;
+        }
 
         await using var create = connection.CreateCommand();
         create.CommandText = """
@@ -128,7 +131,11 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         for (var i = 0; i < items.Count; i++)
         {
             id.Value = items[i].Id;
-            if (value is not null) value.Value = items[i].Value;
+            if (value is not null)
+            {
+                value.Value = items[i].Value;
+            }
+
             affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
@@ -256,7 +263,10 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         command.CommandText = DeleteSql;
 
         var values = new object?[ids.Count];
-        for (var i = 0; i < ids.Count; i++) values[i] = ids[i];
+        for (var i = 0; i < ids.Count; i++)
+        {
+            values[i] = ids[i];
+        }
 
         var id = command.CreateParameter();
         id.ParameterName = "id";
@@ -281,7 +291,11 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         command.BindByName = true;
         for (var i = 0; i < items.Count; i++)
         {
-            if (i > 0) sql.Append(" UNION ALL ");
+            if (i > 0)
+            {
+                sql.Append(" UNION ALL ");
+            }
+
             sql.Append("SELECT :id").Append(i).Append(", :value").Append(i).Append(" FROM dual");
             command.Parameters.Add($"id{i}", OracleDbType.Int32).Value = items[i].Id;
             command.Parameters.Add($"value{i}", OracleDbType.Varchar2, 100).Value = items[i].Value;

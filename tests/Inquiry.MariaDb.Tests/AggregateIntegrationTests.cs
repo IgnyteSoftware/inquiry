@@ -1,6 +1,6 @@
+using Inquiry.MariaDb.Tests.Fixtures;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
-using Inquiry.MariaDb.Tests.Fixtures;
 
 namespace Inquiry.MariaDb.Tests;
 

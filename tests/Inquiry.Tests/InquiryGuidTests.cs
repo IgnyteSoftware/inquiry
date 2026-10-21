@@ -1,7 +1,3 @@
-using System;
-using Inquiry;
-using Xunit;
-
 namespace Inquiry.Tests;
 
 /// <summary>

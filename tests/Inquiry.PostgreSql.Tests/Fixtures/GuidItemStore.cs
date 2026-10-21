@@ -1,12 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Stores;
 
 namespace Inquiry.PostgreSql.Tests.Fixtures;
 
-public partial class GuidItemStore : InquiryStore<GuidItem>
+public partial class GuidItemStore: InquiryStore<GuidItem>
 {
     [InquiryUpsert] public partial Task<int> UpsertAsync(GuidItem item, CancellationToken ct = default);
     [InquiryUpsert] public partial Task<GuidItem?> UpsertReturningAsync(GuidItem item, CancellationToken ct = default);

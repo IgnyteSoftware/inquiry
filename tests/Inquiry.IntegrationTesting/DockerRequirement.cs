@@ -1,5 +1,3 @@
-using System;
-
 namespace Inquiry.IntegrationTesting;
 
 /// <summary>

@@ -1,8 +1,8 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Inquiry.Sqlite.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data.Common;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -53,7 +53,7 @@ public sealed class SingleProviderDIContractTests
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite");
     }
 
-    private sealed class FakeFactory : IInquiryConnectionFactory
+    private sealed class FakeFactory: IInquiryConnectionFactory
     {
         public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
             => throw new NotImplementedException();

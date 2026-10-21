@@ -101,4 +101,4 @@ public static class ReleaseTool
     }
 }
 
-public sealed class ReleaseVerificationException(string message) : Exception(message);
+public sealed class ReleaseVerificationException(string message): Exception(message);

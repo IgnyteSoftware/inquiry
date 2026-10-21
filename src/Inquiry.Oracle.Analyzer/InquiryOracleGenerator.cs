@@ -11,7 +11,7 @@ namespace Inquiry.Oracle.Analyzer;
 /// <see cref="CreateSqlBuilder"/> for the dialect-specific SQL.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class InquiryOracleGenerator : InquiryGeneratorBase
+public sealed class InquiryOracleGenerator: InquiryGeneratorBase
 {
     protected override string Dialect => "Oracle";
 

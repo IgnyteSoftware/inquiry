@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
@@ -19,7 +17,7 @@ public sealed class ProcItem
     public decimal Amount { get; set; }
 }
 
-public partial class ProcItemStore : InquiryStore<ProcItem>
+public partial class ProcItemStore: InquiryStore<ProcItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(ProcItem item, CancellationToken cancellationToken = default);

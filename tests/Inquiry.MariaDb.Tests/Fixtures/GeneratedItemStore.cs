@@ -2,7 +2,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.MariaDb.Tests.Fixtures;
 
-public partial class GeneratedItemStore : InquiryStore<GeneratedItem>
+public partial class GeneratedItemStore: InquiryStore<GeneratedItem>
 {
     [InquiryUpsert] public partial Task<int> UpsertAsync(GeneratedItem item, CancellationToken ct = default);
     [InquiryUpsert] public partial Task<GeneratedItem?> UpsertReturningAsync(GeneratedItem item, CancellationToken ct = default);

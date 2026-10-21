@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Inquiry.FeatureCatalog;
 using Inquiry.PostgreSql.Tests.Fixtures;
 

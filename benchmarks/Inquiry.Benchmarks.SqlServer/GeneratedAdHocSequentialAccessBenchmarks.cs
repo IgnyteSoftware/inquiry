@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -6,8 +8,6 @@ using Inquiry.Commands;
 using Inquiry.Entities;
 using Inquiry.Materialization;
 using Microsoft.Data.SqlClient;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
@@ -48,7 +48,7 @@ public sealed class BufferedSequentialBenchmarkRow
     public byte[] Payload { get; set; } = [];
 }
 
-internal sealed class BufferedSequentialBenchmarkRowMaterializer : IInquiryEntityMaterializer<BufferedSequentialBenchmarkRow>
+internal sealed class BufferedSequentialBenchmarkRowMaterializer: IInquiryEntityMaterializer<BufferedSequentialBenchmarkRow>
 {
     public BufferedSequentialBenchmarkRow Materialize(DbDataReader reader) => new()
     {
@@ -185,7 +185,11 @@ public class GeneratedAdHocSequentialAccessBenchmarks
         command.CommandText = SelectSql;
         await using var reader = await command.ExecuteReaderAsync(behavior);
         long checksum = 0;
-        while (await reader.ReadAsync()) checksum += Checksum(ReadRow(reader));
+        while (await reader.ReadAsync())
+        {
+            checksum += Checksum(ReadRow(reader));
+        }
+
         return checksum;
     }
 
@@ -206,14 +210,26 @@ public class GeneratedAdHocSequentialAccessBenchmarks
 
         var values = new object[14];
         values[0] = 1;
-        for (var ordinal = 1; ordinal <= 12; ordinal++) values[ordinal] = 100 + ordinal;
+        for (var ordinal = 1; ordinal <= 12; ordinal++)
+        {
+            values[ordinal] = 100 + ordinal;
+        }
+
         var payload = new byte[256];
-        for (var index = 0; index < payload.Length; index++) payload[index] = (byte)index;
+        for (var index = 0; index < payload.Length; index++)
+        {
+            payload[index] = (byte)index;
+        }
+
         values[13] = payload;
         table.Rows.Add(values);
 
         var reader = table.CreateDataReader();
-        if (!reader.Read()) throw new InvalidOperationException("Dispatch benchmark row was not created.");
+        if (!reader.Read())
+        {
+            throw new InvalidOperationException("Dispatch benchmark row was not created.");
+        }
+
         return reader;
     }
 
@@ -238,14 +254,22 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     private static long Checksum(IReadOnlyList<SequentialBenchmarkRow> rows)
     {
         long checksum = 0;
-        foreach (var row in rows) checksum += Checksum(row);
+        foreach (var row in rows)
+        {
+            checksum += Checksum(row);
+        }
+
         return checksum;
     }
 
     private static long Checksum(IReadOnlyList<BufferedSequentialBenchmarkRow> rows)
     {
         long checksum = 0;
-        foreach (var row in rows) checksum += Checksum(row);
+        foreach (var row in rows)
+        {
+            checksum += Checksum(row);
+        }
+
         return checksum;
     }
 
@@ -264,7 +288,11 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     private static long Checksum(long scalarChecksum, byte[] payload)
     {
         var checksum = scalarChecksum + payload.Length;
-        for (var index = 0; index < payload.Length; index++) checksum += payload[index];
+        for (var index = 0; index < payload.Length; index++)
+        {
+            checksum += payload[index];
+        }
+
         return checksum;
     }
 }

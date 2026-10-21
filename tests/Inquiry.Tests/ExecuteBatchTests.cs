@@ -1,12 +1,12 @@
+using System.Collections;
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Collections;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -386,9 +386,18 @@ public sealed class ExecuteBatchTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            if (terminalOperation == "commit") await transaction.CommitAsync();
-            else if (terminalOperation == "rollback") await transaction.RollbackAsync();
-            else await transaction.DisposeAsync();
+            if (terminalOperation == "commit")
+            {
+                await transaction.CommitAsync();
+            }
+            else if (terminalOperation == "rollback")
+            {
+                await transaction.RollbackAsync();
+            }
+            else
+            {
+                await transaction.DisposeAsync();
+            }
         });
 
         blocker.Release.TrySetResult();
@@ -557,7 +566,7 @@ public sealed class ExecuteBatchTests
         return (long)(await command.ExecuteScalarAsync())!;
     }
 
-    private sealed class CountingInterceptor : IInquiryCommandInterceptor
+    private sealed class CountingInterceptor: IInquiryCommandInterceptor
     {
         public int ExecutingCount { get; private set; }
 
@@ -579,7 +588,7 @@ public sealed class ExecuteBatchTests
         }
     }
 
-    private sealed class BatchTestConnectionFactory : IInquiryConnectionFactory
+    private sealed class BatchTestConnectionFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         private int _openCount;
@@ -614,7 +623,7 @@ public sealed class ExecuteBatchTests
             => _events?.Add("initialize:" + itemCount);
     }
 
-    private sealed class BlockingInterceptor : IInquiryCommandInterceptor
+    private sealed class BlockingInterceptor: IInquiryCommandInterceptor
     {
         private int _entered;
         internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -622,13 +631,17 @@ public sealed class ExecuteBatchTests
 
         public async ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
         {
-            if (Interlocked.Exchange(ref _entered, 1) != 0) return;
+            if (Interlocked.Exchange(ref _entered, 1) != 0)
+            {
+                return;
+            }
+
             Entered.TrySetResult();
             await Release.Task.WaitAsync(cancellationToken);
         }
     }
 
-    private sealed class CancellingEnumerable : IEnumerable<(int Id, string Name)>
+    private sealed class CancellingEnumerable: IEnumerable<(int Id, string Name)>
     {
         private readonly CancellationTokenSource _cts;
         private readonly int _cancelAtMove;
@@ -650,7 +663,7 @@ public sealed class ExecuteBatchTests
         }
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator : IEnumerator<(int Id, string Name)>
+        private sealed class Enumerator: IEnumerator<(int Id, string Name)>
         {
             private readonly CancellingEnumerable _owner;
 
@@ -661,7 +674,11 @@ public sealed class ExecuteBatchTests
             public bool MoveNext()
             {
                 _owner.MoveCount++;
-                if (_owner.MoveCount == _owner._cancelAtMove) _owner._cts.Cancel();
+                if (_owner.MoveCount == _owner._cancelAtMove)
+                {
+                    _owner._cts.Cancel();
+                }
+
                 return _owner.MoveCount <= 5;
             }
 
@@ -670,7 +687,7 @@ public sealed class ExecuteBatchTests
         }
     }
 
-    private sealed class ThrowingDisposeEnumerable<T> : IEnumerable<T>
+    private sealed class ThrowingDisposeEnumerable<T>: IEnumerable<T>
     {
         private readonly IReadOnlyList<T> _items;
         private readonly TaskCompletionSource? _disposeEntered;
@@ -689,7 +706,7 @@ public sealed class ExecuteBatchTests
         public IEnumerator<T> GetEnumerator() => new Enumerator(this);
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator : IEnumerator<T>
+        private sealed class Enumerator: IEnumerator<T>
         {
             private readonly ThrowingDisposeEnumerable<T> _owner;
             private int _index = -1;
@@ -709,7 +726,7 @@ public sealed class ExecuteBatchTests
         }
     }
 
-    private sealed class IsolationRecordingFactory : IInquiryConnectionFactory
+    private sealed class IsolationRecordingFactory: IInquiryConnectionFactory
     {
         private readonly DbConnection _connection;
 
@@ -719,7 +736,7 @@ public sealed class ExecuteBatchTests
             => ValueTask.FromResult(_connection);
     }
 
-    private sealed class IsolationRecordingConnection : DbConnection
+    private sealed class IsolationRecordingConnection: DbConnection
     {
         public IsolationLevel? RequestedIsolationLevel { get; private set; }
         public override string ConnectionString { get; set; } = string.Empty;

@@ -75,7 +75,11 @@ public class JsonArrayParameterBenchmarks
         var first = true;
         foreach (var value in values)
         {
-            if (!first) sb.Append(',');
+            if (!first)
+            {
+                sb.Append(',');
+            }
+
             first = false;
 
             if (value is null)
@@ -87,10 +91,17 @@ public class JsonArrayParameterBenchmarks
             object boxed = value;
             switch (boxed)
             {
-                case string text: AppendJsonString(sb, text); break;
-                case int number: sb.Append(number.ToString(CultureInfo.InvariantCulture)); break;
-                case decimal number: sb.Append(number.ToString(CultureInfo.InvariantCulture)); break;
-                default: throw new NotSupportedException($"The benchmark does not support {typeof(T)}.");
+                case string text:
+                    AppendJsonString(sb, text);
+                    break;
+                case int number:
+                    sb.Append(number.ToString(CultureInfo.InvariantCulture));
+                    break;
+                case decimal number:
+                    sb.Append(number.ToString(CultureInfo.InvariantCulture));
+                    break;
+                default:
+                    throw new NotSupportedException($"The benchmark does not support {typeof(T)}.");
             }
         }
 
@@ -104,13 +115,27 @@ public class JsonArrayParameterBenchmarks
         {
             switch (c)
             {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\b': sb.Append("\\b"); break;
-                case '\f': sb.Append("\\f"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
+                case '"':
+                    sb.Append("\\\"");
+                    break;
+                case '\\':
+                    sb.Append("\\\\");
+                    break;
+                case '\b':
+                    sb.Append("\\b");
+                    break;
+                case '\f':
+                    sb.Append("\\f");
+                    break;
+                case '\n':
+                    sb.Append("\\n");
+                    break;
+                case '\r':
+                    sb.Append("\\r");
+                    break;
+                case '\t':
+                    sb.Append("\\t");
+                    break;
                 default:
                     if (c < ' ' || char.IsSurrogate(c))
                     {

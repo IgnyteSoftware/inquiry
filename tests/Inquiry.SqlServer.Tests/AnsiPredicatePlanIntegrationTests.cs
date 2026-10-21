@@ -1,6 +1,6 @@
+using System.Xml.Linq;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Microsoft.Data.SqlClient;
-using System.Xml.Linq;
 
 namespace Inquiry.SqlServer.Tests;
 

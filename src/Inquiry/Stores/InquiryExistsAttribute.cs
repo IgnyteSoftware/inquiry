@@ -13,6 +13,6 @@ namespace Inquiry.Stores;
 /// filter (hidden rows don't count as existing).
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryExistsAttribute : Attribute
+public sealed class InquiryExistsAttribute: Attribute
 {
 }

@@ -4,7 +4,7 @@ namespace Inquiry.Entities;
 /// Maps a CLR property to a relational database column.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public class InquiryColumnAttribute : Attribute
+public class InquiryColumnAttribute: Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryColumnAttribute"/> class.

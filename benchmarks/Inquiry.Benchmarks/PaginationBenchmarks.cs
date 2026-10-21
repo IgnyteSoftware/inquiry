@@ -49,7 +49,7 @@ public class PaginationBenchmarks
         _connectionString = _db.ConnectionString;
         _linqToDbOptions = _db.LinqToDbOptions;
         _offset = Rows / 2;   // deep page so OFFSET cost is realistic
-        _after  = Rows / 2;   // keyset seek point
+        _after = Rows / 2;   // keyset seek point
     }
 
     [GlobalCleanup]
@@ -61,16 +61,16 @@ public class PaginationBenchmarks
 
     private static Product ReadProduct(System.Data.Common.DbDataReader reader) => new Product
     {
-        ProductID       = reader.GetInt32(0),
-        ProductName     = reader.GetString(1),
-        SupplierID      = reader.IsDBNull(2) ? null : reader.GetInt32(2),
-        CategoryID      = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+        ProductID = reader.GetInt32(0),
+        ProductName = reader.GetString(1),
+        SupplierID = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+        CategoryID = reader.IsDBNull(3) ? null : reader.GetInt32(3),
         QuantityPerUnit = reader.IsDBNull(4) ? null : reader.GetString(4),
-        UnitPrice       = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
-        UnitsInStock    = reader.IsDBNull(6) ? null : reader.GetInt16(6),
-        UnitsOnOrder    = reader.IsDBNull(7) ? null : reader.GetInt16(7),
-        ReorderLevel    = reader.IsDBNull(8) ? null : reader.GetInt16(8),
-        Discontinued    = reader.GetInt32(9) != 0,
+        UnitPrice = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+        UnitsInStock = reader.IsDBNull(6) ? null : reader.GetInt16(6),
+        UnitsOnOrder = reader.IsDBNull(7) ? null : reader.GetInt16(7),
+        ReorderLevel = reader.IsDBNull(8) ? null : reader.GetInt16(8),
+        Discontinued = reader.GetInt32(9) != 0,
     };
 
     // ---- OffsetPage (LIMIT / OFFSET) ----------------------------------------------------
@@ -88,10 +88,14 @@ public class PaginationBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = OffsetSql;
         command.Parameters.Add("$limit", SqliteType.Integer).Value = PageSize;
-        command.Parameters.Add("$off",   SqliteType.Integer).Value = _offset;
+        command.Parameters.Add("$off", SqliteType.Integer).Value = _offset;
         var list = new List<Product>(PageSize);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadProduct(reader));
+        }
+
         return list.Count;
     }
 
@@ -170,7 +174,11 @@ public class PaginationBenchmarks
         command.Parameters.Add("$limit", SqliteType.Integer).Value = PageSize + 1;
         var list = new List<Product>(PageSize + 1);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadProduct(reader));
+        }
+
         return list.Count;
     }
 

@@ -1,6 +1,6 @@
-using Inquiry.Pipeline;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Pipeline;
 
 namespace Inquiry.Transactions;
 
@@ -32,7 +32,7 @@ namespace Inquiry.Transactions;
 /// savepoint handle prevents calls after the savepoint has been released or rolled back.
 /// </para>
 /// </remarks>
-internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
+internal sealed class SavepointInquiryTransaction: InquiryTransactionBase
 {
     private readonly TransactedInquiryRequestPipeline _outerPipeline;
     private readonly string _savepointName;
@@ -123,7 +123,11 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     {
         lock (_lifecycleLock)
         {
-            if (_disposeTask is not null) return new ValueTask(_disposeTask);
+            if (_disposeTask is not null)
+            {
+                return new ValueTask(_disposeTask);
+            }
+
             if (_outerPipeline.IsClosed)
             {
                 _closed = true;
@@ -186,14 +190,21 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
 
     private async Task DisposeActiveCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease)
     {
-        try { await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false); }
+        try
+        { await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false); }
         finally { lease.Dispose(); }
     }
 
     private async Task DisposeAfterTerminalAsync(Task terminalTask)
     {
-        try { await terminalTask.ConfigureAwait(false); } catch { }
-        if (_terminalSucceeded || _cleanupAttempted || _outerPipeline.IsClosed) return;
+        try
+        { await terminalTask.ConfigureAwait(false); }
+        catch { }
+        if (_terminalSucceeded || _cleanupAttempted || _outerPipeline.IsClosed)
+        {
+            return;
+        }
+
         try
         {
             using var lease = _outerPipeline.EnterExclusiveOperation();

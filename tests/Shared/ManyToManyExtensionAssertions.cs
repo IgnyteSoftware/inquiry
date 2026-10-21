@@ -1,7 +1,4 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Testing;
 
@@ -284,7 +281,11 @@ internal static class ManyToManyExtensionAssertions
     private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> source)
     {
         var items = new List<T>();
-        await foreach (var item in source) items.Add(item);
+        await foreach (var item in source)
+        {
+            items.Add(item);
+        }
+
         return items;
     }
 }

@@ -18,7 +18,9 @@ internal static class InquiryCancellation
         CancellationToken callerToken)
     {
         if (exception is OperationCanceledException oce && RequiresCallerToken(oce, callerToken))
+        {
             throw AssociateWithCallerToken(oce, callerToken);
+        }
     }
 
     /// <summary>
@@ -168,7 +170,9 @@ internal static class InquiryCancellation
             // provider call started) is pending by definition.
             var providerTask = Volatile.Read(ref _providerTask);
             if (providerTask is null || !providerTask.IsCompleted)
+            {
                 Volatile.Write(ref _cancelledWhilePending, 1);
+            }
         }
     }
 }

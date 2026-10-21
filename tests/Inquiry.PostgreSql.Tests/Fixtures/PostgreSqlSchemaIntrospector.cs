@@ -1,14 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.Data.Common;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 
 namespace Inquiry.PostgreSql.Tests.Fixtures;
 
-public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
+public sealed class PostgreSqlSchemaIntrospector: ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {
@@ -20,7 +15,11 @@ public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
             r =>
             {
                 var t = r.GetString(0);
-                if (!cols.TryGetValue(t, out var list)) cols[t] = list = new();
+                if (!cols.TryGetValue(t, out var list))
+                {
+                    cols[t] = list = new();
+                }
+
                 list.Add(new ColumnSnapshot(r.GetString(1), r.GetString(2) == "YES"));
             });
 
@@ -83,6 +82,9 @@ public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct)) onRow(r);
+        while (await r.ReadAsync(ct))
+        {
+            onRow(r);
+        }
     }
 }

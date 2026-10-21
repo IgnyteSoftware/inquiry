@@ -9,7 +9,7 @@ namespace Inquiry.Benchmarks.Ef;
 /// (case-sensitive table names on Linux), and SQL Server (case-insensitive). Reuses the
 /// <see cref="EfShipper"/> POCO from <see cref="NorthwindDbContext"/>.
 /// </summary>
-public sealed class CrossDialectShipperContext : DbContext
+public sealed class CrossDialectShipperContext: DbContext
 {
     public CrossDialectShipperContext(DbContextOptions<CrossDialectShipperContext> options) : base(options) { }
 

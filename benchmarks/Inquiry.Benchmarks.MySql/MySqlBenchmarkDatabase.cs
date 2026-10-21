@@ -20,7 +20,7 @@ namespace Inquiry.Benchmarks.MySql;
 /// a non-pooled factory so it pays per-operation context construction — the same lifecycle ADO,
 /// Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
+public sealed class MySqlBenchmarkDatabase: IAsyncDisposable
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static MySqlContainer? _container;
@@ -118,12 +118,12 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
             insert.Transaction = tx;
             insert.CommandText = "INSERT INTO `Shippers` (`CompanyName`, `Phone`) VALUES (@company, @phone);";
             var pCompany = insert.Parameters.AddWithValue("company", "");
-            var pPhone   = insert.Parameters.AddWithValue("phone",   "");
+            var pPhone = insert.Parameters.AddWithValue("phone", "");
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

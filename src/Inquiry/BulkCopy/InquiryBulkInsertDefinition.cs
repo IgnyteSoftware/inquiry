@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.ComponentModel;
 
 namespace Inquiry.BulkCopy;
@@ -33,18 +32,34 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
         Type[]? fieldTypes = null,
         IInquiryBulkColumnAccessor<TEntity>[]? typedAccessors = null)
     {
-        if (columns is null) throw new ArgumentNullException(nameof(columns));
-        if (columns.Length == 0) throw new ArgumentException("A bulk insert needs at least one column.", nameof(columns));
+        ArgumentNullException.ThrowIfNull(columns);
+
+        if (columns.Length == 0)
+        {
+            throw new ArgumentException("A bulk insert needs at least one column.", nameof(columns));
+        }
+
         if (columnTypes is not null && columnTypes.Length != columns.Length)
+        {
             throw new ArgumentException("Column type metadata must have one entry per column.", nameof(columnTypes));
+        }
+
         if (fieldTypes is not null && fieldTypes.Length != columns.Length)
+        {
             throw new ArgumentException("Field type metadata must have one entry per column.", nameof(fieldTypes));
+        }
+
         if (typedAccessors is not null)
         {
             if (typedAccessors.Length != columns.Length)
+            {
                 throw new ArgumentException("Typed accessor metadata must have one entry per column.", nameof(typedAccessors));
+            }
+
             if (Array.IndexOf(typedAccessors, null) >= 0)
+            {
                 throw new ArgumentException("Typed accessor metadata must not contain null entries.", nameof(typedAccessors));
+            }
         }
 
         Schema = schema;

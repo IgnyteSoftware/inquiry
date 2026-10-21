@@ -11,13 +11,13 @@ namespace Inquiry.Benchmarks.Ef;
 /// The EF entities are dedicated types — not the Inquiry POCOs — so EF's conventions can
 /// run without colliding with the Inquiry attributes / navigation properties.
 /// </remarks>
-public sealed class NorthwindDbContext : DbContext
+public sealed class NorthwindDbContext: DbContext
 {
     public NorthwindDbContext(DbContextOptions<NorthwindDbContext> options) : base(options) { }
 
     public DbSet<EfCustomer> Customers => Set<EfCustomer>();
-    public DbSet<EfProduct>  Products  => Set<EfProduct>();
-    public DbSet<EfShipper>  Shippers  => Set<EfShipper>();
+    public DbSet<EfProduct> Products => Set<EfProduct>();
+    public DbSet<EfShipper> Shippers => Set<EfShipper>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

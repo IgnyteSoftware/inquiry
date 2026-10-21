@@ -101,7 +101,9 @@ public sealed class AnalyzerReleaseCatalogTests
         {
             var parts = line.Split('|').Select(static value => value.Trim()).ToArray();
             if (parts.Length >= 3 && Regex.IsMatch(parts[0], @"^INQ\d{3}$"))
+            {
                 yield return new CatalogEntry(parts[0], owner, parts[2]);
+            }
         }
     }
 
@@ -109,7 +111,10 @@ public sealed class AnalyzerReleaseCatalogTests
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Inquiry.slnx")))
+        {
             directory = directory.Parent;
+        }
+
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 

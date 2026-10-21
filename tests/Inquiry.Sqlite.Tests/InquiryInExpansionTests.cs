@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Inquiry.Parameters;
 using Microsoft.Data.Sqlite;
 

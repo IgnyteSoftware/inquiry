@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace Inquiry.Generators.Tests;
 
 public sealed partial class InquiryGeneratorTests
@@ -59,8 +57,15 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         var page = Method(text, "PageByCodeAsync");
-        if (dialect == "Oracle") Assert.Matches("ParameterName = \"iq1\\$Codexx\\$[0-9a-f]{14}\"", page);
-        else Assert.Contains("@Code", page);
+        if (dialect == "Oracle")
+        {
+            Assert.Matches("ParameterName = \"iq1\\$Codexx\\$[0-9a-f]{14}\"", page);
+        }
+        else
+        {
+            Assert.Contains("@Code", page);
+        }
+
         Assert.Contains("DbType.AnsiString", page);
 
         var search = Method(text, "SearchAsync");
@@ -90,8 +95,15 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("DbType.Binary", delete);
 
         var seek = Method(text, "SeekAsync");
-        if (dialect == "Oracle") Assert.Matches("ParameterName = \"iq1\\$cursor\\$[0-9a-f]{14}\"", seek);
-        else Assert.Contains("@__cursor0", seek);
+        if (dialect == "Oracle")
+        {
+            Assert.Matches("ParameterName = \"iq1\\$cursor\\$[0-9a-f]{14}\"", seek);
+        }
+        else
+        {
+            Assert.Contains("@__cursor0", seek);
+        }
+
         Assert.Contains("DbType.Int32", seek);
     }
 

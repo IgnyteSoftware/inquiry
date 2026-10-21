@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Inquiry.Stores;
@@ -16,7 +13,7 @@ public sealed class PgKeyOnlyItem
     public long? Id { get; set; }
 }
 
-public partial class PgKeyOnlyItemStore : InquiryStore<PgKeyOnlyItem>
+public partial class PgKeyOnlyItemStore: InquiryStore<PgKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(PgKeyOnlyItem item, CancellationToken ct = default);

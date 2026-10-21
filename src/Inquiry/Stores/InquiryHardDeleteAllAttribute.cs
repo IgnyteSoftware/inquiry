@@ -6,6 +6,6 @@ namespace Inquiry.Stores;
 /// </summary>
 /// <remarks>Global filters continue to enforce their configured write behavior.</remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryHardDeleteAllAttribute : Attribute
+public sealed class InquiryHardDeleteAllAttribute: Attribute
 {
 }

@@ -1,7 +1,7 @@
-using Microsoft.Data.SqlClient.Server;
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Data;
+using Microsoft.Data.SqlClient.Server;
 
 namespace Inquiry.SqlServer.Parameters;
 
@@ -33,9 +33,18 @@ public sealed class InquiryTvpDescriptor
     /// <summary>Returns the cached descriptor for one generator-resolved physical signature.</summary>
     public static InquiryTvpDescriptor Get(string kind, long length, int precision, int scale, bool nullable)
     {
-        if (kind is null) throw new ArgumentNullException(nameof(kind));
-        if (precision is < 0 or > 255) throw new ArgumentOutOfRangeException(nameof(precision));
-        if (scale is < 0 or > 255) throw new ArgumentOutOfRangeException(nameof(scale));
+        ArgumentNullException.ThrowIfNull(kind);
+
+        if (precision is < 0 or > 255)
+        {
+            throw new ArgumentOutOfRangeException(nameof(precision));
+        }
+
+        if (scale is < 0 or > 255)
+        {
+            throw new ArgumentOutOfRangeException(nameof(scale));
+        }
+
         var key = new Key(kind, length, (byte)precision, (byte)scale, nullable);
         return Cache.GetOrAdd(key, static value => new InquiryTvpDescriptor(value.Kind, value.Length, value.Precision, value.Scale, value.Nullable));
     }

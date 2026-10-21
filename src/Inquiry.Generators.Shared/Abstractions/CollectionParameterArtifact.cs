@@ -1,8 +1,8 @@
-namespace Inquiry.Generators.Abstractions;
 
-using Microsoft.CodeAnalysis;
 using System.Collections.Immutable;
+using Microsoft.CodeAnalysis;
 
+namespace Inquiry.Generators.Abstractions;
 /// <summary>Compile-time database artifact required by one collection-parameter transport.</summary>
 public sealed record CollectionParameterArtifact(
     string Identity,

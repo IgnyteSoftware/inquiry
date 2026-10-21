@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 using System.Text;
 
@@ -19,7 +18,9 @@ internal static class OracleBindName
     public static string Encode(string logicalName)
     {
         if (string.IsNullOrEmpty(logicalName))
+        {
             throw new ArgumentException("Oracle bind names cannot be null or empty.", nameof(logicalName));
+        }
 
         var builder = new StringBuilder(EncodedLength);
         builder.Append(Prefix);
@@ -36,7 +37,9 @@ internal static class OracleBindName
         }
 
         while (stemCount++ < StemLength)
+        {
             builder.Append('x');
+        }
 
         builder.Append('$');
         builder.Append(Hash(logicalName).ToString("x16", CultureInfo.InvariantCulture), 16 - HashDigits, HashDigits);
@@ -45,7 +48,10 @@ internal static class OracleBindName
 
     public static bool IsEncoded(string name)
     {
-        if (IsBatchName(name)) return true;
+        if (IsBatchName(name))
+        {
+            return true;
+        }
 
         // IN expansion appends up to five decimal digits to the fixed encoded base.
         if (name.Length < EncodedLength || name.Length > EncodedLength + 5
@@ -59,13 +65,17 @@ internal static class OracleBindName
         {
             var c = name[i];
             if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+            {
                 return false;
+            }
         }
 
         for (var i = EncodedLength; i < name.Length; i++)
         {
             if (name[i] < '0' || name[i] > '9')
+            {
                 return false;
+            }
         }
 
         return true;
@@ -76,14 +86,27 @@ internal static class OracleBindName
         const string batchPrefix = "iq1$b";
         if (name.Length <= batchPrefix.Length + 2 || name.Length > 30
             || !name.StartsWith(batchPrefix, StringComparison.Ordinal))
+        {
             return false;
+        }
 
         var separator = name.IndexOf('_', batchPrefix.Length);
-        if (separator <= batchPrefix.Length || separator == name.Length - 1) return false;
+        if (separator <= batchPrefix.Length || separator == name.Length - 1)
+        {
+            return false;
+        }
+
         for (var i = batchPrefix.Length; i < name.Length; i++)
         {
-            if (i == separator) continue;
-            if (name[i] < '0' || name[i] > '9') return false;
+            if (i == separator)
+            {
+                continue;
+            }
+
+            if (name[i] < '0' || name[i] > '9')
+            {
+                return false;
+            }
         }
         return true;
     }

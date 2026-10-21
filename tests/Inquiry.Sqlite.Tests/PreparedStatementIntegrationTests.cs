@@ -1,12 +1,11 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
-using Inquiry.Sqlite.Tests.Fixtures;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data.Common;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -104,7 +103,7 @@ public sealed class PreparedStatementIntegrationTests
         bool Deleted,
         bool AfterDeleteNull);
 
-    private sealed class PrepareCapableSqliteFactory : IInquiryConnectionFactory
+    private sealed class PrepareCapableSqliteFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         public PrepareCapableSqliteFactory(string connectionString) => _connectionString = connectionString;

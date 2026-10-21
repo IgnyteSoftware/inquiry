@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using Inquiry.IntegrationTesting;
-using Xunit;
 
 namespace Inquiry.Tests;
 

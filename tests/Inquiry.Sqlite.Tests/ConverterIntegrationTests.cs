@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -12,7 +9,7 @@ public readonly struct Money
     public decimal Amount { get; init; }
 }
 
-public sealed class MoneyConverter : IInquiryValueConverter<Money, decimal>
+public sealed class MoneyConverter: IInquiryValueConverter<Money, decimal>
 {
     public decimal ToProvider(Money model) => model.Amount;
     public Money FromProvider(decimal provider) => new() { Amount = provider };
@@ -34,7 +31,7 @@ public sealed class Wallet
     public List<string>? Tags { get; set; }
 }
 
-public partial class WalletStore : InquiryStore<Wallet>
+public partial class WalletStore: InquiryStore<Wallet>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Wallet wallet, CancellationToken cancellationToken = default);
@@ -56,7 +53,7 @@ public readonly struct Counter
     public uint Value { get; init; }
 }
 
-public sealed class CounterConverter : IInquiryValueConverter<Counter, uint>
+public sealed class CounterConverter: IInquiryValueConverter<Counter, uint>
 {
     public uint ToProvider(Counter model) => model.Value;
     public Counter FromProvider(uint provider) => new() { Value = provider };
@@ -72,7 +69,7 @@ public sealed class Gauge
     public Counter Ticks { get; set; }
 }
 
-public partial class GaugeStore : InquiryStore<Gauge>
+public partial class GaugeStore: InquiryStore<Gauge>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Gauge gauge, CancellationToken cancellationToken = default);

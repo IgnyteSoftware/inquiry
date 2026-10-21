@@ -1,10 +1,8 @@
 using Inquiry.Generators.Abstractions;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Inquiry.Sqlite.Analyzer;
 
-internal sealed class SqliteSqlBuilder : SqlBuilder
+internal sealed class SqliteSqlBuilder: SqlBuilder
 {
     public override BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.Row;
 

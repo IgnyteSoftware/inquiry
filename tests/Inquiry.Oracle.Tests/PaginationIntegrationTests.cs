@@ -24,10 +24,10 @@ public sealed class PaginationIntegrationTests
     {
         var products = harness.GetRequiredService<ProductStore>();
 
-        await products.InsertAsync(new Product { ProductName = "Echo",    UnitPrice = 1m, CategoryID = null, Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Alpha",   UnitPrice = 2m, CategoryID = null, Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Delta",   UnitPrice = 3m, CategoryID = null, Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Bravo",   UnitPrice = 4m, CategoryID = null, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Echo", UnitPrice = 1m, CategoryID = null, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Alpha", UnitPrice = 2m, CategoryID = null, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Delta", UnitPrice = 3m, CategoryID = null, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Bravo", UnitPrice = 4m, CategoryID = null, Discontinued = false });
         await products.InsertAsync(new Product { ProductName = "Charlie", UnitPrice = 5m, CategoryID = null, Discontinued = false });
     }
 

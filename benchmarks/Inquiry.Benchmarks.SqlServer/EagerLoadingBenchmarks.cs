@@ -1,4 +1,3 @@
-using System.Data;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
@@ -33,7 +32,7 @@ public sealed class BenchmarkM2MOrderProduct
     [InquiryKey] public long ProductId { get; set; }
 }
 
-public partial class BenchmarkM2MOrderStore : InquiryStore<BenchmarkM2MOrder>
+public partial class BenchmarkM2MOrderStore: InquiryStore<BenchmarkM2MOrder>
 {
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<BenchmarkM2MOrder> AllWithProductsAsync(CancellationToken cancellationToken = default);
@@ -95,7 +94,11 @@ public class EagerLoadingBenchmarks
         var hasCategory = await reader.ReadAsync();
         await reader.NextResultAsync();
         var childCount = 0;
-        while (await reader.ReadAsync()) childCount++;
+        while (await reader.ReadAsync())
+        {
+            childCount++;
+        }
+
         return hasCategory ? childCount : -1;
     }
 

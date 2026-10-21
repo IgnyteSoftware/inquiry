@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Inquiry.Generators.Abstractions;
 using Microsoft.CodeAnalysis;
 
@@ -967,13 +964,13 @@ public sealed partial class InquiryGeneratorTests
 /// A dialect without a multi-result batch. No shipped provider is one, so this is the only way to emit
 /// and compile the separate-query eager path.
 /// </summary>
-internal sealed class NoGridInquiryGenerator : InquiryGeneratorBase
+internal sealed class NoGridInquiryGenerator: InquiryGeneratorBase
 {
     protected override string Dialect => "NoGrid";
     protected override SqlBuilder CreateSqlBuilder() => new NoGridSqlBuilder();
 }
 
-internal sealed class NoGridSqlBuilder : SqlBuilder
+internal sealed class NoGridSqlBuilder: SqlBuilder
 {
     public override string DialectName => "NoGrid";
     public override string ProviderId => "nogrid";

@@ -45,9 +45,9 @@ public class ConcurrencyBenchmarks
 
     private static Shipper ReadShipper(System.Data.Common.DbDataReader reader) => new Shipper
     {
-        ShipperID   = reader.GetInt32(0),
+        ShipperID = reader.GetInt32(0),
         CompanyName = reader.GetString(1),
-        Phone       = reader.IsDBNull(2) ? null : reader.GetString(2),
+        Phone = reader.IsDBNull(2) ? null : reader.GetString(2),
     };
 
     // ---- ConcurrentPointRead ---------------------------------------------------------------
@@ -97,7 +97,10 @@ public class ConcurrencyBenchmarks
     {
         var tasks = new Task<EfShipper?>[Concurrency];
         for (int i = 0; i < Concurrency; i++)
+        {
             tasks[i] = Task.Run(EfCorePointRead);
+        }
+
         var results = await Task.WhenAll(tasks);
         return results.Count(r => r is not null);
     }
@@ -113,7 +116,10 @@ public class ConcurrencyBenchmarks
     {
         var tasks = new Task<L2Shipper?>[Concurrency];
         for (int i = 0; i < Concurrency; i++)
+        {
             tasks[i] = Task.Run(LinqToDbPointRead);
+        }
+
         var results = await Task.WhenAll(tasks);
         return results.Count(r => r is not null);
     }

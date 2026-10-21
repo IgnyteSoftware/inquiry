@@ -20,7 +20,7 @@ namespace Inquiry.Benchmarks.Oracle;
 /// backstop). EF uses a non-pooled factory so it pays per-operation context construction — the same
 /// lifecycle ADO, Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-public sealed class OracleBenchmarkDatabase : IAsyncDisposable
+public sealed class OracleBenchmarkDatabase: IAsyncDisposable
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static OracleContainer? _container;
@@ -166,12 +166,12 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
             insert.BindByName = true;
             insert.CommandText = "INSERT INTO SHIPPERS (COMPANYNAME, PHONE) VALUES (:company, :phone)";
             var pCompany = insert.Parameters.Add("company", OracleDbType.Varchar2);
-            var pPhone   = insert.Parameters.Add("phone",   OracleDbType.Varchar2);
+            var pPhone = insert.Parameters.Add("phone", OracleDbType.Varchar2);
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

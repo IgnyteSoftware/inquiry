@@ -10,7 +10,7 @@ using Testcontainers.MariaDb;
 
 namespace Inquiry.Benchmarks.MariaDb;
 
-public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
+public sealed class MariaDbBenchmarkDatabase: IAsyncDisposable
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static MariaDbContainer? _container;
@@ -100,12 +100,12 @@ public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
             insert.Transaction = tx;
             insert.CommandText = "INSERT INTO `Shippers` (`CompanyName`, `Phone`) VALUES (@company, @phone);";
             var pCompany = insert.Parameters.AddWithValue("company", "");
-            var pPhone   = insert.Parameters.AddWithValue("phone",   "");
+            var pPhone = insert.Parameters.AddWithValue("phone", "");
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

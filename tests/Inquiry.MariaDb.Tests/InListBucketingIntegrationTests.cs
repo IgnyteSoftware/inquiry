@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Inquiry.MariaDb.Tests.Fixtures;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;

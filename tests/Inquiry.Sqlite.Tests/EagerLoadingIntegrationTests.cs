@@ -174,8 +174,8 @@ public sealed class EagerLoadingIntegrationTests
 
         await regionStore.InsertAsync(new Region { RegionID = 1, RegionDescription = "Existing" });
 
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1",   TerritoryDescription = "Matched", RegionID = 1 });
-        await territoryStore.InsertAsync(new Territory { TerritoryID = "T999", TerritoryDescription = "Orphan",  RegionID = 99 });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T1", TerritoryDescription = "Matched", RegionID = 1 });
+        await territoryStore.InsertAsync(new Territory { TerritoryID = "T999", TerritoryDescription = "Orphan", RegionID = 99 });
 
         var all = await territoryStore.SelectAllWithRegionAsync().ToListAsync();
 
@@ -196,7 +196,7 @@ public sealed class EagerLoadingIntegrationTests
         var beverages = await categoryStore.InsertReturningAsync(new Category { CategoryName = "Beverages" });
         Assert.NotNull(beverages);
 
-        await productStore.InsertAsync(new Product { ProductName = "Chai",  CategoryID = beverages!.CategoryID });
+        await productStore.InsertAsync(new Product { ProductName = "Chai", CategoryID = beverages!.CategoryID });
         await productStore.InsertAsync(new Product { ProductName = "Chang", CategoryID = beverages.CategoryID });
 
         var loaded = await categoryStore.SelectByKeyWithProductsAsync(beverages.CategoryID);
@@ -219,7 +219,7 @@ public sealed class EagerLoadingIntegrationTests
         var beverages = await categoryStore.InsertReturningAsync(new Category { CategoryName = "Beverages" });
         Assert.NotNull(beverages);
 
-        await productStore.InsertAsync(new Product { ProductName = "Chai",         CategoryID = beverages!.CategoryID });
+        await productStore.InsertAsync(new Product { ProductName = "Chai", CategoryID = beverages!.CategoryID });
         await productStore.InsertAsync(new Product { ProductName = "Uncategorized", CategoryID = null });
 
         var all = await categoryStore.SelectAllWithProductsAsync().ToListAsync();
@@ -260,7 +260,7 @@ public sealed class EagerLoadingIntegrationTests
         var beverages = await categoryStore.InsertReturningAsync(new Category { CategoryName = "Beverages" });
         Assert.NotNull(beverages);
 
-        await productStore.InsertAsync(new Product { ProductName = "Chai",         CategoryID = beverages!.CategoryID });
+        await productStore.InsertAsync(new Product { ProductName = "Chai", CategoryID = beverages!.CategoryID });
         await productStore.InsertAsync(new Product { ProductName = "Uncategorized", CategoryID = null });
 
         var all = await productStore.SelectAllWithCategoryAsync().ToListAsync();

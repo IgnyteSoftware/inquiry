@@ -1,5 +1,4 @@
 using BenchmarkDotNet.Attributes;
-using Inquiry.Benchmarks.Contracts;
 
 namespace Inquiry.Benchmarks.Contracts.Tests;
 

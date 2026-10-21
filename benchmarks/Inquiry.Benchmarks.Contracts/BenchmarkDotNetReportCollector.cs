@@ -21,7 +21,10 @@ public static class BenchmarkDotNetReportCollector
     {
         ArgumentNullException.ThrowIfNull(report);
         if (nativeLaunchIndexBase is not (0 or 1))
+        {
             throw new ArgumentOutOfRangeException(nameof(nativeLaunchIndexBase));
+        }
+
         var resultRuns = report.GetResultRuns()
             .OrderBy(static measurement => measurement.LaunchIndex)
             .ThenBy(static measurement => measurement.IterationIndex)
@@ -40,7 +43,9 @@ public static class BenchmarkDotNetReportCollector
                 measurement.GetAverageTime().Nanoseconds))
             .ToArray();
         if (measurements.Length == 0)
+        {
             throw new InvalidDataException("BenchmarkDotNet report contains no target measurements.");
+        }
 
         var bytesPerOperation = report.GcStats.GetBytesAllocatedPerOperation(report.BenchmarkCase);
         var gcStats = new BenchmarkDotNetGcStats(
@@ -72,7 +77,9 @@ public static class BenchmarkDotNetReportCollector
         int expectedIterationCount)
     {
         if (expectedLaunchCount <= 0 || expectedIterationCount <= 0)
+        {
             throw new InvalidDataException("BenchmarkDotNet report has invalid configured launch or iteration counts.");
+        }
 
         var expected = Enumerable.Range(1, expectedLaunchCount)
             .SelectMany(launch => Enumerable.Range(1, expectedIterationCount)
@@ -82,7 +89,9 @@ public static class BenchmarkDotNetReportCollector
             .ThenBy(static coordinate => coordinate.IterationIndex)
             .ToArray();
         if (!actual.SequenceEqual(expected))
+        {
             throw new InvalidDataException(
                 "BenchmarkDotNet target measurements must contain the exact contiguous one-based launch/iteration coordinate set configured by the job.");
+        }
     }
 }

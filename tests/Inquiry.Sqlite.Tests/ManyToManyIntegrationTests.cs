@@ -1,7 +1,4 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Microsoft.Data.Sqlite;
@@ -88,7 +85,10 @@ public sealed class ManyToManyIntegrationTests
         M2MMaterializationProbe.Reset(scenario.DefaultExcludedTitles, scenario.DefaultExcludedProductIds);
 
         var all = new List<M2MOrder>();
-        await foreach (var order in orders.AllWithProductsAsync()) all.Add(order);
+        await foreach (var order in orders.AllWithProductsAsync())
+        {
+            all.Add(order);
+        }
 
         Assert.True(M2MMaterializationProbe.ChildReads > 0);
         Assert.True(M2MMaterializationProbe.JunctionReads > 0);
@@ -111,7 +111,10 @@ public sealed class ManyToManyIntegrationTests
             scenario.IncludeDeletedExcludedProductIds);
 
         var all = new List<M2MOrder>();
-        await foreach (var order in orders.AllIncludingDeletedWithProductsAsync()) all.Add(order);
+        await foreach (var order in orders.AllIncludingDeletedWithProductsAsync())
+        {
+            all.Add(order);
+        }
 
         var deletedParent = all.Single(o => o.Id == scenario.DeletedParentId);
         Assert.Contains(deletedParent.Products, p => p.Title == scenario.DeletedParentIncludedTitle);
@@ -136,7 +139,10 @@ public sealed class ManyToManyIntegrationTests
         command.CommandText = "EXPLAIN QUERY PLAN " + sql;
         var details = new List<string>();
         await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync()) details.Add(reader.GetString(3));
+        while (await reader.ReadAsync())
+        {
+            details.Add(reader.GetString(3));
+        }
 
         Assert.Contains(details, detail =>
             detail.Contains("SEARCH", System.StringComparison.OrdinalIgnoreCase)

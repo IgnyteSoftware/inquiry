@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
@@ -19,7 +17,7 @@ public sealed class TvpProcItem
     public int GroupId { get; set; }
 }
 
-public partial class TvpProcItemStore : InquiryStore<TvpProcItem>
+public partial class TvpProcItemStore: InquiryStore<TvpProcItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(TvpProcItem item, CancellationToken cancellationToken = default);

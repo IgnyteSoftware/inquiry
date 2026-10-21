@@ -7,7 +7,7 @@ namespace Inquiry.Stores;
 /// for the selected provider at compile time.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
-public sealed class InquirySetAttribute : Attribute
+public sealed class InquirySetAttribute: Attribute
 {
     /// <summary>Initializes an expression-based assignment.</summary>
     public InquirySetAttribute(string field, string expression)

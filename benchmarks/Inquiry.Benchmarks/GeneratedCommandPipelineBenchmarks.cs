@@ -1,3 +1,4 @@
+using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -9,7 +10,6 @@ using Inquiry.Sqlite.DependencyInjection;
 using Inquiry.Transactions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
 
 namespace Inquiry.Benchmarks;
 
@@ -164,7 +164,7 @@ public class GeneratedCommandPipelineBenchmarks
     }
 }
 
-internal sealed class CountingInterceptor : IInquiryCommandInterceptor
+internal sealed class CountingInterceptor: IInquiryCommandInterceptor
 {
     public long ExecutingCount { get; private set; }
 
@@ -175,7 +175,7 @@ internal sealed class CountingInterceptor : IInquiryCommandInterceptor
     }
 }
 
-internal sealed class GeneratedCommandRoutingGuard : IInquiry
+internal sealed class GeneratedCommandRoutingGuard: IInquiry
 {
     private readonly IInquiry _inner;
 

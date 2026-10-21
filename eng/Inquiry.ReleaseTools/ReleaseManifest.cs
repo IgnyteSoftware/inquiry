@@ -38,7 +38,7 @@ public sealed record ReleaseAssets(
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(ReleaseManifest))]
 [JsonSerializable(typeof(CiRequiredContract))]
-internal sealed partial class ReleaseJsonContext : JsonSerializerContext;
+internal sealed partial class ReleaseJsonContext: JsonSerializerContext;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CiRequiredContract(

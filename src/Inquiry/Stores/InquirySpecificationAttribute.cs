@@ -5,6 +5,6 @@ namespace Inquiry.Stores;
 /// criteria. The generator expands the criteria declared on the custom attribute at each use site.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class InquirySpecificationAttribute : Attribute
+public sealed class InquirySpecificationAttribute: Attribute
 {
 }

@@ -1,6 +1,6 @@
-using Inquiry.Commands;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Commands;
 
 namespace Inquiry.Transactions;
 
@@ -35,7 +35,7 @@ namespace Inquiry.Transactions;
 /// disposal calls share the same exactly-once provider cleanup.
 /// </para>
 /// </remarks>
-public interface IInquiryTransaction : IAsyncDisposable
+public interface IInquiryTransaction: IAsyncDisposable
 {
     /// <summary>
     /// Gets the isolation level the underlying database transaction was opened with.

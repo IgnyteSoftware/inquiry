@@ -1,14 +1,13 @@
-using Inquiry;
+using System.Collections;
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using Inquiry.SqlServer.Parameters;
-using System.Collections;
-using System.Data;
-using System.Data.Common;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -159,7 +158,7 @@ public sealed class TvpResourceLifetimePipelineTests
         }
     }
 
-    private sealed class FakeConnectionFactory : IInquiryConnectionFactory
+    private sealed class FakeConnectionFactory: IInquiryConnectionFactory
     {
         private readonly ThrowingPrepareCommand _command;
         private readonly IInquiryExecutionResource? _resource;
@@ -175,7 +174,10 @@ public sealed class TvpResourceLifetimePipelineTests
 
         public void InitializeCommand(DbCommand command)
         {
-            if (_resource is not null) InquiryCommandResources.Register(command, _resource);
+            if (_resource is not null)
+            {
+                InquiryCommandResources.Register(command, _resource);
+            }
         }
 
         public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
@@ -185,13 +187,13 @@ public sealed class TvpResourceLifetimePipelineTests
         }
     }
 
-    private sealed class FakeConnection : DbConnection
+    private sealed class FakeConnection: DbConnection
     {
         private readonly ThrowingPrepareCommand _command;
         public FakeConnection(ThrowingPrepareCommand command) => _command = command;
         public int DisposeCount { get; private set; }
         protected override DbCommand CreateDbCommand() => _command;
-        protected override void Dispose(bool disposing) { if (disposing) DisposeCount++; base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { DisposeCount++; } base.Dispose(disposing); }
         [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "test";
         public override string DataSource => "test";
@@ -203,10 +205,10 @@ public sealed class TvpResourceLifetimePipelineTests
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
     }
 
-    private sealed class CountingConnection : DbConnection
+    private sealed class CountingConnection: DbConnection
     {
         public int DisposeCount { get; private set; }
-        protected override void Dispose(bool disposing) { if (disposing) DisposeCount++; base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { DisposeCount++; } base.Dispose(disposing); }
         protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
         [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "test";
@@ -219,13 +221,13 @@ public sealed class TvpResourceLifetimePipelineTests
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
     }
 
-    private sealed class CountingLease : IDisposable
+    private sealed class CountingLease: IDisposable
     {
         public int DisposeCount { get; private set; }
         public void Dispose() => DisposeCount++;
     }
 
-    private sealed class ThrowingResource : IInquiryExecutionResource
+    private sealed class ThrowingResource: IInquiryExecutionResource
     {
         public int DisposeCount { get; private set; }
         public void Dispose()
@@ -235,13 +237,13 @@ public sealed class TvpResourceLifetimePipelineTests
         }
     }
 
-    private sealed class CountingResource : IInquiryExecutionResource
+    private sealed class CountingResource: IInquiryExecutionResource
     {
         public int DisposeCount { get; private set; }
         public void Dispose() => DisposeCount++;
     }
 
-    private sealed class NoopInterceptor : IInquiryCommandInterceptor
+    private sealed class NoopInterceptor: IInquiryCommandInterceptor
     {
     }
 
@@ -249,12 +251,12 @@ public sealed class TvpResourceLifetimePipelineTests
     {
     }
 
-    private readonly struct ProbeMaterializer : IInquiryEntityMaterializer<ProbeEntity>
+    private readonly struct ProbeMaterializer: IInquiryEntityMaterializer<ProbeEntity>
     {
         public ProbeEntity Materialize(DbDataReader reader) => new();
     }
 
-    private sealed class ThrowingPrepareCommand : DbCommand
+    private sealed class ThrowingPrepareCommand: DbCommand
     {
         public bool PrepareCalled { get; private set; }
         public bool ExecuteCalled { get; private set; }
@@ -289,7 +291,7 @@ public sealed class TvpResourceLifetimePipelineTests
         public override void Cancel() { }
     }
 
-    private sealed class FakeParameter : DbParameter
+    private sealed class FakeParameter: DbParameter
     {
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
@@ -302,13 +304,19 @@ public sealed class TvpResourceLifetimePipelineTests
         public override void ResetDbType() { }
     }
 
-    private sealed class FakeParameterCollection : DbParameterCollection
+    private sealed class FakeParameterCollection: DbParameterCollection
     {
         private readonly List<DbParameter> _items = [];
         public override int Count => _items.Count;
         public override object SyncRoot => _items;
         public override int Add(object value) { _items.Add((DbParameter)value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var value in values) Add(value!); }
+        public override void AddRange(Array values)
+        {
+            foreach (var value in values)
+            {
+                Add(value!);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains((DbParameter)value);
         public override bool Contains(string value) => IndexOf(value) >= 0;
@@ -319,18 +327,32 @@ public sealed class TvpResourceLifetimePipelineTests
         public override void Insert(int index, object value) => _items.Insert(index, (DbParameter)value);
         public override void Remove(object value) => _items.Remove((DbParameter)value);
         public override void RemoveAt(int index) => _items.RemoveAt(index);
-        public override void RemoveAt(string parameterName) { var index = IndexOf(parameterName); if (index >= 0) RemoveAt(index); }
+        public override void RemoveAt(string parameterName)
+        {
+            var index = IndexOf(parameterName);
+            if (index >= 0)
+            {
+                RemoveAt(index);
+            }
+        }
         protected override DbParameter GetParameter(int index) => _items[index];
         protected override DbParameter GetParameter(string parameterName) => _items[IndexOf(parameterName)];
         protected override void SetParameter(int index, DbParameter value) => _items[index] = value;
         protected override void SetParameter(string parameterName, DbParameter value)
         {
             var index = IndexOf(parameterName);
-            if (index < 0) _items.Add(value); else _items[index] = value;
+            if (index < 0)
+            {
+                _items.Add(value);
+            }
+            else
+            {
+                _items[index] = value;
+            }
         }
     }
 
-    private sealed class TrackingEnumerable<T> : IEnumerable<T>
+    private sealed class TrackingEnumerable<T>: IEnumerable<T>
     {
         private readonly IReadOnlyList<T> _items;
         public TrackingEnumerable(IReadOnlyList<T> items) => _items = items;
@@ -343,7 +365,7 @@ public sealed class TvpResourceLifetimePipelineTests
         }
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator : IEnumerator<T>
+        private sealed class Enumerator: IEnumerator<T>
         {
             private readonly TrackingEnumerable<T> _owner;
             private int _index = -1;
@@ -355,16 +377,20 @@ public sealed class TvpResourceLifetimePipelineTests
             public void Reset() => throw new NotSupportedException();
             public void Dispose()
             {
-                if (_disposed) return;
+                if (_disposed)
+                {
+                    return;
+                }
+
                 _disposed = true;
                 _owner.DisposeCount++;
             }
         }
     }
 
-    private sealed class PrepareProbeException : Exception { }
-    private sealed class CleanupProbeException : Exception { }
-    private sealed class BinderProbeException : Exception { }
+    private sealed class PrepareProbeException: Exception { }
+    private sealed class CleanupProbeException: Exception { }
+    private sealed class BinderProbeException: Exception { }
 
     public enum FastPath { Stream, List, Single, Scalar, Execute, SequentialBatch }
 }

@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Data.Common;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 
 namespace Inquiry.Oracle.Tests.Fixtures;
@@ -12,7 +7,7 @@ namespace Inquiry.Oracle.Tests.Fixtures;
 /// schema user owns every object). Oracle folds unquoted identifiers to UPPERCASE, which is fine —
 /// <see cref="SchemaFidelity"/> matches case-insensitively; <c>"Order Details"</c> is quoted in the DDL
 /// so it comes back with its original mixed case.</summary>
-public sealed class OracleSchemaIntrospector : ISchemaIntrospector
+public sealed class OracleSchemaIntrospector: ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {
@@ -24,7 +19,11 @@ public sealed class OracleSchemaIntrospector : ISchemaIntrospector
             r =>
             {
                 var t = r.GetString(0);
-                if (!cols.TryGetValue(t, out var list)) cols[t] = list = new();
+                if (!cols.TryGetValue(t, out var list))
+                {
+                    cols[t] = list = new();
+                }
+
                 list.Add(new ColumnSnapshot(r.GetString(1), r.GetString(2) == "Y"));
             });
 
@@ -83,6 +82,9 @@ public sealed class OracleSchemaIntrospector : ISchemaIntrospector
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct)) onRow(r);
+        while (await r.ReadAsync(ct))
+        {
+            onRow(r);
+        }
     }
 }

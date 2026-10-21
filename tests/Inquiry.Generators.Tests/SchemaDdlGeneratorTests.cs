@@ -1,8 +1,5 @@
-using System;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 using Microsoft.CodeAnalysis;
 
@@ -952,13 +949,13 @@ public sealed partial class InquiryGeneratorTests
     }
 }
 
-internal sealed class FallbackInquiryGenerator : InquiryGeneratorBase
+internal sealed class FallbackInquiryGenerator: InquiryGeneratorBase
 {
     protected override string Dialect => "Fallback";
     protected override SqlBuilder CreateSqlBuilder() => new FallbackSqlBuilder();
 }
 
-internal sealed class FallbackSqlBuilder : SqlBuilder
+internal sealed class FallbackSqlBuilder: SqlBuilder
 {
     public override string DialectName => "Fallback";
     public override string ProviderId => "fallback";

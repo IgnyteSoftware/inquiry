@@ -1,7 +1,5 @@
-using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.MariaDb.Tests.Fixtures;
-using Xunit;
 
 namespace Inquiry.MariaDb.Tests;
 

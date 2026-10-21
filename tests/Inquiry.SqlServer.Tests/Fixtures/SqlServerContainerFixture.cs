@@ -1,15 +1,12 @@
-using System;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests.Fixtures;
 
 /// <summary>Starts one SQL Server container for the whole assembly. If Docker is unreachable,
 /// <see cref="IsAvailable"/> stays false and tests skip rather than fail.</summary>
-public sealed class SqlServerContainerFixture : IAsyncLifetime
+public sealed class SqlServerContainerFixture: IAsyncLifetime
 {
     public const string ImageEnvVarName = "INQUIRY_SQLSERVER_IMAGE";
     private const string DefaultImage =
@@ -79,6 +76,9 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

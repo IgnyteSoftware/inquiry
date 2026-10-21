@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.SqlServer.Tests.Fixtures;
 
 namespace Inquiry.SqlServer.Tests;

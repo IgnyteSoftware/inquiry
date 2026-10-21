@@ -20,7 +20,7 @@ namespace Inquiry.Sqlite.Testing;
 ///     services => services.AddInquiryGeneratedStores());
 /// </code>
 /// </remarks>
-public sealed class SqliteInquiryFixture : IAsyncDisposable
+public sealed class SqliteInquiryFixture: IAsyncDisposable
 {
     private readonly SqliteConnection _keeper;
     private readonly ServiceProvider _provider;

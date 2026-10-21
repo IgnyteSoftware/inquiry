@@ -417,7 +417,7 @@ public static class CiContractVerifier
             || (jobId == "package-verifier" && run == PackageConsumerCommand))
         {
             Require(step.TryGetValue("shell", out var shellNode)
-                && Scalar(shellNode!, $"{jobId}[{stepIndex}].shell") == "pwsh",
+                && Scalar(shellNode, $"{jobId}[{stepIndex}].shell") == "pwsh",
                 "Package scripts must use the exact pwsh shell.");
         }
         else

@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -23,7 +21,7 @@ public sealed class VersionedItem
     public int Version { get; set; }
 }
 
-public partial class VersionedItemStore : InquiryStore<VersionedItem>
+public partial class VersionedItemStore: InquiryStore<VersionedItem>
 {
     [InquiryInsert]
     public partial Task<VersionedItem?> InsertAsync(VersionedItem item, CancellationToken cancellationToken = default);

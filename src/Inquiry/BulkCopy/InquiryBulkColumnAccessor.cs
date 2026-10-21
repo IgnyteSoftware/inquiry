@@ -31,7 +31,7 @@ public interface IInquiryBulkColumnAccessor<in TEntity>
 
 /// <summary>Default implementation used by generated stores for one typed column.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class InquiryBulkColumnAccessor<TEntity, TValue> : IInquiryBulkColumnAccessor<TEntity>
+public sealed class InquiryBulkColumnAccessor<TEntity, TValue>: IInquiryBulkColumnAccessor<TEntity>
     where TEntity : class
 {
     private readonly Func<TEntity, TValue> _getValue;

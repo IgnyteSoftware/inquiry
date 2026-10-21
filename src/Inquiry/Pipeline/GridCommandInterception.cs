@@ -1,8 +1,8 @@
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Diagnostics;
 using Inquiry.Interceptors;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Pipeline;
 
@@ -46,17 +46,30 @@ internal sealed class GridCommandInterception
         var count = 0;
         foreach (var interceptor in interceptors)
         {
-            if (interceptor is not InquiryTelemetryInterceptor) count++;
+            if (interceptor is not InquiryTelemetryInterceptor)
+            {
+                count++;
+            }
         }
 
-        if (count == 0) return null;
-        if (count == interceptors.Length) return interceptors;
+        if (count == 0)
+        {
+            return null;
+        }
+
+        if (count == interceptors.Length)
+        {
+            return interceptors;
+        }
 
         var selected = new IInquiryCommandInterceptor[count];
         var index = 0;
         foreach (var interceptor in interceptors)
         {
-            if (interceptor is not InquiryTelemetryInterceptor) selected[index++] = interceptor;
+            if (interceptor is not InquiryTelemetryInterceptor)
+            {
+                selected[index++] = interceptor;
+            }
         }
 
         return selected;
@@ -89,7 +102,11 @@ internal sealed class GridCommandInterception
     internal async ValueTask FailedAsync(Exception exception, CancellationToken cancellationToken)
     {
         // A grid can fail on any read after the command executed. Only the first failure is reported.
-        if (HasFailed) return;
+        if (HasFailed)
+        {
+            return;
+        }
+
         HasFailed = true;
         var context = new InquiryCommandFailedContext(_command, _dbCommand, exception);
         foreach (var interceptor in _interceptors)

@@ -4,7 +4,7 @@ namespace Inquiry.Stores;
 /// Generates a method that selects all rows for the store entity.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquirySelectAllAttribute : Attribute
+public sealed class InquirySelectAllAttribute: Attribute
 {
     /// <summary>
     /// Gets or sets a compile-time ORDER BY specification, e.g. <c>"Name ASC, Id DESC"</c>. Each item

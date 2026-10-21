@@ -1,6 +1,5 @@
 using System.Collections;
 using Inquiry.Benchmarks.Contracts;
-using Inquiry.Benchmarks.SqlServer;
 using Inquiry.SqlServer.Parameters;
 using Microsoft.Data.SqlClient;
 
@@ -69,7 +68,7 @@ public sealed class CollectionTransportBenchmarkIntegrationTests
         Assert.Equal(1, source.DisposeCount);
     }
 
-    private sealed class TrackingEnumerable(IEnumerable<int> values, bool failDispose = false) : IEnumerable<int>
+    private sealed class TrackingEnumerable(IEnumerable<int> values, bool failDispose = false): IEnumerable<int>
     {
         private bool FailDispose { get; } = failDispose;
         public int DisposeCount { get; private set; }
@@ -77,7 +76,7 @@ public sealed class CollectionTransportBenchmarkIntegrationTests
         public IEnumerator<int> GetEnumerator() => new Enumerator(values.GetEnumerator(), this);
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator(IEnumerator<int> inner, TrackingEnumerable owner) : IEnumerator<int>
+        private sealed class Enumerator(IEnumerator<int> inner, TrackingEnumerable owner): IEnumerator<int>
         {
             public int Current => inner.Current;
             object IEnumerator.Current => Current;
@@ -87,10 +86,13 @@ public sealed class CollectionTransportBenchmarkIntegrationTests
             {
                 inner.Dispose();
                 owner.DisposeCount++;
-                if (owner.FailDispose) throw new CleanupProbeException();
+                if (owner.FailDispose)
+                {
+                    throw new CleanupProbeException();
+                }
             }
         }
     }
 
-    private sealed class CleanupProbeException : Exception;
+    private sealed class CleanupProbeException: Exception;
 }

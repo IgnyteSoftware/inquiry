@@ -10,6 +10,6 @@ namespace Inquiry.Stores;
 /// to enforce their configured write behavior.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryDeleteAllAttribute : Attribute
+public sealed class InquiryDeleteAllAttribute: Attribute
 {
 }

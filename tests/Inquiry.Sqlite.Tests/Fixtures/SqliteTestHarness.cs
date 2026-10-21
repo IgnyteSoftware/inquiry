@@ -1,9 +1,9 @@
+using System.Runtime.ExceptionServices;
 using Inquiry.DependencyInjection;
-using Inquiry.Sqlite.DependencyInjection;
 using Inquiry.Northwind.Stores;
+using Inquiry.Sqlite.DependencyInjection;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Runtime.ExceptionServices;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
 
@@ -13,7 +13,7 @@ namespace Inquiry.Sqlite.Tests.Fixtures;
 /// shared in-memory DB persists for the lifetime of this harness; disposing
 /// releases everything in the right order.
 /// </summary>
-internal sealed class SqliteTestHarness : IAsyncDisposable
+internal sealed class SqliteTestHarness: IAsyncDisposable
 {
     private readonly SqliteConnection _keeper;
 
@@ -80,9 +80,14 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
 
             var serviceCollection = new ServiceCollection();
             if (configureOptions is null)
+            {
                 serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
+            }
             else
+            {
                 serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
+            }
+
             serviceCollection.AddInquirySqlite(connectionString);
             configureServices?.Invoke(serviceCollection);
             var services = serviceCollection.BuildServiceProvider();
@@ -132,6 +137,8 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
         }
 
         if (serviceFailure is not null)
+        {
             ExceptionDispatchInfo.Throw(serviceFailure);
+        }
     }
 }

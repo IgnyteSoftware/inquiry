@@ -289,7 +289,7 @@ public sealed class BatchChunkingIntegrationTests
     private sealed record StructuredParameterMetadata(SqlDbType DbType, string TypeName);
     private sealed record InsertBatchMetadata(string[] Names, DbType[] Types);
 
-    private sealed class CountingInterceptor : IInquiryCommandInterceptor
+    private sealed class CountingInterceptor: IInquiryCommandInterceptor
     {
         internal int InitializedCount { get; private set; }
         internal int ExecutedCount { get; private set; }

@@ -57,7 +57,9 @@ public class WideBatchInsertThresholdBenchmarks
             """, connection);
         command.Parameters.Add("@rows", SqlDbType.Int).Value = Rows;
         if ((int)command.ExecuteScalar()! != Rows)
+        {
             throw new InvalidOperationException("Wide insert persisted rows or values differ from the requested input.");
+        }
     }
 
     [GlobalCleanup]
@@ -87,7 +89,10 @@ public class WideBatchInsertThresholdBenchmarks
         if (useBatch)
         {
             if (!connection.CanCreateBatch)
+            {
                 throw new NotSupportedException("SqlConnection.CanCreateBatch is false; the native comparison is unavailable.");
+            }
+
             await using var batch = connection.CreateBatch();
             batch.Transaction = transaction;
             foreach (var item in _items)
@@ -110,13 +115,19 @@ public class WideBatchInsertThresholdBenchmarks
         {
             await using var command = new SqlCommand(InsertSql, connection, transaction);
             for (var column = 0; column < 10; column++)
+            {
                 command.Parameters.Add("@p" + column, SqlDbType.Int).Value = column;
+            }
+
             await command.PrepareAsync().ConfigureAwait(false);
             affected = 0;
             foreach (var item in _items)
             {
                 for (var column = 0; column < 10; column++)
+                {
                     command.Parameters[column].Value = ValueAt(item, column);
+                }
+
                 affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
@@ -154,7 +165,7 @@ public sealed class WideBatchEvidenceItem
     [InquiryColumn] public int C9 { get; set; }
 }
 
-public partial class WideBatchEvidenceStore : InquiryStore<WideBatchEvidenceItem>
+public partial class WideBatchEvidenceStore: InquiryStore<WideBatchEvidenceItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<WideBatchEvidenceItem> items, CancellationToken ct = default);

@@ -1,6 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -77,7 +74,7 @@ public sealed class UnsignedTypesItem
 }
 
 /// <summary>Control: int-backed enum (should work fine).</summary>
-public enum SampleEnumInt32 : int
+public enum SampleEnumInt32: int
 {
     Zero = 0,
     One = 1,
@@ -85,7 +82,7 @@ public enum SampleEnumInt32 : int
 }
 
 /// <summary>sbyte-backed enum — includes a negative member.</summary>
-public enum SampleEnumSByte : sbyte
+public enum SampleEnumSByte: sbyte
 {
     Negative = -1,
     Zero = 0,
@@ -93,7 +90,7 @@ public enum SampleEnumSByte : sbyte
 }
 
 /// <summary>ushort-backed enum — includes a member beyond short.MaxValue.</summary>
-public enum SampleEnumUInt16 : ushort
+public enum SampleEnumUInt16: ushort
 {
     Zero = 0,
     AboveShortMax = 40000,
@@ -101,7 +98,7 @@ public enum SampleEnumUInt16 : ushort
 }
 
 /// <summary>uint-backed enum — includes a member beyond int.MaxValue.</summary>
-public enum SampleEnumUInt32 : uint
+public enum SampleEnumUInt32: uint
 {
     Zero = 0,
     AboveIntMax = 3_000_000_000u,
@@ -113,7 +110,7 @@ public enum SampleEnumUInt32 : uint
 /// signed bit pattern (e.g. <see cref="AboveLongMax"/> → a negative long), so they fit BIGINT
 /// and round-trip back exactly.
 /// </summary>
-public enum SampleEnumUInt64 : ulong
+public enum SampleEnumUInt64: ulong
 {
     Zero = 0,
     Large = 9_000_000_000_000_000_000ul,        // < long.MaxValue
@@ -121,7 +118,7 @@ public enum SampleEnumUInt64 : ulong
     Max = ulong.MaxValue,
 }
 
-public partial class UnsignedTypesItemStore : InquiryStore<UnsignedTypesItem>
+public partial class UnsignedTypesItemStore: InquiryStore<UnsignedTypesItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(UnsignedTypesItem item, CancellationToken cancellationToken = default);

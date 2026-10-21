@@ -1,5 +1,3 @@
-using System;
-
 namespace Inquiry.Generators.Tests;
 
 /// <summary>

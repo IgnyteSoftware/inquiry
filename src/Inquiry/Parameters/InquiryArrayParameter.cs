@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Common;
 
@@ -25,8 +24,9 @@ public static class InquiryArrayParameter
     /// <typeparam name="T">The element type of the IN collection.</typeparam>
     public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values)
     {
-        if (command is null) throw new System.ArgumentNullException(nameof(command));
-        if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
+        ArgumentNullException.ThrowIfNull(command);
+
+        ArgumentNullException.ThrowIfNull(parameterName);
 
         var parameter = command.CreateParameter();
         parameter.ParameterName = parameterName;
@@ -36,14 +36,45 @@ public static class InquiryArrayParameter
 
     internal static object ToArrayValue<T>(IEnumerable<T>? values)
     {
-        if (typeof(T) == typeof(sbyte)) return ReinterpretSByte((IEnumerable<sbyte>?)(object?)values);
-        if (typeof(T) == typeof(ushort)) return ReinterpretUInt16((IEnumerable<ushort>?)(object?)values);
-        if (typeof(T) == typeof(uint)) return ReinterpretUInt32((IEnumerable<uint>?)(object?)values);
-        if (typeof(T) == typeof(ulong)) return ReinterpretUInt64((IEnumerable<ulong>?)(object?)values);
-        if (typeof(T) == typeof(sbyte?)) return ReinterpretNullableSByte((IEnumerable<sbyte?>?)(object?)values);
-        if (typeof(T) == typeof(ushort?)) return ReinterpretNullableUInt16((IEnumerable<ushort?>?)(object?)values);
-        if (typeof(T) == typeof(uint?)) return ReinterpretNullableUInt32((IEnumerable<uint?>?)(object?)values);
-        if (typeof(T) == typeof(ulong?)) return ReinterpretNullableUInt64((IEnumerable<ulong?>?)(object?)values);
+        if (typeof(T) == typeof(sbyte))
+        {
+            return ReinterpretSByte((IEnumerable<sbyte>?)(object?)values);
+        }
+
+        if (typeof(T) == typeof(ushort))
+        {
+            return ReinterpretUInt16((IEnumerable<ushort>?)(object?)values);
+        }
+
+        if (typeof(T) == typeof(uint))
+        {
+            return ReinterpretUInt32((IEnumerable<uint>?)(object?)values);
+        }
+
+        if (typeof(T) == typeof(ulong))
+        {
+            return ReinterpretUInt64((IEnumerable<ulong>?)(object?)values);
+        }
+
+        if (typeof(T) == typeof(sbyte?))
+        {
+            return ReinterpretNullableSByte((IEnumerable<sbyte?>?)(object?)values);
+        }
+
+        if (typeof(T) == typeof(ushort?))
+        {
+            return ReinterpretNullableUInt16((IEnumerable<ushort?>?)(object?)values);
+        }
+
+        if (typeof(T) == typeof(uint?))
+        {
+            return ReinterpretNullableUInt32((IEnumerable<uint?>?)(object?)values);
+        }
+
+        if (typeof(T) == typeof(ulong?))
+        {
+            return ReinterpretNullableUInt64((IEnumerable<ulong?>?)(object?)values);
+        }
 
         var elementType = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
         if (elementType.IsEnum)
@@ -89,30 +120,48 @@ public static class InquiryArrayParameter
 
     private static TResult[] MapTyped<T, TResult>(IEnumerable<T>? values, System.Func<T, TResult> selector)
     {
-        if (values is null) return System.Array.Empty<TResult>();
+        if (values is null)
+        {
+            return System.Array.Empty<TResult>();
+        }
+
         if (values is ICollection<T> collection)
         {
             var result = new TResult[collection.Count];
             var index = 0;
-            foreach (var value in collection) result[index++] = selector(value);
+            foreach (var value in collection)
+            {
+                result[index++] = selector(value);
+            }
+
             return result;
         }
 
         var list = new List<TResult>();
-        foreach (var value in values) list.Add(selector(value));
+        foreach (var value in values)
+        {
+            list.Add(selector(value));
+        }
+
         return list.ToArray();
     }
 
     private static TResult[] MapNonNull<T, TResult>(IEnumerable<T>? values, System.Func<T, TResult> selector)
     {
-        if (values is null) return System.Array.Empty<TResult>();
+        if (values is null)
+        {
+            return System.Array.Empty<TResult>();
+        }
 
         var converted = values is ICollection<T> collection
             ? new List<TResult>(collection.Count)
             : new List<TResult>();
         foreach (var value in values)
         {
-            if (value is not null) converted.Add(selector(value));
+            if (value is not null)
+            {
+                converted.Add(selector(value));
+            }
         }
 
         return converted.ToArray();

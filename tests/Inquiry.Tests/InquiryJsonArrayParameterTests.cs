@@ -1,6 +1,4 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
 using Inquiry.Parameters;
 
@@ -8,7 +6,7 @@ namespace Inquiry.Tests;
 
 public sealed class InquiryJsonArrayParameterTests
 {
-    private enum UnsignedCode : uint { Max = uint.MaxValue }
+    private enum UnsignedCode: uint { Max = uint.MaxValue }
 
     [Fact]
     public void NullAndEmptyCollectionsProduceEmptyArray()
@@ -64,12 +62,16 @@ public sealed class InquiryJsonArrayParameterTests
         Assert.Equal(1, values.EnumerationCount);
     }
 
-    private sealed class SingleUseEnumerable<T>(IEnumerable<T> values) : IEnumerable<T>
+    private sealed class SingleUseEnumerable<T>(IEnumerable<T> values): IEnumerable<T>
     {
         public int EnumerationCount { get; private set; }
         public IEnumerator<T> GetEnumerator()
         {
-            if (++EnumerationCount != 1) throw new InvalidOperationException("enumerated twice");
+            if (++EnumerationCount != 1)
+            {
+                throw new InvalidOperationException("enumerated twice");
+            }
+
             return values.GetEnumerator();
         }
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

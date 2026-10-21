@@ -14,7 +14,7 @@ namespace Inquiry.Stores;
 /// does not also map a result set; use a separate method for the rows.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class InquiryStoredProcedureAttribute : Attribute
+public sealed class InquiryStoredProcedureAttribute: Attribute
 {
     /// <summary>
     /// Initializes a new instance of <see cref="InquiryStoredProcedureAttribute"/> with the procedure name.

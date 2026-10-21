@@ -1,3 +1,6 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
@@ -5,9 +8,6 @@ using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using Inquiry.Transactions;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
-using System.Data.Common;
-using System.Diagnostics;
 
 namespace Inquiry;
 
@@ -27,7 +27,7 @@ namespace Inquiry;
 /// async work that captured the old transaction slot fails fast after the transaction closes.
 /// </para>
 /// </remarks>
-internal sealed class DefaultInquiry : IInquiry
+internal sealed class DefaultInquiry: IInquiry
 {
     private readonly IInquiryRequestPipeline _defaultPipeline;
     private readonly IInquiryConnectionFactory _connectionFactory;
@@ -251,8 +251,9 @@ internal sealed class DefaultInquiry : IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        if (definition is null) throw new ArgumentNullException(nameof(definition));
-        if (rows is null) throw new ArgumentNullException(nameof(rows));
+        ArgumentNullException.ThrowIfNull(definition);
+
+        ArgumentNullException.ThrowIfNull(rows);
 
         options ??= new Inquiry.BulkCopy.InquiryBulkInsertOptions();
         options.Validate();
@@ -266,10 +267,15 @@ internal sealed class DefaultInquiry : IInquiry
         var pipeline = ambientSlot?.Pipeline;
         if (options.ConnectionBehavior == Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.RequireAmbientTransaction
             && pipeline is null)
+        {
             throw new InvalidOperationException("Bulk insert option ConnectionBehavior requires an ambient Inquiry transaction, but none is active.");
+        }
+
         if (options.ConnectionBehavior == Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.RequireDedicatedConnection
             && pipeline is not null)
+        {
             throw new InvalidOperationException("Bulk insert option ConnectionBehavior requires a dedicated connection, but an ambient Inquiry transaction is active.");
+        }
 
         var copier = _serviceProvider.GetService<Inquiry.BulkCopy.IInquiryBulkCopier>()
             ?? throw new InvalidOperationException(
@@ -288,7 +294,10 @@ internal sealed class DefaultInquiry : IInquiry
         try
         {
             operationLease = pipeline?.EnterExclusiveOperation();
-            if (enlisted) context.RecordConnectionOpened(TimeSpan.Zero);
+            if (enlisted)
+            {
+                context.RecordConnectionOpened(TimeSpan.Zero);
+            }
             // Same cancellation contract as the command pipeline (#282/#283): a driver-native error
             // surfaced after the caller's token fired (MySqlConnector wraps the cancel in a
             // MySqlException during LOAD DATA LOCAL INFILE) normalizes to an OCE carrying the
@@ -322,7 +331,9 @@ internal sealed class DefaultInquiry : IInquiry
             && !Diagnostics.InquiryTelemetry.CommandDuration.Enabled
             && !Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Enabled
             && !Diagnostics.InquiryTelemetry.BulkCopyDuration.Enabled)
+        {
             return (null, 0, "");
+        }
 
         var dbSystem = Diagnostics.InquiryTelemetry.MapDbSystem(_connectionFactory);
         var startTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -348,7 +359,10 @@ internal sealed class DefaultInquiry : IInquiry
 
     private static void RecordBulkInsertCompletion(Activity? activity, long startTimestamp, string dbSystem, bool enlisted, long rowCount)
     {
-        if (startTimestamp == 0) return;
+        if (startTimestamp == 0)
+        {
+            return;
+        }
 
         Diagnostics.InquiryTelemetry.CommandDuration.Record(
             System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
@@ -381,7 +395,10 @@ internal sealed class DefaultInquiry : IInquiry
         {
             Diagnostics.InquiryTelemetry.SetError(activity, exception, _recordTelemetryDetails);
             if (exception is Inquiry.BulkCopy.InquiryBulkInsertWarningException warning)
+            {
                 activity.SetTag("db.response.affected_rows", warning.RowsWritten);
+            }
+
             activity.Dispose();
         }
     }

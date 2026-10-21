@@ -31,7 +31,7 @@ public class ShipperBenchmarks
     private OracleBenchmarkDatabase _db = null!;
 
     // Single fixed target: ShipperID = 1 (always present after seeding).
-    private const int    TargetShipperId   = 1;
+    private const int TargetShipperId = 1;
     private const string TargetCompanyName = "Shipper 0";
 
     [Params(1000)]
@@ -39,8 +39,8 @@ public class ShipperBenchmarks
 
     // Oracle DDL uses unquoted identifiers — Oracle folds them to uppercase.
     // Hand-written SQL uses the stored uppercase names to stay consistent.
-    private const string SelectAllSql     = "SELECT SHIPPERID, COMPANYNAME, PHONE FROM SHIPPERS";
-    private const string SelectByKeySql   = SelectAllSql + " WHERE SHIPPERID = :id";
+    private const string SelectAllSql = "SELECT SHIPPERID, COMPANYNAME, PHONE FROM SHIPPERS";
+    private const string SelectByKeySql = SelectAllSql + " WHERE SHIPPERID = :id";
     private const string SelectByFieldSql = SelectAllSql + " WHERE COMPANYNAME = :c";
 
     [GlobalSetup]
@@ -53,9 +53,9 @@ public class ShipperBenchmarks
 
     private static Shipper ReadShipper(System.Data.Common.DbDataReader reader) => new Shipper
     {
-        ShipperID   = reader.GetInt32(0),
+        ShipperID = reader.GetInt32(0),
         CompanyName = reader.GetString(1),
-        Phone       = reader.IsDBNull(2) ? null : reader.GetString(2),
+        Phone = reader.IsDBNull(2) ? null : reader.GetString(2),
     };
 
     private OracleConnection OpenConnection()
@@ -75,7 +75,11 @@ public class ShipperBenchmarks
         command.CommandText = SelectAllSql;
         var list = new List<Shipper>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadShipper(reader));
+        }
+
         return list.Count;
     }
 
@@ -149,7 +153,11 @@ public class ShipperBenchmarks
         command.Parameters.Add("c", OracleDbType.Varchar2).Value = TargetCompanyName;
         var list = new List<Shipper>();
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadShipper(reader));
+        }
+
         return list.Count;
     }
 
@@ -188,7 +196,7 @@ public class ShipperBenchmarks
         command.BindByName = true;
         command.CommandText = "INSERT INTO SHIPPERS (COMPANYNAME, PHONE) VALUES (:company, :phone)";
         command.Parameters.Add("company", OracleDbType.Varchar2).Value = "Bench Shipper";
-        command.Parameters.Add("phone",   OracleDbType.Varchar2).Value = "555-0000";
+        command.Parameters.Add("phone", OracleDbType.Varchar2).Value = "555-0000";
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -224,9 +232,9 @@ public class ShipperBenchmarks
         await using var command = connection.CreateCommand();
         command.BindByName = true;
         command.CommandText = "UPDATE SHIPPERS SET COMPANYNAME = :company, PHONE = :phone WHERE SHIPPERID = :id";
-        command.Parameters.Add("id",      OracleDbType.Int32).Value   = TargetShipperId;
+        command.Parameters.Add("id", OracleDbType.Int32).Value = TargetShipperId;
         command.Parameters.Add("company", OracleDbType.Varchar2).Value = "Updated Shipper";
-        command.Parameters.Add("phone",   OracleDbType.Varchar2).Value = "555-9999";
+        command.Parameters.Add("phone", OracleDbType.Varchar2).Value = "555-9999";
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -246,7 +254,7 @@ public class ShipperBenchmarks
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var entity = await ctx.Shippers.FirstAsync(s => s.ShipperID == TargetShipperId);
         entity.CompanyName = "Updated Shipper";
-        entity.Phone       = "555-9999";
+        entity.Phone = "555-9999";
         return await ctx.SaveChangesAsync();
     }
 
@@ -254,9 +262,9 @@ public class ShipperBenchmarks
     public async Task<bool> Update_Inquiry()
         => await _db.Shippers.UpdateAsync(new Shipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Updated Shipper",
-            Phone       = "555-9999",
+            Phone = "555-9999",
         });
 
     // ---- Upsert -------------------------------------------------------------------------
@@ -275,9 +283,9 @@ public class ShipperBenchmarks
             "ON (tgt.SHIPPERID = src.SHIPPERID) " +
             "WHEN MATCHED THEN UPDATE SET tgt.COMPANYNAME = src.COMPANYNAME, tgt.PHONE = src.PHONE " +
             "WHEN NOT MATCHED THEN INSERT (COMPANYNAME, PHONE) VALUES (src.COMPANYNAME, src.PHONE)";
-        command.Parameters.Add("id",      OracleDbType.Int32).Value   = TargetShipperId;
+        command.Parameters.Add("id", OracleDbType.Int32).Value = TargetShipperId;
         command.Parameters.Add("company", OracleDbType.Varchar2).Value = "Upserted Shipper";
-        command.Parameters.Add("phone",   OracleDbType.Varchar2).Value = "555-1234";
+        command.Parameters.Add("phone", OracleDbType.Varchar2).Value = "555-1234";
         return await command.ExecuteNonQueryAsync();
     }
 

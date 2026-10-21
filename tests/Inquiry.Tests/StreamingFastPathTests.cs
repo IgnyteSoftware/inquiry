@@ -1,9 +1,9 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -65,7 +65,7 @@ public sealed class StreamingFastPathTests
         public string Name { get; set; } = string.Empty;
     }
 
-    private readonly struct RowMaterializer : IInquiryEntityMaterializer<Row>
+    private readonly struct RowMaterializer: IInquiryEntityMaterializer<Row>
     {
         public Row Materialize(DbDataReader reader) => new()
         {
@@ -74,7 +74,7 @@ public sealed class StreamingFastPathTests
         };
     }
 
-    private sealed class FastPathConnectionFactory : IInquiryConnectionFactory
+    private sealed class FastPathConnectionFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
 

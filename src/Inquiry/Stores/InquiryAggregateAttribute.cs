@@ -28,7 +28,7 @@ public enum InquiryAggregateFunction
 /// IEEE-754 rounding. Use a decimal/integer column (and matching <c>T</c>) when exact results matter.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryAggregateAttribute : Attribute
+public sealed class InquiryAggregateAttribute: Attribute
 {
     /// <summary>Initializes a new instance of the <see cref="InquiryAggregateAttribute"/> class.</summary>
     /// <param name="function">The aggregate function to apply.</param>

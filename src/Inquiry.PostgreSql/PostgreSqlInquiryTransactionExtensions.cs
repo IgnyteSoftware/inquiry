@@ -1,8 +1,8 @@
+using System.Data;
+using System.Text.RegularExpressions;
 using Inquiry.Commands;
 using Inquiry.Parameters;
 using Inquiry.Transactions;
-using System.Data;
-using System.Text.RegularExpressions;
 
 namespace Inquiry.PostgreSql;
 
@@ -94,8 +94,10 @@ public static class PostgreSqlInquiryTransactionExtensions
         string value,
         CancellationToken cancellationToken = default)
     {
-        if (transaction is null) throw new ArgumentNullException(nameof(transaction));
-        if (value is null) throw new ArgumentNullException(nameof(value));
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        ArgumentNullException.ThrowIfNull(value);
+
         ValidateSettingName(settingName);
 
         // Routed through the transaction's own execute surface rather than its raw Connection so the
@@ -140,8 +142,9 @@ public static class PostgreSqlInquiryTransactionExtensions
         IReadOnlyDictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
-        if (transaction is null) throw new ArgumentNullException(nameof(transaction));
-        if (settings is null) throw new ArgumentNullException(nameof(settings));
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        ArgumentNullException.ThrowIfNull(settings);
 
         foreach (var setting in settings)
         {

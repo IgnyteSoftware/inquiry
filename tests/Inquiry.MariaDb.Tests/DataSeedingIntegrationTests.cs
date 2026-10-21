@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.DependencyInjection;
 using Inquiry.Entities;
 using Inquiry.MariaDb.DependencyInjection;
@@ -21,7 +18,7 @@ public sealed class SeededItem
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class SeededItemStore : InquiryStore<SeededItem>
+public partial class SeededItemStore: InquiryStore<SeededItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(SeededItem item, CancellationToken cancellationToken = default);
@@ -32,7 +29,7 @@ public partial class SeededItemStore : InquiryStore<SeededItem>
 
 /// <summary>Conventional seeder shape: constructor-injects the generated store, guards on
 /// existing rows so re-running is a no-op.</summary>
-public sealed class SeededItemSeeder : IInquiryDataSeeder
+public sealed class SeededItemSeeder: IInquiryDataSeeder
 {
     private readonly SeededItemStore _store;
 

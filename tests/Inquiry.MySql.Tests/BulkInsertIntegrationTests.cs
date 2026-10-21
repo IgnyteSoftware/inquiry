@@ -1,10 +1,9 @@
 using System.Data.Common;
 using System.Diagnostics;
-using System.Linq;
-using Inquiry.FeatureCatalog;
 using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using Inquiry.Diagnostics;
+using Inquiry.FeatureCatalog;
 using Inquiry.MySql.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 using MySqlConnector;
@@ -134,7 +133,7 @@ public sealed class BulkInsertIntegrationTests
         {
             ShouldListenTo = static source => source.Name == InquiryTelemetry.ActivitySourceName,
             Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activity => { lock (activities) activities.Add(activity); },
+            ActivityStopped = activity => { lock (activities) { activities.Add(activity); } },
         };
         ActivitySource.AddActivityListener(listener);
         await using var harness = await CreatePermissiveHarnessAsync("bulkwarn");
@@ -150,8 +149,11 @@ public sealed class BulkInsertIntegrationTests
 
         Activity span;
         lock (activities)
+        {
             span = Assert.Single(activities, a => a.DisplayName == "BULK_INSERT"
                 && (string?)a.GetTagItem("error.type") == typeof(InquiryBulkInsertWarningException).FullName);
+        }
+
         Assert.Equal(3L, span.GetTagItem("db.response.affected_rows"));
         var copy = Assert.Single(span.Events, e => e.Name == "copy.completed");
         Assert.Contains(copy.Tags, tag => tag.Key == "db.response.affected_rows" && Equals(tag.Value, 3L));
@@ -195,7 +197,7 @@ public sealed class BulkInsertIntegrationTests
     private static IEnumerable<BulkItem> RowsWithOverlongCategory()
         => new[] { Item("short", 1), Item(new string('x', 150), 2), Item("short", 3) };
 
-    private sealed class PermissiveConnectionFactory : IInquiryConnectionFactory
+    private sealed class PermissiveConnectionFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
 
@@ -218,7 +220,11 @@ public sealed class BulkInsertIntegrationTests
     {
         for (var i = 0; i < count; i++)
         {
-            if (i == cancelAt) cancellation.Cancel();
+            if (i == cancelAt)
+            {
+                cancellation.Cancel();
+            }
+
             cancellation.Token.ThrowIfCancellationRequested();
             yield return Item("cancel", i);
         }

@@ -99,15 +99,15 @@ public sealed class NorthwindCoverageIntegrationTests
 
         await customers.InsertAsync(new Customer { CustomerID = "ALFKI", CompanyName = "Alfreds" });
         var beverages = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
-        var chai = await products.InsertReturningAsync(new Product { ProductName = "Chai",  CategoryID = beverages!.CategoryID, UnitPrice = 18m });
-        var chang = await products.InsertReturningAsync(new Product { ProductName = "Chang", CategoryID = beverages.CategoryID,  UnitPrice = 19m });
+        var chai = await products.InsertReturningAsync(new Product { ProductName = "Chai", CategoryID = beverages!.CategoryID, UnitPrice = 18m });
+        var chang = await products.InsertReturningAsync(new Product { ProductName = "Chang", CategoryID = beverages.CategoryID, UnitPrice = 19m });
 
         var order = await orders.InsertReturningAsync(new Order { CustomerID = "ALFKI" });
         Assert.NotNull(order);
         var orderID = order!.OrderID!.Value;
 
-        await orderDetails.InsertAsync(new OrderDetail { OrderID = orderID, ProductID = chai!.ProductID!.Value,  UnitPrice = 18m, Quantity = 10, Discount = 0f   });
-        await orderDetails.InsertAsync(new OrderDetail { OrderID = orderID, ProductID = chang!.ProductID!.Value, UnitPrice = 19m, Quantity =  5, Discount = 0.1f });
+        await orderDetails.InsertAsync(new OrderDetail { OrderID = orderID, ProductID = chai!.ProductID!.Value, UnitPrice = 18m, Quantity = 10, Discount = 0f });
+        await orderDetails.InsertAsync(new OrderDetail { OrderID = orderID, ProductID = chang!.ProductID!.Value, UnitPrice = 19m, Quantity = 5, Discount = 0.1f });
 
         var lines = await orderDetails.SelectByOrderAsync(orderID).ToListAsync();
         Assert.Equal(2, lines.Count);
@@ -137,10 +137,10 @@ public sealed class NorthwindCoverageIntegrationTests
         var nancy = await employees.InsertReturningAsync(new Employee { FirstName = "Nancy", LastName = "Davolio" });
         await regions.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
         await territories.InsertAsync(new Territory { TerritoryID = "01581", TerritoryDescription = "Westboro", RegionID = 1 });
-        await territories.InsertAsync(new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford",  RegionID = 1 });
+        await territories.InsertAsync(new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford", RegionID = 1 });
 
         await bridge.InsertAsync(new EmployeeTerritory { EmployeeID = nancy!.EmployeeID!.Value, TerritoryID = "01581" });
-        await bridge.InsertAsync(new EmployeeTerritory { EmployeeID = nancy.EmployeeID!.Value,  TerritoryID = "01730" });
+        await bridge.InsertAsync(new EmployeeTerritory { EmployeeID = nancy.EmployeeID!.Value, TerritoryID = "01730" });
 
         var byEmployee = await bridge.SelectByEmployeeAsync(nancy.EmployeeID!.Value).ToListAsync();
         Assert.Equal(2, byEmployee.Count);
@@ -164,9 +164,9 @@ public sealed class NorthwindCoverageIntegrationTests
         var nancy = await employees.InsertReturningAsync(new Employee { FirstName = "Nancy", LastName = "Davolio" });
         var andrew = await employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller" });
 
-        await orders.InsertAsync(new Order { CustomerID = "ALFKI", EmployeeID = nancy!.EmployeeID,  ShipCity = "Berlin" });
+        await orders.InsertAsync(new Order { CustomerID = "ALFKI", EmployeeID = nancy!.EmployeeID, ShipCity = "Berlin" });
         await orders.InsertAsync(new Order { CustomerID = "ALFKI", EmployeeID = andrew!.EmployeeID, ShipCity = "Berlin" });
-        await orders.InsertAsync(new Order { CustomerID = "BONAP", EmployeeID = nancy.EmployeeID,   ShipCity = "Marseille" });
+        await orders.InsertAsync(new Order { CustomerID = "BONAP", EmployeeID = nancy.EmployeeID, ShipCity = "Marseille" });
 
         var matched = await orders.SelectByCustomerAndEmployeeAsync("ALFKI", nancy.EmployeeID).ToListAsync();
         var only = Assert.Single(matched);
@@ -204,7 +204,7 @@ public sealed class NorthwindCoverageIntegrationTests
         var products = harness.GetRequiredService<ProductStore>();
 
         var beverages = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
-        await products.InsertAsync(new Product { ProductName = "Chai",  CategoryID = beverages!.CategoryID });
+        await products.InsertAsync(new Product { ProductName = "Chai", CategoryID = beverages!.CategoryID });
         await products.InsertAsync(new Product { ProductName = "Chang", CategoryID = beverages.CategoryID });
 
         var loaded = await categories.SelectByKeyWithProductsAsync(beverages.CategoryID);

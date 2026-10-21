@@ -1,5 +1,3 @@
-using Inquiry.Benchmarks.Contracts;
-
 namespace Inquiry.Benchmarks.Contracts.Tests;
 
 public sealed class ScenarioContractTests

@@ -14,7 +14,7 @@ public sealed class SeqDoc
     public string Title { get; set; } = string.Empty;
 }
 
-public partial class SeqDocStore : InquiryStore<SeqDoc>
+public partial class SeqDocStore: InquiryStore<SeqDoc>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(SeqDoc doc, CancellationToken cancellationToken = default);
@@ -113,7 +113,10 @@ public sealed class SequentialGuidIntegrationTests
             var doc = new SeqDoc { Title = $"doc-{i}" };
             await store.InsertAsync(doc);
             ids.Add(doc.Id);
-            if (i % 5 == 0) await Task.Delay(15);
+            if (i % 5 == 0)
+            {
+                await Task.Delay(15);
+            }
         }
 
         // Sort by SqlGuid to use the same comparison SQL Server applies — avoids relying on

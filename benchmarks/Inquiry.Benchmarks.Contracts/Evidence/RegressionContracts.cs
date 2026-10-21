@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Inquiry.Benchmarks.Contracts.Evidence;
@@ -48,7 +47,9 @@ public static class RegressionComparator
         foreach (var c in currentResults)
         {
             if (c.FullName is not null)
+            {
                 currentByName[c.FullName] = c;
+            }
         }
 
         var results = new List<RegressionResult>();
@@ -206,7 +207,9 @@ public static class RegressionBaselineGenerator
         foreach (var benchmark in report.Benchmarks ?? [])
         {
             if (benchmark.FullName is null || benchmark.Statistics is null)
+            {
                 continue;
+            }
 
             cases.Add(new RegressionBaselineCase(
                 benchmark.FullName,

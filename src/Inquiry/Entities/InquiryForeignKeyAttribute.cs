@@ -10,7 +10,7 @@ namespace Inquiry.Entities;
 /// columns the same as any other mapped column.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
+public sealed class InquiryForeignKeyAttribute: InquiryColumnAttribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryForeignKeyAttribute"/> class with the
@@ -55,7 +55,10 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
     {
         ReferencedType = referencedType ?? throw new ArgumentNullException(nameof(referencedType));
         if (string.IsNullOrWhiteSpace(referencedColumn))
+        {
             throw new ArgumentException("Referenced column cannot be empty.", nameof(referencedColumn));
+        }
+
         ReferencedTable = null!;
         ReferencedColumn = referencedColumn;
     }

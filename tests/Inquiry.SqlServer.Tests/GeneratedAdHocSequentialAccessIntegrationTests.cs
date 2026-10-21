@@ -123,7 +123,10 @@ public sealed class GeneratedAdHocSequentialAccessIntegrationTests
     private static void AssertRows(IReadOnlyList<SqlServerSequentialAdHocRow> rows)
     {
         Assert.Equal(RowCount, rows.Count);
-        for (var i = 0; i < rows.Count; i++) AssertRow(rows[i], i + 1);
+        for (var i = 0; i < rows.Count; i++)
+        {
+            AssertRow(rows[i], i + 1);
+        }
     }
 
     private static void AssertRow(SqlServerSequentialAdHocRow row, int id)

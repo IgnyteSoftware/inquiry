@@ -1,16 +1,10 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Commands;
 using Inquiry.DependencyInjection;
 using Inquiry.Interceptors;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Xunit;
 
 namespace Inquiry.Tests;
 
@@ -21,7 +15,7 @@ namespace Inquiry.Tests;
 /// </summary>
 public sealed class InquiryInterceptorsTests
 {
-    private sealed class ListLoggerProvider : ILoggerProvider
+    private sealed class ListLoggerProvider: ILoggerProvider
     {
         public List<string> Messages { get; } = new();
 
@@ -31,7 +25,7 @@ public sealed class InquiryInterceptorsTests
         {
         }
 
-        private sealed class ListLogger : ILogger
+        private sealed class ListLogger: ILogger
         {
             private readonly List<string> _messages;
             public ListLogger(List<string> messages) => _messages = messages;
@@ -51,7 +45,7 @@ public sealed class InquiryInterceptorsTests
 
     /// <summary>Captures the command text seen at execution time. Registered last, so it observes
     /// any mutations earlier interceptors (the sqlcommenter) made.</summary>
-    private sealed class CapturingInterceptor : IInquiryCommandInterceptor
+    private sealed class CapturingInterceptor: IInquiryCommandInterceptor
     {
         public string LastCommandText { get; private set; } = string.Empty;
 
@@ -62,7 +56,7 @@ public sealed class InquiryInterceptorsTests
         }
     }
 
-    private sealed class Harness : IAsyncDisposable
+    private sealed class Harness: IAsyncDisposable
     {
         public required ServiceProvider Services { get; init; }
         public required SqliteConnection Keeper { get; init; }
@@ -252,9 +246,14 @@ public sealed class InquiryInterceptorsTests
         {
             // Each execution gets a different traceparent, but the fingerprint should match.
             using (source.StartActivity("op1"))
+            {
                 await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            }
+
             using (source.StartActivity("op2"))
+            {
                 await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            }
         }
 
         var warning = Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));

@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using Inquiry.BulkCopy;
-using Xunit;
 
 namespace Inquiry.Tests;
 

@@ -1,14 +1,14 @@
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.SqlServer.Parameters;
 using Microsoft.Data.SqlClient;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.SqlServer.Tests;
 
 public sealed class InquiryTvpParameterTests
 {
-    private enum UnsignedState : uint { High = 3_000_000_000u, Max = uint.MaxValue }
+    private enum UnsignedState: uint { High = 3_000_000_000u, Max = uint.MaxValue }
 
     [Theory]
     [MemberData(nameof(UnsignedCases))]
@@ -17,11 +17,21 @@ public sealed class InquiryTvpParameterTests
         using var command = new SqlCommand();
         switch (values)
         {
-            case sbyte[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
-            case ushort[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
-            case uint[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
-            case ulong[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
-            case UnsignedState[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
+            case sbyte[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
+            case ushort[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
+            case uint[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
+            case ulong[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
+            case UnsignedState[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
         }
 
         var parameter = Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>()));
@@ -84,7 +94,10 @@ public sealed class InquiryTvpParameterTests
             Assert.IsType<SqlParameter>(Assert.Single(unsignedCommand.Parameters.Cast<SqlParameter>())).Value);
         var unsignedValues = new List<object>();
         foreach (var record in unsignedRecords)
+        {
             unsignedValues.Add(record.GetValue(0));
+        }
+
         Assert.Equal(new object[] { 0, int.MinValue, -1, DBNull.Value }, unsignedValues.ToArray());
 
         using var enumCommand = new SqlCommand();
@@ -93,7 +106,10 @@ public sealed class InquiryTvpParameterTests
             Assert.IsType<SqlParameter>(Assert.Single(enumCommand.Parameters.Cast<SqlParameter>())).Value);
         var enumValues = new List<object>();
         foreach (var record in enumRecords)
+        {
             enumValues.Add(record.GetValue(0));
+        }
+
         Assert.Equal(new object[] { unchecked((int)3_000_000_000u), -1, DBNull.Value }, enumValues.ToArray());
     }
 
@@ -190,7 +206,10 @@ public sealed class InquiryTvpParameterTests
             Assert.IsType<SqlParameter>(Assert.Single(nullableCommand.Parameters.Cast<SqlParameter>())).Value);
         var nullableValues = new List<object>();
         foreach (var record in nullableRecords)
+        {
             nullableValues.Add(record.GetValue(0));
+        }
+
         Assert.Equal(3, nullableValues.Count);
         Assert.Equal(1, nullableValues[0]);
         Assert.Equal(DBNull.Value, nullableValues[1]);
@@ -367,9 +386,9 @@ public sealed class InquiryTvpParameterTests
         Assert.Equal(1, second.DisposeCount);
     }
 
-    private sealed class ProbeException : Exception { }
+    private sealed class ProbeException: Exception { }
 
-    private sealed class ProbeEnumerable<T> : IEnumerable<T>
+    private sealed class ProbeEnumerable<T>: IEnumerable<T>
     {
         private readonly IReadOnlyList<T> _values;
         private readonly int _failMoveNextAt;
@@ -397,7 +416,7 @@ public sealed class InquiryTvpParameterTests
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator : IEnumerator<T>
+        private sealed class Enumerator: IEnumerator<T>
         {
             private readonly ProbeEnumerable<T> _owner;
             private int _index = -1;
@@ -410,7 +429,11 @@ public sealed class InquiryTvpParameterTests
                 get
                 {
                     _owner.CurrentCount++;
-                    if (_owner.CurrentCount == _owner._failCurrentAt) throw new ProbeException();
+                    if (_owner.CurrentCount == _owner._failCurrentAt)
+                    {
+                        throw new ProbeException();
+                    }
+
                     return _owner._values[_index];
                 }
             }
@@ -420,7 +443,11 @@ public sealed class InquiryTvpParameterTests
             public bool MoveNext()
             {
                 _owner.MoveNextCount++;
-                if (_owner.MoveNextCount == _owner._failMoveNextAt) throw new ProbeException();
+                if (_owner.MoveNextCount == _owner._failMoveNextAt)
+                {
+                    throw new ProbeException();
+                }
+
                 _index++;
                 return _index < _owner._values.Count;
             }
@@ -429,17 +456,24 @@ public sealed class InquiryTvpParameterTests
 
             public void Dispose()
             {
-                if (_disposed) return;
+                if (_disposed)
+                {
+                    return;
+                }
+
                 _disposed = true;
                 _owner.DisposeCount++;
-                if (_owner._failDispose) throw new ProbeException();
+                if (_owner._failDispose)
+                {
+                    throw new ProbeException();
+                }
             }
         }
     }
 
-    private sealed class ParameterAddException : Exception;
+    private sealed class ParameterAddException: Exception;
 
-    private sealed class RejectingCommand : DbCommand
+    private sealed class RejectingCommand: DbCommand
     {
         protected override DbParameterCollection DbParameterCollection { get; } = new RejectingParameterCollection();
         [System.Diagnostics.CodeAnalysis.AllowNull] public override string CommandText { get; set; } = string.Empty;
@@ -457,7 +491,7 @@ public sealed class InquiryTvpParameterTests
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
     }
 
-    private sealed class RejectingParameterCollection : DbParameterCollection
+    private sealed class RejectingParameterCollection: DbParameterCollection
     {
         public override int Count => 0;
         public override object SyncRoot => this;

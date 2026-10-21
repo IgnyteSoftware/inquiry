@@ -121,7 +121,9 @@ internal static class QueryPlanCapture
             var repoRoot = FindRepoRoot();
             var outputDir = Path.Combine(repoRoot, "benchmarks", "evidence", "query-plans");
             if (!Directory.Exists(outputDir))
+            {
                 Directory.CreateDirectory(outputDir);
+            }
 
             var outputPath = Path.Combine(outputDir, "sqlite-query-plans.md");
 
@@ -183,7 +185,9 @@ internal static class QueryPlanCapture
         finally
         {
             SqliteConnection.ClearAllPools();
-            try { File.Delete(dbPath); } catch { }
+            try
+            { File.Delete(dbPath); }
+            catch { }
         }
     }
 
@@ -193,7 +197,10 @@ internal static class QueryPlanCapture
         while (dir is not null)
         {
             if (Directory.Exists(Path.Combine(dir, ".git")))
+            {
                 return dir;
+            }
+
             dir = Path.GetDirectoryName(dir);
         }
 

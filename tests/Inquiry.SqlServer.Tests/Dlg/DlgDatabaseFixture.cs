@@ -2,7 +2,6 @@ using Inquiry.Benchmarks.SqlServer.Dlg;
 using Inquiry.Northwind;
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests.Dlg;
 
@@ -11,7 +10,7 @@ namespace Inquiry.SqlServer.Tests.Dlg;
 /// known seed, shared by all DLG smoke tests. DLG's config is process-static, so a single primed
 /// connection string serves every test — hence one shared database here.
 /// </summary>
-public sealed class DlgDatabaseFixture : IAsyncLifetime
+public sealed class DlgDatabaseFixture: IAsyncLifetime
 {
     private MsSqlContainer? _container;
 
@@ -51,7 +50,10 @@ public sealed class DlgDatabaseFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 
     private static async Task ApplySchemaAsync(string cs)

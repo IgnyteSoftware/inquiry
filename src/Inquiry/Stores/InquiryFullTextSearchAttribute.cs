@@ -13,7 +13,7 @@ namespace Inquiry.Stores;
 /// compile-time diagnostic is reported).
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryFullTextSearchAttribute : Attribute
+public sealed class InquiryFullTextSearchAttribute: Attribute
 {
     /// <summary>Initializes a new instance of the <see cref="InquiryFullTextSearchAttribute"/> class.</summary>
     /// <param name="columns">One or more mapped property or column names to search.</param>

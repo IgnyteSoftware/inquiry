@@ -11,7 +11,7 @@ namespace Inquiry.Parameters;
 /// cost is the value-type column itself flowing through the <see cref="Value"/> field, which
 /// happens regardless of how this type is shaped.
 /// </remarks>
-public readonly struct InquiryParameter : IEquatable<InquiryParameter>
+public readonly struct InquiryParameter: IEquatable<InquiryParameter>
 {
     /// <summary>
     /// Initializes a new <see cref="InquiryParameter"/>.

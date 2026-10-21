@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
 namespace Inquiry.IntegrationTesting;
 
-public sealed class SchemaFidelityException : Exception
+public sealed class SchemaFidelityException: Exception
 {
     public SchemaFidelityException(string message) : base(message) { }
 }
@@ -21,18 +17,24 @@ public static class SchemaFidelity
         foreach (var et in expected.Tables)
         {
             var at = actual.Tables.FirstOrDefault(t => Id.Equals(t.Name, et.Name));
-            if (at is null) { problems.Add($"Missing table '{et.Name}'."); continue; }
+            if (at is null)
+            { problems.Add($"Missing table '{et.Name}'."); continue; }
 
             foreach (var ec in et.Columns)
             {
                 var ac = at.Columns.FirstOrDefault(c => Id.Equals(c.Name, ec.Name));
-                if (ac is null) { problems.Add($"{et.Name}: missing column '{ec.Name}'."); continue; }
+                if (ac is null)
+                { problems.Add($"{et.Name}: missing column '{ec.Name}'."); continue; }
                 if (ac.IsNullable != ec.IsNullable)
+                {
                     problems.Add($"{et.Name}.{ec.Name}: nullability expected {ec.IsNullable}, found {ac.IsNullable}.");
+                }
             }
 
             if (!SameColumns(et.PrimaryKey, at.PrimaryKey))
+            {
                 problems.Add($"{et.Name}: PK expected ({Join(et.PrimaryKey)}), found ({Join(at.PrimaryKey)}).");
+            }
 
             CheckForeignKeys(et, at, problems);
 
@@ -40,14 +42,18 @@ public static class SchemaFidelity
             {
                 var ok = at.Indexes.Any(aix => LeadsWith(aix.Columns, eix.Columns));
                 if (!ok)
+                {
                     problems.Add($"{et.Name}: missing index on ({Join(eix.Columns)}).");
+                }
             }
         }
 
         if (problems.Count > 0)
+        {
             throw new SchemaFidelityException(
                 "Schema fidelity check failed:" + Environment.NewLine +
                 string.Join(Environment.NewLine, problems.Select(p => "  - " + p)));
+        }
     }
 
     /// <summary>Structural check: every expected table is present with the correct primary key and foreign
@@ -64,18 +70,23 @@ public static class SchemaFidelity
         foreach (var et in expected.Tables)
         {
             var at = actual.Tables.FirstOrDefault(t => Id.Equals(t.Name, et.Name));
-            if (at is null) { problems.Add($"Missing table '{et.Name}'."); continue; }
+            if (at is null)
+            { problems.Add($"Missing table '{et.Name}'."); continue; }
 
             if (!SameColumns(et.PrimaryKey, at.PrimaryKey))
+            {
                 problems.Add($"{et.Name}: PK expected ({Join(et.PrimaryKey)}), found ({Join(at.PrimaryKey)}).");
+            }
 
             CheckForeignKeys(et, at, problems);
         }
 
         if (problems.Count > 0)
+        {
             throw new SchemaFidelityException(
                 "Schema structure check failed:" + Environment.NewLine +
                 string.Join(Environment.NewLine, problems.Select(p => "  - " + p)));
+        }
     }
 
     /// <summary>Appends a problem for every expected foreign key not present in <paramref name="actual"/>.</summary>
@@ -88,7 +99,9 @@ public static class SchemaFidelity
                 Id.Equals(afk.ReferencedTable, efk.ReferencedTable) &&
                 SameColumns(afk.ReferencedColumns, efk.ReferencedColumns));
             if (!ok)
+            {
                 problems.Add($"{expected.Name}: missing FK ({Join(efk.Columns)}) -> {efk.ReferencedTable}({Join(efk.ReferencedColumns)}).");
+            }
         }
     }
 

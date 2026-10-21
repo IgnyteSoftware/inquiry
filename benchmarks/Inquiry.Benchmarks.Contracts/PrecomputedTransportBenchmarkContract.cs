@@ -4,7 +4,7 @@ using BenchmarkDotNet.Attributes;
 namespace Inquiry.Benchmarks.Contracts;
 
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class PrecomputedTransportBenchmarkAttribute : Attribute;
+public sealed class PrecomputedTransportBenchmarkAttribute: Attribute;
 
 public static class PrecomputedTransportBenchmarkContract
 {
@@ -17,20 +17,28 @@ public static class PrecomputedTransportBenchmarkContract
         foreach (var method in benchmarkType.GetMethods(BindingFlags.Instance | BindingFlags.Public))
         {
             if (method.GetCustomAttribute<PrecomputedTransportBenchmarkAttribute>() is null)
+            {
                 continue;
+            }
 
             if (method.GetCustomAttribute<BenchmarkAttribute>() is null)
+            {
                 throw InvalidName(method, "must also be marked as a BenchmarkDotNet benchmark");
+            }
 
             var namesThePrecomputation = method.Name.Contains("Precomputed", StringComparison.OrdinalIgnoreCase)
                 || method.Name.Contains("PreSerialized", StringComparison.OrdinalIgnoreCase);
             if (!namesThePrecomputation || !method.Name.Contains("Floor", StringComparison.OrdinalIgnoreCase))
+            {
                 throw InvalidName(method, "must contain Precomputed or PreSerialized and Floor");
+            }
 
             foreach (var prohibited in ProhibitedTerms)
             {
                 if (method.Name.Contains(prohibited, StringComparison.OrdinalIgnoreCase))
+                {
                     throw InvalidName(method, $"cannot contain {prohibited}");
+                }
             }
         }
     }

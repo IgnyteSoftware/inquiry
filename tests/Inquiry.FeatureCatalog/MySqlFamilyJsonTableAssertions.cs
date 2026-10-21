@@ -1,6 +1,3 @@
-using System;
-using System.Threading.Tasks;
-
 namespace Inquiry.FeatureCatalog;
 
 public static class MySqlFamilyJsonTableAssertions
@@ -19,9 +16,11 @@ public static class MySqlFamilyJsonTableAssertions
         {
             OccurredAt = new DateTime(2026, 7, 10, 12, 34, 56, 123, DateTimeKind.Unspecified),
             ObservedAt = new DateTimeOffset(2026, 7, 10, 8, 34, 56, TimeSpan.FromHours(-4)),
-            Day = new DateOnly(2026, 7, 10), Clock = new TimeOnly(12, 34, 56, 123),
+            Day = new DateOnly(2026, 7, 10),
+            Clock = new TimeOnly(12, 34, 56, 123),
             CorrelationId = Guid.Parse("00112233-4455-6677-8899-aabbccddeeff"),
-            Payload = new byte[] { 0, 1, 2, 254, 255 }, Amount = 1234.5678m,
+            Payload = new byte[] { 0, 1, 2, 254, 255 },
+            Amount = 1234.5678m,
         };
         var saved = (await store.InsertAsync(input))!;
 

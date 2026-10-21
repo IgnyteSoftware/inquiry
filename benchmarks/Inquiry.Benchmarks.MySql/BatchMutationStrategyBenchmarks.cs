@@ -90,7 +90,11 @@ public class BatchMutationStrategyBenchmarks
     private static MySqlBatchMutationItem[] CreateRawItems(int count, int firstId, string valuePrefix)
     {
         var items = new MySqlBatchMutationItem[count];
-        for (var i = 0; i < count; i++) items[i] = new(firstId + i, $"{valuePrefix} {i}");
+        for (var i = 0; i < count; i++)
+        {
+            items[i] = new(firstId + i, $"{valuePrefix} {i}");
+        }
+
         return items;
     }
 
@@ -98,14 +102,21 @@ public class BatchMutationStrategyBenchmarks
     {
         var items = new BatchMutationBenchmarkItem[count];
         for (var i = 0; i < count; i++)
+        {
             items[i] = new BatchMutationBenchmarkItem { Id = firstId + i, ValueText = $"{valuePrefix} {i}" };
+        }
+
         return items;
     }
 
     private static int[] CreateIds(int count, int firstId)
     {
         var ids = new int[count];
-        for (var i = 0; i < count; i++) ids[i] = firstId + i;
+        for (var i = 0; i < count; i++)
+        {
+            ids[i] = firstId + i;
+        }
+
         return ids;
     }
 

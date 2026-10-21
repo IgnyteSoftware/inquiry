@@ -1,12 +1,10 @@
-using System.Threading.Tasks;
-using Inquiry.Generated;
 using Inquiry.FeatureCatalog;
+using Inquiry.Generated;
 using Inquiry.IntegrationTesting;
+using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
-using Inquiry.MySql.Tests.Fixtures;
 using MySqlConnector;
-using Xunit;
 
 namespace Inquiry.MySql.Tests;
 

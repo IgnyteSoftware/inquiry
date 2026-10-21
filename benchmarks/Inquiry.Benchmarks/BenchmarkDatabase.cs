@@ -1,8 +1,6 @@
-using Inquiry;
-using Inquiry.DependencyInjection;
 using Inquiry.Benchmarks.Ef;
+using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
-using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Sqlite.DependencyInjection;
 using LinqToDB;
@@ -26,7 +24,7 @@ namespace Inquiry.Benchmarks;
 /// accumulate rows from earlier inserts. The seeded row count is parameterized so a class
 /// can drive both the 1 000-row and 100 000-row tiers via a <c>[Params]</c> field.
 /// </remarks>
-public sealed class BenchmarkDatabase : IAsyncDisposable
+public sealed class BenchmarkDatabase: IAsyncDisposable
 {
     public const int DefaultSeedRows = 1000;
 
@@ -52,12 +50,12 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     public DataOptions LinqToDbOptions { get; }
 
     public IInquiry Inquiry => _services.GetRequiredService<IInquiry>();
-    public CustomerStore    Customers   => _services.GetRequiredService<CustomerStore>();
-    public ProductStore     Products    => _services.GetRequiredService<ProductStore>();
-    public ShipperStore     Shippers    => _services.GetRequiredService<ShipperStore>();
-    public RegionStore      Regions     => _services.GetRequiredService<RegionStore>();
-    public TerritoryStore   Territories => _services.GetRequiredService<TerritoryStore>();
-    public CategoryStore    Categories  => _services.GetRequiredService<CategoryStore>();
+    public CustomerStore Customers => _services.GetRequiredService<CustomerStore>();
+    public ProductStore Products => _services.GetRequiredService<ProductStore>();
+    public ShipperStore Shippers => _services.GetRequiredService<ShipperStore>();
+    public RegionStore Regions => _services.GetRequiredService<RegionStore>();
+    public TerritoryStore Territories => _services.GetRequiredService<TerritoryStore>();
+    public CategoryStore Categories => _services.GetRequiredService<CategoryStore>();
     public BatchMutationBenchmarkStore BatchMutations => _services.GetRequiredService<BatchMutationBenchmarkStore>();
     public MixedBenchPostStore MixedPosts => _services.GetRequiredService<MixedBenchPostStore>();
 
@@ -128,19 +126,19 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             insert.CommandText =
                 "INSERT INTO Customers (CustomerID, CompanyName, ContactName, Country, City) " +
                 "VALUES ($id, $company, $contact, $country, $city);";
-            var pId       = insert.Parameters.Add("$id",      SqliteType.Text);
-            var pCompany  = insert.Parameters.Add("$company", SqliteType.Text);
-            var pContact  = insert.Parameters.Add("$contact", SqliteType.Text);
-            var pCountry  = insert.Parameters.Add("$country", SqliteType.Text);
-            var pCity     = insert.Parameters.Add("$city",    SqliteType.Text);
+            var pId = insert.Parameters.Add("$id", SqliteType.Text);
+            var pCompany = insert.Parameters.Add("$company", SqliteType.Text);
+            var pContact = insert.Parameters.Add("$contact", SqliteType.Text);
+            var pCountry = insert.Parameters.Add("$country", SqliteType.Text);
+            var pCity = insert.Parameters.Add("$city", SqliteType.Text);
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < RowCount; i++)
             {
-                pId.Value      = SeedCustomerId(i);
+                pId.Value = SeedCustomerId(i);
                 pCompany.Value = $"Company {i}";
                 pContact.Value = $"Contact {i}";
                 pCountry.Value = SeedCountries[i % SeedCountries.Length];
-                pCity.Value    = $"City {i % 50}";
+                pCity.Value = $"City {i % 50}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
@@ -151,12 +149,12 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             insert.Transaction = tx;
             insert.CommandText = "INSERT INTO Shippers (CompanyName, Phone) VALUES ($company, $phone);";
             var pCompany = insert.Parameters.Add("$company", SqliteType.Text);
-            var pPhone   = insert.Parameters.Add("$phone",   SqliteType.Text);
+            var pPhone = insert.Parameters.Add("$phone", SqliteType.Text);
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < RowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
@@ -183,17 +181,17 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             insert.CommandText =
                 "INSERT INTO Products (ProductName, CategoryID, UnitPrice, UnitsInStock, Discontinued) " +
                 "VALUES ($name, $category, $price, $stock, 0);";
-            var pName     = insert.Parameters.Add("$name",     SqliteType.Text);
+            var pName = insert.Parameters.Add("$name", SqliteType.Text);
             var pCategory = insert.Parameters.Add("$category", SqliteType.Integer);
-            var pPrice    = insert.Parameters.Add("$price",    SqliteType.Real);
-            var pStock    = insert.Parameters.Add("$stock",    SqliteType.Integer);
+            var pPrice = insert.Parameters.Add("$price", SqliteType.Real);
+            var pStock = insert.Parameters.Add("$stock", SqliteType.Integer);
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < RowCount; i++)
             {
-                pName.Value     = $"Product {i}";
+                pName.Value = $"Product {i}";
                 pCategory.Value = categoryIds[i % categoryIds.Count];
-                pPrice.Value    = 10.0 + (i % 50);
-                pStock.Value    = i % 100;
+                pPrice.Value = 10.0 + (i % 50);
+                pStock.Value = i % 100;
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

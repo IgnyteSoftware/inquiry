@@ -1,6 +1,6 @@
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Materialization;
-using System.Data.Common;
 
 namespace Inquiry.Pipeline;
 
@@ -102,8 +102,10 @@ internal interface IInquiryRequestPipeline
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return QueryAsync<T, TMaterializer>(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
@@ -128,8 +130,10 @@ internal interface IInquiryRequestPipeline
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return QueryListAsync<T, TMaterializer>(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
@@ -148,8 +152,10 @@ internal interface IInquiryRequestPipeline
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return QuerySingleOrDefaultAsync<T, TMaterializer>(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
@@ -226,8 +232,10 @@ internal interface IInquiryRequestPipeline
         Action<DbCommand, TArgs> bindParameters,
         CancellationToken cancellationToken = default)
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return ExecuteAsync(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
             cancellationToken);
@@ -250,9 +258,11 @@ internal interface IInquiryRequestPipeline
         Action<InquiryParameterTarget, TItem> bindParameters,
         CancellationToken cancellationToken = default)
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (items is null) throw new ArgumentNullException(nameof(items));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(items);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
 
         var total = 0;
         for (var i = 0; i < items.Count; i++)
@@ -274,7 +284,7 @@ internal interface IInquiryRequestPipeline
         CancellationToken cancellationToken = default)
     {
         command.Validate();
-        if (items is null) throw new ArgumentNullException(nameof(items));
+        ArgumentNullException.ThrowIfNull(items);
 
         var total = 0;
         using var chunks = new InquiryBatchChunkReader<TItem>(items,
@@ -289,7 +299,9 @@ internal interface IInquiryRequestPipeline
             else
             {
                 for (var i = 0; i < chunk.Count; i++)
+                {
                     total += await ExecuteAsync(command.ForItem(chunk[i]), cancellationToken).ConfigureAwait(false);
+                }
             }
         }
 
@@ -342,8 +354,10 @@ internal interface IInquiryRequestPipeline
         Action<DbCommand, TArgs> bindParameters,
         CancellationToken cancellationToken = default)
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return ExecuteScalarAsync<T>(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
             cancellationToken);

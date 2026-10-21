@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Inquiry;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -30,7 +26,7 @@ public sealed class WriteEnforcedDoc
     public bool IsDeleted { get; set; }
 }
 
-public partial class WriteEnforcedDocStore : InquiryStore<WriteEnforcedDoc>
+public partial class WriteEnforcedDocStore: InquiryStore<WriteEnforcedDoc>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(WriteEnforcedDoc doc, CancellationToken cancellationToken = default);

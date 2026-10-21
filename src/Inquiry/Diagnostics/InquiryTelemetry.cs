@@ -89,7 +89,11 @@ public static class InquiryTelemetry
     /// </summary>
     internal static string? ExtractTableName(string? commandText)
     {
-        if (commandText is null) return null;
+        if (commandText is null)
+        {
+            return null;
+        }
+
         return InquiryTelemetryInterceptor.TableName(commandText);
     }
 

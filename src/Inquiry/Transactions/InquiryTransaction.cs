@@ -8,7 +8,7 @@ namespace Inquiry.Transactions;
 /// Default implementation of <see cref="IInquiryTransaction"/>.
 /// Rolls back automatically on disposal unless <see cref="CommitAsync"/> has been called.
 /// </summary>
-internal sealed class InquiryTransaction : InquiryTransactionBase
+internal sealed class InquiryTransaction: InquiryTransactionBase
 {
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
@@ -282,36 +282,46 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 
     private async Task ContinueCleanupAfterRollbackAsync(Task rollbackTask)
     {
-        try { await rollbackTask.ConfigureAwait(false); }
+        try
+        { await rollbackTask.ConfigureAwait(false); }
         catch { }
         await DisposeProviderResourcesUnboundedObservedAsync().ConfigureAwait(false);
     }
 
     private async Task ContinueConnectionCleanupAsync(Task transactionDisposeTask)
     {
-        try { await transactionDisposeTask.ConfigureAwait(false); }
+        try
+        { await transactionDisposeTask.ConfigureAwait(false); }
         catch { }
-        try { await _connection.DisposeAsync().ConfigureAwait(false); }
+        try
+        { await _connection.DisposeAsync().ConfigureAwait(false); }
         catch { }
     }
 
     private async Task DisposeProviderResourcesUnboundedObservedAsync()
     {
-        try { await _transaction.DisposeAsync().ConfigureAwait(false); }
+        try
+        { await _transaction.DisposeAsync().ConfigureAwait(false); }
         catch { }
-        try { await _connection.DisposeAsync().ConfigureAwait(false); }
+        try
+        { await _connection.DisposeAsync().ConfigureAwait(false); }
         catch { }
     }
 
     private static async Task ObserveBackgroundAsync(Task task)
     {
-        try { await task.ConfigureAwait(false); }
+        try
+        { await task.ConfigureAwait(false); }
         catch { }
     }
 
     private static void ThrowFailures(List<Exception> failures, string aggregateMessage)
     {
-        if (failures.Count == 0) return;
+        if (failures.Count == 0)
+        {
+            return;
+        }
+
         if (failures.Count == 1)
         {
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
@@ -326,7 +336,11 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     /// </summary>
     private void Close()
     {
-        if (System.Threading.Interlocked.Exchange(ref _closed, 1) != 0) return;
+        if (System.Threading.Interlocked.Exchange(ref _closed, 1) != 0)
+        {
+            return;
+        }
+
         _pipeline.MarkClosed();
         _onClose();
     }

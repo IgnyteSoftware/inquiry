@@ -36,8 +36,8 @@ public class PredicateBenchmarks
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
     [Params(1000, 100000)] public int Rows;
 
-    private const decimal MinPrice    = 20m;
-    private const string  NamePattern = "Product 1%";
+    private const decimal MinPrice = 20m;
+    private const string NamePattern = "Product 1%";
     private static readonly int[] CategoryIds = { 1, 2, 3 };
 
     [GlobalSetup]
@@ -57,16 +57,16 @@ public class PredicateBenchmarks
 
     private static Product ReadProduct(System.Data.Common.DbDataReader reader) => new Product
     {
-        ProductID       = reader.GetInt32(0),
-        ProductName     = reader.GetString(1),
-        SupplierID      = reader.IsDBNull(2) ? null : reader.GetInt32(2),
-        CategoryID      = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+        ProductID = reader.GetInt32(0),
+        ProductName = reader.GetString(1),
+        SupplierID = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+        CategoryID = reader.IsDBNull(3) ? null : reader.GetInt32(3),
         QuantityPerUnit = reader.IsDBNull(4) ? null : reader.GetString(4),
-        UnitPrice       = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
-        UnitsInStock    = reader.IsDBNull(6) ? null : reader.GetInt16(6),
-        UnitsOnOrder    = reader.IsDBNull(7) ? null : reader.GetInt16(7),
-        ReorderLevel    = reader.IsDBNull(8) ? null : reader.GetInt16(8),
-        Discontinued    = reader.GetInt32(9) != 0,
+        UnitPrice = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+        UnitsInStock = reader.IsDBNull(6) ? null : reader.GetInt16(6),
+        UnitsOnOrder = reader.IsDBNull(7) ? null : reader.GetInt16(7),
+        ReorderLevel = reader.IsDBNull(8) ? null : reader.GetInt16(8),
+        Discontinued = reader.GetInt32(9) != 0,
     };
 
     // ---- Search (UnitPrice >= @min AND ProductName LIKE @pattern) ------------------------
@@ -83,11 +83,15 @@ public class PredicateBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = SearchSql;
-        command.Parameters.Add("$min",     SqliteType.Real).Value = (double)MinPrice;
+        command.Parameters.Add("$min", SqliteType.Real).Value = (double)MinPrice;
         command.Parameters.Add("$pattern", SqliteType.Text).Value = NamePattern;
         var list = new List<Product>();
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadProduct(reader));
+        }
+
         return list.Count;
     }
 
@@ -161,7 +165,11 @@ public class PredicateBenchmarks
             $"SELECT {SelectColumns} FROM Products WHERE CategoryID IN ({string.Join(", ", names)});";
         var list = new List<Product>();
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadProduct(reader));
+        }
+
         return list.Count;
     }
 

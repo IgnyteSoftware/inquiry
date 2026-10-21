@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
-using Microsoft.CodeAnalysis;
-using Inquiry.Generators.Models;
-using Inquiry.Generators.Infrastructure;
-using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
+using Inquiry.Generators.Models;
+using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
 
@@ -597,7 +593,11 @@ public sealed partial class InquiryGeneratorTests
     private static int CountPrimitiveOccurrences(string value, string token)
     {
         var count = 0;
-        for (var offset = 0; (offset = value.IndexOf(token, offset, StringComparison.Ordinal)) >= 0; offset += token.Length) count++;
+        for (var offset = 0; (offset = value.IndexOf(token, offset, StringComparison.Ordinal)) >= 0; offset += token.Length)
+        {
+            count++;
+        }
+
         return count;
     }
 

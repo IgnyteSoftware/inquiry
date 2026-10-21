@@ -4,7 +4,6 @@ using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.MariaDb.Tests.Fixtures;
 using MySqlConnector;
-using Xunit;
 
 namespace Inquiry.MariaDb.Tests;
 
@@ -36,7 +35,8 @@ public sealed class SchemaManifestCatalogIntegrationTests
         var ddl = GeneratedSchemaDdl.Extract(InquiryGeneratedSchema.Ddl, "ManifestParent", "ManifestWidget");
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await MariaDbTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, ddl, "manifest");
-        await using var connection = new MySqlConnection(harness.ConnectionString); await connection.OpenAsync();
+        await using var connection = new MySqlConnection(harness.ConnectionString);
+        await connection.OpenAsync();
         using var manifest = JsonDocument.Parse(InquiryGeneratedSchema.SchemaManifestJson);
         var table = manifest.RootElement.GetProperty("tables").EnumerateArray().Single(x => x.GetProperty("name").GetString() == "ManifestWidget");
         var expected = table.GetProperty("columns").EnumerateArray().ToArray();
@@ -81,16 +81,25 @@ public sealed class SchemaManifestCatalogIntegrationTests
             NormalizeCheckExpression((string)(await checkExpression.ExecuteScalarAsync())!));
         await using var facts = connection.CreateCommand();
         facts.CommandText = "SELECT (SELECT SUM(extra LIKE '%auto_increment%') FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='ManifestWidget'), (SELECT SUM(column_default='7') FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='ManifestWidget'), (SELECT SUM(generation_expression LIKE '%Score%') FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='ManifestWidget'), (SELECT count(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='ManifestWidget' AND index_name='UX_ManifestWidget_Name' AND non_unique=0), (SELECT count(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name='ManifestWidget' AND constraint_name='CK_ManifestWidget_Score' AND constraint_type='CHECK'), (SELECT count(*) FROM information_schema.referential_constraints WHERE constraint_schema=DATABASE() AND table_name='ManifestWidget' AND constraint_name='FK_ManifestWidget_Parent' AND delete_rule='CASCADE' AND update_rule IN ('NO ACTION','RESTRICT'))";
-        await using var factsReader = await facts.ExecuteReaderAsync(); Assert.True(await factsReader.ReadAsync());
-        Assert.Equal(1, factsReader.GetInt32(0)); Assert.Equal(1, factsReader.GetInt32(1)); Assert.Equal(1, factsReader.GetInt32(2));
-        Assert.Equal(1L, factsReader.GetInt64(3)); Assert.Equal(1L, factsReader.GetInt64(4)); Assert.Equal(1L, factsReader.GetInt64(5));
+        await using var factsReader = await facts.ExecuteReaderAsync();
+        Assert.True(await factsReader.ReadAsync());
+        Assert.Equal(1, factsReader.GetInt32(0));
+        Assert.Equal(1, factsReader.GetInt32(1));
+        Assert.Equal(1, factsReader.GetInt32(2));
+        Assert.Equal(1L, factsReader.GetInt64(3));
+        Assert.Equal(1L, factsReader.GetInt64(4));
+        Assert.Equal(1L, factsReader.GetInt64(5));
         await factsReader.DisposeAsync();
 
         await using var structures = connection.CreateCommand();
         structures.CommandText = "SELECT s.column_name FROM information_schema.statistics s WHERE s.table_schema=DATABASE() AND s.table_name='ManifestWidget' AND s.index_name='UX_ManifestWidget_Name' ORDER BY s.seq_in_index; SELECT k.column_name,k.referenced_table_schema,k.referenced_table_name,k.referenced_column_name,r.delete_rule,r.update_rule FROM information_schema.key_column_usage k JOIN information_schema.referential_constraints r ON r.constraint_schema=k.constraint_schema AND r.table_name=k.table_name AND r.constraint_name=k.constraint_name WHERE k.constraint_schema=DATABASE() AND k.table_name='ManifestWidget' AND k.constraint_name='FK_ManifestWidget_Parent' ORDER BY k.ordinal_position";
         await using var structureReader = await structures.ExecuteReaderAsync();
         var catalogKeys = new List<string>();
-        while (await structureReader.ReadAsync()) catalogKeys.Add(structureReader.GetString(0));
+        while (await structureReader.ReadAsync())
+        {
+            catalogKeys.Add(structureReader.GetString(0));
+        }
+
         Assert.Equal(index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()), catalogKeys);
         Assert.True(await structureReader.NextResultAsync());
         Assert.True(await structureReader.ReadAsync());

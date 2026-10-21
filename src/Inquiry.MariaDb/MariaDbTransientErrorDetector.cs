@@ -9,7 +9,7 @@ namespace Inquiry.MariaDb;
 /// ones (access denied, unknown database). MariaDB and MySQL share the same wire protocol and
 /// error-number space (via MySqlConnector), so the transient set is identical.
 /// </summary>
-internal sealed class MariaDbTransientErrorDetector : ITransientErrorDetector
+internal sealed class MariaDbTransientErrorDetector: ITransientErrorDetector
 {
     /// <summary>
     /// MySQL/MariaDB error numbers that represent transient connection-open faults across managed

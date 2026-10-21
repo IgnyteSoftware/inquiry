@@ -52,7 +52,9 @@ public sealed class CancellationTokenPropagationTests
         finally
         {
             if (harness is not null)
+            {
                 await harness.DisposeAsync();
+            }
         }
     }
 
@@ -124,7 +126,8 @@ public sealed class CancellationTokenPropagationTests
             var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(2)));
             if (completed == execution)
             {
-                try { await execution; }
+                try
+                { await execution; }
                 catch { }
             }
             else

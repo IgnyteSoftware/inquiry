@@ -1,13 +1,13 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Microsoft.Data.SqlClient;
-using System.Data.Common;
 
 namespace Inquiry.SqlServer;
 
 /// <summary>
 /// Opens SQL Server connections for generated Inquiry stores.
 /// </summary>
-internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFactory
+internal sealed class SqlServerInquiryConnectionFactory: IInquiryConnectionFactory
 {
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;

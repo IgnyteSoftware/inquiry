@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Sqlite.Tests.Fixtures;
 

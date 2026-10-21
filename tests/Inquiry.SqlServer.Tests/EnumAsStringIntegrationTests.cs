@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
@@ -25,7 +23,7 @@ public sealed class Ticket
     public TicketStatus? Prior { get; set; }
 }
 
-public partial class TicketStore : InquiryStore<Ticket>
+public partial class TicketStore: InquiryStore<Ticket>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Ticket ticket, CancellationToken cancellationToken = default);

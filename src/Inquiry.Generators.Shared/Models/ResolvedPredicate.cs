@@ -1,5 +1,4 @@
 using Inquiry.Generators.Abstractions;
-using System.Collections.Generic;
 
 namespace Inquiry.Generators.Models;
 

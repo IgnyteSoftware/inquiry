@@ -20,7 +20,7 @@ namespace Inquiry.Benchmarks.PostgreSql;
 /// resource reaper as a backstop). EF uses a non-pooled factory so it pays per-operation context
 /// construction — the same lifecycle ADO, Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
+public sealed class PostgreSqlBenchmarkDatabase: IAsyncDisposable
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static PostgreSqlContainer? _container;
@@ -145,12 +145,12 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
             insert.Transaction = tx;
             insert.CommandText = "INSERT INTO \"Shippers\" (\"CompanyName\", \"Phone\") VALUES (@company, @phone);";
             var pCompany = insert.Parameters.Add("company", NpgsqlTypes.NpgsqlDbType.Text);
-            var pPhone   = insert.Parameters.Add("phone",   NpgsqlTypes.NpgsqlDbType.Text);
+            var pPhone = insert.Parameters.Add("phone", NpgsqlTypes.NpgsqlDbType.Text);
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

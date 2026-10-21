@@ -56,8 +56,16 @@ public sealed class BoundedProcessTests
         finally
         {
             childId ??= ReadProcessId(readyPath);
-            if (result is not null) TryStop(result.ProcessId);
-            if (childId is not null) TryStop(childId.Value);
+            if (result is not null)
+            {
+                TryStop(result.ProcessId);
+            }
+
+            if (childId is not null)
+            {
+                TryStop(childId.Value);
+            }
+
             temporary.Delete(recursive: true);
         }
     }
@@ -91,8 +99,16 @@ public sealed class BoundedProcessTests
         finally
         {
             childId ??= ReadProcessId(childPath);
-            if (result is not null) TryStop(result.ProcessId);
-            if (childId is not null) TryStop(childId.Value);
+            if (result is not null)
+            {
+                TryStop(result.ProcessId);
+            }
+
+            if (childId is not null)
+            {
+                TryStop(childId.Value);
+            }
+
             temporary.Delete(recursive: true);
         }
     }
@@ -124,7 +140,10 @@ public sealed class BoundedProcessTests
     {
         var deadline = Stopwatch.StartNew();
         while (deadline.Elapsed < TimeSpan.FromSeconds(3) && IsRunning(processId))
+        {
             Thread.Sleep(25);
+        }
+
         Assert.False(IsRunning(processId), $"Process {processId} remained alive after timeout cleanup.");
     }
 
@@ -133,7 +152,11 @@ public sealed class BoundedProcessTests
         try
         {
             using var process = Process.GetProcessById(processId);
-            if (process.HasExited) return;
+            if (process.HasExited)
+            {
+                return;
+            }
+
             process.Kill(entireProcessTree: true);
             _ = process.WaitForExit(2_000);
         }

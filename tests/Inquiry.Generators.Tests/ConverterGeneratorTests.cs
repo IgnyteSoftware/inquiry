@@ -1,5 +1,3 @@
-using System;
-
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
@@ -119,7 +117,11 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains(guidDbType, text);
-        if (dialect == "Oracle") Assert.DoesNotContain("global::System.Data.DbType.Guid", text);
+        if (dialect == "Oracle")
+        {
+            Assert.DoesNotContain("global::System.Data.DbType.Guid", text);
+        }
+
         Assert.Contains("global::System.Data.DbType.Binary", text);
         Assert.Contains("global::System.Data.DbType.DateTimeOffset", text);
         Assert.Contains(dateTimeDbType, text);

@@ -1,9 +1,8 @@
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
-using Inquiry.Generators;
 using Inquiry.Generators.Models;
 using Json.Schema;
 
@@ -268,11 +267,23 @@ public sealed partial class InquiryGeneratorTests
         foreach (var handle in metadata.GetAssemblyDefinition().GetCustomAttributes())
         {
             var attribute = metadata.GetCustomAttribute(handle);
-            if (attribute.Constructor.Kind != HandleKind.MemberReference) continue;
+            if (attribute.Constructor.Kind != HandleKind.MemberReference)
+            {
+                continue;
+            }
+
             var member = metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor);
-            if (member.Parent.Kind != HandleKind.TypeReference) continue;
+            if (member.Parent.Kind != HandleKind.TypeReference)
+            {
+                continue;
+            }
+
             var type = metadata.GetTypeReference((TypeReferenceHandle)member.Parent);
-            if (metadata.GetString(type.Name) != "AssemblyMetadataAttribute") continue;
+            if (metadata.GetString(type.Name) != "AssemblyMetadataAttribute")
+            {
+                continue;
+            }
+
             var blob = metadata.GetBlobReader(attribute.Value);
             Assert.Equal(1, blob.ReadUInt16());
             values[blob.ReadSerializedString()!] = blob.ReadSerializedString()!;
@@ -330,16 +341,29 @@ public sealed partial class InquiryGeneratorTests
             Assert.Equal(new[] { "schema", "name", "columns", "primaryKey", "indexes", "checks", "foreignKeys" }, table.EnumerateObject().Select(property => property.Name));
             Assert.NotEmpty(table.GetProperty("name").GetString()!);
             foreach (var column in table.GetProperty("columns").EnumerateArray())
+            {
                 Assert.Equal(new[] { "name", "storeType", "typeInference", "typeClass", "nullable", "primaryKeyOrdinal", "generation", "defaultExpression", "computedExpression", "concurrency" }, column.EnumerateObject().Select(property => property.Name));
+            }
+
             foreach (var index in table.GetProperty("indexes").EnumerateArray())
+            {
                 Assert.Equal(new[] { "name", "unique", "keyColumns", "includeColumns" }, index.EnumerateObject().Select(property => property.Name));
+            }
+
             foreach (var check in table.GetProperty("checks").EnumerateArray())
+            {
                 Assert.Equal(new[] { "name", "expression" }, check.EnumerateObject().Select(property => property.Name));
+            }
+
             foreach (var foreignKey in table.GetProperty("foreignKeys").EnumerateArray())
+            {
                 Assert.Equal(new[] { "name", "localColumns", "referencedSchema", "referencedTable", "referencedColumns", "onDelete", "onUpdate" }, foreignKey.EnumerateObject().Select(property => property.Name));
+            }
         }
         foreach (var artifact in manifest.GetProperty("providerArtifacts").EnumerateArray())
+        {
             Assert.Equal(new[] { "schema", "name", "kind", "signature" }, artifact.EnumerateObject().Select(property => property.Name));
+        }
     }
 
     private static void AssertJsonEnum(JsonElement schema, params string[] expected)
@@ -348,7 +372,11 @@ public sealed partial class InquiryGeneratorTests
     private static string RepositoryFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Inquiry.slnx"))) directory = directory.Parent;
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Inquiry.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
         Assert.NotNull(directory);
         return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
     }

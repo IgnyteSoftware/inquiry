@@ -5,7 +5,7 @@ namespace Inquiry.Commands;
 /// <summary>
 /// Provides failed command execution details to Inquiry command interceptors.
 /// </summary>
-public sealed class InquiryCommandFailedContext : InquiryCommandContext
+public sealed class InquiryCommandFailedContext: InquiryCommandContext
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryCommandFailedContext"/> class.

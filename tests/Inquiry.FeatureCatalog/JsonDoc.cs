@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -12,7 +9,7 @@ public readonly struct Money
     public decimal Amount { get; init; }
 }
 
-public sealed class MoneyConverter : IInquiryValueConverter<Money, decimal>
+public sealed class MoneyConverter: IInquiryValueConverter<Money, decimal>
 {
     public decimal ToProvider(Money model) => model.Amount;
     public Money FromProvider(decimal provider) => new() { Amount = provider };
@@ -39,7 +36,7 @@ public sealed class JsonDoc
     public List<string>? Tags { get; set; }
 }
 
-public partial class JsonDocStore : InquiryStore<JsonDoc>
+public partial class JsonDocStore: InquiryStore<JsonDoc>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(JsonDoc doc, CancellationToken cancellationToken = default);

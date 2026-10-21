@@ -1,9 +1,8 @@
-using Inquiry.Generators.Abstractions;
-using Microsoft.CodeAnalysis;
-using System;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Inquiry.Generators.Abstractions;
+using Microsoft.CodeAnalysis;
 
 namespace Inquiry.SqlServer.Analyzer;
 
@@ -26,18 +25,32 @@ internal static class SqlServerTvpResolver
         if (column.SqlType is not null)
         {
             if (string.IsNullOrWhiteSpace(column.SqlType))
+            {
                 return Failure(context, "SqlType cannot be empty or whitespace", "SqlType");
+            }
+
             var conflict = ExplicitFacetConflict(column);
-            if (conflict is not null) return Failure(context, conflict.Value.Message, conflict.Value.Facet);
+            if (conflict is not null)
+            {
+                return Failure(context, conflict.Value.Message, conflict.Value.Facet);
+            }
+
             if (!TryParseExplicit(column.SqlType!, out physical, out var parseError))
+            {
                 return Failure(context, parseError, "SqlType");
+            }
+
             if (!IsCompatible(column.TypeClass, physical!))
+            {
                 return Failure(context, $"provider CLR type '{column.ProviderClrTypeName}' is incompatible with SQL type '{physical!.Ddl}'", "SqlType");
+            }
         }
         else
         {
             if (!TryInfer(column, out physical, out var inferError, out var inferFacet))
+            {
                 return Failure(context, inferError ?? $"provider CLR type '{column.ProviderClrTypeName}' has no exact TVP mapping", inferFacet);
+            }
         }
 
         var resolved = physical!;
@@ -86,16 +99,35 @@ internal static class SqlServerTvpResolver
 
     private static (string Facet, string Message)? ExplicitFacetConflict(IColumn column)
     {
-        if (column.IsUnicodeSpecified) return ("IsUnicode", "SqlType owns ANSI/Unicode; remove the explicit IsUnicode facet");
-        if (column.IsLengthSpecified) return ("Length", "SqlType owns length; remove the explicit Length facet");
-        if (column.IsPrecisionSpecified) return ("Precision", "SqlType owns precision; remove the explicit Precision facet");
-        if (column.IsScaleSpecified) return ("Scale", "SqlType owns scale; remove the explicit Scale facet");
+        if (column.IsUnicodeSpecified)
+        {
+            return ("IsUnicode", "SqlType owns ANSI/Unicode; remove the explicit IsUnicode facet");
+        }
+
+        if (column.IsLengthSpecified)
+        {
+            return ("Length", "SqlType owns length; remove the explicit Length facet");
+        }
+
+        if (column.IsPrecisionSpecified)
+        {
+            return ("Precision", "SqlType owns precision; remove the explicit Precision facet");
+        }
+
+        if (column.IsScaleSpecified)
+        {
+            return ("Scale", "SqlType owns scale; remove the explicit Scale facet");
+        }
+
         return null;
     }
 
     internal static string InferredColumnDdl(IColumn column)
     {
-        if (TryInfer(column, out var physical, out _, out _)) return physical!.Ddl;
+        if (TryInfer(column, out var physical, out _, out _))
+        {
+            return physical!.Ddl;
+        }
 
         // EntityProcessor reports invalid column metadata separately. Keep schema emission valid while
         // the affected collection method is replaced by its INQ076 throwing stub.
@@ -128,7 +160,10 @@ internal static class SqlServerTvpResolver
             DbTypeClass.ByteArray => Binary(column.Length),
             _ => null,
         };
-        if (physical is not null) return true;
+        if (physical is not null)
+        {
+            return true;
+        }
 
         if (column.TypeClass == DbTypeClass.Decimal)
         {
@@ -184,7 +219,11 @@ internal static class SqlServerTvpResolver
         physical = null;
         error = "SqlType is outside the supported primitive TVP grammar";
         var match = TypePattern.Match(value);
-        if (!match.Success) return false;
+        if (!match.Success)
+        {
+            return false;
+        }
+
         var name = match.Groups["name"].Value.ToLowerInvariant();
         var a = match.Groups["a"].Success ? match.Groups["a"].Value : null;
         var b = match.Groups["b"].Success ? match.Groups["b"].Value : null;
@@ -235,22 +274,26 @@ internal static class SqlServerTvpResolver
         }
         if (name == "float")
         {
-            if (!TryInt(a, out var bits) || bits is < 1 or > 53) { error = "FLOAT precision must be 1..53"; return false; }
+            if (!TryInt(a, out var bits) || bits is < 1 or > 53)
+            { error = "FLOAT precision must be 1..53"; return false; }
             physical = bits <= 24 ? Simple("real", "REAL", "real", precision: 24) : Simple("float(53)", "FLOAT", "float", precision: 53);
             return true;
         }
         if (name is "datetime2" or "datetimeoffset" or "time")
         {
-            if (!TryInt(a, out var scale) || scale is < 0 or > 7) { error = "temporal scale must be 0..7"; return false; }
+            if (!TryInt(a, out var scale) || scale is < 0 or > 7)
+            { error = "temporal scale must be 0..7"; return false; }
             physical = Temporal(name, scale);
             return true;
         }
         if (name is "char" or "varchar" or "nchar" or "nvarchar" or "binary" or "varbinary")
         {
             var isMax = a.Equals("max", StringComparison.OrdinalIgnoreCase);
-            if (isMax && name is not "varchar" and not "nvarchar" and not "varbinary") { error = $"{name} does not support MAX"; return false; }
+            if (isMax && name is not "varchar" and not "nvarchar" and not "varbinary")
+            { error = $"{name} does not support MAX"; return false; }
             var max = name[0] == 'n' ? 4000 : 8000;
-            if (!isMax && (!TryInt(a, out var length) || length < 1 || length > max)) { error = $"{name} length must be 1..{max}"; return false; }
+            if (!isMax && (!TryInt(a, out var length) || length < 1 || length > max))
+            { error = $"{name} length must be 1..{max}"; return false; }
             var size = isMax ? -1 : int.Parse(a, CultureInfo.InvariantCulture);
             var ddlSize = isMax ? "MAX" : size.ToString(CultureInfo.InvariantCulture);
             var canonical = name + "(" + ddlSize.ToLowerInvariant() + ")";
@@ -307,7 +350,10 @@ internal static class SqlServerTvpResolver
             DbTypeClass.ByteArray => Binary(length),
             _ => null,
         };
-        if (physical is not null) return true;
+        if (physical is not null)
+        {
+            return true;
+        }
 
         if (typeClass == DbTypeClass.Decimal)
         {
@@ -467,7 +513,11 @@ internal static class SqlServerTvpResolver
         using var sha = System.Security.Cryptography.SHA256.Create();
         var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value));
         var hex = new System.Text.StringBuilder(bytes.Length * 2);
-        foreach (var b in bytes) hex.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+        foreach (var b in bytes)
+        {
+            hex.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+        }
+
         return hex.ToString();
     }
 

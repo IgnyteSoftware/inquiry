@@ -16,7 +16,7 @@ namespace Inquiry.Sample.Services;
 /// to exercise every generated store method (CRUD, eager-load, by-field, transactional
 /// insert) without standing up the full historical fixture.
 /// </remarks>
-public sealed class DataSeeder : IInquiryDataSeeder
+public sealed class DataSeeder: IInquiryDataSeeder
 {
     private readonly CustomerStore _customers;
     private readonly EmployeeStore _employees;
@@ -85,17 +85,21 @@ public sealed class DataSeeder : IInquiryDataSeeder
 
         // Employees — InsertReturning to capture IDENTITY-assigned EmployeeID for the
         // reports-to chain and the EmployeeTerritories join below.
-        var nancy   = await _employees.InsertReturningAsync(new Employee { FirstName = "Nancy",    LastName = "Davolio",   Title = "Sales Representative",  HireDate = new DateTime(1992, 5,  1) }, cancellationToken).ConfigureAwait(false);
-        var andrew  = await _employees.InsertReturningAsync(new Employee { FirstName = "Andrew",   LastName = "Fuller",    Title = "Vice President, Sales", HireDate = new DateTime(1992, 8, 14) }, cancellationToken).ConfigureAwait(false);
-        var janet   = await _employees.InsertReturningAsync(new Employee { FirstName = "Janet",    LastName = "Leverling", Title = "Sales Representative",  HireDate = new DateTime(1992, 4,  1) }, cancellationToken).ConfigureAwait(false);
-        var margaret = await _employees.InsertReturningAsync(new Employee { FirstName = "Margaret", LastName = "Peacock",   Title = "Sales Representative",  HireDate = new DateTime(1993, 5,  3) }, cancellationToken).ConfigureAwait(false);
+        var nancy = await _employees.InsertReturningAsync(new Employee { FirstName = "Nancy", LastName = "Davolio", Title = "Sales Representative", HireDate = new DateTime(1992, 5, 1) }, cancellationToken).ConfigureAwait(false);
+        var andrew = await _employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller", Title = "Vice President, Sales", HireDate = new DateTime(1992, 8, 14) }, cancellationToken).ConfigureAwait(false);
+        var janet = await _employees.InsertReturningAsync(new Employee { FirstName = "Janet", LastName = "Leverling", Title = "Sales Representative", HireDate = new DateTime(1992, 4, 1) }, cancellationToken).ConfigureAwait(false);
+        var margaret = await _employees.InsertReturningAsync(new Employee { FirstName = "Margaret", LastName = "Peacock", Title = "Sales Representative", HireDate = new DateTime(1993, 5, 3) }, cancellationToken).ConfigureAwait(false);
 
         // Nancy, Janet, and Margaret report to Andrew.
         if (andrew?.EmployeeID is int andrewID)
         {
             foreach (var report in new[] { nancy, janet, margaret })
             {
-                if (report is null) continue;
+                if (report is null)
+                {
+                    continue;
+                }
+
                 report.ReportsTo = andrewID;
                 await _employees.UpdateAsync(report, cancellationToken).ConfigureAwait(false);
             }
@@ -113,27 +117,27 @@ public sealed class DataSeeder : IInquiryDataSeeder
         }
 
         // Suppliers — IDENTITY-keyed; capture the assigned IDs for product wiring.
-        var exoticLiquids       = await _suppliers.InsertReturningAsync(new Supplier { CompanyName = "Exotic Liquids",          ContactName = "Charlotte Cooper", Country = "UK",     City = "London"   }, cancellationToken).ConfigureAwait(false);
-        var newOrleansCajun     = await _suppliers.InsertReturningAsync(new Supplier { CompanyName = "New Orleans Cajun Delights", ContactName = "Shelley Burke", Country = "USA",    City = "New Orleans" }, cancellationToken).ConfigureAwait(false);
-        var grandmaKellysHomstead = await _suppliers.InsertReturningAsync(new Supplier { CompanyName = "Grandma Kelly's Homestead", ContactName = "Regina Murphy", Country = "USA",   City = "Ann Arbor" }, cancellationToken).ConfigureAwait(false);
+        var exoticLiquids = await _suppliers.InsertReturningAsync(new Supplier { CompanyName = "Exotic Liquids", ContactName = "Charlotte Cooper", Country = "UK", City = "London" }, cancellationToken).ConfigureAwait(false);
+        var newOrleansCajun = await _suppliers.InsertReturningAsync(new Supplier { CompanyName = "New Orleans Cajun Delights", ContactName = "Shelley Burke", Country = "USA", City = "New Orleans" }, cancellationToken).ConfigureAwait(false);
+        var grandmaKellysHomstead = await _suppliers.InsertReturningAsync(new Supplier { CompanyName = "Grandma Kelly's Homestead", ContactName = "Regina Murphy", Country = "USA", City = "Ann Arbor" }, cancellationToken).ConfigureAwait(false);
 
         // Categories — InsertReturning so we capture the IDENTITY-assigned CategoryID.
-        var beverages  = await _categories.InsertReturningAsync(new Category { CategoryName = "Beverages",      Description = "Soft drinks, coffees, teas, beers, and ales" },                cancellationToken).ConfigureAwait(false);
-        var condiments = await _categories.InsertReturningAsync(new Category { CategoryName = "Condiments",     Description = "Sweet and savory sauces, relishes, spreads, and seasonings" }, cancellationToken).ConfigureAwait(false);
-        var produce    = await _categories.InsertReturningAsync(new Category { CategoryName = "Produce",        Description = "Dried fruit and bean curd" },                                  cancellationToken).ConfigureAwait(false);
-        var seafood    = await _categories.InsertReturningAsync(new Category { CategoryName = "Seafood",        Description = "Seaweed and fish" },                                           cancellationToken).ConfigureAwait(false);
+        var beverages = await _categories.InsertReturningAsync(new Category { CategoryName = "Beverages", Description = "Soft drinks, coffees, teas, beers, and ales" }, cancellationToken).ConfigureAwait(false);
+        var condiments = await _categories.InsertReturningAsync(new Category { CategoryName = "Condiments", Description = "Sweet and savory sauces, relishes, spreads, and seasonings" }, cancellationToken).ConfigureAwait(false);
+        var produce = await _categories.InsertReturningAsync(new Category { CategoryName = "Produce", Description = "Dried fruit and bean curd" }, cancellationToken).ConfigureAwait(false);
+        var seafood = await _categories.InsertReturningAsync(new Category { CategoryName = "Seafood", Description = "Seaweed and fish" }, cancellationToken).ConfigureAwait(false);
 
         // Products — InsertReturning so we capture IDs for the order-details rows below.
-        var chai      = await _products.InsertReturningAsync(new Product { ProductName = "Chai",                          SupplierID = exoticLiquids?.SupplierID,   CategoryID = beverages?.CategoryID,  UnitPrice = 18m,    UnitsInStock = 39, ReorderLevel = 10 }, cancellationToken).ConfigureAwait(false);
-        var chang     = await _products.InsertReturningAsync(new Product { ProductName = "Chang",                         SupplierID = exoticLiquids?.SupplierID,   CategoryID = beverages?.CategoryID,  UnitPrice = 19m,    UnitsInStock = 17, ReorderLevel = 25 }, cancellationToken).ConfigureAwait(false);
-        var aniseed   = await _products.InsertReturningAsync(new Product { ProductName = "Aniseed Syrup",                 SupplierID = exoticLiquids?.SupplierID,   CategoryID = condiments?.CategoryID, UnitPrice = 10m,    UnitsInStock = 13, ReorderLevel = 25 }, cancellationToken).ConfigureAwait(false);
-        var cajun     = await _products.InsertReturningAsync(new Product { ProductName = "Chef Anton's Cajun Seasoning",  SupplierID = newOrleansCajun?.SupplierID, CategoryID = condiments?.CategoryID, UnitPrice = 22m,    UnitsInStock = 53, ReorderLevel = 0  }, cancellationToken).ConfigureAwait(false);
-        var tofu      = await _products.InsertReturningAsync(new Product { ProductName = "Tofu",                          SupplierID = grandmaKellysHomstead?.SupplierID, CategoryID = produce?.CategoryID,    UnitPrice = 23.25m, UnitsInStock = 35, ReorderLevel = 0  }, cancellationToken).ConfigureAwait(false);
-        var konbu     = await _products.InsertReturningAsync(new Product { ProductName = "Konbu",                         SupplierID = grandmaKellysHomstead?.SupplierID, CategoryID = seafood?.CategoryID,    UnitPrice = 6m,     UnitsInStock = 24, ReorderLevel = 5  }, cancellationToken).ConfigureAwait(false);
+        var chai = await _products.InsertReturningAsync(new Product { ProductName = "Chai", SupplierID = exoticLiquids?.SupplierID, CategoryID = beverages?.CategoryID, UnitPrice = 18m, UnitsInStock = 39, ReorderLevel = 10 }, cancellationToken).ConfigureAwait(false);
+        var chang = await _products.InsertReturningAsync(new Product { ProductName = "Chang", SupplierID = exoticLiquids?.SupplierID, CategoryID = beverages?.CategoryID, UnitPrice = 19m, UnitsInStock = 17, ReorderLevel = 25 }, cancellationToken).ConfigureAwait(false);
+        var aniseed = await _products.InsertReturningAsync(new Product { ProductName = "Aniseed Syrup", SupplierID = exoticLiquids?.SupplierID, CategoryID = condiments?.CategoryID, UnitPrice = 10m, UnitsInStock = 13, ReorderLevel = 25 }, cancellationToken).ConfigureAwait(false);
+        var cajun = await _products.InsertReturningAsync(new Product { ProductName = "Chef Anton's Cajun Seasoning", SupplierID = newOrleansCajun?.SupplierID, CategoryID = condiments?.CategoryID, UnitPrice = 22m, UnitsInStock = 53, ReorderLevel = 0 }, cancellationToken).ConfigureAwait(false);
+        var tofu = await _products.InsertReturningAsync(new Product { ProductName = "Tofu", SupplierID = grandmaKellysHomstead?.SupplierID, CategoryID = produce?.CategoryID, UnitPrice = 23.25m, UnitsInStock = 35, ReorderLevel = 0 }, cancellationToken).ConfigureAwait(false);
+        var konbu = await _products.InsertReturningAsync(new Product { ProductName = "Konbu", SupplierID = grandmaKellysHomstead?.SupplierID, CategoryID = seafood?.CategoryID, UnitPrice = 6m, UnitsInStock = 24, ReorderLevel = 5 }, cancellationToken).ConfigureAwait(false);
 
         // Region + Territories — Region uses a non-generated INT key.
-        await _regions.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" },  cancellationToken).ConfigureAwait(false);
-        await _regions.InsertAsync(new Region { RegionID = 2, RegionDescription = "Western" },  cancellationToken).ConfigureAwait(false);
+        await _regions.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" }, cancellationToken).ConfigureAwait(false);
+        await _regions.InsertAsync(new Region { RegionID = 2, RegionDescription = "Western" }, cancellationToken).ConfigureAwait(false);
         await _regions.InsertAsync(new Region { RegionID = 3, RegionDescription = "Northern" }, cancellationToken).ConfigureAwait(false);
         await _regions.InsertAsync(new Region { RegionID = 4, RegionDescription = "Southern" }, cancellationToken).ConfigureAwait(false);
 
@@ -155,12 +159,12 @@ public sealed class DataSeeder : IInquiryDataSeeder
         // Margaret covers a Western territory.
         if (nancy?.EmployeeID is int nancyID)
         {
-            await _employeeTerritories.InsertAsync(new EmployeeTerritory { EmployeeID = nancyID,   TerritoryID = "01581" }, cancellationToken).ConfigureAwait(false);
-            await _employeeTerritories.InsertAsync(new EmployeeTerritory { EmployeeID = nancyID,   TerritoryID = "01730" }, cancellationToken).ConfigureAwait(false);
+            await _employeeTerritories.InsertAsync(new EmployeeTerritory { EmployeeID = nancyID, TerritoryID = "01581" }, cancellationToken).ConfigureAwait(false);
+            await _employeeTerritories.InsertAsync(new EmployeeTerritory { EmployeeID = nancyID, TerritoryID = "01730" }, cancellationToken).ConfigureAwait(false);
         }
         if (janet?.EmployeeID is int janetID)
         {
-            await _employeeTerritories.InsertAsync(new EmployeeTerritory { EmployeeID = janetID,   TerritoryID = "02116" }, cancellationToken).ConfigureAwait(false);
+            await _employeeTerritories.InsertAsync(new EmployeeTerritory { EmployeeID = janetID, TerritoryID = "02116" }, cancellationToken).ConfigureAwait(false);
         }
         if (margaret?.EmployeeID is int margaretID)
         {
@@ -169,9 +173,9 @@ public sealed class DataSeeder : IInquiryDataSeeder
         }
 
         // CustomerDemographics + bridge.
-        await _demographics.InsertAsync(new CustomerDemographic { CustomerTypeID = "VIP",     CustomerDesc = "Very Important Customer" },     cancellationToken).ConfigureAwait(false);
-        await _demographics.InsertAsync(new CustomerDemographic { CustomerTypeID = "REGULAR", CustomerDesc = "Standard ordering customer" },  cancellationToken).ConfigureAwait(false);
-        await _customerDemographics.InsertAsync(new CustomerCustomerDemo { CustomerID = "ALFKI", CustomerTypeID = "VIP"     }, cancellationToken).ConfigureAwait(false);
+        await _demographics.InsertAsync(new CustomerDemographic { CustomerTypeID = "VIP", CustomerDesc = "Very Important Customer" }, cancellationToken).ConfigureAwait(false);
+        await _demographics.InsertAsync(new CustomerDemographic { CustomerTypeID = "REGULAR", CustomerDesc = "Standard ordering customer" }, cancellationToken).ConfigureAwait(false);
+        await _customerDemographics.InsertAsync(new CustomerCustomerDemo { CustomerID = "ALFKI", CustomerTypeID = "VIP" }, cancellationToken).ConfigureAwait(false);
         await _customerDemographics.InsertAsync(new CustomerCustomerDemo { CustomerID = "BONAP", CustomerTypeID = "REGULAR" }, cancellationToken).ConfigureAwait(false);
 
         // Orders + Order Details — round-trip the IDENTITY-keyed Orders row through
@@ -181,13 +185,13 @@ public sealed class DataSeeder : IInquiryDataSeeder
         {
             CustomerID = "ALFKI",
             EmployeeID = nancy?.EmployeeID,
-            OrderDate  = new DateTime(1996, 7, 4),
+            OrderDate = new DateTime(1996, 7, 4),
             RequiredDate = new DateTime(1996, 8, 1),
-            ShippedDate  = new DateTime(1996, 7, 16),
-            ShipVia    = 3,
-            Freight    = 32.38m,
-            ShipName   = "Alfreds Futterkiste",
-            ShipCity   = "Berlin",
+            ShippedDate = new DateTime(1996, 7, 16),
+            ShipVia = 3,
+            Freight = 32.38m,
+            ShipName = "Alfreds Futterkiste",
+            ShipCity = "Berlin",
             ShipCountry = "Germany",
         }, cancellationToken).ConfigureAwait(false);
 
@@ -195,24 +199,38 @@ public sealed class DataSeeder : IInquiryDataSeeder
         {
             CustomerID = "BONAP",
             EmployeeID = janet?.EmployeeID,
-            OrderDate  = new DateTime(1996, 7, 5),
+            OrderDate = new DateTime(1996, 7, 5),
             RequiredDate = new DateTime(1996, 8, 2),
-            ShipVia    = 1,
-            Freight    = 11.61m,
-            ShipName   = "Bon app'",
-            ShipCity   = "Marseille",
+            ShipVia = 1,
+            Freight = 11.61m,
+            ShipName = "Bon app'",
+            ShipCity = "Marseille",
             ShipCountry = "France",
         }, cancellationToken).ConfigureAwait(false);
 
         if (firstOrder?.OrderID is int firstOrderID)
         {
-            if (chai?.ProductID  is int p1) await _orderDetails.InsertAsync(new OrderDetail { OrderID = firstOrderID, ProductID = p1, UnitPrice = chai!.UnitPrice  ?? 0m, Quantity = 10, Discount = 0f   }, cancellationToken).ConfigureAwait(false);
-            if (chang?.ProductID is int p2) await _orderDetails.InsertAsync(new OrderDetail { OrderID = firstOrderID, ProductID = p2, UnitPrice = chang!.UnitPrice ?? 0m, Quantity = 5,  Discount = 0.1f }, cancellationToken).ConfigureAwait(false);
+            if (chai?.ProductID is int p1)
+            {
+                await _orderDetails.InsertAsync(new OrderDetail { OrderID = firstOrderID, ProductID = p1, UnitPrice = chai!.UnitPrice ?? 0m, Quantity = 10, Discount = 0f }, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (chang?.ProductID is int p2)
+            {
+                await _orderDetails.InsertAsync(new OrderDetail { OrderID = firstOrderID, ProductID = p2, UnitPrice = chang!.UnitPrice ?? 0m, Quantity = 5, Discount = 0.1f }, cancellationToken).ConfigureAwait(false);
+            }
         }
         if (secondOrder?.OrderID is int secondOrderID)
         {
-            if (tofu?.ProductID  is int p3) await _orderDetails.InsertAsync(new OrderDetail { OrderID = secondOrderID, ProductID = p3, UnitPrice = tofu!.UnitPrice  ?? 0m, Quantity = 3,  Discount = 0f   }, cancellationToken).ConfigureAwait(false);
-            if (konbu?.ProductID is int p4) await _orderDetails.InsertAsync(new OrderDetail { OrderID = secondOrderID, ProductID = p4, UnitPrice = konbu!.UnitPrice ?? 0m, Quantity = 12, Discount = 0f   }, cancellationToken).ConfigureAwait(false);
+            if (tofu?.ProductID is int p3)
+            {
+                await _orderDetails.InsertAsync(new OrderDetail { OrderID = secondOrderID, ProductID = p3, UnitPrice = tofu!.UnitPrice ?? 0m, Quantity = 3, Discount = 0f }, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (konbu?.ProductID is int p4)
+            {
+                await _orderDetails.InsertAsync(new OrderDetail { OrderID = secondOrderID, ProductID = p4, UnitPrice = konbu!.UnitPrice ?? 0m, Quantity = 12, Discount = 0f }, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 

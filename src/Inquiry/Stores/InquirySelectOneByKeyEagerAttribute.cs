@@ -6,7 +6,7 @@ namespace Inquiry.Stores;
 /// The method must accept the key type and return <c>Task&lt;TEntity?&gt;</c>.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class InquirySelectOneByKeyEagerAttribute : Attribute
+public sealed class InquirySelectOneByKeyEagerAttribute: Attribute
 {
     /// <summary>
     /// Gets or sets a value indicating whether the parent lookup includes a soft-deleted row. Has an

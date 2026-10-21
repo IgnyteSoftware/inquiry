@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Data.Common;
+using System.Diagnostics;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Microsoft.Extensions.Configuration;

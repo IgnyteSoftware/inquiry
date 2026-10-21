@@ -1,4 +1,3 @@
-using System;
 using Inquiry.Entities;
 
 namespace Inquiry.SqlServer.Tests.Fixtures;

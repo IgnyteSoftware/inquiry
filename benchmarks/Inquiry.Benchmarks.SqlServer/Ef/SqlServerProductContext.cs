@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Inquiry.Benchmarks.SqlServer.Ef;
 
 /// <summary>EF Core model for the Product/Category read-extra benchmarks (Count, OffsetPage, Search).</summary>
-public sealed class SqlServerProductContext : DbContext
+public sealed class SqlServerProductContext: DbContext
 {
     public SqlServerProductContext(DbContextOptions<SqlServerProductContext> options) : base(options) { }
 

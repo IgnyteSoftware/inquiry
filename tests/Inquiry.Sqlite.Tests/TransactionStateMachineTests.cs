@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
@@ -9,8 +11,6 @@ using Inquiry.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -208,7 +208,10 @@ public sealed class TransactionStateMachineTests
         }, commit: true);
 
         Assert.Equal(3, ids.Count);
-        foreach (var id in ids) Assert.NotNull(await items.SelectByKeyAsync(id));
+        foreach (var id in ids)
+        {
+            Assert.NotNull(await items.SelectByKeyAsync(id));
+        }
     }
 
     [Fact]
@@ -229,7 +232,10 @@ public sealed class TransactionStateMachineTests
 
         // ids are the auto-generated keys returned by the UpsertReturning calls — but the
         // outer transaction's rollback erased the rows, so SelectByKey returns null for each.
-        foreach (var id in ids) Assert.Null(await items.SelectByKeyAsync(id));
+        foreach (var id in ids)
+        {
+            Assert.Null(await items.SelectByKeyAsync(id));
+        }
     }
 
     // ---- Medium-priority defensive edges (audit items #5, #6, #7, #8, #10) -----------
@@ -368,7 +374,8 @@ public sealed class TransactionStateMachineTests
         await tx.CommitAsync();
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var _ in stream) { }
+            await foreach (var _ in stream)
+            { }
         });
         await tx.DisposeAsync();
     }
@@ -382,10 +389,19 @@ public sealed class TransactionStateMachineTests
         var tx = await harness.GetRequiredService<IInquiry>().BeginTransactionAsync();
         var stream = tx.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers");
 
-        if (dispose) await tx.DisposeAsync(); else await tx.RollbackAsync();
+        if (dispose)
+        {
+            await tx.DisposeAsync();
+        }
+        else
+        {
+            await tx.RollbackAsync();
+        }
+
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var _ in stream) { }
+            await foreach (var _ in stream)
+            { }
         });
         await tx.DisposeAsync();
     }
@@ -533,7 +549,8 @@ public sealed class TransactionStateMachineTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var _ in tx.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers")) { }
+            await foreach (var _ in tx.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers"))
+            { }
         });
         Assert.Contains(mode == FailureMode.OnReaderDispose ? "reader dispose" : "command dispose", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, probe.ReaderDisposeCalls);
@@ -594,7 +611,8 @@ public sealed class TransactionStateMachineTests
         await inner.CommitAsync();
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var _ in stream) { }
+            await foreach (var _ in stream)
+            { }
         });
         await inner.DisposeAsync();
         await outer.RollbackAsync();
@@ -610,10 +628,19 @@ public sealed class TransactionStateMachineTests
         var inner = await outer.BeginTransactionAsync();
         var stream = inner.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers");
 
-        if (dispose) await inner.DisposeAsync(); else await inner.RollbackAsync();
+        if (dispose)
+        {
+            await inner.DisposeAsync();
+        }
+        else
+        {
+            await inner.RollbackAsync();
+        }
+
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var _ in stream) { }
+            await foreach (var _ in stream)
+            { }
         });
         await inner.DisposeAsync();
         await outer.RollbackAsync();
@@ -652,7 +679,9 @@ public sealed class TransactionStateMachineTests
         async Task<Exception?> Run(Func<Task> terminal)
         {
             await gate.Task;
-            try { await terminal(); return null; } catch (Exception exception) { return exception; }
+            try
+            { await terminal(); return null; }
+            catch (Exception exception) { return exception; }
         }
 
         var commit = Run(() => inner.CommitAsync());
@@ -916,7 +945,7 @@ public sealed class TransactionStateMachineTests
         return services.BuildServiceProvider().GetRequiredService<IInquiry>();
     }
 
-    private sealed class ThrowingInitializeCommandFactory : IInquiryConnectionFactory
+    private sealed class ThrowingInitializeCommandFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         public ThrowingInitializeCommandFactory(string connectionString) => _connectionString = connectionString;
@@ -959,7 +988,7 @@ public sealed class TransactionStateMachineTests
         public TaskCompletionSource AllowTerminal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private sealed class FailingConnectionFactory : IInquiryConnectionFactory
+    private sealed class FailingConnectionFactory: IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         private readonly FailureMode _failureMode;
@@ -981,7 +1010,7 @@ public sealed class TransactionStateMachineTests
     }
 
     /// <summary>Forwards everything to the inner SqliteConnection except BeginDbTransaction (returns the failing wrapper) and CreateDbCommand (returns a wrapper that unwraps the failing tx when assigning Transaction).</summary>
-    private sealed class FailingConnection : DbConnection
+    private sealed class FailingConnection: DbConnection
     {
         private readonly SqliteConnection _inner;
         private readonly FailureMode _failureMode;
@@ -1011,7 +1040,11 @@ public sealed class TransactionStateMachineTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
@@ -1020,12 +1053,14 @@ public sealed class TransactionStateMachineTests
             System.Threading.Interlocked.Increment(ref _probe.ConnectionDisposeCalls);
             await _inner.DisposeAsync();
             if (_failureMode is FailureMode.OnConnectionDispose or FailureMode.OnCommitAndAllCleanup)
+            {
                 throw new InvalidOperationException("Simulated connection dispose failure.");
+            }
         }
     }
 
     /// <summary>Wraps SqliteCommand. Forwards everything to the inner — the Transaction setter unwraps a FailingTransaction to assign the real underlying SqliteTransaction (which is what the SqliteCommand requires).</summary>
-    private sealed class FailingCommand : DbCommand
+    private sealed class FailingCommand: DbCommand
     {
         private readonly SqliteCommand _inner;
         private readonly FailureMode _failureMode;
@@ -1081,7 +1116,11 @@ public sealed class TransactionStateMachineTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
@@ -1089,12 +1128,15 @@ public sealed class TransactionStateMachineTests
         {
             System.Threading.Interlocked.Increment(ref _probe.CommandDisposeCalls);
             await _inner.DisposeAsync();
-            if (_failureMode == FailureMode.OnCommandDispose) throw new InvalidOperationException("Simulated command dispose failure.");
+            if (_failureMode == FailureMode.OnCommandDispose)
+            {
+                throw new InvalidOperationException("Simulated command dispose failure.");
+            }
         }
 
     }
 
-    private sealed class FailingReader : DbDataReader
+    private sealed class FailingReader: DbDataReader
     {
         private readonly DbDataReader _inner;
         private readonly FailureMode _failureMode;
@@ -1138,12 +1180,15 @@ public sealed class TransactionStateMachineTests
         {
             System.Threading.Interlocked.Increment(ref _probe.ReaderDisposeCalls);
             await _inner.DisposeAsync();
-            if (_failureMode == FailureMode.OnReaderDispose) throw new InvalidOperationException("Simulated reader dispose failure.");
+            if (_failureMode == FailureMode.OnReaderDispose)
+            {
+                throw new InvalidOperationException("Simulated reader dispose failure.");
+            }
         }
     }
 
     /// <summary>Wraps a real SqliteTransaction. Throws on Commit or Rollback based on FailureMode.</summary>
-    private sealed class FailingTransaction : DbTransaction
+    private sealed class FailingTransaction: DbTransaction
     {
         internal DbTransaction Inner { get; }
         private readonly FailureMode _failureMode;
@@ -1162,7 +1207,10 @@ public sealed class TransactionStateMachineTests
         public override void Commit()
         {
             if (_failureMode is FailureMode.OnCommit or FailureMode.OnCommitAndAllCleanup or FailureMode.OnCommitWithHangingRollback)
+            {
                 throw new InvalidOperationException("Simulated commit failure for tests.");
+            }
+
             Inner.Commit();
         }
 
@@ -1175,14 +1223,20 @@ public sealed class TransactionStateMachineTests
                 await _probe.AllowTerminal.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
             if (_failureMode is FailureMode.OnCommit or FailureMode.OnCommitAndAllCleanup or FailureMode.OnCommitWithHangingRollback)
+            {
                 throw new InvalidOperationException("Simulated commit failure for tests.");
+            }
+
             await Inner.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public override void Rollback()
         {
             if (_failureMode == FailureMode.OnRollback)
+            {
                 throw new InvalidOperationException("Simulated rollback failure for tests.");
+            }
+
             Inner.Rollback();
         }
 
@@ -1200,7 +1254,10 @@ public sealed class TransactionStateMachineTests
                 await _probe.AllowTerminal.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
             if (_failureMode is FailureMode.OnRollback or FailureMode.OnCommitAndAllCleanup)
+            {
                 throw new InvalidOperationException("Simulated rollback failure for tests.");
+            }
+
             await Inner.RollbackAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -1214,7 +1271,11 @@ public sealed class TransactionStateMachineTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) Inner.Dispose();
+            if (disposing)
+            {
+                Inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
@@ -1223,7 +1284,9 @@ public sealed class TransactionStateMachineTests
             System.Threading.Interlocked.Increment(ref _probe.TransactionDisposeCalls);
             await Inner.DisposeAsync();
             if (_failureMode is FailureMode.OnTransactionDispose or FailureMode.OnCommitAndAllCleanup)
+            {
                 throw new InvalidOperationException("Simulated transaction dispose failure.");
+            }
         }
     }
 }
@@ -1237,7 +1300,7 @@ public sealed class TransactionStateMachineTests
 /// metadata in this compilation (it can't see Northwind's entities, which live in a
 /// referenced compiled assembly).
 /// </summary>
-internal sealed partial class GeneratedItemAtomicService : InquiryStore<GeneratedItem>
+internal sealed partial class GeneratedItemAtomicService: InquiryStore<GeneratedItem>
 {
     private readonly GeneratedItemStore _items;
 
@@ -1260,7 +1323,11 @@ internal sealed partial class GeneratedItemAtomicService : InquiryStore<Generate
             ids.Add(inserted!.Id!.Value);
         }
 
-        if (commit) await tx.CommitAsync(cancellationToken);
+        if (commit)
+        {
+            await tx.CommitAsync(cancellationToken);
+        }
+
         return ids;
     }
 }

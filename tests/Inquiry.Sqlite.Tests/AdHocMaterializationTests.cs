@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Inquiry;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 

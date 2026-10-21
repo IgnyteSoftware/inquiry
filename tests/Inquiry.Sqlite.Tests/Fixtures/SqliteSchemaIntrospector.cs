@@ -1,12 +1,9 @@
-using System.Collections.Generic;
 using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
 
-public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
+public sealed class SqliteSchemaIntrospector: ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection connection, CancellationToken ct = default)
     {
@@ -15,7 +12,10 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
         {
             cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';";
             await using var r = await cmd.ExecuteReaderAsync(ct);
-            while (await r.ReadAsync(ct)) tableNames.Add(r.GetString(0));
+            while (await r.ReadAsync(ct))
+            {
+                tableNames.Add(r.GetString(0));
+            }
         }
 
         var tables = new List<TableSnapshot>();
@@ -35,7 +35,10 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
                     // SQLite reports INTEGER PRIMARY KEY AUTOINCREMENT (rowid alias) columns with
                     // notnull=0, but a primary-key column can never be null — treat PK members as NOT NULL.
                     columns.Add(new ColumnSnapshot(name, !notNull && pkOrd == 0));
-                    if (pkOrd > 0) pk.Add((pkOrd, name));
+                    if (pkOrd > 0)
+                    {
+                        pk.Add((pkOrd, name));
+                    }
                 }
             }
             pk.Sort((a, b) => a.Seq.CompareTo(b.Seq));
@@ -46,7 +49,9 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
                 cmd.CommandText = $"PRAGMA foreign_key_list(\"{table}\");";
                 await using var r = await cmd.ExecuteReaderAsync(ct);
                 while (await r.ReadAsync(ct))
+                {
                     fks.Add(new ForeignKeySnapshot(new[] { r.GetString(3) }, r.GetString(2), new[] { r.GetString(4) }));
+                }
             }
 
             var indexes = new List<IndexSnapshot>();
@@ -55,7 +60,10 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
             {
                 cmd.CommandText = $"PRAGMA index_list(\"{table}\");";
                 await using var r = await cmd.ExecuteReaderAsync(ct);
-                while (await r.ReadAsync(ct)) indexNames.Add(r.GetString(1));
+                while (await r.ReadAsync(ct))
+                {
+                    indexNames.Add(r.GetString(1));
+                }
             }
             foreach (var ix in indexNames)
             {
@@ -63,8 +71,15 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
                 await using var cmd = connection.CreateCommand();
                 cmd.CommandText = $"PRAGMA index_info(\"{ix}\");";
                 await using var r = await cmd.ExecuteReaderAsync(ct);
-                while (await r.ReadAsync(ct)) cols.Add(r.GetString(2));
-                if (cols.Count > 0) indexes.Add(new IndexSnapshot(cols));
+                while (await r.ReadAsync(ct))
+                {
+                    cols.Add(r.GetString(2));
+                }
+
+                if (cols.Count > 0)
+                {
+                    indexes.Add(new IndexSnapshot(cols));
+                }
             }
 
             tables.Add(new TableSnapshot(table, columns, pk.ConvertAll(x => x.Col), fks, indexes));

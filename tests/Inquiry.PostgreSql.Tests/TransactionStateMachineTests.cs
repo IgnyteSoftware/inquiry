@@ -1,8 +1,8 @@
+using System.Data;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Inquiry.Stores;
-using System.Data;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -179,7 +179,7 @@ public sealed class TransactionStateMachineTests
 /// hand-written method, then calling another injected store. Documents the pattern the
 /// transactions feature page describes, ported to the PostgreSQL live engine.
 /// </summary>
-internal sealed partial class CustomerAtomicService : InquiryStore<Customer>
+internal sealed partial class CustomerAtomicService: InquiryStore<Customer>
 {
     private readonly CustomerStore _customers;
 
@@ -193,6 +193,9 @@ internal sealed partial class CustomerAtomicService : InquiryStore<Customer>
         {
             await _customers.InsertAsync(c, cancellationToken);
         }
-        if (commit) await tx.CommitAsync(cancellationToken);
+        if (commit)
+        {
+            await tx.CommitAsync(cancellationToken);
+        }
     }
 }

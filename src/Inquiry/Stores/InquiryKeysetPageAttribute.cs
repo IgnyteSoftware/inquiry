@@ -26,7 +26,7 @@ public enum KeysetDirection
 /// Use offset pagination when the ordering must include null values.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryKeysetPageAttribute : Attribute
+public sealed class InquiryKeysetPageAttribute: Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryKeysetPageAttribute"/> class.

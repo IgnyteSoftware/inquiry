@@ -8,7 +8,7 @@ namespace Inquiry.Benchmarks.Oracle.Ef;
 /// column names must match the stored (uppercase) names. Uses <see cref="OracleEfShipper"/> as
 /// the POCO to keep this project self-contained.
 /// </summary>
-public sealed class OracleShipperContext : DbContext
+public sealed class OracleShipperContext: DbContext
 {
     public OracleShipperContext(DbContextOptions<OracleShipperContext> options) : base(options) { }
 

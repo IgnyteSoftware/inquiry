@@ -1,7 +1,5 @@
-using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.SqlServer.Tests.Fixtures;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests;
 

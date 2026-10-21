@@ -13,7 +13,10 @@ internal static class ConsumerBuildEvidence
     {
         var root = Path.GetFullPath(destination);
         if (Directory.Exists(root) || File.Exists(root))
+        {
             throw new ArgumentException("Use a new output directory. Existing evidence is never overwritten.");
+        }
+
         Directory.CreateDirectory(root);
         await RunDotnetAsync(root, "--info");
         var samples = new List<object>();
@@ -55,7 +58,10 @@ internal static class ConsumerBuildEvidence
                 var generated = fixture.CreateDriver().RunGenerators(fixture.Original);
                 fixture.Verify(generated, fixture.Original);
                 foreach (var source in generated.GetRunResult().Results.SelectMany(result => result.GeneratedSources))
+                {
                     controlSources.Add(source.HintName, source.SourceText.ToString());
+                }
+
                 await InitializeAsync(controlDirectory, controlProject, controlSources);
                 var controlElapsed = await RunDotnetAsync(controlDirectory, "build", "-c", "Release", "--no-restore", "--verbosity", "quiet");
                 samples.Add(new { EntityCount = count, Repetition = repetition, Scenario = "emitted-source-control", ElapsedMilliseconds = controlElapsed, OutputCount = GeneratorFixture.Snapshot(generated).Length });
@@ -70,11 +76,18 @@ internal static class ConsumerBuildEvidence
                     if (scenario != "clean-build")
                     {
                         foreach (var source in fixture.Sources)
+                        {
                             await File.WriteAllTextAsync(Path.Combine(directory, source.Key), source.Value);
+                        }
+
                         await RunDotnetAsync(directory, "build", "-c", "Release", "--no-restore", "--verbosity", "quiet");
                         foreach (var tree in compilation.SyntaxTrees)
+                        {
                             if (tree.ToString() != fixture.Sources[tree.FilePath])
+                            {
                                 await File.WriteAllTextAsync(Path.Combine(directory, tree.FilePath), tree.ToString());
+                            }
+                        }
                     }
                     var elapsed = await RunDotnetAsync(directory, "build", "-c", "Release", "--no-restore", "--verbosity", "quiet");
                     var expected = fixture.CreateDriver().RunGenerators(compilation);
@@ -109,16 +122,26 @@ internal static class ConsumerBuildEvidence
     {
         await File.WriteAllTextAsync(Path.Combine(directory, "Consumer.csproj"), project.ToString());
         foreach (var name in new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props" })
+        {
             await File.WriteAllTextAsync(Path.Combine(directory, name), "<Project />");
+        }
+
         foreach (var source in sources)
+        {
             await File.WriteAllTextAsync(Path.Combine(directory, source.Key), source.Value);
+        }
+
         await RunDotnetAsync(directory, "restore");
     }
 
     private static async Task<double> RunDotnetAsync(string directory, params string[] arguments)
     {
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
         var stopwatch = Stopwatch.StartNew();
         using var process = Process.Start(start)!;
         var output = process.StandardOutput.ReadToEndAsync();
@@ -126,7 +149,11 @@ internal static class ConsumerBuildEvidence
         await process.WaitForExitAsync();
         stopwatch.Stop();
         var log = await output + await error;
-        if (process.ExitCode != 0) throw new InvalidOperationException(log);
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(log);
+        }
+
         await File.AppendAllTextAsync(Path.Combine(directory, "build.log"), string.Join(" ", arguments) + Environment.NewLine + log);
         return stopwatch.Elapsed.TotalMilliseconds;
     }

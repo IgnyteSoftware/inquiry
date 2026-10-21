@@ -1,12 +1,9 @@
+using System.Collections.Immutable;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
 
 namespace Inquiry.Generators;
 
@@ -82,14 +79,23 @@ internal static class AutoJunctionSynthesizer
 
         foreach (var entity in entities)
         {
-            if (!entity.IsMapped) continue;
+            if (!entity.IsMapped)
+            {
+                continue;
+            }
 
             foreach (var relation in entity.Relations)
             {
-                if (!relation.IsAutoJunction) continue;
+                if (!relation.IsAutoJunction)
+                {
+                    continue;
+                }
 
                 var shape = TryBuildShape(context, sqlBuilder, byName, claimedTables, entity, relation);
-                if (shape is null) continue;
+                if (shape is null)
+                {
+                    continue;
+                }
 
                 if (Describe(byPair, pairByIdentity, shape) is { } disagreement)
                 {
@@ -407,7 +413,10 @@ internal static class AutoJunctionSynthesizer
     private static int ComparePhysical(EntityData left, EntityData right)
     {
         var bySchema = StringComparer.Ordinal.Compare(left.Schema ?? string.Empty, right.Schema ?? string.Empty);
-        if (bySchema != 0) return bySchema;
+        if (bySchema != 0)
+        {
+            return bySchema;
+        }
 
         var byTable = StringComparer.Ordinal.Compare(left.TableName, right.TableName);
         return byTable != 0 ? byTable : StringComparer.Ordinal.Compare(left.FullyQualifiedName, right.FullyQualifiedName);

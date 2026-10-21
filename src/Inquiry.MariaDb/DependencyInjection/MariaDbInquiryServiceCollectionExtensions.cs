@@ -19,15 +19,9 @@ public static class MariaDbInquiryServiceCollectionExtensions
         this IServiceCollection services,
         MySqlDataSource dataSource)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
-        if (dataSource is null)
-        {
-            throw new ArgumentNullException(nameof(dataSource));
-        }
+        ArgumentNullException.ThrowIfNull(dataSource);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MariaDb");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new MariaDbInquiryConnectionFactory(dataSource));
@@ -40,10 +34,7 @@ public static class MariaDbInquiryServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquiryMariaDb(this IServiceCollection services, string connectionString)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MariaDb");
         InquiryProviderRegistration.ValidateConnectionString(connectionString);
@@ -61,15 +52,9 @@ public static class MariaDbInquiryServiceCollectionExtensions
         string connectionString,
         Action<MariaDbInquiryOptions> configure)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
-        if (configure is null)
-        {
-            throw new ArgumentNullException(nameof(configure));
-        }
+        ArgumentNullException.ThrowIfNull(configure);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "MariaDb");
         var options = new MariaDbInquiryOptions();
@@ -112,10 +97,7 @@ public static class MariaDbInquiryServiceCollectionExtensions
 
     private static string GetRequiredConnectionString(IConfiguration configuration, string connectionStringName)
     {
-        if (configuration is null)
-        {
-            throw new ArgumentNullException(nameof(configuration));
-        }
+        ArgumentNullException.ThrowIfNull(configuration);
 
         var connectionString = configuration.GetConnectionString(connectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString))

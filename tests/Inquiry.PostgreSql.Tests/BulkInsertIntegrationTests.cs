@@ -1,7 +1,5 @@
-using System.Collections.Generic;
-using System.Linq;
-using Inquiry.FeatureCatalog;
 using Inquiry.BulkCopy;
+using Inquiry.FeatureCatalog;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Inquiry.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -175,7 +173,11 @@ public sealed class BulkInsertIntegrationTests
     {
         for (var i = 0; i < count; i++)
         {
-            if (i == cancelAt) cancellation.Cancel();
+            if (i == cancelAt)
+            {
+                cancellation.Cancel();
+            }
+
             cancellation.Token.ThrowIfCancellationRequested();
             yield return Item("cancel", i);
         }

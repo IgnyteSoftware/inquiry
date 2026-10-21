@@ -1,7 +1,5 @@
-using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.Oracle.Tests.Fixtures;
-using Xunit;
 
 namespace Inquiry.Oracle.Tests;
 

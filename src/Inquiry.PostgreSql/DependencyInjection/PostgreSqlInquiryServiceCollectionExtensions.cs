@@ -19,15 +19,9 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
         this IServiceCollection services,
         NpgsqlDataSource dataSource)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
-        if (dataSource is null)
-        {
-            throw new ArgumentNullException(nameof(dataSource));
-        }
+        ArgumentNullException.ThrowIfNull(dataSource);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
         services.AddSingleton<IInquiryConnectionFactory>(_ => new PostgreSqlInquiryConnectionFactory(dataSource));
@@ -40,10 +34,7 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquiryPostgreSql(this IServiceCollection services, string connectionString)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
         InquiryProviderRegistration.ValidateConnectionString(connectionString);
@@ -61,15 +52,9 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
         string connectionString,
         Action<PostgreSqlInquiryOptions> configure)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
-        if (configure is null)
-        {
-            throw new ArgumentNullException(nameof(configure));
-        }
+        ArgumentNullException.ThrowIfNull(configure);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "PostgreSql");
         var options = new PostgreSqlInquiryOptions();
@@ -112,10 +97,7 @@ public static class PostgreSqlInquiryServiceCollectionExtensions
 
     private static string GetRequiredConnectionString(IConfiguration configuration, string connectionStringName)
     {
-        if (configuration is null)
-        {
-            throw new ArgumentNullException(nameof(configuration));
-        }
+        ArgumentNullException.ThrowIfNull(configuration);
 
         var connectionString = configuration.GetConnectionString(connectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString))

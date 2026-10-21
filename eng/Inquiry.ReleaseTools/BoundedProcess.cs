@@ -34,11 +34,19 @@ internal static class BoundedProcess
     {
         ArgumentNullException.ThrowIfNull(startInfo);
         if (!startInfo.RedirectStandardOutput || !startInfo.RedirectStandardError)
+        {
             throw new ArgumentException("Bounded processes must redirect both standard output and standard error.", nameof(startInfo));
+        }
+
         if (executionTimeout <= TimeSpan.Zero)
+        {
             throw new ArgumentOutOfRangeException(nameof(executionTimeout));
+        }
+
         if (terminationTimeout <= TimeSpan.Zero)
+        {
             throw new ArgumentOutOfRangeException(nameof(terminationTimeout));
+        }
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Could not start process '{startInfo.FileName}'.");
@@ -113,7 +121,11 @@ internal static class BoundedProcess
 
     private static async Task<bool> WaitForExitAsync(Process process, TimeSpan timeout)
     {
-        if (HasExited(process)) return true;
+        if (HasExited(process))
+        {
+            return true;
+        }
+
         using var cts = new CancellationTokenSource(timeout);
         try
         {
@@ -151,7 +163,9 @@ internal static class BoundedProcess
         {
             int read;
             while ((read = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) != 0)
+            {
                 capture.Append(buffer.AsSpan(0, read));
+            }
         }
         finally
         {
@@ -161,13 +175,15 @@ internal static class BoundedProcess
 
     private static bool HasExited(Process process)
     {
-        try { return process.HasExited; }
+        try
+        { return process.HasExited; }
         catch (InvalidOperationException) { return true; }
     }
 
     private static int? ExitCode(Process process)
     {
-        try { return process.HasExited ? process.ExitCode : null; }
+        try
+        { return process.HasExited ? process.ExitCode : null; }
         catch (InvalidOperationException) { return null; }
     }
 
@@ -219,7 +235,11 @@ internal static class BoundedProcess
         {
             lock (_gate)
             {
-                if (_count == 0) return (string.Empty, _truncated);
+                if (_count == 0)
+                {
+                    return (string.Empty, _truncated);
+                }
+
                 var value = new char[_count];
                 var first = Math.Min(_count, _buffer.Length - _start);
                 _buffer.AsSpan(_start, first).CopyTo(value);

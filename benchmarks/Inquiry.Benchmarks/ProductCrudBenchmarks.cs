@@ -58,16 +58,16 @@ public class ProductCrudBenchmarks
 
     private static Product ReadProduct(System.Data.Common.DbDataReader reader) => new Product
     {
-        ProductID       = reader.GetInt32(0),
-        ProductName     = reader.GetString(1),
-        SupplierID      = reader.IsDBNull(2) ? null : reader.GetInt32(2),
-        CategoryID      = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+        ProductID = reader.GetInt32(0),
+        ProductName = reader.GetString(1),
+        SupplierID = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+        CategoryID = reader.IsDBNull(3) ? null : reader.GetInt32(3),
         QuantityPerUnit = reader.IsDBNull(4) ? null : reader.GetString(4),
-        UnitPrice       = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
-        UnitsInStock    = reader.IsDBNull(6) ? null : reader.GetInt16(6),
-        UnitsOnOrder    = reader.IsDBNull(7) ? null : reader.GetInt16(7),
-        ReorderLevel    = reader.IsDBNull(8) ? null : reader.GetInt16(8),
-        Discontinued    = reader.GetInt32(9) != 0,
+        UnitPrice = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+        UnitsInStock = reader.IsDBNull(6) ? null : reader.GetInt16(6),
+        UnitsOnOrder = reader.IsDBNull(7) ? null : reader.GetInt16(7),
+        ReorderLevel = reader.IsDBNull(8) ? null : reader.GetInt16(8),
+        Discontinued = reader.GetInt32(9) != 0,
     };
 
     // ---- SelectAll ----------------------------------------------------------------------
@@ -81,7 +81,11 @@ public class ProductCrudBenchmarks
         command.CommandText = $"SELECT {SelectColumns} FROM Products;";
         var list = new List<Product>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadProduct(reader));
+        }
+
         return list.Count;
     }
 
@@ -197,7 +201,11 @@ public class ProductCrudBenchmarks
         command.Parameters.Add("$c", SqliteType.Integer).Value = TargetCategoryId;
         var list = new List<Product>();
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadProduct(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadProduct(reader));
+        }
+
         return list.Count;
     }
 
@@ -256,10 +264,10 @@ public class ProductCrudBenchmarks
         command.CommandText =
             "INSERT INTO Products (ProductName, CategoryID, UnitPrice, UnitsInStock, Discontinued) " +
             "VALUES ($name, $category, $price, $stock, 0);";
-        command.Parameters.Add("$name",     SqliteType.Text).Value    = "Bench Product";
+        command.Parameters.Add("$name", SqliteType.Text).Value = "Bench Product";
         command.Parameters.Add("$category", SqliteType.Integer).Value = TargetCategoryId;
-        command.Parameters.Add("$price",    SqliteType.Real).Value    = 9.99;
-        command.Parameters.Add("$stock",    SqliteType.Integer).Value = 42;
+        command.Parameters.Add("$price", SqliteType.Real).Value = 9.99;
+        command.Parameters.Add("$stock", SqliteType.Integer).Value = 42;
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -280,9 +288,9 @@ public class ProductCrudBenchmarks
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         ctx.Products.Add(new EfProduct
         {
-            ProductName  = "Bench Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 9.99m,
+            ProductName = "Bench Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 9.99m,
             UnitsInStock = 42,
             Discontinued = false,
         });
@@ -295,9 +303,9 @@ public class ProductCrudBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         return await dc.InsertAsync(new L2Product
         {
-            ProductName  = "Bench Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 9.99m,
+            ProductName = "Bench Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 9.99m,
             UnitsInStock = 42,
             Discontinued = false,
         });
@@ -310,9 +318,9 @@ public class ProductCrudBenchmarks
         await connection.OpenAsync();
         return await RepoDb.DbConnectionExtension.InsertAsync(connection, new RdProduct
         {
-            ProductName  = "Bench Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 9.99m,
+            ProductName = "Bench Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 9.99m,
             UnitsInStock = 42,
             Discontinued = false,
         });
@@ -322,9 +330,9 @@ public class ProductCrudBenchmarks
     public async Task<int> Insert_Inquiry()
         => await _db.Products.InsertAsync(new Product
         {
-            ProductName  = "Bench Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 9.99m,
+            ProductName = "Bench Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 9.99m,
             UnitsInStock = 42,
             Discontinued = false,
         });
@@ -333,9 +341,9 @@ public class ProductCrudBenchmarks
     public async Task<int> Insert_Inquiry_Cancellable()
         => await _db.Products.InsertAsync(new Product
         {
-            ProductName  = "Bench Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 9.99m,
+            ProductName = "Bench Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 9.99m,
             UnitsInStock = 42,
             Discontinued = false,
         }, _cancellationTokenSource.Token);
@@ -351,11 +359,11 @@ public class ProductCrudBenchmarks
         command.CommandText =
             "UPDATE Products SET ProductName = $name, CategoryID = $category, " +
             "UnitPrice = $price, UnitsInStock = $stock, Discontinued = 0 WHERE ProductID = $id;";
-        command.Parameters.Add("$id",       SqliteType.Integer).Value = TargetProductId;
-        command.Parameters.Add("$name",     SqliteType.Text).Value    = "Updated Product";
+        command.Parameters.Add("$id", SqliteType.Integer).Value = TargetProductId;
+        command.Parameters.Add("$name", SqliteType.Text).Value = "Updated Product";
         command.Parameters.Add("$category", SqliteType.Integer).Value = TargetCategoryId;
-        command.Parameters.Add("$price",    SqliteType.Real).Value    = 19.99;
-        command.Parameters.Add("$stock",    SqliteType.Integer).Value = 7;
+        command.Parameters.Add("$price", SqliteType.Real).Value = 19.99;
+        command.Parameters.Add("$stock", SqliteType.Integer).Value = 7;
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -375,9 +383,9 @@ public class ProductCrudBenchmarks
     {
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var entity = await ctx.Products.FirstAsync(p => p.ProductID == TargetProductId);
-        entity.ProductName  = "Updated Product";
-        entity.CategoryID   = TargetCategoryId;
-        entity.UnitPrice    = 19.99m;
+        entity.ProductName = "Updated Product";
+        entity.CategoryID = TargetCategoryId;
+        entity.UnitPrice = 19.99m;
         entity.UnitsInStock = 7;
         entity.Discontinued = false;
         return await ctx.SaveChangesAsync();
@@ -389,10 +397,10 @@ public class ProductCrudBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         return await dc.UpdateAsync(new L2Product
         {
-            ProductID    = TargetProductId,
-            ProductName  = "Updated Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 19.99m,
+            ProductID = TargetProductId,
+            ProductName = "Updated Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 19.99m,
             UnitsInStock = 7,
             Discontinued = false,
         });
@@ -405,10 +413,10 @@ public class ProductCrudBenchmarks
         await connection.OpenAsync();
         return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdProduct
         {
-            ProductID    = TargetProductId,
-            ProductName  = "Updated Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 19.99m,
+            ProductID = TargetProductId,
+            ProductName = "Updated Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 19.99m,
             UnitsInStock = 7,
             Discontinued = false,
         });
@@ -418,10 +426,10 @@ public class ProductCrudBenchmarks
     public async Task<bool> Update_Inquiry()
         => await _db.Products.UpdateAsync(new Product
         {
-            ProductID    = TargetProductId,
-            ProductName  = "Updated Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 19.99m,
+            ProductID = TargetProductId,
+            ProductName = "Updated Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 19.99m,
             UnitsInStock = 7,
             Discontinued = false,
         });
@@ -430,10 +438,10 @@ public class ProductCrudBenchmarks
     public async Task<bool> Update_Inquiry_Cancellable()
         => await _db.Products.UpdateAsync(new Product
         {
-            ProductID    = TargetProductId,
-            ProductName  = "Updated Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 19.99m,
+            ProductID = TargetProductId,
+            ProductName = "Updated Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 19.99m,
             UnitsInStock = 7,
             Discontinued = false,
         }, _cancellationTokenSource.Token);
@@ -455,11 +463,11 @@ public class ProductCrudBenchmarks
             "    UnitPrice    = excluded.UnitPrice, " +
             "    UnitsInStock = excluded.UnitsInStock, " +
             "    Discontinued = excluded.Discontinued;";
-        command.Parameters.Add("$id",       SqliteType.Integer).Value = TargetProductId;
-        command.Parameters.Add("$name",     SqliteType.Text).Value    = "Upserted Product";
+        command.Parameters.Add("$id", SqliteType.Integer).Value = TargetProductId;
+        command.Parameters.Add("$name", SqliteType.Text).Value = "Upserted Product";
         command.Parameters.Add("$category", SqliteType.Integer).Value = TargetCategoryId;
-        command.Parameters.Add("$price",    SqliteType.Real).Value    = 29.99;
-        command.Parameters.Add("$stock",    SqliteType.Integer).Value = 3;
+        command.Parameters.Add("$price", SqliteType.Real).Value = 29.99;
+        command.Parameters.Add("$stock", SqliteType.Integer).Value = 3;
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -502,10 +510,10 @@ public class ProductCrudBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         return await dc.InsertOrReplaceAsync(new L2Product
         {
-            ProductID    = TargetProductId,
-            ProductName  = "Upserted Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 29.99m,
+            ProductID = TargetProductId,
+            ProductName = "Upserted Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 29.99m,
             UnitsInStock = 3,
             Discontinued = false,
         });
@@ -518,10 +526,10 @@ public class ProductCrudBenchmarks
         await connection.OpenAsync();
         return await RepoDb.DbConnectionExtension.MergeAsync(connection, new RdProduct
         {
-            ProductID    = TargetProductId,
-            ProductName  = "Upserted Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 29.99m,
+            ProductID = TargetProductId,
+            ProductName = "Upserted Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 29.99m,
             UnitsInStock = 3,
             Discontinued = false,
         });
@@ -531,10 +539,10 @@ public class ProductCrudBenchmarks
     public async Task<int> Upsert_Inquiry()
         => await _db.Products.UpsertAsync(new Product
         {
-            ProductID    = TargetProductId,
-            ProductName  = "Upserted Product",
-            CategoryID   = TargetCategoryId,
-            UnitPrice    = 29.99m,
+            ProductID = TargetProductId,
+            ProductName = "Upserted Product",
+            CategoryID = TargetCategoryId,
+            UnitPrice = 29.99m,
             UnitsInStock = 3,
             Discontinued = false,
         });

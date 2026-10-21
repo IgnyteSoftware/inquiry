@@ -24,7 +24,9 @@ public class GeneratorBenchmarks
             var reused = _primed.RunGenerators(edited);
             _fixture.Verify(reused, edited);
             if (!GeneratorFixture.Snapshot(reused).SequenceEqual(GeneratorFixture.Snapshot(_fixture.CreateDriver().RunGenerators(edited))))
+            {
                 throw new InvalidOperationException("Reused-driver output differs from fresh generation.");
+            }
         }
         Console.WriteLine($"Verified {EntityCount} entities; generated output count: {GeneratorFixture.Snapshot(_primed).Length}.");
     }
@@ -107,7 +109,9 @@ internal sealed class GeneratorFixture
         var errors = result.Diagnostics.Concat(input.AddSyntaxTrees(result.GeneratedTrees).GetDiagnostics())
             .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         if (errors.Length != 0 || result.Results.Any(generator => generator.Exception is not null) || result.GeneratedTrees.Length == 0)
+        {
             throw new InvalidOperationException(string.Join(Environment.NewLine, errors.Select(error => error.ToString())));
+        }
     }
 
     public static string[] Snapshot(GeneratorDriver driver) => driver.GetRunResult().Results

@@ -61,14 +61,14 @@ internal static class DbTypeMapper
     private static string? Map(SpecialType specialType, bool isUnicode = true) => specialType switch
     {
         SpecialType.System_Boolean => "global::System.Data.DbType.Boolean",
-        SpecialType.System_Byte    => "global::System.Data.DbType.Byte",
-        SpecialType.System_SByte   => "global::System.Data.DbType.Byte",    // reinterpret: sbyte ↔ byte (unchecked)
-        SpecialType.System_Int16   => "global::System.Data.DbType.Int16",
-        SpecialType.System_UInt16  => "global::System.Data.DbType.Int16",   // reinterpret: ushort ↔ short (unchecked)
-        SpecialType.System_Int32   => "global::System.Data.DbType.Int32",
-        SpecialType.System_UInt32  => "global::System.Data.DbType.Int32",   // reinterpret: uint ↔ int (unchecked)
-        SpecialType.System_Int64   => "global::System.Data.DbType.Int64",
-        SpecialType.System_UInt64  => "global::System.Data.DbType.Int64",   // reinterpret: ulong ↔ long (unchecked)
+        SpecialType.System_Byte => "global::System.Data.DbType.Byte",
+        SpecialType.System_SByte => "global::System.Data.DbType.Byte",    // reinterpret: sbyte ↔ byte (unchecked)
+        SpecialType.System_Int16 => "global::System.Data.DbType.Int16",
+        SpecialType.System_UInt16 => "global::System.Data.DbType.Int16",   // reinterpret: ushort ↔ short (unchecked)
+        SpecialType.System_Int32 => "global::System.Data.DbType.Int32",
+        SpecialType.System_UInt32 => "global::System.Data.DbType.Int32",   // reinterpret: uint ↔ int (unchecked)
+        SpecialType.System_Int64 => "global::System.Data.DbType.Int64",
+        SpecialType.System_UInt64 => "global::System.Data.DbType.Int64",   // reinterpret: ulong ↔ long (unchecked)
         SpecialType.System_Single => "global::System.Data.DbType.Single",
         SpecialType.System_Double => "global::System.Data.DbType.Double",
         SpecialType.System_Decimal => "global::System.Data.DbType.Decimal",

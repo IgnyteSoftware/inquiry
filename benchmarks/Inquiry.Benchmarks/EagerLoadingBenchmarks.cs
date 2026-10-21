@@ -50,23 +50,23 @@ public class EagerLoadingBenchmarks
 
     private static Product ReadProduct(System.Data.Common.DbDataReader reader) => new Product
     {
-        ProductID       = reader.GetInt32(0),
-        ProductName     = reader.GetString(1),
-        SupplierID      = reader.IsDBNull(2) ? null : reader.GetInt32(2),
-        CategoryID      = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+        ProductID = reader.GetInt32(0),
+        ProductName = reader.GetString(1),
+        SupplierID = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+        CategoryID = reader.IsDBNull(3) ? null : reader.GetInt32(3),
         QuantityPerUnit = reader.IsDBNull(4) ? null : reader.GetString(4),
-        UnitPrice       = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
-        UnitsInStock    = reader.IsDBNull(6) ? null : reader.GetInt16(6),
-        UnitsOnOrder    = reader.IsDBNull(7) ? null : reader.GetInt16(7),
-        ReorderLevel    = reader.IsDBNull(8) ? null : reader.GetInt16(8),
-        Discontinued    = reader.GetInt32(9) != 0,
+        UnitPrice = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+        UnitsInStock = reader.IsDBNull(6) ? null : reader.GetInt16(6),
+        UnitsOnOrder = reader.IsDBNull(7) ? null : reader.GetInt16(7),
+        ReorderLevel = reader.IsDBNull(8) ? null : reader.GetInt16(8),
+        Discontinued = reader.GetInt32(9) != 0,
     };
 
     private static Category ReadCategory(System.Data.Common.DbDataReader reader) => new Category
     {
-        CategoryID   = reader.GetInt32(0),
+        CategoryID = reader.GetInt32(0),
         CategoryName = reader.GetString(1),
-        Description  = reader.IsDBNull(2) ? null : reader.GetString(2),
+        Description = reader.IsDBNull(2) ? null : reader.GetString(2),
     };
 
     // ---- EagerAll (separate-query stitch) -----------------------------------------------

@@ -2,7 +2,7 @@ using System.Collections;
 
 namespace Inquiry.Commands;
 
-internal sealed class InquiryBatchChunkReader<T> : IDisposable
+internal sealed class InquiryBatchChunkReader<T>: IDisposable
 {
     private readonly int _maxBatchSize;
     private readonly IReadOnlyList<T>? _items;
@@ -16,7 +16,11 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
     internal InquiryBatchChunkReader(IEnumerable<T> items, int maxBatchSize, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(items);
-        if (maxBatchSize <= 0) throw new ArgumentOutOfRangeException(nameof(maxBatchSize));
+        if (maxBatchSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxBatchSize));
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         _maxBatchSize = maxBatchSize;
@@ -69,7 +73,11 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
         while (_buffer.Count < _maxBatchSize)
         {
             _cancellationToken.ThrowIfCancellationRequested();
-            if (!_enumerator!.MoveNext()) break;
+            if (!_enumerator!.MoveNext())
+            {
+                break;
+            }
+
             _buffer.Add(_enumerator.Current);
         }
         chunk = _buffer;
@@ -78,11 +86,14 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0) _enumerator?.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _enumerator?.Dispose();
+        }
     }
 }
 
-internal sealed class InquiryBatchChunkView<T> : IReadOnlyList<T>
+internal sealed class InquiryBatchChunkView<T>: IReadOnlyList<T>
 {
     private IReadOnlyList<T>? _items;
     private int _offset;
@@ -93,7 +104,11 @@ internal sealed class InquiryBatchChunkView<T> : IReadOnlyList<T>
     {
         get
         {
-            if ((uint)index >= (uint)Count) throw new ArgumentOutOfRangeException(nameof(index));
+            if ((uint)index >= (uint)Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
+
             return _items![_offset + index];
         }
     }
@@ -107,7 +122,10 @@ internal sealed class InquiryBatchChunkView<T> : IReadOnlyList<T>
 
     public IEnumerator<T> GetEnumerator()
     {
-        for (var i = 0; i < Count; i++) yield return this[i];
+        for (var i = 0; i < Count; i++)
+        {
+            yield return this[i];
+        }
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

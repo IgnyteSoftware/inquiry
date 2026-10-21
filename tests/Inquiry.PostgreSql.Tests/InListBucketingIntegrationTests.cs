@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.Tests.Fixtures;

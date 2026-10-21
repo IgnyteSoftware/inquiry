@@ -15,7 +15,7 @@ public sealed class DefaultedKeyItem
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class DefaultedKeyItemStore : InquiryStore<DefaultedKeyItem>
+public partial class DefaultedKeyItemStore: InquiryStore<DefaultedKeyItem>
 {
     [InquiryInsert]
     public partial Task<DefaultedKeyItem?> InsertReturningAsync(
@@ -35,7 +35,7 @@ public sealed class OraGeneratedKeyOnlyItem
     public int? Id { get; set; }
 }
 
-public partial class OraGeneratedKeyOnlyItemStore : InquiryStore<OraGeneratedKeyOnlyItem>
+public partial class OraGeneratedKeyOnlyItemStore: InquiryStore<OraGeneratedKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(
@@ -50,7 +50,7 @@ public sealed class OraDefaultKeyOnlyItem
     public string? Id { get; set; }
 }
 
-public partial class OraDefaultKeyOnlyItemStore : InquiryStore<OraDefaultKeyOnlyItem>
+public partial class OraDefaultKeyOnlyItemStore: InquiryStore<OraDefaultKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(

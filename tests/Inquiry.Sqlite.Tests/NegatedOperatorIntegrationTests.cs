@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -21,7 +17,7 @@ public sealed class NegatedProduct
     public int Qty { get; set; }
 }
 
-public partial class NegatedProductStore : InquiryStore<NegatedProduct>
+public partial class NegatedProductStore: InquiryStore<NegatedProduct>
 {
     [InquiryInsert]
     public partial Task<NegatedProduct?> InsertAsync(NegatedProduct product, CancellationToken cancellationToken = default);

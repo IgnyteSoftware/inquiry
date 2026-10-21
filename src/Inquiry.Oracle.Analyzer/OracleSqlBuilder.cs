@@ -1,8 +1,5 @@
 using Inquiry.Generators.Abstractions;
 using Inquiry.Oracle.Shared;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Inquiry.Oracle.Analyzer;
 
@@ -35,7 +32,7 @@ namespace Inquiry.Oracle.Analyzer;
 /// builder fails the build with a clear message.</description></item>
 /// </list>
 /// </summary>
-internal sealed class OracleSqlBuilder : SqlBuilder
+internal sealed class OracleSqlBuilder: SqlBuilder
 {
     public override bool UsesArrayBindingForBatchMutations => true;
 
@@ -140,7 +137,11 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         var sb = new System.Text.StringBuilder("DECLARE ");
         for (var i = 0; i < resultSetCount; i++)
         {
-            if (i > 0) sb.Append(' ');
+            if (i > 0)
+            {
+                sb.Append(' ');
+            }
+
             sb.Append('c').Append(i).Append(" SYS_REFCURSOR;");
         }
         sb.Append(" BEGIN ").Append(procedureName).Append('(');
@@ -148,12 +149,20 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         var argIndex = 0;
         for (var i = 0; i < parameterNames.Count; i++)
         {
-            if (argIndex++ > 0) sb.Append(", ");
+            if (argIndex++ > 0)
+            {
+                sb.Append(", ");
+            }
+
             sb.Append(':').Append(OracleBindName.Encode(parameterNames[i]));
         }
         for (var i = 0; i < resultSetCount; i++)
         {
-            if (argIndex++ > 0) sb.Append(", ");
+            if (argIndex++ > 0)
+            {
+                sb.Append(", ");
+            }
+
             sb.Append('c').Append(i);
         }
         sb.Append("); ");
@@ -459,7 +468,9 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     protected override string RenderComputedColumn(IColumn column)
     {
         if (column.TypeClass != DbTypeClass.String)
+        {
             return base.RenderComputedColumn(column);
+        }
 
         var type = column.IsUnicode ? "NVARCHAR2" : "VARCHAR2";
         return "AS (CAST(" + column.ComputedExpression + " AS " + type + "(" +

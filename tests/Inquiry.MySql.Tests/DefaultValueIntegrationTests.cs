@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Stores;
@@ -17,7 +14,7 @@ public sealed class DefaultedKeyItem
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class DefaultedKeyItemStore : InquiryStore<DefaultedKeyItem>
+public partial class DefaultedKeyItemStore: InquiryStore<DefaultedKeyItem>
 {
     [InquiryInsert]
     public partial Task<DefaultedKeyItem?> InsertReturningAsync(DefaultedKeyItem item, CancellationToken cancellationToken = default);
@@ -42,7 +39,7 @@ public sealed class DefaultedUniqueKeyItem
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class DefaultedUniqueKeyItemStore : InquiryStore<DefaultedUniqueKeyItem>
+public partial class DefaultedUniqueKeyItemStore: InquiryStore<DefaultedUniqueKeyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(DefaultedUniqueKeyItem item, CancellationToken cancellationToken = default);

@@ -17,7 +17,7 @@ public sealed class GroupItem
     public int Priority { get; set; }
 }
 
-public partial class GroupItemStore : InquiryStore<GroupItem>
+public partial class GroupItemStore: InquiryStore<GroupItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(GroupItem item, CancellationToken cancellationToken = default);

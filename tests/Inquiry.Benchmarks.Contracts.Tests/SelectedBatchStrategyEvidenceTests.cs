@@ -58,7 +58,8 @@ public sealed class SelectedBatchStrategyEvidenceTests
         {
             Authoritative = true,
             BenchmarkDotNet = Evidence(provider, operation, cell, operation.SelectedMethod, capabilities, releaseSource: true)
-                .BenchmarkDotNet with { JobId = "ShortRun" },
+                .BenchmarkDotNet with
+            { JobId = "ShortRun" },
         };
         var reference = Reference("evidence/short-run.json", evidence);
         var accepted = cell with

@@ -1,6 +1,5 @@
 using Inquiry.FeatureCatalog;
 using Inquiry.SqlServer.Tests.Fixtures;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -39,7 +38,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsByte");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.ByteVal = 200;
+        var item = MakeItem(1);
+        item.ByteVal = 200;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -54,7 +54,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsI16");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.Int16Val = short.MaxValue;
+        var item = MakeItem(1);
+        item.Int16Val = short.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -69,7 +70,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsI32");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.Int32Val = int.MaxValue;
+        var item = MakeItem(1);
+        item.Int32Val = int.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -84,7 +86,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsI64");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.Int64Val = long.MaxValue;
+        var item = MakeItem(1);
+        item.Int64Val = long.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -99,7 +102,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsEI32");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumInt32Val = SampleEnumInt32.MaxSigned;
+        var item = MakeItem(1);
+        item.EnumInt32Val = SampleEnumInt32.MaxSigned;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -119,7 +123,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsSB2");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.SByteVal = 42;
+        var item = MakeItem(1);
+        item.SByteVal = 42;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -135,7 +140,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // sbyte -1 → unchecked((byte)-1) = 255 → TINYINT; reads back GetByte=255 → (sbyte)=-1.
-        var item = MakeItem(1); item.SByteVal = -1;
+        var item = MakeItem(1);
+        item.SByteVal = -1;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -151,7 +157,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // sbyte.MinValue (-128) → unchecked((byte)) = 128 → TINYINT; reads back to -128.
-        var item = MakeItem(1); item.SByteVal = sbyte.MinValue;
+        var item = MakeItem(1);
+        item.SByteVal = sbyte.MinValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -171,7 +178,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsU162");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt16Val = 1000;
+        var item = MakeItem(1);
+        item.UInt16Val = 1000;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -187,7 +195,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // 40000 > short.MaxValue (32767); stored as signed -25536 in SMALLINT, reads back to 40000.
-        var item = MakeItem(1); item.UInt16Val = 40000;
+        var item = MakeItem(1);
+        item.UInt16Val = 40000;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -203,7 +212,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // ushort.MaxValue (65535) → short -1 → SMALLINT; reads back to 65535.
-        var item = MakeItem(1); item.UInt16Val = ushort.MaxValue;
+        var item = MakeItem(1);
+        item.UInt16Val = ushort.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -223,7 +233,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsU322");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt32Val = 1000u;
+        var item = MakeItem(1);
+        item.UInt32Val = 1000u;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -239,7 +250,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // 3_000_000_000 > int.MaxValue (2_147_483_647); stored as -1_294_967_296 in INT, reads back exactly.
-        var item = MakeItem(1); item.UInt32Val = 3_000_000_000u;
+        var item = MakeItem(1);
+        item.UInt32Val = 3_000_000_000u;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -255,7 +267,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // uint.MaxValue → int -1 → INT; reads back to uint.MaxValue.
-        var item = MakeItem(1); item.UInt32Val = uint.MaxValue;
+        var item = MakeItem(1);
+        item.UInt32Val = uint.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -275,7 +288,8 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesSqlServerDdl, "UnsignedSsU642");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt64Val = 1000ul;
+        var item = MakeItem(1);
+        item.UInt64Val = 1000ul;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -291,7 +305,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // ulong.MaxValue > long.MaxValue; stored as long -1 in BIGINT, reads back to ulong.MaxValue.
-        var item = MakeItem(1); item.UInt64Val = ulong.MaxValue;
+        var item = MakeItem(1);
+        item.UInt64Val = ulong.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -311,7 +326,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // SampleEnumSByte.Negative = -1 → byte 255 → TINYINT; reads back to the enum member.
-        var item = MakeItem(1); item.EnumSByteVal = SampleEnumSByte.Negative;
+        var item = MakeItem(1);
+        item.EnumSByteVal = SampleEnumSByte.Negative;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -331,7 +347,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // SampleEnumUInt16.AboveShortMax = 40000 (> 32767) → short -25536 → SMALLINT; round-trips.
-        var item = MakeItem(1); item.EnumUInt16Val = SampleEnumUInt16.AboveShortMax;
+        var item = MakeItem(1);
+        item.EnumUInt16Val = SampleEnumUInt16.AboveShortMax;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -351,7 +368,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // SampleEnumUInt32.AboveIntMax = 3_000_000_000 (> int.MaxValue) → int -1_294_967_296 → INT.
-        var item = MakeItem(1); item.EnumUInt32Val = SampleEnumUInt32.AboveIntMax;
+        var item = MakeItem(1);
+        item.EnumUInt32Val = SampleEnumUInt32.AboveIntMax;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
@@ -371,7 +389,8 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // SampleEnumUInt64.AboveLongMax = 1.8e19 (> long.MaxValue) → negative long → BIGINT; round-trips.
-        var item = MakeItem(1); item.EnumUInt64Val = SampleEnumUInt64.AboveLongMax;
+        var item = MakeItem(1);
+        item.EnumUInt64Val = SampleEnumUInt64.AboveLongMax;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);

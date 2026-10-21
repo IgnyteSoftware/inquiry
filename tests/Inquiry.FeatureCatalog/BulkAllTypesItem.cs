@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -53,7 +49,7 @@ public sealed class BulkAllTypesItem
     public Money ConvertedVal { get; set; }
 }
 
-public partial class BulkAllTypesItemStore : InquiryStore<BulkAllTypesItem>
+public partial class BulkAllTypesItemStore: InquiryStore<BulkAllTypesItem>
 {
     [InquiryBulkInsert]
     public partial Task<long> BulkInsertAsync(IEnumerable<BulkAllTypesItem> items, CancellationToken cancellationToken = default);

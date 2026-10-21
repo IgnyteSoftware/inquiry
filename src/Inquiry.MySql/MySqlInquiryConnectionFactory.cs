@@ -1,6 +1,6 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using MySqlConnector;
-using System.Data.Common;
 
 namespace Inquiry.MySql;
 
@@ -16,7 +16,7 @@ namespace Inquiry.MySql;
 /// The factory is a DI singleton, so the data source lives for the container's lifetime and is
 /// disposed with it (see <see cref="DisposeAsync"/>).
 /// </remarks>
-internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory, IAsyncDisposable, IDisposable
+internal sealed class MySqlInquiryConnectionFactory: IInquiryConnectionFactory, IAsyncDisposable, IDisposable
 {
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;
@@ -46,10 +46,7 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory,
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
         }
 
-        if (options is null)
-        {
-            throw new ArgumentNullException(nameof(options));
-        }
+        ArgumentNullException.ThrowIfNull(options);
 
         // Inquiry's emulated RETURNING for a database-generated GUID key captures the value in a
         // @_inquiry_genkey user variable; MySqlConnector only treats an unmatched @name as a user

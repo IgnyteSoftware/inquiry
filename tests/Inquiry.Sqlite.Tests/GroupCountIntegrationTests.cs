@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -21,7 +17,7 @@ public sealed class GroupItem
     public int Priority { get; set; }
 }
 
-public partial class GroupItemStore : InquiryStore<GroupItem>
+public partial class GroupItemStore: InquiryStore<GroupItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(GroupItem item, CancellationToken cancellationToken = default);

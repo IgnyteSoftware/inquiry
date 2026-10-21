@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -28,7 +24,7 @@ public sealed record DistinctCategory
     public string Category { get; init; } = string.Empty;
 }
 
-public partial class DistinctProductStore : InquiryStore<DistinctProduct>
+public partial class DistinctProductStore: InquiryStore<DistinctProduct>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(DistinctProduct product, CancellationToken cancellationToken = default);

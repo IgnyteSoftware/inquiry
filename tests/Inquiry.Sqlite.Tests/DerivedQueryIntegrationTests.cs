@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -21,7 +17,7 @@ public sealed class DerivedPerson
     public string City { get; set; } = string.Empty;
 }
 
-public partial class DerivedPersonStore : InquiryStore<DerivedPerson>
+public partial class DerivedPersonStore: InquiryStore<DerivedPerson>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(DerivedPerson person, CancellationToken cancellationToken = default);
