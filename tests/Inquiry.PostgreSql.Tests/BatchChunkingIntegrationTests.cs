@@ -41,7 +41,9 @@ public sealed class BatchChunkingIntegrationTests
         {
             Assert.Contains("= ANY(@Id)", command.CommandText, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(
+#pragma warning disable S3265 // Npgsql combines NpgsqlDbType.Array with an element type by design.
                 NpgsqlDbType.Array | NpgsqlDbType.Integer,
+#pragma warning restore S3265
                 Assert.IsType<NpgsqlDbType>(command.Metadata));
         });
         Assert.Equal(0, await store.CountAsync());
@@ -129,7 +131,9 @@ public sealed class BatchChunkingIntegrationTests
     private static object? InspectArrayParameter(System.Data.Common.DbCommand command)
     {
         var parameter = command.Parameters.Cast<NpgsqlParameter>()
+#pragma warning disable S3265 // Npgsql combines NpgsqlDbType.Array with an element type by design.
             .SingleOrDefault(candidate => (candidate.NpgsqlDbType & NpgsqlDbType.Array) != 0);
+#pragma warning restore S3265
         return parameter?.NpgsqlDbType;
     }
 

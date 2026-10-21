@@ -20,7 +20,7 @@ public sealed class TvpResourceLifetimePipelineTests
     [Theory]
     [InlineData(FastPath.Stream)]
     [InlineData(FastPath.List)]
-    [InlineData(FastPath.Single)]
+    [InlineData(FastPath.SingleOrDefault)]
     [InlineData(FastPath.Scalar)]
     [InlineData(FastPath.Execute)]
     public async Task InterceptorCommandConstructionFailureReleasesFastPathResources(FastPath fastPath)
@@ -131,13 +131,14 @@ public sealed class TvpResourceLifetimePipelineTests
                 await foreach (var _ in pipeline.QueryAsync<ProbeEntity, int, ProbeMaterializer>(
                     " ", 0, static (_, _) => throw new BinderProbeException(), default))
                 {
+                    // The fast path must return before enumeration yields a row.
                 }
                 break;
             case FastPath.List:
                 await pipeline.QueryListAsync<ProbeEntity, int, ProbeMaterializer>(
                     " ", 0, static (_, _) => throw new BinderProbeException(), default, default);
                 break;
-            case FastPath.Single:
+            case FastPath.SingleOrDefault:
                 await pipeline.QuerySingleOrDefaultAsync<ProbeEntity, int, ProbeMaterializer>(
                     " ", 0, static (_, _) => throw new BinderProbeException(), default);
                 break;
@@ -233,7 +234,9 @@ public sealed class TvpResourceLifetimePipelineTests
         public void Dispose()
         {
             DisposeCount++;
+#pragma warning disable S3877 // The probe throws from Dispose to test that the pipeline reports cleanup failures.
             throw new CleanupProbeException();
+#pragma warning restore S3877
         }
     }
 
@@ -247,6 +250,7 @@ public sealed class TvpResourceLifetimePipelineTests
     {
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2094", Justification = "Placeholder entity type for the generic pipeline calls; the tests never materialize a row.")]
     private sealed class ProbeEntity
     {
     }
@@ -388,9 +392,12 @@ public sealed class TvpResourceLifetimePipelineTests
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class PrepareProbeException : Exception { }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class CleanupProbeException : Exception { }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class BinderProbeException : Exception { }
 
-    public enum FastPath { Stream, List, Single, Scalar, Execute, SequentialBatch }
+    public enum FastPath { Stream, List, SingleOrDefault, Scalar, Execute, SequentialBatch }
 }

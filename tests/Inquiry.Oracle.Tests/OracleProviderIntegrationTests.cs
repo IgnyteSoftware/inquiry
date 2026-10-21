@@ -91,6 +91,6 @@ public sealed class OracleProviderIntegrationTests
         ConvertedEnabled = new OracleToggle(enabled),
         Payload = payload,
         Name = name,
-        OccurredAt = new DateTime(2026, 7, 14, 12, 0, 0),
+        OccurredAt = new DateTime(2026, 7, 14, 12, 0, 0, DateTimeKind.Unspecified),
     };
 }

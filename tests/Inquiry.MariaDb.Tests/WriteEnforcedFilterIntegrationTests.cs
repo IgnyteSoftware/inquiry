@@ -16,7 +16,7 @@ public sealed class WriteEnforcedFilterIntegrationTests
     private readonly MariaDbContainerFixture _fixture;
     public WriteEnforcedFilterIntegrationTests(MariaDbContainerFixture fixture) => _fixture = fixture;
 
-    private static IDisposable Scope(long tenantId)
+    private static InquiryFilterContext.Scope Scope(long tenantId)
         => InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["TenantId"] = tenantId });
 
     private Task<MariaDbTestHarness> CreateHarnessAsync()

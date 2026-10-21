@@ -44,30 +44,30 @@ internal sealed class OracleTestHarness : IAsyncDisposable
         string adminConnectionString,
         string? namePrefix = null,
         Action<string>? userCreated = null,
-        CancellationToken cancellationToken = default,
         Action<global::Inquiry.InquiryOptions>? configureOptions = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        CancellationToken cancellationToken = default)
         => CreateFromDdlAsync(
             adminConnectionString,
             NorthwindSchema.OracleDdl,
             namePrefix,
             userCreated,
-            cancellationToken,
             configureOptions,
-            configureServices);
+            configureServices,
+            cancellationToken);
 
     public static async Task<OracleTestHarness> CreateFromDdlAsync(
         string adminConnectionString,
         string ddl,
         string? namePrefix = null,
         Action<string>? userCreated = null,
-        CancellationToken cancellationToken = default,
         Action<global::Inquiry.InquiryOptions>? configureOptions = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        CancellationToken cancellationToken = default)
     {
         var prefix = (namePrefix ?? "inquiry").ToUpperInvariant();
         var schemaUser = prefix + "_" + Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant();
-        var schemaPassword = "Pw_" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        var schemaPassword = string.Concat("Pw_", Guid.NewGuid().ToString("N").AsSpan(0, 12));
         var connectionString = new OracleConnectionStringBuilder(adminConnectionString)
         {
             UserID = schemaUser,

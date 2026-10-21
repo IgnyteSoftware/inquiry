@@ -11,7 +11,9 @@ public sealed class InquiryTvpParameterTests
     private enum UnsignedState : uint { High = 3_000_000_000u, Max = uint.MaxValue }
 
     [Theory]
+#pragma warning disable xUnit1042 // The rows hold descriptors that xUnit cannot serialize, so TheoryData would not enumerate them either.
     [MemberData(nameof(UnsignedCases))]
+#pragma warning restore xUnit1042
     public void DirectUnsignedBinderUsesSignedArtifactMetadataAndRows(object values, SqlDbType expectedType, InquiryTvpDescriptor descriptor, object[] expectedRows)
     {
         using var command = new SqlCommand();
@@ -386,6 +388,7 @@ public sealed class InquiryTvpParameterTests
         Assert.Equal(1, second.DisposeCount);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class ProbeException : Exception { }
 
     private sealed class ProbeEnumerable<T> : IEnumerable<T>
@@ -465,12 +468,15 @@ public sealed class InquiryTvpParameterTests
                 _owner.DisposeCount++;
                 if (_owner._failDispose)
                 {
+#pragma warning disable S3877 // The probe throws from Dispose to test that cleanup failures are aggregated.
                     throw new ProbeException();
+#pragma warning restore S3877
                 }
             }
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class ParameterAddException : Exception;
 
     private sealed class RejectingCommand : DbCommand
@@ -508,8 +514,12 @@ public sealed class InquiryTvpParameterTests
         public override void Remove(object value) { }
         public override void RemoveAt(int index) { }
         public override void RemoveAt(string parameterName) { }
+#pragma warning disable CA2201 // The fake matches ADO.NET providers, which throw IndexOutOfRangeException for a missing parameter.
         protected override DbParameter GetParameter(int index) => throw new IndexOutOfRangeException();
+#pragma warning restore CA2201
+#pragma warning disable CA2201 // The fake matches ADO.NET providers, which throw IndexOutOfRangeException for a missing parameter.
         protected override DbParameter GetParameter(string parameterName) => throw new IndexOutOfRangeException();
+#pragma warning restore CA2201
         protected override void SetParameter(int index, DbParameter value) => throw new ParameterAddException();
         protected override void SetParameter(string parameterName, DbParameter value) => throw new ParameterAddException();
     }

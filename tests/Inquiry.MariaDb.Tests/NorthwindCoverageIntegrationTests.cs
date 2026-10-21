@@ -74,7 +74,7 @@ public sealed class NorthwindCoverageIntegrationTests
         var order = await orders.InsertReturningAsync(new Order
         {
             CustomerID = "ALFKI",
-            OrderDate = new DateTime(1996, 7, 4),
+            OrderDate = new DateTime(1996, 7, 4, 0, 0, 0, DateTimeKind.Unspecified),
             Freight = 32.38m,
         });
 

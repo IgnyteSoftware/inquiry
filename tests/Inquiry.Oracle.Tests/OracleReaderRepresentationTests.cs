@@ -69,7 +69,7 @@ public sealed class OracleReaderRepresentationTests
         Assert.StartsWith("TimeSpan+Time: Execute: ArgumentException: ORA-50028:", rejected[2]);
         Assert.StartsWith("TimeSpan+Object: Execute: ArgumentException: ORA-50028:", rejected[3]);
 
-        await ExecuteAsync(new DateTime(2024, 2, 29), DbType.Date);
+        await ExecuteAsync(new DateTime(2024, 2, 29, 0, 0, 0, DateTimeKind.Unspecified), DbType.Date);
         await ExecuteAsync(TimeSpan.FromTicks(452_961_234_570), null);
         await ExecuteAsync(new DateTimeOffset(2024, 2, 29, 12, 34, 56, TimeSpan.FromMinutes(-270)), DbType.DateTimeOffset);
 

@@ -28,7 +28,7 @@ public sealed class CancellationTokenPropagationTests
             var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(10)));
             if (completed != execution)
             {
-                cts.Cancel();
+                await cts.CancelAsync();
                 var cleanup = ObserveAndDisposeAsync(execution, harness);
                 harness = null;
 
@@ -91,6 +91,7 @@ public sealed class CancellationTokenPropagationTests
         {
             await foreach (var _ in store.SelectAllAsync(PreCancelled))
             {
+                // Enumeration alone must throw; the rows are not used.
             }
         });
     }
@@ -128,7 +129,10 @@ public sealed class CancellationTokenPropagationTests
             {
                 try
                 { await execution; }
-                catch { }
+                catch
+                {
+                    // The execution failure is expected after cancellation; the task only needs to be observed.
+                }
             }
             else
             {

@@ -103,7 +103,8 @@ public sealed class OracleContainerFixture : IAsyncLifetime
     private static async Task<string> WaitForServiceAsync(string connectionString)
     {
         const int maxAttempts = 30;
-        for (var attempt = 1; ; attempt++)
+        var attempt = 1;
+        while (true)
         {
             try
             {
@@ -120,6 +121,8 @@ public sealed class OracleContainerFixture : IAsyncLifetime
             {
                 await Task.Delay(2000);
             }
+
+            attempt++;
         }
     }
 

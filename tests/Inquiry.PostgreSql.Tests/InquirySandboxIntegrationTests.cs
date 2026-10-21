@@ -46,7 +46,7 @@ public sealed class InquirySandboxIntegrationTests
             catch (Exception exception)
             {
                 bothInserted.TrySetException(exception);
-                coordination.Cancel();
+                await coordination.CancelAsync();
                 throw;
             }
         }

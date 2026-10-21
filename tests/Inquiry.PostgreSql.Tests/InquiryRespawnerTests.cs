@@ -127,7 +127,7 @@ public sealed class InquiryRespawnerTests(PostgreSqlContainerFixture fixture)
         var respawner = await InquiryRespawner.CreateAsync(connection, Options);
         await ExecuteAsync(connection, "INSERT INTO parent DEFAULT VALUES");
         using var cancellation = new CancellationTokenSource();
-        cancellation.Cancel();
+        await cancellation.CancelAsync();
         var token = cancellation.Token;
         var factory = new RecordingFactory(database.ConnectionString);
 

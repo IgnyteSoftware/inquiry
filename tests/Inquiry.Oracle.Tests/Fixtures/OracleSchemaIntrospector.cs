@@ -9,10 +9,10 @@ namespace Inquiry.Oracle.Tests.Fixtures;
 /// so it comes back with its original mixed case.</summary>
 public sealed class OracleSchemaIntrospector : ISchemaIntrospector
 {
-    public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
+    public async Task<SchemaSnapshot> ReadAsync(DbConnection connection, CancellationToken cancellationToken = default)
     {
         var cols = new Dictionary<string, List<ColumnSnapshot>>();
-        await Query(conn, ct,
+        await Query(connection,
             @"SELECT table_name, column_name, nullable
               FROM user_tab_columns
               ORDER BY table_name, column_id",
@@ -25,19 +25,19 @@ public sealed class OracleSchemaIntrospector : ISchemaIntrospector
                 }
 
                 list.Add(new ColumnSnapshot(r.GetString(1), r.GetString(2) == "Y"));
-            });
+            }, cancellationToken);
 
         var pks = new Dictionary<string, List<string>>();
-        await Query(conn, ct,
+        await Query(connection,
             @"SELECT c.table_name, cc.column_name
               FROM user_constraints c
               JOIN user_cons_columns cc ON cc.constraint_name = c.constraint_name
               WHERE c.constraint_type = 'P'
               ORDER BY c.table_name, cc.position",
-            r => { var t = r.GetString(0); (pks.TryGetValue(t, out var l) ? l : pks[t] = new()).Add(r.GetString(1)); });
+            r => { var t = r.GetString(0); GetOrAdd(pks, t).Add(r.GetString(1)); }, cancellationToken);
 
         var fks = new Dictionary<string, List<ForeignKeySnapshot>>();
-        await Query(conn, ct,
+        await Query(connection,
             @"SELECT c.table_name, cc.column_name, rc.table_name AS ref_table, rcc.column_name AS ref_col
               FROM user_constraints c
               JOIN user_cons_columns cc  ON cc.constraint_name = c.constraint_name
@@ -49,20 +49,20 @@ public sealed class OracleSchemaIntrospector : ISchemaIntrospector
             r =>
             {
                 var t = r.GetString(0);
-                (fks.TryGetValue(t, out var l) ? l : fks[t] = new())
+                GetOrAdd(fks, t)
                     .Add(new ForeignKeySnapshot(new[] { r.GetString(1) }, r.GetString(2), new[] { r.GetString(3) }));
-            });
+            }, cancellationToken);
 
         var idx = new Dictionary<(string Table, string Index), List<string>>();
-        await Query(conn, ct,
+        await Query(connection,
             @"SELECT table_name, index_name, column_name
               FROM user_ind_columns
               ORDER BY table_name, index_name, column_position",
             r =>
             {
                 var key = (r.GetString(0), r.GetString(1));
-                (idx.TryGetValue(key, out var l) ? l : idx[key] = new()).Add(r.GetString(2));
-            });
+                GetOrAdd(idx, key).Add(r.GetString(2));
+            }, cancellationToken);
 
         var idxByTable = idx
             .GroupBy(kv => kv.Key.Table)
@@ -77,14 +77,26 @@ public sealed class OracleSchemaIntrospector : ISchemaIntrospector
         return new SchemaSnapshot(tables);
     }
 
-    private static async Task Query(DbConnection conn, CancellationToken ct, string sql, Action<DbDataReader> onRow)
+    private static async Task Query(DbConnection connection, string sql, Action<DbDataReader> onRow, CancellationToken cancellationToken)
     {
-        await using var cmd = conn.CreateCommand();
+        await using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct))
+        await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await r.ReadAsync(cancellationToken))
         {
             onRow(r);
         }
+    }
+
+    private static List<TValue> GetOrAdd<TKey, TValue>(Dictionary<TKey, List<TValue>> map, TKey key)
+        where TKey : notnull
+    {
+        if (!map.TryGetValue(key, out var list))
+        {
+            list = new();
+            map[key] = list;
+        }
+
+        return list;
     }
 }

@@ -89,7 +89,7 @@ public sealed class ManyToManyIntegrationTests
 
         M2MMaterializationProbe.Reset(scenario.DefaultExcludedTitles, scenario.DefaultExcludedProductIds);
 
-        var all = await orders.AllWithProductsAsync().ToListAsync();
+        await orders.AllWithProductsAsync().ToListAsync();
 
         Assert.True(M2MMaterializationProbe.ChildReads > 0);
         Assert.True(M2MMaterializationProbe.JunctionReads > 0);

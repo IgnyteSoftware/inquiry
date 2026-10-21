@@ -46,7 +46,7 @@ public sealed class OracleTestHarnessCleanupTests
                     schemaUser = user;
                     cts.Cancel();
                 },
-                cts.Token));
+                cancellationToken: cts.Token));
 
         Assert.NotNull(schemaUser);
         Assert.False(await UserExistsAsync(schemaUser));

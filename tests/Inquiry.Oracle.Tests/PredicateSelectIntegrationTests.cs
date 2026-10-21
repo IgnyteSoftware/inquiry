@@ -165,8 +165,9 @@ public sealed class PredicateSelectIntegrationTests
     }
 
     // #106: live bucket-boundary coverage against real Oracle. #67 pads each IN list to the next power of
-    // two by repeating an element (well under Oracle's 1000-expression IN ceiling for these cardinalities);
-    // 1,2,3,5,9 → buckets 1,2,4,8,16, all returning the same rows — the padding-is-a-no-op guarantee.
+    // two by repeating an element. These list sizes stay well under the Oracle limit of 1000 IN expressions.
+    // Lists of 1, 2, 3, 5, and 9 values use buckets of 1, 2, 4, 8, and 16, and all return the same rows.
+    // This shows that the padding is a no-op.
     [SkippableFact]
     public async Task InListBucketBoundariesReturnCorrectRows()
     {

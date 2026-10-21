@@ -63,8 +63,8 @@ public sealed class OracleCoverageGapIntegrationTests
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "datetime");
         var employees = harness.GetRequiredService<EmployeeStore>();
 
-        var birth = new DateTime(1980, 5, 15);
-        var hire = new DateTime(2010, 3, 1);
+        var birth = new DateTime(1980, 5, 15, 0, 0, 0, DateTimeKind.Unspecified);
+        var hire = new DateTime(2010, 3, 1, 0, 0, 0, DateTimeKind.Unspecified);
         var inserted = await employees.InsertReturningAsync(new Employee
         {
             FirstName = "Nancy",

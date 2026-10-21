@@ -159,12 +159,12 @@ public sealed class BatchChunkingIntegrationTests
             configureServices: probe.Decorate,
             configureOptions: options => options.MaxBatchSize = 2);
 
-    private static object InspectCommand(System.Data.Common.DbCommand command)
+    private static CommandMetadata InspectCommand(System.Data.Common.DbCommand command)
         => new CommandMetadata(command.Parameters.Cast<MySqlParameter>()
             .Select(SnapshotParameter)
             .ToArray());
 
-    private static object InspectBatchCommand(System.Data.Common.DbBatchCommand command)
+    private static CommandMetadata InspectBatchCommand(System.Data.Common.DbBatchCommand command)
         => new CommandMetadata(command.Parameters.Cast<MySqlParameter>()
             .Select(SnapshotParameter)
             .ToArray());

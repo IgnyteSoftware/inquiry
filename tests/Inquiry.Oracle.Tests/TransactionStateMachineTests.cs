@@ -97,8 +97,8 @@ public sealed class TransactionStateMachineTests
         var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<CustomerStore>();
 
-        const int N = 16;
-        var tasks = Enumerable.Range(0, N).Select(i => Task.Run(async () =>
+        const int transactionCount = 16;
+        var tasks = Enumerable.Range(0, transactionCount).Select(i => Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
             await store.InsertAsync(new Customer { CustomerID = "C" + i.ToString("D4", CultureInfo.CurrentCulture), CompanyName = "Concurrent " + i });
@@ -108,8 +108,8 @@ public sealed class TransactionStateMachineTests
         await Task.WhenAll(tasks);
 
         var all = await store.SelectAllAsync();
-        Assert.Equal(N, all.Count);
-        for (var i = 0; i < N; i++)
+        Assert.Equal(transactionCount, all.Count);
+        for (var i = 0; i < transactionCount; i++)
         {
             Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4", CultureInfo.CurrentCulture));
         }

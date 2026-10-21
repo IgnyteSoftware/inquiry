@@ -91,7 +91,9 @@ public sealed class TvpResourceLifetimeIntegrationTests
         await foreach (var item in harness.GetRequiredService<TvpLifetimeStore>().StreamAsync(source))
         {
             Assert.Equal(1, item.Id);
+#pragma warning disable S1751 // The test checks that leaving the stream after the first row disposes the source.
             break;
+#pragma warning restore S1751
         }
 
         Assert.Equal(1, source.DisposeCount);

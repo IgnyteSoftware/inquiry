@@ -119,9 +119,9 @@ public sealed class PredicateSelectIntegrationTests
         await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, TemporalDdl, "predindt");
         var items = harness.GetRequiredService<TemporalItemStore>();
 
-        var d1 = new DateTime(2021, 6, 15, 10, 30, 0, 1);  // .001 -> legacy datetime rounds to .000
-        var d2 = new DateTime(2022, 3, 9, 14, 45, 0, 2);   // .002 -> legacy datetime rounds to .003
-        var decoy = new DateTime(2020, 1, 1, 0, 0, 0, 7);
+        var d1 = new DateTime(2021, 6, 15, 10, 30, 0, 1, DateTimeKind.Unspecified);  // .001 -> legacy datetime rounds to .000
+        var d2 = new DateTime(2022, 3, 9, 14, 45, 0, 2, DateTimeKind.Unspecified);   // .002 -> legacy datetime rounds to .003
+        var decoy = new DateTime(2020, 1, 1, 0, 0, 0, 7, DateTimeKind.Unspecified);
 
         await items.InsertAsync(new TemporalItem { Moment = d1 });
         await items.InsertAsync(new TemporalItem { Moment = d2 });

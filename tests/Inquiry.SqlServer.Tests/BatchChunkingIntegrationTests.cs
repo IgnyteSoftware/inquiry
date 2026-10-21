@@ -247,7 +247,7 @@ public sealed class BatchChunkingIntegrationTests
             configureServices: probe.Decorate,
             configureOptions: options => options.MaxBatchSize = 2);
 
-    private static object? InspectStructuredParameter(System.Data.Common.DbCommand command)
+    private static StructuredParameterMetadata? InspectStructuredParameter(System.Data.Common.DbCommand command)
     {
         var parameter = command.Parameters.Cast<SqlParameter>()
             .SingleOrDefault(candidate => candidate.SqlDbType == SqlDbType.Structured);
@@ -278,7 +278,7 @@ public sealed class BatchChunkingIntegrationTests
     private static DefaultOnlyBatchItem[] DefaultOnlyItems(int count)
         => Enumerable.Range(0, count).Select(static _ => new DefaultOnlyBatchItem()).ToArray();
 
-    private static object InspectInsertBatchCommand(System.Data.Common.DbBatchCommand command)
+    private static InsertBatchMetadata InspectInsertBatchCommand(System.Data.Common.DbBatchCommand command)
     {
         var parameters = command.Parameters.Cast<SqlParameter>().ToArray();
         return new InsertBatchMetadata(

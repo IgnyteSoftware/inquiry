@@ -291,7 +291,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         Assert.Equal(new OracleToggle(true), value.ConvertedEnabled);
         Assert.Equal([1, 2, 3, 4], value.Payload);
         Assert.Equal("reader", value.Name);
-        Assert.Equal(new DateTime(2026, 7, 11, 12, 34, 56), value.OccurredAt);
+        Assert.Equal(new DateTime(2026, 7, 11, 12, 34, 56, DateTimeKind.Unspecified), value.OccurredAt);
     }
 
     [SkippableFact]
@@ -399,7 +399,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
             ConvertedToken = new OracleExternalId(convertedToken),
             Payload = [(byte)id, (byte)(id + 1)],
             Name = $"item-{id}",
-            OccurredAt = new DateTime(2026, 7, 11, 12, 34, id),
+            OccurredAt = new DateTime(2026, 7, 11, 12, 34, id, DateTimeKind.Unspecified),
         };
 
     private static void AssertAllTypes(ProviderReadAllTypes expected, ProviderReadAllTypes actual)

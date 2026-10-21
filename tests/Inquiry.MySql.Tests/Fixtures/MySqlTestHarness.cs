@@ -100,7 +100,7 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         }
         catch (Exception setupException) when (wasCreated)
         {
-            MySqlConnection.ClearAllPools();
+            await MySqlConnection.ClearAllPoolsAsync();
             try
             {
                 await DropDatabaseAsync(adminConnectionString, databaseName);
@@ -130,7 +130,7 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         }
 
         // Force-close pooled connections so DROP DATABASE doesn't fail with "database in use".
-        MySqlConnection.ClearAllPools();
+        await MySqlConnection.ClearAllPoolsAsync();
 
         try
         {

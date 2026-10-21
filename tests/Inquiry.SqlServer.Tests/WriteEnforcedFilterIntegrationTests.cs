@@ -16,7 +16,7 @@ public sealed class WriteEnforcedFilterIntegrationTests
     private readonly SqlServerContainerFixture _fixture;
     public WriteEnforcedFilterIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
 
-    private static IDisposable Scope(long tenantId)
+    private static InquiryFilterContext.Scope Scope(long tenantId)
         => InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["TenantId"] = tenantId });
 
     private Task<SqlServerTestHarness> CreateHarnessAsync()

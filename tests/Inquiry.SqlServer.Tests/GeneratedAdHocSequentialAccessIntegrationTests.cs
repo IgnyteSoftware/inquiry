@@ -70,7 +70,9 @@ public sealed class GeneratedAdHocSequentialAccessIntegrationTests
         {
             AssertRow(row, 1);
             firstOnly++;
+#pragma warning disable S1751 // The test checks that leaving the stream after the first row is safe.
             break;
+#pragma warning restore S1751
         }
         Assert.Equal(1, firstOnly);
         Assert.Equal(RowCount, await inquiry.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM [SequentialAdHocRow]"));
@@ -79,7 +81,9 @@ public sealed class GeneratedAdHocSequentialAccessIntegrationTests
         await foreach (var row in transaction.QueryAsync<SqlServerSequentialAdHocRow>(new Inquiry.Commands.InquiryCommand(SelectSql)))
         {
             AssertRow(row, 1);
+#pragma warning disable S1751 // The test checks that leaving the stream after the first row is safe.
             break;
+#pragma warning restore S1751
         }
         Assert.Equal(RowCount, await transaction.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM [SequentialAdHocRow]"));
         await transaction.CommitAsync();

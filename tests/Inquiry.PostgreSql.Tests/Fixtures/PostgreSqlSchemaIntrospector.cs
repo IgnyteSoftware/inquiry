@@ -5,10 +5,10 @@ namespace Inquiry.PostgreSql.Tests.Fixtures;
 
 public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
 {
-    public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
+    public async Task<SchemaSnapshot> ReadAsync(DbConnection connection, CancellationToken cancellationToken = default)
     {
         var cols = new Dictionary<string, List<ColumnSnapshot>>();
-        await Query(conn, ct,
+        await Query(connection,
             @"SELECT table_name, column_name, is_nullable
               FROM information_schema.columns
               WHERE table_schema = 'public' ORDER BY table_name, ordinal_position;",
@@ -21,20 +21,20 @@ public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
                 }
 
                 list.Add(new ColumnSnapshot(r.GetString(1), r.GetString(2) == "YES"));
-            });
+            }, cancellationToken);
 
         var pks = new Dictionary<string, List<string>>();
-        await Query(conn, ct,
+        await Query(connection,
             @"SELECT tc.table_name, kcu.column_name
               FROM information_schema.table_constraints tc
               JOIN information_schema.key_column_usage kcu
                 ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
               WHERE tc.table_schema='public' AND tc.constraint_type='PRIMARY KEY'
               ORDER BY tc.table_name, kcu.ordinal_position;",
-            r => { var t = r.GetString(0); (pks.TryGetValue(t, out var l) ? l : pks[t] = new()).Add(r.GetString(1)); });
+            r => { var t = r.GetString(0); GetOrAdd(pks, t).Add(r.GetString(1)); }, cancellationToken);
 
         var fks = new Dictionary<string, List<ForeignKeySnapshot>>();
-        await Query(conn, ct,
+        await Query(connection,
             @"SELECT tc.table_name, kcu.column_name, ccu.table_name AS ref_table, ccu.column_name AS ref_col
               FROM information_schema.table_constraints tc
               JOIN information_schema.key_column_usage kcu
@@ -45,12 +45,12 @@ public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
             r =>
             {
                 var t = r.GetString(0);
-                (fks.TryGetValue(t, out var l) ? l : fks[t] = new())
+                GetOrAdd(fks, t)
                     .Add(new ForeignKeySnapshot(new[] { r.GetString(1) }, r.GetString(2), new[] { r.GetString(3) }));
-            });
+            }, cancellationToken);
 
         var idx = new Dictionary<string, List<IndexSnapshot>>();
-        await Query(conn, ct,
+        await Query(connection,
             @"SELECT t.relname AS table_name,
                      array_to_string(array_agg(a.attname ORDER BY k.ord), ',') AS cols
               FROM pg_index ix
@@ -65,8 +65,8 @@ public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
             {
                 var t = r.GetString(0);
                 var c = r.GetString(1).Split(',');
-                (idx.TryGetValue(t, out var l) ? l : idx[t] = new()).Add(new IndexSnapshot(c));
-            });
+                GetOrAdd(idx, t).Add(new IndexSnapshot(c));
+            }, cancellationToken);
 
         var tables = cols.Keys.Select(t => new TableSnapshot(
             t, cols[t],
@@ -77,14 +77,26 @@ public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
         return new SchemaSnapshot(tables);
     }
 
-    private static async Task Query(DbConnection conn, CancellationToken ct, string sql, Action<DbDataReader> onRow)
+    private static async Task Query(DbConnection connection, string sql, Action<DbDataReader> onRow, CancellationToken cancellationToken)
     {
-        await using var cmd = conn.CreateCommand();
+        await using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct))
+        await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await r.ReadAsync(cancellationToken))
         {
             onRow(r);
         }
+    }
+
+    private static List<TValue> GetOrAdd<TKey, TValue>(Dictionary<TKey, List<TValue>> map, TKey key)
+        where TKey : notnull
+    {
+        if (!map.TryGetValue(key, out var list))
+        {
+            list = new();
+            map[key] = list;
+        }
+
+        return list;
     }
 }

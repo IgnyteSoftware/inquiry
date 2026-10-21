@@ -194,7 +194,7 @@ public sealed class BulkInsertIntegrationTests
         return harness;
     }
 
-    private static IEnumerable<BulkItem> RowsWithOverlongCategory()
+    private static BulkItem[] RowsWithOverlongCategory()
         => new[] { Item("short", 1), Item(new string('x', 150), 2), Item("short", 3) };
 
     private sealed class PermissiveConnectionFactory : IInquiryConnectionFactory

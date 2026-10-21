@@ -80,7 +80,6 @@ public sealed class AmbientTransactionIntegrationTests
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await PostgreSqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "Ambient");
-        var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<CustomerStore>();
 
         // No transaction — should hit the default pipeline and persist immediately.
