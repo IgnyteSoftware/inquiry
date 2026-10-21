@@ -59,7 +59,7 @@ public sealed class SequentialGuidIntegrationTests
 
         var loaded = await store.SelectByKeyAsync(doc.Id);
         Assert.NotNull(loaded);
-        Assert.Equal("first", loaded!.Title);
+        Assert.Equal("first", loaded.Title);
     }
 
     [Fact]

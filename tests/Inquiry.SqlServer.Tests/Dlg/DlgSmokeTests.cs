@@ -30,7 +30,7 @@ public sealed class DlgSmokeTests
         var shipper = await Shipper.SelectOneAsync(1);
 
         Assert.NotNull(shipper);
-        Assert.Equal(1, shipper!.ShipperID);
+        Assert.Equal(1, shipper.ShipperID);
     }
 
     [SkippableFact]
@@ -129,6 +129,6 @@ public sealed class DlgSmokeTests
 
         Assert.NotNull(category);
         // Child collection navigation property — confirmed as ProductsUsingCategoryID in CategoryBase.cs line 175.
-        Assert.Equal(expected, category!.ProductsUsingCategoryID!.Count);
+        Assert.Equal(expected, category.ProductsUsingCategoryID!.Count);
     }
 }

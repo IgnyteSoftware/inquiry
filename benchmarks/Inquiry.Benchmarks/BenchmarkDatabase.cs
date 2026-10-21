@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.Benchmarks.Ef;
 using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
@@ -248,7 +249,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < territoryCount; i++)
             {
-                pId.Value = i.ToString();
+                pId.Value = i.ToString(CultureInfo.CurrentCulture);
                 pDesc.Value = $"Territory {i}";
                 pRegion.Value = (i % regionCount) + 1;
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);

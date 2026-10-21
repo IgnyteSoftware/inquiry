@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Microsoft.Data.SqlClient;
 
@@ -30,6 +31,6 @@ public sealed class SqlServerTestHarnessCleanupTests
         command.CommandText = "SELECT COUNT(*) FROM sys.databases WHERE [name] = @name;";
         command.Parameters.Add(new SqlParameter("@name", System.Data.SqlDbType.NVarChar, 128) { Value = databaseName });
 
-        Assert.Equal(0, Convert.ToInt32(await command.ExecuteScalarAsync()));
+        Assert.Equal(0, Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.CurrentCulture));
     }
 }

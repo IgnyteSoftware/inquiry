@@ -151,7 +151,7 @@ public sealed class TvpResourceLifetimePipelineTests
                 break;
             case FastPath.SequentialBatch:
                 await pipeline.ExecuteBatchAsync(
-                    " ", new[] { 0 }, static (_, _) => throw new BinderProbeException());
+                    " ", [0], static (_, _) => throw new BinderProbeException());
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(fastPath), fastPath, null);
@@ -314,7 +314,7 @@ public sealed class TvpResourceLifetimePipelineTests
         {
             foreach (var value in values)
             {
-                Add(value!);
+                Add(value);
             }
         }
         public override void Clear() => _items.Clear();

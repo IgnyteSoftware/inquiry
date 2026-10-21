@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Text;
 using Inquiry.Parameters;
 using Oracle.ManagedDataAccess.Client;
@@ -22,7 +23,7 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         await connection.OpenAsync().ConfigureAwait(false);
         await using var exists = connection.CreateCommand();
         exists.CommandText = "SELECT COUNT(*) FROM USER_TABLES WHERE TABLE_NAME = 'INQUIRYBATCHEVIDENCE'";
-        var count = Convert.ToInt32(await exists.ExecuteScalarAsync().ConfigureAwait(false));
+        var count = Convert.ToInt32(await exists.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.CurrentCulture);
         if (count != 0)
         {
             return;

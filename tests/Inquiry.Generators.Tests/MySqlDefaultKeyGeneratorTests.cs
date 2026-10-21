@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -98,8 +99,8 @@ public sealed partial class InquiryGeneratorTests
             includeInsertReturning: true), dialect: "MySql");
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ039");
-        Assert.Contains("standalone scalar", diagnostic.GetMessage(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(expectedReason, diagnostic.GetMessage(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standalone scalar", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(expectedReason, diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private const string _sqlInsertReturning =", DefaultKeyStoreText(result));
     }
 
@@ -153,7 +154,7 @@ public sealed partial class InquiryGeneratorTests
             includeInsertReturning: true), dialect: "MySql");
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ039");
-        Assert.Contains("top-level comma", diagnostic.GetMessage(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("top-level comma", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -165,7 +166,7 @@ public sealed partial class InquiryGeneratorTests
             includeInsertReturning: true), dialect: "MySql");
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ039");
-        Assert.Contains(":=", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains(":=", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -37,7 +37,7 @@ public sealed class BatchExecutionProbeTests
         Assert.Equal(1, inner.InitializeCommandCount);
         Assert.Equal(1, inner.InitializeChunkCount);
         Assert.Equal(1, inner.FinalizeCommandCount);
-        Assert.Equal(new[] { 7 }, probe.InitializedChunkSizes);
+        Assert.Equal([7], probe.InitializedChunkSizes);
         var finalized = Assert.Single(probe.FinalizedCommands);
         Assert.Equal("work /* finalized */", finalized.CommandText);
         Assert.Equal((typeof(SqliteCommand), 17), Assert.IsType<ValueTuple<Type, int>>(finalized.Metadata));
@@ -131,7 +131,7 @@ public sealed class BatchExecutionProbeTests
     public void CancellingEnumerableIsSinglePassAndRecordsCancellationAndDisposal()
     {
         using var cancellation = new CancellationTokenSource();
-        var source = new SinglePassCancellingEnumerable<int>(new[] { 10, 20, 30 }, cancellation, cancelAtMoveNext: 2);
+        var source = new SinglePassCancellingEnumerable<int>([10, 20, 30], cancellation, cancelAtMoveNext: 2);
 
         using (var enumerator = source.GetEnumerator())
         {
@@ -183,9 +183,9 @@ public sealed class BatchExecutionProbeTests
         Assert.Equal(17, inner.LastBatch.Timeout);
         Assert.Equal(1, inner.LastBatch.ExecuteCount);
         Assert.Equal(1, probe.CreateBatchCount);
-        Assert.Equal(new[] { 2 }, probe.ExecutedBatchSizes);
+        Assert.Equal([2], probe.ExecutedBatchSizes);
         var executed = Assert.Single(probe.ExecutedBatches);
-        Assert.Equal(new[] { "first", "second" }, executed.Commands.Select(command => command.CommandText));
+        Assert.Equal(["first", "second"], executed.Commands.Select(command => command.CommandText));
         Assert.Equal(
             new[] { ("@id", (object?)5) },
             Assert.IsType<(string ParameterName, object? Value)[]>(executed.Commands[0].Metadata));
@@ -223,7 +223,7 @@ public sealed class BatchExecutionProbeTests
     public void ExecutionBoundaryEnumerableRecordsReadsAgainstCompletedExecutions()
     {
         var executed = 0;
-        var source = new ExecutionBoundaryEnumerable<int>(new[] { 1, 2, 3, 4, 5 }, () => executed);
+        var source = new ExecutionBoundaryEnumerable<int>([1, 2, 3, 4, 5], () => executed);
 
         using (var enumerator = source.GetEnumerator())
         {
@@ -239,7 +239,7 @@ public sealed class BatchExecutionProbeTests
             Assert.False(enumerator.MoveNext());
         }
 
-        Assert.Equal(new[] { 0, 0, 2, 2, 4, 4, 5 }, source.ObservedExecutionCounts);
+        Assert.Equal([0, 0, 2, 2, 4, 4, 5], source.ObservedExecutionCounts);
         Assert.Throws<InvalidOperationException>(() => source.GetEnumerator());
     }
 

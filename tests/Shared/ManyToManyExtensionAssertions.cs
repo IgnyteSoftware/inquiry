@@ -63,7 +63,7 @@ internal static class ManyToManyExtensionAssertions
         var loaded = await posts.GetWithTagsAsync(post1);
 
         Assert.NotNull(loaded);
-        Assert.Equal(new[] { "Red T1" }, Labels(loaded!.Tags));
+        Assert.Equal(["Red T1"], Labels(loaded.Tags));
     }
 
     internal static async Task AllEagerAssemblesEachPostsTagsAsync(
@@ -75,8 +75,8 @@ internal static class ManyToManyExtensionAssertions
 
         Assert.Equal(new[] { post1, post2, unlinkedPost }.OrderBy(id => id), all.Select(p => p.Id).OrderBy(id => id));
         Assert.DoesNotContain(all, p => p.Id == deletedPost);
-        Assert.Equal(new[] { "Red T1" }, Labels(all.Single(p => p.Id == post1).Tags));
-        Assert.Equal(new[] { "Blue T1", "Red T2" }, Labels(all.Single(p => p.Id == post2).Tags));
+        Assert.Equal(["Red T1"], Labels(all.Single(p => p.Id == post1).Tags));
+        Assert.Equal(["Blue T1", "Red T2"], Labels(all.Single(p => p.Id == post2).Tags));
         Assert.Empty(all.Single(p => p.Id == unlinkedPost).Tags);
     }
 
@@ -119,8 +119,8 @@ internal static class ManyToManyExtensionAssertions
         Assert.Contains(all, p => p.Id == deletedPost);
         Assert.Contains(all, p => p.Id == post2);
         Assert.Equal(4, all.Count);
-        Assert.Equal(new[] { "Blue T1" }, Labels(all.Single(p => p.Id == deletedPost).Tags));
-        Assert.Equal(new[] { "Red T1" }, Labels(all.Single(p => p.Id == post1).Tags));
+        Assert.Equal(["Blue T1"], Labels(all.Single(p => p.Id == deletedPost).Tags));
+        Assert.Equal(["Red T1"], Labels(all.Single(p => p.Id == post1).Tags));
     }
 
     /// <summary>
@@ -147,12 +147,12 @@ internal static class ManyToManyExtensionAssertions
         var includingDeleted = await ToListAsync(posts.AllIncludingDeletedWithTagsAsync());
 
         Assert.NotNull(single);
-        Assert.Equal(new[] { "Red T1" }, Labels(single!.Tags));
-        Assert.Equal(new[] { "Red T1" }, Labels(all.Single(p => p.Id == post1).Tags));
+        Assert.Equal(["Red T1"], Labels(single.Tags));
+        Assert.Equal(["Red T1"], Labels(all.Single(p => p.Id == post1).Tags));
 
         // IncludeDeleted suppresses the PARENT's soft-delete term and nothing else — a global filter has
         // no per-method opt-out, so the muted tag stays out here too.
-        Assert.Equal(new[] { "Red T1" }, Labels(includingDeleted.Single(p => p.Id == post1).Tags));
+        Assert.Equal(["Red T1"], Labels(includingDeleted.Single(p => p.Id == post1).Tags));
     }
 
     internal static async Task CompositeEagerLoadCostsOneRoundTripAsync(
@@ -177,7 +177,7 @@ internal static class ManyToManyExtensionAssertions
         Assert.NotNull(loaded);
         // Book 30 is soft-deleted and book 40 is globally filtered. The junction has no filter columns
         // of its own, so the child's own active-row filter is the only thing excluding those links.
-        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(loaded!.Books));
+        Assert.Equal(["Analytical", "Compilers"], Titles(loaded.Books));
     }
 
     /// <summary>
@@ -194,15 +194,15 @@ internal static class ManyToManyExtensionAssertions
         var includingDeleted = await ToListAsync(authors.AllIncludingDeletedWithBooksAsync());
 
         Assert.NotNull(single);
-        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(single!.Books));
-        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(all.Single(a => a.Id == 1).Books));
-        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(includingDeleted.Single(a => a.Id == 1).Books));
+        Assert.Equal(["Analytical", "Compilers"], Titles(single.Books));
+        Assert.Equal(["Analytical", "Compilers"], Titles(all.Single(a => a.Id == 1).Books));
+        Assert.Equal(["Analytical", "Compilers"], Titles(includingDeleted.Single(a => a.Id == 1).Books));
 
         // The same book is a PARENT on the reverse navigation, where the identical filter has to exclude
         // it from the result set rather than from a collection. Asserting the exact set rather than just
         // book 40's absence — "not present" is also true of an empty result.
         var loadedBooks = await ToListAsync(books.AllWithAuthorsAsync());
-        Assert.Equal(new[] { 10L, 20L }, loadedBooks.Select(b => b.Id).OrderBy(id => id).ToArray());
+        Assert.Equal([10L, 20L], loadedBooks.Select(b => b.Id).OrderBy(id => id).ToArray());
     }
 
     internal static async Task AutoJunctionAllEagerAssemblesFromBothSidesAsync(
@@ -212,9 +212,9 @@ internal static class ManyToManyExtensionAssertions
 
         // Author 3 is soft-deleted and never returned; its link to book 10 must not leak either.
         // Author 4 has no links at all — the grouping must leave an empty collection, not null.
-        Assert.Equal(new[] { 1L, 2L, 4L }, loadedAuthors.Select(a => a.Id).OrderBy(id => id).ToArray());
-        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(loadedAuthors.Single(a => a.Id == 1).Books));
-        Assert.Equal(new[] { "Compilers" }, Titles(loadedAuthors.Single(a => a.Id == 2).Books));
+        Assert.Equal([1L, 2L, 4L], loadedAuthors.Select(a => a.Id).OrderBy(id => id).ToArray());
+        Assert.Equal(["Analytical", "Compilers"], Titles(loadedAuthors.Single(a => a.Id == 1).Books));
+        Assert.Equal(["Compilers"], Titles(loadedAuthors.Single(a => a.Id == 2).Books));
         Assert.Empty(loadedAuthors.Single(a => a.Id == 4).Books);
 
         // The reverse navigation reads the SAME synthesized table. Both sides declaring is what proves
@@ -222,21 +222,21 @@ internal static class ManyToManyExtensionAssertions
         // this side would query one the DDL never created.
         var loadedBooks = await ToListAsync(books.AllWithAuthorsAsync());
 
-        Assert.Equal(new[] { 10L, 20L }, loadedBooks.Select(b => b.Id).OrderBy(id => id).ToArray());
-        Assert.Equal(new[] { "Ada" }, Names(loadedBooks.Single(b => b.Id == 10).Authors));
-        Assert.Equal(new[] { "Ada", "Grace" }, Names(loadedBooks.Single(b => b.Id == 20).Authors));
+        Assert.Equal([10L, 20L], loadedBooks.Select(b => b.Id).OrderBy(id => id).ToArray());
+        Assert.Equal(["Ada"], Names(loadedBooks.Single(b => b.Id == 10).Authors));
+        Assert.Equal(["Ada", "Grace"], Names(loadedBooks.Single(b => b.Id == 20).Authors));
     }
 
     internal static async Task AutoJunctionAllEagerIncludingDeletedAsync(M2MAuthorStore authors)
     {
         var all = await ToListAsync(authors.AllIncludingDeletedWithBooksAsync());
 
-        Assert.Equal(new[] { 1L, 2L, 3L, 4L }, all.Select(a => a.Id).OrderBy(id => id).ToArray());
+        Assert.Equal([1L, 2L, 3L, 4L], all.Select(a => a.Id).OrderBy(id => id).ToArray());
 
         // Author 3's only link is to book 10, which is not deleted — the child filter is unchanged by
         // IncludeDeleted, so book 30 stays out of author 1's collection.
-        Assert.Equal(new[] { "Analytical" }, Titles(all.Single(a => a.Id == 3).Books));
-        Assert.Equal(new[] { "Analytical", "Compilers" }, Titles(all.Single(a => a.Id == 1).Books));
+        Assert.Equal(["Analytical"], Titles(all.Single(a => a.Id == 3).Books));
+        Assert.Equal(["Analytical", "Compilers"], Titles(all.Single(a => a.Id == 1).Books));
     }
 
     internal static async Task AutoJunctionEagerLoadCostsOneRoundTripAsync(

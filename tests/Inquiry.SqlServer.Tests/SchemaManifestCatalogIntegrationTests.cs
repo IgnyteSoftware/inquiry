@@ -71,7 +71,7 @@ public sealed class SchemaManifestCatalogIntegrationTests
         }
         await reader.DisposeAsync();
         Assert.Equal(expected.Length, ordinal);
-        Assert.Equal(new[] { "Id" }, table.GetProperty("primaryKey").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Id"], table.GetProperty("primaryKey").EnumerateArray().Select(x => x.GetString()));
 
         var columns = table.GetProperty("columns").EnumerateArray().ToDictionary(x => x.GetProperty("name").GetString()!);
         Assert.Equal("identity", columns["Id"].GetProperty("generation").GetString());
@@ -120,15 +120,15 @@ public sealed class SchemaManifestCatalogIntegrationTests
 
         var index = Assert.Single(table.GetProperty("indexes").EnumerateArray());
         Assert.True(index.GetProperty("unique").GetBoolean());
-        Assert.Equal(new[] { "Name" }, index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()));
-        Assert.Equal(new[] { "Notes" }, index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Name"], index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Notes"], index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal("CK_ManifestWidget_Score", Assert.Single(table.GetProperty("checks").EnumerateArray()).GetProperty("name").GetString());
         var foreignKey = Assert.Single(table.GetProperty("foreignKeys").EnumerateArray());
         Assert.Equal("FK_ManifestWidget_Parent", foreignKey.GetProperty("name").GetString());
-        Assert.Equal(new[] { "ParentId" }, foreignKey.GetProperty("localColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["ParentId"], foreignKey.GetProperty("localColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal(JsonValueKind.Null, foreignKey.GetProperty("referencedSchema").ValueKind);
         Assert.Equal("ManifestParent", foreignKey.GetProperty("referencedTable").GetString());
-        Assert.Equal(new[] { "Id" }, foreignKey.GetProperty("referencedColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Id"], foreignKey.GetProperty("referencedColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal("cascade", foreignKey.GetProperty("onDelete").GetString());
         Assert.Equal("no-action", foreignKey.GetProperty("onUpdate").GetString());
 

@@ -35,7 +35,7 @@ internal static class SqlServerTvpResolver
                 return Failure(context, conflict.Value.Message, conflict.Value.Facet);
             }
 
-            if (!TryParseExplicit(column.SqlType!, out physical, out var parseError))
+            if (!TryParseExplicit(column.SqlType, out physical, out var parseError))
             {
                 return Failure(context, parseError, "SqlType");
             }

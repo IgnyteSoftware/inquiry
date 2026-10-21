@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -262,13 +263,13 @@ public sealed partial class InquiryGeneratorTests
         var schema = GetSchema(result);
         Assert.Equal(
             1,
-            schema.Split(new[] { "CREATE TABLE IF NOT EXISTS \"\"Orders_Products\"\"" }, StringSplitOptions.None).Length - 1);
+            schema.Split(["CREATE TABLE IF NOT EXISTS \"\"Orders_Products\"\""], StringSplitOptions.None).Length - 1);
 
         // Counting only the canonical name would still pass if order-independence regressed and the
         // reverse side produced a SECOND table under its own derived name — no INQ070 either, since the
         // names differ. Assert the total: exactly the two mapped tables plus one junction.
         Assert.DoesNotContain("Products_Orders", schema);
-        Assert.Equal(3, schema.Split(new[] { "CREATE TABLE IF NOT EXISTS" }, StringSplitOptions.None).Length - 1);
+        Assert.Equal(3, schema.Split(["CREATE TABLE IF NOT EXISTS"], StringSplitOptions.None).Length - 1);
     }
 
     [Fact]
@@ -352,8 +353,8 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("Orders_Products", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("Orders_Products", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -396,11 +397,11 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("already the junction for a different pair of entities", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("already the junction for a different pair of entities", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
 
         // Exactly one link table, and the rejected association contributes no eager SQL.
         var schema = GetSchema(result);
-        Assert.Equal(1, schema.Split(new[] { "CREATE TABLE IF NOT EXISTS \"\"links\"\"" }, StringSplitOptions.None).Length - 1);
+        Assert.Equal(1, schema.Split(["CREATE TABLE IF NOT EXISTS \"\"links\"\""], StringSplitOptions.None).Length - 1);
     }
 
     [Fact]
@@ -431,7 +432,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Empty(result.Compilation.GetDiagnostics().Where(static d => d.Severity == DiagnosticSeverity.Error));
 
         var schema = GetSchema(result);
-        Assert.Equal(3, schema.Split(new[] { "CREATE TABLE IF NOT EXISTS" }, StringSplitOptions.None).Length - 1);
+        Assert.Equal(3, schema.Split(["CREATE TABLE IF NOT EXISTS"], StringSplitOptions.None).Length - 1);
         Assert.Contains("PRIMARY KEY (\"\"order_id\"\", \"\"product_id\"\")", schema);
     }
 
@@ -466,7 +467,7 @@ public sealed partial class InquiryGeneratorTests
 
         // One table, and both navigations resolve to it.
         var schema = GetSchema(result);
-        Assert.Equal(3, schema.Split(new[] { "CREATE TABLE IF NOT EXISTS" }, StringSplitOptions.None).Length - 1);
+        Assert.Equal(3, schema.Split(["CREATE TABLE IF NOT EXISTS"], StringSplitOptions.None).Length - 1);
     }
 
     [Fact]
@@ -495,7 +496,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -522,7 +523,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("Each side may declare one", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("Each side may declare one", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -565,7 +566,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("already the junction for a different pair of entities", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("already the junction for a different pair of entities", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -605,8 +606,8 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("already declares an auto-managed association", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("Each side may declare one", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("already declares an auto-managed association", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("Each side may declare one", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -631,7 +632,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("must state the same JunctionTable and JunctionSchema", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("must state the same JunctionTable and JunctionSchema", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
 
         var schema = GetSchema(result);
         Assert.DoesNotContain("CREATE TABLE IF NOT EXISTS \\\"Orders_Products\\\"", schema);
@@ -659,7 +660,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("already mapped by an entity", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -674,8 +675,8 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("[InquiryView]", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("foreign key to a view", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("[InquiryView]", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("foreign key to a view", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -692,7 +693,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains(expected, diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains(expected, diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -707,8 +708,8 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("different schemas", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("Set JunctionSchema on both sides", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("different schemas", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("Set JunctionSchema on both sides", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -748,7 +749,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("self-referential", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("self-referential", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -762,8 +763,8 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("composite primary key", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("three-argument constructor", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("composite primary key", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("three-argument constructor", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -789,7 +790,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ090"));
-        Assert.Contains("the reverse side states the two swapped", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("the reverse side states the two swapped", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     /// <summary>Returns the single line declaring <paramref name="constName"/>, for per-const assertions.</summary>
@@ -1213,8 +1214,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sql_Products_All_IncludeDeleted", text);
         Assert.Contains("IN (SELECT \\\"Id\\\" FROM \\\"Orders\\\" WHERE \\\"IsActive\\\" = 1)", text);
         Assert.Contains("_sql_Products_Junction_IncludeDeleted", text);
-        Assert.Equal(2, text.Split(new[] { "_sql_Products_All_IncludeDeleted" }, StringSplitOptions.None).Length - 1);
-        Assert.Equal(2, text.Split(new[] { "_sql_Products_Junction_IncludeDeleted" }, StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, text.Split(["_sql_Products_All_IncludeDeleted"], StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, text.Split(["_sql_Products_Junction_IncludeDeleted"], StringSplitOptions.None).Length - 1);
     }
 
     [Theory]
@@ -1492,7 +1493,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ063"));
-        var message = diagnostic.GetMessage();
+        var message = diagnostic.GetMessage(CultureInfo.CurrentCulture);
         Assert.Contains("at least one child foreign-key property name", message, StringComparison.Ordinal);
         Assert.DoesNotContain("it is not a collection navigation", message, StringComparison.Ordinal);
     }
@@ -1529,7 +1530,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ087"));
-        Assert.Contains("OrderProduct", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("OrderProduct", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
 
         // The old catch-all fired here too; the split is only worth it if the narrower code replaces it
         // rather than joining it, otherwise a user still has to read every reason to find the real one.
@@ -1549,7 +1550,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ089"));
-        var message = diagnostic.GetMessage();
+        var message = diagnostic.GetMessage(CultureInfo.CurrentCulture);
         Assert.Contains("'Slug'", message, StringComparison.Ordinal);
         Assert.Contains("'TenantId'", message, StringComparison.Ordinal);
         Assert.Contains("the names may be in the wrong order", message, StringComparison.Ordinal);
@@ -1590,8 +1591,8 @@ public sealed partial class InquiryGeneratorTests
         // INQ088 rather than the old catch-all: the point of splitting it out is that the message can
         // name the string that did not resolve, which is the whole content of a typo.
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ088"));
-        Assert.Contains("'Nope'", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("OrderProduct", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("'Nope'", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("OrderProduct", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1635,8 +1636,8 @@ public sealed partial class InquiryGeneratorTests
 
         // INQ089 states both counts, so the message alone says what to change.
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(static d => d.Id == "INQ089"));
-        Assert.Contains("names 2 child foreign-key properties", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("which has 1 key column", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("names 2 child foreign-key properties", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("which has 1 key column", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
 
         Assert.DoesNotContain(
             result.RunResult.GeneratedTrees,

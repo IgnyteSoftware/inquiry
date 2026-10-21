@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.MySql.Tests.Fixtures;
 using MySqlConnector;
 
@@ -30,6 +31,6 @@ public sealed class MySqlTestHarnessCleanupTests
         command.CommandText = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = @name;";
         command.Parameters.AddWithValue("@name", databaseName);
 
-        Assert.Equal(0, Convert.ToInt32(await command.ExecuteScalarAsync()));
+        Assert.Equal(0, Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.CurrentCulture));
     }
 }

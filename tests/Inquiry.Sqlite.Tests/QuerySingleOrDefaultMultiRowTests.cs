@@ -41,7 +41,7 @@ public sealed class QuerySingleOrDefaultMultiRowTests
 
         var row = await inquiry.QuerySingleOrDefaultAsync<GeneratedItem>(new InquiryCommand("SELECT Id, Name FROM TGeneratedItem WHERE Id = 1"));
         Assert.NotNull(row);
-        Assert.Equal(1, row!.Id);
+        Assert.Equal(1, row.Id);
         Assert.Equal("a", row.Name);
     }
 

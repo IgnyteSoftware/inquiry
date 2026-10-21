@@ -136,7 +136,8 @@ public sealed class ProductWorkspace(
                 "Decaf blend", "Cocoa powder", "Glass carafe", "Breakfast bundle", "Chamomile", "Maple syrup",
                 "Measuring spoons", "Weekend hamper", "Cold brew", "Fruit preserve", "Tea strainer", "Discovery set"];
             int[] categoryIds = [1, 1, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4];
-            foreach (var workspaceId in new[] { 1, 2 })
+            int[] workspaceIds = [1, 2];
+            foreach (var workspaceId in workspaceIds)
             {
                 var rows = names.Select((name, index) => new WorkspaceProduct
                 {

@@ -78,7 +78,7 @@ public sealed class TransactionIntegrationTests
 
         var loaded = await store.SelectByKeyAsync("HELP1");
         Assert.NotNull(loaded);
-        Assert.Equal("USA", loaded!.Country);
+        Assert.Equal("USA", loaded.Country);
     }
 
     [SkippableFact]
@@ -504,6 +504,6 @@ public sealed class TransactionIntegrationTests
         var loaded = await tx.QuerySingleOrDefaultAsync<Customer>(SelectCustomer("READ1"));
 
         Assert.NotNull(loaded);
-        Assert.Equal("Read Me", loaded!.CompanyName);
+        Assert.Equal("Read Me", loaded.CompanyName);
     }
 }

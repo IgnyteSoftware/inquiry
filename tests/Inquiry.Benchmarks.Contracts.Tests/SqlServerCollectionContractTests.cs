@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Inquiry.Benchmarks.Contracts.Evidence;
 using Inquiry.Benchmarks.Contracts.Fixtures;
@@ -45,7 +46,7 @@ public sealed class SqlServerCollectionContractTests
         {
             LogicalReads = evidence.LogicalReads.Skip(1).ToArray(),
             PlanStability = evidence.PlanStability.Select(item => item.Transport == SqlServerCollectionTransport.Tvp
-                ? item with { SqlHash = Hash(item.Cardinality.ToString()) }
+                ? item with { SqlHash = Hash(item.Cardinality.ToString(CultureInfo.CurrentCulture)) }
                 : item).ToArray(),
         };
         var codes = SqlServerCollectionEvidenceValidator.Validate(drifted).Select(static error => error.Code).ToHashSet();

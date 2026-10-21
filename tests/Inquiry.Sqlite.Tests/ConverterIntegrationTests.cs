@@ -95,7 +95,7 @@ public sealed class ConverterIntegrationTests
         var loaded = await store.GetAsync(1);
 
         Assert.NotNull(loaded);
-        Assert.Equal(3_000_000_000u, loaded!.Ticks.Value);
+        Assert.Equal(3_000_000_000u, loaded.Ticks.Value);
     }
 
     private const string Ddl = "CREATE TABLE Wallet (Id INTEGER PRIMARY KEY AUTOINCREMENT, Owner TEXT NOT NULL, Balance NUMERIC NOT NULL, Tags TEXT NULL);";
@@ -115,8 +115,8 @@ public sealed class ConverterIntegrationTests
 
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(12.50m, loaded!.Balance.Amount);
-        Assert.Equal(new[] { "savings", "primary" }, loaded.Tags);
+        Assert.Equal(12.50m, loaded.Balance.Amount);
+        Assert.Equal(["savings", "primary"], loaded.Tags);
 
         // The JSON column stores text.
         var rawTags = await harness.ExecuteScalarAsync("SELECT Tags FROM Wallet LIMIT 1");
@@ -134,7 +134,7 @@ public sealed class ConverterIntegrationTests
         Assert.Null(await harness.ExecuteScalarAsync("SELECT Tags FROM Wallet LIMIT 1"));
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
-        Assert.Null(loaded!.Tags);
+        Assert.Null(loaded.Tags);
     }
 
     /// <summary>Reproduces bug #51: IN over a converter column must call ToProvider on each element.</summary>

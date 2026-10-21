@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.Generators.Abstractions;
 using Microsoft.CodeAnalysis;
 
@@ -121,7 +122,7 @@ public sealed partial class InquiryGeneratorTests
 
         var diagnostics = result.RunResult.Diagnostics.Where(static d => d.Id == "INQ040").ToArray();
         Assert.Equal(suppressed ? 0 : 2, diagnostics.Length);
-        Assert.All(diagnostics, static d => Assert.Contains("use 'RegionRef'", d.GetMessage(), StringComparison.Ordinal));
+        Assert.All(diagnostics, static d => Assert.Contains("use 'RegionRef'", d.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal));
 
         // No eager loader is emitted, so any follow-on error is a missing partial body.
         Assert.DoesNotContain("_sql_Territories", StoreText(result, "RegionStore"));
@@ -220,8 +221,8 @@ public sealed partial class InquiryGeneratorTests
         if (!suppressed)
         {
             var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ088");
-            Assert.Contains($"names '{named}'", diagnostic.GetMessage(), StringComparison.Ordinal);
-            Assert.Contains($"use '{property}'", diagnostic.GetMessage(), StringComparison.Ordinal);
+            Assert.Contains($"names '{named}'", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+            Assert.Contains($"use '{property}'", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
         }
 
         // Validation and emission now agree, so a rejected name never reaches emitted SQL, even with the
@@ -249,9 +250,9 @@ public sealed partial class InquiryGeneratorTests
             .ToArray();
         Assert.All(diagnostics, static d => Assert.Equal(DiagnosticSeverity.Warning, d.Severity));
         Assert.Equal(
-            new[] { "\"legacy\"", "\"legacy_links\"", "\"order_ref\"", "\"product_ref\"" },
+            ["\"legacy\"", "\"legacy_links\"", "\"order_ref\"", "\"product_ref\""],
             diagnostics.Select(d => source.Substring(d.Location.SourceSpan.Start, d.Location.SourceSpan.Length)).OrderBy(static s => s, StringComparer.Ordinal));
-        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("sets JunctionTable", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage(CultureInfo.CurrentCulture).Contains("sets JunctionTable", StringComparison.Ordinal));
 
         // The options stay ignored: the explicit junction's own table is still used.
         Assert.Empty(CompileErrors(result));
@@ -322,7 +323,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains(
             "joins 'PostGrade.Grade' (enum stored as text) to 'GradeRow.Code' (enum stored as a number)",
-            diagnostic.GetMessage(),
+            diagnostic.GetMessage(CultureInfo.CurrentCulture),
             StringComparison.Ordinal);
 
         // Before, this compiled with no diagnostic and returned no related rows. The loader is now dropped
@@ -408,7 +409,7 @@ public sealed partial class InquiryGeneratorTests
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ104");
         Assert.Contains(
             "joins 'OrderItem.Sku' (converter Demo.SkuAsPaddedText) to 'Item.Sku' (converter Demo.SkuAsText)",
-            diagnostic.GetMessage(),
+            diagnostic.GetMessage(CultureInfo.CurrentCulture),
             StringComparison.Ordinal);
         Assert.DoesNotContain("_sql_Items", GetOrderStore(result));
 
@@ -539,7 +540,7 @@ public sealed partial class InquiryGeneratorTests
         var diagnostic = Assert.Single(RunGenerator(source).RunResult.Diagnostics, static d => d.Id == "INQ104");
         Assert.Contains(
             "joins 'Office.Region' (enum stored as text) to 'RegionRow.Code' (enum stored as a number)",
-            diagnostic.GetMessage(),
+            diagnostic.GetMessage(CultureInfo.CurrentCulture),
             StringComparison.Ordinal);
     }
 
@@ -604,7 +605,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains(
             "'CategoryId' declares a foreign key to 'Tags.CategoryId', but the relation pairs it with 'Tags.TenantId'",
-            diagnostic.GetMessage(),
+            diagnostic.GetMessage(CultureInfo.CurrentCulture),
             StringComparison.Ordinal);
         Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ089");
         Assert.DoesNotContain("_sql_Tags", StoreText(result, "PostStore"));
@@ -619,7 +620,7 @@ public sealed partial class InquiryGeneratorTests
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ105");
         Assert.Contains(
             "'PostId' declares a foreign key to 'Tags.TenantId', but the relation pairs it with 'Posts.Id'",
-            diagnostic.GetMessage(),
+            diagnostic.GetMessage(CultureInfo.CurrentCulture),
             StringComparison.Ordinal);
     }
 

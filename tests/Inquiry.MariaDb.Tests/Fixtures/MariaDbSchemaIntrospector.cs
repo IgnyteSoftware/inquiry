@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Globalization;
 using Inquiry.IntegrationTesting;
 
 namespace Inquiry.MariaDb.Tests.Fixtures;
@@ -58,7 +59,7 @@ public sealed class MariaDbSchemaIntrospector : ISchemaIntrospector
                     idxCols[key] = list = new();
                 }
 
-                list.Add((Convert.ToInt32(r.GetValue(3)), r.GetString(2)));
+                list.Add((Convert.ToInt32(r.GetValue(3), CultureInfo.CurrentCulture), r.GetString(2)));
             });
 
         var idx = new Dictionary<string, List<IndexSnapshot>>();

@@ -91,7 +91,7 @@ public sealed class ExecuteBatchTests
             new[] { (1, "Alpha"), (2, "Beta") },
             static (target, item) => BindItem(target, item));
 
-        Assert.Equal(new[] { 9, 9 }, interceptor.ObservedTimeouts);
+        Assert.Equal([9, 9], interceptor.ObservedTimeouts);
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public sealed class ExecuteBatchTests
             new[] { (1, "A"), (2, "B"), (3, "C"), (4, "D"), (5, "E") });
 
         Assert.Equal(5, total);
-        Assert.Equal(new[] { "initialize:2", "bind:2", "initialize:2", "bind:2", "initialize:1", "bind:1" }, events);
+        Assert.Equal(["initialize:2", "bind:2", "initialize:2", "bind:2", "initialize:1", "bind:1"], events);
         Assert.Equal(5, await CountItemsAsync(keeper));
     }
 
@@ -341,7 +341,7 @@ public sealed class ExecuteBatchTests
 
         await pipeline.ExecuteBatchAsync(command, new[] { (1, "A"), (2, "B") });
 
-        Assert.Equal(new[] { "initialize:1", "bind:1", "initialize:1", "bind:1" }, events);
+        Assert.Equal(["initialize:1", "bind:1", "initialize:1", "bind:1"], events);
     }
 
     [Fact]
@@ -507,7 +507,7 @@ public sealed class ExecuteBatchTests
             new IsolationRecordingFactory(connection), Array.Empty<IInquiryCommandInterceptor>());
         var command = new InquiryBatchCommand<int>("work", static (_, _) => { });
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => pipeline.ExecuteBatchAsync(command, new[] { 1 }));
+        await Assert.ThrowsAsync<NotSupportedException>(() => pipeline.ExecuteBatchAsync(command, [1]));
 
         Assert.Equal(IsolationLevel.ReadCommitted, connection.RequestedIsolationLevel);
     }

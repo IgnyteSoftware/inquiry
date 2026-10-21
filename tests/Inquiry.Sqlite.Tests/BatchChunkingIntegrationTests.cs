@@ -33,7 +33,7 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(0, probe.CreateBatchCount);
         Assert.Equal(5, probe.FinalizedCommands.Count);
-        Assert.Equal(new[] { 0, 0, 2, 2, 4, 4, 5 }, updates.ObservedExecutionCounts);
+        Assert.Equal([0, 0, 2, 2, 4, 4, 5], updates.ObservedExecutionCounts);
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));

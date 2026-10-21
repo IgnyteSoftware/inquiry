@@ -18,7 +18,7 @@ internal sealed class MySqlSqlBuilder : MySqlFamilySqlBuilder
             return analysis.Failures;
         }
 
-        return analysis.Failures.Concat(new[] { "contains ambiguous '||'; use CONCAT(...), OR, or a mysql override" }).ToArray();
+        return analysis.Failures.Concat(["contains ambiguous '||'; use CONCAT(...), OR, or a mysql override"]).ToArray();
     }
     public override string DialectName => "MySql";
     public override string ProviderId => "mysql";

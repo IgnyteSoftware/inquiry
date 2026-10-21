@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
@@ -173,7 +174,7 @@ public class ProjectionAggregateBenchmarks
         command.CommandText = SumSql;
         var scalar = await command.ExecuteScalarAsync();
         // SQLite returns SUM over a NUMERIC column as a floating value; normalise to decimal.
-        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar, CultureInfo.CurrentCulture);
     }
 
     [BenchmarkCategory("Sum"), Benchmark]
@@ -217,7 +218,7 @@ public class ProjectionAggregateBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = AvgSql;
         var scalar = await command.ExecuteScalarAsync();
-        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar, CultureInfo.CurrentCulture);
     }
 
     [BenchmarkCategory("Avg"), Benchmark]
@@ -259,7 +260,7 @@ public class ProjectionAggregateBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = MinSql;
         var scalar = await command.ExecuteScalarAsync();
-        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar, CultureInfo.CurrentCulture);
     }
 
     [BenchmarkCategory("Min"), Benchmark]
@@ -301,7 +302,7 @@ public class ProjectionAggregateBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = MaxSql;
         var scalar = await command.ExecuteScalarAsync();
-        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar, CultureInfo.CurrentCulture);
     }
 
     [BenchmarkCategory("Max"), Benchmark]

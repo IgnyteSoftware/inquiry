@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
@@ -385,10 +387,10 @@ public sealed partial class InquiryGeneratorTests
         var activeResult = Assert.Single(result.RunResult.Results, static generator => generator.GeneratedSources.Length > 0);
         var diagnostics = activeResult.Diagnostics.Where(static d => d.Id == "INQ038").ToArray();
         Assert.Equal(4, diagnostics.Length);
-        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("Guid?", StringComparison.Ordinal));
-        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("bool?", StringComparison.Ordinal));
-        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("string?", StringComparison.Ordinal));
-        Assert.Contains(diagnostics, static d => d.GetMessage().Contains("Provider", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage(CultureInfo.CurrentCulture).Contains("Guid?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage(CultureInfo.CurrentCulture).Contains("bool?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage(CultureInfo.CurrentCulture).Contains("string?", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => d.GetMessage(CultureInfo.CurrentCulture).Contains("Provider", StringComparison.Ordinal));
 
         var generated = string.Join("\n", result.RunResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         Assert.DoesNotContain("NullableGuidConverter", generated);

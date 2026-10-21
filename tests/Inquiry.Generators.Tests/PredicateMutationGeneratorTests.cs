@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
@@ -297,8 +299,8 @@ public sealed partial class InquiryGeneratorTests
             public partial Task<bool> RepriceAllAsync(decimal price, CancellationToken cancellationToken = default);
             """));
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ096");
-        Assert.Contains("reads as an update by entity key", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("Add [InquiryWhere] to select predicate-update mode", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("reads as an update by entity key", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("Add [InquiryWhere] to select predicate-update mode", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -56,7 +56,7 @@ public sealed class OracleProviderIntegrationTests
         };
 
         using var command = new OracleCommand();
-        descriptor.BindChunk!(command, items);
+        descriptor.BindChunk(command, items);
 
         Assert.Equal(2, command.ArrayBindCount);
         var parameters = command.Parameters.Cast<OracleParameter>().ToArray();

@@ -24,8 +24,8 @@ public sealed class GuidKeyUpsertTests
 
         var saved = await store.UpsertReturningAsync(new GuidItem { Id = null, Name = "A" });
         Assert.NotNull(saved);
-        Assert.NotNull(saved!.Id);
-        Assert.NotEqual(Guid.Empty, saved.Id!.Value);
+        Assert.NotNull(saved.Id);
+        Assert.NotEqual(Guid.Empty, saved.Id.Value);
     }
 
     [SkippableFact]
@@ -37,8 +37,8 @@ public sealed class GuidKeyUpsertTests
 
         var saved = await store.InsertReturningAsync(new GuidItem { Id = null, Name = "A" });
         Assert.NotNull(saved);
-        Assert.NotNull(saved!.Id);
-        Assert.NotEqual(Guid.Empty, saved.Id!.Value);
+        Assert.NotNull(saved.Id);
+        Assert.NotEqual(Guid.Empty, saved.Id.Value);
     }
 
     [SkippableFact]

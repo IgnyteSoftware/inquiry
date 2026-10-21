@@ -1,3 +1,4 @@
+using System.Globalization;
 using DotNet.Testcontainers.Configurations;
 using Inquiry.IntegrationTesting;
 using Oracle.ManagedDataAccess.Client;
@@ -113,7 +114,7 @@ public sealed class OracleContainerFixture : IAsyncLifetime
                 await cmd.ExecuteScalarAsync();
 
                 cmd.CommandText = "SELECT BANNER FROM V$VERSION WHERE BANNER LIKE 'Oracle Database%' FETCH FIRST 1 ROW ONLY";
-                return Convert.ToString(await cmd.ExecuteScalarAsync()) ?? "unknown";
+                return Convert.ToString(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture) ?? "unknown";
             }
             catch (OracleException) when (attempt < maxAttempts)
             {

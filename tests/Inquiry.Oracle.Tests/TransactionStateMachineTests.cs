@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.Tests.Fixtures;
@@ -100,7 +101,7 @@ public sealed class TransactionStateMachineTests
         var tasks = Enumerable.Range(0, N).Select(i => Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await store.InsertAsync(new Customer { CustomerID = "C" + i.ToString("D4"), CompanyName = "Concurrent " + i });
+            await store.InsertAsync(new Customer { CustomerID = "C" + i.ToString("D4", CultureInfo.CurrentCulture), CompanyName = "Concurrent " + i });
             await tx.CommitAsync();
         }));
 
@@ -110,7 +111,7 @@ public sealed class TransactionStateMachineTests
         Assert.Equal(N, all.Count);
         for (var i = 0; i < N; i++)
         {
-            Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4"));
+            Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4", CultureInfo.CurrentCulture));
         }
     }
 

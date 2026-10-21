@@ -78,7 +78,7 @@ public sealed class InListBucketingIntegrationTests
             Assert.All(matched, item => Assert.Equal(1, item.CategoryId));
         }
 
-        var duplicates = await items.InCategoriesAsync(new[] { 1, 1, 1 });
+        var duplicates = await items.InCategoriesAsync([1, 1, 1]);
         Assert.Equal(2, duplicates.Count);
         Assert.All(duplicates, item => Assert.Equal(1, item.CategoryId));
     }
@@ -92,11 +92,11 @@ public sealed class InListBucketingIntegrationTests
 
         // NOT IN deliberately uses scalar parameters. Repeated values used to stabilize SQL shapes
         // must not change the excluded set; NULL remains UNKNOWN under normal SQL semantics.
-        var one = await items.NotInCategoriesAsync(new[] { 2 });
-        var repeated = await items.NotInCategoriesAsync(new[] { 2, 2, 2 });
+        var one = await items.NotInCategoriesAsync([2]);
+        var repeated = await items.NotInCategoriesAsync([2, 2, 2]);
 
-        Assert.Equal(new[] { 1, 2 }, one.Select(item => item.Id).OrderBy(id => id));
-        Assert.Equal(new[] { 1, 2 }, repeated.Select(item => item.Id).OrderBy(id => id));
+        Assert.Equal([1, 2], one.Select(item => item.Id).OrderBy(id => id));
+        Assert.Equal([1, 2], repeated.Select(item => item.Id).OrderBy(id => id));
 
         var all = await items.NotInCategoriesAsync(Array.Empty<int>());
         Assert.Equal(5, all.Count);

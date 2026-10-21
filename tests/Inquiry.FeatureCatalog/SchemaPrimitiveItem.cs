@@ -46,6 +46,6 @@ public static class GeneratedSchemaDdl
 {
     public static string Extract(string generatedDdl, params string[] tableNames)
         => string.Join("\n\n", generatedDdl
-            .Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries)
+            .Split(["\n\n"], StringSplitOptions.RemoveEmptyEntries)
             .Where(statement => tableNames.Any(table => statement.Contains(table, StringComparison.Ordinal))));
 }

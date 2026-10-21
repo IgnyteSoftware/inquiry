@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.Oracle.Tests.Fixtures;
@@ -38,6 +39,6 @@ public sealed class SchemaPrimitiveIntegrationTests
         Assert.Equal(0, await ScalarAsync(c, "SELECT COUNT(*) FROM PrimitiveChild"));
     }
     private static async Task ExecAsync(OracleConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; await cmd.ExecuteNonQueryAsync(); }
-    private static async Task<int> ScalarAsync(OracleConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToInt32(await cmd.ExecuteScalarAsync()); }
-    private static async Task<string?> StringAsync(OracleConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToString(await cmd.ExecuteScalarAsync()); }
+    private static async Task<int> ScalarAsync(OracleConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture); }
+    private static async Task<string?> StringAsync(OracleConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToString(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture); }
 }

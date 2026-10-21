@@ -29,7 +29,7 @@ public sealed class UnsignedCollectionIntegrationTests
         await store.InsertAsync(new() { Id = uint.MaxValue, S8 = -1, U16 = ushort.MaxValue, U32 = 3_000_000_000u, U64 = ulong.MaxValue, Code = new(uint.MaxValue), State = UnsignedCollectionState.Max });
         Assert.Single(await store.ByS8Async(new sbyte[] { -1 }));
         Assert.Single(await store.ByU16Async(new[] { ushort.MaxValue }));
-        Assert.Single(await store.ByU32Async(new[] { 3_000_000_000u }));
+        Assert.Single(await store.ByU32Async([3_000_000_000u]));
         Assert.Single(await store.ByU64Async(new[] { ulong.MaxValue }));
         Assert.Single(await store.ByCodeAsync(new[] { new UnsignedCollectionCode(uint.MaxValue) }));
         Assert.Single(await store.ByStateAsync(new[] { UnsignedCollectionState.Max }));

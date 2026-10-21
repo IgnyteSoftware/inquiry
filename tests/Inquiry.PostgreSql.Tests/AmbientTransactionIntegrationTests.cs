@@ -51,7 +51,7 @@ public sealed class AmbientTransactionIntegrationTests
 
         var loaded = await store.SelectByKeyAsync("COMM1");
         Assert.NotNull(loaded);
-        Assert.Equal("Committed", loaded!.CompanyName);
+        Assert.Equal("Committed", loaded.CompanyName);
     }
 
     [SkippableFact]

@@ -93,7 +93,7 @@ public sealed class PostgreSqlDateTimeBindingIntegrationTests
             });
 
             Assert.NotNull(returned);
-            AssertWallClock(value, returned!.OccurredAt);
+            AssertWallClock(value, returned.OccurredAt);
             if (i == 1)
             {
                 Assert.Null(returned.OptionalAt);
@@ -124,9 +124,9 @@ public sealed class PostgreSqlDateTimeBindingIntegrationTests
         await store.InsertAsync(NewItem(3, new DateTime(baseTicks + 20, DateTimeKind.Unspecified)));
 
         var direct = await store.InOccurredAsync(new[] { utc, local });
-        Assert.Equal(new[] { 1, 2 }, direct.Select(static item => item.Id).OrderBy(static id => id));
+        Assert.Equal([1, 2], direct.Select(static item => item.Id).OrderBy(static id => id));
         var converted = await store.InConvertedAsync(new[] { new PostgreSqlWallClock(utc), new PostgreSqlWallClock(local) });
-        Assert.Equal(new[] { 1, 2 }, converted.Select(static item => item.Id).OrderBy(static id => id));
+        Assert.Equal([1, 2], converted.Select(static item => item.Id).OrderBy(static id => id));
     }
 
     [SkippableFact]

@@ -179,7 +179,7 @@ public sealed class CancellationTokenPropagationTests
         var store = harness.GetRequiredService<RegionStore>();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => store.DeleteByKeysAsync(new[] { 1, 2 }, PreCancelled));
+            () => store.DeleteByKeysAsync([1, 2], PreCancelled));
     }
 
     [Fact]

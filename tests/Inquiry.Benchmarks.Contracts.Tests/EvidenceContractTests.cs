@@ -331,16 +331,16 @@ public sealed class EvidenceContractTests
     [Fact]
     public void SourceManifestClaimsOnlyWiredProjectProviderTfmLanes()
     {
-        Assert.Equal(new[]
-        {
+        Assert.Equal([
             "Inquiry", "Inquiry.Sqlite", "Inquiry.SqlServer", "Inquiry.PostgreSql", "Inquiry.MySql",
             "Inquiry.MariaDb", "Inquiry.Oracle", "Inquiry.Interceptors", "Inquiry.Testing",
-        }, SourceArtifactManifestCatalog.PackageIds);
+        ], SourceArtifactManifestCatalog.PackageIds);
         var providers = new[] { "sqlite", "sqlserver", "postgresql", "mysql", "mariadb", "oracle" };
         Assert.Equal(providers, SourceArtifactManifestCatalog.Providers);
         var rids = SourceArtifactManifestCatalog.RuntimeIdentifiers;
+        string[] runtimeTfms = ["net8.0", "net10.0"];
         var expectedLanes = providers.SelectMany(provider => rids.SelectMany(rid =>
-            new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
+            runtimeTfms.Select(runtimeTfm =>
                 (Provider: provider, RuntimeTfm: runtimeTfm, Rid: rid, Lane: BenchmarkSourceLane.DeveloperProject)))).ToArray();
         Assert.Equal(expectedLanes, SourceArtifactManifestCatalog.Manifests.Select(static manifest =>
             (manifest.Provider, manifest.RuntimeTfm, manifest.RuntimeIdentifier, manifest.Lane)));
@@ -983,7 +983,8 @@ public sealed class EvidenceContractTests
         Assert.Contains(EvidenceHygieneValidator.ValidateTotalBytes(EvidenceLimits.MaxCheckedEvidenceBytes + 1),
             static error => error.Code == "total-size");
 
-        var aliases = JsonSerializer.SerializeToUtf8Bytes(new { records = new[] { "customer" } });
+        string[] records = ["customer"];
+        var aliases = JsonSerializer.SerializeToUtf8Bytes(new { records });
         Assert.Contains(EvidenceHygieneValidator.Validate(aliases), static error => error.Code == "row-data");
 
         var pathKey = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, string> { ["/home/alice/secret"] = "value" });

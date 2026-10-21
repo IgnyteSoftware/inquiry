@@ -163,14 +163,14 @@ public sealed partial class InquiryGeneratorTests
     public void ManifestCaseOnlyNamesHaveStableRawOrdinalTieBreak(string dialect)
     {
         const string source = "using Inquiry.Entities; namespace Demo; [InquiryTable(\"a\")] public sealed class Lower { [InquiryKey] public int Id {get;set;} } [InquiryTable(\"A\")] public sealed class Upper { [InquiryKey] public int Id {get;set;} }";
-        Assert.Equal(new[] { "A", "a" }, ManifestTableNames(RunGenerator(source, dialect: dialect)));
+        Assert.Equal(["A", "a"], ManifestTableNames(RunGenerator(source, dialect: dialect)));
     }
 
     [Fact]
     public void OracleRequiredQuotedNamesPreserveExactOrdinalOrdering()
     {
         const string source = "using Inquiry.Entities; namespace Demo; [InquiryTable(\"a name\")] public sealed class Lower { [InquiryKey] public int Id {get;set;} } [InquiryTable(\"B name\")] public sealed class Upper { [InquiryKey] public int Id {get;set;} }";
-        Assert.Equal(new[] { "B name", "a name" }, ManifestTableNames(RunGenerator(source, dialect: "Oracle")));
+        Assert.Equal(["B name", "a name"], ManifestTableNames(RunGenerator(source, dialect: "Oracle")));
     }
 
     [Fact]
@@ -334,35 +334,35 @@ public sealed partial class InquiryGeneratorTests
 
     private static void AssertManifestShape(JsonElement manifest)
     {
-        Assert.Equal(new[] { "formatVersion", "providerId", "tables", "providerArtifacts" }, manifest.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(["formatVersion", "providerId", "tables", "providerArtifacts"], manifest.EnumerateObject().Select(property => property.Name));
         Assert.Matches("^[a-z][a-z0-9.-]{0,63}$", manifest.GetProperty("providerId").GetString()!);
         foreach (var table in manifest.GetProperty("tables").EnumerateArray())
         {
-            Assert.Equal(new[] { "schema", "name", "columns", "primaryKey", "indexes", "checks", "foreignKeys" }, table.EnumerateObject().Select(property => property.Name));
+            Assert.Equal(["schema", "name", "columns", "primaryKey", "indexes", "checks", "foreignKeys"], table.EnumerateObject().Select(property => property.Name));
             Assert.NotEmpty(table.GetProperty("name").GetString()!);
             foreach (var column in table.GetProperty("columns").EnumerateArray())
             {
-                Assert.Equal(new[] { "name", "storeType", "typeInference", "typeClass", "nullable", "primaryKeyOrdinal", "generation", "defaultExpression", "computedExpression", "concurrency" }, column.EnumerateObject().Select(property => property.Name));
+                Assert.Equal(["name", "storeType", "typeInference", "typeClass", "nullable", "primaryKeyOrdinal", "generation", "defaultExpression", "computedExpression", "concurrency"], column.EnumerateObject().Select(property => property.Name));
             }
 
             foreach (var index in table.GetProperty("indexes").EnumerateArray())
             {
-                Assert.Equal(new[] { "name", "unique", "keyColumns", "includeColumns" }, index.EnumerateObject().Select(property => property.Name));
+                Assert.Equal(["name", "unique", "keyColumns", "includeColumns"], index.EnumerateObject().Select(property => property.Name));
             }
 
             foreach (var check in table.GetProperty("checks").EnumerateArray())
             {
-                Assert.Equal(new[] { "name", "expression" }, check.EnumerateObject().Select(property => property.Name));
+                Assert.Equal(["name", "expression"], check.EnumerateObject().Select(property => property.Name));
             }
 
             foreach (var foreignKey in table.GetProperty("foreignKeys").EnumerateArray())
             {
-                Assert.Equal(new[] { "name", "localColumns", "referencedSchema", "referencedTable", "referencedColumns", "onDelete", "onUpdate" }, foreignKey.EnumerateObject().Select(property => property.Name));
+                Assert.Equal(["name", "localColumns", "referencedSchema", "referencedTable", "referencedColumns", "onDelete", "onUpdate"], foreignKey.EnumerateObject().Select(property => property.Name));
             }
         }
         foreach (var artifact in manifest.GetProperty("providerArtifacts").EnumerateArray())
         {
-            Assert.Equal(new[] { "schema", "name", "kind", "signature" }, artifact.EnumerateObject().Select(property => property.Name));
+            Assert.Equal(["schema", "name", "kind", "signature"], artifact.EnumerateObject().Select(property => property.Name));
         }
     }
 
@@ -378,6 +378,6 @@ public sealed partial class InquiryGeneratorTests
         }
 
         Assert.NotNull(directory);
-        return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
     }
 }

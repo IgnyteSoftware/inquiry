@@ -55,7 +55,7 @@ public sealed class StreamingFastPathTests
             names.Add(item.Name);
         }
 
-        Assert.Equal(new[] { "Alpha", "Gamma" }, names);
+        Assert.Equal(["Alpha", "Gamma"], names);
     }
 
     private sealed class Row

@@ -29,7 +29,7 @@ internal static class EagerGridCommandAssertions
         var loaded = await regions.SelectByKeyWithTerritoriesAsync(1);
 
         Assert.NotNull(loaded);
-        Assert.Single(loaded!.Territories!);
+        Assert.Single(loaded.Territories!);
         AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "Region", "Territories");
     }
 
@@ -59,8 +59,8 @@ internal static class EagerGridCommandAssertions
         var loaded = await territories.SelectByKeyWithRegionAsync("T1");
 
         Assert.NotNull(loaded);
-        Assert.NotNull(loaded!.Region);
-        Assert.Equal("Eastern", loaded.Region!.RegionDescription);
+        Assert.NotNull(loaded.Region);
+        Assert.Equal("Eastern", loaded.Region.RegionDescription);
         AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "Region", "Territories");
     }
 
@@ -94,11 +94,11 @@ internal static class EagerGridCommandAssertions
         var loaded = await posts.GetWithAuthorAndTagsAsync(10);
 
         Assert.NotNull(loaded);
-        Assert.Equal("First", loaded!.Title);
+        Assert.Equal("First", loaded.Title);
         Assert.NotNull(loaded.Author);
-        Assert.Equal("Ada", loaded.Author!.Name);
+        Assert.Equal("Ada", loaded.Author.Name);
         Assert.Equal(
-            new[] { "alpha", "beta" },
+            ["alpha", "beta"],
             loaded.Tags.Select(t => t.Label).OrderBy(s => s, StringComparer.Ordinal));
 
         AssertSingleGridCommand(probe, recorder, expectedResultSets: 3, "EagerMixedPost", "EagerMixedAuthor", "EagerMixedTag");
@@ -120,7 +120,7 @@ internal static class EagerGridCommandAssertions
         var first = all.Single(p => p.Id == 10);
         Assert.Equal("Ada", first.Author!.Name);
         Assert.Equal(
-            new[] { "alpha", "beta" },
+            ["alpha", "beta"],
             first.Tags.Select(t => t.Label).OrderBy(s => s, StringComparer.Ordinal));
 
         // Second post resolves a different author and has no tags — the empty-collection branch.

@@ -50,7 +50,7 @@ public sealed class DataSeedingTests
 
         await services.SeedInquiryAsync();
 
-        Assert.Equal(new[] { "first", "second" }, services.GetRequiredService<Journal>().Entries);
+        Assert.Equal(["first", "second"], services.GetRequiredService<Journal>().Entries);
     }
 
     [Fact]

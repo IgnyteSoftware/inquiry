@@ -43,12 +43,12 @@ public sealed class NorthwindCrudIntegrationTests
 
         Assert.Equal(1, inserted);
         Assert.NotNull(selected);
-        Assert.Equal("Acme Research", selected!.CompanyName);
+        Assert.Equal("Acme Research", selected.CompanyName);
         Assert.Equal("USA", selected.Country);
         Assert.Single(usCustomers);
         Assert.True(updated);
         Assert.NotNull(selectedAfterUpdate);
-        Assert.Equal("Acme Updated", selectedAfterUpdate!.CompanyName);
+        Assert.Equal("Acme Updated", selectedAfterUpdate.CompanyName);
         Assert.Equal("Canada", selectedAfterUpdate.Country);
         Assert.True(deleted);
         Assert.Null(selectedAfterDelete);
@@ -63,12 +63,12 @@ public sealed class NorthwindCrudIntegrationTests
 
         var inserted = await store.InsertReturningAsync(new Category { CategoryName = "Beverages" });
         Assert.NotNull(inserted);
-        Assert.NotNull(inserted!.CategoryID);
+        Assert.NotNull(inserted.CategoryID);
         Assert.True(inserted.CategoryID > 0);
 
         var fetched = await store.SelectByKeyAsync(inserted.CategoryID);
         Assert.NotNull(fetched);
-        Assert.Equal("Beverages", fetched!.CategoryName);
+        Assert.Equal("Beverages", fetched.CategoryName);
 
         var deleted = await store.DeleteByKeyAsync(inserted.CategoryID);
         Assert.True(deleted);
@@ -92,9 +92,9 @@ public sealed class NorthwindCrudIntegrationTests
         var afterUpdate = await store.SelectByKeyAsync("UPS01");
 
         Assert.NotNull(afterInsert);
-        Assert.Equal("First", afterInsert!.CompanyName);
+        Assert.Equal("First", afterInsert.CompanyName);
         Assert.NotNull(afterUpdate);
-        Assert.Equal("Second", afterUpdate!.CompanyName);
+        Assert.Equal("Second", afterUpdate.CompanyName);
         Assert.Equal("Canada", afterUpdate.Country);
         // ON DUPLICATE KEY UPDATE reports 1 affected row for an insert and 2 for an update.
         Assert.Equal(1, firstRows);
@@ -116,7 +116,7 @@ public sealed class NorthwindCrudIntegrationTests
 
         var loaded = await bridge.SelectByKeyAsync("ALFKI", "VIP");
         Assert.NotNull(loaded);
-        Assert.Equal("ALFKI", loaded!.CustomerID);
+        Assert.Equal("ALFKI", loaded.CustomerID);
         Assert.Equal("VIP", loaded.CustomerTypeID);
 
         Assert.True(await bridge.DeleteByKeyAsync("ALFKI", "VIP"));
@@ -138,9 +138,9 @@ public sealed class NorthwindCrudIntegrationTests
         var loaded = await regions.SelectByKeyWithTerritoriesAsync(1);
 
         Assert.NotNull(loaded);
-        Assert.Equal("Eastern", loaded!.RegionDescription);
+        Assert.Equal("Eastern", loaded.RegionDescription);
         Assert.NotNull(loaded.Territories);
-        Assert.Equal(2, loaded.Territories!.Count);
+        Assert.Equal(2, loaded.Territories.Count);
     }
 
     [SkippableFact]

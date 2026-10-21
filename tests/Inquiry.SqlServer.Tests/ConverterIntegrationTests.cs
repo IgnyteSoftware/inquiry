@@ -62,8 +62,8 @@ public sealed class ConverterIntegrationTests
 
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(12.50m, loaded!.Balance.Amount);
-        Assert.Equal(new[] { "savings", "primary" }, loaded.Tags);
+        Assert.Equal(12.50m, loaded.Balance.Amount);
+        Assert.Equal(["savings", "primary"], loaded.Tags);
     }
 
     [SkippableFact]
@@ -77,7 +77,7 @@ public sealed class ConverterIntegrationTests
 
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
-        Assert.Null(loaded!.Tags);
+        Assert.Null(loaded.Tags);
     }
 
     [SkippableFact]
@@ -95,6 +95,6 @@ public sealed class ConverterIntegrationTests
         var loaded = await store.GetAsync(1);
 
         Assert.NotNull(loaded);
-        Assert.Equal(3_000_000_000u, loaded!.Ticks.Value);
+        Assert.Equal(3_000_000_000u, loaded.Ticks.Value);
     }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.Entities;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
@@ -58,6 +59,6 @@ public sealed class SchemaPrimitiveIntegrationTests
     }
 
     private static async Task ExecAsync(SqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; await cmd.ExecuteNonQueryAsync(); }
-    private static async Task<int> ScalarAsync(SqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToInt32(await cmd.ExecuteScalarAsync()); }
-    private static async Task<string?> StringAsync(SqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToString(await cmd.ExecuteScalarAsync()); }
+    private static async Task<int> ScalarAsync(SqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture); }
+    private static async Task<string?> StringAsync(SqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToString(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture); }
 }

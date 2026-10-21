@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.IntegrationTesting;
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
@@ -34,7 +35,7 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
 
             if (hasImageOverride)
             {
-                var user = await _container.ExecAsync(new[] { "/usr/bin/id", "-u" });
+                var user = await _container.ExecAsync(["/usr/bin/id", "-u"]);
                 if (user.ExitCode != 0 || user.Stdout.Trim() == "0")
                 {
                     throw new InvalidOperationException(
@@ -52,7 +53,7 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
                 await using var command = connection.CreateCommand();
                 command.CommandText = "SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled')";
                 var value = await command.ExecuteScalarAsync();
-                var isInstalled = value is not null && value != DBNull.Value && Convert.ToInt32(value) == 1;
+                var isInstalled = value is not null && value != DBNull.Value && Convert.ToInt32(value, CultureInfo.CurrentCulture) == 1;
                 SqlServerFullTextPolicy.ShouldSkip(isRequired: true, isInstalled);
             }
 

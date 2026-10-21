@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.DependencyInjection;
 using Inquiry.FeatureCatalog;
 using Inquiry.IntegrationTesting;
@@ -295,6 +296,6 @@ internal sealed class OracleTestHarness : IAsyncDisposable
         command.CommandTimeout = 10;
         command.CommandText = "SELECT COUNT(*) FROM ALL_USERS WHERE USERNAME = :username";
         command.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
-        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) != 0;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.CurrentCulture) != 0;
     }
 }

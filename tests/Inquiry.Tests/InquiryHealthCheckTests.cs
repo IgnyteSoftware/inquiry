@@ -38,7 +38,7 @@ public sealed class InquiryHealthCheckTests
         // HealthCheckService requires ILogger<>; the null logger keeps the test free of the full logging package.
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(Microsoft.Extensions.Logging.Abstractions.NullLogger<>));
         services.AddSingleton<IInquiryConnectionFactory>(new HealthTestConnectionFactory(failOpen: false));
-        services.AddHealthChecks().AddInquiry(tags: new[] { "ready" });
+        services.AddHealthChecks().AddInquiry(tags: ["ready"]);
 
         await using var provider = services.BuildServiceProvider();
         var healthService = provider.GetRequiredService<HealthCheckService>();

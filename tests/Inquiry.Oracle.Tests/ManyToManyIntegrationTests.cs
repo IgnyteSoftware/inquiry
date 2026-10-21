@@ -34,7 +34,7 @@ public sealed class ManyToManyIntegrationTests
         var loaded = await orders.GetWithProductsAsync(order1.Id);
 
         Assert.NotNull(loaded);
-        Assert.Equal(new[] { "Apple", "Banana" }, loaded.Products.Select(p => p.Title).OrderBy(t => t));
+        Assert.Equal(["Apple", "Banana"], loaded.Products.Select(p => p.Title).OrderBy(t => t));
     }
 
     [SkippableFact]
@@ -64,8 +64,8 @@ public sealed class ManyToManyIntegrationTests
         Assert.Equal(2, all.Count);
         var first = all.OrderBy(o => o.Name).First();
         var second = all.OrderBy(o => o.Name).Last();
-        Assert.Equal(new[] { "Apple", "Banana" }, first.Products.Select(p => p.Title).OrderBy(t => t));
-        Assert.Equal(new[] { "Banana", "Cherry" }, second.Products.Select(p => p.Title).OrderBy(t => t));
+        Assert.Equal(["Apple", "Banana"], first.Products.Select(p => p.Title).OrderBy(t => t));
+        Assert.Equal(["Banana", "Cherry"], second.Products.Select(p => p.Title).OrderBy(t => t));
     }
 
     [SkippableFact]
@@ -83,7 +83,7 @@ public sealed class ManyToManyIntegrationTests
         M2MMaterializationProbe.Reset(scenario.DefaultExcludedTitles, scenario.DefaultExcludedProductIds);
         var single = await orders.GetWithProductsAsync(orderId);
         Assert.NotNull(single);
-        Assert.DoesNotContain(single!.Products,
+        Assert.DoesNotContain(single.Products,
             p => p.Title is "Deleted junction" or "Inactive junction");
 
         M2MMaterializationProbe.Reset(scenario.DefaultExcludedTitles, scenario.DefaultExcludedProductIds);

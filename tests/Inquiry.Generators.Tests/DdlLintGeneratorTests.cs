@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -67,7 +68,7 @@ public sealed partial class InquiryGeneratorTests
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ061");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
-        Assert.Contains("AuthorId", lint.GetMessage());
+        Assert.Contains("AuthorId", lint.GetMessage(CultureInfo.CurrentCulture));
     }
 
     [Fact]
@@ -164,7 +165,7 @@ public sealed partial class InquiryGeneratorTests
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ062");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
-        Assert.Contains("Amount", lint.GetMessage());
+        Assert.Contains("Amount", lint.GetMessage(CultureInfo.CurrentCulture));
     }
 
     [Fact]
@@ -248,7 +249,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(FilterSource, enableDiagnostics: EnableDdlLints);
 
         // Email (field select) and Name (predicate) are both filtered and unindexed.
-        var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage()).ToArray();
+        var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage(CultureInfo.CurrentCulture)).ToArray();
         Assert.Equal(2, lints.Length);
         Assert.Contains(lints, m => m.Contains("Email"));
         Assert.Contains(lints, m => m.Contains("Name"));
@@ -293,7 +294,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
 
-        var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage()).ToArray();
+        var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage(CultureInfo.CurrentCulture)).ToArray();
         // Status (the WHERE filter) is flagged; LastSeen (the SET column) is not.
         Assert.Contains(lints, m => m.Contains("Status"));
         Assert.DoesNotContain(lints, m => m.Contains("LastSeen"));
@@ -381,7 +382,7 @@ public sealed partial class InquiryGeneratorTests
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ066");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
-        Assert.Contains("Locale", lint.GetMessage());
+        Assert.Contains("Locale", lint.GetMessage(CultureInfo.CurrentCulture));
     }
 
     [Fact]
@@ -470,7 +471,7 @@ public sealed partial class InquiryGeneratorTests
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ067");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
-        Assert.Contains("Body", lint.GetMessage());
+        Assert.Contains("Body", lint.GetMessage(CultureInfo.CurrentCulture));
     }
 
     [Fact]

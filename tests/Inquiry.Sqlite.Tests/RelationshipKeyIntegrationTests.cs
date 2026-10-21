@@ -125,7 +125,7 @@ public sealed class RelationshipKeyIntegrationTests
         var territories = harness.GetRequiredService<RkTerritoryStore>();
 
         var north = await regions.GetWithTerritoriesAsync(1);
-        Assert.Equal(new[] { "N1", "N2" }, north!.Territories.Select(static t => t.Name).OrderBy(static n => n));
+        Assert.Equal(["N1", "N2"], north!.Territories.Select(static t => t.Name).OrderBy(static n => n));
 
         var all = new List<RkRegion>();
         await foreach (var region in regions.AllWithTerritoriesAsync())
@@ -134,7 +134,7 @@ public sealed class RelationshipKeyIntegrationTests
         }
 
         Assert.Equal(
-            new[] { "North:N1,N2", "South:S1", "Empty:" },
+            ["North:N1,N2", "South:S1", "Empty:"],
             all.OrderBy(static r => r.RegionId).Select(static r => r.Name + ":" + string.Join(",", r.Territories.Select(static t => t.Name).OrderBy(static n => n))));
 
         Assert.Equal("South", (await territories.GetWithRegionAsync(20))!.Region!.Name);
@@ -144,7 +144,7 @@ public sealed class RelationshipKeyIntegrationTests
             allTerritories.Add(territory);
         }
 
-        Assert.Equal(new[] { "North", "North", "South" }, allTerritories.OrderBy(static t => t.TerritoryId).Select(static t => t.Region!.Name));
+        Assert.Equal(["North", "North", "South"], allTerritories.OrderBy(static t => t.TerritoryId).Select(static t => t.Region!.Name));
     }
 
     [Fact]

@@ -394,7 +394,7 @@ public sealed class ReleaseManifestTests
         {
             var projectPath = Path.Combine(repository, package!["project"]!.GetValue<string>());
             Directory.CreateDirectory(Path.GetDirectoryName(projectPath)!);
-            var packageId = package!["id"]!.GetValue<string>();
+            var packageId = package["id"]!.GetValue<string>();
             File.WriteAllText(projectPath, $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><IsPackable>true</IsPackable><PackageId>{packageId}</PackageId></PropertyGroup></Project>");
         }
 

@@ -31,7 +31,7 @@ public sealed class SqlCommenterInterceptor : IInquiryCommandInterceptor
     {
         _staticFragment = string.IsNullOrWhiteSpace(applicationName)
             ? null
-            : "application='" + Escape(applicationName!) + "'";
+            : "application='" + Escape(applicationName) + "'";
     }
 
     /// <inheritdoc />

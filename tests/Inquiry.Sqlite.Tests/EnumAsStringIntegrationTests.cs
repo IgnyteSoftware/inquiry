@@ -66,7 +66,7 @@ public sealed class EnumAsStringIntegrationTests
 
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(TicketStatus.Closed, loaded!.Status);
+        Assert.Equal(TicketStatus.Closed, loaded.Status);
         Assert.Equal(TicketStatus.Active, loaded.Prior);
     }
 
@@ -83,7 +83,7 @@ public sealed class EnumAsStringIntegrationTests
 
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
-        Assert.Null(loaded!.Prior);
+        Assert.Null(loaded.Prior);
     }
 
     [Fact]

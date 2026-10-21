@@ -29,7 +29,7 @@ public sealed class InquiryGridReaderStreamTests
         // Completing the enumeration must leave the grid positioned on the NEXT set.
         var afterStream = await grid.ReadScalarAsync<int>();
 
-        Assert.Equal(new[] { 1, 2, 3 }, streamed);
+        Assert.Equal([1, 2, 3], streamed);
         Assert.Equal(99, afterStream);
     }
 
@@ -107,7 +107,7 @@ public sealed class InquiryGridReaderStreamTests
             first.Add(row.Value);
         }
 
-        Assert.Equal(new[] { 1, 2 }, first);
+        Assert.Equal([1, 2], first);
 
         // An async iterator hands out a fresh state machine per GetAsyncEnumerator, so without the
         // one-shot guard this would materialize result set 2 through BoxMaterializer and skip past it.

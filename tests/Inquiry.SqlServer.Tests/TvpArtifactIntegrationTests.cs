@@ -44,7 +44,7 @@ public sealed class TvpArtifactIntegrationTests
 
         var missingBefore = await ReadValidationAsync(harness.ConnectionString);
         Assert.Contains(missingBefore, row => row.Name == "[dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]" && row.Signature == "int|nullable=0" && row.Status == "missing");
-        var missingException = await Assert.ThrowsAsync<SqlException>(() => store.DeleteAllAsync(new[] { 1 }));
+        var missingException = await Assert.ThrowsAsync<SqlException>(() => store.DeleteAllAsync([1]));
         Assert.Contains("Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c", missingException.Message);
 
         await ExecuteAsync(harness.ConnectionString, "CREATE TYPE [dbo].[Legacy_Unrelated_Type] AS TABLE ([Value] INT NOT NULL);");
@@ -54,7 +54,7 @@ public sealed class TvpArtifactIntegrationTests
 
         Assert.Empty(await ReadValidationAsync(harness.ConnectionString));
         Assert.Equal(1, await CountRowsAsync(harness.ConnectionString, "SELECT 1 FROM sys.table_types WHERE [name] = N'Legacy_Unrelated_Type'"));
-        Assert.Equal(1, await store.DeleteAllAsync(new[] { 1 }));
+        Assert.Equal(1, await store.DeleteAllAsync([1]));
     }
 
     [SkippableFact]
@@ -157,7 +157,7 @@ public sealed class TvpArtifactIntegrationTests
             "tvptenant");
         var store = harness.GetRequiredService<TenantGadgetStore>();
         await store.InsertAsync(new TenantGadget { Name = "tenant", IsActive = true });
-        Assert.True(await store.ExistsActiveAsync(new[] { true }));
+        Assert.True(await store.ExistsActiveAsync([true]));
         Assert.Equal(1, await CountRowsAsync(harness.ConnectionString,
             "SELECT 1 FROM sys.table_types t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE t.[name] = N'Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c' AND s.[name] = N'9 odd].schema'''"));
         Assert.Equal(1, await CountRowsAsync(harness.ConnectionString,
@@ -166,12 +166,12 @@ public sealed class TvpArtifactIntegrationTests
 
         await using (var transaction = await inquiry.BeginTransactionAsync())
         {
-            Assert.Equal(1, await store.DeleteAllAsync(new[] { 1 }));
+            Assert.Equal(1, await store.DeleteAllAsync([1]));
             await transaction.RollbackAsync();
         }
 
         Assert.Equal(1, await store.CountAsync());
-        Assert.Equal(1, await store.DeleteAllAsync(new[] { 1 }));
+        Assert.Equal(1, await store.DeleteAllAsync([1]));
     }
 
     [SkippableFact]

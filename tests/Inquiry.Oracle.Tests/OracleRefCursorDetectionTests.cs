@@ -144,7 +144,7 @@ public sealed class OracleRefCursorDetectionTests
 
         factory.FinalizeCommand(command);
 
-        Assert.Equal(new[] { "Prior", "Total" }, command.Parameters.Cast<OracleParameter>().Select(static p => p.ParameterName));
+        Assert.Equal(["Prior", "Total"], command.Parameters.Cast<OracleParameter>().Select(static p => p.ParameterName));
         Assert.Equal("MY_PACKAGE.DO_WORK", command.CommandText);
     }
 

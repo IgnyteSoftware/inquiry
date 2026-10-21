@@ -60,7 +60,7 @@ public sealed class GeneratedDdlIntegrationTests
         var categories = harness.GetRequiredService<CategoryStore>();
         var inserted = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
         Assert.NotNull(inserted);
-        Assert.True(inserted!.CategoryID > 0);
+        Assert.True(inserted.CategoryID > 0);
         Assert.NotNull(await categories.SelectByKeyAsync(inserted.CategoryID));
 
         await using var conn = new SqlConnection(harness.ConnectionString);
@@ -85,13 +85,13 @@ public sealed class GeneratedDdlIntegrationTests
 
         var inserted = await store.InsertAsync(new GeneratedRowversionDocument { Id = 1, Name = "v1" });
         Assert.NotNull(inserted);
-        Assert.Equal(8, inserted!.Version.Length);
+        Assert.Equal(8, inserted.Version.Length);
         var stale = new GeneratedRowversionDocument { Id = inserted.Id, Name = "stale", Version = inserted.Version.ToArray() };
 
         inserted.Name = "v2";
         var updated = await store.UpdateAsync(inserted);
         Assert.NotNull(updated);
-        Assert.Equal(8, updated!.Version.Length);
+        Assert.Equal(8, updated.Version.Length);
         Assert.False(inserted.Version.SequenceEqual(updated.Version));
         Assert.Null(await store.UpdateAsync(stale));
         Assert.False(await store.DeleteAsync(stale));

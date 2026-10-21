@@ -24,7 +24,7 @@ public sealed class JsonPathPredicateIntegrationTests
 
         var active = await store.ByStatusAsync("active");
 
-        Assert.Equal(new[] { "Alpha", "Gamma" }, active.Select(d => d.Name).OrderBy(n => n));
+        Assert.Equal(["Alpha", "Gamma"], active.Select(d => d.Name).OrderBy(n => n));
     }
 
     [SkippableFact]
@@ -42,7 +42,7 @@ public sealed class JsonPathPredicateIntegrationTests
 
         var boston = await store.ByCityAsync("Boston");
 
-        Assert.Equal(new[] { "Alpha", "Beta" }, boston.Select(d => d.Name).OrderBy(n => n));
+        Assert.Equal(["Alpha", "Beta"], boston.Select(d => d.Name).OrderBy(n => n));
     }
 
     [SkippableFact]

@@ -28,7 +28,7 @@ public sealed class GeneratedDdlIntegrationTests
         var categories = harness.GetRequiredService<CategoryStore>();
         var inserted = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
         Assert.NotNull(inserted);
-        Assert.True(inserted!.CategoryID > 0);
+        Assert.True(inserted.CategoryID > 0);
         Assert.NotNull(await categories.SelectByKeyAsync(inserted.CategoryID));
 
         await using var conn = new OracleConnection(harness.ConnectionString);

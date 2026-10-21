@@ -207,7 +207,7 @@ public sealed class SelectedBatchStrategyArtifactTests
 
         var extraCapabilityCell = cell with
         {
-            RuntimeCapabilities = new Dictionary<string, string>(cell.RuntimeCapabilities!, StringComparer.Ordinal)
+            RuntimeCapabilities = new Dictionary<string, string>(cell.RuntimeCapabilities, StringComparer.Ordinal)
             {
                 ["unchecked-capability"] = "true",
             },

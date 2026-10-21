@@ -59,7 +59,7 @@ public sealed class PredicateSelectIntegrationTests
         await using var harness = await SeedAsync();
         var products = harness.GetRequiredService<ProductStore>();
 
-        var matched = await products.InCategoriesAsync(new[] { 2 });
+        var matched = await products.InCategoriesAsync([2]);
 
         Assert.Equal(2, matched.Count);
         Assert.All(matched, p => Assert.Equal(2, p.CategoryID));
@@ -71,7 +71,7 @@ public sealed class PredicateSelectIntegrationTests
         await using var harness = await SeedAsync();
         var products = harness.GetRequiredService<ProductStore>();
 
-        var matched = await products.InCategoriesAsync(new[] { 1, 2 });
+        var matched = await products.InCategoriesAsync([1, 2]);
 
         Assert.Equal(4, matched.Count);
     }

@@ -20,7 +20,7 @@ internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
             return analysis.Failures;
         }
 
-        return analysis.Failures.Concat(new[] { "contains ambiguous '||'; use CONCAT(...), OR, or a mariadb override" }).ToArray();
+        return analysis.Failures.Concat(["contains ambiguous '||'; use CONCAT(...), OR, or a mariadb override"]).ToArray();
     }
     public override string DialectName => "MariaDb";
     public override string ProviderId => "mariadb";

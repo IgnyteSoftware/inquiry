@@ -149,7 +149,7 @@ public sealed class InquiryInterceptorsTests
         // The tag is execution-side only — results are unaffected, and the comment carried both keys.
         Assert.Equal(1L, count);
         Assert.Contains("application='checkout-api'", harness.Captured.LastCommandText);
-        Assert.Contains("traceparent='00-" + activity!.TraceId + "-", harness.Captured.LastCommandText);
+        Assert.Contains("traceparent='00-" + activity.TraceId + "-", harness.Captured.LastCommandText);
     }
 
     [Fact]

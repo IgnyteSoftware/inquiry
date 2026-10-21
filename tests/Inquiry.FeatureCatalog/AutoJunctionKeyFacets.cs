@@ -192,7 +192,7 @@ public static class AutoJunctionKeyFacetAssertions
         {
             var code = await codes.GetAsync(name);
             Assert.NotNull(code);
-            AssertCode(code!, expectedPrices[name], expectedSkus[name]);
+            AssertCode(code, expectedPrices[name], expectedSkus[name]);
         }
 
         var allCodes = new List<AjCode>();
@@ -211,7 +211,7 @@ public static class AutoJunctionKeyFacetAssertions
         {
             var price = await prices.GetAsync(amount);
             Assert.NotNull(price);
-            Assert.Equal(expectedCodes[amount], Names(price!.Codes));
+            Assert.Equal(expectedCodes[amount], Names(price.Codes));
         }
 
         var allPrices = new List<AjPrice>();

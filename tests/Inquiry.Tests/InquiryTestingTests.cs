@@ -90,7 +90,7 @@ public sealed class InquiryTestingTests
 
             Assert.Same(expected, actual.InnerExceptions[0]);
             Assert.Equal(
-                new[] { "rollback failure", "transaction disposal failure", "scope disposal failure" },
+                ["rollback failure", "transaction disposal failure", "scope disposal failure"],
                 actual.InnerExceptions.Skip(1).Select(exception => exception.Message));
         }
     }

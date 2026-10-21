@@ -24,13 +24,13 @@ public sealed class BatchChunkingIntegrationTests
         var store = harness.GetRequiredService<BatchChunkItemStore>();
 
         Assert.Equal(5, await store.InsertAllAsync(Items(5)));
-        Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
+        Assert.Equal([2, 2, 1], probe.InitializedChunkSizes);
 
         probe.Reset();
         Assert.Equal(5, await store.UpdateAllAsync(Items(5, valuePrefix: "updated")));
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(3, probe.CreateBatchCount);
-        Assert.Equal(new[] { 2, 2, 1 }, probe.ExecutedBatchSizes);
+        Assert.Equal([2, 2, 1], probe.ExecutedBatchSizes);
         Assert.Empty(probe.FinalizedCommands);
 
         probe.Reset();
@@ -59,7 +59,7 @@ public sealed class BatchChunkingIntegrationTests
         await Assert.ThrowsAsync<PostgresException>(() => store.InsertAllAsync(items));
 
         Assert.Equal(0, await store.CountAsync());
-        Assert.Equal(new[] { 2, 2 }, probe.InitializedChunkSizes);
+        Assert.Equal([2, 2], probe.InitializedChunkSizes);
     }
 
     [SkippableFact]
@@ -97,7 +97,7 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Equal(1, source.GetEnumeratorCount);
         Assert.Equal(4, source.MoveNextCount);
         Assert.Equal(1, source.DisposeCount);
-        Assert.Equal(new[] { 2, 2 }, probe.InitializedChunkSizes);
+        Assert.Equal([2, 2], probe.InitializedChunkSizes);
     }
 
     [SkippableFact]
@@ -114,7 +114,7 @@ public sealed class BatchChunkingIntegrationTests
 
         Assert.Equal(1001, await store.InsertAllAsync(Items(1001)));
 
-        Assert.Equal(new[] { 1000, 1 }, probe.InitializedChunkSizes);
+        Assert.Equal([1000, 1], probe.InitializedChunkSizes);
         Assert.Equal(1001, await store.CountAsync());
     }
 

@@ -46,7 +46,7 @@ public sealed class InquiryParameterBinderTests
 
         InquiryParameterBinder.Bind(command, new[] { parameter });
 
-        var bound = (FakeDbParameter)command.Parameters[0]!;
+        var bound = (FakeDbParameter)command.Parameters[0];
         Assert.Equal(DbType.Decimal, bound.DbType);
         Assert.Equal(ParameterDirection.Input, bound.Direction);
         Assert.Equal(10, bound.Size);
@@ -65,8 +65,8 @@ public sealed class InquiryParameterBinderTests
             new InquiryParameter("Enabled", true, DbType.Int32),
         });
 
-        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[0]!);
-        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[1]!);
+        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[0]);
+        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[1]);
     }
 
     [Fact]
@@ -84,12 +84,12 @@ public sealed class InquiryParameterBinderTests
         InquiryInExpansion.ExpandNotIn(
             boolCommand,
             "@Enabled",
-            new[] { true },
+            [true],
             maxParameterCount: 10,
             dbType: DbType.Int32);
 
-        AssertMetadataPrecedesValue((FakeDbParameter)guidCommand.Parameters[0]!);
-        AssertMetadataPrecedesValue((FakeDbParameter)boolCommand.Parameters[0]!);
+        AssertMetadataPrecedesValue((FakeDbParameter)guidCommand.Parameters[0]);
+        AssertMetadataPrecedesValue((FakeDbParameter)boolCommand.Parameters[0]);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public sealed class InquiryParameterBinderTests
 
         InquiryParameterBinder.Bind(command, new[] { new InquiryParameter("Name", "alpha") });
 
-        var bound = (FakeDbParameter)command.Parameters[0]!;
+        var bound = (FakeDbParameter)command.Parameters[0];
         Assert.False(bound.DbTypeAssigned);
         Assert.False(bound.DirectionAssigned);
         Assert.False(bound.SizeAssigned);
@@ -256,7 +256,7 @@ public sealed class InquiryParameterBinderTests
         {
             foreach (var v in values)
             {
-                Add(v!);
+                Add(v);
             }
         }
         public override void Clear() => _items.Clear();

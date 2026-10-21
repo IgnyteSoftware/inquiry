@@ -62,7 +62,7 @@ public sealed class NegatedOperatorIntegrationTests
 
         // Everything whose name does NOT contain "Test".
         var result = await store.NameNotLikeAsync("%Test%");
-        Assert.Equal(new[] { "Gadget", "Widget" }, result.Select(p => p.Name).OrderBy(n => n).ToArray());
+        Assert.Equal(["Gadget", "Widget"], result.Select(p => p.Name).OrderBy(n => n).ToArray());
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class NegatedOperatorIntegrationTests
 
         // Qty NOT BETWEEN 10 AND 20 → keeps 5 and 25, excludes 15.
         var result = await store.QtyNotBetweenAsync(10, 20);
-        Assert.Equal(new[] { 5, 25 }, result.Select(p => p.Qty).OrderBy(q => q).ToArray());
+        Assert.Equal([5, 25], result.Select(p => p.Qty).OrderBy(q => q).ToArray());
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class NegatedOperatorIntegrationTests
         await using var _ = harness;
 
         // Qty NOT IN (15, 25) → keeps only 5.
-        var result = await store.QtyNotInAsync(new[] { 15, 25 });
+        var result = await store.QtyNotInAsync([15, 25]);
         var only = Assert.Single(result);
         Assert.Equal(5, only.Qty);
     }

@@ -43,7 +43,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal((byte)200, loaded!.ByteVal);
+        Assert.Equal((byte)200, loaded.ByteVal);
     }
 
     [SkippableFact]
@@ -59,7 +59,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(short.MaxValue, loaded!.Int16Val);
+        Assert.Equal(short.MaxValue, loaded.Int16Val);
     }
 
     [SkippableFact]
@@ -75,7 +75,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(int.MaxValue, loaded!.Int32Val);
+        Assert.Equal(int.MaxValue, loaded.Int32Val);
     }
 
     [SkippableFact]
@@ -91,7 +91,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(long.MaxValue, loaded!.Int64Val);
+        Assert.Equal(long.MaxValue, loaded.Int64Val);
     }
 
     [SkippableFact]
@@ -107,7 +107,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumInt32.MaxSigned, loaded!.EnumInt32Val);
+        Assert.Equal(SampleEnumInt32.MaxSigned, loaded.EnumInt32Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal((sbyte)42, loaded!.SByteVal);
+        Assert.Equal((sbyte)42, loaded.SByteVal);
     }
 
     [SkippableFact]
@@ -145,7 +145,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal((sbyte)-1, loaded!.SByteVal);
+        Assert.Equal((sbyte)-1, loaded.SByteVal);
     }
 
     [SkippableFact]
@@ -162,7 +162,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(sbyte.MinValue, loaded!.SByteVal);
+        Assert.Equal(sbyte.MinValue, loaded.SByteVal);
     }
 
     // ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal((ushort)1000, loaded!.UInt16Val);
+        Assert.Equal((ushort)1000, loaded.UInt16Val);
     }
 
     [SkippableFact]
@@ -200,7 +200,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal((ushort)40000, loaded!.UInt16Val);
+        Assert.Equal((ushort)40000, loaded.UInt16Val);
     }
 
     [SkippableFact]
@@ -217,7 +217,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(ushort.MaxValue, loaded!.UInt16Val);
+        Assert.Equal(ushort.MaxValue, loaded.UInt16Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -238,7 +238,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(1000u, loaded!.UInt32Val);
+        Assert.Equal(1000u, loaded.UInt32Val);
     }
 
     [SkippableFact]
@@ -255,7 +255,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(3_000_000_000u, loaded!.UInt32Val);
+        Assert.Equal(3_000_000_000u, loaded.UInt32Val);
     }
 
     [SkippableFact]
@@ -272,7 +272,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(uint.MaxValue, loaded!.UInt32Val);
+        Assert.Equal(uint.MaxValue, loaded.UInt32Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -293,7 +293,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(1000ul, loaded!.UInt64Val);
+        Assert.Equal(1000ul, loaded.UInt64Val);
     }
 
     [SkippableFact]
@@ -310,7 +310,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(ulong.MaxValue, loaded!.UInt64Val);
+        Assert.Equal(ulong.MaxValue, loaded.UInt64Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -331,7 +331,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumSByte.Negative, loaded!.EnumSByteVal);
+        Assert.Equal(SampleEnumSByte.Negative, loaded.EnumSByteVal);
     }
 
     // ---------------------------------------------------------------------------
@@ -352,7 +352,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumUInt16.AboveShortMax, loaded!.EnumUInt16Val);
+        Assert.Equal(SampleEnumUInt16.AboveShortMax, loaded.EnumUInt16Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -373,7 +373,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumUInt32.AboveIntMax, loaded!.EnumUInt32Val);
+        Assert.Equal(SampleEnumUInt32.AboveIntMax, loaded.EnumUInt32Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -394,7 +394,7 @@ public sealed class UnsignedTypesIntegrationTests
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumUInt64.AboveLongMax, loaded!.EnumUInt64Val);
+        Assert.Equal(SampleEnumUInt64.AboveLongMax, loaded.EnumUInt64Val);
     }
 
     // ---------------------------------------------------------------------------

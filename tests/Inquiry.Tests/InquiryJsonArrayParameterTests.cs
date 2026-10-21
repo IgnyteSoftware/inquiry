@@ -57,7 +57,7 @@ public sealed class InquiryJsonArrayParameterTests
     [Fact]
     public void EnumerableIsConsumedExactlyOnce()
     {
-        var values = new SingleUseEnumerable<int>(new[] { 1, 2, 3 });
+        var values = new SingleUseEnumerable<int>([1, 2, 3]);
         Assert.Equal("[1,2,3]", InquiryJsonArrayParameter.ToJsonArray(values));
         Assert.Equal(1, values.EnumerationCount);
     }

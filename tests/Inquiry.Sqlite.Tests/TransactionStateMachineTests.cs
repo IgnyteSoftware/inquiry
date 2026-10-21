@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
@@ -101,7 +102,7 @@ public sealed class TransactionStateMachineTests
         var tasks = Enumerable.Range(0, N).Select(i => Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await tx.ExecuteAsync(InsertCustomer("C" + i.ToString("D4"), "Concurrent " + i, "USA"));
+            await tx.ExecuteAsync(InsertCustomer("C" + i.ToString("D4", CultureInfo.CurrentCulture), "Concurrent " + i, "USA"));
             await tx.CommitAsync();
         }));
 
@@ -111,7 +112,7 @@ public sealed class TransactionStateMachineTests
         Assert.Equal(N, all.Count);
         for (var i = 0; i < N; i++)
         {
-            Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4"));
+            Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4", CultureInfo.CurrentCulture));
         }
     }
 
@@ -292,7 +293,7 @@ public sealed class TransactionStateMachineTests
         {
             try
             {
-                await tx.ExecuteAsync(InsertCustomer("X" + i.ToString("D4"), "X " + i, "USA"));
+                await tx.ExecuteAsync(InsertCustomer("X" + i.ToString("D4", CultureInfo.CurrentCulture), "X " + i, "USA"));
                 return (Success: true, Exception: (Exception?)null);
             }
             catch (Exception ex)
@@ -312,7 +313,7 @@ public sealed class TransactionStateMachineTests
         Assert.All(failures, f =>
         {
             Assert.IsType<InvalidOperationException>(f.Exception);
-            Assert.Contains("in flight", f.Exception!.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("in flight", f.Exception.Message, StringComparison.OrdinalIgnoreCase);
         });
 
         await tx.CommitAsync();

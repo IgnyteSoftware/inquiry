@@ -17,7 +17,7 @@ public static class BulkAllTypesCases
         {
             var actual = await store.GetAsync(item.Id);
             Assert.NotNull(actual);
-            AssertEqual(item, actual!);
+            AssertEqual(item, actual);
         }
     }
 

@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
@@ -401,7 +402,7 @@ public sealed class BatchCancellationRaceTests
         {
             count.Transaction = transaction;
             count.CommandText = "SELECT COUNT(*) FROM Items";
-            Assert.Equal(4, Convert.ToInt32(await count.ExecuteScalarAsync()));
+            Assert.Equal(4, Convert.ToInt32(await count.ExecuteScalarAsync(), CultureInfo.CurrentCulture));
         }
 
         await transaction.RollbackAsync();
@@ -484,7 +485,7 @@ public sealed class BatchCancellationRaceTests
     {
         await using var command = keeper.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM Items";
-        return Convert.ToInt32(await command.ExecuteScalarAsync());
+        return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.CurrentCulture);
     }
 
     /// <summary>
@@ -630,7 +631,7 @@ public sealed class BatchCancellationRaceTests
         [AllowNull]
         public override string ConnectionString { get => _inner.ConnectionString; set => _inner.ConnectionString = value; }
         public override string Database => _inner.Database;
-        public override string DataSource => _inner.DataSource!;
+        public override string DataSource => _inner.DataSource;
         public override string ServerVersion => _inner.ServerVersion;
         public override ConnectionState State => _inner.State;
 

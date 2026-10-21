@@ -141,7 +141,7 @@ public sealed class SoftDeleteIntegrationTests
         await store.InsertAsync(new SoftDeleteWidget { Name = "Beta" });
 
         // Both rows visible through the projection before any delete.
-        Assert.Equal(new[] { "Alpha", "Beta" }, (await store.NamesAsync()).Select(n => n.Name).OrderBy(n => n).ToArray());
+        Assert.Equal(["Alpha", "Beta"], (await store.NamesAsync()).Select(n => n.Name).OrderBy(n => n).ToArray());
 
         await store.SoftDeleteAsync(id);
 

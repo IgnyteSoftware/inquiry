@@ -212,24 +212,24 @@ public sealed class DataSeeder : IInquiryDataSeeder
         {
             if (chai?.ProductID is int p1)
             {
-                await _orderDetails.InsertAsync(new OrderDetail { OrderID = firstOrderID, ProductID = p1, UnitPrice = chai!.UnitPrice ?? 0m, Quantity = 10, Discount = 0f }, cancellationToken).ConfigureAwait(false);
+                await _orderDetails.InsertAsync(new OrderDetail { OrderID = firstOrderID, ProductID = p1, UnitPrice = chai.UnitPrice ?? 0m, Quantity = 10, Discount = 0f }, cancellationToken).ConfigureAwait(false);
             }
 
             if (chang?.ProductID is int p2)
             {
-                await _orderDetails.InsertAsync(new OrderDetail { OrderID = firstOrderID, ProductID = p2, UnitPrice = chang!.UnitPrice ?? 0m, Quantity = 5, Discount = 0.1f }, cancellationToken).ConfigureAwait(false);
+                await _orderDetails.InsertAsync(new OrderDetail { OrderID = firstOrderID, ProductID = p2, UnitPrice = chang.UnitPrice ?? 0m, Quantity = 5, Discount = 0.1f }, cancellationToken).ConfigureAwait(false);
             }
         }
         if (secondOrder?.OrderID is int secondOrderID)
         {
             if (tofu?.ProductID is int p3)
             {
-                await _orderDetails.InsertAsync(new OrderDetail { OrderID = secondOrderID, ProductID = p3, UnitPrice = tofu!.UnitPrice ?? 0m, Quantity = 3, Discount = 0f }, cancellationToken).ConfigureAwait(false);
+                await _orderDetails.InsertAsync(new OrderDetail { OrderID = secondOrderID, ProductID = p3, UnitPrice = tofu.UnitPrice ?? 0m, Quantity = 3, Discount = 0f }, cancellationToken).ConfigureAwait(false);
             }
 
             if (konbu?.ProductID is int p4)
             {
-                await _orderDetails.InsertAsync(new OrderDetail { OrderID = secondOrderID, ProductID = p4, UnitPrice = konbu!.UnitPrice ?? 0m, Quantity = 12, Discount = 0f }, cancellationToken).ConfigureAwait(false);
+                await _orderDetails.InsertAsync(new OrderDetail { OrderID = secondOrderID, ProductID = p4, UnitPrice = konbu.UnitPrice ?? 0m, Quantity = 12, Discount = 0f }, cancellationToken).ConfigureAwait(false);
             }
         }
     }

@@ -118,12 +118,12 @@ public sealed class EmptyUpsertSetIntegrationTests
 
         var conflict = await store.UpsertReturningAsync(new SsKeyOnlyItem { Id = id });
         Assert.NotNull(conflict);
-        Assert.Equal(id, conflict!.Id);
+        Assert.Equal(id, conflict.Id);
         Assert.Single(await store.AllAsync());
 
         var inserted = await store.UpsertReturningAsync(new SsKeyOnlyItem { Id = null });
         Assert.NotNull(inserted);
-        Assert.NotNull(inserted!.Id);
+        Assert.NotNull(inserted.Id);
         Assert.Equal(2, (await store.AllAsync()).Count);
     }
 
@@ -157,7 +157,7 @@ public sealed class EmptyUpsertSetIntegrationTests
 
         Assert.NotNull(inserted);
         Assert.NotNull(conflict);
-        Assert.Equal(73, conflict!.Id);
+        Assert.Equal(73, conflict.Id);
         Assert.Equal(storedAt, conflict.CreatedAt);
         Assert.NotEqual(conflictingAt, conflict.CreatedAt);
         Assert.Single(await store.AllAsync());

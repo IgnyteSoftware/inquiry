@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
@@ -158,7 +159,7 @@ public sealed class GeneratedCommandRuntimeTests
                 target.AddParameter(parameter);
             });
 
-        var affected = await inquiry.ExecuteBatchAsync(command, new[] { 11, 12, 13 });
+        var affected = await inquiry.ExecuteBatchAsync(command, [11, 12, 13]);
 
         var fallback = Assert.IsType<FallbackInquiry>(inquiry);
         Assert.Equal(3, affected);
@@ -222,7 +223,7 @@ public sealed class GeneratedCommandRuntimeTests
         public ValueTask CommandInitializedAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
         {
             CommandType = context.Command.CommandType;
-            ParameterValue = Convert.ToInt64(context.Command.Parameters[0].Value);
+            ParameterValue = Convert.ToInt64(context.Command.Parameters[0].Value, CultureInfo.CurrentCulture);
             return ValueTask.CompletedTask;
         }
     }
@@ -278,7 +279,7 @@ public sealed class GeneratedCommandRuntimeTests
             CommandText = command.CommandText;
             using var dbCommand = new SqliteCommand();
             command.DbCommandBinder?.Invoke(dbCommand);
-            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value);
+            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value, CultureInfo.CurrentCulture);
             return Task.FromResult<TEntity?>(default);
         }
 
@@ -293,7 +294,7 @@ public sealed class GeneratedCommandRuntimeTests
             CommandText = command.CommandText;
             using var dbCommand = new SqliteCommand();
             command.DbCommandBinder?.Invoke(dbCommand);
-            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value);
+            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value, CultureInfo.CurrentCulture);
             ExecuteCallCount++;
             return Task.FromResult(1);
         }

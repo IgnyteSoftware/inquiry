@@ -80,7 +80,7 @@ public sealed class TransactionIntegrationTests
 
         var loaded = await store.SelectByKeyAsync("HELP1");
         Assert.NotNull(loaded);
-        Assert.Equal("USA", loaded!.Country);
+        Assert.Equal("USA", loaded.Country);
     }
 
     [SkippableFact]
@@ -506,6 +506,6 @@ public sealed class TransactionIntegrationTests
             $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers WHERE CustomerID = {"READ1"}");
 
         Assert.NotNull(loaded);
-        Assert.Equal("Read Me", loaded!.CompanyName);
+        Assert.Equal("Read Me", loaded.CompanyName);
     }
 }

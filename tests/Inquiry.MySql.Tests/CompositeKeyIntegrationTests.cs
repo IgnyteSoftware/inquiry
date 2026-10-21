@@ -68,7 +68,7 @@ public sealed class CompositeKeyIntegrationTests
         var loaded = await store.SelectByKeyAsync(1, 2);
 
         Assert.NotNull(loaded);
-        Assert.Equal(1, loaded!.OrderID);
+        Assert.Equal(1, loaded.OrderID);
         Assert.Equal(2, loaded.ProductID);
         Assert.Equal(20m, loaded.UnitPrice);
         Assert.Equal(3, loaded.Quantity);
@@ -177,7 +177,7 @@ public sealed class CompositeKeyIntegrationTests
         var loaded = await bridgeStore.SelectByKeyAsync("ALFKI", "VIP");
 
         Assert.NotNull(loaded);
-        Assert.Equal("ALFKI", loaded!.CustomerID);
+        Assert.Equal("ALFKI", loaded.CustomerID);
         Assert.Equal("VIP", loaded.CustomerTypeID);
 
         var deleted = await bridgeStore.DeleteByKeyAsync("ALFKI", "VIP");

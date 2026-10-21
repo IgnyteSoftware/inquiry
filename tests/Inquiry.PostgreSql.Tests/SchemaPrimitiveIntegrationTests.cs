@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.Entities;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
@@ -50,6 +51,6 @@ public sealed class SchemaPrimitiveIntegrationTests
         Assert.Equal(1, await ScalarAsync(c, "SELECT COUNT(*) FROM \"UpdateCascadeChild\" WHERE \"ParentId\"=11"));
     }
     private static async Task ExecAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; await cmd.ExecuteNonQueryAsync(); }
-    private static async Task<int> ScalarAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToInt32(await cmd.ExecuteScalarAsync()); }
-    private static async Task<string?> StringAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToString(await cmd.ExecuteScalarAsync()); }
+    private static async Task<int> ScalarAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture); }
+    private static async Task<string?> StringAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToString(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture); }
 }

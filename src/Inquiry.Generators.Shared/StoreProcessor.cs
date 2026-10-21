@@ -1008,7 +1008,7 @@ internal static class StoreProcessor
                 continue;
             }
 
-            var parts = term.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = term.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
             var field = parts[0];
             var descending = false;
 

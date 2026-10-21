@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
@@ -186,7 +188,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(Inquiry.Generators.Abstractions.SqlExpressionLexer.Analyze("a # b", Inquiry.Generators.Abstractions.SqlExpressionCommentPolicy.MySql, false).Failures, f => f.Contains("line comment", StringComparison.Ordinal));
 
         var mysql = RunGenerator("using Inquiry.Entities; namespace Demo; [InquiryTable(\"T\")] public sealed class T { [InquiryKey] public int Id {get;set;} [InquiryColumn(Computed=\"Id || 1\")] public int C {get;set;} }", dialect: "MySql");
-        Assert.Contains(mysql.RunResult.Diagnostics, d => d.Id == "INQ072" && d.GetMessage().Contains("ambiguous", StringComparison.Ordinal));
+        Assert.Contains(mysql.RunResult.Diagnostics, d => d.Id == "INQ072" && d.GetMessage(CultureInfo.CurrentCulture).Contains("ambiguous", StringComparison.Ordinal));
         Assert.DoesNotContain(mysql.RunResult.GeneratedTrees, tree => tree.GetText().ToString().Contains("Id || 1", StringComparison.Ordinal));
     }
 
@@ -216,7 +218,7 @@ public sealed partial class InquiryGeneratorTests
     {
         var source = $"using Inquiry.Entities; namespace Demo; [InquiryTable(\"T\")] public sealed class T {{ [InquiryKey] public int Id {{get;set;}} [InquiryColumn(Computed=\"{fallback}\")] [InquiryComputedExpression(\"{provider}\", \"Id + 2\")] public int C {{get;set;}} }}";
         var result = RunGenerator(source, dialect: "MySql");
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ072" && d.GetMessage().Contains(reason, StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ072" && d.GetMessage(CultureInfo.CurrentCulture).Contains(reason, StringComparison.Ordinal));
         Assert.DoesNotContain(result.Compilation.GetDiagnostics(), d => d.Id == "CS8795");
     }
 
@@ -256,7 +258,7 @@ public sealed partial class InquiryGeneratorTests
         const string source = "using Inquiry.Entities; namespace Demo; [InquiryTable(\"T\")] public sealed class T { [InquiryKey] public int Id {get;set;} [InquiryColumn(Computed=\"Id+1\")] [InquiryComputedExpression(\"future.provider\", \"   \")] public int C {get;set;} }";
         var result = RunGenerator(source, dialect: "Sqlite");
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(d => d.Id == "INQ072"));
-        Assert.Contains("override expression is empty", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("override expression is empty", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
         Assert.Equal("\"   \"", source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length));
     }
 
@@ -282,7 +284,7 @@ public sealed partial class InquiryGeneratorTests
             """;
         var result = RunGenerator(source, dialect: "MySql");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ072");
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ008" && d.GetMessage().Contains("relation dependency", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ008" && d.GetMessage(CultureInfo.CurrentCulture).Contains("relation dependency", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Compilation.GetDiagnostics(), d => d.Id == "CS8795");
         var store = Assert.Single(result.RunResult.GeneratedTrees, tree => tree.FilePath.EndsWith("OrderStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Contains("NotSupportedException", store);
@@ -295,7 +297,7 @@ public sealed partial class InquiryGeneratorTests
         const string source = "using Inquiry.Entities; namespace Demo; [InquiryTable(\"T\")] public sealed class T { [InquiryKey] public int Id {get;set;} [InquiryColumn(Computed=\"Id+1\")] [InquiryComputedExpression(\"mysql\", \"   \")] public int C {get;set;} }";
         var result = RunGenerator(source, dialect: "MySql");
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(d => d.Id == "INQ072"));
-        Assert.Contains("override expression is empty", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("override expression is empty", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
         Assert.Equal("\"   \"", source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length));
     }
 
@@ -314,9 +316,9 @@ public sealed partial class InquiryGeneratorTests
         // The junction declares no key, so it fails its own validation and never reaches mappedEntities —
         // which is INQ087 ("not a mapped entity"), the reason split out of INQ063's old catch-all.
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(d => d.Id == "INQ087"));
-        Assert.Contains("is not a mapped Inquiry entity", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.Contains("OrderProduct", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ008" && d.GetMessage().Contains("relation dependency", StringComparison.Ordinal));
+        Assert.Contains("is not a mapped Inquiry entity", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Contains("OrderProduct", diagnostic.GetMessage(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ008" && d.GetMessage(CultureInfo.CurrentCulture).Contains("relation dependency", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -377,8 +379,8 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, dialect: "MySql");
         var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ072").ToArray();
         Assert.Equal(2, diagnostics.Length);
-        var provider = Assert.Single(diagnostics, d => d.GetMessage().Contains("provider id is invalid", StringComparison.Ordinal));
-        var expression = Assert.Single(diagnostics, d => d.GetMessage().Contains("override expression is empty", StringComparison.Ordinal));
+        var provider = Assert.Single(diagnostics, d => d.GetMessage(CultureInfo.CurrentCulture).Contains("provider id is invalid", StringComparison.Ordinal));
+        var expression = Assert.Single(diagnostics, d => d.GetMessage(CultureInfo.CurrentCulture).Contains("override expression is empty", StringComparison.Ordinal));
         Assert.Equal("\"Bad\"", source.Substring(provider.Location.SourceSpan.Start, provider.Location.SourceSpan.Length));
         Assert.Equal("\"   \"", source.Substring(expression.Location.SourceSpan.Start, expression.Location.SourceSpan.Length));
     }

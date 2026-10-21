@@ -61,13 +61,13 @@ public sealed class MutationReturningIntegrationTests
         // Insert branch — row does not exist yet.
         var inserted = await store.UpsertReturningAsync(new Customer { CustomerID = "UPS01", CompanyName = "New", Country = "USA" });
         Assert.NotNull(inserted);
-        Assert.Equal("UPS01", inserted!.CustomerID);
+        Assert.Equal("UPS01", inserted.CustomerID);
         Assert.Equal("New", inserted.CompanyName);
 
         // Update branch — row already exists.
         var updated = await store.UpsertReturningAsync(new Customer { CustomerID = "UPS01", CompanyName = "Updated", Country = "Canada" });
         Assert.NotNull(updated);
-        Assert.Equal("Updated", updated!.CompanyName);
+        Assert.Equal("Updated", updated.CompanyName);
         Assert.Equal("Canada", updated.Country);
     }
 }

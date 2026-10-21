@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -262,7 +263,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "PostgreSql");
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ068");
-        Assert.Contains("Provider 'PostgreSql'", diagnostic.GetMessage());
+        Assert.Contains("Provider 'PostgreSql'", diagnostic.GetMessage(CultureInfo.CurrentCulture));
         Assert.NotEqual(Location.None, diagnostic.Location);
         Assert.Equal(8, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
     }
@@ -393,7 +394,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ068");
-        Assert.Contains("Provider 'Sqlite'", diagnostic.GetMessage());
+        Assert.Contains("Provider 'Sqlite'", diagnostic.GetMessage(CultureInfo.CurrentCulture));
         Assert.NotEqual(Location.None, diagnostic.Location);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ006");
     }

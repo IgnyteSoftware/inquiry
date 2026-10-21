@@ -221,13 +221,13 @@ public sealed class ProviderAwareMaterializerIntegrationTests
 
         var returned = await store.InsertReturningAsync(item);
         Assert.NotNull(returned);
-        Assert.True(returned!.Id > 0);
+        Assert.True(returned.Id > 0);
         AssertItem(returned, item);
         item = returned;
 
         var selected = await store.SelectByKeyAsync(returned.Id);
         Assert.NotNull(selected);
-        AssertItem(selected!, item);
+        AssertItem(selected, item);
 
         item.EventDate = date.AddDays(1);
         item.EventTime = item.EventTime.Add(TimeSpan.FromTicks(10));
@@ -236,7 +236,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         item.OptionalOffset = new DateTimeOffset(2024, 12, 31, 23, 59, 59, TimeSpan.FromMinutes(345));
         var updated = await store.UpdateReturningAsync(item);
         Assert.NotNull(updated);
-        AssertItem(updated!, item);
+        AssertItem(updated, item);
 
         Assert.Single(await store.ByDateAsync(item.EventDate));
         Assert.Single(await store.ByTimeAsync(item.EventTime));
@@ -284,7 +284,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         }
         var value = await harness.GetRequiredService<ProviderReadAllTypesStore>().SelectByKeyAsync(1);
         Assert.NotNull(value);
-        Assert.Equal(42, value!.NumberValue);
+        Assert.Equal(42, value.NumberValue);
         Assert.True(value.Enabled);
         Assert.Equal(token, value.Token);
         Assert.Equal(new OracleExternalId(token), value.ConvertedToken);
@@ -307,7 +307,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
 
         var inserted = await store.InsertReturningAsync(item);
         Assert.NotNull(inserted);
-        AssertAllTypes(item, inserted!);
+        AssertAllTypes(item, inserted);
         Assert.Single(await store.ByTokenAsync(token));
         Assert.Single(await store.ByEnabledAsync(true));
         Assert.Single(await store.ByOptionalTokenAsync(optionalToken));
@@ -334,7 +334,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         item.ConvertedToken = new OracleExternalId(token);
         var updated = await store.UpdateReturningAsync(item);
         Assert.NotNull(updated);
-        AssertAllTypes(item, updated!);
+        AssertAllTypes(item, updated);
         Assert.Single(await store.ByConvertedTokenAsync(item.ConvertedToken));
         Assert.Single(await store.ByConvertedEnabledAsync(item.ConvertedEnabled));
         Assert.Single(await store.InTokensAsync([optionalToken]));
@@ -354,7 +354,7 @@ public sealed class ProviderAwareMaterializerIntegrationTests
         {
             var selected = await store.SelectByKeyAsync(expected.Id);
             Assert.NotNull(selected);
-            AssertAllTypes(expected, selected!);
+            AssertAllTypes(expected, selected);
         }
 
         batch[0].Enabled = true;

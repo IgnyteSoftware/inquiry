@@ -188,7 +188,7 @@ internal static class InquiryBatchCommandExecutor
                 for (; index < chunk.Count; index++)
                 {
                     reuseState.BeginItem();
-                    command.BindItem!(reuseTarget, chunk[index]);
+                    command.BindItem(reuseTarget, chunk[index]);
                     reuseState.CompleteItem();
                     connectionFactory.FinalizeCommand(dbCommand);
                     total += await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

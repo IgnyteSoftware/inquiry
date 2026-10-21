@@ -30,14 +30,14 @@ public sealed class NorthwindCoverageIntegrationTests
             Country = "UK",
         });
         Assert.NotNull(inserted);
-        Assert.NotNull(inserted!.SupplierID);
+        Assert.NotNull(inserted.SupplierID);
 
         inserted.ContactName = "Updated";
         Assert.True(await store.UpdateAsync(inserted));
 
         var fetched = await store.SelectByKeyAsync(inserted.SupplierID);
         Assert.NotNull(fetched);
-        Assert.Equal("Updated", fetched!.ContactName);
+        Assert.Equal("Updated", fetched.ContactName);
 
         Assert.True(await store.DeleteByKeyAsync(inserted.SupplierID));
         Assert.Null(await store.SelectByKeyAsync(inserted.SupplierID));
@@ -52,11 +52,11 @@ public sealed class NorthwindCoverageIntegrationTests
 
         var inserted = await store.InsertReturningAsync(new Shipper { CompanyName = "Speedy Express", Phone = "(503) 555-9831" });
         Assert.NotNull(inserted);
-        Assert.NotNull(inserted!.ShipperID);
+        Assert.NotNull(inserted.ShipperID);
 
         var fetched = await store.SelectByKeyAsync(inserted.ShipperID);
         Assert.NotNull(fetched);
-        Assert.Equal("Speedy Express", fetched!.CompanyName);
+        Assert.Equal("Speedy Express", fetched.CompanyName);
 
         Assert.True(await store.DeleteByKeyAsync(inserted.ShipperID));
     }
@@ -79,7 +79,7 @@ public sealed class NorthwindCoverageIntegrationTests
         });
 
         Assert.NotNull(order);
-        Assert.NotNull(order!.OrderID);
+        Assert.NotNull(order.OrderID);
         Assert.True(order.OrderID > 0);
 
         var fetched = await orders.SelectByKeyAsync(order.OrderID);
@@ -104,7 +104,7 @@ public sealed class NorthwindCoverageIntegrationTests
 
         var order = await orders.InsertReturningAsync(new Order { CustomerID = "ALFKI" });
         Assert.NotNull(order);
-        var orderID = order!.OrderID!.Value;
+        var orderID = order.OrderID!.Value;
 
         await orderDetails.InsertAsync(new OrderDetail { OrderID = orderID, ProductID = chai!.ProductID!.Value, UnitPrice = 18m, Quantity = 10, Discount = 0f });
         await orderDetails.InsertAsync(new OrderDetail { OrderID = orderID, ProductID = chang!.ProductID!.Value, UnitPrice = 19m, Quantity = 5, Discount = 0.1f });
@@ -112,16 +112,16 @@ public sealed class NorthwindCoverageIntegrationTests
         var lines = await orderDetails.SelectByOrderAsync(orderID).ToListAsync();
         Assert.Equal(2, lines.Count);
 
-        var line = await orderDetails.SelectByKeyAsync(orderID, chai.ProductID!.Value);
+        var line = await orderDetails.SelectByKeyAsync(orderID, chai.ProductID.Value);
         Assert.NotNull(line);
-        Assert.Equal(10, line!.Quantity);
+        Assert.Equal(10, line.Quantity);
 
         line.Quantity = 99;
         Assert.True(await orderDetails.UpdateAsync(line));
-        Assert.Equal(99, (await orderDetails.SelectByKeyAsync(orderID, chai.ProductID!.Value))!.Quantity);
+        Assert.Equal(99, (await orderDetails.SelectByKeyAsync(orderID, chai.ProductID.Value))!.Quantity);
 
-        Assert.True(await orderDetails.DeleteByKeyAsync(orderID, chai.ProductID!.Value));
-        Assert.Null(await orderDetails.SelectByKeyAsync(orderID, chai.ProductID!.Value));
+        Assert.True(await orderDetails.DeleteByKeyAsync(orderID, chai.ProductID.Value));
+        Assert.Null(await orderDetails.SelectByKeyAsync(orderID, chai.ProductID.Value));
     }
 
     [SkippableFact]
@@ -140,14 +140,14 @@ public sealed class NorthwindCoverageIntegrationTests
         await territories.InsertAsync(new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford", RegionID = 1 });
 
         await bridge.InsertAsync(new EmployeeTerritory { EmployeeID = nancy!.EmployeeID!.Value, TerritoryID = "01581" });
-        await bridge.InsertAsync(new EmployeeTerritory { EmployeeID = nancy.EmployeeID!.Value, TerritoryID = "01730" });
+        await bridge.InsertAsync(new EmployeeTerritory { EmployeeID = nancy.EmployeeID.Value, TerritoryID = "01730" });
 
-        var byEmployee = await bridge.SelectByEmployeeAsync(nancy.EmployeeID!.Value).ToListAsync();
+        var byEmployee = await bridge.SelectByEmployeeAsync(nancy.EmployeeID.Value).ToListAsync();
         Assert.Equal(2, byEmployee.Count);
 
-        Assert.NotNull(await bridge.SelectByKeyAsync(nancy.EmployeeID!.Value, "01581"));
-        Assert.True(await bridge.DeleteByKeyAsync(nancy.EmployeeID!.Value, "01581"));
-        Assert.Null(await bridge.SelectByKeyAsync(nancy.EmployeeID!.Value, "01581"));
+        Assert.NotNull(await bridge.SelectByKeyAsync(nancy.EmployeeID.Value, "01581"));
+        Assert.True(await bridge.DeleteByKeyAsync(nancy.EmployeeID.Value, "01581"));
+        Assert.Null(await bridge.SelectByKeyAsync(nancy.EmployeeID.Value, "01581"));
     }
 
     [SkippableFact]
@@ -184,7 +184,7 @@ public sealed class NorthwindCoverageIntegrationTests
 
         var updated = await store.UpdateReturningAsync(new Customer { CustomerID = "UPD01", CompanyName = "Updated", Country = "Canada" });
         Assert.NotNull(updated);
-        Assert.Equal("Updated", updated!.CompanyName);
+        Assert.Equal("Updated", updated.CompanyName);
         Assert.Equal("Canada", updated.Country);
 
         var missing = await store.UpdateReturningAsync(new Customer { CustomerID = "GONE1", CompanyName = "Missing" });
@@ -192,7 +192,7 @@ public sealed class NorthwindCoverageIntegrationTests
 
         var upserted = await store.UpsertReturningAsync(new Customer { CustomerID = "UPS01", CompanyName = "New", Country = "USA" });
         Assert.NotNull(upserted);
-        Assert.Equal("New", upserted!.CompanyName);
+        Assert.Equal("New", upserted.CompanyName);
     }
 
     /// <summary>
@@ -217,14 +217,14 @@ public sealed class NorthwindCoverageIntegrationTests
             Discontinued = false,
         });
         Assert.NotNull(inserted);
-        Assert.NotNull(inserted!.ProductID);
+        Assert.NotNull(inserted.ProductID);
         Assert.True(inserted.ProductID > 0);
         Assert.Equal("Chai", inserted.ProductName);
 
         // The inserted row is readable by key (independent of the returning path).
         var fetched = await products.SelectByKeyAsync(inserted.ProductID);
         Assert.NotNull(fetched);
-        Assert.Equal(18m, fetched!.UnitPrice);
+        Assert.Equal(18m, fetched.UnitPrice);
     }
 
     /// <summary>
@@ -247,7 +247,7 @@ public sealed class NorthwindCoverageIntegrationTests
         inserted!.UnitPrice = 99m;
         var updated = await products.UpsertReturningAsync(inserted);
         Assert.NotNull(updated);
-        Assert.Equal(inserted.ProductID, updated!.ProductID);
+        Assert.Equal(inserted.ProductID, updated.ProductID);
         Assert.Equal(99m, updated.UnitPrice);
     }
 
@@ -265,8 +265,8 @@ public sealed class NorthwindCoverageIntegrationTests
 
         var loaded = await categories.SelectByKeyWithProductsAsync(beverages.CategoryID);
         Assert.NotNull(loaded);
-        Assert.NotNull(loaded!.Products);
-        Assert.Equal(2, loaded.Products!.Count);
+        Assert.NotNull(loaded.Products);
+        Assert.Equal(2, loaded.Products.Count);
 
         var withCategory = await products.SelectAllWithCategoryAsync().ToListAsync();
         Assert.All(withCategory, p => Assert.Equal("Beverages", p.Category?.CategoryName));
@@ -301,7 +301,7 @@ public sealed class NorthwindCoverageIntegrationTests
         await using (var tx = await inquiry.BeginTransactionAsync())
         {
             var order = await orders.InsertReturningAsync(new Order { CustomerID = "ALFKI", Freight = 7m });
-            await orderDetails.InsertAsync(new OrderDetail { OrderID = order!.OrderID!.Value, ProductID = chai!.ProductID!.Value, UnitPrice = 18m, Quantity = 3, Discount = 0f });
+            await orderDetails.InsertAsync(new OrderDetail { OrderID = order!.OrderID!.Value, ProductID = chai.ProductID.Value, UnitPrice = 18m, Quantity = 3, Discount = 0f });
             await tx.CommitAsync();
         }
 
@@ -325,7 +325,7 @@ public sealed class NorthwindCoverageIntegrationTests
 
         var fetched = await employees.SelectByKeyAsync(report!.EmployeeID);
         Assert.NotNull(fetched);
-        Assert.Equal(manager.EmployeeID, fetched!.ReportsTo);
+        Assert.Equal(manager.EmployeeID, fetched.ReportsTo);
     }
 
     [SkippableFact]

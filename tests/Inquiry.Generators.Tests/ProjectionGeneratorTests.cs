@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -503,7 +504,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains(
             result.RunResult.Diagnostics,
-            static d => d.Id == "INQ009" && d.Severity == DiagnosticSeverity.Error && d.GetMessage().Contains("DocTitle.Title", StringComparison.Ordinal));
+            static d => d.Id == "INQ009" && d.Severity == DiagnosticSeverity.Error && d.GetMessage(CultureInfo.CurrentCulture).Contains("DocTitle.Title", StringComparison.Ordinal));
     }
 
     [Fact]

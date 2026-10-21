@@ -29,7 +29,7 @@ public static class CyclicForeignKeyDdl
 {
     public static string Extract(string generatedDdl)
         => string.Join("\n\n", generatedDdl
-            .Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries)
+            .Split(["\n\n"], StringSplitOptions.RemoveEmptyEntries)
             .Where(static statement =>
                 statement.Contains("CyclicAlpha", StringComparison.Ordinal)
                 || statement.Contains("CyclicBeta", StringComparison.Ordinal)));

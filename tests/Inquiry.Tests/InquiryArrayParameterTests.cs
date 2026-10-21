@@ -58,7 +58,7 @@ public sealed class InquiryArrayParameterTests
     public void LazySequenceMaterializesToTypedArray()
     {
         var value = InquiryArrayParameter.ToArrayValue<string>(Lazy());
-        Assert.Equal(new[] { "a", "b" }, Assert.IsType<string[]>(value));
+        Assert.Equal(["a", "b"], Assert.IsType<string[]>(value));
 
         static IEnumerable<string> Lazy()
         {
@@ -78,7 +78,7 @@ public sealed class InquiryArrayParameterTests
     public void EnumElementsCoerceToUnderlyingTypedArray()
     {
         var value = InquiryArrayParameter.ToArrayValue<Color>(new[] { Color.Red, Color.Green });
-        Assert.Equal(new[] { 1, 2 }, Assert.IsType<int[]>(value));
+        Assert.Equal([1, 2], Assert.IsType<int[]>(value));
 
         var longValue = InquiryArrayParameter.ToArrayValue<BigFlag>(new[] { BigFlag.B });
         Assert.Equal(new long[] { 6 }, Assert.IsType<long[]>(longValue));
@@ -90,6 +90,6 @@ public sealed class InquiryArrayParameterTests
         // IN/ANY never matches NULL, so dropping null elements preserves semantics while keeping
         // the array typed for the provider.
         var value = InquiryArrayParameter.ToArrayValue<Color?>(new Color?[] { Color.Red, null, Color.Green });
-        Assert.Equal(new[] { 1, 2 }, Assert.IsType<int[]>(value));
+        Assert.Equal([1, 2], Assert.IsType<int[]>(value));
     }
 }

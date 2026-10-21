@@ -189,7 +189,7 @@ public sealed class InquiryTelemetryTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(
-            null, Sentinel, new[] { "Id" }, static (item, _) => item.Id);
+            null, Sentinel, ["Id"], static (item, _) => item.Id);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }));
@@ -275,7 +275,7 @@ public sealed class InquiryTelemetryTests
 
                 break;
             case "batch":
-                await pipeline.ExecuteBatchAsync(sql, new[] { 1 }, static (target, item) =>
+                await pipeline.ExecuteBatchAsync(sql, [1], static (target, item) =>
                 {
                     var p = target.CreateParameter();
                     p.ParameterName = "@id";
@@ -826,7 +826,7 @@ public sealed class InquiryTelemetryTests
         await Assert.ThrowsAsync<SqliteException>(() =>
             pipeline.ExecuteBatchAsync(
                 "INSERT INTO NoSuchTable (Id) VALUES (@id)",
-                new[] { 1 },
+                [1],
                 static (target, item) =>
                 {
                     var p = target.CreateParameter();
@@ -870,7 +870,7 @@ public sealed class InquiryTelemetryTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(
-            null, "Items", new[] { "Id", "Name", "IsActive" },
+            null, "Items", ["Id", "Name", "IsActive"],
             static (item, ordinal) => ordinal switch { 0 => item.Id, 1 => item.Name, _ => item.IsActive });
 
         var count = await inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) });
@@ -924,7 +924,7 @@ public sealed class InquiryTelemetryTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(
-            null, "Items", new[] { "Id" },
+            null, "Items", ["Id"],
             static (item, _) => item.Id);
 
         await inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) });
@@ -974,7 +974,7 @@ public sealed class InquiryTelemetryTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(
-            null, "Items", new[] { "Id" },
+            null, "Items", ["Id"],
             static (item, _) => item.Id);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -999,7 +999,7 @@ public sealed class InquiryTelemetryTests
             services.AddSingleton<IInquiryBulkCopier>(new FakeBulkCopier()));
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
-        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", new[] { "Id" }, static (item, _) => item.Id);
+        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", ["Id"], static (item, _) => item.Id);
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
@@ -1044,7 +1044,7 @@ public sealed class InquiryTelemetryTests
             services.AddSingleton<IInquiryBulkCopier>(new OpenFailingBulkCopier()));
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
-        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", new[] { "Id" }, static (item, _) => item.Id);
+        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", ["Id"], static (item, _) => item.Id);
 
         await Assert.ThrowsAsync<TimeoutException>(() => inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }));
 
@@ -1225,7 +1225,7 @@ public sealed class InquiryTelemetryTests
         [System.Diagnostics.CodeAnalysis.AllowNull]
         public override string ConnectionString { get => _inner.ConnectionString; set => _inner.ConnectionString = value; }
         public override string Database => _inner.Database;
-        public override string DataSource => _inner.DataSource!;
+        public override string DataSource => _inner.DataSource;
         public override string ServerVersion => _inner.ServerVersion;
         public override System.Data.ConnectionState State => _inner.State;
 

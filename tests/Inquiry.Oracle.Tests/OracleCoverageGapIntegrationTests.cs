@@ -51,7 +51,7 @@ public sealed class OracleCoverageGapIntegrationTests
 
         var fetched = await employees.SelectByKeyAsync(report!.EmployeeID);
         Assert.NotNull(fetched);
-        Assert.Equal(manager.EmployeeID, fetched!.ReportsTo);
+        Assert.Equal(manager.EmployeeID, fetched.ReportsTo);
     }
 
     [SkippableFact]
@@ -75,7 +75,7 @@ public sealed class OracleCoverageGapIntegrationTests
 
         var fetched = await employees.SelectByKeyAsync(inserted!.EmployeeID);
         Assert.NotNull(fetched);
-        Assert.Equal(birth, fetched!.BirthDate);
+        Assert.Equal(birth, fetched.BirthDate);
         Assert.Equal(hire, fetched.HireDate);
     }
 }
