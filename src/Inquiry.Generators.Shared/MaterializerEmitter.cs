@@ -24,13 +24,21 @@ internal static class MaterializerEmitter
     public static string ReadExpression(TypeData type, int index, SqlBuilder sqlBuilder, bool enumAsString = false, ConverterData? converter = null, ReaderResultRole role = ReaderResultRole.Column)
     {
         var nonNullable = type.NonNullableDisplayName;
-        var read = converter is not null
-            ? ConverterInvocationEmitter.FromProvider(converter, PlainReadExpression(converter.ProviderType, converter.ProviderSpecialType, index, nonNullable, converter.ProviderTypeDisplay, sqlBuilder, role))
-            : enumAsString
-                ? $"global::System.Enum.Parse<{nonNullable}>({sqlBuilder.BuildReaderExpression(new ReaderExpressionContext(index, nonNullable, "global::System.String", SpecialType.System_String, role))})"
-                : type.IsEnum
-                    ? EnumReadExpression(type.EnumUnderlyingSpecialType, nonNullable, index, sqlBuilder, role)
-                    : PlainReadExpression(type, type.SpecialType, index, nonNullable, nonNullable, sqlBuilder, role);
+        string read;
+        if (converter is not null)
+        {
+            read = ConverterInvocationEmitter.FromProvider(converter, PlainReadExpression(converter.ProviderType, converter.ProviderSpecialType, index, nonNullable, converter.ProviderTypeDisplay, sqlBuilder, role));
+        }
+        else if (enumAsString)
+        {
+            read = $"global::System.Enum.Parse<{nonNullable}>({sqlBuilder.BuildReaderExpression(new ReaderExpressionContext(index, nonNullable, "global::System.String", SpecialType.System_String, role))})";
+        }
+        else
+        {
+            read = type.IsEnum
+                ? EnumReadExpression(type.EnumUnderlyingSpecialType, nonNullable, index, sqlBuilder, role)
+                : PlainReadExpression(type, type.SpecialType, index, nonNullable, nonNullable, sqlBuilder, role);
+        }
 
         if (!type.IsNullable)
         {

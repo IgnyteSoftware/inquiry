@@ -220,7 +220,7 @@ internal static class SchemaEmitter
         context.AddSource($"{GeneratedClassName}.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
     }
 
-    private static IReadOnlyList<EntityData> SuppressInvalidGeneratedKeySchemas(SourceProductionContext context, IReadOnlyList<EntityData> entities)
+    private static List<EntityData> SuppressInvalidGeneratedKeySchemas(SourceProductionContext context, IReadOnlyList<EntityData> entities)
     {
         var valid = new List<EntityData>(entities.Count);
         foreach (var entity in entities)
@@ -275,11 +275,8 @@ internal static class SchemaEmitter
                 var columns = table.Columns.Select(column =>
                 {
                     var keyOrdinal = System.Array.IndexOf(keys, column.ColumnName);
-                    var generation = column.IsDatabaseGeneratedToken ? "rowversion"
-                        : !string.IsNullOrEmpty(column.ComputedExpression) ? "computed"
-                        : column.IsGenerated ? "identity"
-                        : !string.IsNullOrEmpty(column.DefaultExpression) ? "default" : "none";
-                    var concurrency = !column.IsConcurrencyToken ? "none" : column.IsDatabaseGeneratedToken ? "database" : "application";
+                    var generation = ManifestGenerationToken(column);
+                    var concurrency = ManifestConcurrencyToken(column);
                     var storeType = builder.GetSchemaManifestStoreType(column);
                     return new SchemaManifestColumnData(column.ColumnName, storeType, storeType is null ? "database" : "explicit",
                         TypeClassToken(column.TypeClass), !string.IsNullOrEmpty(column.ComputedExpression) || column.IsNullable, keyOrdinal < 0 ? null : keyOrdinal,
@@ -305,6 +302,36 @@ internal static class SchemaEmitter
             .Select(artifact => new SchemaManifestArtifactData(artifact.Schema, artifact.Name,
                 builder.GetProviderArtifactKind(artifact), builder.GetProviderArtifactSignature(artifact))).ToArray();
         return new SchemaManifestData(builder.ProviderId, result, providerArtifacts);
+    }
+
+    private static string ManifestGenerationToken(IColumn column)
+    {
+        if (column.IsDatabaseGeneratedToken)
+        {
+            return "rowversion";
+        }
+
+        if (!string.IsNullOrEmpty(column.ComputedExpression))
+        {
+            return "computed";
+        }
+
+        if (column.IsGenerated)
+        {
+            return "identity";
+        }
+
+        return !string.IsNullOrEmpty(column.DefaultExpression) ? "default" : "none";
+    }
+
+    private static string ManifestConcurrencyToken(IColumn column)
+    {
+        if (!column.IsConcurrencyToken)
+        {
+            return "none";
+        }
+
+        return column.IsDatabaseGeneratedToken ? "database" : "application";
     }
 
     private static string TypeClassToken(DbTypeClass type) => type switch
@@ -505,7 +532,7 @@ internal static class SchemaEmitter
     private static bool IsIntegerClass(DbTypeClass typeClass)
         => typeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64;
 
-    private static IReadOnlyList<EntityData> SelectPhysicalTableRepresentatives(
+    private static List<EntityData> SelectPhysicalTableRepresentatives(
         SourceProductionContext context, IReadOnlyList<EntityData> entities)
     {
         var selected = new List<EntityData>();
@@ -596,7 +623,7 @@ internal static class SchemaEmitter
     /// and SCC-internal cyclic edges do not constrain this phase. Exact table identity is the deterministic
     /// tie-breaker, and the defensive final pass uses the same ordering.
     /// </summary>
-    private static IReadOnlyList<EntityData> OrderByForeignKeyDependencies(
+    private static List<EntityData> OrderByForeignKeyDependencies(
         IReadOnlyList<EntityData> entities,
         HashSet<string> cyclicIdentities)
     {
@@ -678,6 +705,33 @@ internal static class SchemaEmitter
         return ordered;
     }
 
+    private static string? ForeignKeyActionError(ColumnData column, SqlBuilder builder)
+    {
+        if (column.ForeignKeyConstraintName is not null && !IsValidExplicitIdentifier(column.ForeignKeyConstraintName))
+        {
+            return "explicit foreign-key constraint name is empty, contains control characters, or exceeds 63 UTF-8 bytes";
+        }
+
+        if (!builder.SupportsReferentialAction((ReferentialActionKind)column.ForeignKeyOnDelete, ReferentialActionEvent.Delete))
+        {
+            return "ON DELETE action is unsupported";
+        }
+
+        if (!builder.SupportsReferentialAction((ReferentialActionKind)column.ForeignKeyOnUpdate, ReferentialActionEvent.Update))
+        {
+            return "ON UPDATE action is unsupported";
+        }
+
+        if ((column.ForeignKeyOnDelete == 3 || column.ForeignKeyOnUpdate == 3) && !column.IsNullable)
+        {
+            return "SET NULL requires a nullable local property";
+        }
+
+        return (column.ForeignKeyOnDelete == 4 || column.ForeignKeyOnUpdate == 4) && string.IsNullOrEmpty(column.DefaultExpression)
+            ? "SET DEFAULT requires DefaultExpression"
+            : null;
+    }
+
     private static ForeignKeyGraph AnalyzeForeignKeys(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
     {
         var invalidMappings = new List<InvalidSchemaMapping>();
@@ -712,17 +766,7 @@ internal static class SchemaEmitter
                 var canonical = CanonicalForeignKeyIdentity(
                     entity.Schema, entity.TableName, column.ColumnName,
                     column.ForeignKeySchema, column.ForeignKeyTable!, column.ForeignKeyColumn!);
-                var actionError = column.ForeignKeyConstraintName is not null && !IsValidExplicitIdentifier(column.ForeignKeyConstraintName)
-                    ? "explicit foreign-key constraint name is empty, contains control characters, or exceeds 63 UTF-8 bytes"
-                    : !builder.SupportsReferentialAction((ReferentialActionKind)column.ForeignKeyOnDelete, ReferentialActionEvent.Delete)
-                    ? "ON DELETE action is unsupported"
-                    : !builder.SupportsReferentialAction((ReferentialActionKind)column.ForeignKeyOnUpdate, ReferentialActionEvent.Update)
-                        ? "ON UPDATE action is unsupported"
-                        : (column.ForeignKeyOnDelete == 3 || column.ForeignKeyOnUpdate == 3) && !column.IsNullable
-                            ? "SET NULL requires a nullable local property"
-                            : (column.ForeignKeyOnDelete == 4 || column.ForeignKeyOnUpdate == 4) && string.IsNullOrEmpty(column.DefaultExpression)
-                                ? "SET DEFAULT requires DefaultExpression"
-                                : null;
+                var actionError = ForeignKeyActionError(column, builder);
                 if (actionError is not null)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaPrimitiveInvalid,
@@ -846,19 +890,13 @@ internal static class SchemaEmitter
         }
 
         var cyclic = new HashSet<string>(System.StringComparer.Ordinal);
-        foreach (var invalid in invalidForeignKeys)
+        foreach (var invalid in invalidForeignKeys.Where(IsCyclic))
         {
-            if (IsCyclic(invalid))
-            {
-                cyclic.Add(invalid.CanonicalIdentity);
-            }
+            cyclic.Add(invalid.CanonicalIdentity);
         }
-        foreach (var foreignKey in named)
+        foreach (var foreignKey in named.Where(IsCyclic))
         {
-            if (IsCyclic(foreignKey))
-            {
-                cyclic.Add(foreignKey.CanonicalIdentity);
-            }
+            cyclic.Add(foreignKey.CanonicalIdentity);
         }
         var emitted = named.Select(foreignKey => ApplyForeignKeyEmissionMetadata(
             foreignKey, cyclic.Contains(foreignKey.CanonicalIdentity), builder.CyclicForeignKeyStrategy)).ToList();
@@ -871,14 +909,23 @@ internal static class SchemaEmitter
         bool isCyclic,
         CyclicForeignKeyStrategy strategy)
     {
-        var mode = isCyclic
-            ? strategy == CyclicForeignKeyStrategy.AlterTable ? ForeignKeyEmissionMode.Deferred
-                : strategy == CyclicForeignKeyStrategy.Inline ? ForeignKeyEmissionMode.Inline
-                : ForeignKeyEmissionMode.Suppressed
-            : ForeignKeyEmissionMode.Inline;
-        var emittedName = mode == ForeignKeyEmissionMode.Suppressed ? null
-            : mode == ForeignKeyEmissionMode.Deferred ? foreignKey.RequestedName ?? foreignKey.ConstraintName
-            : foreignKey.RequestedName;
+        var mode = ForeignKeyEmissionMode.Inline;
+        if (isCyclic)
+        {
+            mode = strategy switch
+            {
+                CyclicForeignKeyStrategy.AlterTable => ForeignKeyEmissionMode.Deferred,
+                CyclicForeignKeyStrategy.Inline => ForeignKeyEmissionMode.Inline,
+                _ => ForeignKeyEmissionMode.Suppressed,
+            };
+        }
+
+        var emittedName = mode switch
+        {
+            ForeignKeyEmissionMode.Suppressed => null,
+            ForeignKeyEmissionMode.Deferred => foreignKey.RequestedName ?? foreignKey.ConstraintName,
+            _ => foreignKey.RequestedName,
+        };
         return foreignKey with { EmissionMode = mode, EmittedName = emittedName };
     }
 
@@ -903,14 +950,14 @@ internal static class SchemaEmitter
 
             foreach (var target in adjacency[vertex].OrderBy(static value => value, System.StringComparer.Ordinal))
             {
-                if (!indices.ContainsKey(target))
+                if (!indices.TryGetValue(target, out var targetIndex))
                 {
                     Visit(target);
                     lowLinks[vertex] = System.Math.Min(lowLinks[vertex], lowLinks[target]);
                 }
                 else if (onStack.Contains(target))
                 {
-                    lowLinks[vertex] = System.Math.Min(lowLinks[vertex], indices[target]);
+                    lowLinks[vertex] = System.Math.Min(lowLinks[vertex], targetIndex);
                 }
             }
 
@@ -935,10 +982,13 @@ internal static class SchemaEmitter
 
         foreach (var vertex in adjacency.Keys.OrderBy(static value => value, System.StringComparer.Ordinal))
         {
-            if (!indices.ContainsKey(vertex))
+            // Visit marks more vertices as it recurses, so test each one when the loop reaches it.
+            if (indices.ContainsKey(vertex))
             {
-                Visit(vertex);
+                continue;
             }
+
+            Visit(vertex);
         }
 
         componentSizes = sizes;
@@ -1040,7 +1090,7 @@ internal static class SchemaEmitter
             ? TableKey(schema, table) + "\0" + name
             : (schema ?? string.Empty) + "\0" + name;
 
-    private static IReadOnlyList<IndexData> NormalizeIndexes(SourceProductionContext context, EntityData entity, SqlBuilder builder, Dictionary<string, int> declaredLengths)
+    private static List<IndexData> NormalizeIndexes(SourceProductionContext context, EntityData entity, SqlBuilder builder, Dictionary<string, int> declaredLengths)
     {
         var result = new List<IndexData>();
         var legacyOrdinal = 0;
@@ -1056,8 +1106,9 @@ internal static class SchemaEmitter
                 continue;
             }
 
+            var legacyPrefix = column.IsUnique ? "UX_" : "IX_";
             var legacyName = string.IsNullOrEmpty(column.IndexName)
-                ? (column.IsUnique ? "UX_" : "IX_") + entity.TableName + "_" + column.ColumnName
+                ? legacyPrefix + entity.TableName + "_" + column.ColumnName
                 : column.IndexName!;
             result.Add(new IndexData(entity.Schema, entity.TableName,
                 new EquatableArray<string>(ImmutableArray.Create(column.ColumnName)), default,
@@ -1076,15 +1127,7 @@ internal static class SchemaEmitter
             var keys = declared.KeyColumns.AsImmutableArray();
             var includes = declared.IncludeColumns.AsImmutableArray();
             var mappedColumns = entity.Columns.AsImmutableArray();
-            var error = keys.Length == 0 || keys.Any(string.IsNullOrEmpty) ? "index keys must name mapped properties"
-                : keys.Distinct(System.StringComparer.Ordinal).Count() != keys.Length ? "index keys contain duplicates"
-                : includes.Any(string.IsNullOrEmpty) ? "included columns must name mapped properties"
-                : includes.Distinct(System.StringComparer.Ordinal).Count() != includes.Length ? "included columns contain duplicates"
-                : includes.Any(keys.Contains) ? "a column cannot be both a key and included column"
-                : includes.Length > 0 && !builder.SupportsIndexIncludeColumns ? "covering INCLUDE columns are unsupported"
-                : declared.RequestedName is not null && !IsValidExplicitIdentifier(declared.RequestedName) ? "explicit index name is empty, contains control characters, or exceeds 63 UTF-8 bytes"
-                : builder.RequiresBoundedStringKeys && keys.Any(key => mappedColumns.Any(c => c.ColumnName == key && builder.MapsToUnboundedString(DeriveForeignKeyLength(c, declaredLengths)))) ? "index key maps to an unbounded type"
-                : null;
+            var error = DeclaredIndexError(declared, keys, includes, mappedColumns, builder, declaredLengths);
             if (error is not null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaPrimitiveInvalid,
@@ -1092,8 +1135,9 @@ internal static class SchemaEmitter
                 continue;
             }
             var canonical = CanonicalIndexIdentity(entity.Schema, entity.TableName, keys, includes, declared.IsUnique);
+            var namePrefix = declared.IsUnique ? "UX" : "IX";
             var name = string.IsNullOrEmpty(declared.RequestedName)
-                ? (declared.IsUnique ? "UX" : "IX") + BuildForeignKeyName(entity.TableName, keys[0], canonical, 8).Substring(2)
+                ? namePrefix + BuildForeignKeyName(entity.TableName, keys[0], canonical, 8).Substring(2)
                 : declared.RequestedName!;
             result.Add(declared with { Schema = entity.Schema, Table = entity.TableName, EmittedName = name, CanonicalIdentity = canonical });
         }
@@ -1135,11 +1179,59 @@ internal static class SchemaEmitter
         return valid;
     }
 
+    private static string? DeclaredIndexError(
+        IndexData declared,
+        ImmutableArray<string> keys,
+        ImmutableArray<string> includes,
+        ImmutableArray<ColumnData> mappedColumns,
+        SqlBuilder builder,
+        Dictionary<string, int> declaredLengths)
+    {
+        if (keys.Length == 0 || keys.Any(string.IsNullOrEmpty))
+        {
+            return "index keys must name mapped properties";
+        }
+
+        if (keys.Distinct(System.StringComparer.Ordinal).Count() != keys.Length)
+        {
+            return "index keys contain duplicates";
+        }
+
+        if (includes.Any(string.IsNullOrEmpty))
+        {
+            return "included columns must name mapped properties";
+        }
+
+        if (includes.Distinct(System.StringComparer.Ordinal).Count() != includes.Length)
+        {
+            return "included columns contain duplicates";
+        }
+
+        if (includes.Any(keys.Contains))
+        {
+            return "a column cannot be both a key and included column";
+        }
+
+        if (includes.Length > 0 && !builder.SupportsIndexIncludeColumns)
+        {
+            return "covering INCLUDE columns are unsupported";
+        }
+
+        if (declared.RequestedName is not null && !IsValidExplicitIdentifier(declared.RequestedName))
+        {
+            return "explicit index name is empty, contains control characters, or exceeds 63 UTF-8 bytes";
+        }
+
+        return builder.RequiresBoundedStringKeys && keys.Any(key => mappedColumns.Any(c => c.ColumnName == key && builder.MapsToUnboundedString(DeriveForeignKeyLength(c, declaredLengths))))
+            ? "index key maps to an unbounded type"
+            : null;
+    }
+
     private static string CanonicalIndexIdentity(string? schema, string table, IEnumerable<string> keys, IEnumerable<string> includes, bool unique)
         => CanonicalPart(schema) + CanonicalPart(table) + "K" + string.Concat(keys.Select(CanonicalPart))
             + "I" + string.Concat(includes.Select(CanonicalPart)) + (unique ? "U" : "N");
 
-    private static IReadOnlyList<CheckConstraintData> NormalizeChecks(SourceProductionContext context, EntityData entity, SqlBuilder builder)
+    private static List<CheckConstraintData> NormalizeChecks(SourceProductionContext context, EntityData entity, SqlBuilder builder)
     {
         var result = new List<CheckConstraintData>();
         foreach (var declared in entity.Checks.AsImmutableArray())

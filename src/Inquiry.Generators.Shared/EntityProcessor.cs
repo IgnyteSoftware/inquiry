@@ -223,16 +223,18 @@ internal static class EntityProcessor
         ImmutableArray<DiagnosticData>.Builder diagnostics)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < columns.Count; i++)
+        var i = 0;
+        while (i < columns.Count)
         {
             if (seen.Add(columns[i].ColumnName))
             {
+                i++;
                 continue;
             }
 
             diagnostics.Add(DiagnosticData.Create(
                 InquiryDiagnosticDescriptors.DuplicateColumn, location, entityName, columns[i].ColumnName));
-            columns.RemoveAt(i--);
+            columns.RemoveAt(i);
         }
     }
 
@@ -458,20 +460,18 @@ internal static class EntityProcessor
             // otherwise; flags cleared so emission stays valid).
             var isCreatedBy = createdByAttribute is not null;
             var isModifiedBy = modifiedByAttribute is not null;
-            if (isCreatedBy || isModifiedBy)
-            {
-                if (typeData.SpecialType != SpecialType.System_String || (isCreatedBy && isModifiedBy) ||
+            if ((isCreatedBy || isModifiedBy)
+                && (typeData.SpecialType != SpecialType.System_String || (isCreatedBy && isModifiedBy) ||
                     keyAttribute is not null || isGenerated || useDatabaseDefault || isConcurrencyToken ||
-                    GeneratorHelpers.GetEntityAttribute(property, "InquirySoftDeleteAttribute") is not null)
-                {
-                    diagnostics.Add(DiagnosticData.Create(
-                        InquiryDiagnosticDescriptors.AuditUserInvalid,
-                        property.Locations.FirstOrDefault(),
-                        entitySymbol.Name,
-                        property.Name));
-                    isCreatedBy = false;
-                    isModifiedBy = false;
-                }
+                    GeneratorHelpers.GetEntityAttribute(property, "InquirySoftDeleteAttribute") is not null))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.AuditUserInvalid,
+                    property.Locations.FirstOrDefault(),
+                    entitySymbol.Name,
+                    property.Name));
+                isCreatedBy = false;
+                isModifiedBy = false;
             }
 
             // [InquiryEnumAsString] stores an enum column as its member name. Only valid on an
@@ -515,15 +515,29 @@ internal static class EntityProcessor
             // value, a Precision past the portable SQL maximum of 38 (also the byte ceiling for #56's Size
             // emission), or a Scale exceeding its Precision produces invalid DDL or a broken binder. Flag the
             // first offending value at the property. Unset metadata (all 0) is left alone.
-            var rangeError =
-                length < 0 ? "Length (" + length + ") cannot be negative"
-                : precision < 0 ? "Precision (" + precision + ") cannot be negative"
-                : scale < 0 ? "Scale (" + scale + ") cannot be negative"
-                : precision > 38 ? "Precision (" + precision + ") exceeds the maximum of 38 (use SqlType for a wider decimal)"
-                : scale > precision && typeData.SpecialType != SpecialType.System_DateTime &&
-                    typeData.NonNullableDisplayName != "global::System.DateTimeOffset" && !typeData.IsTimeOnly
-                    ? "Scale (" + scale + ") cannot exceed Precision (" + precision + ")"
-                : null;
+            string? rangeError = null;
+            if (length < 0)
+            {
+                rangeError = "Length (" + length + ") cannot be negative";
+            }
+            else if (precision < 0)
+            {
+                rangeError = "Precision (" + precision + ") cannot be negative";
+            }
+            else if (scale < 0)
+            {
+                rangeError = "Scale (" + scale + ") cannot be negative";
+            }
+            else if (precision > 38)
+            {
+                rangeError = "Precision (" + precision + ") exceeds the maximum of 38 (use SqlType for a wider decimal)";
+            }
+            else if (scale > precision && typeData.SpecialType != SpecialType.System_DateTime &&
+                typeData.NonNullableDisplayName != "global::System.DateTimeOffset" && !typeData.IsTimeOnly)
+            {
+                rangeError = "Scale (" + scale + ") cannot exceed Precision (" + precision + ")";
+            }
+
             if (rangeError is not null)
             {
                 diagnostics.Add(DiagnosticData.Create(
@@ -614,6 +628,31 @@ internal static class EntityProcessor
                 preventReassignment = false;
             }
 
+            // A converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
+            DbTypeClass typeClass;
+            if (converter is not null)
+            {
+                typeClass = converter.ProviderType is not null ? MapTypeClass(converter.ProviderType) : MapSpecialType(converter.ProviderSpecialType);
+            }
+            else
+            {
+                typeClass = enumAsString ? DbTypeClass.String : MapTypeClass(typeData);
+            }
+
+            string providerClrTypeName;
+            if (converter is not null)
+            {
+                providerClrTypeName = converter.ProviderType?.NonNullableDisplayName ?? converter.ProviderTypeDisplay;
+            }
+            else if (enumAsString)
+            {
+                providerClrTypeName = "global::System.String";
+            }
+            else
+            {
+                providerClrTypeName = typeData.IsEnum ? SpecialTypeDisplayName(typeData.EnumUnderlyingSpecialType) : typeData.NonNullableDisplayName;
+            }
+
             columns.Add(new ColumnData
             {
                 Location = LocationData.From(property.Locations.FirstOrDefault()),
@@ -639,18 +678,11 @@ internal static class EntityProcessor
                 IsCreatedBy = isCreatedBy,
                 IsModifiedBy = isModifiedBy,
                 EnumAsString = enumAsString,
-                // a converter column's DDL type reflects the PROVIDER primitive it stores, not the model type.
-                TypeClass = converter is not null
-                    ? converter.ProviderType is not null ? MapTypeClass(converter.ProviderType) : MapSpecialType(converter.ProviderSpecialType)
-                    : enumAsString ? DbTypeClass.String : MapTypeClass(typeData),
+                TypeClass = typeClass,
                 IsNullable = !isKey && typeData.IsNullable,
                 SqlType = sqlType,
                 SqlTypeLocation = GetNamedArgumentLocation(metadataAttribute, "SqlType"),
-                ProviderClrTypeName = converter is not null
-                    ? converter.ProviderType?.NonNullableDisplayName ?? converter.ProviderTypeDisplay
-                    : enumAsString ? "global::System.String"
-                    : typeData.IsEnum ? SpecialTypeDisplayName(typeData.EnumUnderlyingSpecialType)
-                    : typeData.NonNullableDisplayName,
+                ProviderClrTypeName = providerClrTypeName,
                 ProviderValueIsNullable = converter?.ProviderType?.IsNullable == true,
                 Length = length,
                 IsLengthSpecified = lengthSpecified,
@@ -915,7 +947,9 @@ internal static class EntityProcessor
         }
 
         var match = global::System.Text.RegularExpressions.Regex.Match(type,
-            @"^(?:N?VARCHAR2?|N?CHAR)\s*\(\s*(MAX|[0-9]+)(?:\s+(?:CHAR|BYTE))?\s*\)$");
+            @"^(?:N?VARCHAR2?|N?CHAR)\s*\(\s*(MAX|[0-9]+)(?:\s+(?:CHAR|BYTE))?\s*\)$",
+            global::System.Text.RegularExpressions.RegexOptions.None,
+            TimeSpan.FromSeconds(1));
         return match.Success && (match.Groups[1].Value == "MAX" ||
             int.TryParse(match.Groups[1].Value, out var size) && size >= 36);
     }
@@ -1325,16 +1359,16 @@ internal static class EntityProcessor
 
                 // The explicit form ignores the auto-junction options, as their contract states. Report
                 // each one at its own argument, so a user who expected it to rename something sees why not.
-                foreach (var argument in manyToManyAttribute.NamedArguments)
+                var ignoredOptions = manyToManyAttribute.NamedArguments
+                    .Select(static argument => argument.Key)
+                    .Where(static key => key is "JunctionTable" or "JunctionSchema" or "ParentColumn" or "ChildColumn");
+                foreach (var optionName in ignoredOptions)
                 {
-                    if (argument.Key is "JunctionTable" or "JunctionSchema" or "ParentColumn" or "ChildColumn")
-                    {
-                        diagnostics.Add(new DiagnosticData(
-                            InquiryDiagnosticDescriptors.ManyToManyAutoJunctionOptionIgnored,
-                            GetNamedArgumentLocation(manyToManyAttribute, argument.Key)
-                                ?? LocationData.From(property.Locations.FirstOrDefault()),
-                            new EquatableArray<string>(ImmutableArray.Create(entitySymbol.Name, property.Name, argument.Key))));
-                    }
+                    diagnostics.Add(new DiagnosticData(
+                        InquiryDiagnosticDescriptors.ManyToManyAutoJunctionOptionIgnored,
+                        GetNamedArgumentLocation(manyToManyAttribute, optionName)
+                            ?? LocationData.From(property.Locations.FirstOrDefault()),
+                        new EquatableArray<string>(ImmutableArray.Create(entitySymbol.Name, property.Name, optionName))));
                 }
 
                 var childFks = GetJunctionChildForeignKeys(manyToManyAttribute);
@@ -1345,8 +1379,8 @@ internal static class EntityProcessor
                     !TryGetChildEntityType(property.Type, out var manyChildSymbol, out var manyIsCollection) ||
                     !manyIsCollection)
                 {
-                    // A non-collection M:N (or malformed args) is reported by ValidateRelations (INQ063);
-                    // still record it (with whatever child type we found) so the diagnostic has a target.
+                    // A non-collection M:N (or malformed args) is reported by ValidateRelations (INQ063).
+                    // Still record it (with whatever child type we found) so the diagnostic has a target.
                     // This fallback record is diagnostic-only and never load-bearing: IsCollection is forced
                     // false so every emit-time check (ValidateRelations / TryValidateForEmit) treats it as
                     // invalid and drops it — no SQL or loader is ever generated from it.

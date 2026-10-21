@@ -1,3 +1,4 @@
+using System.Text;
 using Inquiry.Generators.Models;
 
 namespace Inquiry.Generators.Abstractions;
@@ -15,10 +16,11 @@ public sealed class SqlBuildContext
 {
     internal static string RotatedTokenParameterName(IEnumerable<IColumn> columns, IColumn token)
     {
-        var name = "__new_" + token.PropertyName;
+        var nameBuilder = new StringBuilder("__new_").Append(token.PropertyName);
+        var name = nameBuilder.ToString();
         while (columns.Any(c => string.Equals(c.PropertyName, name, StringComparison.OrdinalIgnoreCase)))
         {
-            name = "_" + name;
+            name = nameBuilder.Insert(0, '_').ToString();
         }
 
         return name;
@@ -249,7 +251,14 @@ public sealed class SqlBuildContext
     /// for the clauses composed here (all AND-only, so no OR grouping is ever needed).
     /// </summary>
     private static string JoinAnd(string left, string right)
-        => left.Length == 0 ? right : right.Length == 0 ? left : left + " AND " + right;
+    {
+        if (left.Length == 0)
+        {
+            return right;
+        }
+
+        return right.Length == 0 ? left : left + " AND " + right;
+    }
 
     public string Table { get; }
 
@@ -321,13 +330,13 @@ public sealed class SqlBuildContext
     /// The soft-delete term is dropped when this context was built with soft-delete suppressed
     /// (IncludeDeleted); global-filter terms always remain.
     /// </summary>
-    public string ActiveRowPredicate { get; } = string.Empty;
+    public string ActiveRowPredicate { get; }
 
     /// <summary>
     /// Table-qualified variant of <see cref="ActiveRowPredicate"/> for use in multi-table queries
     /// (e.g. many-to-many JOINs) where an unqualified column name would be ambiguous.
     /// </summary>
-    public string QualifiedActiveRowPredicate { get; } = string.Empty;
+    public string QualifiedActiveRowPredicate { get; }
 
     /// <summary>The predicate that identifies an active soft-delete row. Empty when the entity has no soft-delete column.</summary>
     public string SoftDeletePredicate { get; } = string.Empty;

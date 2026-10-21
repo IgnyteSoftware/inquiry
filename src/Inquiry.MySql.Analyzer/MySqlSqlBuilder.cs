@@ -28,6 +28,6 @@ internal sealed class MySqlSqlBuilder : MySqlFamilySqlBuilder
     public override ConstraintNameScope IndexNameScope => ConstraintNameScope.Table;
     public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
-    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
 
 }

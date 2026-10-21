@@ -84,12 +84,13 @@ internal static class StoreProcessor
         {
             if (overloadedNames.Contains(methods[i].Name))
             {
-                var memberName = methods[i].Name + "_" + StoreOperationEmitter.SignatureHash(methods[i]);
+                var memberNameBuilder = new StringBuilder(methods[i].Name).Append('_').Append(StoreOperationEmitter.SignatureHash(methods[i]));
+                var memberName = memberNameBuilder.ToString();
                 // A declared method may literally carry the hashed form of a sibling's name; probe
                 // until the member name is free of every declared name and every name assigned so far.
                 while (!takenNames.Add(memberName))
                 {
-                    memberName += "_";
+                    memberName = memberNameBuilder.Append('_').ToString();
                 }
 
                 methods[i] = methods[i] with { MemberName = memberName };
@@ -195,8 +196,8 @@ internal static class StoreProcessor
         if (operation is StoreOperation.SelectAllByPredicate or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate or StoreOperation.Exists or StoreOperation.Aggregate)
         {
             predicates = ReadWherePredicates(method);
-            // [InquiryExists] is valid with no criteria (tests whether the table has any row at all);
-            // the other predicate operations require at least one criterion.
+            // [InquiryExists] is valid with no criteria (tests whether the table has any row at all).
+            // The other predicate operations require at least one criterion.
             if (predicates.Length == 0 && operation is not StoreOperation.Exists and not StoreOperation.Aggregate)
             {
                 // A predicate select with no criteria is a parameter mismatch (INQ019); a set-based
@@ -672,16 +673,19 @@ internal static class StoreProcessor
         // 'and') and "AndrewId" (leading "And") stay whole.
         var segments = new List<string>();
         var start = 0;
-        for (var i = 1; i + 3 < fieldsPart.Length; i++)
+        var position = 1;
+        while (position + 3 < fieldsPart.Length)
         {
-            if (fieldsPart[i] == 'A' && fieldsPart[i + 1] == 'n' && fieldsPart[i + 2] == 'd'
-                && char.IsUpper(fieldsPart[i + 3])
-                && (char.IsLower(fieldsPart[i - 1]) || char.IsDigit(fieldsPart[i - 1])))
+            if (fieldsPart[position] == 'A' && fieldsPart[position + 1] == 'n' && fieldsPart[position + 2] == 'd'
+                && char.IsUpper(fieldsPart[position + 3])
+                && (char.IsLower(fieldsPart[position - 1]) || char.IsDigit(fieldsPart[position - 1])))
             {
-                segments.Add(fieldsPart.Substring(start, i - start));
-                start = i + 3;
-                i = start; // resume scanning after the consumed "And"
+                segments.Add(fieldsPart.Substring(start, position - start));
+                start = position + 3;
+                position = start; // resume scanning after the consumed "And"
             }
+
+            position++;
         }
 
         segments.Add(fieldsPart.Substring(start));
@@ -694,9 +698,8 @@ internal static class StoreProcessor
             static a => a.AttributeClass?.Name == "InquiryParameterAttribute"
                 && a.AttributeClass.ContainingNamespace?.ToDisplayString() == KnownSymbols.StoreAttributeNamespace);
 
-        var isUnicode = paramAttr is not null
-            ? GeneratorHelpers.GetNamedBool(paramAttr, "IsUnicode", defaultValue: true)
-            : true;
+        var isUnicode = paramAttr is null
+            || GeneratorHelpers.GetNamedBool(paramAttr, "IsUnicode", defaultValue: true);
 
         var typeData = TypeData.Create(parameter.Type, parameter.NullableAnnotation);
         var dbType = DbTypeMapper.TryGetDbTypeExpression(typeData, isUnicode);
@@ -1634,82 +1637,82 @@ internal static class StoreProcessor
         }
 
         var sprocTvpResolutions = new Dictionary<StoreMethodData, Dictionary<string, (ProcedureTvpResolution Resolution, string FieldName)>>();
-        foreach (var item in valid)
+        foreach (var procedure in valid.Select(static item => item.Method))
         {
-            if (item.Method.Operation != StoreOperation.StoredProcedure)
+            if (procedure.Operation != StoreOperation.StoredProcedure)
             {
                 continue;
             }
 
-            var paramCount = item.Method.Parameters.Count - 1;
+            var paramCount = procedure.Parameters.Count - 1;
             for (var pi = 0; pi < paramCount; pi++)
             {
-                var p = item.Method.Parameters[pi];
+                var p = procedure.Parameters[pi];
                 if (p.ElementComparisonDisplay is null || p.IsBinaryType)
                 {
                     continue;
                 }
 
-                if (collectionErrors.ContainsKey(item.Method))
+                if (collectionErrors.ContainsKey(procedure))
                 {
                     break;
                 }
 
                 if (p.TvpTypeName is null)
                 {
-                    if (!collectionErrors.ContainsKey(item.Method))
+                    if (!collectionErrors.ContainsKey(procedure))
                     {
-                        collectionErrors.Add(item.Method, $"collection parameter '{p.Name}' requires [InquiryParameter(TvpTypeName = ...)]");
+                        collectionErrors.Add(procedure, $"collection parameter '{p.Name}' requires [InquiryParameter(TvpTypeName = ...)]");
                         context.ReportDiagnostic(Diagnostic.Create(
-                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, item.Method.Location?.ToLocation(),
-                            item.Method.Name, p.Name, "TvpTypeName is required for collection parameters on stored-procedure methods"));
+                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, procedure.Location?.ToLocation(),
+                            procedure.Name, p.Name, "TvpTypeName is required for collection parameters on stored-procedure methods"));
                     }
                     continue;
                 }
                 if (p.ElementDbTypeClass is null)
                 {
-                    if (!collectionErrors.ContainsKey(item.Method))
+                    if (!collectionErrors.ContainsKey(procedure))
                     {
-                        collectionErrors.Add(item.Method, $"collection parameter '{p.Name}' has an unsupported element type");
+                        collectionErrors.Add(procedure, $"collection parameter '{p.Name}' has an unsupported element type");
                         context.ReportDiagnostic(Diagnostic.Create(
-                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, item.Method.Location?.ToLocation(),
-                            item.Method.Name, p.Name, "the collection element type has no supported TVP mapping"));
+                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, procedure.Location?.ToLocation(),
+                            procedure.Name, p.Name, "the collection element type has no supported TVP mapping"));
                     }
                     continue;
                 }
                 var tvpContext = new ProcedureTvpContext(
-                    item.Method.Name, p.Name, p.TvpTypeName,
+                    procedure.Name, p.Name, p.TvpTypeName,
                     p.ElementDbTypeClass.Value, p.ElementIsNullable,
                     p.DeclaredIsUnicode, p.DeclaredLength, p.DeclaredPrecision, p.DeclaredScale);
                 var tvpResolution = sqlBuilder.ResolveProcedureTvp(tvpContext);
                 if (tvpResolution is null)
                 {
-                    if (!collectionErrors.ContainsKey(item.Method))
+                    if (!collectionErrors.ContainsKey(procedure))
                     {
-                        collectionErrors.Add(item.Method, "this provider does not support TVP parameters on stored procedures");
+                        collectionErrors.Add(procedure, "this provider does not support TVP parameters on stored procedures");
                         context.ReportDiagnostic(Diagnostic.Create(
-                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, item.Method.Location?.ToLocation(),
-                            item.Method.Name, p.Name, "the active database provider does not support TVP parameters on stored procedures"));
+                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, procedure.Location?.ToLocation(),
+                            procedure.Name, p.Name, "the active database provider does not support TVP parameters on stored procedures"));
                     }
                     continue;
                 }
                 if (!tvpResolution.IsValid)
                 {
                     var diag = tvpResolution.Diagnostic!;
-                    if (!collectionErrors.ContainsKey(item.Method))
+                    if (!collectionErrors.ContainsKey(procedure))
                     {
-                        collectionErrors.Add(item.Method, diag.FailureMessage);
+                        collectionErrors.Add(procedure, diag.FailureMessage);
                         context.ReportDiagnostic(Diagnostic.Create(
-                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, item.Method.Location?.ToLocation(),
-                            item.Method.Name, p.Name, diag.FailureMessage));
+                            InquiryDiagnosticDescriptors.StoredProcedureTvpInvalid, procedure.Location?.ToLocation(),
+                            procedure.Name, p.Name, diag.FailureMessage));
                     }
                     continue;
                 }
-                var fieldName = "_sprocTvp_" + item.Method.MemberName + "_" + p.Name;
-                if (!sprocTvpResolutions.TryGetValue(item.Method, out var dict))
+                var fieldName = "_sprocTvp_" + procedure.MemberName + "_" + p.Name;
+                if (!sprocTvpResolutions.TryGetValue(procedure, out var dict))
                 {
                     dict = new Dictionary<string, (ProcedureTvpResolution, string)>();
-                    sprocTvpResolutions[item.Method] = dict;
+                    sprocTvpResolutions[procedure] = dict;
                 }
                 dict[p.Name] = (tvpResolution, fieldName);
             }
@@ -1817,8 +1820,8 @@ internal static class StoreProcessor
             .Select(static g => g.First().FieldColumns)
             .ToArray();
 
-        // per-method base SELECT const name for each non-plan select. Defaults to the shared const;
-        // an IncludeDeleted select on a soft-delete entity gets its own unfiltered per-method const.
+        // per-method base SELECT const name for each non-plan select. Defaults to the shared const.
+        // An IncludeDeleted select on a soft-delete entity gets its own unfiltered per-method const.
         var baseSelectFields = new Dictionary<string, string>(System.StringComparer.Ordinal);
 
         var source = new StringBuilder();
@@ -1859,8 +1862,8 @@ internal static class StoreProcessor
             AppendSql("_sqlUpdate", sqlBuilder.BuildUpdateSql(ctx));
         }
         // Some operations are not universally supported (e.g. Oracle has no RETURNING result set, and no
-        // MERGE upsert on a database-generated key). The builder throws NotSupportedException for those;
-        // catch it so a single unsupported operation degrades to a diagnostic + throwing stub (below)
+        // MERGE upsert on a database-generated key). The builder throws NotSupportedException for those.
+        // Catch it so a single unsupported operation degrades to a diagnostic + throwing stub (below)
         // instead of silently aborting the whole generator. A null reason means "supported (or not needed)".
         var upsertError = TryBuildDegradableConst(source, generatedSql, "_sqlUpsert", needsUpsert, () => sqlBuilder.BuildUpsertSql(ctx));
         var insertReturningError = TryBuildDegradableConst(source, generatedSql, "_sqlInsertReturning", needsInsertReturning, () => sqlBuilder.BuildInsertReturningSql(ctx));
@@ -2032,13 +2035,20 @@ internal static class StoreProcessor
                 // composing the entity's active-row filter (soft-delete suppressed for IncludeDeleted)
                 // just like a non-projection select — the projection columns don't carry those
                 // indicator/filter columns, so pass them explicitly.
-                var planCtx = projectionMethods.TryGetValue(method.MemberName, out var projForPlan)
-                    ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns),
+                SqlBuildContext planCtx;
+                if (projectionMethods.TryGetValue(method.MemberName, out var projForPlan))
+                {
+                    planCtx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(projForPlan.Columns),
                         suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
                         softDeletePredicateColumn: entity.SoftDeleteColumn,
                         globalFilterPredicateColumns: entityGlobalFilters,
-                        ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null)
-                    : CtxFor(method);
+                        ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null);
+                }
+                else
+                {
+                    planCtx = CtxFor(method);
+                }
+
                 var planSql = BuildSelectPlanSql(sqlBuilder, planCtx, fieldColumns, selectPlan, method.Distinct, plannedPredicates);
                 if (method.LockMode != 0)
                 {
@@ -2523,7 +2533,7 @@ internal static class StoreProcessor
         ResolvedSelectPlan? selectPlan,
         EntityData entity,
         SqlBuilder sqlBuilder,
-        IReadOnlyDictionary<string, string> generatedSql,
+        Dictionary<string, string> generatedSql,
         string? baseSelectField)
     {
         var commands = ImmutableArray.CreateBuilder<GeneratedCommandDocumentation>();
@@ -2583,9 +2593,9 @@ internal static class StoreProcessor
                 break;
             case StoreOperation.SelectOneByKeyEager:
                 Add("parent query", baseSelectField ?? "_sqlSelectByKey");
-                foreach (var relation in entity.Relations.AsImmutableArray())
+                foreach (var relationName in entity.Relations.AsImmutableArray().Select(static relation => relation.PropertyName))
                 {
-                    Add($"{relation.PropertyName} query", "_sql_" + relation.PropertyName);
+                    Add($"{relationName} query", "_sql_" + relationName);
                 }
                 break;
             case StoreOperation.SelectAllByPredicate:
@@ -2718,8 +2728,8 @@ internal static class StoreProcessor
             return false;
         }
 
-        // Eager loaders assemble multi-entity grids whose relation consts are shared per relation;
-        // this release has no per-relation binding variants, so a runtime-parameterized filter
+        // Eager loaders assemble multi-entity grids whose relation consts are shared per relation.
+        // This release has no per-relation binding variants, so a runtime-parameterized filter
         // anywhere in the eager tree (root, relation child, or junction) would produce SQL with an
         // unbound @__gf_* parameter. Rejecting is the fail-closed choice — a diagnostic beats a
         // runtime missing-parameter error, and silently dropping the filter is exactly the
@@ -3107,7 +3117,7 @@ internal static class StoreProcessor
             // buffered (Task<IReadOnlyList<T>>) so the offset/limit ints can sit ahead of the token.
             if (method.Pagination == Pagination.Offset)
             {
-                if (orderColumns.Count == 0 || !method.ReturnsList || !HasOffsetPagingParameters(method, entity, fieldColumns))
+                if (orderColumns.Count == 0 || !method.ReturnsList || !HasOffsetPagingParameters(method, fieldColumns))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PagingRequiresOrderBy, method.Location?.ToLocation(), method.Name));
                     return false;
@@ -3139,9 +3149,16 @@ internal static class StoreProcessor
                 var operationName = isInsert ? "insert" : "update";
                 var writtenShape = isBatch ? "contains an entity collection" : "does not contain an entity collection";
                 var expectedShape = isBatch ? "one IEnumerable<TEntity>" : "one TEntity";
-                var inferredMode = isBatch
-                    ? $"a batch {operationName}"
-                    : isInsert ? "a single-row insert" : "an update by entity key";
+                string inferredMode;
+                if (isBatch)
+                {
+                    inferredMode = $"a batch {operationName}";
+                }
+                else
+                {
+                    inferredMode = isInsert ? "a single-row insert" : "an update by entity key";
+                }
+
                 string correction;
                 if (isBatch)
                 {
@@ -3204,7 +3221,7 @@ internal static class StoreProcessor
     /// SelectAll, the field columns for SelectAllByField) followed by two <c>int</c> parameters
     /// (offset, limit) and the trailing cancellation token.
     /// </summary>
-    private static bool HasOffsetPagingParameters(StoreMethodData method, EntityData entity, IReadOnlyList<ColumnData> fieldColumns)
+    private static bool HasOffsetPagingParameters(StoreMethodData method, IReadOnlyList<ColumnData> fieldColumns)
     {
         var parameters = method.Parameters;
         if (parameters.Count == 0 || !parameters[parameters.Count - 1].IsCancellationToken)
@@ -3287,7 +3304,7 @@ internal static class StoreProcessor
     /// True when the keyset cursor parameter is the nullable form of the single key column's type, or a
     /// nullable value tuple of the composite key columns' types.
     /// </summary>
-    private static bool CursorParameterMatches(ParameterData cursor, IReadOnlyList<ColumnData> keysetColumns)
+    private static bool CursorParameterMatches(ParameterData cursor, List<ColumnData> keysetColumns)
     {
         if (keysetColumns.Count == 1)
         {
@@ -3351,8 +3368,10 @@ internal static class StoreProcessor
             var expression = new StringBuilder(setExpression.Expression.Length);
             var validationExpression = new StringBuilder(setExpression.Expression.Length);
             var inStringLiteral = false;
-            for (var i = 0; i < setExpression.Expression.Length; i++)
+            var next = 0;
+            for (var i = 0; i < setExpression.Expression.Length; i = next)
             {
+                next = i + 1;
                 var ch = setExpression.Expression[i];
                 if (ch == '\'')
                 {
@@ -3362,7 +3381,7 @@ internal static class StoreProcessor
                     {
                         expression.Append('\'');
                         validationExpression.Append('\'');
-                        i++;
+                        next = i + 2;
                     }
                     else
                     {
@@ -3400,7 +3419,7 @@ internal static class StoreProcessor
 
                     expression.Append(sqlBuilder.QuoteIdentifier(column.ColumnName));
                     validationExpression.Append('0');
-                    i = close;
+                    next = close + 1;
                     continue;
                 }
 
@@ -3453,7 +3472,7 @@ internal static class StoreProcessor
                     }
                     expression.Append(sqlBuilder.ParameterName(name));
                     validationExpression.Append('0');
-                    i = end - 1;
+                    next = end;
                     continue;
                 }
 
@@ -3510,7 +3529,7 @@ internal static class StoreProcessor
         EntityData entity,
         SqlBuilder sqlBuilder,
         out ResolvedPredicatePlan? plan,
-        IReadOnlyList<ColumnData>? setColumns = null,
+        List<ColumnData>? setColumns = null,
         int trailingParameterCount = 0,
         int? leadingParameterCount = null,
         IReadOnlyCollection<string>? reservedParameterNames = null)
@@ -3728,14 +3747,16 @@ internal static class StoreProcessor
             return candidate;
         }
 
-        for (var i = 2; ; i++)
+        var suffix = 2;
+        string next;
+        do
         {
-            var next = candidate + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (used.Add(next))
-            {
-                return next;
-            }
+            next = candidate + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            suffix++;
         }
+        while (!used.Add(next));
+
+        return next;
     }
 
     /// <summary>
@@ -3748,12 +3769,9 @@ internal static class StoreProcessor
         var lastDot = jsonPath.LastIndexOf('.');
         var leaf = lastDot >= 0 ? jsonPath.Substring(lastDot + 1) : jsonPath;
         var sb = new System.Text.StringBuilder(leaf.Length);
-        foreach (var ch in leaf)
+        foreach (var ch in leaf.Where(static c => char.IsLetterOrDigit(c) || c == '_'))
         {
-            if (char.IsLetterOrDigit(ch) || ch == '_')
-            {
-                sb.Append(ch);
-            }
+            sb.Append(ch);
         }
 
         var name = sb.ToString();
@@ -3974,17 +3992,7 @@ internal static class StoreProcessor
     /// the SQL use a column that validation had rejected, with a parameter the binder named differently.
     /// </remarks>
     internal static ColumnData? FindRelationColumn(EntityData entity, string propertyName)
-    {
-        foreach (var column in entity.Columns.AsImmutableArray())
-        {
-            if (string.Equals(column.PropertyName, propertyName, StringComparison.Ordinal))
-            {
-                return column;
-            }
-        }
-
-        return null;
-    }
+        => entity.Columns.AsImmutableArray().FirstOrDefault(column => string.Equals(column.PropertyName, propertyName, StringComparison.Ordinal));
 
     /// <summary>A foreign-key column and the key column it is joined to.</summary>
     internal sealed record RelationKeyPair(EntityData ForeignKeyOwner, ColumnData ForeignKey, EntityData KeyOwner, ColumnData Key);
@@ -4129,18 +4137,9 @@ internal static class StoreProcessor
                 string.Equals(foreignKey.ForeignKeySchema, entity.Schema, StringComparison.OrdinalIgnoreCase));
 
     private static ColumnData? FindColumn(EntityData entity, string nameOrColumn)
-    {
-        foreach (var column in entity.Columns.AsImmutableArray())
-        {
-            if (string.Equals(column.PropertyName, nameOrColumn, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(column.ColumnName, nameOrColumn, StringComparison.OrdinalIgnoreCase))
-            {
-                return column;
-            }
-        }
-
-        return null;
-    }
+        => entity.Columns.AsImmutableArray().FirstOrDefault(column =>
+            string.Equals(column.PropertyName, nameOrColumn, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(column.ColumnName, nameOrColumn, StringComparison.OrdinalIgnoreCase));
 
     private static ColumnData? FindUniqueColumn(EntityData entity, string nameOrColumn, out bool ambiguous)
     {
@@ -4174,9 +4173,9 @@ internal static class StoreProcessor
     /// byte-identical to the full-column context's.
     /// </summary>
     private static SqlBuildContext JunctionKeyProjectionContext(
-        SqlBuilder sqlBuilder, EntityData junction, ColumnData parentForeignKey, IReadOnlyList<ColumnData> childForeignKeys)
+        SqlBuilder sqlBuilder, EntityData junction, ColumnData parentForeignKey, ColumnData[] childForeignKeys)
     {
-        var projection = new List<IColumn>(childForeignKeys.Count + 1) { parentForeignKey };
+        var projection = new List<IColumn>(childForeignKeys.Length + 1) { parentForeignKey };
         foreach (var childForeignKey in childForeignKeys)
         {
             projection.Add(childForeignKey);
@@ -4200,17 +4199,7 @@ internal static class StoreProcessor
             globalFilterPredicateColumns: supplied);
 
         bool IsProjected(ColumnData column)
-        {
-            foreach (var projected in projection)
-            {
-                if (string.Equals(column.PropertyName, projected.PropertyName, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
+            => projection.Any(projected => string.Equals(column.PropertyName, projected.PropertyName, StringComparison.Ordinal));
     }
 
     private static List<IColumn> ToColumnList(EquatableArray<ColumnData> columns)
@@ -4248,7 +4237,7 @@ internal static class StoreProcessor
     /// </summary>
     private static string? TryBuildDegradableConst(
         StringBuilder source,
-        IDictionary<string, string> generatedSql,
+        Dictionary<string, string> generatedSql,
         string fieldName,
         bool needed,
         System.Func<string> build)
@@ -4345,11 +4334,16 @@ internal static class StoreProcessor
                 ? new SqlSelectOptions(orderTerms, offsetParameter: sqlBuilder.ParameterName(OffsetLogicalName), limitParameter: sqlBuilder.ParameterName(LimitLogicalName))
                 : new SqlSelectOptions(orderTerms);
 
-            baseSql = predicatePlan is not null
-                ? sqlBuilder.BuildSelectByPredicateSql(ctx, predicatePlan.Predicates, distinct)
-                : fieldColumns.Count > 0
-                ? sqlBuilder.BuildSelectByFieldSql(ctx, ToColumnList(fieldColumns), distinct)
-                : sqlBuilder.BuildSelectAllSql(ctx, distinct);
+            if (predicatePlan is not null)
+            {
+                baseSql = sqlBuilder.BuildSelectByPredicateSql(ctx, predicatePlan.Predicates, distinct);
+            }
+            else
+            {
+                baseSql = fieldColumns.Count > 0
+                    ? sqlBuilder.BuildSelectByFieldSql(ctx, ToColumnList(fieldColumns), distinct)
+                    : sqlBuilder.BuildSelectAllSql(ctx, distinct);
+            }
         }
 
         var orderByClause = sqlBuilder.BuildOrderByClause(options);

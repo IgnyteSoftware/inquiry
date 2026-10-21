@@ -65,12 +65,9 @@ public abstract class SqlBuilder
             failures.Add("contains a side-effecting variable assignment");
         }
 
-        foreach (var token in analysis.ValueIdentifierTokens)
+        foreach (var token in analysis.ValueIdentifierTokens.Where(candidate => !_setExpressionKeywords.Contains(candidate)))
         {
-            if (!_setExpressionKeywords.Contains(token))
-            {
-                failures.Add("contains bare identifier '" + token + "'; use a {Field} placeholder for mapped columns");
-            }
+            failures.Add("contains bare identifier '" + token + "'; use a {Field} placeholder for mapped columns");
         }
         return failures;
     }
@@ -132,7 +129,7 @@ public abstract class SqlBuilder
     public virtual IdentifierComparison IndexNameComparison => IdentifierComparison.Ordinal;
     public virtual IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.Ordinal;
     public virtual IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.Ordinal;
-    public virtual bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event)
+    public virtual bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent)
         => action == ReferentialActionKind.NoAction;
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
@@ -1118,9 +1115,15 @@ public abstract class SqlBuilder
             + RenderReferentialActionClause(ReferentialActionEvent.Delete, (ReferentialActionKind)foreignKey.OnDelete)
             + RenderReferentialActionClause(ReferentialActionEvent.Update, (ReferentialActionKind)foreignKey.OnUpdate);
 
-    protected virtual string RenderReferentialActionClause(ReferentialActionEvent @event, ReferentialActionKind action)
-        => action == ReferentialActionKind.NoAction ? string.Empty
-            : " ON " + (@event == ReferentialActionEvent.Delete ? "DELETE" : "UPDATE") + " " + RenderReferentialActionToken(action);
+    protected virtual string RenderReferentialActionClause(ReferentialActionEvent actionEvent, ReferentialActionKind action)
+    {
+        if (action == ReferentialActionKind.NoAction)
+        {
+            return string.Empty;
+        }
+
+        return " ON " + (actionEvent == ReferentialActionEvent.Delete ? "DELETE" : "UPDATE") + " " + RenderReferentialActionToken(action);
+    }
 
     protected virtual string RenderReferentialActionToken(ReferentialActionKind action) => action switch
     {
@@ -1174,8 +1177,9 @@ public abstract class SqlBuilder
                 continue;
             }
 
+            var indexPrefix = column.IsUnique ? "UX_" : "IX_";
             var indexName = string.IsNullOrEmpty(column.IndexName)
-                ? (column.IsUnique ? "UX_" : "IX_") + context.RawTableName + "_" + column.ColumnName
+                ? indexPrefix + context.RawTableName + "_" + column.ColumnName
                 : column.IndexName!;
             var unique = column.IsUnique ? "UNIQUE " : string.Empty;
             var guard = SupportsCreateIndexIfNotExists ? "IF NOT EXISTS " : string.Empty;
@@ -1439,9 +1443,16 @@ public abstract class SqlBuilder
     /// </summary>
     protected static string JsonPathToPostgresTextPath(string jsonPath)
     {
-        var trimmed = jsonPath.StartsWith("$.", System.StringComparison.Ordinal)
-            ? jsonPath.Substring(2)
-            : jsonPath.StartsWith("$", System.StringComparison.Ordinal) ? jsonPath.Substring(1) : jsonPath;
+        string trimmed;
+        if (jsonPath.StartsWith("$.", System.StringComparison.Ordinal))
+        {
+            trimmed = jsonPath.Substring(2);
+        }
+        else
+        {
+            trimmed = jsonPath.StartsWith("$", System.StringComparison.Ordinal) ? jsonPath.Substring(1) : jsonPath;
+        }
+
         return "{" + trimmed.Replace(".", ",") + "}";
     }
 

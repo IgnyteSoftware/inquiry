@@ -16,7 +16,8 @@ internal static class SqlServerTvpResolver
 
     private static readonly Regex _typePattern = new(
         @"^\s*(?<name>[A-Za-z][A-Za-z0-9_]*)(?:\s*\(\s*(?<a>MAX|[0-9]+)\s*(?:,\s*(?<b>[0-9]+)\s*)?\))?\s*$",
-        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase,
+        TimeSpan.FromSeconds(1));
 
     public static CollectionParameterResolution Resolve(SqlServerSqlBuilder builder, CollectionParameterContext context)
     {
@@ -486,11 +487,13 @@ internal static class SqlServerTvpResolver
         "bigint" or "float" or "datetime" => 8,
         "uniqueidentifier" => 16,
         "date" => 3,
-        "decimal" => p.Precision <= 9 ? 5 : p.Precision <= 19 ? 9 : p.Precision <= 28 ? 13 : 17,
-        "time" => p.Scale <= 2 ? 3 : p.Scale <= 4 ? 4 : 5,
-        "datetime2" => p.Scale <= 2 ? 6 : p.Scale <= 4 ? 7 : 8,
-        "datetimeoffset" => p.Scale <= 2 ? 8 : p.Scale <= 4 ? 9 : 10,
-        _ => p.Length < 0 ? -1 : p.Unicode ? p.Length * 2 : p.Length,
+        "decimal" => p.Precision switch { <= 9 => 5, <= 19 => 9, <= 28 => 13, _ => 17 },
+        "time" => p.Scale switch { <= 2 => 3, <= 4 => 4, _ => 5 },
+        "datetime2" => p.Scale switch { <= 2 => 6, <= 4 => 7, _ => 8 },
+        "datetimeoffset" => p.Scale switch { <= 2 => 8, <= 4 => 9, _ => 10 },
+        _ when p.Length < 0 => -1,
+        _ when p.Unicode => p.Length * 2,
+        _ => p.Length,
     };
 
     private static int ExpectedPrecision(PhysicalType p) => p.SystemType switch

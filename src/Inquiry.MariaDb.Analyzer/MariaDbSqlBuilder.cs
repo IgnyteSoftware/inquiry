@@ -31,7 +31,7 @@ internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
     public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
-    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
 
     // ---- Native RETURNING (#58) -------------------------------------------------------------
 
