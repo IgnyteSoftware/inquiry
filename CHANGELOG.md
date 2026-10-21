@@ -29,10 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Aspire, Oracle, SQL Server and Testing packages now declare `System.Security.Cryptography.Pkcs` 10.0.13 on every target framework, which fixes GHSA-846f-f764-76mx and GHSA-2fmv-rv2c-59x7 in the version their ADO.NET drivers pull in. Consumers on .NET 8 or .NET 9 that pin an older 8.x or 9.x Pkcs will see a package-downgrade warning until they move up.
 - MySQL and MariaDB bulk inserts that complete with server warnings throw `InquiryBulkInsertWarningException`, still an `InvalidOperationException`. It reports the rows written, whether they are in the caller's Inquiry transaction, and the warnings. Telemetry records the written row count.
+- Packages that use SQL Server or SQLite now depend on Microsoft.Data.SqlClient 7.0.3 or Microsoft.Data.Sqlite 10.0.12. The core package now depends on version 10.0.12 of the Microsoft.Extensions configuration, dependency injection and logging abstractions.
 
 ### Documentation
 
 - The bulk insert guide describes per-provider transaction ownership, SQL Server per-batch commits, partial outcomes and safe retries. The testing guide no longer says that native bulk insert is always rejected in a sandbox.
+- The batch operations guide explains that `MaxBatchSize` splits entity collections into commands but never limits input, and that SQL Server table-valued parameters are not chunked.
+- The select declarations guide adds recipes for optional category filters and user-selected sorting. The stored procedure guide corrects its examples and limitations, and the runtime contract documents grid reader callbacks.
 
 ## [1.0.0-preview.11] - 2026-10-12
 
