@@ -54,15 +54,18 @@ public sealed record ResolvedDependencyManifest(
             .ThenBy(static asset => asset.Provenance, StringComparer.Ordinal)
             .ToArray()
         };
-        var options = new System.Text.Json.JsonSerializerOptions
-        {
-            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-            WriteIndented = false,
-        };
-        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(
-            System.Text.Json.JsonNamingPolicy.CamelCase));
-        return System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(canonical, options);
+        return System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(canonical, _canonicalJsonOptions);
     }
+
+    private static readonly System.Text.Json.JsonSerializerOptions _canonicalJsonOptions = new()
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        WriteIndented = false,
+        Converters =
+        {
+            new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase),
+        },
+    };
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string ContentSha256 => Convert.ToHexString(
@@ -156,7 +159,7 @@ public static class SourceArtifactManifestCatalog
     }
 }
 
-public static class SourceArtifactCollection
+public static class SourceArtifactSelection
 {
     public static IReadOnlyList<SourceArtifact> FromSelectedAssets(this ResolvedDependencyManifest resolvedDependencies)
         => resolvedDependencies.Assets
@@ -549,7 +552,7 @@ public sealed record ScenarioTemplate(
 
 public static class CanonicalScenarioCatalog
 {
-    private static readonly TimedPathContract ExactReadBoundary = new(
+    private static readonly TimedPathContract _exactReadBoundary = new(
         IncludesDependencyResolution: true,
         IncludesConnectionCreation: true,
         IncludesConnectionOpen: true,
@@ -573,7 +576,7 @@ public static class CanonicalScenarioCatalog
                 CompilationMode.NotApplicable, ApiStyle.ExactOverhead, TransactionMode.None, MetricFamily.Latency),
             ComparisonEligible: true,
             LoadEligible: true,
-            ExactReadBoundary,
+            _exactReadBoundary,
             new ScenarioDataContract(
                 new Dictionary<string, string>(StringComparer.Ordinal) { ["customerId"] = "00001" },
                 [
@@ -600,7 +603,7 @@ public static class CanonicalScenarioCatalog
                 CompilationMode.NotApplicable, ApiStyle.Micro, TransactionMode.None, MetricFamily.Latency),
             ComparisonEligible: false,
             LoadEligible: false,
-            ExactReadBoundary with
+            _exactReadBoundary with
             {
                 IncludesDependencyResolution = false,
                 IncludesConnectionCreation = false,

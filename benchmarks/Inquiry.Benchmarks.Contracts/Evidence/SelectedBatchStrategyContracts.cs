@@ -95,8 +95,8 @@ public static class SelectedBatchStrategyValidator
         string SqlShape,
         string ChunkPolicy);
 
-    private static readonly IReadOnlyDictionary<(string Provider, BatchMutationOperation Operation), CheckedOperation>
-        CheckedOperations = new Dictionary<(string, BatchMutationOperation), CheckedOperation>
+    private static readonly Dictionary<(string Provider, BatchMutationOperation Operation), CheckedOperation>
+        _checkedOperations = new Dictionary<(string, BatchMutationOperation), CheckedOperation>
         {
             { ("sqlite", BatchMutationOperation.Insert), new("Insert", "Inquiry_SelectedInsertAll", "generatedReusedRowPreferPrepareOnce", "single-row-insert", "configured-max-batch-size") },
             { ("sqlite", BatchMutationOperation.Update), new("Update", "Inquiry_SelectedUpdateAll", "generatedReusedCommand", "single-row-update", "effective-max-batch-and-parameters") },
@@ -118,7 +118,7 @@ public static class SelectedBatchStrategyValidator
             { ("oracle", BatchMutationOperation.Delete), new("BatchDelete", "Inquiry_SelectedDeleteAll", "generatedSingleStatementPredicate", "json-table-keyset-delete", "none-single-statement") },
         };
 
-    private static readonly IReadOnlyDictionary<string, ComparisonMethodRole> CheckedComparisonRoles =
+    private static readonly Dictionary<string, ComparisonMethodRole> _checkedComparisonRoles =
         new Dictionary<string, ComparisonMethodRole>(StringComparer.Ordinal)
         {
             ["Direct_ReusedPreparedInsert"] = ComparisonMethodRole.DirectDriver,
@@ -256,7 +256,7 @@ public static class SelectedBatchStrategyValidator
                   string.IsNullOrWhiteSpace(operation.SqlShape) ||
                   string.IsNullOrWhiteSpace(operation.ChunkPolicy),
                 "strategy-operation", $"{prefix} must declare category, selected method, execution mode, SQL shape, and chunk policy.");
-            if (CheckedOperations.TryGetValue((provider.Provider, operation.Operation), out var checkedOperation))
+            if (_checkedOperations.TryGetValue((provider.Provider, operation.Operation), out var checkedOperation))
             {
                 AddIf(operation.BenchmarkCategory != checkedOperation.Category ||
                       operation.SelectedMethod != checkedOperation.SelectedMethod ||
@@ -277,7 +277,7 @@ public static class SelectedBatchStrategyValidator
 
             foreach (var comparison in operation.Comparisons)
             {
-                AddIf(!CheckedComparisonRoles.TryGetValue(comparison.Method, out var checkedRole) ||
+                AddIf(!_checkedComparisonRoles.TryGetValue(comparison.Method, out var checkedRole) ||
                       comparison.Role != checkedRole, "strategy-comparison-role",
                     $"{prefix} comparison '{comparison.Method}' is mislabeled as {comparison.Role}.");
                 AddIf(comparison.CapabilityId is not null &&
@@ -614,7 +614,7 @@ public static class SelectedBatchStrategyValidator
     {
         var safePath = !string.IsNullOrWhiteSpace(reference.RelativeArtifactId) &&
                        reference.RelativeArtifactId == reference.RelativeArtifactId.Trim() &&
-                       !reference.RelativeArtifactId.StartsWith("/", StringComparison.Ordinal) &&
+                       !reference.RelativeArtifactId.StartsWith('/') &&
                        !reference.RelativeArtifactId.Contains('\\') && !reference.RelativeArtifactId.Contains(':') &&
                        reference.RelativeArtifactId.Split('/').All(static segment => segment is not ("" or "." or ".."));
         if (!safePath || !IsSha256(reference.Sha256) || !IsSha256(reference.CaseId))

@@ -8,7 +8,7 @@ public sealed class PrecomputedTransportBenchmarkAttribute : Attribute;
 
 public static class PrecomputedTransportBenchmarkContract
 {
-    private static readonly string[] ProhibitedTerms = ["Production", "Generated", "Selected"];
+    private static readonly string[] _prohibitedTerms = ["Production", "Generated", "Selected"];
 
     public static void Validate(Type benchmarkType)
     {
@@ -33,12 +33,10 @@ public static class PrecomputedTransportBenchmarkContract
                 throw InvalidName(method, "must contain Precomputed or PreSerialized and Floor");
             }
 
-            foreach (var prohibited in ProhibitedTerms)
+            var prohibited = _prohibitedTerms.FirstOrDefault(term => method.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
+            if (prohibited is not null)
             {
-                if (method.Name.Contains(prohibited, StringComparison.OrdinalIgnoreCase))
-                {
-                    throw InvalidName(method, $"cannot contain {prohibited}");
-                }
+                throw InvalidName(method, $"cannot contain {prohibited}");
             }
         }
     }

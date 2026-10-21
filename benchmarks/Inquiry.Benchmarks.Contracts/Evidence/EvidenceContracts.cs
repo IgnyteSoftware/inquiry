@@ -333,6 +333,7 @@ public sealed record BenchmarkEvidenceEnvelope(
 
 public static class EvidenceValidator
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "S1244", Justification = "Evidence must match the recorded BenchmarkDotNet values bit for bit; a tolerance would accept altered evidence.")]
     public static IReadOnlyList<ContractError> Validate(
         BenchmarkEvidenceEnvelope evidence,
         BenchmarkJobContract? nonAuthoritativeJobOverride = null)
@@ -563,7 +564,8 @@ public static class EvidenceValidator
     private static bool IsGitCommit(string? value)
         => value is { Length: 40 or 64 } && value.All(static c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 
-    private static IReadOnlyList<ContractError> ValidateComputedStatistics(BenchmarkEvidenceEnvelope evidence)
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "S1244", Justification = "The stored statistics must equal the values recomputed from the same measurements; a tolerance would accept altered evidence.")]
+    private static List<ContractError> ValidateComputedStatistics(BenchmarkEvidenceEnvelope evidence)
     {
         var errors = new List<ContractError>();
         if (evidence.BenchmarkDotNet.Measurements.Count == 0)
@@ -628,6 +630,7 @@ public static class EvidenceValidator
             ? StringComparer.Ordinal.Equals(value, BenchmarkAggregationCatalog.UnavailableAllocation)
             : MatchesBenchmarkDotNetField(value, expected.Value, unit, decimalPlaces);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "S1244", Justification = "The parsed field must equal the value rounded the same way BenchmarkDotNet rounds it; a tolerance would accept altered evidence.")]
     private static bool MatchesBenchmarkDotNetField(
         string value,
         double expected,
@@ -656,7 +659,7 @@ public static class EvidenceValidator
             rounded.ToString($"F{decimalPlaces}", System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private static IReadOnlyList<ContractError> ValidateSourceArtifacts(
+    private static List<ContractError> ValidateSourceArtifacts(
         BenchmarkSourceIdentity source,
         string provider,
         string runtimeTfm,
@@ -722,7 +725,7 @@ public static class EvidenceValidator
         return errors;
     }
 
-    private static IReadOnlyList<ContractError> ValidateResolvedDependencies(
+    private static List<ContractError> ValidateResolvedDependencies(
         BenchmarkSourceIdentity source,
         SourceArtifactManifest sourceManifest)
     {
@@ -804,7 +807,7 @@ public static class EvidenceValidator
 
     private static bool IsSafeRelativeArtifactId(string? value)
         => !string.IsNullOrWhiteSpace(value) && value == value.Trim() &&
-           !value.StartsWith("/", StringComparison.Ordinal) && !value.Contains('\\') &&
+           !value.StartsWith('/') && !value.Contains('\\') &&
            !value.Contains(':') && !value.Contains('?') && !value.Contains('#') &&
            value.Split('/').All(static segment => segment is not ("" or "." or "..") &&
                segment.All(static character => char.IsLetterOrDigit(character) || character is '.' or '-' or '_' or '+'));
@@ -954,13 +957,13 @@ public sealed record ArtifactValidationResult<T>(T? Artifact, IReadOnlyList<Cont
 
 public static class CheckedArtifactSchemas
 {
-    private static readonly Lazy<JsonSchema> EvidenceSchema = new(() => Load("benchmark-evidence-v2.schema.json"));
-    private static readonly Lazy<JsonSchema> BaselineSchema = new(() => Load("checked-baseline.schema.json"));
-    private static readonly Lazy<JsonSchema> SelectedStrategySchema = new(() => Load("selected-batch-strategy-v1.schema.json"));
+    private static readonly Lazy<JsonSchema> _evidenceSchema = new(() => Load("benchmark-evidence-v2.schema.json"));
+    private static readonly Lazy<JsonSchema> _baselineSchema = new(() => Load("checked-baseline.schema.json"));
+    private static readonly Lazy<JsonSchema> _selectedStrategySchema = new(() => Load("selected-batch-strategy-v1.schema.json"));
 
-    public static JsonSchema Evidence => EvidenceSchema.Value;
-    public static JsonSchema Baseline => BaselineSchema.Value;
-    public static JsonSchema SelectedStrategy => SelectedStrategySchema.Value;
+    public static JsonSchema Evidence => _evidenceSchema.Value;
+    public static JsonSchema Baseline => _baselineSchema.Value;
+    public static JsonSchema SelectedStrategy => _selectedStrategySchema.Value;
 
     private static JsonSchema Load(string fileName)
     {
@@ -979,7 +982,7 @@ public sealed record EvidenceArtifactValidationContext(
 
 public static class EvidenceArtifactValidator
 {
-    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+    private static readonly StringComparer _pathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
 
@@ -1133,7 +1136,7 @@ public static class EvidenceArtifactValidator
                 throw new InvalidDataException($"Artifact path traverses a reparse point: {relativeArtifactId}");
             }
 
-            if (PathComparer.Equals(current.FullName.TrimEnd(Path.DirectorySeparatorChar), root))
+            if (_pathComparer.Equals(current.FullName.TrimEnd(Path.DirectorySeparatorChar), root))
             {
                 return path;
             }
@@ -1247,6 +1250,7 @@ public static class BaselineValidator
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "S1244", Justification = "The baseline medians must equal the medians recomputed from the same measurements; a tolerance would accept altered baselines.")]
     public static IReadOnlyList<ContractError> Validate(
         CheckedBaselineVector baseline,
         BenchmarkEvidenceEnvelope evidence)

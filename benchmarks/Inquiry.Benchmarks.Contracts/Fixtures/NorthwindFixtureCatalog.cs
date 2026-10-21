@@ -10,7 +10,7 @@ public static class NorthwindFixtureCatalog
 
     // Generated from the row streams. Unit tests recompute the tiny tier; the fixture writer verifies
     // every emitted tier before it can become benchmark evidence.
-    private static readonly IReadOnlyDictionary<FixtureTier, IReadOnlyDictionary<string, string>> CheckedChecksums =
+    private static readonly Dictionary<FixtureTier, IReadOnlyDictionary<string, string>> _checkedChecksums =
         new Dictionary<FixtureTier, IReadOnlyDictionary<string, string>>
         {
             [FixtureTier.Tiny] = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -63,7 +63,7 @@ public static class NorthwindFixtureCatalog
             },
         };
 
-    private static readonly IReadOnlyDictionary<FixtureTier, FixtureManifest> Manifests =
+    private static readonly Dictionary<FixtureTier, FixtureManifest> _manifests =
         new Dictionary<FixtureTier, FixtureManifest>
         {
             [FixtureTier.Tiny] = CreateManifest(FixtureTier.Tiny,
@@ -80,7 +80,7 @@ public static class NorthwindFixtureCatalog
                 territories: 4_096, demographics: 50, customerDemos: 100_000, employeeTerritories: 2_048),
         };
 
-    public static FixtureManifest For(FixtureTier tier) => Manifests[tier];
+    public static FixtureManifest For(FixtureTier tier) => _manifests[tier];
 
     private static FixtureManifest CreateManifest(
         FixtureTier tier,
@@ -115,7 +115,7 @@ public static class NorthwindFixtureCatalog
             ["Territories"] = territories,
         };
 
-        var checksums = CheckedChecksums[tier];
+        var checksums = _checkedChecksums[tier];
 
         return new FixtureManifest(
             ContractVersion,

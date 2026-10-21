@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -5,10 +6,13 @@ using Inquiry.Benchmarks.Contracts.Evidence;
 
 if (args.Length < 1)
 {
+    // The entry point is synchronous, so there is no async context to await in.
+#pragma warning disable S6966
     Console.Error.WriteLine("Usage:");
     Console.Error.WriteLine("  Compare:  regression-gate compare <bdn-json> <baseline-json> --tfm <tfm> --env <env> [--filter <glob>]");
     Console.Error.WriteLine("  Generate: regression-gate generate <bdn-json> --provider <p> --tfm <tfm> --commit <sha> --env <env> [--budget <pct>] [--abs <ns>]");
     Console.Error.WriteLine("Compare exits 0 when every case passes, 1 on a budget violation, 2 when evidence is missing or invalid, and 3 when --filter selects no baseline case.");
+#pragma warning restore S6966
     return 1;
 }
 
@@ -39,7 +43,8 @@ static int RunCompare(string[] args)
     string? tfm = null, env = null;
     var filter = "*";
 
-    for (var i = 2; i < args.Length - 1; i++)
+    var i = 2;
+    while (i < args.Length - 1)
     {
         switch (args[i])
         {
@@ -53,6 +58,8 @@ static int RunCompare(string[] args)
                 filter = args[++i];
                 break;
         }
+
+        i++;
     }
 
     if (tfm is null || env is null)
@@ -77,9 +84,12 @@ static int RunCompare(string[] args)
 
     // A filtered run measures only the selected cases. This matches BenchmarkDotNet's --filter glob,
     // which tests both the full case name and the name without parameters.
+    // The pattern comes from an escaped glob, so it has only wildcards and cannot backtrack catastrophically.
+#pragma warning disable S6444
     var filterRegex = new Regex(
         "^" + Regex.Escape(filter).Replace(@"\*", ".*").Replace(@"\?", ".") + "$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+#pragma warning restore S6444
     var selectedCases = baseline.Cases
         .Where(c => filterRegex.IsMatch(c.FullName) || filterRegex.IsMatch(c.FullName.Split('(')[0]))
         .ToList();
@@ -213,7 +223,8 @@ static int RunGenerate(string[] args)
     var budget = 0.10;
     var abs = 5000.0;
 
-    for (var i = 1; i < args.Length; i++)
+    var i = 1;
+    while (i < args.Length)
     {
         switch (args[i])
         {
@@ -230,12 +241,14 @@ static int RunGenerate(string[] args)
                 env = args[++i];
                 break;
             case "--budget":
-                budget = double.Parse(args[++i]);
+                budget = double.Parse(args[++i], CultureInfo.CurrentCulture);
                 break;
             case "--abs":
-                abs = double.Parse(args[++i]);
+                abs = double.Parse(args[++i], CultureInfo.CurrentCulture);
                 break;
         }
+
+        i++;
     }
 
     if (provider is null || tfm is null || commit is null || env is null)

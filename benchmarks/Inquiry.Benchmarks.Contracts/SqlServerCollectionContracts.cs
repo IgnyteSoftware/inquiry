@@ -86,7 +86,7 @@ public sealed record SqlServerCollectionEvidence(
 
 public static class SqlServerCollectionEvidenceValidator
 {
-    private static readonly Lazy<JsonSchema> Schema = new(() =>
+    private static readonly Lazy<JsonSchema> _schema = new(() =>
     {
         var assembly = typeof(SqlServerCollectionEvidenceValidator).Assembly;
         var name = assembly.GetManifestResourceNames().Single(static value =>
@@ -102,7 +102,7 @@ public static class SqlServerCollectionEvidenceValidator
         try
         {
             using var document = JsonDocument.Parse(json);
-            var schema = Schema.Value.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+            var schema = _schema.Value.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
             if (!schema.IsValid)
             {
                 return [new("json-schema", "SQL Server collection evidence does not match the closed schema.")];

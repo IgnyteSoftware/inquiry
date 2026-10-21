@@ -9,6 +9,8 @@ namespace Inquiry.Benchmarks.Generators;
 
 internal static class ConsumerBuildEvidence
 {
+    private static readonly JsonSerializerOptions _reportJsonOptions = new() { WriteIndented = true };
+
     public static async Task RunAsync(string destination)
     {
         var root = Path.GetFullPath(destination);
@@ -55,8 +57,8 @@ internal static class ConsumerBuildEvidence
                 var controlProject = new XElement(project);
                 controlProject.Descendants("Analyzer").Remove();
                 var controlSources = new Dictionary<string, string>(fixture.Sources);
-                var generated = fixture.CreateDriver().RunGenerators(fixture.Original);
-                fixture.Verify(generated, fixture.Original);
+                var generated = GeneratorFixture.CreateDriver().RunGenerators(fixture.Original);
+                GeneratorFixture.Verify(generated, fixture.Original);
                 foreach (var source in generated.GetRunResult().Results.SelectMany(result => result.GeneratedSources))
                 {
                     controlSources.Add(source.HintName, source.SourceText.ToString());
@@ -90,8 +92,8 @@ internal static class ConsumerBuildEvidence
                         }
                     }
                     var elapsed = await RunDotnetAsync(directory, "build", "-c", "Release", "--no-restore", "--verbosity", "quiet");
-                    var expected = fixture.CreateDriver().RunGenerators(compilation);
-                    fixture.Verify(expected, compilation);
+                    var expected = GeneratorFixture.CreateDriver().RunGenerators(compilation);
+                    GeneratorFixture.Verify(expected, compilation);
                     var actual = Directory.GetFiles(Path.Combine(directory, "obj", "generated"), "*.cs", SearchOption.AllDirectories)
                         .Select(path => Path.GetFileName(path) + "\n" + File.ReadAllText(path)).Order(StringComparer.Ordinal).ToArray();
                     if (!actual.SequenceEqual(GeneratorFixture.Snapshot(expected)))
@@ -115,7 +117,7 @@ internal static class ConsumerBuildEvidence
             Assets = references.Append(analyzer).Append(shared).Select(path => new { Path = path, Sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))) }),
             Samples = samples
         };
-        await File.WriteAllTextAsync(Path.Combine(root, "build-evidence.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        await File.WriteAllTextAsync(Path.Combine(root, "build-evidence.json"), JsonSerializer.Serialize(report, _reportJsonOptions));
     }
 
     private static async Task InitializeAsync(string directory, XElement project, Dictionary<string, string> sources)
@@ -134,6 +136,7 @@ internal static class ConsumerBuildEvidence
         await RunDotnetAsync(directory, "restore");
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4036", Justification = "This developer tool runs the dotnet host found on PATH on purpose, so the evidence records the SDK that the developer uses.")]
     private static async Task<double> RunDotnetAsync(string directory, params string[] arguments)
     {
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };

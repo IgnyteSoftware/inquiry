@@ -160,7 +160,7 @@ public static class ResolvedDependencyManifestCollector
         return StringComparer.Ordinal.Equals(actual.ContentSha256, manifest.ContentSha256);
     }
 
-    private static IReadOnlyList<SelectedAssetRoot> NormalizeRoots(IReadOnlyList<SelectedAssetRoot> roots)
+    private static SelectedAssetRoot[] NormalizeRoots(IReadOnlyList<SelectedAssetRoot> roots)
     {
         if (roots.Count == 0 || roots.Any(static root => string.IsNullOrWhiteSpace(root.Id) || string.IsNullOrWhiteSpace(root.Path)))
         {
@@ -184,16 +184,16 @@ public static class ResolvedDependencyManifestCollector
             throw new ArgumentException("Physical roots must identify distinct paths.", nameof(roots));
         }
 
-        foreach (var root in normalized)
+        foreach (var rootPath in normalized.Select(static root => root.Path))
         {
-            if (!Directory.Exists(root.Path))
+            if (!Directory.Exists(rootPath))
             {
-                throw new DirectoryNotFoundException($"Approved selected-asset root does not exist: {root.Path}");
+                throw new DirectoryNotFoundException($"Approved selected-asset root does not exist: {rootPath}");
             }
 
-            if ((File.GetAttributes(root.Path) & FileAttributes.ReparsePoint) != 0)
+            if ((File.GetAttributes(rootPath) & FileAttributes.ReparsePoint) != 0)
             {
-                throw new InvalidDataException($"Approved selected-asset root cannot be a reparse point: {root.Path}");
+                throw new InvalidDataException($"Approved selected-asset root cannot be a reparse point: {rootPath}");
             }
         }
         return normalized.OrderByDescending(static root => root.Path.Length).ToArray();

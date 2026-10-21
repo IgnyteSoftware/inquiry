@@ -17,13 +17,13 @@ public class GeneratorBenchmarks
     public void Setup()
     {
         _fixture = new GeneratorFixture(EntityCount);
-        _primed = _fixture.CreateDriver().RunGenerators(_fixture.Original);
-        _fixture.Verify(_primed, _fixture.Original);
+        _primed = GeneratorFixture.CreateDriver().RunGenerators(_fixture.Original);
+        GeneratorFixture.Verify(_primed, _fixture.Original);
         foreach (var edited in new[] { _fixture.Unrelated, _fixture.Model, _fixture.RelationFilter })
         {
             var reused = _primed.RunGenerators(edited);
-            _fixture.Verify(reused, edited);
-            if (!GeneratorFixture.Snapshot(reused).SequenceEqual(GeneratorFixture.Snapshot(_fixture.CreateDriver().RunGenerators(edited))))
+            GeneratorFixture.Verify(reused, edited);
+            if (!GeneratorFixture.Snapshot(reused).SequenceEqual(GeneratorFixture.Snapshot(GeneratorFixture.CreateDriver().RunGenerators(edited))))
             {
                 throw new InvalidOperationException("Reused-driver output differs from fresh generation.");
             }
@@ -32,7 +32,7 @@ public class GeneratorBenchmarks
     }
 
     [Benchmark]
-    public GeneratorDriver FreshGeneration() => _fixture.CreateDriver().RunGenerators(_fixture.Original);
+    public GeneratorDriver FreshGeneration() => GeneratorFixture.CreateDriver().RunGenerators(_fixture.Original);
 
     // Keep the primed driver unchanged so each invocation measures an edit, not a cache hit.
     [Benchmark]
@@ -47,7 +47,7 @@ public class GeneratorBenchmarks
 
 internal sealed class GeneratorFixture
 {
-    private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp12);
+    private static readonly CSharpParseOptions _parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp12);
     public Dictionary<string, string> Sources { get; }
     public CSharpCompilation Original { get; }
     public CSharpCompilation Unrelated { get; }
@@ -82,7 +82,7 @@ internal sealed class GeneratorFixture
                 """;
         }
         var trees = Sources.OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .ToDictionary(pair => pair.Key, pair => CSharpSyntaxTree.ParseText(pair.Value, ParseOptions, pair.Key));
+            .ToDictionary(pair => pair.Key, pair => CSharpSyntaxTree.ParseText(pair.Value, _parseOptions, pair.Key));
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Concat(new[]
             {
@@ -97,13 +97,13 @@ internal sealed class GeneratorFixture
         RelationFilter = Edit("Model1.cs", Sources["Model1.cs"].Replace("[InquiryColumn] public int ParentId", "[InquiryColumn(\"OwnerId\")] public int ParentId")
             .Replace("InquiryGlobalFilter]", "InquiryGlobalFilter(KeepWhen = false)]"));
 
-        CSharpCompilation Edit(string path, string source) => Original.ReplaceSyntaxTree(trees[path], CSharpSyntaxTree.ParseText(source, ParseOptions, path));
+        CSharpCompilation Edit(string path, string source) => Original.ReplaceSyntaxTree(trees[path], CSharpSyntaxTree.ParseText(source, _parseOptions, path));
     }
 
-    public GeneratorDriver CreateDriver() => CSharpGeneratorDriver.Create(
-        new[] { new Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator() }, parseOptions: ParseOptions);
+    public static GeneratorDriver CreateDriver() => CSharpGeneratorDriver.Create(
+        new[] { new Inquiry.Sqlite.Analyzer.InquirySqliteGenerator().AsSourceGenerator() }, parseOptions: _parseOptions);
 
-    public void Verify(GeneratorDriver driver, CSharpCompilation input)
+    public static void Verify(GeneratorDriver driver, CSharpCompilation input)
     {
         var result = driver.GetRunResult();
         var errors = result.Diagnostics.Concat(input.AddSyntaxTrees(result.GeneratedTrees).GetDiagnostics())
