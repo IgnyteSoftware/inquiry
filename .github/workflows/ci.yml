@@ -30,8 +30,10 @@ jobs:
             9.0.x
             10.0.x
       - run: dotnet restore Inquiry.slnx --locked-mode
-      - run: dotnet format Inquiry.slnx --no-restore --verify-no-changes --severity error
       - run: dotnet build Inquiry.slnx --configuration Release --no-restore --warnaserror
+      # The provider source generators load from the analyzer build output. Format runs after the build
+      # and in the same configuration, so it sees the generated code that some usings refer to.
+      - run: Configuration=Release dotnet format Inquiry.slnx --no-restore --verify-no-changes --severity error
       - name: Verify release and required-check manifests
         run: |
           dotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release --no-build -- verify-manifest . eng/release-manifest.json

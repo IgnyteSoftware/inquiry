@@ -72,6 +72,10 @@ An exception must state:
 
 Exceptions should be as narrow as possible. Prefer a rule-specific diagnostic entry over a category-wide suppression.
 
+## Repository-specific CI order
+
+The template runs `dotnet format` before `dotnet build`. Here the provider source generators attach to consuming projects from the analyzer projects' build output, so a workspace loaded before the build sees no generated code and reports `using Inquiry.Generated;` and similar usings as unnecessary (`IDE0005`). The `build-and-unit` job therefore builds first and runs `Configuration=Release dotnet format ... --no-restore --verify-no-changes --severity error` afterwards, so the format workspace loads the same Release analyzer output. `IDE0005` stays an error. `eng/Inquiry.ReleaseTools/CiContractVerifier.cs` pins this order.
+
 ## Recorded exceptions
 
 Each entry names the rule, the location, and the reason. Entries marked "owner to confirm" were kept from before the template adoption and need an owner and a review date.
