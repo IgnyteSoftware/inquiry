@@ -63,8 +63,11 @@ jobs:
         with:
           global-json-file: global.json
           dotnet-version: 10.0.x
+      # Restore without -r: a global RID would apply to every referenced library and fail locked restore.
+      - name: Restore AOT smoke app from the lock file
+        run: dotnet restore samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj --locked-mode
       - name: Publish AOT smoke app
-        run: dotnet publish samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj -c Release -r linux-x64 -o aot-out
+        run: dotnet publish samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj -c Release -r linux-x64 --no-restore -o aot-out
       - name: Run native binary
         run: |
           out=$(./aot-out/Inquiry.AotSmoke)
