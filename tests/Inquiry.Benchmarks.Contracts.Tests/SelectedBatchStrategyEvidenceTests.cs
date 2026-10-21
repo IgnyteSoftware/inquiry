@@ -228,7 +228,7 @@ public sealed class SelectedBatchStrategyEvidenceTests
         };
     }
 
-    private static IReadOnlyDictionary<string, string> Capabilities(SelectedOperationStrategy operation)
+    private static Dictionary<string, string> Capabilities(SelectedOperationStrategy operation)
         => new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["selected-execution-mode"] = operation.ProductionExecutionMode,

@@ -1447,6 +1447,7 @@ public sealed class EvidenceContractTests
     public class TinyAllocationBenchmark
     {
         [Benchmark]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
         public byte[] Allocate() => new byte[64];
     }
 
