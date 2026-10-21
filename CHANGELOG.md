@@ -6,10 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-preview.12] - 2026-10-21
+
 ### Fixed
 
 - Store methods that share a name now get generated SQL constants and per-method lookups keyed by their full signature. A key lookup overloaded with an unfiltered, distinct, locked, or filter-bypassing select previously ran that sibling's `SELECT`-all query and returned a row for a missing key.
-
 - Native bulk insert disposes its dedicated connection when a telemetry listener throws after the connection opens. A failed open now records `connection.open_failed` with `error.type` instead of `connection.opened`, and keeps the open error.
 - `RecordCommandText = false` now also redacts provider error messages from span status descriptions and `Error` logs, and drops `db.collection.name`, on command, grid, batch, bulk-insert, and transaction routes. Exception types stay recorded.
 - `db.collection.name` reports the table for bracketed, double-quoted, backtick-quoted, escaped, and two- or three-part names. It handles newlines, tabs, and comments around keywords, uses the outer `SELECT`'s `FROM`, and recognizes `INSERT OR …`, `INSERT IGNORE`, `UPDATE OR …`, and `UPDATE TOP (n)`. Derived tables, table-valued functions, and unsupported shapes get no tag instead of a wrong one.
@@ -27,7 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The Aspire, Oracle, SQL Server and Testing packages now declare `System.Security.Cryptography.Pkcs` 10.0.13 on every target framework, which fixes GHSA-846f-f764-76mx and GHSA-2fmv-rv2c-59x7 in the version their ADO.NET drivers pull in. Consumers on .NET 8 or .NET 9 that pin an older 8.x or 9.x Pkcs will see a package-downgrade warning until they move up.
-
 - MySQL and MariaDB bulk inserts that complete with server warnings throw `InquiryBulkInsertWarningException`, still an `InvalidOperationException`. It reports the rows written, whether they are in the caller's Inquiry transaction, and the warnings. Telemetry records the written row count.
 
 ### Documentation
@@ -173,7 +173,8 @@ changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
 - [GraphQL DataLoader recipe](docs/site/articles/features/graphql-dataloader.md) — batching Hot Chocolate resolver fan-out onto a single `Compare.In` predicate method.
 - [Migrations recipe](docs/site/articles/features/migrations.md) — using `InquiryGeneratedSchema.Ddl` as the baseline script for DbUp or FluentMigrator, plus `ProviderArtifactsDdl` and `ProviderArtifactsValidationSql` for deploying and checking the SQL Server TVP types.
 
-[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.11...HEAD
+[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.12...HEAD
+[1.0.0-preview.12]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.11...v1.0.0-preview.12
 [1.0.0-preview.11]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.10...v1.0.0-preview.11
 [1.0.0-preview.10]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.9...v1.0.0-preview.10
 [1.0.0-preview.9]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.8...v1.0.0-preview.9
