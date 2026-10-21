@@ -38,7 +38,7 @@ jobs:
   publish:
     needs: [correctness, security]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     # The nuget-release environment restricts deployments to v* tags and is the binding
     # point for the nuget.org Trusted Publishing policy.

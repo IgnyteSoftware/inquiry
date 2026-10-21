@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   build-and-unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -52,7 +53,7 @@ jobs:
           retention-days: 7
 
   aot-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -68,7 +69,7 @@ jobs:
           echo "$out" | grep -q "AOT-SMOKE-OK"
 
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
       INQUIRY_REQUIRE_DOCKER: 1
@@ -116,7 +117,7 @@ jobs:
           retention-days: 7
 
   benchmark-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -137,7 +138,7 @@ jobs:
             --exporters json
 
   package-producer:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Packing runs pull request code, so this job gets no write or OIDC token.
     permissions:
@@ -181,7 +182,7 @@ jobs:
     # repo variable (or make the repo public) to turn it back on.
     if: vars.ENABLE_ATTESTATIONS == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs: [package-producer]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       attestations: write
@@ -201,7 +202,7 @@ jobs:
 
   package-verifier:
     needs: [package-producer]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       actions: read
@@ -260,7 +261,7 @@ jobs:
           retention-days: 30
 
   docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -285,7 +286,8 @@ jobs:
     name: ci-required-v1
     if: always()
     needs: [build-and-unit, aot-smoke, integration, benchmark-smoke, package-producer, package-verifier, docs]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Enforce every required job and matrix leg
         env:
