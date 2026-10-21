@@ -1,4 +1,75 @@
 <Project>
+  <!-- Directory.Build.targets is imported after the project file, so these values cannot be quietly disabled by project properties. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>10.0-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Deterministic>true</Deterministic>
+    <LangVersion Condition="'$(MSBuildProjectExtension)' == '.csproj'">14.0</LangVersion>
+    <OptionStrict Condition="'$(MSBuildProjectExtension)' == '.vbproj'">On</OptionStrict>
+    <OptionExplicit Condition="'$(MSBuildProjectExtension)' == '.vbproj'">On</OptionExplicit>
+    <OptionInfer Condition="'$(MSBuildProjectExtension)' == '.vbproj'">On</OptionInfer>
+    <OptionCompare Condition="'$(MSBuildProjectExtension)' == '.vbproj'">Binary</OptionCompare>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- Test names such as Method_Scenario_Expected are the convention, so CA1707 does not apply to test projects.
+       Microsoft.Testing.Platform apps can set IsTestingPlatformApplication without IsTestProject. -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true' or '$(IsTestingPlatformApplication)' == 'true'">
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' == 'true' or '@(PackageReference->WithMetadataValue('Identity', 'Microsoft.NET.Test.Sdk'))' != ''">
+    <PackageReference Update="coverlet.collector" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" ExcludeAssets="none" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" ExcludeAssets="none" Condition="'@(PackageReference->WithMetadataValue('Identity', 'coverlet.collector'))' == ''" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <PackageReference Update="SonarAnalyzer.CSharp" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" ExcludeAssets="none" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.vbproj'">
+    <PackageReference Update="SonarAnalyzer.VisualBasic" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" ExcludeAssets="none" />
+  </ItemGroup>
+
+  <Target Name="ValidateIgnyteBuildPolicy" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="'$(Nullable)' != 'enable'" Text="Ignyte policy requires Nullable=enable. Add a documented exception before changing it." />
+    <Error Condition="'$(ImplicitUsings)' != 'enable'" Text="Ignyte policy requires ImplicitUsings=enable. Add a documented exception before changing it." />
+    <Error Condition="'$(TreatWarningsAsErrors)' != 'true'" Text="Ignyte policy requires TreatWarningsAsErrors=true." />
+    <Error Condition="'$(CodeAnalysisTreatWarningsAsErrors)' != 'true'" Text="Ignyte policy requires CodeAnalysisTreatWarningsAsErrors=true." />
+    <Error Condition="'$(EnableNETAnalyzers)' != 'true'" Text="Ignyte policy requires EnableNETAnalyzers=true." />
+    <Error Condition="'$(EnforceCodeStyleInBuild)' != 'true'" Text="Ignyte policy requires EnforceCodeStyleInBuild=true." />
+    <Error Condition="'$(Deterministic)' != 'true'" Text="Ignyte policy requires Deterministic=true." />
+    <Error Condition="'$(ManagePackageVersionsCentrally)' != 'true'" Text="Ignyte policy requires central package management." />
+    <Error Condition="'$(CentralPackageVersionOverrideEnabled)' != 'false'" Text="Ignyte policy does not permit central package version overrides." />
+    <Error Condition="'$(NuGetAudit)' != 'true'" Text="Ignyte policy requires NuGetAudit=true." />
+    <Error Condition="'$(NuGetAuditMode)' != 'all'" Text="Ignyte policy requires NuGetAuditMode=all." />
+    <Error Condition="'$(WarningsNotAsErrors)' != ''" Text="Ignyte policy does not permit WarningsNotAsErrors." />
+    <Error Condition="'$(MSBuildProjectExtension)' == '.csproj' and '@(PackageReference->WithMetadataValue('Identity', 'SonarAnalyzer.CSharp'))' == ''" Text="Ignyte policy requires SonarAnalyzer.CSharp for C# projects." />
+    <Error Condition="'$(MSBuildProjectExtension)' == '.csproj' and '@(PackageReference->WithMetadataValue('Identity', 'SonarAnalyzer.CSharp')->WithMetadataValue('PrivateAssets', 'all')->WithMetadataValue('IncludeAssets', 'runtime; build; native; contentfiles; analyzers; buildtransitive')->WithMetadataValue('ExcludeAssets', 'none'))' == ''" Text="Ignyte policy requires SonarAnalyzer.CSharp analyzer assets to remain enabled and private." />
+    <Error Condition="'$(MSBuildProjectExtension)' == '.vbproj' and '@(PackageReference->WithMetadataValue('Identity', 'SonarAnalyzer.VisualBasic'))' == ''" Text="Ignyte policy requires SonarAnalyzer.VisualBasic for Visual Basic projects." />
+    <Error Condition="'$(MSBuildProjectExtension)' == '.vbproj' and '@(PackageReference->WithMetadataValue('Identity', 'SonarAnalyzer.VisualBasic')->WithMetadataValue('PrivateAssets', 'all')->WithMetadataValue('IncludeAssets', 'runtime; build; native; contentfiles; analyzers; buildtransitive')->WithMetadataValue('ExcludeAssets', 'none'))' == ''" Text="Ignyte policy requires SonarAnalyzer.VisualBasic analyzer assets to remain enabled and private." />
+
+    <ItemGroup>
+      <_IgnyteSuppressedPackageReference Include="@(PackageReference)" Condition="'%(PackageReference.NoWarn)' != '' or '%(PackageReference.WarningsNotAsErrors)' != ''" />
+      <_IgnyteNuGetAuditSuppression Include="@(NuGetAuditSuppress)" />
+    </ItemGroup>
+    <Error Condition="'@(_IgnyteSuppressedPackageReference)' != ''" Text="Ignyte policy does not permit warning suppression metadata on PackageReference items." />
+    <Error Condition="'@(_IgnyteNuGetAuditSuppression)' != ''" Text="Ignyte policy does not permit NuGetAuditSuppress items." />
+  </Target>
+
+  <!-- Repository-specific provider analyzer wiring. -->
   <PropertyGroup>
     <_InquirySqliteProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Sqlite\Inquiry.Sqlite.csproj'))</_InquirySqliteProjectPath>
     <_InquirySqliteAnalyzerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Sqlite.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Sqlite.Analyzer.dll'))</_InquirySqliteAnalyzerPath>
@@ -65,5 +136,4 @@
       <Analyzer Include="$(_InquiryOracleSharedPath)" Condition="'@(_InquiryOracleProjectReference)' != '' and Exists('$(_InquiryOracleSharedPath)')" />
     </ItemGroup>
   </Target>
-
 </Project>

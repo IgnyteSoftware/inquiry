@@ -4,6 +4,8 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-x64</RuntimeIdentifier>
     <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows'))">win-x64</RuntimeIdentifier>
+    <!-- Restore both RIDs so the lock file is valid on Linux CI and on Windows. -->
+    <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
     <BenchmarkEvidenceProvider>sqlite</BenchmarkEvidenceProvider>
     <BenchmarkEvidenceLane>DeveloperProject</BenchmarkEvidenceLane>
     <BenchmarkEvidenceProviderAssembly>Inquiry.Sqlite</BenchmarkEvidenceProviderAssembly>
@@ -17,7 +19,7 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="linq2db" />
     <PackageReference Include="RepoDb" />
@@ -32,7 +34,7 @@
     <!-- EF Core 8.x pulls in M.E.DependencyInjection 8.0.1 transitively; override the
          central package version (6.0.1, picked for the library's netstandard2.0 surface)
          locally so NuGet does not flag a downgrade. -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <!-- Cross-dialect benchmark (CrossDialectReadBenchmarks): ADO drivers + Testcontainers for the
          networked dialects. EF Core is compared in the in-process SQLite suite only. -->
     <PackageReference Include="Npgsql" />

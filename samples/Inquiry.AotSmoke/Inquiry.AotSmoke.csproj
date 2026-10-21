@@ -8,6 +8,8 @@
          `dotnet publish -r <rid>` produces a native binary; CI runs it and asserts the
          AOT-SMOKE-OK marker. A normal `dotnet build`/`run` still works for local iteration. -->
     <PublishAot>true</PublishAot>
+    <!-- Restore both RIDs so the lock file is valid on Linux CI and on Windows. -->
+    <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 

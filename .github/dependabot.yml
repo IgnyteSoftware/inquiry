@@ -1,19 +1,12 @@
 version: 2
 updates:
-  # Keep SHA-pinned actions from rotting: Dependabot updates the pin and the version comment.
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      actions:
-        patterns: ["*"]
-
   - package-ecosystem: nuget
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    groups:
+      nuget:
+        update-types: [minor, patch]
     ignore:
       # The source generator's Roslyn reference is a compatibility FLOOR, not a currency
       # target: raising it drops support for consumers on older SDK/IDE Roslyn versions.
@@ -26,3 +19,11 @@ updates:
       - dependency-name: Npgsql.EntityFrameworkCore.PostgreSQL
       - dependency-name: Pomelo.EntityFrameworkCore.MySql
       - dependency-name: Oracle.EntityFrameworkCore
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
