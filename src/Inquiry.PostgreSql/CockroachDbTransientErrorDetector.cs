@@ -10,7 +10,7 @@ namespace Inquiry.PostgreSql;
 /// </summary>
 internal sealed class CockroachDbTransientErrorDetector : ITransientErrorDetector
 {
-    private static readonly HashSet<string> TransientSqlStates = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> _transientSqlStates = new(StringComparer.Ordinal)
     {
         "40001", // serialization_failure (Cockroach retryable transaction)
         "08006", // connection_failure
@@ -20,5 +20,5 @@ internal sealed class CockroachDbTransientErrorDetector : ITransientErrorDetecto
     /// <inheritdoc />
     public bool IsTransient(Exception exception) =>
         exception is PostgresException postgresException
-        && TransientSqlStates.Contains(postgresException.SqlState);
+        && _transientSqlStates.Contains(postgresException.SqlState);
 }

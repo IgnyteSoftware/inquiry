@@ -2148,16 +2148,16 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
     private static (Activity? activity, long startTimestamp) StartGridActivity(DbCommand dbCommand)
     {
-        if (!InquiryTelemetry.ActivitySource.HasListeners() && !InquiryTelemetry.CommandDuration.Enabled)
+        if (!InquiryTelemetry._activitySource.HasListeners() && !InquiryTelemetry._commandDuration.Enabled)
         {
             return (null, 0);
         }
 
         var startTimestamp = Stopwatch.GetTimestamp();
         Activity? activity = null;
-        if (InquiryTelemetry.ActivitySource.HasListeners())
+        if (InquiryTelemetry._activitySource.HasListeners())
         {
-            activity = InquiryTelemetry.ActivitySource.StartActivity("QUERY_MULTIPLE", ActivityKind.Client);
+            activity = InquiryTelemetry._activitySource.StartActivity("QUERY_MULTIPLE", ActivityKind.Client);
             if (activity is not null)
             {
                 var dbSystem = InquiryTelemetry.MapDbSystem(dbCommand);
@@ -2175,7 +2175,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
         if (startTimestamp != 0 && dbCommand is not null)
         {
-            InquiryTelemetry.CommandDuration.Record(
+            InquiryTelemetry._commandDuration.Record(
                 Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
                 new KeyValuePair<string, object?>("db.system.name", InquiryTelemetry.MapDbSystem(dbCommand)),
                 new KeyValuePair<string, object?>("db.operation.name", "QUERY_MULTIPLE"),
@@ -2192,7 +2192,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     private (Activity? activity, long startTimestamp, string dbSystem) StartBatchActivity(
         DbConnection connection, string? commandText)
     {
-        if (!InquiryTelemetry.ActivitySource.HasListeners() && !InquiryTelemetry.CommandDuration.Enabled)
+        if (!InquiryTelemetry._activitySource.HasListeners() && !InquiryTelemetry._commandDuration.Enabled)
         {
             return (null, 0, "");
         }
@@ -2200,9 +2200,9 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         var dbSystem = InquiryTelemetry.MapDbSystem(connection);
         var startTimestamp = Stopwatch.GetTimestamp();
         Activity? activity = null;
-        if (InquiryTelemetry.ActivitySource.HasListeners())
+        if (InquiryTelemetry._activitySource.HasListeners())
         {
-            activity = InquiryTelemetry.ActivitySource.StartActivity("EXECUTE_BATCH", ActivityKind.Client);
+            activity = InquiryTelemetry._activitySource.StartActivity("EXECUTE_BATCH", ActivityKind.Client);
             if (activity is not null)
             {
                 activity.SetTag("db.system.name", dbSystem);
@@ -2225,7 +2225,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             return;
         }
 
-        InquiryTelemetry.CommandDuration.Record(
+        InquiryTelemetry._commandDuration.Record(
             Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             new KeyValuePair<string, object?>("db.operation.name", "EXECUTE_BATCH"));
@@ -2243,7 +2243,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 
         if (startTimestamp != 0)
         {
-            InquiryTelemetry.CommandDuration.Record(
+            InquiryTelemetry._commandDuration.Record(
                 Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
                 new KeyValuePair<string, object?>("db.system.name", dbSystem),
                 new KeyValuePair<string, object?>("db.operation.name", "EXECUTE_BATCH"),

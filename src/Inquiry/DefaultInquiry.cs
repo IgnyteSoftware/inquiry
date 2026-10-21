@@ -327,10 +327,10 @@ internal sealed class DefaultInquiry : IInquiry
 
     private (Activity? activity, long startTimestamp, string dbSystem) StartBulkInsertActivity(string table, bool enlisted)
     {
-        if (!Diagnostics.InquiryTelemetry.ActivitySource.HasListeners()
-            && !Diagnostics.InquiryTelemetry.CommandDuration.Enabled
-            && !Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Enabled
-            && !Diagnostics.InquiryTelemetry.BulkCopyDuration.Enabled)
+        if (!Diagnostics.InquiryTelemetry._activitySource.HasListeners()
+            && !Diagnostics.InquiryTelemetry._commandDuration.Enabled
+            && !Diagnostics.InquiryTelemetry._bulkConnectionOpenDuration.Enabled
+            && !Diagnostics.InquiryTelemetry._bulkCopyDuration.Enabled)
         {
             return (null, 0, "");
         }
@@ -338,9 +338,9 @@ internal sealed class DefaultInquiry : IInquiry
         var dbSystem = Diagnostics.InquiryTelemetry.MapDbSystem(_connectionFactory);
         var startTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         Activity? activity = null;
-        if (Diagnostics.InquiryTelemetry.ActivitySource.HasListeners())
+        if (Diagnostics.InquiryTelemetry._activitySource.HasListeners())
         {
-            activity = Diagnostics.InquiryTelemetry.ActivitySource.StartActivity("BULK_INSERT", ActivityKind.Client);
+            activity = Diagnostics.InquiryTelemetry._activitySource.StartActivity("BULK_INSERT", ActivityKind.Client);
             if (activity is not null)
             {
                 activity.SetTag("db.system.name", dbSystem);
@@ -364,7 +364,7 @@ internal sealed class DefaultInquiry : IInquiry
             return;
         }
 
-        Diagnostics.InquiryTelemetry.CommandDuration.Record(
+        Diagnostics.InquiryTelemetry._commandDuration.Record(
             System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"),
@@ -383,7 +383,7 @@ internal sealed class DefaultInquiry : IInquiry
 
         if (startTimestamp != 0)
         {
-            Diagnostics.InquiryTelemetry.CommandDuration.Record(
+            Diagnostics.InquiryTelemetry._commandDuration.Record(
                 System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
                 new KeyValuePair<string, object?>("db.system.name", dbSystem),
                 new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"),
@@ -409,7 +409,7 @@ internal sealed class DefaultInquiry : IInquiry
         if (openError is not null)
         {
             var errorType = openError.GetType().FullName ?? openError.GetType().Name;
-            Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Record(
+            Diagnostics.InquiryTelemetry._bulkConnectionOpenDuration.Record(
                 duration.TotalSeconds,
                 new KeyValuePair<string, object?>("db.system.name", dbSystem),
                 connectionMode,
@@ -424,7 +424,7 @@ internal sealed class DefaultInquiry : IInquiry
             return;
         }
 
-        Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Record(
+        Diagnostics.InquiryTelemetry._bulkConnectionOpenDuration.Record(
             duration.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             connectionMode);
@@ -438,7 +438,7 @@ internal sealed class DefaultInquiry : IInquiry
 
     private static void RecordBulkCopy(Activity? activity, string dbSystem, bool enlisted, TimeSpan duration, long? rowCount)
     {
-        Diagnostics.InquiryTelemetry.BulkCopyDuration.Record(
+        Diagnostics.InquiryTelemetry._bulkCopyDuration.Record(
             duration.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             new KeyValuePair<string, object?>("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated"));

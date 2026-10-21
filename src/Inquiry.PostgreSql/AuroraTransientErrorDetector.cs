@@ -11,7 +11,7 @@ namespace Inquiry.PostgreSql;
 /// </summary>
 internal sealed class AuroraTransientErrorDetector : ITransientErrorDetector
 {
-    private static readonly HashSet<string> TransientSqlStates = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> _transientSqlStates = new(StringComparer.Ordinal)
     {
         "57P01", // admin_shutdown
     };
@@ -24,7 +24,7 @@ internal sealed class AuroraTransientErrorDetector : ITransientErrorDetector
             // Connection-exception class (08xxx) covers connection_failure / does-not-exist /
             // rejected during failover.
             return postgresException.SqlState.StartsWith("08", StringComparison.Ordinal)
-                || TransientSqlStates.Contains(postgresException.SqlState);
+                || _transientSqlStates.Contains(postgresException.SqlState);
         }
 
         // Transport-level faults (socket reset on failover) surface as a base NpgsqlException.

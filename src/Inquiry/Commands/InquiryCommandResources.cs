@@ -15,16 +15,16 @@ namespace Inquiry.Commands;
 public static class InquiryCommandResources
 {
     private const int ResourceSignalMask = 1023;
-    private static readonly ConditionalWeakTable<DbCommand, ResourceSet> Resources = new();
-    private static readonly object ResourceSignalGate = new();
-    private static readonly WeakReference<DbCommand>[]?[] ResourceSignals = new WeakReference<DbCommand>[ResourceSignalMask + 1][];
+    private static readonly ConditionalWeakTable<DbCommand, ResourceSet> _resources = new();
+    private static readonly object _resourceSignalGate = new();
+    private static readonly WeakReference<DbCommand>[]?[] _resourceSignals = new WeakReference<DbCommand>[ResourceSignalMask + 1][];
 
     internal static void Register(DbCommand command, IInquiryExecutionResource resource)
-        => Resources.GetValue(command, static key => new ResourceSet(key)).Add(resource);
+        => _resources.GetValue(command, static key => new ResourceSet(key)).Add(resource);
 
     internal static void Unregister(DbCommand command, IInquiryExecutionResource resource)
     {
-        if (Resources.TryGetValue(command, out var set))
+        if (_resources.TryGetValue(command, out var set))
         {
             set.Remove(resource);
         }
@@ -51,18 +51,18 @@ public static class InquiryCommandResources
             return;
         }
 
-        if (!Resources.TryGetValue(command, out var set))
+        if (!_resources.TryGetValue(command, out var set))
         {
             return;
         }
 
-        Resources.Remove(command);
+        _resources.Remove(command);
         set.Dispose();
     }
 
     internal static bool HasResourceSignal(DbCommand command)
     {
-        var signals = Volatile.Read(ref ResourceSignals[GetSignalIndex(command)]);
+        var signals = Volatile.Read(ref _resourceSignals[GetSignalIndex(command)]);
         if (signals is null)
         {
             return false;
@@ -83,9 +83,9 @@ public static class InquiryCommandResources
 
     private static void AddResourceSignal(int signalIndex, WeakReference<DbCommand> signal)
     {
-        lock (ResourceSignalGate)
+        lock (_resourceSignalGate)
         {
-            var current = ResourceSignals[signalIndex];
+            var current = _resourceSignals[signalIndex];
             var next = current is null ? new WeakReference<DbCommand>[1] : new WeakReference<DbCommand>[current.Length + 1];
             if (current is not null)
             {
@@ -93,15 +93,15 @@ public static class InquiryCommandResources
             }
 
             next[^1] = signal;
-            Volatile.Write(ref ResourceSignals[signalIndex], next);
+            Volatile.Write(ref _resourceSignals[signalIndex], next);
         }
     }
 
     private static void RemoveResourceSignal(int signalIndex, WeakReference<DbCommand> signal)
     {
-        lock (ResourceSignalGate)
+        lock (_resourceSignalGate)
         {
-            var current = ResourceSignals[signalIndex];
+            var current = _resourceSignals[signalIndex];
             if (current is null)
             {
                 return;
@@ -109,7 +109,7 @@ public static class InquiryCommandResources
 
             if (current.Length == 1)
             {
-                Volatile.Write(ref ResourceSignals[signalIndex], null);
+                Volatile.Write(ref _resourceSignals[signalIndex], null);
                 return;
             }
 
@@ -124,7 +124,7 @@ public static class InquiryCommandResources
 
                 next[destination++] = candidate;
             }
-            Volatile.Write(ref ResourceSignals[signalIndex], next);
+            Volatile.Write(ref _resourceSignals[signalIndex], next);
         }
     }
 

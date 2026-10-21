@@ -48,8 +48,8 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
     internal bool RecordCommandText => _options.RecordCommandText;
 
     public bool IsActive
-        => InquiryTelemetry.ActivitySource.HasListeners()
-            || InquiryTelemetry.CommandDuration.Enabled
+        => InquiryTelemetry._activitySource.HasListeners()
+            || InquiryTelemetry._commandDuration.Enabled
             || _logger.IsEnabled(LogLevel.Debug)
             || _logger.IsEnabled(LogLevel.Error);
 
@@ -69,9 +69,9 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
             StartTimestamp = Stopwatch.GetTimestamp(),
         };
 
-        if (InquiryTelemetry.ActivitySource.HasListeners())
+        if (InquiryTelemetry._activitySource.HasListeners())
         {
-            var activity = InquiryTelemetry.ActivitySource.StartActivity(state.Operation, ActivityKind.Client);
+            var activity = InquiryTelemetry._activitySource.StartActivity(state.Operation, ActivityKind.Client);
             if (activity is not null)
             {
                 activity.SetTag("db.system.name", state.DbSystem);
@@ -110,7 +110,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         _inflight.Remove(context.Command);
         var elapsed = Stopwatch.GetElapsedTime(state.StartTimestamp);
 
-        InquiryTelemetry.CommandDuration.Record(
+        InquiryTelemetry._commandDuration.Record(
             elapsed.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", state.DbSystem),
             new KeyValuePair<string, object?>("db.operation.name", state.Operation));
@@ -144,7 +144,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         var elapsed = Stopwatch.GetElapsedTime(state.StartTimestamp);
         var errorType = InquiryTelemetry.ErrorType(context.Exception);
 
-        InquiryTelemetry.CommandDuration.Record(
+        InquiryTelemetry._commandDuration.Record(
             elapsed.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", state.DbSystem),
             new KeyValuePair<string, object?>("db.operation.name", state.Operation),
@@ -493,54 +493,54 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
 
     private static class Log
     {
-        private static readonly Action<ILogger, string, string, Exception?> ExecutingMessage =
+        private static readonly Action<ILogger, string, string, Exception?> _executingMessage =
             LoggerMessage.Define<string, string>(
                 LogLevel.Debug,
                 new EventId(1, "InquiryCommandExecuting"),
                 "Executing {Operation}: {CommandText}");
 
-        private static readonly Action<ILogger, string, double, int?, Exception?> ExecutedMessage =
+        private static readonly Action<ILogger, string, double, int?, Exception?> _executedMessage =
             LoggerMessage.Define<string, double, int?>(
                 LogLevel.Debug,
                 new EventId(2, "InquiryCommandExecuted"),
                 "Executed {Operation} in {ElapsedMs:0.###} ms ({RecordsAffected} rows affected)");
 
-        private static readonly Action<ILogger, string, double, Exception?> FailedMessage =
+        private static readonly Action<ILogger, string, double, Exception?> _failedMessage =
             LoggerMessage.Define<string, double>(
                 LogLevel.Error,
                 new EventId(3, "InquiryCommandFailed"),
                 "Failed {Operation} after {ElapsedMs:0.###} ms");
 
-        private static readonly Action<ILogger, string, double, string, Exception?> FailedRedactedMessage =
+        private static readonly Action<ILogger, string, double, string, Exception?> _failedRedactedMessage =
             LoggerMessage.Define<string, double, string>(
                 LogLevel.Error,
                 new EventId(3, "InquiryCommandFailed"),
                 "Failed {Operation} after {ElapsedMs:0.###} ms with {ErrorType}");
 
-        private static readonly Action<ILogger, string, double, string, string, Exception?> FailedRedactedWithCauseMessage =
+        private static readonly Action<ILogger, string, double, string, string, Exception?> _failedRedactedWithCauseMessage =
             LoggerMessage.Define<string, double, string, string>(
                 LogLevel.Error,
                 new EventId(3, "InquiryCommandFailed"),
                 "Failed {Operation} after {ElapsedMs:0.###} ms with {ErrorType} caused by {CauseType}");
 
         public static void Executing(ILogger logger, string operation, string commandText)
-            => ExecutingMessage(logger, operation, commandText, null);
+            => _executingMessage(logger, operation, commandText, null);
 
         public static void Executed(ILogger logger, string operation, double elapsedMs, int? recordsAffected)
-            => ExecutedMessage(logger, operation, elapsedMs, recordsAffected, null);
+            => _executedMessage(logger, operation, elapsedMs, recordsAffected, null);
 
         public static void Failed(ILogger logger, Exception exception, string operation, double elapsedMs)
-            => FailedMessage(logger, operation, elapsedMs, exception);
+            => _failedMessage(logger, operation, elapsedMs, exception);
 
         public static void FailedRedacted(ILogger logger, string operation, double elapsedMs, string errorType, string? causeType)
         {
             if (causeType is null)
             {
-                FailedRedactedMessage(logger, operation, elapsedMs, errorType, null);
+                _failedRedactedMessage(logger, operation, elapsedMs, errorType, null);
             }
             else
             {
-                FailedRedactedWithCauseMessage(logger, operation, elapsedMs, errorType, causeType, null);
+                _failedRedactedWithCauseMessage(logger, operation, elapsedMs, errorType, causeType, null);
             }
         }
     }

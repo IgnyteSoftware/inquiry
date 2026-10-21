@@ -8,13 +8,13 @@ namespace Inquiry.SqlServer.Analyzer;
 
 internal static class SqlServerTvpResolver
 {
-    private static readonly DiagnosticDescriptor InvalidMapping = new(
+    private static readonly DiagnosticDescriptor _invalidMapping = new(
         "INQ076", "SQL Server TVP collection mapping is invalid",
         "Collection method '{0}' cannot use the SQL Server TVP mapping for column '{1}': {2}",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq076");
 
-    private static readonly Regex TypePattern = new(
+    private static readonly Regex _typePattern = new(
         @"^\s*(?<name>[A-Za-z][A-Za-z0-9_]*)(?:\s*\(\s*(?<a>MAX|[0-9]+)\s*(?:,\s*(?<b>[0-9]+)\s*)?\))?\s*$",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
@@ -92,7 +92,7 @@ internal static class SqlServerTvpResolver
 
     private static CollectionParameterResolution Failure(CollectionParameterContext context, string message, string? facet)
         => new(null, new CollectionParameterDiagnostic(
-            InvalidMapping,
+            _invalidMapping,
             facet,
             message,
             ImmutableArray.Create(context.OperationName, context.Column.PropertyName, message)));
@@ -218,7 +218,7 @@ internal static class SqlServerTvpResolver
     {
         physical = null;
         error = "SqlType is outside the supported primitive TVP grammar";
-        var match = TypePattern.Match(value);
+        var match = _typePattern.Match(value);
         if (!match.Success)
         {
             return false;
@@ -316,7 +316,7 @@ internal static class SqlServerTvpResolver
                 context.Precision, context.Scale, out var physical, out var error, out var facet))
         {
             return new(null, null, null, new CollectionParameterDiagnostic(
-                InvalidMapping, facet, error ?? $"element type class '{context.ElementTypeClass}' has no exact TVP mapping",
+                _invalidMapping, facet, error ?? $"element type class '{context.ElementTypeClass}' has no exact TVP mapping",
                 ImmutableArray.Create(context.OperationName, context.ParameterName, error ?? "unsupported element type")));
         }
 

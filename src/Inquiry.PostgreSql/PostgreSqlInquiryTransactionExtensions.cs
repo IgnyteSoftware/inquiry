@@ -50,7 +50,7 @@ public static class PostgreSqlInquiryTransactionExtensions
     /// pass it to the server — which rejects it and aborts the caller's transaction, breaking the
     /// promise that an invalid name throws before any statement runs.
     /// </remarks>
-    private static readonly Regex SettingNamePattern = new(
+    private static readonly Regex _settingNamePattern = new(
         @"\A[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\z",
         RegexOptions.CultureInvariant);
 
@@ -171,7 +171,7 @@ public static class PostgreSqlInquiryTransactionExtensions
                 nameof(settingName));
         }
 
-        if (!SettingNamePattern.IsMatch(settingName))
+        if (!_settingNamePattern.IsMatch(settingName))
         {
             throw new ArgumentException(
                 $"Setting name '{settingName}' is not a valid PostgreSQL custom configuration parameter. " +

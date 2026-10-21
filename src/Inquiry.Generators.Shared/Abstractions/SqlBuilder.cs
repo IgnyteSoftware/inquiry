@@ -67,7 +67,7 @@ public abstract class SqlBuilder
 
         foreach (var token in analysis.ValueIdentifierTokens)
         {
-            if (!SetExpressionKeywords.Contains(token))
+            if (!_setExpressionKeywords.Contains(token))
             {
                 failures.Add("contains bare identifier '" + token + "'; use a {Field} placeholder for mapped columns");
             }
@@ -75,7 +75,7 @@ public abstract class SqlBuilder
         return failures;
     }
 
-    private static readonly HashSet<string> SetExpressionKeywords = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _setExpressionKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
         "and", "or", "not", "null", "true", "false", "case", "when", "then", "else", "end",
         "as", "is", "between", "like", "in", "current_date", "current_time", "current_timestamp",

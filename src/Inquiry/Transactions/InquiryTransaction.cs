@@ -16,7 +16,7 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     private readonly Action _onDetach;
     private readonly Action _onClose;
     private readonly object _lifecycleLock = new();
-    private static readonly TimeSpan CleanupTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan _cleanupTimeout = TimeSpan.FromSeconds(5);
     private int _closed;
     private Task? _terminalTask;
     private Task? _disposeTask;
@@ -201,12 +201,12 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 
         try
         {
-            await rollbackTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+            await rollbackTask.WaitAsync(_cleanupTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             failures.Add(new TimeoutException(
-                $"Provider rollback did not complete within {CleanupTimeout.TotalSeconds:0} seconds; cleanup will continue sequentially in the background."));
+                $"Provider rollback did not complete within {_cleanupTimeout.TotalSeconds:0} seconds; cleanup will continue sequentially in the background."));
             _ = ContinueCleanupAfterRollbackAsync(rollbackTask);
             return;
         }
@@ -234,12 +234,12 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 
         try
         {
-            await transactionDisposeTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+            await transactionDisposeTask.WaitAsync(_cleanupTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             failures.Add(new TimeoutException(
-                $"Provider transaction disposal did not complete within {CleanupTimeout.TotalSeconds:0} seconds; connection cleanup will continue sequentially in the background."));
+                $"Provider transaction disposal did not complete within {_cleanupTimeout.TotalSeconds:0} seconds; connection cleanup will continue sequentially in the background."));
             _ = ContinueConnectionCleanupAsync(transactionDisposeTask);
             return;
         }
@@ -266,12 +266,12 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 
         try
         {
-            await connectionDisposeTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+            await connectionDisposeTask.WaitAsync(_cleanupTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             failures.Add(new TimeoutException(
-                $"Provider connection disposal did not complete within {CleanupTimeout.TotalSeconds:0} seconds; it will continue in the background."));
+                $"Provider connection disposal did not complete within {_cleanupTimeout.TotalSeconds:0} seconds; it will continue in the background."));
             _ = ObserveBackgroundAsync(connectionDisposeTask);
         }
         catch (Exception exception)

@@ -43,7 +43,7 @@ public static class InquiryJsonArrayParameter
             }
 
             first = false;
-            ElementWriter<T>.Append(sb, value);
+            ElementWriter<T>._append(sb, value);
         }
 
         return sb.Append(']').ToString();
@@ -51,7 +51,7 @@ public static class InquiryJsonArrayParameter
 
     private static int GetInitialCapacity<T>(IEnumerable<T> values)
     {
-        var estimatedElementLength = ElementMetadata<T>.EstimatedJsonLength;
+        var estimatedElementLength = ElementMetadata<T>._estimatedJsonLength;
         if (estimatedElementLength == 0 || !System.Linq.Enumerable.TryGetNonEnumeratedCount(values, out var count))
         {
             return 16;
@@ -70,10 +70,10 @@ public static class InquiryJsonArrayParameter
         }
 
         object boxed = value;
-        var type = ElementMetadata<T>.Type;
-        if (ElementMetadata<T>.IsEnum)
+        var type = ElementMetadata<T>._type;
+        if (ElementMetadata<T>._isEnum)
         {
-            boxed = EnumStorageValue(boxed, ElementMetadata<T>.EnumUnderlyingType!);
+            boxed = EnumStorageValue(boxed, ElementMetadata<T>._enumUnderlyingType!);
         }
 
         switch (boxed)
@@ -165,10 +165,10 @@ public static class InquiryJsonArrayParameter
     // no members are discovered or invoked dynamically.
     private static class ElementMetadata<T>
     {
-        internal static readonly System.Type Type = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-        internal static readonly bool IsEnum = Type.IsEnum;
-        internal static readonly System.Type? EnumUnderlyingType = IsEnum ? System.Enum.GetUnderlyingType(Type) : null;
-        internal static readonly int EstimatedJsonLength = GetEstimatedJsonLength(Type);
+        internal static readonly System.Type _type = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        internal static readonly bool _isEnum = _type.IsEnum;
+        internal static readonly System.Type? _enumUnderlyingType = _isEnum ? System.Enum.GetUnderlyingType(_type) : null;
+        internal static readonly int _estimatedJsonLength = GetEstimatedJsonLength(_type);
 
         private static int GetEstimatedJsonLength(System.Type type)
         {
@@ -244,7 +244,7 @@ public static class InquiryJsonArrayParameter
 
     private static class ElementWriter<T>
     {
-        internal static readonly System.Action<StringBuilder, T> Append = Create();
+        internal static readonly System.Action<StringBuilder, T> _append = Create();
 
         private static System.Action<StringBuilder, T> Create()
         {

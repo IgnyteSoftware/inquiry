@@ -257,13 +257,13 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             }
         }
 
-        return s_reservedWords.Contains(identifier);
+        return _reservedWords.Contains(identifier);
     }
 
     // Oracle 23c V$RESERVED_WORDS WHERE RESERVED = 'Y' — the keywords that cause ORA-00903 / ORA-01747
     // when used unquoted as an identifier. Only the reserved subset is listed; non-reserved keywords
     // (COMMIT, ROLLBACK, etc.) work unquoted.
-    private static readonly HashSet<string> s_reservedWords = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _reservedWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "ACCESS", "ADD", "ALL", "ALTER", "AND", "ANY", "AS", "ASC",
         "AUDIT", "BETWEEN", "BY", "CHAR", "CHECK", "CLUSTER", "COLUMN",

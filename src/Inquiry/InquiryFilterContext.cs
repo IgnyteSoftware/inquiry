@@ -11,7 +11,7 @@ namespace Inquiry;
 /// </summary>
 public static class InquiryFilterContext
 {
-    private static readonly AsyncLocal<ScopeFrame?> Current = new();
+    private static readonly AsyncLocal<ScopeFrame?> _current = new();
 
     /// <summary>
     /// Sets the ambient filter values for the current async flow and returns a scope that restores
@@ -33,8 +33,8 @@ public static class InquiryFilterContext
             snapshot[pair.Key] = pair.Value;
         }
 
-        var frame = new ScopeFrame(snapshot, Current.Value);
-        Current.Value = frame;
+        var frame = new ScopeFrame(snapshot, _current.Value);
+        _current.Value = frame;
         return new Scope(frame);
     }
 
@@ -48,7 +48,7 @@ public static class InquiryFilterContext
     /// </summary>
     public static T GetRequired<T>(string contextKey)
     {
-        var values = Current.Value?.Value;
+        var values = _current.Value?._value;
         if (values is null)
         {
             throw new InquiryFilterValueMissingException(
@@ -72,13 +72,13 @@ public static class InquiryFilterContext
 
     internal sealed class ScopeFrame
     {
-        internal readonly IReadOnlyDictionary<string, object> Value;
-        internal readonly ScopeFrame? Previous;
+        internal readonly IReadOnlyDictionary<string, object> _value;
+        internal readonly ScopeFrame? _previous;
 
         internal ScopeFrame(IReadOnlyDictionary<string, object> value, ScopeFrame? previous)
         {
-            Value = value;
-            Previous = previous;
+            _value = value;
+            _previous = previous;
         }
     }
 
@@ -102,14 +102,14 @@ public static class InquiryFilterContext
                 return;
             }
 
-            var current = Current.Value;
+            var current = _current.Value;
             if (ReferenceEquals(current, _frame))
             {
-                Current.Value = _frame.Previous;
+                _current.Value = _frame._previous;
                 return;
             }
 
-            for (var frame = current; frame is not null; frame = frame.Previous)
+            for (var frame = current; frame is not null; frame = frame._previous)
             {
                 if (ReferenceEquals(frame, _frame))
                 {

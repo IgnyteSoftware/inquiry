@@ -136,7 +136,7 @@ public static class InquiryTvpParameter
     private sealed class TvpRecordEnumerable<T> : IEnumerable<SqlDataRecord>, IEnumerator<SqlDataRecord>, IInquiryExecutionResource
     {
         private delegate void ValueWriterDelegate(SqlDataRecord record, T value, InquiryTvpDescriptor descriptor, int index);
-        private static readonly ValueWriterDelegate ValueWriter = CreateValueWriter();
+        private static readonly ValueWriterDelegate _valueWriter = CreateValueWriter();
         private IEnumerator<T>? _source;
         private readonly InquiryTvpDescriptor _descriptor;
         private SqlDataRecord? _current;
@@ -207,7 +207,7 @@ public static class InquiryTvpParameter
         }
 
         private static void Write(SqlDataRecord record, T value, InquiryTvpDescriptor descriptor, int index)
-            => ValueWriter(record, value, descriptor, index);
+            => _valueWriter(record, value, descriptor, index);
 
         private static ValueWriterDelegate CreateValueWriter()
         {

@@ -408,7 +408,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
                 var dbSystem = InquiryTelemetry.MapDbSystem(_command);
                 if (!_faulted)
                 {
-                    InquiryTelemetry.CommandDuration.Record(
+                    InquiryTelemetry._commandDuration.Record(
                         Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
                         new KeyValuePair<string, object?>("db.system.name", dbSystem),
                         new KeyValuePair<string, object?>("db.operation.name", "QUERY_MULTIPLE"));
@@ -479,7 +479,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         _faulted = true;
         var errorType = InquiryTelemetry.ErrorType(exception);
         var dbSystem = InquiryTelemetry.MapDbSystem(_command);
-        InquiryTelemetry.CommandDuration.Record(
+        InquiryTelemetry._commandDuration.Record(
             Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             new KeyValuePair<string, object?>("db.operation.name", "QUERY_MULTIPLE"),

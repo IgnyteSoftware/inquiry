@@ -24,31 +24,31 @@ public static class InquiryTelemetry
     /// <summary>The name of the <see cref="Meter"/> Inquiry emits database metrics on.</summary>
     public const string MeterName = "Inquiry";
 
-    private static readonly string Version =
+    private static readonly string _version =
         typeof(InquiryTelemetry).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? typeof(InquiryTelemetry).Assembly.GetName().Version?.ToString()
         ?? "unknown";
 
-    internal static readonly ActivitySource ActivitySource = new(ActivitySourceName, Version);
+    internal static readonly ActivitySource _activitySource = new(ActivitySourceName, _version);
 
-    internal static readonly Meter Meter = new(MeterName, Version);
+    internal static readonly Meter _meter = new(MeterName, _version);
 
     /// <summary>
     /// Duration of database commands executed by the Inquiry pipeline, following the OpenTelemetry
     /// database semantic conventions (<c>db.client.operation.duration</c>, seconds). Failed commands
     /// carry an <c>error.type</c> tag, so error rate is derivable from the same instrument.
     /// </summary>
-    internal static readonly Histogram<double> CommandDuration = Meter.CreateHistogram<double>(
+    internal static readonly Histogram<double> _commandDuration = _meter.CreateHistogram<double>(
         "db.client.operation.duration",
         unit: "s",
         description: "Duration of database commands executed by the Inquiry pipeline.");
 
-    internal static readonly Histogram<double> BulkConnectionOpenDuration = Meter.CreateHistogram<double>(
+    internal static readonly Histogram<double> _bulkConnectionOpenDuration = _meter.CreateHistogram<double>(
         "inquiry.bulk_insert.connection_open.duration",
         unit: "s",
         description: "Duration of opening or acquiring the connection used for a native bulk insert.");
 
-    internal static readonly Histogram<double> BulkCopyDuration = Meter.CreateHistogram<double>(
+    internal static readonly Histogram<double> _bulkCopyDuration = _meter.CreateHistogram<double>(
         "inquiry.bulk_insert.copy.duration",
         unit: "s",
         description: "Duration of the provider-native copy phase of a bulk insert.");
