@@ -545,168 +545,6 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<T>> QueryListAsync<T>(
-        InquiryCommand command,
-        IInquiryEntityMaterializer<T> materializer,
-        CancellationToken cancellationToken = default)
-        where T : class
-    {
-        ArgumentNullException.ThrowIfNull(command);
-
-        ArgumentNullException.ThrowIfNull(materializer);
-
-        EnterInFlight();
-        try
-        {
-            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
-            var dbCommand = CreateCommand();
-            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
-            try
-            {
-                dbCommand.Transaction = _transaction;
-                InitializeCommandSync(dbCommand, command);
-                if (HasInterceptors)
-                {
-                    await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
-                    await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
-                }
-
-                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
-                commandResources.OwnReader(reader);
-                var list = new List<T>();
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    list.Add(materializer.Materialize(reader));
-                }
-
-                if (HasInterceptors)
-                {
-                    await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
-                }
-
-                return list;
-            }
-            catch (OperationCanceledException exception)
-                when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
-            {
-                var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-                commandResources.Capture(normalized);
-                if (HasInterceptors)
-                {
-                    await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
-                }
-
-                throw normalized;
-            }
-            catch (Exception exception)
-            {
-                commandResources.Capture(exception);
-                if (HasInterceptors)
-                {
-                    await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
-                }
-
-                throw;
-            }
-            finally
-            {
-                await commandResources.DisposeAsync().ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            ExitInFlight();
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task<T?> QuerySingleOrDefaultAsync<T>(
-        InquiryCommand command,
-        IInquiryEntityMaterializer<T> materializer,
-        CancellationToken cancellationToken = default)
-        where T : class
-    {
-        ArgumentNullException.ThrowIfNull(command);
-
-        ArgumentNullException.ThrowIfNull(materializer);
-
-        EnterInFlight();
-        try
-        {
-            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialSingleRowBehavior : SingleRowBehavior;
-            var dbCommand = CreateCommand();
-            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
-            try
-            {
-                dbCommand.Transaction = _transaction;
-                InitializeCommandSync(dbCommand, command);
-                if (HasInterceptors)
-                {
-                    await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
-                    await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
-                }
-
-                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
-                commandResources.OwnReader(reader);
-                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    if (HasInterceptors)
-                    {
-                        await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    return default;
-                }
-
-                var result = materializer.Materialize(reader);
-                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    throw new InvalidOperationException("QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.");
-                }
-
-                if (HasInterceptors)
-                {
-                    await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
-                }
-
-                return result;
-            }
-            catch (OperationCanceledException exception)
-                when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
-            {
-                var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-                commandResources.Capture(normalized);
-                if (HasInterceptors)
-                {
-                    await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
-                }
-
-                throw normalized;
-            }
-            catch (Exception exception)
-            {
-                commandResources.Capture(exception);
-                if (HasInterceptors)
-                {
-                    await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
-                }
-
-                throw;
-            }
-            finally
-            {
-                await commandResources.DisposeAsync().ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            ExitInFlight();
-        }
-    }
-
     // ---- Struct-materializer overloads (generated-store path) -----------------------------
 
     /// <inheritdoc />
@@ -842,6 +680,104 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
+    public IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken);
+
+    public IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        command.Validate();
+        return QueryGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<T>> QueryListAsync<T>(
+        InquiryCommand command,
+        IInquiryEntityMaterializer<T> materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        ArgumentNullException.ThrowIfNull(materializer);
+
+        EnterInFlight();
+        try
+        {
+            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try
+            {
+                dbCommand.Transaction = _transaction;
+                InitializeCommandSync(dbCommand, command);
+                if (HasInterceptors)
+                {
+                    await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
+                var list = new List<T>();
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    list.Add(materializer.Materialize(reader));
+                }
+
+                if (HasInterceptors)
+                {
+                    await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                }
+
+                return list;
+            }
+            catch (OperationCanceledException exception)
+                when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+            {
+                var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+                commandResources.Capture(normalized);
+                if (HasInterceptors)
+                {
+                    await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+                }
+
+                throw normalized;
+            }
+            catch (Exception exception)
+            {
+                commandResources.Capture(exception);
+                if (HasInterceptors)
+                {
+                    await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                }
+
+                throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
@@ -882,6 +818,115 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 return list;
+            }
+            catch (OperationCanceledException exception)
+                when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+            {
+                var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+                commandResources.Capture(normalized);
+                if (HasInterceptors)
+                {
+                    await InvokeFailedAsync(command, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+                }
+
+                throw normalized;
+            }
+            catch (Exception exception)
+            {
+                commandResources.Capture(exception);
+                if (HasInterceptors)
+                {
+                    await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                }
+
+                throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryListGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken, -1);
+
+    public Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+    {
+        command.Validate();
+        return QueryListGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken, capacityHint);
+    }
+
+    /// <inheritdoc />
+    public async Task<T?> QuerySingleOrDefaultAsync<T>(
+        InquiryCommand command,
+        IInquiryEntityMaterializer<T> materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        ArgumentNullException.ThrowIfNull(materializer);
+
+        EnterInFlight();
+        try
+        {
+            var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialSingleRowBehavior : SingleRowBehavior;
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            try
+            {
+                dbCommand.Transaction = _transaction;
+                InitializeCommandSync(dbCommand, command);
+                if (HasInterceptors)
+                {
+                    await InvokeInitializedAsync(dbCommand, command, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+
+                await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
+                var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
+                commandResources.OwnReader(reader);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    if (HasInterceptors)
+                    {
+                        await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    return default;
+                }
+
+                var result = materializer.Materialize(reader);
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException("QuerySingleOrDefaultAsync expected zero or one row, but the query returned multiple rows.");
+                }
+
+                if (HasInterceptors)
+                {
+                    await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
+                }
+
+                return result;
             }
             catch (OperationCanceledException exception)
                 when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -1001,7 +1046,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
-    public IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+    public Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
         string commandText,
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
@@ -1009,9 +1054,9 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         CancellationToken cancellationToken = default)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
-        => QueryGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken);
+        => QueryValidatingSingleGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken);
 
-    public IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+    public Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
         InquiryGeneratedCommand<TArgs> command,
         TMaterializer materializer,
         CancellationToken cancellationToken = default)
@@ -1019,7 +1064,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
         command.Validate();
-        return QueryGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken);
+        return QueryValidatingSingleGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken);
     }
 
     private async IAsyncEnumerable<T> QueryGeneratedCore<T, TArgs, TMaterializer>(
@@ -1166,29 +1211,6 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
-    /// <inheritdoc />
-    public Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where T : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<T>
-        => QueryListGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken, -1);
-
-    public Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
-        InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default,
-        int capacityHint = -1)
-        where T : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<T>
-    {
-        command.Validate();
-        return QueryListGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken, capacityHint);
-    }
-
     private async Task<IReadOnlyList<T>> QueryListGeneratedCore<T, TArgs, TMaterializer>(
         string commandText,
         CommandType commandType,
@@ -1271,28 +1293,6 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         {
             ExitInFlight();
         }
-    }
-
-    /// <inheritdoc />
-    public Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where T : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<T>
-        => QueryValidatingSingleGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken);
-
-    public Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
-        InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where T : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<T>
-    {
-        command.Validate();
-        return QueryValidatingSingleGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken);
     }
 
     public Task<T?> QueryGeneratedSingleOrDefaultAsync<T, TArgs, TMaterializer>(
@@ -1617,6 +1617,22 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     }
 
     /// <inheritdoc />
+    public Task<T> ExecuteScalarAsync<T, TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+        => ExecuteScalarGeneratedCore<T, TArgs>(commandText, CommandType.Text, args, bindParameters, cancellationToken);
+
+    public Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        return ExecuteScalarGeneratedCore<T, TArgs>(command.CommandText, command.CommandType, command.Args, command.BindParameters, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<T> ExecuteProcedureScalarAsync<T>(InquiryCommand command, string readBackParameterName, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -1672,6 +1688,82 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 if (HasInterceptors)
                 {
                     await InvokeFailedAsync(command, dbCommand, exception, cancellationToken).ConfigureAwait(false);
+                }
+
+                throw;
+            }
+            finally
+            {
+                await commandResources.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ExitInFlight();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        string readBackParameterName,
+        CancellationToken cancellationToken = default)
+    {
+        command.Validate();
+        if (string.IsNullOrWhiteSpace(readBackParameterName))
+        {
+            throw new ArgumentException("Read-back parameter name cannot be empty.", nameof(readBackParameterName));
+        }
+
+        readBackParameterName = InquiryParameterBinder.NormalizeName(readBackParameterName);
+
+        EnterInFlight();
+        try
+        {
+            var dbCommand = CreateCommand();
+            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(command.CommandText, command.CommandType) : null;
+
+            try
+            {
+                dbCommand.Transaction = _transaction;
+                dbCommand.CommandText = command.CommandText;
+                dbCommand.CommandType = command.CommandType;
+                command.BindParameters(dbCommand, command.Args);
+                _connectionFactory.FinalizeCommand(dbCommand);
+                if (interceptorCommand is not null)
+                {
+                    await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
+                    await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
+                }
+
+                var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+                var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
+                if (interceptorCommand is not null)
+                {
+                    await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
+                }
+
+                return readBack;
+            }
+            catch (OperationCanceledException exception)
+                when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+            {
+                var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+                commandResources.Capture(normalized);
+                if (interceptorCommand is not null)
+                {
+                    await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
+                }
+
+                throw normalized;
+            }
+            catch (Exception exception)
+            {
+                commandResources.Capture(exception);
+                if (interceptorCommand is not null)
+                {
+                    await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
                 }
 
                 throw;
@@ -1775,98 +1867,6 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         {
             ExitInFlight();
         }
-    }
-
-    /// <inheritdoc />
-    public async Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        string readBackParameterName,
-        CancellationToken cancellationToken = default)
-    {
-        command.Validate();
-        if (string.IsNullOrWhiteSpace(readBackParameterName))
-        {
-            throw new ArgumentException("Read-back parameter name cannot be empty.", nameof(readBackParameterName));
-        }
-
-        readBackParameterName = InquiryParameterBinder.NormalizeName(readBackParameterName);
-
-        EnterInFlight();
-        try
-        {
-            var dbCommand = CreateCommand();
-            var commandResources = InquiryCommandResources.CreateScope(dbCommand);
-            var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(command.CommandText, command.CommandType) : null;
-
-            try
-            {
-                dbCommand.Transaction = _transaction;
-                dbCommand.CommandText = command.CommandText;
-                dbCommand.CommandType = command.CommandType;
-                command.BindParameters(dbCommand, command.Args);
-                _connectionFactory.FinalizeCommand(dbCommand);
-                if (interceptorCommand is not null)
-                {
-                    await InvokeInitializedAsync(dbCommand, interceptorCommand, cancellationToken).ConfigureAwait(false);
-                    await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
-                }
-
-                var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
-                var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
-                if (interceptorCommand is not null)
-                {
-                    await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected, cancellationToken).ConfigureAwait(false);
-                }
-
-                return readBack;
-            }
-            catch (OperationCanceledException exception)
-                when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
-            {
-                var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
-                commandResources.Capture(normalized);
-                if (interceptorCommand is not null)
-                {
-                    await InvokeFailedAsync(interceptorCommand, dbCommand, normalized, cancellationToken).ConfigureAwait(false);
-                }
-
-                throw normalized;
-            }
-            catch (Exception exception)
-            {
-                commandResources.Capture(exception);
-                if (interceptorCommand is not null)
-                {
-                    await InvokeFailedAsync(interceptorCommand, dbCommand, exception, cancellationToken).ConfigureAwait(false);
-                }
-
-                throw;
-            }
-            finally
-            {
-                await commandResources.DisposeAsync().ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            ExitInFlight();
-        }
-    }
-
-    /// <inheritdoc />
-    public Task<T> ExecuteScalarAsync<T, TArgs>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        CancellationToken cancellationToken = default)
-        => ExecuteScalarGeneratedCore<T, TArgs>(commandText, CommandType.Text, args, bindParameters, cancellationToken);
-
-    public Task<T> ExecuteScalarAsync<T, TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        CancellationToken cancellationToken = default)
-    {
-        command.Validate();
-        return ExecuteScalarGeneratedCore<T, TArgs>(command.CommandText, command.CommandType, command.Args, command.BindParameters, cancellationToken);
     }
 
     private async Task<T> ExecuteScalarGeneratedCore<T, TArgs>(

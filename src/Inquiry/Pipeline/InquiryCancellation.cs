@@ -48,14 +48,6 @@ internal static class InquiryCancellation
             ? providerTask
             : AwaitEnforcingCallerTokenCore(providerTask, callerToken);
 
-    private static async Task<T> AwaitEnforcingCallerTokenCore<T>(Task<T> providerTask, CancellationToken callerToken)
-    {
-        // The re-await is on an already-settled task (the core either completed it or threw), so it
-        // resolves synchronously to the result.
-        await AwaitEnforcingCallerTokenCore((Task)providerTask, callerToken).ConfigureAwait(false);
-        return await providerTask.ConfigureAwait(false);
-    }
-
     /// <summary>
     /// Register-first variant for provider awaits with no downstream token check to backstop them
     /// (the batch transaction's CommitAsync). The task-taking overloads have a window between the
@@ -71,6 +63,20 @@ internal static class InquiryCancellation
             ? startProviderTask(callerToken)
             : AwaitEnforcingCallerTokenCore(startProviderTask, callerToken);
 
+    /// <summary>Non-generic variant for result-less provider awaits already started by the caller.</summary>
+    internal static Task AwaitEnforcingCallerToken(Task providerTask, CancellationToken callerToken)
+        => !callerToken.CanBeCanceled
+            ? providerTask
+            : AwaitEnforcingCallerTokenCore(providerTask, callerToken);
+
+    private static async Task<T> AwaitEnforcingCallerTokenCore<T>(Task<T> providerTask, CancellationToken callerToken)
+    {
+        // The re-await is on an already-settled task (the core either completed it or threw), so it
+        // resolves synchronously to the result.
+        await AwaitEnforcingCallerTokenCore((Task)providerTask, callerToken).ConfigureAwait(false);
+        return await providerTask.ConfigureAwait(false);
+    }
+
     private static async Task AwaitEnforcingCallerTokenCore(Func<CancellationToken, Task> startProviderTask, CancellationToken callerToken)
     {
         var race = new CancellationRace();
@@ -83,12 +89,6 @@ internal static class InquiryCancellation
             await AwaitRegisteredAsync(providerTask, race, callerToken).ConfigureAwait(false);
         }
     }
-
-    /// <summary>Non-generic variant for result-less provider awaits already started by the caller.</summary>
-    internal static Task AwaitEnforcingCallerToken(Task providerTask, CancellationToken callerToken)
-        => !callerToken.CanBeCanceled
-            ? providerTask
-            : AwaitEnforcingCallerTokenCore(providerTask, callerToken);
 
     private static async Task AwaitEnforcingCallerTokenCore(Task providerTask, CancellationToken callerToken)
     {

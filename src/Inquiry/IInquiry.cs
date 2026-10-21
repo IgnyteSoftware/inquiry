@@ -55,6 +55,36 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
+    // ---- Struct-materializer overloads (generated-store path) --------------------------
+    //
+    // These bypass the DI lookup that the class-materializer path needs and let the JIT
+    // specialize the pipeline body per concrete TMaterializer struct, so the per-row
+    // Materialize call inlines into the read loop. Generated stores pass
+    // default(SomeEntityStructMaterializer) — the struct has no fields and no state.
+
+    /// <summary>
+    /// Streams materialized rows using a struct materializer. JIT-specialized per
+    /// <typeparamref name="TMaterializer"/> so the per-row dispatch inlines.
+    /// </summary>
+    IAsyncEnumerable<TEntity> QueryAsync<TEntity, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
+
+    // ---- Immutable generated-command path ---------------------------------------------
+
+    /// <summary>Streams rows from an immutable generated command definition.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => QueryAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
     /// <summary>Executes a SQL query and returns the buffered set of mapped entities.</summary>
     Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
         FormattableString commandText,
@@ -71,6 +101,30 @@ public interface IInquiry
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class;
+
+    /// <summary>
+    /// Buffered list query with a struct materializer. <paramref name="capacityHint"/> (when &gt;= 0)
+    /// pre-sizes the result <c>List</c> to avoid grow-reallocations — the generated paged/keyset readers
+    /// pass the known row count (limit, or pageSize + 1).
+    /// </summary>
+    Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
+
+    /// <summary>Buffers rows from an immutable generated command definition.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => QueryListAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken, capacityHint);
 
     /// <summary>Returns the sole mapped entity, or <see langword="null"/> when no row is returned.</summary>
     /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
@@ -91,37 +145,6 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class;
 
-    // ---- Struct-materializer overloads (generated-store path) --------------------------
-    //
-    // These bypass the DI lookup that the class-materializer path needs and let the JIT
-    // specialize the pipeline body per concrete TMaterializer struct, so the per-row
-    // Materialize call inlines into the read loop. Generated stores pass
-    // default(SomeEntityStructMaterializer) — the struct has no fields and no state.
-
-    /// <summary>
-    /// Streams materialized rows using a struct materializer. JIT-specialized per
-    /// <typeparamref name="TMaterializer"/> so the per-row dispatch inlines.
-    /// </summary>
-    IAsyncEnumerable<TEntity> QueryAsync<TEntity, TMaterializer>(
-        InquiryCommand command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
-
-    /// <summary>
-    /// Buffered list query with a struct materializer. <paramref name="capacityHint"/> (when &gt;= 0)
-    /// pre-sizes the result <c>List</c> to avoid grow-reallocations — the generated paged/keyset readers
-    /// pass the known row count (limit, or pageSize + 1).
-    /// </summary>
-    Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
-        InquiryCommand command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default,
-        int capacityHint = -1)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
-
     /// <summary>Returns the sole mapped entity, or null when empty, using a struct materializer.</summary>
     /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
     Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(
@@ -130,6 +153,17 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>;
+
+    /// <summary>Returns the sole mapped entity, or null when empty, from a generated command.</summary>
+    /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
 
     /// <summary>
     /// Executes a command that returns multiple result sets and returns a grid reader to materialize them
@@ -142,6 +176,13 @@ public interface IInquiry
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Multi-result-set queries require the built-in DefaultInquiry.");
+
+    /// <summary>Executes a generated multi-result command.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => QueryMultipleAsync(command.ToInquiryCommand(), cancellationToken);
 
     // ---- Bulk insert -------------------------------------------------------------------
 
@@ -191,6 +232,13 @@ public interface IInquiry
     Task<int> ExecuteAsync(
         InquiryCommand command,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Executes a generated non-query command.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<int> ExecuteAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ExecuteAsync(command.ToInquiryCommand(), cancellationToken);
 
     /// <summary>
     /// Executes <paramref name="commandText"/> once per item in <paramref name="items"/>, binding
@@ -318,6 +366,13 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Scalar execution requires the built-in DefaultInquiry.");
 
+    /// <summary>Executes a generated scalar command.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ExecuteScalarAsync<T>(command.ToInquiryCommand(), cancellationToken);
+
     /// <summary>
     /// Executes a stored-procedure command and returns the post-execution value of the bound output
     /// (or return-value) parameter named <paramref name="readBackParameterName"/>, converted to
@@ -332,39 +387,13 @@ public interface IInquiry
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Stored-procedure output execution requires the built-in DefaultInquiry.");
 
-    // ---- Immutable generated-command path ---------------------------------------------
-
-    /// <summary>Streams rows from an immutable generated command definition.</summary>
+    /// <summary>Executes a generated procedure and reads an output or return parameter.</summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
+    Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
         InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
+        string readBackParameterName,
         CancellationToken cancellationToken = default)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-        => QueryAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
-
-    /// <summary>Buffers rows from an immutable generated command definition.</summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
-        InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default,
-        int capacityHint = -1)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-        => QueryListAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken, capacityHint);
-
-    /// <summary>Returns the sole mapped entity, or null when empty, from a generated command.</summary>
-    /// <exception cref="InvalidOperationException">The query returns more than one row.</exception>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
-        InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-        => QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+        => ExecuteProcedureScalarAsync<T>(command.ToInquiryCommand(), readBackParameterName, cancellationToken);
 
     /// <summary>
     /// Executes a generator-proven single-row query. Custom implementations retain validating
@@ -378,35 +407,6 @@ public interface IInquiry
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
         => QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
-
-    /// <summary>Executes a generated multi-result command.</summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        CancellationToken cancellationToken = default)
-        => QueryMultipleAsync(command.ToInquiryCommand(), cancellationToken);
-
-    /// <summary>Executes a generated non-query command.</summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<int> ExecuteAsync<TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        CancellationToken cancellationToken = default)
-        => ExecuteAsync(command.ToInquiryCommand(), cancellationToken);
-
-    /// <summary>Executes a generated scalar command.</summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<T> ExecuteScalarAsync<T, TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        CancellationToken cancellationToken = default)
-        => ExecuteScalarAsync<T>(command.ToInquiryCommand(), cancellationToken);
-
-    /// <summary>Executes a generated procedure and reads an output or return parameter.</summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<T> ExecuteProcedureScalarAsync<T, TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        string readBackParameterName,
-        CancellationToken cancellationToken = default)
-        => ExecuteProcedureScalarAsync<T>(command.ToInquiryCommand(), readBackParameterName, cancellationToken);
 
     // ---- Transactions -----------------------------------------------------------------
 
