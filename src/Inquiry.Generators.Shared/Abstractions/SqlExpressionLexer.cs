@@ -30,7 +30,8 @@ public static class SqlExpressionLexer
         var hasUserVariableAssignment = false;
         var hasUserVariableReference = false;
         StringBuilder? quotedIdentifier = null;
-        for (var i = 0; i < expression.Length; i++)
+        var i = 0;
+        while (i < expression.Length)
         {
             var c = expression[i];
             var next = i + 1 < expression.Length ? expression[i + 1] : '\0';
@@ -44,7 +45,13 @@ public static class SqlExpressionLexer
                 case State.Normal:
                     if (c == '\'' || c == '"' || c == '`' || c == '[')
                     {
-                        state = c == '\'' ? State.Single : c == '"' ? State.Double : c == '`' ? State.Backtick : State.Bracket;
+                        state = c switch
+                        {
+                            '\'' => State.Single,
+                            '"' => State.Double,
+                            '`' => State.Backtick,
+                            _ => State.Bracket,
+                        };
                         if (state is State.Backtick or State.Bracket)
                         {
                             quotedIdentifier = new StringBuilder();
@@ -145,10 +152,10 @@ public static class SqlExpressionLexer
 
                     break;
                 case State.Single:
-                    Quoted('\'', State.Single);
+                    Quoted('\'');
                     break;
                 case State.Double:
-                    Quoted('"', State.Double);
+                    Quoted('"');
                     break;
                 case State.Backtick:
                     Append(c);
@@ -214,7 +221,9 @@ public static class SqlExpressionLexer
                     break;
             }
 
-            void Quoted(char quote, State quotedState)
+            i++;
+
+            void Quoted(char quote)
             {
                 Append(c);
                 if (c == quote && next == quote)
@@ -315,12 +324,9 @@ public static class SqlExpressionLexer
             }
         }
 
-        foreach (var token in analysis.ValueIdentifierTokens)
+        foreach (var token in analysis.ValueIdentifierTokens.Where(mapped.Contains))
         {
-            if (mapped.Contains(token))
-            {
-                Add("references mapped column '" + token + "'");
-            }
+            Add("references mapped column '" + token + "'");
         }
 
         return failures;
@@ -354,12 +360,10 @@ public static class SqlExpressionLexer
             return false;
         }
 
-        if (policy is SqlExpressionCommentPolicy.MySql or SqlExpressionCommentPolicy.MariaDb)
+        if ((policy is SqlExpressionCommentPolicy.MySql or SqlExpressionCommentPolicy.MariaDb)
+            && (index + 2 >= value.Length || !char.IsWhiteSpace(value[index + 2])))
         {
-            if (index + 2 >= value.Length || !char.IsWhiteSpace(value[index + 2]))
-            {
-                return false;
-            }
+            return false;
         }
         length = 2;
         return true;

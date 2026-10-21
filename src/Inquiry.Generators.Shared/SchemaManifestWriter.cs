@@ -50,7 +50,8 @@ internal static class SchemaManifestWriter
         var bytes = 0;
         requiredChunkCount = 0;
         var overflow = false;
-        for (var i = 0; i < json.Length; i++)
+        var i = 0;
+        while (i < json.Length)
         {
             var scalarBytes = Utf8ByteCount(json, i, out var charCount);
             if (bytes + scalarBytes > ChunkByteLimit && b.Length > 0)
@@ -67,7 +68,7 @@ internal static class SchemaManifestWriter
             }
             b.Append(json, i, charCount);
             bytes += scalarBytes;
-            i += charCount - 1;
+            i += charCount;
         }
         if (b.Length > 0)
         {
@@ -171,7 +172,8 @@ internal static class SchemaManifestWriter
     private static void String(StringBuilder b, string value)
     {
         b.Append('"');
-        for (var i = 0; i < value.Length; i++)
+        var i = 0;
+        while (i < value.Length)
         {
             var c = value[i];
             switch (c)
@@ -212,6 +214,8 @@ internal static class SchemaManifestWriter
                     }
                     break;
             }
+
+            i++;
         }
         b.Append('"');
     }
