@@ -7,7 +7,7 @@ namespace Inquiry.MariaDb.Tests;
 /// <summary>
 /// End-to-end CRUD coverage for the MariaDB/MariaDB provider, executed against the shared Northwind
 /// schema. Each fact runs in its own throwaway database so parallel tests cannot collide on table
-/// state. Skipped automatically unless <see cref="MariaDbTestHarness.ConnectionStringEnvironmentVariable"/>
+/// state. Skipped automatically unless <c>MariaDbTestHarness.ConnectionStringEnvironmentVariable</c>
 /// is set.
 /// </summary>
 [Collection(MariaDbCollection.Name)]

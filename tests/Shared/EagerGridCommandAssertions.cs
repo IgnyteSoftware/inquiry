@@ -13,7 +13,7 @@ namespace Inquiry.Tests.Shared;
 /// </summary>
 /// <remarks>
 /// The earlier assertion was <c>Assert.Empty(recorder.Commands)</c> alone, which proves nothing about the
-/// round-trip count: <c>QueryMultipleAsync</c> then skipped <see cref="IInquiryCommandInterceptor"/>, so an
+/// round-trip count: <c>QueryMultipleAsync</c> then skipped <c>IInquiryCommandInterceptor</c>, so an
 /// empty recorder was satisfied by one grid command, by N grid commands, and by no query at all.
 /// </remarks>
 internal static class EagerGridCommandAssertions
@@ -195,7 +195,7 @@ internal static class EagerGridCommandAssertions
     ///   </item>
     ///   <item>
     ///     The recorder saw that same command, without a failure. Grids raise the
-    ///     <see cref="IInquiryCommandInterceptor"/> callbacks like every other path (#244), so a
+    ///     <c>IInquiryCommandInterceptor</c> callbacks like every other path (#244), so a
     ///     generated eager load that skipped them fails here.
     ///   </item>
     /// </list>

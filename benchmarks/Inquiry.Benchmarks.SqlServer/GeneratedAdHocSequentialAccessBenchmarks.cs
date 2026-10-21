@@ -89,7 +89,7 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     private IInquiry _inquiry = null!;
     private DbDataReader _dispatchReader = null!;
     private IInquiryEntityMaterializer<SequentialBenchmarkRow> _classMaterializer = null!;
-    private SequentialBenchmarkRowInquiryAdHocStructMaterializer _structMaterializer = default;
+    private readonly SequentialBenchmarkRowInquiryAdHocStructMaterializer _structMaterializer;
 
     [GlobalSetup]
     public void GlobalSetup()

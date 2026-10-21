@@ -51,6 +51,8 @@ internal sealed class SqliteTestHarness: IAsyncDisposable
     /// FK enforcement. Use for the rare tests that intentionally insert orphan-FK rows.
     /// Defaults to true (FK enforcement on), matching Microsoft.Data.Sqlite's default.
     /// </param>
+    /// <param name="configureOptions">Optional callback that adjusts the Inquiry options.</param>
+    /// <param name="configureServices">Optional callback that adds or replaces services.</param>
     public static async Task<SqliteTestHarness> CreateAsync(
         string schemaDdl,
         string? namePrefix = null,

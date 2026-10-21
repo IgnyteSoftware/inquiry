@@ -4,7 +4,7 @@ using Inquiry.Sqlite.Tests.Fixtures;
 namespace Inquiry.Sqlite.Tests;
 
 /// <summary>
-/// Pins the contract for <see cref="IInquiry.QuerySingleOrDefaultAsync{T}"/>: when the query
+/// Pins the contract for <c>IInquiry.QuerySingleOrDefaultAsync</c>: when the query
 /// returns more than one row the call must throw <see cref="InvalidOperationException"/>.
 ///
 /// Previously the pipeline asked the provider for <c>CommandBehavior.SingleRow</c>, which gives

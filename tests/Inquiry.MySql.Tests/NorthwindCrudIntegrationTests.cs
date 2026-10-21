@@ -7,7 +7,7 @@ namespace Inquiry.MySql.Tests;
 /// <summary>
 /// End-to-end CRUD coverage for the MySQL/MariaDB provider, executed against the shared Northwind
 /// schema. Each fact runs in its own throwaway database so parallel tests cannot collide on table
-/// state. Skipped automatically unless <see cref="MySqlTestHarness.ConnectionStringEnvironmentVariable"/>
+/// state. Skipped automatically unless <c>MySqlTestHarness.ConnectionStringEnvironmentVariable</c>
 /// is set.
 /// </summary>
 [Collection(MySqlCollection.Name)]
