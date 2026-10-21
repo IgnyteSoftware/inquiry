@@ -5,7 +5,7 @@ namespace Inquiry.Commands;
 /// <summary>
 /// Provides successful command execution details to Inquiry command interceptors.
 /// </summary>
-public sealed class InquiryCommandExecutedContext: InquiryCommandContext
+public sealed class InquiryCommandExecutedContext : InquiryCommandContext
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryCommandExecutedContext"/> class.

@@ -2,7 +2,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
 
-public partial class ScheduleItemStore: InquiryStore<ScheduleItem>
+public partial class ScheduleItemStore : InquiryStore<ScheduleItem>
 {
 
     [InquiryInsert]

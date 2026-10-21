@@ -1,6 +1,6 @@
 namespace Inquiry.IntegrationTesting;
 
-public sealed class SchemaFidelityException: Exception
+public sealed class SchemaFidelityException : Exception
 {
     public SchemaFidelityException(string message) : base(message) { }
 }

@@ -21,7 +21,7 @@ public sealed class Article
     public string Body { get; set; } = string.Empty;
 }
 
-public partial class ArticleStore: InquiryStore<Article>
+public partial class ArticleStore : InquiryStore<Article>
 {
     [InquiryInsert]
     public partial Task<Article?> InsertAsync(Article article, CancellationToken cancellationToken = default);

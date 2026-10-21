@@ -191,4 +191,4 @@ public class BatchMutationStrategyBenchmarks
 }
 
 [AttributeUsage(AttributeTargets.Method)]
-internal sealed class DirectDriverFloorAttribute: Attribute;
+internal sealed class DirectDriverFloorAttribute : Attribute;

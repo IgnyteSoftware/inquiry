@@ -3,7 +3,7 @@ using Inquiry.IntegrationTesting;
 
 namespace Inquiry.SqlServer.Tests.Fixtures;
 
-public sealed class SqlServerSchemaIntrospector: ISchemaIntrospector
+public sealed class SqlServerSchemaIntrospector : ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {

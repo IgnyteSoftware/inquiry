@@ -2,7 +2,7 @@ using Inquiry.Generators.Abstractions;
 
 namespace Inquiry.PostgreSql.Analyzer;
 
-internal sealed class PostgreSqlSqlBuilder: SqlBuilder
+internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 {
     public override bool ComputedColumnDeclaresStoreType => true;
 

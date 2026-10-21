@@ -8,7 +8,7 @@ using Testcontainers.MsSql;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
-public sealed class SqlServerCollectionBenchmarkDatabase: IAsyncDisposable
+public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
 {
     private static readonly string[] InsertOrder =
     [
@@ -252,7 +252,7 @@ public sealed class SqlServerCollectionBenchmarkDatabase: IAsyncDisposable
 
     public ValueTask DisposeAsync() => _container.DisposeAsync();
 
-    private sealed class SeedRowReader: DbDataReader
+    private sealed class SeedRowReader : DbDataReader
     {
         private readonly IEnumerator<SeedRow> _rows;
         private readonly FixtureTableSchema _schema;

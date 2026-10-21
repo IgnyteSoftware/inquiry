@@ -8,7 +8,7 @@ namespace Inquiry.Interceptors;
 /// within an <see cref="InquiryNPlusOneScope"/>. Logs a warning the first time a fingerprint
 /// reaches the configured threshold. Command text is logged; parameter values never are.
 /// </summary>
-public sealed class NPlusOneDetectionInterceptor: IInquiryCommandInterceptor
+public sealed class NPlusOneDetectionInterceptor : IInquiryCommandInterceptor
 {
     private readonly ILogger<NPlusOneDetectionInterceptor> _logger;
     private readonly int _threshold;

@@ -7,7 +7,7 @@ namespace Inquiry.Generators.Infrastructure;
 /// flow through the incremental generator pipeline must be value-equatable for caching to work;
 /// <see cref="ImmutableArray{T}"/> uses reference equality, so collections are wrapped in this type.
 /// </summary>
-internal readonly struct EquatableArray<T>: IEquatable<EquatableArray<T>>
+internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>
     where T : IEquatable<T>
 {
     private readonly ImmutableArray<T> _array;

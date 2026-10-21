@@ -22,7 +22,7 @@ internal static class EncryptionKeyHolder
 /// base64 of <c>nonce | tag | ciphertext</c>; a fresh random nonce per write means equal plaintexts
 /// encrypt to different ciphertexts.
 /// </summary>
-internal sealed class EncryptedStringConverter: IInquiryValueConverter<string, string>
+internal sealed class EncryptedStringConverter : IInquiryValueConverter<string, string>
 {
     private const int NonceSize = 12;
     private const int TagSize = 16;
@@ -75,7 +75,7 @@ public sealed class SecretRecord
     public string Secret { get; set; } = string.Empty;
 }
 
-public partial class SecretRecordStore: InquiryStore<SecretRecord>
+public partial class SecretRecordStore : InquiryStore<SecretRecord>
 {
     [InquiryInsert]
     public partial Task<SecretRecord?> InsertAsync(SecretRecord record, CancellationToken cancellationToken = default);

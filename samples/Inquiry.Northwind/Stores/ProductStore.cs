@@ -8,11 +8,11 @@ namespace Inquiry.Northwind.Stores;
 [InquiryWhere("Discontinued", OpenGroups = 1, Not = true)]
 [InquiryWhere("UnitsInStock", Compare.LessThan, Or = true, CloseGroups = 1)]
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class AvailableStockAttribute: Attribute
+public sealed class AvailableStockAttribute : Attribute
 {
 }
 
-public partial class ProductStore: InquiryStore<Product>
+public partial class ProductStore : InquiryStore<Product>
 {
 
     [InquirySelectAll]

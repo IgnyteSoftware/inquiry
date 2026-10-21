@@ -6,7 +6,7 @@ namespace Inquiry.SqlServer.Tests.Fixtures;
 
 /// <summary>Starts one SQL Server container for the whole assembly. If Docker is unreachable,
 /// <see cref="IsAvailable"/> stays false and tests skip rather than fail.</summary>
-public sealed class SqlServerContainerFixture: IAsyncLifetime
+public sealed class SqlServerContainerFixture : IAsyncLifetime
 {
     public const string ImageEnvVarName = "INQUIRY_SQLSERVER_IMAGE";
     private const string DefaultImage =

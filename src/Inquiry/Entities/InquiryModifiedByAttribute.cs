@@ -13,7 +13,7 @@ namespace Inquiry.Entities;
 /// Predicate updates (<c>[InquiryUpdate]</c> with <c>[InquiryWhere]</c>) never touch auditing columns.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryModifiedByAttribute: InquiryColumnAttribute
+public sealed class InquiryModifiedByAttribute : InquiryColumnAttribute
 {
     /// <summary>Initializes the attribute mapping the property to a column of the same name.</summary>
     public InquiryModifiedByAttribute()

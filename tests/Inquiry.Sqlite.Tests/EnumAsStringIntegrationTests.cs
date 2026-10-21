@@ -23,7 +23,7 @@ public sealed class Ticket
     public TicketStatus? Prior { get; set; }
 }
 
-public partial class TicketStore: InquiryStore<Ticket>
+public partial class TicketStore : InquiryStore<Ticket>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Ticket ticket, CancellationToken cancellationToken = default);

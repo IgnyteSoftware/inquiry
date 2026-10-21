@@ -11,6 +11,6 @@ namespace Inquiry.Stores;
 /// selects the generated command shape.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryUpdateAttribute: Attribute
+public sealed class InquiryUpdateAttribute : Attribute
 {
 }

@@ -3,7 +3,7 @@ using Inquiry.IntegrationTesting;
 
 namespace Inquiry.PostgreSql.Tests.Fixtures;
 
-public sealed class PostgreSqlSchemaIntrospector: ISchemaIntrospector
+public sealed class PostgreSqlSchemaIntrospector : ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {

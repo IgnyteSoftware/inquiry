@@ -11,7 +11,7 @@ namespace Inquiry.MariaDb.Analyzer;
 /// <see cref="CreateSqlBuilder"/> for the dialect-specific SQL.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class InquiryMariaDbGenerator: InquiryGeneratorBase
+public sealed class InquiryMariaDbGenerator : InquiryGeneratorBase
 {
     protected override string Dialect => "MariaDb";
 

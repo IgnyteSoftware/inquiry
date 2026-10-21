@@ -4,7 +4,7 @@ namespace Inquiry.Stores;
 /// Generates a method that selects a single row by primary key.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquirySelectOneByKeyAttribute: Attribute
+public sealed class InquirySelectOneByKeyAttribute : Attribute
 {
     /// <summary>
     /// Gets or sets a value indicating whether the generated query includes soft-deleted rows. Has an

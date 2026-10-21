@@ -13,7 +13,7 @@ namespace Inquiry.Stores;
 /// <see cref="CloseGroups"/>, and <see cref="Not"/> for explicit Boolean grouping.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-public sealed class InquiryWhereAttribute: Attribute
+public sealed class InquiryWhereAttribute : Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryWhereAttribute"/> class.

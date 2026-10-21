@@ -14,6 +14,6 @@ namespace Inquiry.Entities;
 /// sourced from the database clock (<c>CURRENT_TIMESTAMP</c> / <c>GETUTCDATE()</c> / <c>now()</c>).
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquirySoftDeleteAttribute: Attribute
+public sealed class InquirySoftDeleteAttribute : Attribute
 {
 }

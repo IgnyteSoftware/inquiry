@@ -2,7 +2,7 @@ using Inquiry.Generators.Abstractions;
 
 namespace Inquiry.SqlServer.Analyzer;
 
-internal sealed class SqlServerSqlBuilder: SqlBuilder
+internal sealed class SqlServerSqlBuilder : SqlBuilder
 {
     public override BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.Adaptive;
     public override int BatchInsertAdaptiveThreshold => 250;

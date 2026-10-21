@@ -36,7 +36,7 @@ public sealed class MixedBenchPost
     public List<MixedBenchTag>? Tags { get; set; }
 }
 
-public partial class MixedBenchPostStore: InquiryStore<MixedBenchPost>
+public partial class MixedBenchPostStore : InquiryStore<MixedBenchPost>
 {
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<MixedBenchPost> SelectAllWithAuthorAndTagsAsync(CancellationToken cancellationToken = default);

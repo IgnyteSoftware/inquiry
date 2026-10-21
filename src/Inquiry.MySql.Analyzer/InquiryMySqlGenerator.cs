@@ -11,7 +11,7 @@ namespace Inquiry.MySql.Analyzer;
 /// <see cref="CreateSqlBuilder"/> for the dialect-specific SQL.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class InquiryMySqlGenerator: InquiryGeneratorBase
+public sealed class InquiryMySqlGenerator : InquiryGeneratorBase
 {
     protected override string Dialect => "MySql";
 

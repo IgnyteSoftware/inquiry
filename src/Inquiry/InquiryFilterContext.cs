@@ -83,7 +83,7 @@ public static class InquiryFilterContext
     }
 
     /// <summary>Restores the previous ambient value in the current async flow.</summary>
-    public readonly struct Scope: System.IDisposable
+    public readonly struct Scope : System.IDisposable
     {
         private readonly ScopeFrame? _frame;
 

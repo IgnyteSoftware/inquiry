@@ -66,19 +66,19 @@ public sealed class EagerMixedPost
     public IReadOnlyList<EagerMixedTag> Tags { get; set; } = new List<EagerMixedTag>();
 }
 
-public partial class EagerMixedAuthorStore: InquiryStore<EagerMixedAuthor>
+public partial class EagerMixedAuthorStore : InquiryStore<EagerMixedAuthor>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(EagerMixedAuthor author, CancellationToken cancellationToken = default);
 }
 
-public partial class EagerMixedTagStore: InquiryStore<EagerMixedTag>
+public partial class EagerMixedTagStore : InquiryStore<EagerMixedTag>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(EagerMixedTag tag, CancellationToken cancellationToken = default);
 }
 
-public partial class EagerMixedPostStore: InquiryStore<EagerMixedPost>
+public partial class EagerMixedPostStore : InquiryStore<EagerMixedPost>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(EagerMixedPost post, CancellationToken cancellationToken = default);

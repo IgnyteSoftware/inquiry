@@ -99,7 +99,7 @@ public sealed class AddInquiryAssemblyOverloadTests
     }
 
     // Sentinel registration discovered only when the test explicitly passes this assembly.
-    private sealed class SentinelRegistration: IInquiryServiceRegistration
+    private sealed class SentinelRegistration : IInquiryServiceRegistration
     {
         public void AddServices(IServiceCollection services)
         {

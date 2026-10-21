@@ -16,7 +16,7 @@ public sealed class JsonPathDoc
     public string Data { get; set; } = string.Empty;
 }
 
-public partial class JsonPathDocStore: InquiryStore<JsonPathDoc>
+public partial class JsonPathDocStore : InquiryStore<JsonPathDoc>
 {
     [InquiryInsert]
     public partial Task<JsonPathDoc?> InsertAsync(JsonPathDoc doc, CancellationToken cancellationToken = default);

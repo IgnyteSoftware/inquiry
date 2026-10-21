@@ -11,7 +11,7 @@ public sealed class MySqlKeyOnlyItem
     public long? Id { get; set; }
 }
 
-public partial class MySqlKeyOnlyItemStore: InquiryStore<MySqlKeyOnlyItem>
+public partial class MySqlKeyOnlyItemStore : InquiryStore<MySqlKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(MySqlKeyOnlyItem item, CancellationToken ct = default);

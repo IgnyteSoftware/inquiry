@@ -10,7 +10,7 @@ namespace Inquiry.Generators.Abstractions;
 /// divergence (such as MariaDB-native <c>RETURNING</c>) lands in the concrete subclass. JSON_TABLE
 /// collection binding is shared here so both engines use one type mapping and extraction contract.
 /// </summary>
-public abstract class MySqlFamilySqlBuilder: SqlBuilder
+public abstract class MySqlFamilySqlBuilder : SqlBuilder
 {
     // lower_case_table_names is deployment-specific; ASCII-lower is the portable manifest envelope.
     public override string GetPhysicalIdentifierSortKey(string identifier) => FoldAscii(identifier, upper: false);

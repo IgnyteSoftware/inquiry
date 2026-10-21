@@ -14,7 +14,7 @@ namespace Inquiry.MariaDb.Tests.Fixtures;
 /// configured <see cref="ServiceProvider"/>. The database is dropped on disposal so parallel test
 /// classes never collide on table state.
 /// </summary>
-internal sealed class MariaDbTestHarness: IAsyncDisposable
+internal sealed class MariaDbTestHarness : IAsyncDisposable
 {
     private readonly string _adminConnectionString;
     private readonly string _databaseName;

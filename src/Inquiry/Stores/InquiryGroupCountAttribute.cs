@@ -7,7 +7,7 @@ namespace Inquiry.Stores;
 /// column's .NET type. Respects the soft-delete active filter when the entity declares one.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryGroupCountAttribute: Attribute
+public sealed class InquiryGroupCountAttribute : Attribute
 {
     /// <summary>Initializes a new instance with the column to group by.</summary>
     /// <param name="column">The mapped property or column name to GROUP BY.</param>

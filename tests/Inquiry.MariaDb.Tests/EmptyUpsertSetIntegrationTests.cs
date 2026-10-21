@@ -11,7 +11,7 @@ public sealed class MariaDbKeyOnlyItem
     public long? Id { get; set; }
 }
 
-public partial class MariaDbKeyOnlyItemStore: InquiryStore<MariaDbKeyOnlyItem>
+public partial class MariaDbKeyOnlyItemStore : InquiryStore<MariaDbKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(MariaDbKeyOnlyItem item, CancellationToken ct = default);

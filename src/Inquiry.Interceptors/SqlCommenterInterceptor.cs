@@ -19,7 +19,7 @@ namespace Inquiry.Interceptors;
 /// correlation matters more than prepared reuse, or scope it to diagnosis sessions; see the
 /// Interceptors article for the trade-off.
 /// </remarks>
-public sealed class SqlCommenterInterceptor: IInquiryCommandInterceptor
+public sealed class SqlCommenterInterceptor : IInquiryCommandInterceptor
 {
     private readonly string? _staticFragment;
 

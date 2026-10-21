@@ -30,7 +30,7 @@ namespace Inquiry.Generators;
 /// This type supports only the first-party provider analyzers in this repository. It is not a stable
 /// provider SDK and may change without a major-version release.
 /// </remarks>
-public abstract class InquiryGeneratorBase: IIncrementalGenerator
+public abstract class InquiryGeneratorBase : IIncrementalGenerator
 {
     private const string DialectAttributeFullName = "Inquiry.InquiryDialectAttribute";
 

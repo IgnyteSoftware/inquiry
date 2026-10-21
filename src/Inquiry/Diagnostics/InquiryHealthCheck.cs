@@ -9,7 +9,7 @@ namespace Inquiry.Diagnostics;
 /// including any configured retry and failover. Registered via <c>AddInquiry()</c> on
 /// <c>IHealthChecksBuilder</c>.
 /// </summary>
-internal sealed class InquiryHealthCheck: IHealthCheck
+internal sealed class InquiryHealthCheck : IHealthCheck
 {
     private readonly IInquiryConnectionFactory _connectionFactory;
 

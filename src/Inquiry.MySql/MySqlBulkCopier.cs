@@ -10,7 +10,7 @@ namespace Inquiry.MySql;
 /// Bulk-insert implementation backed by MySqlConnector's <see cref="MySqlBulkCopy"/>, which streams
 /// rows to the server via <c>LOAD DATA LOCAL INFILE</c>.
 /// </summary>
-internal sealed class MySqlBulkCopier: IInquiryBulkCopier
+internal sealed class MySqlBulkCopier : IInquiryBulkCopier
 {
     private readonly IInquiryConnectionFactory _connectionFactory;
 

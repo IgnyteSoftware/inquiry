@@ -13,7 +13,7 @@ public sealed class BatchChunkItem
     public string Value { get; set; } = string.Empty;
 }
 
-public partial class BatchChunkItemStore: InquiryStore<BatchChunkItem>
+public partial class BatchChunkItemStore : InquiryStore<BatchChunkItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<BatchChunkItem> items, CancellationToken cancellationToken = default);
@@ -35,7 +35,7 @@ public sealed class DefaultOnlyBatchItem
     public int Id { get; set; }
 }
 
-public partial class DefaultOnlyBatchItemStore: InquiryStore<DefaultOnlyBatchItem>
+public partial class DefaultOnlyBatchItemStore : InquiryStore<DefaultOnlyBatchItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAllAsync(

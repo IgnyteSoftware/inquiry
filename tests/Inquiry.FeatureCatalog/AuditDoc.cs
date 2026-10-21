@@ -19,7 +19,7 @@ public sealed class AuditDoc
     public DateTime ModifiedAt { get; set; }
 }
 
-public partial class AuditDocStore: InquiryStore<AuditDoc>
+public partial class AuditDocStore : InquiryStore<AuditDoc>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(AuditDoc doc, CancellationToken cancellationToken = default);

@@ -8,7 +8,7 @@ namespace Inquiry.Transactions;
 /// Default implementation of <see cref="IInquiryTransaction"/>.
 /// Rolls back automatically on disposal unless <see cref="CommitAsync"/> has been called.
 /// </summary>
-internal sealed class InquiryTransaction: InquiryTransactionBase
+internal sealed class InquiryTransaction : InquiryTransactionBase
 {
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;

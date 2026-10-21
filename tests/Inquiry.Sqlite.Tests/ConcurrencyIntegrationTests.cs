@@ -20,7 +20,7 @@ public sealed class VersionedDoc
     public int Version { get; set; }
 }
 
-public partial class VersionedDocStore: InquiryStore<VersionedDoc>
+public partial class VersionedDocStore : InquiryStore<VersionedDoc>
 {
     [InquiryInsert]
     public partial Task<VersionedDoc?> InsertAsync(VersionedDoc doc, CancellationToken cancellationToken = default);

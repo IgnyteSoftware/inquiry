@@ -11,6 +11,6 @@ namespace Inquiry.Entities;
 /// with a source-generated <c>JsonSerializerContext</c> if AOT safety is required.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryJsonAttribute: Attribute
+public sealed class InquiryJsonAttribute : Attribute
 {
 }

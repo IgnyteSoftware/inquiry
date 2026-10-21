@@ -254,7 +254,7 @@ public sealed class InquiryGridInterceptorTests
         await transaction.CommitAsync();
     }
 
-    private sealed class EventInterceptor: IInquiryCommandInterceptor
+    private sealed class EventInterceptor : IInquiryCommandInterceptor
     {
         public List<string> Events { get; } = new();
         public List<DbCommand> Commands { get; } = new();
@@ -297,7 +297,7 @@ public sealed class InquiryGridInterceptorTests
         }
     }
 
-    private sealed class MemoryConnectionFactory: IInquiryConnectionFactory
+    private sealed class MemoryConnectionFactory : IInquiryConnectionFactory
     {
         public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
         {

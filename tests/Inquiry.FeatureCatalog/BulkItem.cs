@@ -25,7 +25,7 @@ public sealed class BulkItem
     public string? Note { get; set; }
 }
 
-public partial class BulkItemStore: InquiryStore<BulkItem>
+public partial class BulkItemStore : InquiryStore<BulkItem>
 {
     [InquiryBulkInsert]
     public partial Task<long> BulkInsertAsync(IEnumerable<BulkItem> items, CancellationToken cancellationToken = default);

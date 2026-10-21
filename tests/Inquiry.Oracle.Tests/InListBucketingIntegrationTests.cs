@@ -14,7 +14,7 @@ public sealed class OracleInItem
     public int? CategoryId { get; set; }
 }
 
-public partial class OracleInItemStore: InquiryStore<OracleInItem>
+public partial class OracleInItemStore : InquiryStore<OracleInItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(OracleInItem item, CancellationToken cancellationToken = default);

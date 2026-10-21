@@ -945,7 +945,7 @@ public sealed class TransactionStateMachineTests
         return services.BuildServiceProvider().GetRequiredService<IInquiry>();
     }
 
-    private sealed class ThrowingInitializeCommandFactory: IInquiryConnectionFactory
+    private sealed class ThrowingInitializeCommandFactory : IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         public ThrowingInitializeCommandFactory(string connectionString) => _connectionString = connectionString;
@@ -988,7 +988,7 @@ public sealed class TransactionStateMachineTests
         public TaskCompletionSource AllowTerminal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private sealed class FailingConnectionFactory: IInquiryConnectionFactory
+    private sealed class FailingConnectionFactory : IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         private readonly FailureMode _failureMode;
@@ -1010,7 +1010,7 @@ public sealed class TransactionStateMachineTests
     }
 
     /// <summary>Forwards everything to the inner SqliteConnection except BeginDbTransaction (returns the failing wrapper) and CreateDbCommand (returns a wrapper that unwraps the failing tx when assigning Transaction).</summary>
-    private sealed class FailingConnection: DbConnection
+    private sealed class FailingConnection : DbConnection
     {
         private readonly SqliteConnection _inner;
         private readonly FailureMode _failureMode;
@@ -1060,7 +1060,7 @@ public sealed class TransactionStateMachineTests
     }
 
     /// <summary>Wraps SqliteCommand. Forwards everything to the inner — the Transaction setter unwraps a FailingTransaction to assign the real underlying SqliteTransaction (which is what the SqliteCommand requires).</summary>
-    private sealed class FailingCommand: DbCommand
+    private sealed class FailingCommand : DbCommand
     {
         private readonly SqliteCommand _inner;
         private readonly FailureMode _failureMode;
@@ -1136,7 +1136,7 @@ public sealed class TransactionStateMachineTests
 
     }
 
-    private sealed class FailingReader: DbDataReader
+    private sealed class FailingReader : DbDataReader
     {
         private readonly DbDataReader _inner;
         private readonly FailureMode _failureMode;
@@ -1188,7 +1188,7 @@ public sealed class TransactionStateMachineTests
     }
 
     /// <summary>Wraps a real SqliteTransaction. Throws on Commit or Rollback based on FailureMode.</summary>
-    private sealed class FailingTransaction: DbTransaction
+    private sealed class FailingTransaction : DbTransaction
     {
         internal DbTransaction Inner { get; }
         private readonly FailureMode _failureMode;
@@ -1300,7 +1300,7 @@ public sealed class TransactionStateMachineTests
 /// metadata in this compilation (it can't see Northwind's entities, which live in a
 /// referenced compiled assembly).
 /// </summary>
-internal sealed partial class GeneratedItemAtomicService: InquiryStore<GeneratedItem>
+internal sealed partial class GeneratedItemAtomicService : InquiryStore<GeneratedItem>
 {
     private readonly GeneratedItemStore _items;
 

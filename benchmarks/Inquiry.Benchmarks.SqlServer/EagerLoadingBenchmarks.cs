@@ -32,7 +32,7 @@ public sealed class BenchmarkM2MOrderProduct
     [InquiryKey] public long ProductId { get; set; }
 }
 
-public partial class BenchmarkM2MOrderStore: InquiryStore<BenchmarkM2MOrder>
+public partial class BenchmarkM2MOrderStore : InquiryStore<BenchmarkM2MOrder>
 {
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<BenchmarkM2MOrder> AllWithProductsAsync(CancellationToken cancellationToken = default);

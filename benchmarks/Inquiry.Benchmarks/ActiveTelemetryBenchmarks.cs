@@ -171,7 +171,7 @@ public class ActiveTelemetryBenchmarks
     }
 
     private sealed class Row { public int Id { get; init; } }
-    private readonly struct RowMaterializer: IInquiryEntityMaterializer<Row>
+    private readonly struct RowMaterializer : IInquiryEntityMaterializer<Row>
     {
         public bool IsInquirySequentialAccessSafe => true;
         public Row Materialize(DbDataReader reader) => new() { Id = reader.GetInt32(0) };

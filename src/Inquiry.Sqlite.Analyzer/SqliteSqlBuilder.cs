@@ -2,7 +2,7 @@ using Inquiry.Generators.Abstractions;
 
 namespace Inquiry.Sqlite.Analyzer;
 
-internal sealed class SqliteSqlBuilder: SqlBuilder
+internal sealed class SqliteSqlBuilder : SqlBuilder
 {
     public override BatchInsertStrategy BatchInsertStrategy => BatchInsertStrategy.Row;
 

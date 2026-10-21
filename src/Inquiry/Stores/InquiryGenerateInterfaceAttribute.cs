@@ -8,6 +8,6 @@ namespace Inquiry.Stores;
 /// forward to the concrete store, so services can depend on (and mock) <c>I{StoreName}</c>.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryGenerateInterfaceAttribute: Attribute
+public sealed class InquiryGenerateInterfaceAttribute : Attribute
 {
 }

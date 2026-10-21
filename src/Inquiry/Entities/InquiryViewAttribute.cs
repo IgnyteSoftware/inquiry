@@ -19,7 +19,7 @@ namespace Inquiry.Entities;
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryViewAttribute: Attribute
+public sealed class InquiryViewAttribute : Attribute
 {
     /// <summary>Initializes the attribute, binding the entity to a view of the same name.</summary>
     public InquiryViewAttribute()

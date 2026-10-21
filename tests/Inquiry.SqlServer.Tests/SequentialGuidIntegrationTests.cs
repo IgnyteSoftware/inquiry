@@ -14,7 +14,7 @@ public sealed class SeqDoc
     public string Title { get; set; } = string.Empty;
 }
 
-public partial class SeqDocStore: InquiryStore<SeqDoc>
+public partial class SeqDocStore : InquiryStore<SeqDoc>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(SeqDoc doc, CancellationToken cancellationToken = default);

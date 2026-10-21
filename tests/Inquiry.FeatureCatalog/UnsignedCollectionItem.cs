@@ -4,12 +4,12 @@ using Inquiry.Stores;
 namespace Inquiry.FeatureCatalog;
 
 public readonly record struct UnsignedCollectionCode(uint Value);
-public sealed class UnsignedCollectionCodeConverter: IInquiryValueConverter<UnsignedCollectionCode, uint>
+public sealed class UnsignedCollectionCodeConverter : IInquiryValueConverter<UnsignedCollectionCode, uint>
 {
     public uint ToProvider(UnsignedCollectionCode value) => value.Value;
     public UnsignedCollectionCode FromProvider(uint value) => new(value);
 }
-public enum UnsignedCollectionState: uint { High = 3_000_000_000u, Max = uint.MaxValue }
+public enum UnsignedCollectionState : uint { High = 3_000_000_000u, Max = uint.MaxValue }
 
 [InquiryTable("UnsignedCollectionItem")]
 public sealed class UnsignedCollectionItem
@@ -23,7 +23,7 @@ public sealed class UnsignedCollectionItem
     [InquiryColumn] public UnsignedCollectionState State { get; set; }
 }
 
-public partial class UnsignedCollectionItemStore: InquiryStore<UnsignedCollectionItem>
+public partial class UnsignedCollectionItemStore : InquiryStore<UnsignedCollectionItem>
 {
     [InquiryInsert] public partial Task<int> InsertAsync(UnsignedCollectionItem item, CancellationToken ct = default);
     [InquirySelectAllByPredicate, InquiryWhere("S8", Compare.In)] public partial Task<IReadOnlyList<UnsignedCollectionItem>> ByS8Async(IReadOnlyList<sbyte> values, CancellationToken ct = default);
@@ -41,7 +41,7 @@ public sealed class UnsignedConverterKey
 {
     [InquiryKey(Converter = typeof(UnsignedCollectionCodeConverter))] public UnsignedCollectionCode Id { get; set; }
 }
-public partial class UnsignedConverterKeyStore: InquiryStore<UnsignedConverterKey>
+public partial class UnsignedConverterKeyStore : InquiryStore<UnsignedConverterKey>
 {
     [InquiryInsert] public partial Task<int> InsertAsync(UnsignedConverterKey item, CancellationToken ct = default);
     [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IReadOnlyList<UnsignedCollectionCode> ids, CancellationToken ct = default);
@@ -52,7 +52,7 @@ public sealed class UnsignedEnumKey
 {
     [InquiryKey] public UnsignedCollectionState Id { get; set; }
 }
-public partial class UnsignedEnumKeyStore: InquiryStore<UnsignedEnumKey>
+public partial class UnsignedEnumKeyStore : InquiryStore<UnsignedEnumKey>
 {
     [InquiryInsert] public partial Task<int> InsertAsync(UnsignedEnumKey item, CancellationToken ct = default);
     [InquiryDelete, InquiryWhere("Id", Compare.In)] public partial Task<int> DeleteAllAsync(IReadOnlyList<UnsignedCollectionState> ids, CancellationToken ct = default);

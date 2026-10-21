@@ -192,17 +192,17 @@ public sealed class GeneratedCommandRuntimeTests
         Assert.Equal(0, Assert.IsType<FallbackInquiry>(inquiry).BeginTransactionCallCount);
     }
 
-    private readonly struct NullMaterializer: IInquiryEntityMaterializer<object>
+    private readonly struct NullMaterializer : IInquiryEntityMaterializer<object>
     {
         public object Materialize(DbDataReader reader) => new();
     }
 
-    private sealed class ThrowingDisposeEnumerable<T>(IReadOnlyList<T> items): IEnumerable<T>
+    private sealed class ThrowingDisposeEnumerable<T>(IReadOnlyList<T> items) : IEnumerable<T>
     {
         public IEnumerator<T> GetEnumerator() => new Enumerator(items);
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator(IReadOnlyList<T> items): IEnumerator<T>
+        private sealed class Enumerator(IReadOnlyList<T> items) : IEnumerator<T>
         {
             private int _index = -1;
 
@@ -214,7 +214,7 @@ public sealed class GeneratedCommandRuntimeTests
         }
     }
 
-    private sealed class CommandTypeInterceptor: IInquiryCommandInterceptor
+    private sealed class CommandTypeInterceptor : IInquiryCommandInterceptor
     {
         public CommandType? CommandType { get; private set; }
         public long? ParameterValue { get; private set; }
@@ -227,7 +227,7 @@ public sealed class GeneratedCommandRuntimeTests
         }
     }
 
-    private sealed class SqliteConnectionFactory: IInquiryConnectionFactory
+    private sealed class SqliteConnectionFactory : IInquiryConnectionFactory
     {
         private readonly string _connectionString;
 
@@ -241,7 +241,7 @@ public sealed class GeneratedCommandRuntimeTests
         }
     }
 
-    private sealed class FallbackInquiry: IInquiry
+    private sealed class FallbackInquiry : IInquiry
     {
         private readonly Exception? _executeException;
 

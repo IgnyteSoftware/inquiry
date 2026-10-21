@@ -20,7 +20,7 @@ namespace Inquiry.Testing;
 /// Parameters are snapshotted at executing-time because <see cref="DbParameterCollection"/> is
 /// mutable and may be reused or cleared after execution.
 /// </remarks>
-public sealed class RecordingCommandInterceptor: IInquiryCommandInterceptor
+public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
 {
     private readonly object _lock = new();
     private readonly List<RecordedCommand> _commands = new();

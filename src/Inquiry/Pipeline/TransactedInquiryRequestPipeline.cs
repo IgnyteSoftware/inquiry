@@ -20,7 +20,7 @@ namespace Inquiry.Pipeline;
 /// operations: starting a second op while another is in flight throws
 /// <see cref="InvalidOperationException"/> instead of corrupting the connection state.
 /// </remarks>
-internal sealed class TransactedInquiryRequestPipeline: IInquiryRequestPipeline
+internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
 {
     private const CommandBehavior ReadBehavior = CommandBehavior.SingleResult;
 
@@ -116,7 +116,7 @@ internal sealed class TransactedInquiryRequestPipeline: IInquiryRequestPipeline
         throw new System.InvalidOperationException();
     }
 
-    internal readonly struct InFlightLease: IDisposable
+    internal readonly struct InFlightLease : IDisposable
     {
         private readonly TransactedInquiryRequestPipeline _pipeline;
         private readonly bool _terminal;

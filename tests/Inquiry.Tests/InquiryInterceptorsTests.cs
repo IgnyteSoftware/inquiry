@@ -15,7 +15,7 @@ namespace Inquiry.Tests;
 /// </summary>
 public sealed class InquiryInterceptorsTests
 {
-    private sealed class ListLoggerProvider: ILoggerProvider
+    private sealed class ListLoggerProvider : ILoggerProvider
     {
         public List<string> Messages { get; } = new();
 
@@ -25,7 +25,7 @@ public sealed class InquiryInterceptorsTests
         {
         }
 
-        private sealed class ListLogger: ILogger
+        private sealed class ListLogger : ILogger
         {
             private readonly List<string> _messages;
             public ListLogger(List<string> messages) => _messages = messages;
@@ -45,7 +45,7 @@ public sealed class InquiryInterceptorsTests
 
     /// <summary>Captures the command text seen at execution time. Registered last, so it observes
     /// any mutations earlier interceptors (the sqlcommenter) made.</summary>
-    private sealed class CapturingInterceptor: IInquiryCommandInterceptor
+    private sealed class CapturingInterceptor : IInquiryCommandInterceptor
     {
         public string LastCommandText { get; private set; } = string.Empty;
 
@@ -56,7 +56,7 @@ public sealed class InquiryInterceptorsTests
         }
     }
 
-    private sealed class Harness: IAsyncDisposable
+    private sealed class Harness : IAsyncDisposable
     {
         public required ServiceProvider Services { get; init; }
         public required SqliteConnection Keeper { get; init; }

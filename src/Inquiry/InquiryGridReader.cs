@@ -23,7 +23,7 @@ namespace Inquiry;
 /// Registered command interceptors observe the same lifetime: <c>CommandExecutedAsync</c> runs when the
 /// grid is disposed, and <c>CommandFailedAsync</c> runs instead when a read fails.
 /// </remarks>
-public sealed class InquiryGridReader: IAsyncDisposable
+public sealed class InquiryGridReader : IAsyncDisposable
 {
     private readonly DbDataReader _reader;
     private readonly DbCommand _command;

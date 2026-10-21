@@ -3,7 +3,7 @@ using Inquiry.IntegrationTesting;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
 
-public sealed class SqliteSchemaIntrospector: ISchemaIntrospector
+public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection connection, CancellationToken ct = default)
     {

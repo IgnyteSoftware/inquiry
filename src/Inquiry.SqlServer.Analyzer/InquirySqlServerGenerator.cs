@@ -11,7 +11,7 @@ namespace Inquiry.SqlServer.Analyzer;
 /// <see cref="CreateSqlBuilder"/> for the dialect-specific SQL.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class InquirySqlServerGenerator: InquiryGeneratorBase
+public sealed class InquirySqlServerGenerator : InquiryGeneratorBase
 {
     protected override string Dialect => "SqlServer";
 

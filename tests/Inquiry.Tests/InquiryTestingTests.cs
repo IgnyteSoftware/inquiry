@@ -378,7 +378,7 @@ public sealed class InquiryTestingTests
         public bool Disposed { get; set; }
     }
 
-    private sealed class DisposalProbe: IDisposable
+    private sealed class DisposalProbe : IDisposable
     {
         private readonly DisposalState _state;
 
@@ -401,7 +401,7 @@ public sealed class InquiryTestingTests
             => new() { Name = "generated-" + Interlocked.Increment(ref _sequence) };
     }
 
-    public class FailingSandboxProxy: DispatchProxy
+    public class FailingSandboxProxy : DispatchProxy
     {
         public FailingSandboxProxyMode Mode { get; set; }
         public Transactions.IInquiryTransaction? Transaction { get; set; }
@@ -438,7 +438,7 @@ public sealed class InquiryTestingTests
         SuccessfulTransaction,
     }
 
-    private sealed class FailingScopeDisposable: IDisposable
+    private sealed class FailingScopeDisposable : IDisposable
     {
         public void Dispose() => throw new InvalidOperationException("scope disposal failure");
     }

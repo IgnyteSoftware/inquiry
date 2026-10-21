@@ -7,6 +7,6 @@ namespace Inquiry.Stores;
 /// affected-row count or the inserted entity; the return type selects the generated command shape.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryInsertAttribute: Attribute
+public sealed class InquiryInsertAttribute : Attribute
 {
 }

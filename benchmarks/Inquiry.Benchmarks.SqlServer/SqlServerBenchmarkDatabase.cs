@@ -22,7 +22,7 @@ namespace Inquiry.Benchmarks.SqlServer;
 /// a non-pooled factory so it pays per-operation context construction — the same lifecycle ADO,
 /// Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-public sealed class SqlServerBenchmarkDatabase: IAsyncDisposable
+public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
 {
     public const int SequentialAdHocRowCount = 32;
     public const int SequentialAdHocPayloadSize = 64 * 1024;

@@ -16,7 +16,7 @@ public sealed class Member
     public string Email { get; set; } = string.Empty;
 }
 
-public partial class MemberStore: InquiryStore<Member>
+public partial class MemberStore : InquiryStore<Member>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Member member, CancellationToken cancellationToken = default);

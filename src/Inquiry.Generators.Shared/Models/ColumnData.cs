@@ -13,7 +13,7 @@ namespace Inquiry.Generators.Models;
 /// object initializer, so optional additions (e.g. concurrency-token, soft-delete, converter, DDL
 /// metadata) default cleanly and parallel feature branches do not conflict on the constructor.
 /// </remarks>
-internal sealed record ColumnData: IColumn
+internal sealed record ColumnData : IColumn
 {
     public LocationData? Location { get; init; }
     public required string PropertyName { get; init; }

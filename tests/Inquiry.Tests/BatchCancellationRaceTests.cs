@@ -492,7 +492,7 @@ public sealed class BatchCancellationRaceTests
     /// PROVE they took it — a change to interceptor-activation semantics that silently rerouted them
     /// to the executor would otherwise leave them green while testing a different site.
     /// </summary>
-    private sealed class RouteWitnessInterceptor: IInquiryCommandInterceptor
+    private sealed class RouteWitnessInterceptor : IInquiryCommandInterceptor
     {
         private int _executingCount;
 
@@ -510,7 +510,7 @@ public sealed class BatchCancellationRaceTests
     /// Nth ExecuteNonQueryAsync across the factory's lifetime, the command cancels the caller's token
     /// while "in flight", still executes the real statement, and reports its success.
     /// </summary>
-    private sealed class LyingSuccessConnectionFactory: IInquiryConnectionFactory
+    private sealed class LyingSuccessConnectionFactory : IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         private readonly CancellationTokenSource _cancellation;
@@ -613,7 +613,7 @@ public sealed class BatchCancellationRaceTests
         }
     }
 
-    private sealed class LyingConnection: DbConnection
+    private sealed class LyingConnection : DbConnection
     {
         private readonly SqliteConnection _inner;
         private readonly LyingSuccessConnectionFactory _factory;
@@ -679,7 +679,7 @@ public sealed class BatchCancellationRaceTests
     /// completion — the commit-time face of the lying-success driver. The inner SQLite transaction
     /// genuinely commits; what is faked is only that the "driver" swallowed the interruption.
     /// </summary>
-    private sealed class LyingTransaction: DbTransaction
+    private sealed class LyingTransaction : DbTransaction
     {
         private readonly SqliteTransaction _inner;
         private readonly LyingSuccessConnectionFactory _factory;
@@ -732,7 +732,7 @@ public sealed class BatchCancellationRaceTests
         }
     }
 
-    private sealed class LyingCommand: DbCommand
+    private sealed class LyingCommand : DbCommand
     {
         private readonly SqliteCommand _inner;
         private readonly LyingSuccessConnectionFactory _factory;
@@ -789,7 +789,7 @@ public sealed class BatchCancellationRaceTests
     /// A DbBatch over real SQLite commands. One batch execute counts as one execute for the lie index,
     /// so the lying success lands on a whole batch, the way a provider DbBatch reports it.
     /// </summary>
-    private sealed class LyingBatch: DbBatch
+    private sealed class LyingBatch : DbBatch
     {
         private readonly SqliteConnection _connection;
         private readonly LyingSuccessConnectionFactory _factory;
@@ -856,7 +856,7 @@ public sealed class BatchCancellationRaceTests
         }
     }
 
-    private sealed class LyingBatchCommand: DbBatchCommand
+    private sealed class LyingBatchCommand : DbBatchCommand
     {
         internal LyingBatchCommand(SqliteCommand inner) => Inner = inner;
 
@@ -871,7 +871,7 @@ public sealed class BatchCancellationRaceTests
         public override DbParameter CreateParameter() => Inner.CreateParameter();
     }
 
-    private sealed class LyingBatchCommandCollection: DbBatchCommandCollection
+    private sealed class LyingBatchCommandCollection : DbBatchCommandCollection
     {
         private readonly List<DbBatchCommand> _items = new();
 

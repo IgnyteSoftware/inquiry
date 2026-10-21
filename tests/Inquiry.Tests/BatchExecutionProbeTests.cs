@@ -243,7 +243,7 @@ public sealed class BatchExecutionProbeTests
         Assert.Throws<InvalidOperationException>(() => source.GetEnumerator());
     }
 
-    private sealed class ProbeTestConnectionFactory: IInquiryConnectionFactory
+    private sealed class ProbeTestConnectionFactory : IInquiryConnectionFactory
     {
         internal SqliteConnection? LastConnection { get; private set; }
         internal int InitializeCommandCount { get; private set; }
@@ -277,7 +277,7 @@ public sealed class BatchExecutionProbeTests
         }
     }
 
-    private sealed class DisposalRecordingConnection: DbConnection
+    private sealed class DisposalRecordingConnection : DbConnection
     {
         internal int AsyncDisposeCount { get; private set; }
         internal int SyncDisposeCount { get; private set; }
@@ -309,7 +309,7 @@ public sealed class BatchExecutionProbeTests
         }
     }
 
-    private sealed class DisposalRecordingFactory: IInquiryConnectionFactory, IAsyncDisposable, IDisposable
+    private sealed class DisposalRecordingFactory : IInquiryConnectionFactory, IAsyncDisposable, IDisposable
     {
         internal int AsyncDisposeCount { get; private set; }
         internal int SyncDisposeCount { get; private set; }
@@ -326,7 +326,7 @@ public sealed class BatchExecutionProbeTests
         }
     }
 
-    private sealed class BatchRecordingConnection: DbConnection
+    private sealed class BatchRecordingConnection : DbConnection
     {
         internal BatchRecordingBatch? LastBatch { get; private set; }
         public override bool CanCreateBatch => true;
@@ -348,7 +348,7 @@ public sealed class BatchExecutionProbeTests
         }
     }
 
-    private sealed class BatchRecordingBatch: DbBatch
+    private sealed class BatchRecordingBatch : DbBatch
     {
         private readonly BatchRecordingCommandCollection _commands = new();
 
@@ -387,7 +387,7 @@ public sealed class BatchExecutionProbeTests
         }
     }
 
-    private sealed class BatchRecordingCommand: DbBatchCommand
+    private sealed class BatchRecordingCommand : DbBatchCommand
     {
         private readonly SqliteCommand _command = new();
 
@@ -398,7 +398,7 @@ public sealed class BatchExecutionProbeTests
         public override DbParameter CreateParameter() => _command.CreateParameter();
     }
 
-    private sealed class BatchRecordingCommandCollection: DbBatchCommandCollection
+    private sealed class BatchRecordingCommandCollection : DbBatchCommandCollection
     {
         private readonly List<DbBatchCommand> _items = new();
 

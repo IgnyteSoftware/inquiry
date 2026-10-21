@@ -6,7 +6,7 @@ namespace Inquiry.MySql.Tests.Fixtures;
 
 /// <summary>Starts one MySQL container for the whole assembly. If Docker is unreachable,
 /// <see cref="IsAvailable"/> stays false and tests skip rather than fail.</summary>
-public sealed class MySqlContainerFixture: IAsyncLifetime
+public sealed class MySqlContainerFixture : IAsyncLifetime
 {
     private MySqlContainer? _container;
 

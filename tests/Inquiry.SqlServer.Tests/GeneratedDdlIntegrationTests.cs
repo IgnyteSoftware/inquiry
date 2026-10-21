@@ -23,7 +23,7 @@ public sealed class GeneratedRowversionDocument
     public byte[] Version { get; set; } = [];
 }
 
-public partial class GeneratedRowversionDocumentStore: InquiryStore<GeneratedRowversionDocument>
+public partial class GeneratedRowversionDocumentStore : InquiryStore<GeneratedRowversionDocument>
 {
     [InquiryInsert]
     public partial Task<GeneratedRowversionDocument?> InsertAsync(GeneratedRowversionDocument document, CancellationToken cancellationToken = default);

@@ -9,6 +9,6 @@ namespace Inquiry.Stores;
 /// soft-delete behavior.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryDeleteAttribute: Attribute
+public sealed class InquiryDeleteAttribute : Attribute
 {
 }

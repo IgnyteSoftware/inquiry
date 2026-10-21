@@ -35,7 +35,7 @@ public sealed class SchemaWidget
     [InquiryColumn(Computed = "score + 1")] public int Total { get; set; }
 }
 
-public partial class SchemaWidgetStore: InquiryStore<SchemaWidget>
+public partial class SchemaWidgetStore : InquiryStore<SchemaWidget>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(SchemaWidget widget, CancellationToken cancellationToken = default);

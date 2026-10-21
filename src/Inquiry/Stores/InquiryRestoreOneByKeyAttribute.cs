@@ -7,6 +7,6 @@ namespace Inquiry.Stores;
 /// (true when a row was affected). Requires the entity to declare an <c>[InquirySoftDelete]</c> column.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryRestoreOneByKeyAttribute: Attribute
+public sealed class InquiryRestoreOneByKeyAttribute : Attribute
 {
 }

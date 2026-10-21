@@ -510,19 +510,19 @@ public sealed class SequentialAccessReadBehaviorTests
     private static TestItem Materialize(DbDataReader reader)
         => new(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2) == 1);
 
-    private sealed class TestItemClassMaterializer: IInquiryEntityMaterializer<TestItem>
+    private sealed class TestItemClassMaterializer : IInquiryEntityMaterializer<TestItem>
     {
         public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
     }
 
-    private sealed class GeneratedSafeTestItemMaterializer: IInquiryEntityMaterializer<TestItem>
+    private sealed class GeneratedSafeTestItemMaterializer : IInquiryEntityMaterializer<TestItem>
     {
         public bool IsInquirySequentialAccessSafe => true;
 
         public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
     }
 
-    private sealed class ReverseOrdinalTestItemMaterializer: IInquiryEntityMaterializer<TestItem>
+    private sealed class ReverseOrdinalTestItemMaterializer : IInquiryEntityMaterializer<TestItem>
     {
         public TestItem Materialize(DbDataReader reader)
         {
@@ -533,7 +533,7 @@ public sealed class SequentialAccessReadBehaviorTests
         }
     }
 
-    private sealed class CountingCapabilityMaterializer: IInquiryEntityMaterializer<TestItem>
+    private sealed class CountingCapabilityMaterializer : IInquiryEntityMaterializer<TestItem>
     {
         public int CapabilityReadCount { get; private set; }
 
@@ -549,7 +549,7 @@ public sealed class SequentialAccessReadBehaviorTests
         public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
     }
 
-    private sealed class ThrowingCapabilityMaterializer: IInquiryEntityMaterializer<TestItem>
+    private sealed class ThrowingCapabilityMaterializer : IInquiryEntityMaterializer<TestItem>
     {
         public int CapabilityReadCount { get; private set; }
 
@@ -565,12 +565,12 @@ public sealed class SequentialAccessReadBehaviorTests
         public TestItem Materialize(DbDataReader reader) => throw new InvalidOperationException("Not reached.");
     }
 
-    private readonly struct TestItemStructMaterializer: IInquiryEntityMaterializer<TestItem>
+    private readonly struct TestItemStructMaterializer : IInquiryEntityMaterializer<TestItem>
     {
         public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
     }
 
-    private sealed class RecordingConnectionFactory: IInquiryConnectionFactory
+    private sealed class RecordingConnectionFactory : IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         private readonly List<CommandBehavior> _recorded;
@@ -589,7 +589,7 @@ public sealed class SequentialAccessReadBehaviorTests
         }
     }
 
-    private sealed class TransactedPipelineScope: IAsyncDisposable
+    private sealed class TransactedPipelineScope : IAsyncDisposable
     {
         private readonly DbTransaction _transaction;
         private readonly DbConnection _connection;
@@ -624,7 +624,7 @@ public sealed class SequentialAccessReadBehaviorTests
         Single,
     }
 
-    private sealed class RecordingDbConnection: DbConnection
+    private sealed class RecordingDbConnection : DbConnection
     {
         private readonly SqliteConnection _inner;
         private readonly List<CommandBehavior> _recorded;
@@ -674,7 +674,7 @@ public sealed class SequentialAccessReadBehaviorTests
         public override ValueTask DisposeAsync() => _inner.DisposeAsync();
     }
 
-    private sealed class RecordingDbCommand: DbCommand
+    private sealed class RecordingDbCommand : DbCommand
     {
         private readonly SqliteCommand _inner;
         private readonly List<CommandBehavior> _recorded;

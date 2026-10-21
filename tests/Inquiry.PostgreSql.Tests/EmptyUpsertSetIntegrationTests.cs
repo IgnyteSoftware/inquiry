@@ -13,7 +13,7 @@ public sealed class PgKeyOnlyItem
     public long? Id { get; set; }
 }
 
-public partial class PgKeyOnlyItemStore: InquiryStore<PgKeyOnlyItem>
+public partial class PgKeyOnlyItemStore : InquiryStore<PgKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(PgKeyOnlyItem item, CancellationToken ct = default);

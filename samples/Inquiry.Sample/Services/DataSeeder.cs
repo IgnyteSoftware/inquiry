@@ -16,7 +16,7 @@ namespace Inquiry.Sample.Services;
 /// to exercise every generated store method (CRUD, eager-load, by-field, transactional
 /// insert) without standing up the full historical fixture.
 /// </remarks>
-public sealed class DataSeeder: IInquiryDataSeeder
+public sealed class DataSeeder : IInquiryDataSeeder
 {
     private readonly CustomerStore _customers;
     private readonly EmployeeStore _employees;

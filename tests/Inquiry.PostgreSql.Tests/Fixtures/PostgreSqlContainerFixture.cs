@@ -5,7 +5,7 @@ namespace Inquiry.PostgreSql.Tests.Fixtures;
 
 /// <summary>Starts one PostgreSQL container for the whole assembly. If Docker is unreachable,
 /// <see cref="IsAvailable"/> stays false and tests skip rather than fail.</summary>
-public sealed class PostgreSqlContainerFixture: IAsyncLifetime
+public sealed class PostgreSqlContainerFixture : IAsyncLifetime
 {
     private PostgreSqlContainer? _container;
 

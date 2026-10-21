@@ -14,7 +14,7 @@ public sealed class Sale
     public decimal Amount { get; set; }
 }
 
-public partial class SaleStore: InquiryStore<Sale>
+public partial class SaleStore : InquiryStore<Sale>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Sale sale, CancellationToken cancellationToken = default);

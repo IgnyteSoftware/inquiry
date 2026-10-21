@@ -57,7 +57,7 @@ public static class M2MMaterializationProbe
     }
 }
 
-public sealed class M2MTitleConverter: IInquiryValueConverter<string, string>
+public sealed class M2MTitleConverter : IInquiryValueConverter<string, string>
 {
     public string ToProvider(string model) => model;
     public string FromProvider(string provider)
@@ -67,7 +67,7 @@ public sealed class M2MTitleConverter: IInquiryValueConverter<string, string>
     }
 }
 
-public sealed class M2MJunctionProductIdConverter: IInquiryValueConverter<long, long>
+public sealed class M2MJunctionProductIdConverter : IInquiryValueConverter<long, long>
 {
     public long ToProvider(long model) => model;
     public long FromProvider(long provider)
@@ -264,7 +264,7 @@ public sealed class M2MOrderProduct
     public bool IsActive { get; set; } = true;
 }
 
-public partial class M2MOrderStore: InquiryStore<M2MOrder>
+public partial class M2MOrderStore : InquiryStore<M2MOrder>
 {
     [InquiryInsert]
     public partial Task<M2MOrder?> InsertAsync(M2MOrder order, CancellationToken cancellationToken = default);
@@ -279,13 +279,13 @@ public partial class M2MOrderStore: InquiryStore<M2MOrder>
     public partial IAsyncEnumerable<M2MOrder> AllIncludingDeletedWithProductsAsync(CancellationToken cancellationToken = default);
 }
 
-public partial class M2MProductStore: InquiryStore<M2MProduct>
+public partial class M2MProductStore : InquiryStore<M2MProduct>
 {
     [InquiryInsert]
     public partial Task<M2MProduct?> InsertAsync(M2MProduct product, CancellationToken cancellationToken = default);
 }
 
-public partial class M2MOrderProductStore: InquiryStore<M2MOrderProduct>
+public partial class M2MOrderProductStore : InquiryStore<M2MOrderProduct>
 {
     [InquiryInsert]
     public partial Task<int> LinkAsync(M2MOrderProduct link, CancellationToken cancellationToken = default);
@@ -353,7 +353,7 @@ public sealed class M2MPostTag
     public bool IsDeleted { get; set; }
 }
 
-public partial class M2MPostStore: InquiryStore<M2MPost>
+public partial class M2MPostStore : InquiryStore<M2MPost>
 {
     [InquiryInsert]
     public partial Task<M2MPost?> InsertAsync(M2MPost post, CancellationToken cancellationToken = default);
@@ -368,13 +368,13 @@ public partial class M2MPostStore: InquiryStore<M2MPost>
     public partial IAsyncEnumerable<M2MPost> AllIncludingDeletedWithTagsAsync(CancellationToken cancellationToken = default);
 }
 
-public partial class M2MTagStore: InquiryStore<M2MTag>
+public partial class M2MTagStore : InquiryStore<M2MTag>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(M2MTag tag, CancellationToken cancellationToken = default);
 }
 
-public partial class M2MPostTagStore: InquiryStore<M2MPostTag>
+public partial class M2MPostTagStore : InquiryStore<M2MPostTag>
 {
     [InquiryInsert]
     public partial Task<int> LinkAsync(M2MPostTag link, CancellationToken cancellationToken = default);
@@ -427,7 +427,7 @@ public sealed class M2MBook
     public List<M2MAuthor> Authors { get; set; } = new();
 }
 
-public partial class M2MAuthorStore: InquiryStore<M2MAuthor>
+public partial class M2MAuthorStore : InquiryStore<M2MAuthor>
 {
     [InquirySelectOneByKeyEager]
     public partial Task<M2MAuthor?> GetWithBooksAsync(long id, CancellationToken cancellationToken = default);
@@ -439,7 +439,7 @@ public partial class M2MAuthorStore: InquiryStore<M2MAuthor>
     public partial IAsyncEnumerable<M2MAuthor> AllIncludingDeletedWithBooksAsync(CancellationToken cancellationToken = default);
 }
 
-public partial class M2MBookStore: InquiryStore<M2MBook>
+public partial class M2MBookStore : InquiryStore<M2MBook>
 {
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<M2MBook> AllWithAuthorsAsync(CancellationToken cancellationToken = default);

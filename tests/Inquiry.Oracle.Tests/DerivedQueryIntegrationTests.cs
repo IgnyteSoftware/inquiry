@@ -17,7 +17,7 @@ public sealed class DerivedPerson
     public string City { get; set; } = string.Empty;
 }
 
-public partial class DerivedPersonStore: InquiryStore<DerivedPerson>
+public partial class DerivedPersonStore : InquiryStore<DerivedPerson>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(DerivedPerson person, CancellationToken cancellationToken = default);

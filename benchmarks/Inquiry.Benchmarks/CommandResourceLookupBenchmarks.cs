@@ -77,12 +77,12 @@ public class CommandResourceLookupBenchmarks
         set.Dispose();
     }
 
-    private sealed class NoOpResource: IInquiryExecutionResource
+    private sealed class NoOpResource : IInquiryExecutionResource
     {
         public void Dispose() { }
     }
 
-    private sealed class LegacyResourceSet: IDisposable
+    private sealed class LegacyResourceSet : IDisposable
     {
         private readonly object _gate = new();
         private List<IInquiryExecutionResource>? _items = new();

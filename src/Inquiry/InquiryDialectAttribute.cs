@@ -12,7 +12,7 @@ namespace Inquiry;
 /// this attribute explicitly to disambiguate; otherwise ambiguity surfaces as <c>INQ014</c>.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryDialectAttribute: Attribute
+public sealed class InquiryDialectAttribute : Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryDialectAttribute"/> class.

@@ -20,7 +20,7 @@ namespace Inquiry.Benchmarks.Oracle;
 /// backstop). EF uses a non-pooled factory so it pays per-operation context construction — the same
 /// lifecycle ADO, Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-public sealed class OracleBenchmarkDatabase: IAsyncDisposable
+public sealed class OracleBenchmarkDatabase : IAsyncDisposable
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static OracleContainer? _container;

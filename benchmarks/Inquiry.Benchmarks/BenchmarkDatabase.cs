@@ -24,7 +24,7 @@ namespace Inquiry.Benchmarks;
 /// accumulate rows from earlier inserts. The seeded row count is parameterized so a class
 /// can drive both the 1 000-row and 100 000-row tiers via a <c>[Params]</c> field.
 /// </remarks>
-public sealed class BenchmarkDatabase: IAsyncDisposable
+public sealed class BenchmarkDatabase : IAsyncDisposable
 {
     public const int DefaultSeedRows = 1000;
 

@@ -9,7 +9,7 @@ namespace Inquiry.Interceptors;
 /// Outside a scope the interceptor is a single <see langword="null"/> check — zero allocation,
 /// zero cost.
 /// </summary>
-public sealed class InquiryNPlusOneScope: IDisposable
+public sealed class InquiryNPlusOneScope : IDisposable
 {
     private static readonly AsyncLocal<InquiryNPlusOneScope?> _current = new();
 

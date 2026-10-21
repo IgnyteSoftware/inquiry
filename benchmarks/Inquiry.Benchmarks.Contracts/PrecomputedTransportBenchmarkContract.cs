@@ -4,7 +4,7 @@ using BenchmarkDotNet.Attributes;
 namespace Inquiry.Benchmarks.Contracts;
 
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class PrecomputedTransportBenchmarkAttribute: Attribute;
+public sealed class PrecomputedTransportBenchmarkAttribute : Attribute;
 
 public static class PrecomputedTransportBenchmarkContract
 {

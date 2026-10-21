@@ -2,7 +2,7 @@ namespace Inquiry.Entities;
 
 /// <summary>Overrides a computed-column SQL expression for one provider.</summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
-public sealed class InquiryComputedExpressionAttribute: Attribute
+public sealed class InquiryComputedExpressionAttribute : Attribute
 {
     /// <summary>Creates a provider-specific computed-expression override.</summary>
     /// <param name="providerId">Stable lowercase provider id.</param>

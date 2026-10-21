@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Inquiry.Benchmarks.Contracts.Fixtures;
 
-public sealed class SeedRow: IEquatable<SeedRow>
+public sealed class SeedRow : IEquatable<SeedRow>
 {
     public SeedRow(string table, int ordinal, IReadOnlyDictionary<string, object?> values)
     {
@@ -55,7 +55,7 @@ public static class FixtureChecksum
     }
 }
 
-public sealed class FixtureChecksumAccumulator: IDisposable
+public sealed class FixtureChecksumAccumulator : IDisposable
 {
     private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 

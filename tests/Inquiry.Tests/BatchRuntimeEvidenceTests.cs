@@ -655,7 +655,7 @@ public sealed class BatchRuntimeEvidenceTests
             static _ => false,
             parametersPerItem: 1);
 
-    private sealed class LifecycleRecordingInterceptor: IInquiryCommandInterceptor
+    private sealed class LifecycleRecordingInterceptor : IInquiryCommandInterceptor
     {
         private readonly CancellationTokenSource? _cancellation;
         private readonly int? _cancelAtValue;
@@ -745,7 +745,7 @@ public sealed class BatchRuntimeEvidenceTests
         internal List<DbTransaction?> BatchTransactions { get; } = new();
     }
 
-    private sealed class RecordingFactory: IInquiryConnectionFactory
+    private sealed class RecordingFactory : IInquiryConnectionFactory
     {
         private readonly RecordingState _state;
         private readonly InquiryBatchExecutionMode _mode;
@@ -768,7 +768,7 @@ public sealed class BatchRuntimeEvidenceTests
             => _state.InitializedChunkSizes.Add(itemCount);
     }
 
-    private sealed class RecordingConnection: DbConnection
+    private sealed class RecordingConnection : DbConnection
     {
         private readonly RecordingState _state;
 
@@ -814,7 +814,7 @@ public sealed class BatchRuntimeEvidenceTests
         }
     }
 
-    private sealed class RecordingTransaction: DbTransaction
+    private sealed class RecordingTransaction : DbTransaction
     {
         private readonly RecordingConnection _connection;
         private readonly RecordingState _state;
@@ -891,7 +891,7 @@ public sealed class BatchRuntimeEvidenceTests
         }
     }
 
-    private sealed class RecordingCommand: DbCommand
+    private sealed class RecordingCommand : DbCommand
     {
         private readonly RecordingState _state;
         private DbTransaction? _transaction;
@@ -982,7 +982,7 @@ public sealed class BatchRuntimeEvidenceTests
         }
     }
 
-    private sealed class RecordingBatch: DbBatch
+    private sealed class RecordingBatch : DbBatch
     {
         private readonly RecordingState _state;
         private readonly RecordingBatchCommandCollection _commands = new();
@@ -1046,7 +1046,7 @@ public sealed class BatchRuntimeEvidenceTests
         }
     }
 
-    private sealed class RecordingBatchCommand: DbBatchCommand
+    private sealed class RecordingBatchCommand : DbBatchCommand
     {
         private readonly bool _canCreateParameter;
 
@@ -1060,7 +1060,7 @@ public sealed class BatchRuntimeEvidenceTests
         public override DbParameter CreateParameter() => new RecordingParameter();
     }
 
-    private sealed class RecordingBatchCommandCollection: DbBatchCommandCollection
+    private sealed class RecordingBatchCommandCollection : DbBatchCommandCollection
     {
         private readonly List<DbBatchCommand> _items = new();
 
@@ -1079,7 +1079,7 @@ public sealed class BatchRuntimeEvidenceTests
         protected override void SetBatchCommand(int index, DbBatchCommand batchCommand) => _items[index] = batchCommand;
     }
 
-    private sealed class RecordingParameter: DbParameter
+    private sealed class RecordingParameter : DbParameter
     {
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
@@ -1092,7 +1092,7 @@ public sealed class BatchRuntimeEvidenceTests
         public override void ResetDbType() { }
     }
 
-    private sealed class RecordingParameterCollection: DbParameterCollection
+    private sealed class RecordingParameterCollection : DbParameterCollection
     {
         private readonly List<DbParameter> _items = new();
         public override int Count => _items.Count;
@@ -1124,7 +1124,7 @@ public sealed class BatchRuntimeEvidenceTests
             => _items[IndexOf(parameterName)] = value;
     }
 
-    private sealed class ThrowingDisposeEnumerable: IEnumerable<int>
+    private sealed class ThrowingDisposeEnumerable : IEnumerable<int>
     {
         private readonly IReadOnlyList<int> _items;
 
@@ -1132,7 +1132,7 @@ public sealed class BatchRuntimeEvidenceTests
         public IEnumerator<int> GetEnumerator() => new Enumerator(_items);
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator: IEnumerator<int>
+        private sealed class Enumerator : IEnumerator<int>
         {
             private readonly IReadOnlyList<int> _items;
             private int _index = -1;

@@ -53,7 +53,7 @@ public sealed class SingleProviderDIContractTests
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite");
     }
 
-    private sealed class FakeFactory: IInquiryConnectionFactory
+    private sealed class FakeFactory : IInquiryConnectionFactory
     {
         public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
             => throw new NotImplementedException();

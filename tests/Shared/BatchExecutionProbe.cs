@@ -208,7 +208,7 @@ internal sealed class BatchExecutionProbe
     }
 }
 
-internal sealed class ProbingInquiryConnectionFactory: IInquiryConnectionFactory, IAsyncDisposable, IDisposable
+internal sealed class ProbingInquiryConnectionFactory : IInquiryConnectionFactory, IAsyncDisposable, IDisposable
 {
     private readonly IInquiryConnectionFactory _inner;
     private readonly BatchExecutionProbe _probe;
@@ -270,7 +270,7 @@ internal sealed class ProbingInquiryConnectionFactory: IInquiryConnectionFactory
     }
 }
 
-internal sealed class ProbingDbConnection: DbConnection
+internal sealed class ProbingDbConnection : DbConnection
 {
     private readonly DbConnection _inner;
     private readonly BatchExecutionProbe _probe;
@@ -344,7 +344,7 @@ internal sealed class ProbingDbConnection: DbConnection
     }
 }
 
-internal sealed class ProbingDbBatch: DbBatch
+internal sealed class ProbingDbBatch : DbBatch
 {
     private readonly DbBatch _inner;
     private readonly BatchExecutionProbe _probe;
@@ -412,7 +412,7 @@ internal sealed class ProbingDbBatch: DbBatch
     }
 }
 
-internal sealed class ExecutionBoundaryEnumerable<T>: IEnumerable<T>
+internal sealed class ExecutionBoundaryEnumerable<T> : IEnumerable<T>
 {
     private readonly IReadOnlyList<T> _items;
     private readonly Func<int> _readExecutionCount;
@@ -439,7 +439,7 @@ internal sealed class ExecutionBoundaryEnumerable<T>: IEnumerable<T>
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-    private sealed class Enumerator: IEnumerator<T>
+    private sealed class Enumerator : IEnumerator<T>
     {
         private readonly ExecutionBoundaryEnumerable<T> _owner;
         private int _index = -1;
@@ -459,7 +459,7 @@ internal sealed class ExecutionBoundaryEnumerable<T>: IEnumerable<T>
     }
 }
 
-internal sealed class SinglePassCancellingEnumerable<T>: IEnumerable<T>
+internal sealed class SinglePassCancellingEnumerable<T> : IEnumerable<T>
 {
     private readonly IReadOnlyList<T> _items;
     private readonly CancellationTokenSource _cancellation;
@@ -497,7 +497,7 @@ internal sealed class SinglePassCancellingEnumerable<T>: IEnumerable<T>
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-    private sealed class Enumerator: IEnumerator<T>
+    private sealed class Enumerator : IEnumerator<T>
     {
         private readonly SinglePassCancellingEnumerable<T> _owner;
         private int _index = -1;

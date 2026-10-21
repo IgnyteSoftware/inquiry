@@ -13,7 +13,7 @@ namespace Inquiry.Sqlite.Tests.Fixtures;
 /// shared in-memory DB persists for the lifetime of this harness; disposing
 /// releases everything in the right order.
 /// </summary>
-internal sealed class SqliteTestHarness: IAsyncDisposable
+internal sealed class SqliteTestHarness : IAsyncDisposable
 {
     private readonly SqliteConnection _keeper;
 

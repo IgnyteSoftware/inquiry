@@ -6,7 +6,7 @@ namespace Inquiry.PostgreSql.Tests;
 
 public readonly record struct PostgreSqlWallClock(DateTime Value);
 
-public sealed class PostgreSqlWallClockConverter: IInquiryValueConverter<PostgreSqlWallClock, DateTime>
+public sealed class PostgreSqlWallClockConverter : IInquiryValueConverter<PostgreSqlWallClock, DateTime>
 {
     public DateTime ToProvider(PostgreSqlWallClock model) => model.Value;
     public PostgreSqlWallClock FromProvider(DateTime provider) => new(provider);
@@ -31,7 +31,7 @@ public sealed class PostgreSqlDateTimeItem
     public DateTimeOffset OffsetAt { get; set; }
 }
 
-public partial class PostgreSqlDateTimeItemStore: InquiryStore<PostgreSqlDateTimeItem>
+public partial class PostgreSqlDateTimeItemStore : InquiryStore<PostgreSqlDateTimeItem>
 {
     [InquiryInsert]
     public partial Task<PostgreSqlDateTimeItem?> InsertAsync(PostgreSqlDateTimeItem item, CancellationToken cancellationToken = default);

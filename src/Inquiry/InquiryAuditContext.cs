@@ -43,7 +43,7 @@ public static class InquiryAuditContext
     }
 
     /// <summary>Restores the previous ambient value in the current async flow.</summary>
-    public readonly struct Scope: System.IDisposable
+    public readonly struct Scope : System.IDisposable
     {
         private readonly ScopeFrame? _frame;
 

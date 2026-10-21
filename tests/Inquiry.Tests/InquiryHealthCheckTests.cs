@@ -59,7 +59,7 @@ public sealed class InquiryHealthCheckTests
             tags: null),
     };
 
-    private sealed class HealthTestConnectionFactory: IInquiryConnectionFactory
+    private sealed class HealthTestConnectionFactory : IInquiryConnectionFactory
     {
         private readonly bool _failOpen;
 

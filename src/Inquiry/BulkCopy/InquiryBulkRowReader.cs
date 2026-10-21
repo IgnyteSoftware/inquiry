@@ -11,7 +11,7 @@ namespace Inquiry.BulkCopy;
 /// <see cref="FieldCount"/>, name/ordinal lookup — and throws for everything else.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class InquiryBulkRowReader<TEntity>: DbDataReader
+public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     where TEntity : class
 {
     private readonly InquiryBulkInsertDefinition<TEntity> _definition;

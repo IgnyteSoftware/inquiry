@@ -161,7 +161,7 @@ public sealed class InquiryRespawnerTests(PostgreSqlContainerFixture fixture)
         await command.ExecuteNonQueryAsync();
     }
 
-    private sealed class RecordingFactory(string connectionString): IInquiryConnectionFactory
+    private sealed class RecordingFactory(string connectionString) : IInquiryConnectionFactory
     {
         public NpgsqlConnection? LastConnection { get; private set; }
         public CancellationToken LastToken { get; private set; }

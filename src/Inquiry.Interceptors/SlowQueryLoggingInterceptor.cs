@@ -15,7 +15,7 @@ namespace Inquiry.Interceptors;
 /// carries the duration and the command text; parameter values are never logged (same posture
 /// as Inquiry's telemetry).
 /// </summary>
-public sealed class SlowQueryLoggingInterceptor: IInquiryCommandInterceptor
+public sealed class SlowQueryLoggingInterceptor : IInquiryCommandInterceptor
 {
     private readonly ILogger<SlowQueryLoggingInterceptor> _logger;
     private readonly TimeSpan _threshold;

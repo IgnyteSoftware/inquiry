@@ -8,7 +8,7 @@ namespace Inquiry.Benchmarks.SqlServer.Ef;
 /// default, so EF's default quoted output resolves correctly against unquoted DDL names.
 /// Reuses the <see cref="SqlServerEfShipper"/> POCO to keep this project self-contained.
 /// </summary>
-public sealed class SqlServerShipperContext: DbContext
+public sealed class SqlServerShipperContext : DbContext
 {
     public SqlServerShipperContext(DbContextOptions<SqlServerShipperContext> options) : base(options) { }
 

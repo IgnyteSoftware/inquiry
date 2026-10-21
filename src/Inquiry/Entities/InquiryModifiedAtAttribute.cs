@@ -12,7 +12,7 @@ namespace Inquiry.Entities;
 /// generated client-side in UTC.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryModifiedAtAttribute: InquiryColumnAttribute
+public sealed class InquiryModifiedAtAttribute : InquiryColumnAttribute
 {
     /// <summary>Initializes the attribute mapping the property to a column of the same name.</summary>
     public InquiryModifiedAtAttribute()

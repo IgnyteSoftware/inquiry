@@ -29,7 +29,7 @@ namespace Inquiry.Pipeline;
 /// Generated query bodies snapshot <see cref="HasActiveInterceptors"/> before allocating interceptor
 /// state. With no active interceptor, command-context allocations and notification awaits are omitted.
 /// </remarks>
-internal sealed class InquiryRequestPipeline: IInquiryRequestPipeline
+internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 {
     private const CommandBehavior ReadBehavior = CommandBehavior.SingleResult;
 

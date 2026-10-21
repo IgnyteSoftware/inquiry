@@ -9,7 +9,7 @@ namespace Inquiry.Generators.Tests;
 /// </summary>
 public class SqlBuilderHelpersTests
 {
-    private sealed class TestSqlBuilder: SqlBuilder
+    private sealed class TestSqlBuilder : SqlBuilder
     {
         public override string DialectName => "Test";
         public override string ProviderId => "test";

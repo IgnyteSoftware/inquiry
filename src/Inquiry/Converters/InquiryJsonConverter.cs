@@ -14,7 +14,7 @@ namespace Inquiry.Converters;
 [EditorBrowsable(EditorBrowsableState.Never)]
 [RequiresUnreferencedCode("Reflection-based System.Text.Json serialization may break under trimming. For trimmed/NativeAOT applications, use a custom IInquiryValueConverter that serializes via a JsonSerializerContext.")]
 [RequiresDynamicCode("Reflection-based System.Text.Json serialization may require runtime code generation. For NativeAOT applications, use a custom IInquiryValueConverter that serializes via a JsonSerializerContext.")]
-public sealed class InquiryJsonConverter<T>: IInquiryValueConverter<T, string>
+public sealed class InquiryJsonConverter<T> : IInquiryValueConverter<T, string>
 {
     /// <inheritdoc/>
     public string ToProvider(T model) => JsonSerializer.Serialize(model);

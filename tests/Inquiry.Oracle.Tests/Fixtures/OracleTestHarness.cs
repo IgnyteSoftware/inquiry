@@ -15,7 +15,7 @@ namespace Inquiry.Oracle.Tests.Fixtures;
 /// collide on table state. The admin connection string (the gvenzl image's SYSTEM user) is supplied by
 /// <see cref="OracleContainerFixture"/>.
 /// </summary>
-internal sealed class OracleTestHarness: IAsyncDisposable
+internal sealed class OracleTestHarness : IAsyncDisposable
 {
     private readonly string _adminConnectionString;
     private readonly string _schemaUser;

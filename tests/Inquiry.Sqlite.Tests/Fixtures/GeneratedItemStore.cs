@@ -2,7 +2,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
 
-public partial class GeneratedItemStore: InquiryStore<GeneratedItem>
+public partial class GeneratedItemStore : InquiryStore<GeneratedItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(GeneratedItem item, CancellationToken cancellationToken = default);

@@ -3,7 +3,7 @@ using Inquiry.IntegrationTesting;
 
 namespace Inquiry.MySql.Tests.Fixtures;
 
-public sealed class MySqlSchemaIntrospector: ISchemaIntrospector
+public sealed class MySqlSchemaIntrospector : ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {

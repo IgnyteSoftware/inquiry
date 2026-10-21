@@ -8,7 +8,7 @@ namespace Inquiry.MySql;
 /// transient connection faults (server unavailable, connection reset) but propagates terminal
 /// ones (access denied, unknown database).
 /// </summary>
-internal sealed class MySqlTransientErrorDetector: ITransientErrorDetector
+internal sealed class MySqlTransientErrorDetector : ITransientErrorDetector
 {
     /// <summary>
     /// MySQL error numbers that represent transient connection-open faults across managed cloud

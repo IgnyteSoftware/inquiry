@@ -20,7 +20,7 @@ namespace Inquiry.Diagnostics;
 /// streaming query whose enumeration is abandoned early no completion notification fires, so that
 /// span is dropped rather than recorded with a fabricated duration.
 /// </remarks>
-internal sealed class InquiryTelemetryInterceptor: IInquiryCommandInterceptor, IInquiryInterceptorActivation
+internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, IInquiryInterceptorActivation
 {
     private readonly InquiryTelemetryOptions _options;
     private readonly ILogger _logger;

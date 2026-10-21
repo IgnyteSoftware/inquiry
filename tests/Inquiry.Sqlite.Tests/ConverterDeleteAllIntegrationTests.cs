@@ -7,7 +7,7 @@ namespace Inquiry.Sqlite.Tests;
 
 public readonly record struct DeleteId(long Value);
 
-public sealed class DeleteIdConverter: IInquiryValueConverter<DeleteId, long>
+public sealed class DeleteIdConverter : IInquiryValueConverter<DeleteId, long>
 {
     public static int ToProviderCalls { get; private set; }
 
@@ -32,7 +32,7 @@ public sealed class ConvertedDeleteItem
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class ConvertedDeleteItemStore: InquiryStore<ConvertedDeleteItem>
+public partial class ConvertedDeleteItemStore : InquiryStore<ConvertedDeleteItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(ConvertedDeleteItem item, CancellationToken ct = default);
@@ -74,7 +74,7 @@ public sealed class ConverterDeleteAllIntegrationTests
         Assert.Equal(0, DeleteIdConverter.ToProviderCalls);
     }
 
-    private sealed class CountingEnumerable<T>(IEnumerable<T> values): IEnumerable<T>
+    private sealed class CountingEnumerable<T>(IEnumerable<T> values) : IEnumerable<T>
     {
         public int EnumerationCount { get; private set; }
 

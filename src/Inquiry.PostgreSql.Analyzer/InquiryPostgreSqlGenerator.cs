@@ -11,7 +11,7 @@ namespace Inquiry.PostgreSql.Analyzer;
 /// <see cref="CreateSqlBuilder"/> for the dialect-specific SQL.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class InquiryPostgreSqlGenerator: InquiryGeneratorBase
+public sealed class InquiryPostgreSqlGenerator : InquiryGeneratorBase
 {
     protected override string Dialect => "PostgreSql";
 

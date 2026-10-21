@@ -49,7 +49,7 @@ public sealed class BulkAllTypesItem
     public Money ConvertedVal { get; set; }
 }
 
-public partial class BulkAllTypesItemStore: InquiryStore<BulkAllTypesItem>
+public partial class BulkAllTypesItemStore : InquiryStore<BulkAllTypesItem>
 {
     [InquiryBulkInsert]
     public partial Task<long> BulkInsertAsync(IEnumerable<BulkAllTypesItem> items, CancellationToken cancellationToken = default);

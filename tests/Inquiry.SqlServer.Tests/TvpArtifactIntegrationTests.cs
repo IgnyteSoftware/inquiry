@@ -14,7 +14,7 @@ public sealed class TenantGadget
     [InquiryColumn] public bool IsActive { get; set; }
 }
 
-public partial class TenantGadgetStore: InquiryStore<TenantGadget>
+public partial class TenantGadgetStore : InquiryStore<TenantGadget>
 {
     [InquiryInsert] public partial Task<int> InsertAsync(TenantGadget gadget, CancellationToken cancellationToken = default);
     [InquiryCount] public partial Task<long> CountAsync(CancellationToken cancellationToken = default);

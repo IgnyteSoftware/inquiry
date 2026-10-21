@@ -17,6 +17,6 @@ namespace Inquiry.Entities;
 /// <c>[InquiryEnumAsString]</c> is honored on enum properties.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryAdHocAttribute: Attribute
+public sealed class InquiryAdHocAttribute : Attribute
 {
 }

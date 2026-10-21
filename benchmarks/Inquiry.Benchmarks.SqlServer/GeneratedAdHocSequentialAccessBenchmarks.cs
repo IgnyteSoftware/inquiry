@@ -48,7 +48,7 @@ public sealed class BufferedSequentialBenchmarkRow
     public byte[] Payload { get; set; } = [];
 }
 
-internal sealed class BufferedSequentialBenchmarkRowMaterializer: IInquiryEntityMaterializer<BufferedSequentialBenchmarkRow>
+internal sealed class BufferedSequentialBenchmarkRowMaterializer : IInquiryEntityMaterializer<BufferedSequentialBenchmarkRow>
 {
     public BufferedSequentialBenchmarkRow Materialize(DbDataReader reader) => new()
     {

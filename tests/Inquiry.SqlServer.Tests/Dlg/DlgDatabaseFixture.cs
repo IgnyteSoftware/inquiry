@@ -10,7 +10,7 @@ namespace Inquiry.SqlServer.Tests.Dlg;
 /// known seed, shared by all DLG smoke tests. DLG's config is process-static, so a single primed
 /// connection string serves every test — hence one shared database here.
 /// </summary>
-public sealed class DlgDatabaseFixture: IAsyncLifetime
+public sealed class DlgDatabaseFixture : IAsyncLifetime
 {
     private MsSqlContainer? _container;
 

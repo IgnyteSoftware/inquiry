@@ -32,7 +32,7 @@ namespace Inquiry.Oracle.Analyzer;
 /// builder fails the build with a clear message.</description></item>
 /// </list>
 /// </summary>
-internal sealed class OracleSqlBuilder: SqlBuilder
+internal sealed class OracleSqlBuilder : SqlBuilder
 {
     public override bool UsesArrayBindingForBatchMutations => true;
 

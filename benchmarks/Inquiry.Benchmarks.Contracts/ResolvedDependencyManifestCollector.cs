@@ -394,7 +394,7 @@ public static class ResolvedDependencyManifestCollector
         ? StringComparison.OrdinalIgnoreCase
         : StringComparison.Ordinal;
 
-    private sealed class AssetIdentityComparer: IEqualityComparer<(ResolvedAssetKind Kind, string LogicalAssetId)>
+    private sealed class AssetIdentityComparer : IEqualityComparer<(ResolvedAssetKind Kind, string LogicalAssetId)>
     {
         public static AssetIdentityComparer Instance { get; } = new();
 

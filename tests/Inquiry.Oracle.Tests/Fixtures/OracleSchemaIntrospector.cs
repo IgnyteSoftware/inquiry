@@ -7,7 +7,7 @@ namespace Inquiry.Oracle.Tests.Fixtures;
 /// schema user owns every object). Oracle folds unquoted identifiers to UPPERCASE, which is fine —
 /// <see cref="SchemaFidelity"/> matches case-insensitively; <c>"Order Details"</c> is quoted in the DDL
 /// so it comes back with its original mixed case.</summary>
-public sealed class OracleSchemaIntrospector: ISchemaIntrospector
+public sealed class OracleSchemaIntrospector : ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {

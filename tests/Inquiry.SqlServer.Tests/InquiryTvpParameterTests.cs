@@ -8,7 +8,7 @@ namespace Inquiry.SqlServer.Tests;
 
 public sealed class InquiryTvpParameterTests
 {
-    private enum UnsignedState: uint { High = 3_000_000_000u, Max = uint.MaxValue }
+    private enum UnsignedState : uint { High = 3_000_000_000u, Max = uint.MaxValue }
 
     [Theory]
     [MemberData(nameof(UnsignedCases))]
@@ -386,9 +386,9 @@ public sealed class InquiryTvpParameterTests
         Assert.Equal(1, second.DisposeCount);
     }
 
-    private sealed class ProbeException: Exception { }
+    private sealed class ProbeException : Exception { }
 
-    private sealed class ProbeEnumerable<T>: IEnumerable<T>
+    private sealed class ProbeEnumerable<T> : IEnumerable<T>
     {
         private readonly IReadOnlyList<T> _values;
         private readonly int _failMoveNextAt;
@@ -416,7 +416,7 @@ public sealed class InquiryTvpParameterTests
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private sealed class Enumerator: IEnumerator<T>
+        private sealed class Enumerator : IEnumerator<T>
         {
             private readonly ProbeEnumerable<T> _owner;
             private int _index = -1;
@@ -471,9 +471,9 @@ public sealed class InquiryTvpParameterTests
         }
     }
 
-    private sealed class ParameterAddException: Exception;
+    private sealed class ParameterAddException : Exception;
 
-    private sealed class RejectingCommand: DbCommand
+    private sealed class RejectingCommand : DbCommand
     {
         protected override DbParameterCollection DbParameterCollection { get; } = new RejectingParameterCollection();
         [System.Diagnostics.CodeAnalysis.AllowNull] public override string CommandText { get; set; } = string.Empty;
@@ -491,7 +491,7 @@ public sealed class InquiryTvpParameterTests
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
     }
 
-    private sealed class RejectingParameterCollection: DbParameterCollection
+    private sealed class RejectingParameterCollection : DbParameterCollection
     {
         public override int Count => 0;
         public override object SyncRoot => this;

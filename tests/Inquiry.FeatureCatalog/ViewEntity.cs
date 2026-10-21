@@ -16,7 +16,7 @@ public sealed class SaleRow
     public decimal Amount { get; set; }
 }
 
-public partial class SaleRowStore: InquiryStore<SaleRow>
+public partial class SaleRowStore : InquiryStore<SaleRow>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(SaleRow row, CancellationToken cancellationToken = default);
@@ -35,7 +35,7 @@ public sealed class CategoryTotal
     public decimal TotalAmount { get; set; }
 }
 
-public partial class CategoryTotalStore: InquiryStore<CategoryTotal>
+public partial class CategoryTotalStore : InquiryStore<CategoryTotal>
 {
     [InquirySelectAll]
     public partial Task<IReadOnlyList<CategoryTotal>> AllAsync(CancellationToken cancellationToken = default);

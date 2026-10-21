@@ -9,7 +9,7 @@ namespace Inquiry.Benchmarks.MySql.Ef;
 /// will fail to resolve them.
 /// Reuses the <see cref="MySqlEfShipper"/> POCO to keep this project self-contained.
 /// </summary>
-public sealed class MySqlShipperContext: DbContext
+public sealed class MySqlShipperContext : DbContext
 {
     public MySqlShipperContext(DbContextOptions<MySqlShipperContext> options) : base(options) { }
 

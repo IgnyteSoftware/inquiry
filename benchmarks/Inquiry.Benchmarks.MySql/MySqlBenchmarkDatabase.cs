@@ -20,7 +20,7 @@ namespace Inquiry.Benchmarks.MySql;
 /// a non-pooled factory so it pays per-operation context construction — the same lifecycle ADO,
 /// Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-public sealed class MySqlBenchmarkDatabase: IAsyncDisposable
+public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static MySqlContainer? _container;

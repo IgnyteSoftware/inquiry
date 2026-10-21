@@ -12,7 +12,7 @@ public sealed class OracleProcedureRow
     public int Id { get; set; }
 }
 
-public sealed partial class OracleProcedureStore: InquiryStore<OracleProcedureRow>
+public sealed partial class OracleProcedureStore : InquiryStore<OracleProcedureRow>
 {
     [InquiryStoredProcedure("ADD_VALUES", OutputParameter = "Total")]
     public partial Task<int> AddAsync(int leftValue, int rightValue, CancellationToken cancellationToken = default);

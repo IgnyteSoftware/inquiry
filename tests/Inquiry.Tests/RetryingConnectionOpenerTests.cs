@@ -5,7 +5,7 @@ namespace Inquiry.Tests;
 
 public sealed class RetryingConnectionOpenerTests
 {
-    private sealed class PredicateDetector: ITransientErrorDetector
+    private sealed class PredicateDetector : ITransientErrorDetector
     {
         private readonly Func<Exception, bool> _predicate;
 
@@ -14,15 +14,15 @@ public sealed class RetryingConnectionOpenerTests
         public bool IsTransient(Exception exception) => _predicate(exception);
     }
 
-    private sealed class TransientException: Exception
+    private sealed class TransientException : Exception
     {
     }
 
-    private sealed class TerminalException: Exception
+    private sealed class TerminalException : Exception
     {
     }
 
-    private sealed class FakeConnection: DbConnection
+    private sealed class FakeConnection : DbConnection
     {
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => string.Empty;

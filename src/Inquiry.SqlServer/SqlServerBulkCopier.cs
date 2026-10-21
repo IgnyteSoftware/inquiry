@@ -11,7 +11,7 @@ namespace Inquiry.SqlServer;
 /// <see cref="SqlBulkCopy"/> on the ambient transaction connection when present, or on a dedicated
 /// connection opened from the registered <see cref="IInquiryConnectionFactory"/>.
 /// </summary>
-internal sealed class SqlServerBulkCopier: IInquiryBulkCopier
+internal sealed class SqlServerBulkCopier : IInquiryBulkCopier
 {
     private readonly IInquiryConnectionFactory _connectionFactory;
 

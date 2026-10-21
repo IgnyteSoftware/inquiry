@@ -7,7 +7,7 @@ namespace Inquiry.MySql.Analyzer;
 /// and adds the MySQL 8.0+ <c>JSON_TABLE</c> IN optimization (#169): IN collections bind as a
 /// single JSON array parameter instead of per-element sentinel expansion.
 /// </summary>
-internal sealed class MySqlSqlBuilder: MySqlFamilySqlBuilder
+internal sealed class MySqlSqlBuilder : MySqlFamilySqlBuilder
 {
     protected override SqlExpressionCommentPolicy ComputedExpressionCommentPolicy => SqlExpressionCommentPolicy.MySql;
     public override IReadOnlyList<string> ValidateComputedExpression(string expression)

@@ -12,7 +12,7 @@ namespace Inquiry.PostgreSql;
 /// <see cref="IInquiryBulkCopier"/> for PostgreSQL: streams rows into the target table through
 /// Npgsql's binary <c>COPY ... FROM STDIN</c> protocol on an ambient or dedicated connection.
 /// </summary>
-internal sealed class PostgreSqlBulkCopier: IInquiryBulkCopier
+internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
 {
     private readonly IInquiryConnectionFactory _connectionFactory;
 
@@ -138,7 +138,7 @@ internal sealed class PostgreSqlBulkCopier: IInquiryBulkCopier
         }
     }
 
-    private readonly struct NpgsqlBulkValueWriter: IInquiryBulkValueWriter
+    private readonly struct NpgsqlBulkValueWriter : IInquiryBulkValueWriter
     {
         private readonly NpgsqlBinaryImporter _writer;
         private readonly NpgsqlDbType[]? _types;

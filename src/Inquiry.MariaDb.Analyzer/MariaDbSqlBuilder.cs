@@ -9,7 +9,7 @@ namespace Inquiry.MariaDb.Analyzer;
 /// <see cref="MySqlFamilySqlBuilder.BuildUpdateReturningSql"/> keeps its emulated two-statement batch;
 /// (2) IN collection binding with MariaDB 10.6+ <c>JSON_TABLE</c> (#170).
 /// </summary>
-internal sealed class MariaDbSqlBuilder: MySqlFamilySqlBuilder
+internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
 {
     protected override SqlExpressionCommentPolicy ComputedExpressionCommentPolicy => SqlExpressionCommentPolicy.MariaDb;
     public override IReadOnlyList<string> ValidateComputedExpression(string expression)

@@ -165,7 +165,7 @@ public sealed class WideBatchEvidenceItem
     [InquiryColumn] public int C9 { get; set; }
 }
 
-public partial class WideBatchEvidenceStore: InquiryStore<WideBatchEvidenceItem>
+public partial class WideBatchEvidenceStore : InquiryStore<WideBatchEvidenceItem>
 {
     [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<WideBatchEvidenceItem> items, CancellationToken ct = default);

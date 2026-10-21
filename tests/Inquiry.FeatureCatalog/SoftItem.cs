@@ -36,7 +36,7 @@ public sealed record SoftItemName
     public string Name { get; init; } = string.Empty;
 }
 
-public partial class SoftItemStore: InquiryStore<SoftItem>
+public partial class SoftItemStore : InquiryStore<SoftItem>
 {
     [InquiryInsert]
     public partial Task<SoftItem?> InsertAsync(SoftItem item, CancellationToken cancellationToken = default);

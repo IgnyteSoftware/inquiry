@@ -19,7 +19,7 @@ namespace Inquiry.Generators;
 /// value still binds through parameters there.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class InquiryRawSqlAnalyzer: DiagnosticAnalyzer
+public sealed class InquiryRawSqlAnalyzer : DiagnosticAnalyzer
 {
     private const string InquiryCommandFullName = "Inquiry.Commands.InquiryCommand";
 

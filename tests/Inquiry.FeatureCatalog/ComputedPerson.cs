@@ -35,7 +35,7 @@ public sealed class ComputedPerson
     public int ComputedTotal { get; set; }
 }
 
-public partial class ComputedPersonStore: InquiryStore<ComputedPerson>
+public partial class ComputedPersonStore : InquiryStore<ComputedPerson>
 {
     [InquiryInsert]
     public partial Task<ComputedPerson?> InsertReturningAsync(ComputedPerson person, CancellationToken cancellationToken = default);

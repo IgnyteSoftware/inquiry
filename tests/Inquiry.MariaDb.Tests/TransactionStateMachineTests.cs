@@ -177,7 +177,7 @@ public sealed class TransactionStateMachineTests
 /// hand-written method, then calling another injected store. Documents the pattern the
 /// transactions feature page describes, ported to the MariaDB live engine.
 /// </summary>
-internal sealed partial class CustomerAtomicService: InquiryStore<Customer>
+internal sealed partial class CustomerAtomicService : InquiryStore<Customer>
 {
     private readonly CustomerStore _customers;
 

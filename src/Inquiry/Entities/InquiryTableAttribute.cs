@@ -4,7 +4,7 @@ namespace Inquiry.Entities;
 /// Maps a CLR entity type to a relational database table.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryTableAttribute: Attribute
+public sealed class InquiryTableAttribute : Attribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryTableAttribute"/> class,

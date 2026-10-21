@@ -10,7 +10,7 @@ using Testcontainers.MariaDb;
 
 namespace Inquiry.Benchmarks.MariaDb;
 
-public sealed class MariaDbBenchmarkDatabase: IAsyncDisposable
+public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static MariaDbContainer? _container;

@@ -6,7 +6,7 @@ namespace Inquiry;
 /// last read. Only raised when <see cref="InquiryOptions.ThrowOnConcurrencyConflict"/> is enabled;
 /// otherwise the mutation simply reports <c>false</c>.
 /// </summary>
-public sealed class InquiryConcurrencyException: Exception
+public sealed class InquiryConcurrencyException : Exception
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryConcurrencyException"/> class.

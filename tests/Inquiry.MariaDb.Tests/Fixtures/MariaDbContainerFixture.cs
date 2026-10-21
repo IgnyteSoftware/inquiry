@@ -6,7 +6,7 @@ namespace Inquiry.MariaDb.Tests.Fixtures;
 
 /// <summary>Starts one MariaDB container for the whole assembly. If Docker is unreachable,
 /// <see cref="IsAvailable"/> stays false and tests skip rather than fail.</summary>
-public sealed class MariaDbContainerFixture: IAsyncLifetime
+public sealed class MariaDbContainerFixture : IAsyncLifetime
 {
     private MariaDbContainer? _container;
 

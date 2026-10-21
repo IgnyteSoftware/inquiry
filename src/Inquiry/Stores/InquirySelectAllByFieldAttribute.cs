@@ -13,7 +13,7 @@ namespace Inquiry.Stores;
 /// mapped properties/columns just like an explicit one (an unknown field is a compile error).
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquirySelectAllByFieldAttribute: Attribute
+public sealed class InquirySelectAllByFieldAttribute : Attribute
 {
     /// <summary>
     /// Initializes a field-less attribute whose filter columns are derived from the method name

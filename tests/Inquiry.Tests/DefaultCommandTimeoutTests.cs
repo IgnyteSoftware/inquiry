@@ -92,7 +92,7 @@ public sealed class DefaultCommandTimeoutTests
         return (pipeline, interceptor, keeper);
     }
 
-    private sealed class TimeoutRecordingInterceptor: IInquiryCommandInterceptor
+    private sealed class TimeoutRecordingInterceptor : IInquiryCommandInterceptor
     {
         public List<int> ObservedTimeouts { get; } = new();
 
@@ -103,7 +103,7 @@ public sealed class DefaultCommandTimeoutTests
         }
     }
 
-    private sealed class TimeoutTestConnectionFactory: IInquiryConnectionFactory
+    private sealed class TimeoutTestConnectionFactory : IInquiryConnectionFactory
     {
         private readonly string _connectionString;
 

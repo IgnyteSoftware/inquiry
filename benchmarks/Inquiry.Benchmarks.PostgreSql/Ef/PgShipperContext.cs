@@ -8,7 +8,7 @@ namespace Inquiry.Benchmarks.PostgreSql.Ef;
 /// case for identifiers that were created with double-quotes, so EF's quoted output must match.
 /// Reuses the <see cref="PgEfShipper"/> POCO to keep this project self-contained.
 /// </summary>
-public sealed class PgShipperContext: DbContext
+public sealed class PgShipperContext : DbContext
 {
     public PgShipperContext(DbContextOptions<PgShipperContext> options) : base(options) { }
 

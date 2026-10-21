@@ -12,7 +12,7 @@ namespace Inquiry.Entities;
 /// defines the SELECT order. v1 supports projections on entities without a soft-delete column.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryProjectionAttribute: Attribute
+public sealed class InquiryProjectionAttribute : Attribute
 {
     /// <summary>Initializes the projection, binding it to the entity type it projects.</summary>
     /// <param name="entityType">The <c>[InquiryTable]</c> entity this is a projection of.</param>

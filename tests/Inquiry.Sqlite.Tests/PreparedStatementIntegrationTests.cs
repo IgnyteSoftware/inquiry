@@ -103,7 +103,7 @@ public sealed class PreparedStatementIntegrationTests
         bool Deleted,
         bool AfterDeleteNull);
 
-    private sealed class PrepareCapableSqliteFactory: IInquiryConnectionFactory
+    private sealed class PrepareCapableSqliteFactory : IInquiryConnectionFactory
     {
         private readonly string _connectionString;
         public PrepareCapableSqliteFactory(string connectionString) => _connectionString = connectionString;

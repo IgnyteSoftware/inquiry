@@ -76,7 +76,7 @@ internal static class BulkCopierConnectionOwnershipAssertions
 
     private sealed record Row(int Id);
 
-    private sealed class StubConnectionFactory: IInquiryConnectionFactory
+    private sealed class StubConnectionFactory : IInquiryConnectionFactory
     {
         private readonly Func<CancellationToken, ValueTask<DbConnection>> _open;
 
@@ -85,7 +85,7 @@ internal static class BulkCopierConnectionOwnershipAssertions
         public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default) => _open(cancellationToken);
     }
 
-    private sealed class TrackingConnection: DbConnection
+    private sealed class TrackingConnection : DbConnection
     {
         public bool IsDisposed { get; private set; }
 

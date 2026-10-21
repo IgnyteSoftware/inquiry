@@ -2,7 +2,7 @@ using System.Collections;
 
 namespace Inquiry.Commands;
 
-internal sealed class InquiryBatchChunkReader<T>: IDisposable
+internal sealed class InquiryBatchChunkReader<T> : IDisposable
 {
     private readonly int _maxBatchSize;
     private readonly IReadOnlyList<T>? _items;
@@ -93,7 +93,7 @@ internal sealed class InquiryBatchChunkReader<T>: IDisposable
     }
 }
 
-internal sealed class InquiryBatchChunkView<T>: IReadOnlyList<T>
+internal sealed class InquiryBatchChunkView<T> : IReadOnlyList<T>
 {
     private IReadOnlyList<T>? _items;
     private int _offset;

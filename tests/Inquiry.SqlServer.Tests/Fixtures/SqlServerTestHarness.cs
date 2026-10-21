@@ -14,7 +14,7 @@ namespace Inquiry.SqlServer.Tests.Fixtures;
 /// a configured <see cref="ServiceProvider"/>. The database is dropped on disposal so
 /// parallel test classes never collide on table state.
 /// </summary>
-internal sealed class SqlServerTestHarness: IAsyncDisposable
+internal sealed class SqlServerTestHarness : IAsyncDisposable
 {
     private readonly string _adminConnectionString;
     private readonly string _databaseName;

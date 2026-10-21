@@ -2,7 +2,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.MySql.Tests.Fixtures;
 
-public partial class DefaultedItemStore: InquiryStore<DefaultedItem>
+public partial class DefaultedItemStore : InquiryStore<DefaultedItem>
 {
     [InquiryInsert]
     public partial Task<DefaultedItem?> InsertReturningAsync(DefaultedItem item, CancellationToken cancellationToken = default);

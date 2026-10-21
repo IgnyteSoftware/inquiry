@@ -6,6 +6,6 @@ namespace Inquiry.Stores;
 /// the affected-row count or the entity; the return type selects the generated command shape.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class InquiryUpsertAttribute: Attribute
+public sealed class InquiryUpsertAttribute : Attribute
 {
 }

@@ -27,7 +27,7 @@ public sealed record SoftDeleteWidgetName
     public string Name { get; init; } = string.Empty;
 }
 
-public partial class SoftDeleteWidgetStore: InquiryStore<SoftDeleteWidget>
+public partial class SoftDeleteWidgetStore : InquiryStore<SoftDeleteWidget>
 {
     [InquiryInsert]
     public partial Task<SoftDeleteWidget?> InsertAsync(SoftDeleteWidget widget, CancellationToken cancellationToken = default);

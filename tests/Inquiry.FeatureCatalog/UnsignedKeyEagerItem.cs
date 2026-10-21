@@ -43,7 +43,7 @@ public sealed class UnsignedKeyChild
     public string Label { get; set; } = string.Empty;
 }
 
-public partial class UnsignedKeyParentStore: InquiryStore<UnsignedKeyParent>
+public partial class UnsignedKeyParentStore : InquiryStore<UnsignedKeyParent>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(UnsignedKeyParent parent, CancellationToken cancellationToken = default);
@@ -52,7 +52,7 @@ public partial class UnsignedKeyParentStore: InquiryStore<UnsignedKeyParent>
     public partial Task<UnsignedKeyParent?> GetWithChildrenAsync(uint id, CancellationToken cancellationToken = default);
 }
 
-public partial class UnsignedKeyChildStore: InquiryStore<UnsignedKeyChild>
+public partial class UnsignedKeyChildStore : InquiryStore<UnsignedKeyChild>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(UnsignedKeyChild child, CancellationToken cancellationToken = default);

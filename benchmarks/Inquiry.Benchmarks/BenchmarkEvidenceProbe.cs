@@ -12,7 +12,7 @@ internal sealed class BenchmarkEvidenceProbe
     public int Id { get; set; }
 }
 
-internal partial class BenchmarkEvidenceProbeStore: InquiryStore<BenchmarkEvidenceProbe>
+internal partial class BenchmarkEvidenceProbeStore : InquiryStore<BenchmarkEvidenceProbe>
 {
     [InquirySelectOneByKey]
     public partial Task<BenchmarkEvidenceProbe?> GetAsync(int id, CancellationToken cancellationToken = default);

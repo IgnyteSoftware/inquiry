@@ -17,7 +17,7 @@ public sealed class Sku
     public decimal Price { get; set; }
 }
 
-public partial class SkuStore: InquiryStore<Sku>
+public partial class SkuStore : InquiryStore<Sku>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Sku product, CancellationToken cancellationToken = default);

@@ -12,6 +12,6 @@ namespace Inquiry.Entities;
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryEnumAsStringAttribute: Attribute
+public sealed class InquiryEnumAsStringAttribute : Attribute
 {
 }

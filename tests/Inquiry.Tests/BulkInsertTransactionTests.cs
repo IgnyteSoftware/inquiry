@@ -103,7 +103,7 @@ public sealed class BulkInsertTransactionTests
 
     private sealed record Row(int Id);
 
-    private sealed class RecordingBulkCopier: IInquiryBulkCopier
+    private sealed class RecordingBulkCopier : IInquiryBulkCopier
     {
         public bool Called { get; private set; }
         public InquiryBulkInsertContext? Context { get; private set; }

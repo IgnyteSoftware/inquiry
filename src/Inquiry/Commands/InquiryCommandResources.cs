@@ -203,7 +203,7 @@ public static class InquiryCommandResources
             => DisposeExecutionAsync(_command, _reader, _ownedConnection, _primaryException);
     }
 
-    private sealed class ResourceSet: IDisposable
+    private sealed class ResourceSet : IDisposable
     {
         private readonly object _gate = new();
         private readonly int _signalIndex;
@@ -282,4 +282,4 @@ public static class InquiryCommandResources
     }
 }
 
-internal interface IInquiryExecutionResource: IDisposable;
+internal interface IInquiryExecutionResource : IDisposable;

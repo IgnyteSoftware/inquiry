@@ -12,7 +12,7 @@ public sealed class KeyOnlyItem
     public long? Id { get; set; }
 }
 
-public partial class KeyOnlyItemStore: InquiryStore<KeyOnlyItem>
+public partial class KeyOnlyItemStore : InquiryStore<KeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(KeyOnlyItem item, CancellationToken ct = default);

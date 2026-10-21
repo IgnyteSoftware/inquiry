@@ -10,7 +10,7 @@ public sealed class SelectedAssetProbe
     public int Id { get; set; }
 }
 
-public partial class SelectedAssetProbeStore: InquiryStore<SelectedAssetProbe>
+public partial class SelectedAssetProbeStore : InquiryStore<SelectedAssetProbe>
 {
     [InquirySelectOneByKey]
     public partial Task<SelectedAssetProbe?> GetAsync(int id, CancellationToken cancellationToken = default);

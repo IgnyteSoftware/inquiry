@@ -14,7 +14,7 @@ namespace Inquiry.Transactions;
 /// Each handle captures its transactional pipeline. Calls do not depend on ambient state, which can
 /// differ when a helper returns the handle to its caller. Every call checks closed state first.
 /// </remarks>
-internal abstract class InquiryTransactionBase: IInquiryTransaction
+internal abstract class InquiryTransactionBase : IInquiryTransaction
 {
     private readonly DefaultInquiry _inner;
     private readonly TransactedInquiryRequestPipeline _pipeline;

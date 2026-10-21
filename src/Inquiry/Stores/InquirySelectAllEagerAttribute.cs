@@ -26,7 +26,7 @@ namespace Inquiry.Stores;
 /// </list>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class InquirySelectAllEagerAttribute: Attribute
+public sealed class InquirySelectAllEagerAttribute : Attribute
 {
     /// <summary>
     /// Gets or sets a value indicating whether the parent select includes soft-deleted rows. Has an

@@ -3,7 +3,7 @@ using Inquiry.IntegrationTesting;
 
 namespace Inquiry.MariaDb.Tests.Fixtures;
 
-public sealed class MariaDbSchemaIntrospector: ISchemaIntrospector
+public sealed class MariaDbSchemaIntrospector : ISchemaIntrospector
 {
     public async Task<SchemaSnapshot> ReadAsync(DbConnection conn, CancellationToken ct = default)
     {

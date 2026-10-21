@@ -17,7 +17,7 @@ public sealed class SsKeyOnlyItem
     public int? Id { get; set; }
 }
 
-public partial class SsKeyOnlyItemStore: InquiryStore<SsKeyOnlyItem>
+public partial class SsKeyOnlyItemStore : InquiryStore<SsKeyOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<int> UpsertAsync(SsKeyOnlyItem item, CancellationToken ct = default);
@@ -39,7 +39,7 @@ public sealed class SsAuditOnlyItem
     public System.DateTime CreatedAt { get; set; }
 }
 
-public partial class SsAuditOnlyItemStore: InquiryStore<SsAuditOnlyItem>
+public partial class SsAuditOnlyItemStore : InquiryStore<SsAuditOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<SsAuditOnlyItem?> UpsertReturningAsync(SsAuditOnlyItem item, CancellationToken ct = default);
@@ -58,7 +58,7 @@ public sealed class SsFailingAuditOnlyItem
     public System.DateTime CreatedAt { get; set; }
 }
 
-public partial class SsFailingAuditOnlyItemStore: InquiryStore<SsFailingAuditOnlyItem>
+public partial class SsFailingAuditOnlyItemStore : InquiryStore<SsFailingAuditOnlyItem>
 {
     [InquiryUpsert]
     public partial Task<SsFailingAuditOnlyItem?> UpsertReturningAsync(SsFailingAuditOnlyItem item, CancellationToken ct = default);
@@ -67,7 +67,7 @@ public partial class SsFailingAuditOnlyItemStore: InquiryStore<SsFailingAuditOnl
     public partial Task<long> CountAsync(CancellationToken ct = default);
 }
 
-internal sealed class OwnedUpsertCleanupProbe: IInquiryCommandInterceptor
+internal sealed class OwnedUpsertCleanupProbe : IInquiryCommandInterceptor
 {
     public bool Verified { get; private set; }
 

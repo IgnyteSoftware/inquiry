@@ -12,7 +12,7 @@ internal static class EncryptionKeyHolder
     internal static byte[] Key { get; set; } = new byte[32];
 }
 
-internal sealed class EncryptedStringConverter: IInquiryValueConverter<string, string>
+internal sealed class EncryptedStringConverter : IInquiryValueConverter<string, string>
 {
     private const int NonceSize = 12;
     private const int TagSize = 16;
@@ -64,7 +64,7 @@ public sealed class SecretRecord
     public string Secret { get; set; } = string.Empty;
 }
 
-public partial class SecretRecordStore: InquiryStore<SecretRecord>
+public partial class SecretRecordStore : InquiryStore<SecretRecord>
 {
     [InquiryInsert]
     public partial Task<SecretRecord?> InsertAsync(SecretRecord record, CancellationToken cancellationToken = default);

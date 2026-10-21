@@ -49,7 +49,7 @@ public sealed class SqlServerProviderIntegrationTests
         Assert.IsType<RecordingConnection>(connection);
     }
 
-    private sealed class RecordingDataSource: DbDataSource
+    private sealed class RecordingDataSource : DbDataSource
     {
         public bool Opened { get; private set; }
 
@@ -64,7 +64,7 @@ public sealed class SqlServerProviderIntegrationTests
         }
     }
 
-    private sealed class RecordingConnection: DbConnection
+    private sealed class RecordingConnection : DbConnection
     {
         [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;

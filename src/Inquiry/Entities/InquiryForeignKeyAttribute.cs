@@ -10,7 +10,7 @@ namespace Inquiry.Entities;
 /// columns the same as any other mapped column.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class InquiryForeignKeyAttribute: InquiryColumnAttribute
+public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InquiryForeignKeyAttribute"/> class with the

@@ -2,7 +2,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.MySql.Tests.Fixtures;
 
-public partial class GuidItemStore: InquiryStore<GuidItem>
+public partial class GuidItemStore : InquiryStore<GuidItem>
 {
     [InquiryInsert] public partial Task<GuidItem?> InsertReturningAsync(GuidItem item, CancellationToken ct = default);
     [InquiryUpsert] public partial Task<int> UpsertAsync(GuidItem item, CancellationToken ct = default);

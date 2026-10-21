@@ -14,7 +14,7 @@ public sealed class SsGenItem
     public string Name { get; set; } = string.Empty;
 }
 
-public partial class SsGenItemStore: InquiryStore<SsGenItem>
+public partial class SsGenItemStore : InquiryStore<SsGenItem>
 {
     [InquiryUpsert]
     public partial Task<SsGenItem?> UpsertReturningAsync(SsGenItem item, CancellationToken cancellationToken = default);

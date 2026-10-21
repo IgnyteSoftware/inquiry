@@ -32,7 +32,7 @@ namespace Inquiry.Transactions;
 /// savepoint handle prevents calls after the savepoint has been released or rolled back.
 /// </para>
 /// </remarks>
-internal sealed class SavepointInquiryTransaction: InquiryTransactionBase
+internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
 {
     private readonly TransactedInquiryRequestPipeline _outerPipeline;
     private readonly string _savepointName;

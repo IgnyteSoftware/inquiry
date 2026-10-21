@@ -25,8 +25,9 @@
   </PropertyGroup>
 
   <!-- Test names such as Method_Scenario_Expected are the convention, so CA1707 does not apply to test projects.
-       Microsoft.Testing.Platform apps can set IsTestingPlatformApplication without IsTestProject. -->
-  <PropertyGroup Condition="'$(IsTestProject)' == 'true' or '$(IsTestingPlatformApplication)' == 'true'">
+       Microsoft.Testing.Platform apps can set IsTestingPlatformApplication without IsTestProject.
+       Benchmark method names appear in results and baselines, so *.Benchmarks projects are exempt too. -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true' or '$(IsTestingPlatformApplication)' == 'true' or $(MSBuildProjectName.Contains('.Benchmarks'))">
     <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 

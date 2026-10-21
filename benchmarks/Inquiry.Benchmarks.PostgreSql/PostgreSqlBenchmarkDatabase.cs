@@ -20,7 +20,7 @@ namespace Inquiry.Benchmarks.PostgreSql;
 /// resource reaper as a backstop). EF uses a non-pooled factory so it pays per-operation context
 /// construction — the same lifecycle ADO, Dapper, and Inquiry each take (fresh connection per call).
 /// </summary>
-public sealed class PostgreSqlBenchmarkDatabase: IAsyncDisposable
+public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static PostgreSqlContainer? _container;

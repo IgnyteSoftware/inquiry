@@ -5,7 +5,7 @@ namespace Inquiry.Entities;
 /// The property is NOT mapped to a database column; it is populated by eager-loading store methods.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
-public sealed class InquiryRelationAttribute: Attribute
+public sealed class InquiryRelationAttribute : Attribute
 {
     /// <summary>
     /// Initializes a new instance of <see cref="InquiryRelationAttribute"/>.

@@ -10,7 +10,7 @@ public readonly struct Counter
     public uint Value { get; init; }
 }
 
-public sealed class CounterConverter: IInquiryValueConverter<Counter, uint>
+public sealed class CounterConverter : IInquiryValueConverter<Counter, uint>
 {
     public uint ToProvider(Counter model) => model.Value;
     public Counter FromProvider(uint provider) => new() { Value = provider };
@@ -26,7 +26,7 @@ public sealed class Gauge
     public Counter Ticks { get; set; }
 }
 
-public partial class GaugeStore: InquiryStore<Gauge>
+public partial class GaugeStore : InquiryStore<Gauge>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(Gauge gauge, CancellationToken cancellationToken = default);

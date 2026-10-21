@@ -16,7 +16,7 @@ namespace Inquiry.PostgreSql;
 /// (Aspire registers a <see cref="DbDataSource"/>). The factory is a DI singleton, so the data source
 /// lives for the container's lifetime and is disposed with it (see <see cref="DisposeAsync"/>).
 /// </remarks>
-internal sealed class PostgreSqlInquiryConnectionFactory: IInquiryConnectionFactory, IAsyncDisposable, IDisposable
+internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFactory, IAsyncDisposable, IDisposable
 {
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;

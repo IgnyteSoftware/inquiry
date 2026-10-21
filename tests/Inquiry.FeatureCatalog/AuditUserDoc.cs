@@ -19,7 +19,7 @@ public sealed class AuditUserDoc
     public string? ModifiedBy { get; set; }
 }
 
-public partial class AuditUserDocStore: InquiryStore<AuditUserDoc>
+public partial class AuditUserDocStore : InquiryStore<AuditUserDoc>
 {
     [InquiryInsert]
     public partial Task<AuditUserDoc?> InsertReturningAsync(AuditUserDoc doc, CancellationToken cancellationToken = default);

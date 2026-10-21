@@ -133,7 +133,7 @@ public static class InquiryTvpParameter
         return false;
     }
 
-    private sealed class TvpRecordEnumerable<T>: IEnumerable<SqlDataRecord>, IEnumerator<SqlDataRecord>, IInquiryExecutionResource
+    private sealed class TvpRecordEnumerable<T> : IEnumerable<SqlDataRecord>, IEnumerator<SqlDataRecord>, IInquiryExecutionResource
     {
         private delegate void ValueWriterDelegate(SqlDataRecord record, T value, InquiryTvpDescriptor descriptor, int index);
         private static readonly ValueWriterDelegate ValueWriter = CreateValueWriter();

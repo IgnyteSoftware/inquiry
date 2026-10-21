@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Inquiry.Benchmarks.MariaDb.Ef;
 
-public sealed class MariaDbShipperContext: DbContext
+public sealed class MariaDbShipperContext : DbContext
 {
     public MariaDbShipperContext(DbContextOptions<MariaDbShipperContext> options) : base(options) { }
 

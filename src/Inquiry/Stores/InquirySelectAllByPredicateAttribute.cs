@@ -6,7 +6,7 @@ namespace Inquiry.Stores;
 /// clause and bind positionally to the method's parameters in declaration order.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class InquirySelectAllByPredicateAttribute: Attribute
+public sealed class InquirySelectAllByPredicateAttribute : Attribute
 {
     /// <summary>Gets or sets a compile-time ORDER BY specification.</summary>
     public string? OrderBy { get; set; }
