@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Text;
 
@@ -6,10 +7,10 @@ namespace Inquiry.ReleaseTools.Tests;
 
 public sealed class PackageAdversarialTests
 {
-    private static readonly Lazy<PackageFixture> Fixture = new(() => CreateFixture("Ignyte.Inquiry", "src/Inquiry/Inquiry.csproj"));
-    private static readonly Lazy<PackageFixture> AspireFixture = new(() => CreateFixture("Ignyte.Inquiry.Aspire", "src/Inquiry.Aspire/Inquiry.Aspire.csproj"));
-    private static readonly Lazy<PackageFixture> ProviderFixture = new(() => CreateFixture("Ignyte.Inquiry.Sqlite", "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj"));
-    private static readonly Lazy<PackageFixture> SqlServerFixture = new(() => CreateFixture("Ignyte.Inquiry.SqlServer", "src/Inquiry.SqlServer/Inquiry.SqlServer.csproj"));
+    private static readonly Lazy<PackageFixture> _fixture = new(() => CreateFixture("Ignyte.Inquiry", "src/Inquiry/Inquiry.csproj"));
+    private static readonly Lazy<PackageFixture> _aspireFixture = new(() => CreateFixture("Ignyte.Inquiry.Aspire", "src/Inquiry.Aspire/Inquiry.Aspire.csproj"));
+    private static readonly Lazy<PackageFixture> _providerFixture = new(() => CreateFixture("Ignyte.Inquiry.Sqlite", "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj"));
+    private static readonly Lazy<PackageFixture> _sqlServerFixture = new(() => CreateFixture("Ignyte.Inquiry.SqlServer", "src/Inquiry.SqlServer/Inquiry.SqlServer.csproj"));
 
     [Theory]
     [InlineData("extra-entry")]
@@ -22,7 +23,7 @@ public sealed class PackageAdversarialTests
     [InlineData("symlink-entry")]
     public void Package_bypass_attempts_are_rejected(string mutation)
     {
-        var fixture = Fixture.Value;
+        var fixture = _fixture.Value;
         var directory = Directory.CreateTempSubdirectory("inquiry-package-mutation-");
         try
         {
@@ -81,7 +82,7 @@ public sealed class PackageAdversarialTests
         // at lib/net8.0 with no matching lib/ DLL in the nupkg. Analyzer symbols are embedded in the
         // analyzer assemblies instead, so the snupkg must carry lib PDBs ONLY — and the unmutated
         // pair must still pass the verifier, which now checks the embedded PDBs.
-        var fixture = ProviderFixture.Value;
+        var fixture = _providerFixture.Value;
         using (var archive = ZipFile.OpenRead(fixture.Snupkg))
         {
             var pdbs = archive.Entries.Select(entry => entry.FullName)
@@ -103,7 +104,7 @@ public sealed class PackageAdversarialTests
     [Fact]
     public void Aspire_package_pair_verifies()
     {
-        var fixture = AspireFixture.Value;
+        var fixture = _aspireFixture.Value;
 
         PackageVerifier.VerifyPackagePairForTests(
             RepositoryFixture.Root,
@@ -116,7 +117,7 @@ public sealed class PackageAdversarialTests
     [Fact]
     public void Non_Oracle_package_cannot_include_System_Configuration_compile_assets()
     {
-        var fixture = SqlServerFixture.Value;
+        var fixture = _sqlServerFixture.Value;
         var directory = Directory.CreateTempSubdirectory("inquiry-system-configuration-mutation-");
         try
         {
@@ -146,9 +147,10 @@ public sealed class PackageAdversarialTests
     [Theory]
     [InlineData("analyzer-content-not-an-analyzer")]
     [InlineData("analyzer-shared-swap")]
+    [SuppressMessage("Major Code Smell", "S3928:Parameter names used into ArgumentException constructors should match an existing one", Justification = "The lambda rejects the enclosing method's mutation parameter, which is the out-of-range value.")]
     public void Analyzer_symbol_bypass_attempts_are_rejected(string mutation)
     {
-        var fixture = ProviderFixture.Value;
+        var fixture = _providerFixture.Value;
         var directory = Directory.CreateTempSubdirectory("inquiry-analyzer-symbol-mutation-");
         try
         {

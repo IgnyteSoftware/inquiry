@@ -162,6 +162,7 @@ public sealed class BoundedProcessTests
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or Win32Exception)
         {
+            // The process already exited or cannot be stopped. Cleanup is best effort.
         }
     }
 

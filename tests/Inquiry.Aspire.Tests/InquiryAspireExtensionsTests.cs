@@ -35,7 +35,7 @@ public sealed class InquiryAspireExtensionsTests
     };
 
     [Theory]
-    [MemberData(nameof(Providers))]
+    [MemberData(nameof(Providers), DisableDiscoveryEnumeration = true)]
     public void ResourceNameRegistersProviderTelemetryAndHealthCheck(
         Action<IHostApplicationBuilder, string> register,
         string expectedFactoryType)
@@ -69,7 +69,7 @@ public sealed class InquiryAspireExtensionsTests
     }
 
     [Theory]
-    [MemberData(nameof(DataSourceProviders))]
+    [MemberData(nameof(DataSourceProviders), DisableDiscoveryEnumeration = true)]
     public void ResourceNameRegistersProviderDataSource(
         Action<IHostApplicationBuilder, string> register,
         Type dataSourceType,
