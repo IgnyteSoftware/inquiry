@@ -27,12 +27,12 @@ public class StreamingBenchmarks
     private string _connectionString = null!;
     private DataOptions _linqToDbOptions = null!;
 
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     private const string SelectColumns =
         "ProductID, ProductName, SupplierID, CategoryID, QuantityPerUnit, UnitPrice, UnitsInStock, UnitsOnOrder, ReorderLevel, Discontinued";
 
-    private static readonly string SelectAllSql = $"SELECT {SelectColumns} FROM Products;";
+    private static readonly string _selectAllSql = $"SELECT {SelectColumns} FROM Products;";
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -67,7 +67,7 @@ public class StreamingBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = SelectAllSql;
+        command.CommandText = _selectAllSql;
         var list = new List<Product>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync())
@@ -83,7 +83,7 @@ public class StreamingBenchmarks
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        var list = (await connection.QueryAsync<Product>(SelectAllSql)).AsList();
+        var list = (await connection.QueryAsync<Product>(_selectAllSql)).AsList();
         return list.Count;
     }
 
@@ -107,7 +107,7 @@ public class StreamingBenchmarks
     public async Task<int> BufferedRead_Inquiry()
     {
 #pragma warning disable INQ048 // Static SQL constant, no user input
-        var list = await _db.Inquiry.QueryListAsync<Product>(new InquiryCommand(SelectAllSql));
+        var list = await _db.Inquiry.QueryListAsync<Product>(new InquiryCommand(_selectAllSql));
 #pragma warning restore INQ048
         return list.Count;
     }
@@ -120,7 +120,7 @@ public class StreamingBenchmarks
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = SelectAllSql;
+        command.CommandText = _selectAllSql;
         var count = 0;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
         while (await reader.ReadAsync())
@@ -159,7 +159,7 @@ public class StreamingBenchmarks
     {
         var count = 0;
 #pragma warning disable INQ048 // Static SQL constant, no user input
-        await foreach (var _ in _db.Inquiry.QueryAsync<Product>(new InquiryCommand(SelectAllSql)))
+        await foreach (var _ in _db.Inquiry.QueryAsync<Product>(new InquiryCommand(_selectAllSql)))
         {
 #pragma warning restore INQ048
             count++;

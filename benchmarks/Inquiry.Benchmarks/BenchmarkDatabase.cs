@@ -64,6 +64,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     /// Seeds <paramref name="seedRows"/> rows of each benchmarked entity. Returns the freshly
     /// created harness; callers must dispose it.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The DDL is built only from constants in code; no part comes from input.")]
     public static async Task<BenchmarkDatabase> CreateAsync(int seedRows = DefaultSeedRows)
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"inquiry_bench_{Guid.NewGuid():N}.db");

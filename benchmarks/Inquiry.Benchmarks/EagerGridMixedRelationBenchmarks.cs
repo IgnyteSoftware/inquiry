@@ -34,10 +34,10 @@ public class EagerGridMixedRelationBenchmarks
     private string _connectionString = null!;
 
     /// <summary>Total tag (child collection) rows.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     /// <summary>Parent count: 4 is dense (Rows/4 tags each), 100 is sparse.</summary>
-    [Params(4, 100)] public int PostCount;
+    [Params(4, 100)] public int PostCount { get; set; }
 
     private const int AuthorCount = 8;
 

@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Inquiry.Benchmarks;
 
 [MemoryDiagnoser]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "BenchmarkDotNet disposes these fields in the [GlobalCleanup] method.")]
 public class ActiveTelemetryBenchmarks
 {
     public enum ListenerMode { Inactive, Tracing, Metrics, Both }
@@ -25,11 +26,12 @@ public class ActiveTelemetryBenchmarks
     private IInquiry _inquiry = null!;
     private ActivityListener? _activities;
     private MeterListener? _metrics;
-    private static readonly InquiryCommand Query = new("SELECT Id FROM TelemetryRows ORDER BY Id");
-    private static readonly InquiryCommand Grid = new("SELECT Id FROM TelemetryRows ORDER BY Id; SELECT Id FROM TelemetryRows ORDER BY Id");
-    private static readonly int[] Items = Enumerable.Range(1, 10).ToArray();
+    private static readonly InquiryCommand _query = new("SELECT Id FROM TelemetryRows ORDER BY Id");
+    private static readonly InquiryCommand _grid = new("SELECT Id FROM TelemetryRows ORDER BY Id; SELECT Id FROM TelemetryRows ORDER BY Id");
+    private static readonly int[] _items = Enumerable.Range(1, 10).ToArray();
 
     [GlobalSetup]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The seed SQL uses fixed integer IDs from code; no part comes from input.")]
     public async Task Setup()
     {
         var connectionString = $"Data Source=Telemetry-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
@@ -38,7 +40,7 @@ public class ActiveTelemetryBenchmarks
         using (var command = _keeper.CreateCommand())
         {
             command.CommandText = "CREATE TABLE TelemetryRows (Id INTEGER PRIMARY KEY, Value INTEGER NOT NULL);" +
-                string.Join("", Items.Select(id => $"INSERT INTO TelemetryRows VALUES ({id}, 0);"));
+                string.Join("", _items.Select(id => $"INSERT INTO TelemetryRows VALUES ({id}, 0);"));
             await command.ExecuteNonQueryAsync();
         }
 
@@ -56,8 +58,17 @@ public class ActiveTelemetryBenchmarks
         {
             activityCount = measurementCount = 0;
             var result = await operation();
-            var expected = operation == ConsumedGrid ? 110 : operation == Batch ? 10 : 55;
-            var expectedObservations = operation == Batch ? Items.Length + 1 : 1;
+            int expected;
+            if (operation == ConsumedGrid)
+            {
+                expected = 110;
+            }
+            else
+            {
+                expected = operation == Batch ? 10 : 55;
+            }
+
+            var expectedObservations = operation == Batch ? _items.Length + 1 : 1;
             if (result != expected
                 || activityCount != (Listeners is ListenerMode.Tracing or ListenerMode.Both ? expectedObservations : 0)
                 || measurementCount != (Listeners is ListenerMode.Metrics or ListenerMode.Both ? expectedObservations : 0))
@@ -74,7 +85,7 @@ public class ActiveTelemetryBenchmarks
     [Benchmark]
     public async Task<int> BufferedQuery()
     {
-        var rows = await _inquiry.QueryListAsync<Row, RowMaterializer>(Query, default);
+        var rows = await _inquiry.QueryListAsync<Row, RowMaterializer>(_query, default);
         var sum = 0;
         foreach (var row in rows)
         {
@@ -88,7 +99,7 @@ public class ActiveTelemetryBenchmarks
     public async Task<int> ConsumedStream()
     {
         var sum = 0;
-        await foreach (var row in _inquiry.QueryAsync<Row, RowMaterializer>(Query, default))
+        await foreach (var row in _inquiry.QueryAsync<Row, RowMaterializer>(_query, default))
         {
             sum += row.Id;
         }
@@ -99,7 +110,7 @@ public class ActiveTelemetryBenchmarks
     [Benchmark]
     public async Task<int> ConsumedGrid()
     {
-        await using var grid = await _inquiry.QueryMultipleAsync(Grid);
+        await using var grid = await _inquiry.QueryMultipleAsync(_grid);
         var first = await grid.ReadListAsync<Row, RowMaterializer>(default);
         var second = await grid.ReadListAsync<Row, RowMaterializer>(default);
         var sum = 0;
@@ -118,7 +129,7 @@ public class ActiveTelemetryBenchmarks
 
     [Benchmark]
     public Task<int> Batch() => _inquiry.ExecuteBatchAsync(
-        "UPDATE TelemetryRows SET Value = 1 - Value WHERE Id = @id", Items,
+        "UPDATE TelemetryRows SET Value = 1 - Value WHERE Id = @id", _items,
         static (target, id) =>
         {
             var parameter = target.CreateParameter();

@@ -27,7 +27,7 @@ public class InCardinalityBenchmarks
     private string _connectionString = null!;
     private DataOptions _linqToDbOptions = null!;
 
-    [Params(3, 10, 100, 1000)] public int ListSize;
+    [Params(3, 10, 100, 1000)] public int ListSize { get; set; }
 
     private int[] _ids = null!;
 
@@ -63,6 +63,7 @@ public class InCardinalityBenchmarks
     // ---- InList (parameterized cardinality) -------------------------------------------------
 
     [BenchmarkCategory("InList"), Benchmark(Baseline = true)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The IN list holds generated parameter names only; the values are bound as parameters.")]
     public async Task<int> InList_AdoNet()
     {
         await using var connection = new SqliteConnection(_connectionString);

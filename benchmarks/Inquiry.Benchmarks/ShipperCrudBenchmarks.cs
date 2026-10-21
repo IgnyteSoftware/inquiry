@@ -28,7 +28,7 @@ public class ShipperCrudBenchmarks
     private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     private const int TargetShipperId = 1;
     private const string TargetCompanyName = "Shipper 0";

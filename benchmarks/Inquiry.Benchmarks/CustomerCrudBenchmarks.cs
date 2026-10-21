@@ -27,7 +27,7 @@ public class CustomerCrudBenchmarks
     private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     // Fixed targets used by SelectByKey / Update / Upsert. "00000" is the first seeded row.
     private const string TargetCustomerId = "00000";

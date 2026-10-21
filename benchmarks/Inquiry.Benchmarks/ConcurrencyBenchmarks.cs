@@ -28,7 +28,7 @@ public class ConcurrencyBenchmarks
     private string _connectionString = null!;
     private DataOptions _linqToDbOptions = null!;
 
-    [Params(4, 16, 64)] public int Concurrency;
+    [Params(4, 16, 64)] public int Concurrency { get; set; }
 
     private const int TargetShipperId = 1;
 

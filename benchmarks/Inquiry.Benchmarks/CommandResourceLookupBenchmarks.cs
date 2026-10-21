@@ -11,6 +11,7 @@ namespace Inquiry.Benchmarks;
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 [Orderer(SummaryOrderPolicy.Declared, MethodOrderPolicy.Declared)]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "BenchmarkDotNet disposes the commands in the [GlobalCleanup] method; the no-op resource holds nothing.")]
 public class CommandResourceLookupBenchmarks
 {
     private readonly ConditionalWeakTable<SqliteCommand, LegacyResourceSet> _legacyResources = new();
@@ -91,11 +92,7 @@ public class CommandResourceLookupBenchmarks
         {
             lock (_gate)
             {
-                if (_items is null)
-                {
-                    throw new ObjectDisposedException(nameof(LegacyResourceSet));
-                }
-
+                ObjectDisposedException.ThrowIf(_items is null, this);
                 _items.Add(resource);
             }
         }

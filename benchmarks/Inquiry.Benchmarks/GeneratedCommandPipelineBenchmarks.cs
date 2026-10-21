@@ -28,6 +28,7 @@ namespace Inquiry.Benchmarks;
 [DisassemblyDiagnoser(maxDepth: 4, printSource: true)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "BenchmarkDotNet disposes these fields in the [GlobalCleanup] method.")]
 public class GeneratedCommandPipelineBenchmarks
 {
     private SqliteConnection _keeper = null!;
@@ -37,7 +38,6 @@ public class GeneratedCommandPipelineBenchmarks
     private ParameterBindingProbeStore _withoutInterceptorsStore = null!;
     private ParameterBindingProbeStore _inactiveTelemetryStore = null!;
     private ParameterBindingProbeStore _activeInterceptorStore = null!;
-    private CountingInterceptor _activeInterceptor = null!;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -62,8 +62,8 @@ public class GeneratedCommandPipelineBenchmarks
 
         _withoutInterceptorsProvider = CreateProvider(connectionString);
         _inactiveTelemetryProvider = CreateProvider(connectionString, addInactiveTelemetry: true);
-        _activeInterceptor = new CountingInterceptor();
-        _activeInterceptorProvider = CreateProvider(connectionString, interceptor: _activeInterceptor);
+        var activeInterceptor = new CountingInterceptor();
+        _activeInterceptorProvider = CreateProvider(connectionString, interceptor: activeInterceptor);
 
         _withoutInterceptorsStore = CreateStore(_withoutInterceptorsProvider);
         _inactiveTelemetryStore = CreateStore(_inactiveTelemetryProvider);
@@ -72,9 +72,9 @@ public class GeneratedCommandPipelineBenchmarks
         AssertAllOperationsReturnTrue(_withoutInterceptorsStore);
         AssertAllOperationsReturnTrue(_inactiveTelemetryStore);
         AssertAllOperationsReturnTrue(CreateGuardedStore(_withoutInterceptorsProvider));
-        var executingBefore = _activeInterceptor.ExecutingCount;
+        var executingBefore = activeInterceptor.ExecutingCount;
         AssertAllOperationsReturnTrue(_activeInterceptorStore);
-        if (_activeInterceptor.ExecutingCount - executingBefore != 3)
+        if (activeInterceptor.ExecutingCount - executingBefore != 3)
         {
             throw new InvalidOperationException("The active-interceptor benchmark did not execute all three commands through the interceptor pipeline.");
         }
@@ -195,24 +195,18 @@ internal sealed class GeneratedCommandRoutingGuard : IInquiry
         where TEntity : class
         => throw BoxedPathUsed();
 
-    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        InquiryCommand command,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => throw BoxedPathUsed();
-
-    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
-        InquiryCommand command,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => throw BoxedPathUsed();
-
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
         CancellationToken cancellationToken = default)
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => throw BoxedPathUsed();
+
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
         => throw BoxedPathUsed();
 
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
@@ -222,6 +216,12 @@ internal sealed class GeneratedCommandRoutingGuard : IInquiry
         int capacityHint = -1)
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => throw BoxedPathUsed();
+
+    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
         => throw BoxedPathUsed();
 
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(

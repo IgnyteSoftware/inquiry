@@ -16,4 +16,4 @@ var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(arg
 // BenchmarkDotNet exits 0 even when a benchmark or its setup fails, which would hide the failure from CI.
 return summaries.Any(s => s.HasCriticalValidationErrors || s.Reports.Any(r => !r.Success)) ? 1 : 0;
 
-internal partial class Program { }
+internal static partial class Program { }

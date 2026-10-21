@@ -30,7 +30,7 @@ public class EagerLoadingBenchmarks
     private string _connectionString = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()

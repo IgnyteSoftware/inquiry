@@ -36,7 +36,7 @@ public class PaginationBenchmarks
     private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     private const int PageSize = 20;
     private int _offset;

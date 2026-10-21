@@ -39,7 +39,7 @@ public class ProjectionAggregateBenchmarks
     private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -200,7 +200,7 @@ public class ProjectionAggregateBenchmarks
         return await RepoDb.DbConnectionExtension.SumAllAsync<RdProduct>(connection, new RepoDb.Field("UnitPrice"));
     }
 
-    // note: EF Core's SQLite provider cannot translate a decimal aggregate (UnitPrice is decimal;
+    // note: EF Core's SQLite provider cannot translate a decimal aggregate (UnitPrice is decimal, and
     // SqliteQueryableAggregateMethodTranslator throws). The EF Sum arm is omitted on SQLite — it is
     // included on the networked dialects (PostgreSQL/MySQL/SQL Server have real decimal types).
     [BenchmarkCategory("Sum"), Benchmark]

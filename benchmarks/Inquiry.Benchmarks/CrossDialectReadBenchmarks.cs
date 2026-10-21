@@ -111,7 +111,10 @@ public class CrossDialectReadBenchmarks
                 }
 
             default:
+                // Dialect is the [Params] property that acts as this setup's input.
+#pragma warning disable S3928
                 throw new ArgumentOutOfRangeException(nameof(Dialect), Dialect, "Unsupported dialect.");
+#pragma warning restore S3928
         }
 
         _services = services.BuildServiceProvider();

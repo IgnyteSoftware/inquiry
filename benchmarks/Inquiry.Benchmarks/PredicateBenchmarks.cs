@@ -34,11 +34,11 @@ public class PredicateBenchmarks
     private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     private const decimal MinPrice = 20m;
     private const string NamePattern = "Product 1%";
-    private static readonly int[] CategoryIds = { 1, 2, 3 };
+    private static readonly int[] _categoryIds = { 1, 2, 3 };
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -149,17 +149,18 @@ public class PredicateBenchmarks
     // ---- InList (CategoryID IN (...)) ---------------------------------------------------
 
     [BenchmarkCategory("InList"), Benchmark(Baseline = true)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The IN list holds generated parameter names only; the values are bound as parameters.")]
     public async Task<int> InList_AdoNet()
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         // Expand the IN list to positional parameters by hand (no driver list support).
-        var names = new string[CategoryIds.Length];
-        for (int i = 0; i < CategoryIds.Length; i++)
+        var names = new string[_categoryIds.Length];
+        for (int i = 0; i < _categoryIds.Length; i++)
         {
             names[i] = "$c" + i;
-            command.Parameters.Add(names[i], SqliteType.Integer).Value = CategoryIds[i];
+            command.Parameters.Add(names[i], SqliteType.Integer).Value = _categoryIds[i];
         }
         command.CommandText =
             $"SELECT {SelectColumns} FROM Products WHERE CategoryID IN ({string.Join(", ", names)});";
@@ -181,19 +182,19 @@ public class PredicateBenchmarks
         // Dapper expands a list parameter into the IN clause automatically.
         var list = (await connection.QueryAsync<Product>(
             $"SELECT {SelectColumns} FROM Products WHERE CategoryID IN @ids;",
-            new { ids = CategoryIds })).AsList();
+            new { ids = _categoryIds })).AsList();
         return list.Count;
     }
 
     // EF maps CategoryID as int?, so the Contains collection must be int? too.
-    private static readonly int?[] CategoryIdsNullable = CategoryIds.Select(x => (int?)x).ToArray();
+    private static readonly int?[] _categoryIdsNullable = _categoryIds.Select(x => (int?)x).ToArray();
 
     [BenchmarkCategory("InList"), Benchmark]
     public async Task<int> InList_EfCore()
     {
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var list = await ctx.Products.AsNoTracking()
-            .Where(p => CategoryIdsNullable.Contains(p.CategoryID))
+            .Where(p => _categoryIdsNullable.Contains(p.CategoryID))
             .ToListAsync();
         return list.Count;
     }
@@ -203,7 +204,7 @@ public class PredicateBenchmarks
     {
         await using var dc = new DataConnection(_linqToDbOptions);
         var list = await dc.GetTable<L2Product>()
-            .Where(p => CategoryIds.Contains(p.CategoryID!.Value))
+            .Where(p => _categoryIds.Contains(p.CategoryID!.Value))
             .ToListAsync();
         return list.Count;
     }
@@ -211,7 +212,7 @@ public class PredicateBenchmarks
     [BenchmarkCategory("InList"), Benchmark]
     public async Task<int> InList_Inquiry()
     {
-        var list = await _db.Products.InCategoriesAsync(CategoryIds);
+        var list = await _db.Products.InCategoriesAsync(_categoryIds);
         return list.Count;
     }
 }

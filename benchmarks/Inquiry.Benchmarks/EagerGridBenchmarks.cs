@@ -24,8 +24,8 @@ public class EagerGridBenchmarks
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
 
-    [Params(1000, 100000)] public int Rows;
-    [Params(4, 100)] public int RegionCount;
+    [Params(1000, 100000)] public int Rows { get; set; }
+    [Params(4, 100)] public int RegionCount { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()
