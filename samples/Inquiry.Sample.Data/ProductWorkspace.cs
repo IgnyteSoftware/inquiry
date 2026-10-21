@@ -153,7 +153,7 @@ public sealed class ProductWorkspace(
         }, cancellationToken: ct);
     }
 
-    private static IDisposable Enter(int workspaceId)
+    private static InquiryFilterContext.Scope Enter(int workspaceId)
     {
         if (workspaceId is not (1 or 2))
         {

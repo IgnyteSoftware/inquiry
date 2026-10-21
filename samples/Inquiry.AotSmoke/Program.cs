@@ -46,7 +46,7 @@ var deleted = await store.DeleteByKeyAsync(widget.Key);
 
 if (inserted != 1 || loaded?.Name != "Anvil" || !updated || all.Count != 1 || all[0].Name != "Sprocket" || !deleted)
 {
-    Console.Error.WriteLine("AOT-SMOKE-FAILED");
+    await Console.Error.WriteLineAsync("AOT-SMOKE-FAILED");
     return 1;
 }
 

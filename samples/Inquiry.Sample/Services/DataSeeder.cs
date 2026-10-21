@@ -75,7 +75,9 @@ public sealed class DataSeeder : IInquiryDataSeeder
         {
             new Customer { CustomerID = "ALFKI", CompanyName = "Alfreds Futterkiste",     ContactName = "Maria Anders",     ContactTitle = "Sales Representative", Country = "Germany", City = "Berlin",    Phone = "030-0074321" },
             new Customer { CustomerID = "BLAUS", CompanyName = "Blauer See Delikatessen", ContactName = "Hanna Moos",       ContactTitle = "Sales Representative", Country = "Germany", City = "Mannheim",  Phone = "0621-08460"  },
+#pragma warning disable S1313 // "91.24.45.40" is a French phone number from Northwind, not an IP address.
             new Customer { CustomerID = "BONAP", CompanyName = "Bon app'",                ContactName = "Laurence Lebihan", ContactTitle = "Owner",                Country = "France",  City = "Marseille", Phone = "91.24.45.40" },
+#pragma warning restore S1313
             new Customer { CustomerID = "EASTC", CompanyName = "Eastern Connection",      ContactName = "Ann Devon",        ContactTitle = "Sales Agent",          Country = "UK",      City = "London",    Phone = "(171) 555-0297" },
             new Customer { CustomerID = "FRANK", CompanyName = "Frankenversand",          ContactName = "Peter Franken",    ContactTitle = "Marketing Manager",    Country = "Germany", City = "München",   Phone = "089-0877310" },
         })
@@ -85,10 +87,10 @@ public sealed class DataSeeder : IInquiryDataSeeder
 
         // Employees — InsertReturning to capture IDENTITY-assigned EmployeeID for the
         // reports-to chain and the EmployeeTerritories join below.
-        var nancy = await _employees.InsertReturningAsync(new Employee { FirstName = "Nancy", LastName = "Davolio", Title = "Sales Representative", HireDate = new DateTime(1992, 5, 1) }, cancellationToken).ConfigureAwait(false);
-        var andrew = await _employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller", Title = "Vice President, Sales", HireDate = new DateTime(1992, 8, 14) }, cancellationToken).ConfigureAwait(false);
-        var janet = await _employees.InsertReturningAsync(new Employee { FirstName = "Janet", LastName = "Leverling", Title = "Sales Representative", HireDate = new DateTime(1992, 4, 1) }, cancellationToken).ConfigureAwait(false);
-        var margaret = await _employees.InsertReturningAsync(new Employee { FirstName = "Margaret", LastName = "Peacock", Title = "Sales Representative", HireDate = new DateTime(1993, 5, 3) }, cancellationToken).ConfigureAwait(false);
+        var nancy = await _employees.InsertReturningAsync(new Employee { FirstName = "Nancy", LastName = "Davolio", Title = "Sales Representative", HireDate = new DateTime(1992, 5, 1, 0, 0, 0, DateTimeKind.Unspecified) }, cancellationToken).ConfigureAwait(false);
+        var andrew = await _employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller", Title = "Vice President, Sales", HireDate = new DateTime(1992, 8, 14, 0, 0, 0, DateTimeKind.Unspecified) }, cancellationToken).ConfigureAwait(false);
+        var janet = await _employees.InsertReturningAsync(new Employee { FirstName = "Janet", LastName = "Leverling", Title = "Sales Representative", HireDate = new DateTime(1992, 4, 1, 0, 0, 0, DateTimeKind.Unspecified) }, cancellationToken).ConfigureAwait(false);
+        var margaret = await _employees.InsertReturningAsync(new Employee { FirstName = "Margaret", LastName = "Peacock", Title = "Sales Representative", HireDate = new DateTime(1993, 5, 3, 0, 0, 0, DateTimeKind.Unspecified) }, cancellationToken).ConfigureAwait(false);
 
         // Nancy, Janet, and Margaret report to Andrew.
         if (andrew?.EmployeeID is int andrewID)
@@ -130,8 +132,8 @@ public sealed class DataSeeder : IInquiryDataSeeder
         // Products — InsertReturning so we capture IDs for the order-details rows below.
         var chai = await _products.InsertReturningAsync(new Product { ProductName = "Chai", SupplierID = exoticLiquids?.SupplierID, CategoryID = beverages?.CategoryID, UnitPrice = 18m, UnitsInStock = 39, ReorderLevel = 10 }, cancellationToken).ConfigureAwait(false);
         var chang = await _products.InsertReturningAsync(new Product { ProductName = "Chang", SupplierID = exoticLiquids?.SupplierID, CategoryID = beverages?.CategoryID, UnitPrice = 19m, UnitsInStock = 17, ReorderLevel = 25 }, cancellationToken).ConfigureAwait(false);
-        var aniseed = await _products.InsertReturningAsync(new Product { ProductName = "Aniseed Syrup", SupplierID = exoticLiquids?.SupplierID, CategoryID = condiments?.CategoryID, UnitPrice = 10m, UnitsInStock = 13, ReorderLevel = 25 }, cancellationToken).ConfigureAwait(false);
-        var cajun = await _products.InsertReturningAsync(new Product { ProductName = "Chef Anton's Cajun Seasoning", SupplierID = newOrleansCajun?.SupplierID, CategoryID = condiments?.CategoryID, UnitPrice = 22m, UnitsInStock = 53, ReorderLevel = 0 }, cancellationToken).ConfigureAwait(false);
+        await _products.InsertReturningAsync(new Product { ProductName = "Aniseed Syrup", SupplierID = exoticLiquids?.SupplierID, CategoryID = condiments?.CategoryID, UnitPrice = 10m, UnitsInStock = 13, ReorderLevel = 25 }, cancellationToken).ConfigureAwait(false);
+        await _products.InsertReturningAsync(new Product { ProductName = "Chef Anton's Cajun Seasoning", SupplierID = newOrleansCajun?.SupplierID, CategoryID = condiments?.CategoryID, UnitPrice = 22m, UnitsInStock = 53, ReorderLevel = 0 }, cancellationToken).ConfigureAwait(false);
         var tofu = await _products.InsertReturningAsync(new Product { ProductName = "Tofu", SupplierID = grandmaKellysHomstead?.SupplierID, CategoryID = produce?.CategoryID, UnitPrice = 23.25m, UnitsInStock = 35, ReorderLevel = 0 }, cancellationToken).ConfigureAwait(false);
         var konbu = await _products.InsertReturningAsync(new Product { ProductName = "Konbu", SupplierID = grandmaKellysHomstead?.SupplierID, CategoryID = seafood?.CategoryID, UnitPrice = 6m, UnitsInStock = 24, ReorderLevel = 5 }, cancellationToken).ConfigureAwait(false);
 
@@ -176,7 +178,9 @@ public sealed class DataSeeder : IInquiryDataSeeder
         await _demographics.InsertAsync(new CustomerDemographic { CustomerTypeID = "VIP", CustomerDesc = "Very Important Customer" }, cancellationToken).ConfigureAwait(false);
         await _demographics.InsertAsync(new CustomerDemographic { CustomerTypeID = "REGULAR", CustomerDesc = "Standard ordering customer" }, cancellationToken).ConfigureAwait(false);
         await _customerDemographics.InsertAsync(new CustomerCustomerDemo { CustomerID = "ALFKI", CustomerTypeID = "VIP" }, cancellationToken).ConfigureAwait(false);
+#pragma warning disable S1313 // "91.24.45.40" is a French phone number from Northwind, not an IP address.
         await _customerDemographics.InsertAsync(new CustomerCustomerDemo { CustomerID = "BONAP", CustomerTypeID = "REGULAR" }, cancellationToken).ConfigureAwait(false);
+#pragma warning restore S1313
 
         // Orders + Order Details — round-trip the IDENTITY-keyed Orders row through
         // InsertReturning so we can reference the new OrderID from the composite-key detail
@@ -185,9 +189,9 @@ public sealed class DataSeeder : IInquiryDataSeeder
         {
             CustomerID = "ALFKI",
             EmployeeID = nancy?.EmployeeID,
-            OrderDate = new DateTime(1996, 7, 4),
-            RequiredDate = new DateTime(1996, 8, 1),
-            ShippedDate = new DateTime(1996, 7, 16),
+            OrderDate = new DateTime(1996, 7, 4, 0, 0, 0, DateTimeKind.Unspecified),
+            RequiredDate = new DateTime(1996, 8, 1, 0, 0, 0, DateTimeKind.Unspecified),
+            ShippedDate = new DateTime(1996, 7, 16, 0, 0, 0, DateTimeKind.Unspecified),
             ShipVia = 3,
             Freight = 32.38m,
             ShipName = "Alfreds Futterkiste",
@@ -197,10 +201,12 @@ public sealed class DataSeeder : IInquiryDataSeeder
 
         var secondOrder = await _orders.InsertReturningAsync(new Order
         {
+#pragma warning disable S1313 // "91.24.45.40" is a French phone number from Northwind, not an IP address.
             CustomerID = "BONAP",
+#pragma warning restore S1313
             EmployeeID = janet?.EmployeeID,
-            OrderDate = new DateTime(1996, 7, 5),
-            RequiredDate = new DateTime(1996, 8, 2),
+            OrderDate = new DateTime(1996, 7, 5, 0, 0, 0, DateTimeKind.Unspecified),
+            RequiredDate = new DateTime(1996, 8, 2, 0, 0, 0, DateTimeKind.Unspecified),
             ShipVia = 1,
             Freight = 11.61m,
             ShipName = "Bon app'",
