@@ -10,7 +10,7 @@ namespace Inquiry.Generators.Tests;
 
 public sealed partial class InquiryGeneratorTests
 {
-    private static readonly Lazy<JsonSchema> s_manifestSchema = new(() =>
+    private static readonly Lazy<JsonSchema> _manifestSchema = new(() =>
         JsonSchema.FromText(File.ReadAllText(RepositoryFile("docs", "schema-manifest-v1.schema.json"))));
     private const string ManifestSource = """
         using Inquiry.Entities; namespace Demo;
@@ -98,7 +98,7 @@ public sealed partial class InquiryGeneratorTests
     private static void AssertValidAgainstCheckedInSchema(string instanceJson)
     {
         using var instance = JsonDocument.Parse(instanceJson);
-        var result = s_manifestSchema.Value.Evaluate(instance.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        var result = _manifestSchema.Value.Evaluate(instance.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
         Assert.True(result.IsValid, result.ToString());
     }
 

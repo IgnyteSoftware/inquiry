@@ -182,8 +182,8 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void EnumAsStringInPredicateProjectsThroughArrayBindOnPostgreSql()
     {
-        // The PostgreSQL '= ANY(array)' path binds the whole collection via InquiryArrayParameter.Bind;
-        // the projection must reach it too, so the bound array carries member-name strings, not integers.
+        // The PostgreSQL '= ANY(array)' path binds the whole collection via InquiryArrayParameter.Bind.
+        // The projection must reach it too, so the bound array carries member-name strings, not integers.
         var result = RunGenerator(EnumAsStringInSource, dialect: "PostgreSql");
         AssertNoErrors(result);
 

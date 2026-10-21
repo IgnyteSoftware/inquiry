@@ -70,8 +70,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ065");
     }
 
-    // An over-fixed-width Length is not a range error (it's a legal MAX column), so it must NOT fire INQ065;
-    // the SQL Server DDL maps it to NVARCHAR(MAX) instead of the illegal NVARCHAR(5000).
+    // An over-fixed-width Length is not a range error (it's a legal MAX column), so it must NOT fire INQ065.
+    // The SQL Server DDL maps it to NVARCHAR(MAX) instead of the illegal NVARCHAR(5000).
     [Fact]
     public void SqlServerOverLengthString_MapsToNvarcharMaxWithoutDiagnostic()
     {

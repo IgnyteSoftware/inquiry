@@ -202,7 +202,7 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // INSERT omits the rowversion (database supplies it); no version bump in SET (DB advances it);
+        // INSERT omits the rowversion (database supplies it); no version bump in SET (DB advances it).
         // WHERE still composes the token; OUTPUT returns the new value.
         // The rowversion is absent from INSERT (database supplies it); the key is client-supplied here
         // so it is insertable, but [RowVer] is not (and is not bound in the INSERT binder).

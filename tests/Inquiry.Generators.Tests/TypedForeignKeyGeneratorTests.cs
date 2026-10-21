@@ -341,7 +341,7 @@ public sealed partial class InquiryGeneratorTests
         }
 
         var createStart = text.LastIndexOf("CREATE TABLE", tableStart, StringComparison.Ordinal);
-        var end = text.IndexOf(";", tableStart, StringComparison.Ordinal);
+        var end = text.IndexOf(';', tableStart);
         return end > createStart ? text.Substring(createStart, end - createStart + 1) : string.Empty;
     }
 }

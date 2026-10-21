@@ -54,9 +54,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {projected}{typeName});", store);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", store);
         Assert.Contains("static _e =>", store);
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(
-            store,
-            "StrongIdConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(StrongIdToProviderRegex().Matches(store).Cast<global::System.Text.RegularExpressions.Match>());
         Assert.DoesNotContain(".ToArray()", store);
         Assert.DoesNotContain(".ToList()", store);
     }
@@ -124,8 +122,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {referenceProjection}{referenceTypeName});", reference);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", nullableValue);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", reference);
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(nullableValue, "StrongIdConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(reference, "RefIdConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(StrongIdToProviderRegex().Matches(nullableValue).Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(RefIdToProviderRegex().Matches(reference).Cast<global::System.Text.RegularExpressions.Match>());
     }
 
     [Fact]
@@ -188,4 +186,10 @@ public sealed partial class InquiryGeneratorTests
             "Oracle" => $"private const string _sqlDeleteWhere_DeleteAllAsync = \"DELETE FROM {table} WHERE Id IN (SELECT jt.val FROM JSON_TABLE(:iq1$Idxxxx$30d4cf864d6e68, '$[*]' COLUMNS(val {(providerIsString ? "VARCHAR2(4000)" : "NUMBER(19)")} PATH '$')) jt)\";",
             _ => throw new global::System.ArgumentOutOfRangeException(nameof(dialect)),
         };
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("StrongIdConverter>.Instance.ToProvider\\(")]
+    private static partial global::System.Text.RegularExpressions.Regex StrongIdToProviderRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("RefIdConverter>.Instance.ToProvider\\(")]
+    private static partial global::System.Text.RegularExpressions.Regex RefIdToProviderRegex();
 }

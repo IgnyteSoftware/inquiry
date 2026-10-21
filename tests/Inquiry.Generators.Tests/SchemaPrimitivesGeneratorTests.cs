@@ -195,7 +195,7 @@ public sealed partial class InquiryGeneratorTests
             """;
         var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("duplicate index", StringComparison.Ordinal));
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(ExtractSchemaDdl(result), "CREATE INDEX").Cast<System.Text.RegularExpressions.Match>());
+        Assert.Single(CreateIndexRegex().Matches(ExtractSchemaDdl(result)).Cast<System.Text.RegularExpressions.Match>());
     }
 
     [Theory]
@@ -619,4 +619,7 @@ public sealed partial class InquiryGeneratorTests
         "SetDefault" => "SET DEFAULT",
         _ => action.ToUpperInvariant(),
     };
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("CREATE INDEX")]
+    private static partial global::System.Text.RegularExpressions.Regex CreateIndexRegex();
 }

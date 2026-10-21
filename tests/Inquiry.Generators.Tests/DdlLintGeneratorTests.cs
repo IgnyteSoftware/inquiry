@@ -13,7 +13,7 @@ namespace Inquiry.Generators.Tests;
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
-    private static readonly string[] EnableDdlLints = { "INQ061", "INQ062", "INQ064", "INQ066", "INQ067" };
+    private static readonly string[] _enableDdlLints = { "INQ061", "INQ062", "INQ064", "INQ066", "INQ067" };
 
     private const string UnindexedFkSource = """
         using Inquiry.Entities;
@@ -64,7 +64,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void UnindexedForeignKeyReportsINQ061AsInfo_Sqlite()
     {
-        var result = RunGenerator(UnindexedFkSource, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(UnindexedFkSource, enableDiagnostics: _enableDdlLints);
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ061");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
@@ -83,7 +83,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void IndexedForeignKeyDoesNotReportINQ061_Sqlite()
     {
-        var result = RunGenerator(IndexedFkSource, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(IndexedFkSource, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ061");
     }
 
@@ -93,7 +93,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("Oracle")]
     public void UnindexedForeignKeyReportsINQ061_OnNonAutoIndexingDialects(string dialect)
     {
-        var result = RunGenerator(UnindexedFkSource, dialect: dialect, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(UnindexedFkSource, dialect: dialect, enableDiagnostics: _enableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ061");
     }
 
@@ -103,7 +103,7 @@ public sealed partial class InquiryGeneratorTests
     public void MySqlIsExemptBecauseItAutoIndexesForeignKeys(string dialect)
     {
         // MySQL/MariaDB InnoDB creates a backing index for every FK constraint, so the lint must not fire.
-        var result = RunGenerator(UnindexedFkSource, dialect: dialect, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(UnindexedFkSource, dialect: dialect, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ061");
     }
 
@@ -136,7 +136,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: dialect, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, dialect: dialect, enableDiagnostics: _enableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ061");
     }
 
@@ -161,7 +161,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void DecimalWithoutPrecisionReportsINQ062AsInfo_Sqlite()
     {
-        var result = RunGenerator(DecimalSource, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(DecimalSource, enableDiagnostics: _enableDdlLints);
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ062");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
@@ -183,7 +183,7 @@ public sealed partial class InquiryGeneratorTests
     {
         // INQ062 has no dialect exemption (unlike INQ061's MySQL FK case); the FK-auto-index restructure
         // must not accidentally suppress it.
-        var result = RunGenerator(DecimalSource, dialect: dialect, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(DecimalSource, dialect: dialect, enableDiagnostics: _enableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ062");
     }
 
@@ -208,7 +208,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ062");
     }
 
@@ -246,7 +246,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void UnindexedFilterColumnsReportINQ064_Sqlite()
     {
-        var result = RunGenerator(FilterSource, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(FilterSource, enableDiagnostics: _enableDdlLints);
 
         // Email (field select) and Name (predicate) are both filtered and unindexed.
         var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage(CultureInfo.CurrentCulture)).ToArray();
@@ -292,7 +292,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
 
         var lints = result.RunResult.Diagnostics.Where(d => d.Id == "INQ064").Select(d => d.GetMessage(CultureInfo.CurrentCulture)).ToArray();
         // Status (the WHERE filter) is flagged; LastSeen (the SET column) is not.
@@ -327,7 +327,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ064");
     }
 
@@ -353,7 +353,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ062");
     }
 
@@ -378,7 +378,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void NullableColumnWithDefaultReportsINQ066AsInfo()
     {
-        var result = RunGenerator(NullableWithDefaultSource, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(NullableWithDefaultSource, enableDiagnostics: _enableDdlLints);
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ066");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
@@ -412,7 +412,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ066");
     }
 
@@ -435,14 +435,14 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ066");
     }
 
     [Fact]
     public void NullableColumnWithDefaultIsDialectAgnostic()
     {
-        var result = RunGenerator(NullableWithDefaultSource, dialect: "PostgreSql", enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(NullableWithDefaultSource, dialect: "PostgreSql", enableDiagnostics: _enableDdlLints);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ066");
     }
 
@@ -467,7 +467,7 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void UnboundedStringColumnReportsINQ067AsInfo()
     {
-        var result = RunGenerator(UnboundedStringSource, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(UnboundedStringSource, enableDiagnostics: _enableDdlLints);
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ067");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
@@ -503,7 +503,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ067");
     }
 
@@ -526,7 +526,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ067");
     }
 
@@ -546,7 +546,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, enableDiagnostics: EnableDdlLints);
+        var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ067");
     }
 }

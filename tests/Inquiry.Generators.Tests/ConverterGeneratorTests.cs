@@ -441,8 +441,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("reader.IsDBNull(2) ? null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.LabelConverter>.Instance.FromProvider(reader.GetString(2))", entity);
         Assert.Contains("_e.Amount is null ? global::System.DBNull.Value", store);
         Assert.Contains("_e.Label is null ? global::System.DBNull.Value", store);
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(store, "AmountConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(store, "LabelConverter>.Instance.ToProvider\\(").Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(AmountToProviderRegex().Matches(store).Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(LabelToProviderRegex().Matches(store).Cast<global::System.Text.RegularExpressions.Match>());
     }
 
     [Fact]
@@ -554,8 +554,8 @@ public sealed partial class InquiryGeneratorTests
     [Fact]
     public void ConverterInPredicateProjectsThroughArrayBindOnPostgreSql()
     {
-        // The PostgreSQL '= ANY(array)' path binds the whole collection via InquiryArrayParameter.Bind;
-        // the projection must reach it too, so the bound array carries provider decimals, not Money structs.
+        // The PostgreSQL '= ANY(array)' path binds the whole collection via InquiryArrayParameter.Bind.
+        // The projection must reach it too, so the bound array carries provider decimals, not Money structs.
         var result = RunGenerator(ConverterInSource, dialect: "PostgreSql");
         AssertNoErrors(result);
 
@@ -615,4 +615,10 @@ public sealed partial class InquiryGeneratorTests
         // Per-element null guard, binding a typed (string?)null instead of calling ToProvider(null).
         Assert.Contains("global::System.Linq.Enumerable.Select(tags, static _e => _e is null ? (string?)null : global::Inquiry.Entities.InquiryConverterCache<global::Demo.LabelConverter>.Instance.ToProvider(_e))", text);
     }
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("AmountConverter>.Instance.ToProvider\\(")]
+    private static partial global::System.Text.RegularExpressions.Regex AmountToProviderRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("LabelConverter>.Instance.ToProvider\\(")]
+    private static partial global::System.Text.RegularExpressions.Regex LabelToProviderRegex();
 }

@@ -67,7 +67,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var generated = string.Join("\n", result.RunResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
-        Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(generated, "CREATE TYPE").Count);
+        Assert.Equal(2, CreateTypeRegex().Count(generated));
         Assert.Contains("AS TABLE ([Value] INT NULL)", generated);
         Assert.Contains("AS TABLE ([Value] INT NOT NULL)", generated);
     }
@@ -80,13 +80,23 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("[InquiryColumn(SqlType = \"XML\")] public string Value { get; set; } = \"\";")]
     public void SqlServerInvalidTvpPhysicalMappingReportsInq076AndEmitsUnreachableStub(string property)
     {
+        var element = "string";
+        if (property.Contains("Guid"))
+        {
+            element = "System.Guid";
+        }
+        else if (property.Contains("DateTime"))
+        {
+            element = "System.DateTime";
+        }
+
         var source = $$"""
             using System.Collections.Generic; using System.Threading; using System.Threading.Tasks;
             using Inquiry.Entities; using Inquiry.Stores;
             namespace Demo;
             [InquiryView("VInvalid")] public sealed class Item { {{property}} }
             public partial class Store : InquiryStore<Item>
-            { [InquiryExists, InquiryWhere("Value", Compare.In)] public partial Task<bool> Find(IReadOnlyList<{{(property.Contains("Guid") ? "System.Guid" : property.Contains("DateTime") ? "System.DateTime" : "string")}}> values, CancellationToken ct = default); }
+            { [InquiryExists, InquiryWhere("Value", Compare.In)] public partial Task<bool> Find(IReadOnlyList<{{element}}> values, CancellationToken ct = default); }
             """;
 
         var result = RunGenerator(
@@ -156,9 +166,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Good\", values", store);
         Assert.DoesNotContain("InquiryTvpParameter.Bind(_c, \"@Bad\", values", store);
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(
-            store,
-            "throw new global::System.NotSupportedException").Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(ThrowNotSupportedRegex().Matches(store).Cast<global::System.Text.RegularExpressions.Match>());
     }
 
     [Fact]
@@ -200,8 +208,16 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("[InquiryColumn(Scale = 8)] public System.DateTime Value { get; set; }")]
     public void SqlServerInvalidInferredOrWhitespaceFacetsReportOnlyInq076AndDoNotEmitStubByDefault(string property)
     {
-        var element = property.Contains("decimal", StringComparison.Ordinal) ? "decimal"
-            : property.Contains("DateTime", StringComparison.Ordinal) ? "System.DateTime" : "int";
+        var element = "int";
+        if (property.Contains("decimal", StringComparison.Ordinal))
+        {
+            element = "decimal";
+        }
+        else if (property.Contains("DateTime", StringComparison.Ordinal))
+        {
+            element = "System.DateTime";
+        }
+
         var source = $$"""
             using System.Collections.Generic; using System.Threading; using System.Threading.Tasks;
             using Inquiry.Entities; using Inquiry.Stores;
@@ -283,7 +299,7 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Contains("static _e => unchecked((global::System.Int32)(global::Inquiry.Entities.InquiryConverterCache<global::Demo.TokenConverter>.Instance.ToProvider(_e)))", store);
         Assert.Contains("static _e => _e.HasValue ? (global::System.Int32?)unchecked((global::System.Int32)(global::Inquiry.Entities.InquiryConverterCache<global::Demo.TokenConverter>.Instance.ToProvider(_e.Value))) : null", store);
-        Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(store, "TokenConverter>.Instance.ToProvider\\(").Count);
+        Assert.Equal(2, TokenToProviderRegex().Count(store));
         Assert.DoesNotContain("_e.HasValue ?", store.Substring(store.IndexOf("NonNullable", StringComparison.Ordinal), store.IndexOf("Nullable", store.IndexOf("NonNullable", StringComparison.Ordinal) + 1, StringComparison.Ordinal) - store.IndexOf("NonNullable", StringComparison.Ordinal)));
     }
 
@@ -299,8 +315,23 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var store = GeneratedProductStoreText(result);
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(store, "private static readonly global::Inquiry.SqlServer.Parameters.InquiryTvpDescriptor").Cast<global::System.Text.RegularExpressions.Match>());
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(store, "InquiryTvpDescriptor.Get\\(").Cast<global::System.Text.RegularExpressions.Match>());
-        Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(store, "_inquiryTvpDescriptor_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c\\);").Count);
+        Assert.Single(TvpDescriptorFieldRegex().Matches(store).Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(TvpDescriptorGetRegex().Matches(store).Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Equal(2, TvpDescriptorUsageRegex().Count(store));
     }
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("throw new global::System.NotSupportedException")]
+    private static partial global::System.Text.RegularExpressions.Regex ThrowNotSupportedRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("TokenConverter>.Instance.ToProvider\\(")]
+    private static partial global::System.Text.RegularExpressions.Regex TokenToProviderRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("private static readonly global::Inquiry.SqlServer.Parameters.InquiryTvpDescriptor")]
+    private static partial global::System.Text.RegularExpressions.Regex TvpDescriptorFieldRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("InquiryTvpDescriptor.Get\\(")]
+    private static partial global::System.Text.RegularExpressions.Regex TvpDescriptorGetRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("_inquiryTvpDescriptor_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c\\);")]
+    private static partial global::System.Text.RegularExpressions.Regex TvpDescriptorUsageRegex();
 }

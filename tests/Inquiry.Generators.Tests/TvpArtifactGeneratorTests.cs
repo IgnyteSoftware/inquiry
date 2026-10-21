@@ -50,7 +50,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("public const string ProviderArtifactsDdl", schema);
         Assert.Contains("public const string ProviderArtifactsValidationSql", schema);
         Assert.Contains("public const string Ddl = ProviderArtifactsDdl +", schema);
-        Assert.Equal(3, global::System.Text.RegularExpressions.Regex.Matches(schema, "CREATE TYPE").Count);
+        Assert.Equal(3, CreateTypeRegex().Count(schema));
         Assert.Contains("TYPE_ID(N'[dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]')", schema);
         Assert.Contains("AS TABLE ([Value] INT NOT NULL)", schema);
         Assert.Contains("AS TABLE ([Value] NVARCHAR(64) NOT NULL)", schema);
@@ -243,7 +243,7 @@ public sealed partial class InquiryGeneratorTests
         var leftSchema = Assert.Single(left.RunResult.GeneratedTrees, static tree => tree.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
         var rightSchema = Assert.Single(right.RunResult.GeneratedTrees, static tree => tree.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Equal(leftSchema, rightSchema);
-        Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(leftSchema, "CREATE TYPE").Count);
+        Assert.Equal(2, CreateTypeRegex().Count(leftSchema));
     }
 
     [Fact]
@@ -277,7 +277,13 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var schema = Assert.Single(result.RunResult.GeneratedTrees, static tree => tree.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
-        Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(schema, "SCHEMA_ID\\(N'z].schema'\\)").Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Single(SchemaIdZSchemaRegex().Matches(schema).Cast<global::System.Text.RegularExpressions.Match>());
         Assert.True(schema.IndexOf("CREATE SCHEMA [z]].schema]", StringComparison.Ordinal) < schema.IndexOf("CREATE TYPE [z]].schema]", StringComparison.Ordinal));
     }
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("CREATE TYPE")]
+    private static partial global::System.Text.RegularExpressions.Regex CreateTypeRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("SCHEMA_ID\\(N'z].schema'\\)")]
+    private static partial global::System.Text.RegularExpressions.Regex SchemaIdZSchemaRegex();
 }
