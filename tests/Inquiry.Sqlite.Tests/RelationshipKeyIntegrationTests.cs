@@ -53,7 +53,7 @@ public partial class RkTerritoryStore : InquiryStore<RkTerritory>
 [InquiryTable("BkDoc")]
 public sealed class BkDoc
 {
-    [InquiryKey(Length = 4)] public byte[] Hash { get; set; } = new byte[0];
+    [InquiryKey(Length = 4)] public byte[] Hash { get; set; } = Array.Empty<byte>();
     [InquiryColumn("Title")] public string Title { get; set; } = string.Empty;
 
     [InquiryRelation(nameof(BkNote.DocHash))]
@@ -76,15 +76,15 @@ public sealed class BkNote
 [InquiryTable("BkTag")]
 public sealed class BkTag
 {
-    [InquiryKey(Length = 4)] public byte[] Hash { get; set; } = new byte[0];
+    [InquiryKey(Length = 4)] public byte[] Hash { get; set; } = Array.Empty<byte>();
     [InquiryColumn("Label")] public string Label { get; set; } = string.Empty;
 }
 
 [InquiryTable("BkDocTag")]
 public sealed class BkDocTag
 {
-    [InquiryKey(Length = 4)] public byte[] DocHash { get; set; } = new byte[0];
-    [InquiryKey(Length = 4)] public byte[] TagHash { get; set; } = new byte[0];
+    [InquiryKey(Length = 4)] public byte[] DocHash { get; set; } = Array.Empty<byte>();
+    [InquiryKey(Length = 4)] public byte[] TagHash { get; set; } = Array.Empty<byte>();
 }
 
 public partial class BkDocStore : InquiryStore<BkDoc>

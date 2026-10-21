@@ -79,6 +79,7 @@ public sealed class CancellationTokenPropagationTests
         {
             await foreach (var _ in store.SelectAllAsync(PreCancelled))
             {
+                // Enumerate only. The test checks the exception that enumeration throws.
             }
         });
     }
@@ -113,6 +114,7 @@ public sealed class CancellationTokenPropagationTests
         {
             await foreach (var _ in inquiry.QueryAsync<Customer>($"SELECT * FROM Customers", PreCancelled))
             {
+                // Enumerate only. The test checks the exception that enumeration throws.
             }
         });
     }
@@ -208,7 +210,7 @@ public sealed class CancellationTokenPropagationTests
                 count++;
                 if (count == 1)
                 {
-                    cts.Cancel();
+                    await cts.CancelAsync();
                 }
             }
         });
@@ -236,7 +238,7 @@ public sealed class CancellationTokenPropagationTests
                 count++;
                 if (count == 1)
                 {
-                    cts.Cancel();
+                    await cts.CancelAsync();
                 }
             }
         });

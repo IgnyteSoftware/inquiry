@@ -5,14 +5,14 @@ namespace Inquiry.Sqlite.Tests.Fixtures;
 
 public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
 {
-    public async Task<SchemaSnapshot> ReadAsync(DbConnection connection, CancellationToken ct = default)
+    public async Task<SchemaSnapshot> ReadAsync(DbConnection connection, CancellationToken cancellationToken = default)
     {
         var tableNames = new List<string>();
         await using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';";
-            await using var r = await cmd.ExecuteReaderAsync(ct);
-            while (await r.ReadAsync(ct))
+            await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await r.ReadAsync(cancellationToken))
             {
                 tableNames.Add(r.GetString(0));
             }
@@ -26,8 +26,8 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
             await using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = $"PRAGMA table_info(\"{table}\");";
-                await using var r = await cmd.ExecuteReaderAsync(ct);
-                while (await r.ReadAsync(ct))
+                await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await r.ReadAsync(cancellationToken))
                 {
                     var name = r.GetString(1);
                     var notNull = r.GetInt32(3) == 1;
@@ -47,8 +47,8 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
             await using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = $"PRAGMA foreign_key_list(\"{table}\");";
-                await using var r = await cmd.ExecuteReaderAsync(ct);
-                while (await r.ReadAsync(ct))
+                await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await r.ReadAsync(cancellationToken))
                 {
                     fks.Add(new ForeignKeySnapshot(new[] { r.GetString(3) }, r.GetString(2), new[] { r.GetString(4) }));
                 }
@@ -59,8 +59,8 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
             await using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = $"PRAGMA index_list(\"{table}\");";
-                await using var r = await cmd.ExecuteReaderAsync(ct);
-                while (await r.ReadAsync(ct))
+                await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await r.ReadAsync(cancellationToken))
                 {
                     indexNames.Add(r.GetString(1));
                 }
@@ -70,8 +70,8 @@ public sealed class SqliteSchemaIntrospector : ISchemaIntrospector
                 var cols = new List<string>();
                 await using var cmd = connection.CreateCommand();
                 cmd.CommandText = $"PRAGMA index_info(\"{ix}\");";
-                await using var r = await cmd.ExecuteReaderAsync(ct);
-                while (await r.ReadAsync(ct))
+                await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await r.ReadAsync(cancellationToken))
                 {
                     cols.Add(r.GetString(2));
                 }

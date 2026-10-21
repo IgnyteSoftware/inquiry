@@ -87,7 +87,7 @@ public sealed class UnsignedTypesIntegrationTests
     }
 
     // ---------------------------------------------------------------------------
-    // Bug #49 + #48: sbyte (maps to DbTypeClass.Byte → DbType.SByte on write;
+    // Bug #49 + #48: sbyte (maps to DbTypeClass.Byte → DbType.SByte on write,
     // GetFieldValue<sbyte> on read).
     // Low value (positive, within byte range) — isolates bug, not overflow.
     // ---------------------------------------------------------------------------
@@ -101,7 +101,8 @@ public sealed class UnsignedTypesIntegrationTests
         // sbyte = 42: value is positive; triggers bug #49 (DbType.SByte).
         var item = MakeItem(1);
         item.SByteVal = 42;
-        await store.InsertAsync(item); // bug #49 — expected to throw before fix
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49 — expected to throw before fix
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -127,7 +128,8 @@ public sealed class UnsignedTypesIntegrationTests
         // sbyte = -1; SQLite stores INTEGER as signed 64-bit so this can be stored.
         var item = MakeItem(1);
         item.SByteVal = -1;
-        await store.InsertAsync(item);
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item));
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -156,7 +158,8 @@ public sealed class UnsignedTypesIntegrationTests
 
         var item = MakeItem(1);
         item.UInt16Val = 1000;
-        await store.InsertAsync(item); // bug #49
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -200,7 +203,8 @@ public sealed class UnsignedTypesIntegrationTests
 
         var item = MakeItem(1);
         item.UInt32Val = 1000u;
-        await store.InsertAsync(item); // bug #49
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -244,7 +248,8 @@ public sealed class UnsignedTypesIntegrationTests
 
         var item = MakeItem(1);
         item.UInt64Val = 1000ul;
-        await store.InsertAsync(item); // bug #49
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -288,7 +293,8 @@ public sealed class UnsignedTypesIntegrationTests
 
         var item = MakeItem(1);
         item.EnumSByteVal = SampleEnumSByte.Negative;
-        await store.InsertAsync(item); // bug #49
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -317,7 +323,8 @@ public sealed class UnsignedTypesIntegrationTests
 
         var item = MakeItem(1);
         item.EnumUInt16Val = SampleEnumUInt16.AboveShortMax;
-        await store.InsertAsync(item); // bug #49
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -346,7 +353,8 @@ public sealed class UnsignedTypesIntegrationTests
 
         var item = MakeItem(1);
         item.EnumUInt32Val = SampleEnumUInt32.AboveIntMax;
-        await store.InsertAsync(item); // bug #49
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -375,7 +383,8 @@ public sealed class UnsignedTypesIntegrationTests
 
         var item = MakeItem(1);
         item.EnumUInt64Val = SampleEnumUInt64.Large;
-        await store.InsertAsync(item); // bug #49
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]

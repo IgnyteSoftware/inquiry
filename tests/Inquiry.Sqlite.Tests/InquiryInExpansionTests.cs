@@ -196,7 +196,7 @@ public class InquiryInExpansionTests
         InquiryInExpansion.Expand(
             command,
             "@d",
-            new List<System.DateTime> { new(2024, 1, 1), new(2024, 2, 2) },
+            new List<System.DateTime> { new(2024, 1, 1, 0, 0, 0, DateTimeKind.Unspecified), new(2024, 2, 2, 0, 0, 0, DateTimeKind.Unspecified) },
             InquiryOptions.DefaultMaxParametersPerCommand,
             dbType: System.Data.DbType.DateTime2);
 
@@ -213,7 +213,7 @@ public class InquiryInExpansionTests
         InquiryInExpansion.ExpandNotIn(
             command,
             "@d",
-            new List<System.DateTime> { new(2024, 1, 1) },
+            new List<System.DateTime> { new(2024, 1, 1, 0, 0, 0, DateTimeKind.Unspecified) },
             InquiryOptions.DefaultMaxParametersPerCommand,
             dbType: System.Data.DbType.DateTime2);
 

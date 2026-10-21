@@ -142,7 +142,7 @@ public sealed class BatchChunkingIntegrationTests
             configureOptions: options => options.MaxBatchSize = 2,
             configureServices: probe.Decorate);
 
-    private static object? InspectJsonParameter(System.Data.Common.DbCommand command)
+    private static JsonParameterMetadata? InspectJsonParameter(System.Data.Common.DbCommand command)
     {
         var parameter = command.Parameters.Cast<SqliteParameter>()
             .SingleOrDefault(candidate => candidate.ParameterName == "@Id" && candidate.Value is string);

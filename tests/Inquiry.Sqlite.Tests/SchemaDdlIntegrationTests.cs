@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Inquiry.Entities;
 using Inquiry.FeatureCatalog;
@@ -152,6 +153,7 @@ public sealed class SchemaDdlIntegrationTests
     }
 
     [Fact]
+    [SuppressMessage("Major Bug", "S1244:Floating point numbers should not be tested for equality", Justification = "2.5 is exact in binary floating point, and SQLite REAL stores it without loss. The test checks the exact round trip.")]
     public async Task GeneratedSchemaExecutesAndRoundTripsCrud()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(InquiryGeneratedSchema.Ddl, "GenSchema");

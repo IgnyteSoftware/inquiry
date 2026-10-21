@@ -6,7 +6,7 @@ namespace Inquiry.FeatureCatalog;
 public static class M2MMaterializationProbe
 {
     public const string Sentinel = "__UNRELATED_SENTINEL__";
-    private static readonly object Gate = new();
+    private static readonly object _gate = new();
     private static HashSet<string> _excludedTitles = new();
     private static HashSet<long> _excludedJunctionProductIds = new();
     private static int _childReads;
@@ -21,7 +21,7 @@ public static class M2MMaterializationProbe
 
     public static void Reset(IEnumerable<string> excludedTitles, IEnumerable<long> excludedJunctionProductIds)
     {
-        lock (Gate)
+        lock (_gate)
         {
             _excludedTitles = new HashSet<string>(excludedTitles);
             _excludedJunctionProductIds = new HashSet<long>(excludedJunctionProductIds);
@@ -35,7 +35,7 @@ public static class M2MMaterializationProbe
     internal static void RecordChild(string value)
     {
         Interlocked.Increment(ref _childReads);
-        lock (Gate)
+        lock (_gate)
         {
             if (_excludedTitles.Contains(value))
             {
@@ -47,7 +47,7 @@ public static class M2MMaterializationProbe
     internal static void RecordJunction(long productId)
     {
         Interlocked.Increment(ref _junctionReads);
-        lock (Gate)
+        lock (_gate)
         {
             if (_excludedJunctionProductIds.Contains(productId))
             {

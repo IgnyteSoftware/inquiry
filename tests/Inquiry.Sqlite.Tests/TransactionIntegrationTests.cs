@@ -160,7 +160,8 @@ public sealed class TransactionIntegrationTests
 
         var tx = await inquiry.BeginTransactionAsync();
         await tx.DisposeAsync();
-        await tx.DisposeAsync(); // must not throw
+        var exception = await Record.ExceptionAsync(() => tx.DisposeAsync().AsTask()); // must not throw
+        Assert.Null(exception);
     }
 
     // ---- Nested transactions / savepoints --------------------------------------------

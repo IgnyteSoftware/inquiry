@@ -7,7 +7,7 @@ namespace Inquiry.FeatureCatalog;
 // ---------------------------------------------------------------------------------------------
 // Auto-managed junctions over non-integer keys (#280) with overridden columns declared from both
 // sides (#281). AjCode has a bounded-string key, AjPrice a decimal key with precision and scale, and
-// AjSku a converter-backed key. AjCode <-> AjPrice overrides both column names, relative to each side;
+// AjSku a converter-backed key. AjCode <-> AjPrice overrides both column names, relative to each side.
 // AjCode -> AjSku uses the derived names. The tables are created from the generated DDL, so a dropped
 // facet or a transposed column shows up on the live engine.
 // ---------------------------------------------------------------------------------------------

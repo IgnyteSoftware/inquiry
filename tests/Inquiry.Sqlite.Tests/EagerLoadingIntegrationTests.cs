@@ -349,10 +349,12 @@ public sealed class EagerLoadingIntegrationTests
 
         // Take the first parent and walk away — the grid is disposed mid-result-set.
         Region? first = null;
-        await foreach (var region in regionStore.SelectAllWithTerritoriesAsync())
+        await using (var regions = regionStore.SelectAllWithTerritoriesAsync().GetAsyncEnumerator())
         {
-            first = region;
-            break;
+            if (await regions.MoveNextAsync())
+            {
+                first = regions.Current;
+            }
         }
 
         Assert.NotNull(first);

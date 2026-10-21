@@ -16,7 +16,7 @@ namespace Inquiry.Sqlite.Tests;
 /// </summary>
 public sealed class QuerySingleOrDefaultMultiRowTests
 {
-    private static readonly string SeedDdl = Schemas.GeneratedItem + """
+    private static readonly string _seedDdl = Schemas.GeneratedItem + """
         INSERT INTO TGeneratedItem (Id, Name) VALUES (1, 'a');
         INSERT INTO TGeneratedItem (Id, Name) VALUES (2, 'a');
         """;
@@ -24,7 +24,7 @@ public sealed class QuerySingleOrDefaultMultiRowTests
     [Fact]
     public async Task QuerySingleOrDefaultAsyncThrowsWhenMoreThanOneRowMatches()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(SeedDdl, "SingleOrDefault");
+        await using var harness = await SqliteTestHarness.CreateAsync(_seedDdl, "SingleOrDefault");
         var inquiry = harness.GetRequiredService<IInquiry>();
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -36,7 +36,7 @@ public sealed class QuerySingleOrDefaultMultiRowTests
     [Fact]
     public async Task QuerySingleOrDefaultAsyncReturnsTheOnlyMatch()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(SeedDdl, "SingleOrDefault");
+        await using var harness = await SqliteTestHarness.CreateAsync(_seedDdl, "SingleOrDefault");
         var inquiry = harness.GetRequiredService<IInquiry>();
 
         var row = await inquiry.QuerySingleOrDefaultAsync<GeneratedItem>(new InquiryCommand("SELECT Id, Name FROM TGeneratedItem WHERE Id = 1"));
@@ -48,7 +48,7 @@ public sealed class QuerySingleOrDefaultMultiRowTests
     [Fact]
     public async Task QuerySingleOrDefaultAsyncReturnsNullWhenNoRowMatches()
     {
-        await using var harness = await SqliteTestHarness.CreateAsync(SeedDdl, "SingleOrDefault");
+        await using var harness = await SqliteTestHarness.CreateAsync(_seedDdl, "SingleOrDefault");
         var inquiry = harness.GetRequiredService<IInquiry>();
 
         var row = await inquiry.QuerySingleOrDefaultAsync<GeneratedItem>(new InquiryCommand("SELECT Id, Name FROM TGeneratedItem WHERE Id = 99"));

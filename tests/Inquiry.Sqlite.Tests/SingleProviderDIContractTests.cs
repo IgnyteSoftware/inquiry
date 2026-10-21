@@ -50,7 +50,8 @@ public sealed class SingleProviderDIContractTests
         var services = new ServiceCollection();
         services.AddInquiry();
 
-        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite");
+        var exception = Record.Exception(() => InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite"));
+        Assert.Null(exception);
     }
 
     private sealed class FakeFactory : IInquiryConnectionFactory

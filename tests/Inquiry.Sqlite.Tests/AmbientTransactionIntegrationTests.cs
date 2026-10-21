@@ -72,7 +72,6 @@ public sealed class AmbientTransactionIntegrationTests
     public async Task StoreCallOutsideTransactionUsesDefaultPipeline()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "Ambient");
-        var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<CustomerStore>();
 
         // No transaction — should hit the default pipeline and persist immediately.

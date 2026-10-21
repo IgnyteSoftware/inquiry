@@ -15,7 +15,7 @@ public sealed class WriteEnforcedFilterRoundTripTests
     private const long TenantA = 1L;
     private const long TenantB = 2L;
 
-    private static IDisposable Scope(long tenantId)
+    private static InquiryFilterContext.Scope Scope(long tenantId)
         => InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["TenantId"] = tenantId });
 
     /// <summary>Seeds one row per tenant and returns (tenantA row id, tenantB row id).</summary>
