@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
@@ -191,7 +192,7 @@ public sealed class ExecuteBatchTests
         var (connectionString, keeper) = await CreateDatabaseAsync();
         await using var _ = keeper;
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
         var source = new CancellingEnumerable(cts, cancelAtMove: int.MaxValue);
         var factory = new BatchTestConnectionFactory(connectionString);
         var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>());
@@ -717,6 +718,7 @@ public sealed class ExecuteBatchTests
             public bool MoveNext() => ++_index < _owner._items.Count;
             public void Reset() => throw new NotSupportedException();
 
+            [SuppressMessage("Design", "S3877:Exceptions should not be thrown from unexpected methods", Justification = "The test double throws from Dispose on purpose to test how disposal failures are handled.")]
             public void Dispose()
             {
                 _owner._disposeEntered?.TrySetResult();
@@ -739,6 +741,7 @@ public sealed class ExecuteBatchTests
     private sealed class IsolationRecordingConnection : DbConnection
     {
         public IsolationLevel? RequestedIsolationLevel { get; private set; }
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";

@@ -8,7 +8,7 @@ public sealed class SchemaFidelityTests
     {
         new TableSnapshot("Categories",
             new[] { new ColumnSnapshot("CategoryID", false), new ColumnSnapshot("CategoryName", false) },
-            ["CategoryID"], new ForeignKeySnapshot[0], indexes),
+            ["CategoryID"], Array.Empty<ForeignKeySnapshot>(), indexes),
     });
 
     [Fact]
@@ -26,7 +26,7 @@ public sealed class SchemaFidelityTests
         {
             new TableSnapshot("CATEGORIES",
                 new[] { new ColumnSnapshot("CATEGORYID", false), new ColumnSnapshot("CATEGORYNAME", false) },
-                ["CATEGORYID"], new ForeignKeySnapshot[0],
+                ["CATEGORYID"], Array.Empty<ForeignKeySnapshot>(),
                 new[] { new IndexSnapshot(["CATEGORYNAME"]) }),
         });
         SchemaFidelity.AssertMatches(expected, actual); // does not throw
@@ -49,7 +49,7 @@ public sealed class SchemaFidelityTests
         {
             new TableSnapshot("Categories",
                 new[] { new ColumnSnapshot("CategoryID", false), new ColumnSnapshot("CategoryName", true) },
-                ["CategoryID"], new ForeignKeySnapshot[0], new IndexSnapshot[0]),
+                ["CategoryID"], Array.Empty<ForeignKeySnapshot>(), Array.Empty<IndexSnapshot>()),
         });
         Assert.Throws<SchemaFidelityException>(() => SchemaFidelity.AssertMatches(expected, actual));
     }
@@ -62,7 +62,7 @@ public sealed class SchemaFidelityTests
         {
             new TableSnapshot("Categories",
                 new[] { new ColumnSnapshot("CategoryID", false), new ColumnSnapshot("CategoryName", false) },
-                ["CategoryID"], new ForeignKeySnapshot[0],
+                ["CategoryID"], Array.Empty<ForeignKeySnapshot>(),
                 new[] { new IndexSnapshot(["CategoryID", "CategoryName"]) }), // composite leads with CategoryID
         });
         SchemaFidelity.AssertMatches(expected, actual); // prefix match -> ok

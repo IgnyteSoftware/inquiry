@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Inquiry.Commands;
 using Inquiry.Interceptors;
@@ -154,7 +155,7 @@ public sealed class InquiryTestingTests
         {
             _ = context.Services.GetRequiredService<DisposalProbe>();
             await context.Transaction.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id) VALUES (1)"), token);
-            cancellation.Cancel();
+            await cancellation.CancelAsync();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
         }, cancellation.Token));
 
@@ -440,6 +441,7 @@ public sealed class InquiryTestingTests
 
     private sealed class FailingScopeDisposable : IDisposable
     {
+        [SuppressMessage("Design", "S3877:Exceptions should not be thrown from unexpected methods", Justification = "The test double throws from Dispose on purpose to test how disposal failures are handled.")]
         public void Dispose() => throw new InvalidOperationException("scope disposal failure");
     }
 

@@ -333,6 +333,7 @@ internal sealed class ProbingDbConnection : DbConnection
         base.Dispose(disposing);
     }
 
+    [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously. base.DisposeAsync would also run the synchronous Dispose path, which the test does not expect.")]
     public override async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
@@ -388,7 +389,7 @@ internal sealed class ProbingDbBatch : DbBatch
         => _inner.ExecuteReader(behavior);
     protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
         CommandBehavior behavior,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
         => _inner.ExecuteReaderAsync(behavior, cancellationToken);
 
     public override void Dispose()
@@ -401,6 +402,7 @@ internal sealed class ProbingDbBatch : DbBatch
         base.Dispose();
     }
 
+    [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously. base.DisposeAsync would also run the synchronous Dispose path, which the test does not expect.")]
     public override async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
@@ -473,10 +475,7 @@ internal sealed class SinglePassCancellingEnumerable<T> : IEnumerable<T>
     {
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _cancellation = cancellation ?? throw new ArgumentNullException(nameof(cancellation));
-        if (cancelAtMoveNext <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(cancelAtMoveNext));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cancelAtMoveNext);
 
         _cancelAtMoveNext = cancelAtMoveNext;
     }

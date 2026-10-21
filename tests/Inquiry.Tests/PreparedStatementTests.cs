@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
@@ -91,6 +92,7 @@ public sealed class PreparedStatementTests
 
         protected override DbCommand CreateDbCommand() => _command;
 
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => string.Empty;
         public override string DataSource => string.Empty;

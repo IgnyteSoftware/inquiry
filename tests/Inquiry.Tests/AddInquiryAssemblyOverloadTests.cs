@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.DependencyInjection;
 using Inquiry.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
@@ -94,6 +95,7 @@ public sealed class AddInquiryAssemblyOverloadTests
 
     // Marker service the sentinel registration adds. Counting its descriptors on a per-test
     // ServiceCollection measures how many times the registration ran against that collection.
+    [SuppressMessage("Minor Code Smell", "S2094:Classes should not be empty", Justification = "The test counts service descriptors of this marker type. It needs no members.")]
     private sealed class SentinelMarker
     {
     }

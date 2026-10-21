@@ -53,7 +53,7 @@ public sealed class InquiryRequestPipelineTests
                 static (_, _) => { },
                 cancellationTokenSource.Token));
 
-        AssertCallerCancellation(cancellationTokenSource.Token, cancellation, interceptor);
+        AssertCallerCancellation(cancellation, interceptor, cancellationTokenSource.Token);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed class InquiryRequestPipelineTests
         var cancellation = await Assert.ThrowsAsync<OperationCanceledException>(() =>
             pipeline.ExecuteScalarAsync<int>(new InquiryCommand("SELECT 1"), cancellationTokenSource.Token));
 
-        AssertCallerCancellation(cancellationTokenSource.Token, cancellation, interceptor);
+        AssertCallerCancellation(cancellation, interceptor, cancellationTokenSource.Token);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class InquiryRequestPipelineTests
                 static (_, _) => { },
                 cancellationTokenSource.Token));
 
-        AssertCallerCancellation(cancellationTokenSource.Token, cancellation, interceptor);
+        AssertCallerCancellation(cancellation, interceptor, cancellationTokenSource.Token);
     }
 
     [Fact]
@@ -131,14 +131,14 @@ public sealed class InquiryRequestPipelineTests
             new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 1) }),
-            MaterializerInstance,
+            _materializerInstance,
             cancellationTokenSource.Token);
 
         var missing = await pipeline.QuerySingleOrDefaultAsync(
             new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 404) }),
-            MaterializerInstance,
+            _materializerInstance,
             cancellationTokenSource.Token);
 
         var updated = await pipeline.ExecuteAsync(
@@ -181,12 +181,14 @@ public sealed class InquiryRequestPipelineTests
         await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)"));
         await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (2, 'Beta', 1)"));
 
-        await foreach (var item in pipeline.QueryAsync(
+        await using (var items = pipeline.QueryAsync(
             new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
-            MaterializerInstance))
+            _materializerInstance).GetAsyncEnumerator())
         {
-            Assert.Equal("Alpha", item.Name);
-            break;
+            if (await items.MoveNextAsync())
+            {
+                Assert.Equal("Alpha", items.Current.Name);
+            }
         }
 
         var updated = await pipeline.ExecuteAsync(new InquiryCommand("UPDATE Items SET Name = 'Gamma' WHERE Id = 2"));
@@ -210,11 +212,11 @@ public sealed class InquiryRequestPipelineTests
         await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'Alpha', 1)"));
         await pipeline.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id, Name, IsActive) VALUES (2, 'Beta', 1)"));
 
-        await foreach (var _ in pipeline.QueryAsync(
+        await using (var items = pipeline.QueryAsync(
             new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
-            MaterializerInstance))
+            _materializerInstance).GetAsyncEnumerator())
         {
-            break;
+            await items.MoveNextAsync();
         }
 
         Assert.Empty(interceptor.Failures);
@@ -241,6 +243,7 @@ public sealed class InquiryRequestPipelineTests
                 new InquiryCommand("SELECT Id, Name, IsActive FROM Items"),
                 new ThrowingMaterializer()))
             {
+                // Enumerate only. The materializer throws on the first row.
             }
         });
 
@@ -264,8 +267,9 @@ public sealed class InquiryRequestPipelineTests
         {
             await foreach (var _ in pipeline.QueryAsync(
                 new InquiryCommand("SELECT Id, Name, IsActive FROM Items"),
-                MaterializerInstance))
+                _materializerInstance))
             {
+                // Enumerate only. The interceptor throws before the first row.
             }
         });
 
@@ -290,7 +294,7 @@ public sealed class InquiryRequestPipelineTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             pipeline.QuerySingleOrDefaultAsync(
                 new InquiryCommand("SELECT Id, Name, IsActive FROM Items ORDER BY Id"),
-                MaterializerInstance));
+                _materializerInstance));
     }
 
     [Fact]
@@ -432,7 +436,7 @@ public sealed class InquiryRequestPipelineTests
             new InquiryCommand(
                 "SELECT Id, Name, IsActive FROM Items WHERE Id = @Id",
                 new[] { new InquiryParameter("Id", 1) }),
-            MaterializerInstance);
+            _materializerInstance);
 
         Assert.Equal(1, inserted);
         Assert.NotNull(selected);
@@ -475,7 +479,7 @@ public sealed class InquiryRequestPipelineTests
 
         var selected = await pipeline.QuerySingleOrDefaultAsync(
             new InquiryCommand("SELECT Id, Name, IsActive FROM Items WHERE Id = 7"),
-            MaterializerInstance);
+            _materializerInstance);
 
         Assert.Equal(1, inserted);
         Assert.NotNull(selected);
@@ -521,7 +525,7 @@ public sealed class InquiryRequestPipelineTests
 
         var selected = await inner.QuerySingleOrDefaultAsync(
             new InquiryCommand("SELECT Id, Name, IsActive FROM Items WHERE Id = 9"),
-            MaterializerInstance);
+            _materializerInstance);
 
         Assert.Equal(1, inserted);
         Assert.NotNull(selected);
@@ -699,7 +703,7 @@ public sealed class InquiryRequestPipelineTests
         await command.ExecuteNonQueryAsync();
     }
 
-    private static readonly TestItemMaterializer MaterializerInstance = new();
+    private static readonly TestItemMaterializer _materializerInstance = new();
 
     private static TestItem MaterializeItem(DbDataReader reader)
     {
@@ -721,9 +725,9 @@ public sealed class InquiryRequestPipelineTests
     }
 
     private static void AssertCallerCancellation(
-        CancellationToken expectedToken,
         OperationCanceledException cancellation,
-        ProviderCancellationInterceptor interceptor)
+        ProviderCancellationInterceptor interceptor,
+        CancellationToken expectedToken)
     {
         Assert.Equal(expectedToken, cancellation.CancellationToken);
         var reported = Assert.Single(interceptor.Failures);

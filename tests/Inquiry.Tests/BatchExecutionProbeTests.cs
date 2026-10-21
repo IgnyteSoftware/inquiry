@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Tests.Shared;
@@ -70,6 +71,7 @@ public sealed class BatchExecutionProbeTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "S6966:Awaitable method should be used", Justification = "The test calls the synchronous Dispose after DisposeAsync on purpose.")]
     public async Task MixedDisposalDelegatesToInnerConnectionExactlyOnce()
     {
         var inner = new DisposalRecordingConnection();
@@ -83,6 +85,7 @@ public sealed class BatchExecutionProbeTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "S6966:Awaitable method should be used", Justification = "The test calls the synchronous Dispose after DisposeAsync on purpose.")]
     public async Task MixedFactoryDisposalDelegatesToInnerFactoryExactlyOnce()
     {
         var inner = new DisposalRecordingFactory();
@@ -281,6 +284,7 @@ public sealed class BatchExecutionProbeTests
     {
         internal int AsyncDisposeCount { get; private set; }
         internal int SyncDisposeCount { get; private set; }
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";
@@ -302,6 +306,7 @@ public sealed class BatchExecutionProbeTests
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double counts async disposal separately. base.DisposeAsync would call Dispose and count a synchronous disposal too.")]
         public override ValueTask DisposeAsync()
         {
             AsyncDisposeCount++;
@@ -330,6 +335,7 @@ public sealed class BatchExecutionProbeTests
     {
         internal BatchRecordingBatch? LastBatch { get; private set; }
         public override bool CanCreateBatch => true;
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";
@@ -372,7 +378,7 @@ public sealed class BatchExecutionProbeTests
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
         protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
             CommandBehavior behavior,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken)
             => Task.FromException<DbDataReader>(new NotSupportedException());
 
         private int Execute()
@@ -387,7 +393,7 @@ public sealed class BatchExecutionProbeTests
         }
     }
 
-    private sealed class BatchRecordingCommand : DbBatchCommand
+    private sealed class BatchRecordingCommand : DbBatchCommand, IDisposable
     {
         private readonly SqliteCommand _command = new();
 
@@ -396,6 +402,8 @@ public sealed class BatchExecutionProbeTests
         public override int RecordsAffected => 1;
         protected override DbParameterCollection DbParameterCollection => _command.Parameters;
         public override DbParameter CreateParameter() => _command.CreateParameter();
+
+        public void Dispose() => _command.Dispose();
     }
 
     private sealed class BatchRecordingCommandCollection : DbBatchCommandCollection

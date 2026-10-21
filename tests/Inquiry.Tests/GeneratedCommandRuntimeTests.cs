@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Inquiry.Commands;
 using Inquiry.Connections;
@@ -211,6 +212,7 @@ public sealed class GeneratedCommandRuntimeTests
             object System.Collections.IEnumerator.Current => Current!;
             public bool MoveNext() => ++_index < items.Count;
             public void Reset() => throw new NotSupportedException();
+            [SuppressMessage("Design", "S3877:Exceptions should not be thrown from unexpected methods", Justification = "The test double throws from Dispose on purpose to test how disposal failures are handled.")]
             public void Dispose() => throw new InvalidOperationException("enumerator dispose failed");
         }
     }
@@ -257,19 +259,19 @@ public sealed class GeneratedCommandRuntimeTests
         public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
             where TEntity : class => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
-            where TEntity : class => throw new NotSupportedException();
-
-        public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
-            where TEntity : class => throw new NotSupportedException();
-
         public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default)
             where TEntity : class
             where TMaterializer : struct, IInquiryEntityMaterializer<TEntity> => throw new NotSupportedException();
 
+        public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
+            where TEntity : class => throw new NotSupportedException();
+
         public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default, int capacityHint = -1)
             where TEntity : class
             where TMaterializer : struct, IInquiryEntityMaterializer<TEntity> => throw new NotSupportedException();
+
+        public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
+            where TEntity : class => throw new NotSupportedException();
 
         public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default)
             where TEntity : class

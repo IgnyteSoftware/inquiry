@@ -13,10 +13,10 @@ namespace Inquiry.Tests.Shared;
 /// </summary>
 internal static class BulkCopierConnectionOwnershipAssertions
 {
-    private static readonly InquiryBulkInsertDefinition<Row> Definition =
+    private static readonly InquiryBulkInsertDefinition<Row> _definition =
         new(null, "Rows", new[] { "Id" }, static (row, _) => row.Id);
 
-    private static readonly Row[] Rows = { new(1) };
+    private static readonly Row[] _rows = { new(1) };
 
     internal static async Task ThrowingOpenTelemetryDisposesDedicatedConnectionAsync(
         Func<IInquiryConnectionFactory, IInquiryBulkCopier> createCopier)
@@ -27,7 +27,7 @@ internal static class BulkCopierConnectionOwnershipAssertions
         var context = new InquiryBulkInsertContext(
             null, null, new InquiryBulkInsertOptions(), (_, _) => throw listenerFailure, null);
 
-        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => copier.BulkInsertAsync(Definition, Rows, context));
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => copier.BulkInsertAsync(_definition, _rows, context));
 
         Assert.Same(listenerFailure, thrown);
         Assert.True(connection.IsDisposed);
@@ -42,7 +42,7 @@ internal static class BulkCopierConnectionOwnershipAssertions
         var context = new InquiryBulkInsertContext(
             null, null, new InquiryBulkInsertOptions(), (_, error) => recorded.Add(error), null);
 
-        var thrown = await Assert.ThrowsAsync<TimeoutException>(() => copier.BulkInsertAsync(Definition, Rows, context));
+        var thrown = await Assert.ThrowsAsync<TimeoutException>(() => copier.BulkInsertAsync(_definition, _rows, context));
 
         Assert.Same(openFailure, thrown);
         Assert.Same(openFailure, Assert.Single(recorded));
@@ -56,7 +56,7 @@ internal static class BulkCopierConnectionOwnershipAssertions
         var context = new InquiryBulkInsertContext(
             null, null, new InquiryBulkInsertOptions(), (_, _) => throw new InvalidOperationException("Telemetry listener failed."), null);
 
-        var thrown = await Assert.ThrowsAsync<TimeoutException>(() => copier.BulkInsertAsync(Definition, Rows, context));
+        var thrown = await Assert.ThrowsAsync<TimeoutException>(() => copier.BulkInsertAsync(_definition, _rows, context));
 
         Assert.Same(openFailure, thrown);
     }
@@ -68,7 +68,7 @@ internal static class BulkCopierConnectionOwnershipAssertions
         var copier = createCopier(new StubConnectionFactory(_ => throw new InvalidOperationException("A borrowed connection must not open another.")));
         var context = new InquiryBulkInsertContext(borrowed, null, new InquiryBulkInsertOptions(), null, null);
 
-        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => copier.BulkInsertAsync(Definition, Rows, context));
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => copier.BulkInsertAsync(_definition, _rows, context));
 
         Assert.Contains(nameof(TrackingConnection), thrown.Message);
         Assert.False(borrowed.IsDisposed);

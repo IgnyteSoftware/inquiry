@@ -232,9 +232,9 @@ internal static class EagerGridCommandAssertions
     /// </remarks>
     private static void AssertResultSetCount(string commandText, int expected)
     {
-        const string OracleMarker = "DBMS_SQL.RETURN_RESULT";
-        var actual = commandText.Contains(OracleMarker, StringComparison.OrdinalIgnoreCase)
-            ? Regex.Matches(commandText, Regex.Escape(OracleMarker), RegexOptions.IgnoreCase).Count
+        const string oracleMarker = "DBMS_SQL.RETURN_RESULT";
+        var actual = commandText.Contains(oracleMarker, StringComparison.OrdinalIgnoreCase)
+            ? Regex.Count(commandText, Regex.Escape(oracleMarker), RegexOptions.IgnoreCase)
             : commandText.Split(';').Length;
 
         Assert.True(

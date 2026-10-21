@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Connections;
 
 namespace Inquiry.Tests;
@@ -14,16 +15,19 @@ public sealed class RetryingConnectionOpenerTests
         public bool IsTransient(Exception exception) => _predicate(exception);
     }
 
+    [SuppressMessage("Major Code Smell", "S3871:Exception types should be \"public\"", Justification = "The test throws and catches this exception inside the same test class.")]
     private sealed class TransientException : Exception
     {
     }
 
+    [SuppressMessage("Major Code Smell", "S3871:Exception types should be \"public\"", Justification = "The test throws and catches this exception inside the same test class.")]
     private sealed class TerminalException : Exception
     {
     }
 
     private sealed class FakeConnection : DbConnection
     {
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => string.Empty;
         public override string DataSource => string.Empty;
@@ -33,7 +37,7 @@ public sealed class RetryingConnectionOpenerTests
         public override void Close() { }
         public override void Open() { }
         protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
-        protected override DbTransaction BeginDbTransaction(System.Data.IsolationLevel il) => throw new NotSupportedException();
+        protected override DbTransaction BeginDbTransaction(System.Data.IsolationLevel isolationLevel) => throw new NotSupportedException();
     }
 
     private static RetryingConnectionOpener TransientOpener(int maxAttempts, out List<TimeSpan> delays)
@@ -187,7 +191,7 @@ public sealed class RetryingConnectionOpenerTests
         var opener = TransientOpener(maxAttempts: 5, out var delays);
         var attempts = 0;
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => opener.OpenAsync(ct =>
         {

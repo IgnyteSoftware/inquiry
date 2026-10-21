@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Seeding;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,6 +19,7 @@ public sealed class DataSeedingTests
     private sealed class FirstSeeder : IInquiryDataSeeder
     {
         private readonly Journal _journal;
+        [SuppressMessage("Major Code Smell", "S1144:Unused private types or members should be removed", Justification = "Dependency injection calls this constructor through reflection.")]
         public FirstSeeder(Journal journal) => _journal = journal;
 
         public Task SeedAsync(CancellationToken cancellationToken = default)
@@ -30,6 +32,7 @@ public sealed class DataSeedingTests
     private sealed class SecondSeeder : IInquiryDataSeeder
     {
         private readonly Journal _journal;
+        [SuppressMessage("Major Code Smell", "S1144:Unused private types or members should be removed", Justification = "Dependency injection calls this constructor through reflection.")]
         public SecondSeeder(Journal journal) => _journal = journal;
 
         public Task SeedAsync(CancellationToken cancellationToken = default)
@@ -71,7 +74,8 @@ public sealed class DataSeedingTests
     public async Task NoRegisteredSeedersIsANoOp()
     {
         var services = new ServiceCollection().BuildServiceProvider();
-        await services.SeedInquiryAsync();
+        var exception = await Record.ExceptionAsync(() => services.SeedInquiryAsync());
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -89,6 +93,7 @@ public sealed class DataSeedingTests
         Assert.Single(services.GetRequiredService<Journal>().Entries);
     }
 
+    [SuppressMessage("Minor Code Smell", "S2094:Classes should not be empty", Justification = "Dependency injection resolves this marker type. It needs no members.")]
     private sealed class ScopeProbe
     {
     }
@@ -97,6 +102,7 @@ public sealed class DataSeedingTests
     {
         private readonly Journal _journal;
 
+        [SuppressMessage("Major Code Smell", "S1144:Unused private types or members should be removed", Justification = "Dependency injection calls this constructor through reflection.")]
         public ScopedSeeder(ScopeProbe probe, Journal journal)
         {
             // The probe parameter exists purely to prove scoped resolution succeeds.

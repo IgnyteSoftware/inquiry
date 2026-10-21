@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Metrics;
 using Inquiry.BulkCopy;
 using Inquiry.Commands;
@@ -18,7 +19,7 @@ using Microsoft.Extensions.Logging;
 namespace Inquiry.Tests;
 
 [CollectionDefinition("Inquiry telemetry", DisableParallelization = true)]
-public sealed class InquiryTelemetryCollection
+public sealed class InquiryTelemetryCollectionDefinition
 {
 }
 
@@ -271,6 +272,7 @@ public sealed class InquiryTelemetryTests
                 const string select = $"SELECT * FROM {Sentinel}";
                 await using (await pipeline.QueryMultipleAsync(new InquiryCommand(select)))
                 {
+                    // Open and dispose the grid only. The test checks the command telemetry.
                 }
 
                 break;
@@ -571,7 +573,7 @@ public sealed class InquiryTelemetryTests
         using var listener = CreateActivityListener(activities);
 
         var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await using (var grid = await pipeline.QueryMultipleAsync(
             new InquiryCommand("SELECT * FROM Items; SELECT COUNT(*) FROM Items")))
@@ -616,7 +618,7 @@ public sealed class InquiryTelemetryTests
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await using (var grid = await pipeline.QueryMultipleAsync(new InquiryCommand("SELECT 1")))
         {
@@ -661,7 +663,7 @@ public sealed class InquiryTelemetryTests
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await Assert.ThrowsAsync<SqliteException>(
             () => pipeline.QueryMultipleAsync(new InquiryCommand("SELECT * FROM NoSuchTable")));
@@ -704,7 +706,7 @@ public sealed class InquiryTelemetryTests
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await pipeline.ExecuteAsync(new InquiryCommand(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'A', 1), (2, 'B', 0)"));
@@ -730,7 +732,7 @@ public sealed class InquiryTelemetryTests
         using var listener = CreateActivityListener(activities);
 
         var (pipeline, keeper) = await CreatePipelineAsync(noInterceptors: true);
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         var total = await pipeline.ExecuteBatchAsync(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@id, @name, @active)",
@@ -776,7 +778,7 @@ public sealed class InquiryTelemetryTests
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(noInterceptors: true);
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await pipeline.ExecuteBatchAsync(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@id, @name, @active)",
@@ -821,7 +823,7 @@ public sealed class InquiryTelemetryTests
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(noInterceptors: true);
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await Assert.ThrowsAsync<SqliteException>(() =>
             pipeline.ExecuteBatchAsync(
@@ -849,7 +851,7 @@ public sealed class InquiryTelemetryTests
     public async Task BatchExecutionNoListenerDoesNotAllocateActivity()
     {
         var (pipeline, keeper) = await CreatePipelineAsync(noInterceptors: true);
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         var total = await pipeline.ExecuteBatchAsync(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@id, @name, @active)",
@@ -890,6 +892,7 @@ public sealed class InquiryTelemetryTests
     }
 
     [Fact]
+    [SuppressMessage("Major Bug", "S1244:Floating point numbers should not be tested for equality", Justification = "The fake copier records exactly 1 ms and 2 ms. The test checks that these values reach the metric unchanged.")]
     public async Task BulkInsertRecordsDurationMetric()
     {
         var measurements = new List<(double Value, Dictionary<string, object?> Tags)>();
@@ -1001,7 +1004,7 @@ public sealed class InquiryTelemetryTests
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", ["Id"], static (item, _) => item.Id);
         using var cancellation = new CancellationTokenSource();
-        cancellation.Cancel();
+        await cancellation.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }, cancellationToken: cancellation.Token));
@@ -1195,7 +1198,7 @@ public sealed class InquiryTelemetryTests
             return new NativeErrorConnection(connection, this);
         }
 
-        internal Task<int> ExecuteAsync()
+        internal Task<int> CancelAndFailAsync()
         {
             Interlocked.Increment(ref _executeCount);
             _cancellation.Cancel();
@@ -1205,7 +1208,7 @@ public sealed class InquiryTelemetryTests
             // pipeline sees cancellation win the race, as it would for a slow driver.
             static async Task<int> FailAsync()
             {
-                await Task.Delay(100);
+                await Task.Delay(100, CancellationToken.None);
                 throw new NativeProviderException($"Operation cancelled by user while writing {Sentinel}.");
             }
         }
@@ -1273,7 +1276,7 @@ public sealed class InquiryTelemetryTests
         protected override DbDataReader ExecuteDbDataReader(System.Data.CommandBehavior behavior) => _inner.ExecuteReader(behavior);
         public override int ExecuteNonQuery() => throw new NotSupportedException();
         public override object? ExecuteScalar() => _inner.ExecuteScalar();
-        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken) => _factory.ExecuteAsync();
+        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken) => _factory.CancelAndFailAsync();
 
         protected override void Dispose(bool disposing)
         {

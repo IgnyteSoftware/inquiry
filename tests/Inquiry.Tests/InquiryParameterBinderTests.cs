@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Parameters;
 
 namespace Inquiry.Tests;
@@ -187,14 +188,14 @@ public sealed class InquiryParameterBinderTests
 
         InquiryParameterBinder.Bind(command, new[]
         {
-            new InquiryParameter("EnumKey", SampleUIntEnum.AboveIntMax, DbType.Int32),
+            new InquiryParameter("EnumKey", SampleUInt.AboveIntMax, DbType.Int32),
         });
 
         Assert.Equal(unchecked((int)3_000_000_000u), command.Parameters[0].Value);
         Assert.IsType<int>(command.Parameters[0].Value);
     }
 
-    private enum SampleUIntEnum : uint { Zero = 0, AboveIntMax = 3_000_000_000u }
+    private enum SampleUInt : uint { Zero = 0, AboveIntMax = 3_000_000_000u }
 
     private static void AssertMetadataPrecedesValue(FakeDbParameter parameter)
     {
@@ -227,6 +228,7 @@ public sealed class InquiryParameterBinderTests
     {
         private readonly FakeParameterCollection _parameters = new();
 
+        [AllowNull]
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; }
@@ -298,8 +300,10 @@ public sealed class InquiryParameterBinderTests
         public override DbType DbType { get => _dbType; set { _dbType = value; DbTypeAssigned = true; AssignmentOrder.Add(nameof(DbType)); } }
         public override ParameterDirection Direction { get => _direction; set { _direction = value; DirectionAssigned = true; } }
         public override bool IsNullable { get; set; }
+        [AllowNull]
         public override string ParameterName { get; set; } = string.Empty;
         public override int Size { get => _size; set { _size = value; SizeAssigned = true; } }
+        [AllowNull]
         public override string SourceColumn { get; set; } = string.Empty;
         public override bool SourceColumnNullMapping { get; set; }
         public override object? Value { get => _value; set { _value = value; AssignmentOrder.Add(nameof(Value)); } }

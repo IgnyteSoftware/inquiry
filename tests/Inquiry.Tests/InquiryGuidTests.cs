@@ -28,13 +28,13 @@ public sealed class InquiryGuidTests
     }
 
     [Fact]
-    public void NewVersion7TimestampsAreNonDecreasing()
+    public async Task NewVersion7TimestampsAreNonDecreasing()
     {
         // Compare the extracted 48-bit timestamps with equality tolerance rather than strict
         // whole-GUID byte ordering: the wall clock is not monotonic (NTP steps), and two calls
         // can land in the same millisecond, where the random tail decides byte order.
         var first = ExtractTimestamp(InquiryGuid.NewVersion7());
-        System.Threading.Thread.Sleep(10);
+        await Task.Delay(10);
         var second = ExtractTimestamp(InquiryGuid.NewVersion7());
 
         Assert.True(second >= first, $"v7 timestamps regressed: {first} then {second}.");
@@ -90,10 +90,10 @@ public sealed class InquiryGuidTests
     }
 
     [Fact]
-    public void NewSqlServerSequentialSortsAscendingUnderSqlGuidOrdering()
+    public async Task NewSqlServerSequentialSortsAscendingUnderSqlGuidOrdering()
     {
         var first = new System.Data.SqlTypes.SqlGuid(InquiryGuid.NewSqlServerSequential());
-        System.Threading.Thread.Sleep(15);
+        await Task.Delay(15);
         var second = new System.Data.SqlTypes.SqlGuid(InquiryGuid.NewSqlServerSequential());
 
         Assert.True(first.CompareTo(second) < 0,

@@ -62,10 +62,12 @@ public sealed class InquiryGridReaderStreamTests
         var grid = new InquiryGridReader(reader, command, ownedConnection: null, lease: null);
 
         // Stop after the first row — the reader is left positioned mid-set.
-        await foreach (var row in grid.ReadStreamAsync<Box, BoxMaterializer>(default))
+        await using (var rows = grid.ReadStreamAsync<Box, BoxMaterializer>(default).GetAsyncEnumerator())
         {
-            Assert.Equal(1, row.Value);
-            break;
+            if (await rows.MoveNextAsync())
+            {
+                Assert.Equal(1, rows.Current.Value);
+            }
         }
 
         // Without the latch this would silently return 2 — the tail of the abandoned set — as though it
@@ -83,10 +85,12 @@ public sealed class InquiryGridReaderStreamTests
         await using var reader = await command.ExecuteReaderAsync();
         var grid = new InquiryGridReader(reader, command, ownedConnection: null, lease: null);
 
-        await foreach (var _ in grid.ReadStreamAsync<Box, BoxMaterializer>(default))
+        await using (var rows = grid.ReadStreamAsync<Box, BoxMaterializer>(default).GetAsyncEnumerator())
         {
-            await Assert.ThrowsAsync<InvalidOperationException>(() => grid.ReadScalarAsync<int>());
-            break;
+            if (await rows.MoveNextAsync())
+            {
+                await Assert.ThrowsAsync<InvalidOperationException>(() => grid.ReadScalarAsync<int>());
+            }
         }
     }
 
@@ -115,6 +119,7 @@ public sealed class InquiryGridReaderStreamTests
         {
             await foreach (var _ in sequence)
             {
+                // Enumerate only. The second enumeration must throw.
             }
         });
 
@@ -181,7 +186,7 @@ public sealed class InquiryGridReaderStreamTests
         {
             await foreach (var row in grid.ReadStreamAsync<Box, BoxMaterializer>(default, cts.Token))
             {
-                cts.Cancel();
+                await cts.CancelAsync();
                 _ = row;
             }
         });

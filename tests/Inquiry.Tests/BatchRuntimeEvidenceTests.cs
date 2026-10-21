@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
@@ -773,6 +774,7 @@ public sealed class BatchRuntimeEvidenceTests
         internal RecordingConnection(RecordingState state) => _state = state;
 
         public override bool CanCreateBatch => _state.CanCreateBatch;
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";
@@ -826,6 +828,12 @@ public sealed class BatchRuntimeEvidenceTests
         public override IsolationLevel IsolationLevel => IsolationLevel.ReadCommitted;
         protected override DbConnection DbConnection => _connection;
         public override void Commit() => _state.TransactionCommitCount++;
+        public override Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            _state.TransactionCommitCount++;
+            return Task.CompletedTask;
+        }
+
         public override void Rollback()
         {
             _state.TransactionRollbackCount++;
@@ -835,11 +843,8 @@ public sealed class BatchRuntimeEvidenceTests
                 throw new InvalidOperationException("transaction rollback failed");
             }
         }
-        public override Task CommitAsync(CancellationToken cancellationToken = default)
-        {
-            _state.TransactionCommitCount++;
-            return Task.CompletedTask;
-        }
+
+        public override void Rollback(string savepointName) => _state.SavepointRollbackCount++;
 
         public override Task RollbackAsync(CancellationToken cancellationToken = default)
         {
@@ -853,17 +858,16 @@ public sealed class BatchRuntimeEvidenceTests
             return Task.CompletedTask;
         }
 
+        public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default)
+        {
+            _state.SavepointRollbackCount++;
+            return Task.CompletedTask;
+        }
+
         public override void Save(string savepointName) => _state.SavepointCreateCount++;
         public override Task SaveAsync(string savepointName, CancellationToken cancellationToken = default)
         {
             _state.SavepointCreateCount++;
-            return Task.CompletedTask;
-        }
-
-        public override void Rollback(string savepointName) => _state.SavepointRollbackCount++;
-        public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default)
-        {
-            _state.SavepointRollbackCount++;
             return Task.CompletedTask;
         }
 
@@ -897,6 +901,7 @@ public sealed class BatchRuntimeEvidenceTests
         internal RecordingCommand(RecordingState state) => _state = state;
         internal int AffectedRows { get; set; } = 1;
 
+        [AllowNull]
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; }
@@ -1023,7 +1028,7 @@ public sealed class BatchRuntimeEvidenceTests
 
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
         protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
-            CommandBehavior behavior, CancellationToken cancellationToken = default)
+            CommandBehavior behavior, CancellationToken cancellationToken)
             => Task.FromException<DbDataReader>(new NotSupportedException());
 
         public override void Dispose()
@@ -1082,7 +1087,9 @@ public sealed class BatchRuntimeEvidenceTests
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
+        [AllowNull]
         public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull]
         public override string SourceColumn { get; set; } = string.Empty;
         public override object? Value { get; set; }
         public override bool SourceColumnNullMapping { get; set; }
@@ -1140,6 +1147,7 @@ public sealed class BatchRuntimeEvidenceTests
             object IEnumerator.Current => Current;
             public bool MoveNext() => ++_index < _items.Count;
             public void Reset() => throw new NotSupportedException();
+            [SuppressMessage("Design", "S3877:Exceptions should not be thrown from unexpected methods", Justification = "The test double throws from Dispose on purpose to test how disposal failures are handled.")]
             public void Dispose() => throw new InvalidOperationException("enumerator dispose failed");
         }
     }

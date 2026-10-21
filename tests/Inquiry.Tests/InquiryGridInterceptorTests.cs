@@ -123,7 +123,7 @@ public sealed class InquiryGridInterceptorTests
         await RunAsync(transacted, [recorder], async inquiry =>
         {
             await using var grid = await QueryMultipleAsync(inquiry, "SELECT 1; SELECT 2", generated);
-            cts.Cancel();
+            await cts.CancelAsync();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => grid.ReadScalarAsync<long>(cts.Token));
         });
 

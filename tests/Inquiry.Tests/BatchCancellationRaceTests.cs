@@ -595,7 +595,7 @@ public sealed class BatchCancellationRaceTests
                 await Task.Yield();
                 if (_cancelBeforeFailing)
                 {
-                    _cancellation.Cancel();
+                    await _cancellation.CancelAsync();
                 }
 
                 if (_throwNativeError)
@@ -664,6 +664,7 @@ public sealed class BatchCancellationRaceTests
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously. base.DisposeAsync would also run the synchronous Dispose path, which the test does not expect.")]
         public override async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
@@ -706,14 +707,17 @@ public sealed class BatchCancellationRaceTests
             // pipeline's cleanup aggregation, not the commit guard this fixture exists for.
             try
             { _inner.Rollback(); }
-            catch (InvalidOperationException) { }
+            catch (InvalidOperationException)
+            {
+                // The inner transaction already committed, so the rollback has nothing to undo.
+            }
         }
 
         public override async Task CommitAsync(CancellationToken cancellationToken = default)
         {
             await Task.Yield();
             _factory.CancelNow();
-            _inner.Commit();
+            await _inner.CommitAsync(CancellationToken.None);
         }
 
         protected override void Dispose(bool disposing)
@@ -726,6 +730,7 @@ public sealed class BatchCancellationRaceTests
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously. base.DisposeAsync would also run the synchronous Dispose path, which the test does not expect.")]
         public override async ValueTask DisposeAsync()
         {
             await _inner.DisposeAsync();
@@ -779,6 +784,7 @@ public sealed class BatchCancellationRaceTests
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously. base.DisposeAsync would also run the synchronous Dispose path, which the test does not expect.")]
         public override async ValueTask DisposeAsync()
         {
             await _inner.DisposeAsync();
@@ -795,7 +801,6 @@ public sealed class BatchCancellationRaceTests
         private readonly SqliteConnection _connection;
         private readonly LyingSuccessConnectionFactory _factory;
         private readonly LyingBatchCommandCollection _commands = new();
-        private DbTransaction? _transaction;
         private int _disposed;
 
         internal LyingBatch(SqliteConnection connection, LyingSuccessConnectionFactory factory)
@@ -807,7 +812,7 @@ public sealed class BatchCancellationRaceTests
         public override int Timeout { get; set; }
         protected override DbBatchCommandCollection DbBatchCommands => _commands;
         protected override DbConnection? DbConnection { get => _connection; set => throw new NotSupportedException(); }
-        protected override DbTransaction? DbTransaction { get => _transaction; set => _transaction = value; }
+        protected override DbTransaction? DbTransaction { get; set; }
 
         public override void Cancel() { }
         public override int ExecuteNonQuery() => throw new NotSupportedException();
@@ -819,15 +824,15 @@ public sealed class BatchCancellationRaceTests
         protected override DbBatchCommand CreateDbBatchCommand() => new LyingBatchCommand(_connection.CreateCommand());
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
         protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
-            CommandBehavior behavior, CancellationToken cancellationToken = default)
+            CommandBehavior behavior, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
         public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
             => _factory.ExecuteBatchAsync(async () =>
             {
-                var transaction = _transaction is LyingTransaction lying ? lying.Inner : (SqliteTransaction?)_transaction;
+                var transaction = DbTransaction is LyingTransaction lying ? lying.Inner : (SqliteTransaction?)DbTransaction;
                 var total = 0;
-                foreach (LyingBatchCommand command in _commands)
+                foreach (var command in _commands.Cast<LyingBatchCommand>())
                 {
                     command.Inner.Transaction = transaction;
                     total += await command.Inner.ExecuteNonQueryAsync(CancellationToken.None);
@@ -840,7 +845,7 @@ public sealed class BatchCancellationRaceTests
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
-                foreach (LyingBatchCommand command in _commands)
+                foreach (var command in _commands.Cast<LyingBatchCommand>())
                 {
                     command.Inner.Dispose();
                 }
@@ -848,12 +853,6 @@ public sealed class BatchCancellationRaceTests
                 _factory.RecordBatchDisposed();
             }
             base.Dispose();
-        }
-
-        public override ValueTask DisposeAsync()
-        {
-            Dispose();
-            return ValueTask.CompletedTask;
         }
     }
 
